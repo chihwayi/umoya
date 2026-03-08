@@ -77,6 +77,15 @@ jobs:
       working-directory: ${{ matrix.path }}
       run: npm test
 
+    - name: Red-team adversarial suite (release gate)
+      if: matrix.service == 'ehr-service'
+      working-directory: ${{ matrix.path }}
+      run: npx jest red-team.adversarial.spec.ts --passWithNoTests
+
+    - name: SOC2/HIPAA evidence report (stub)
+      if: matrix.service == 'ehr-service'
+      run: node scripts/soc2-hipaa-evidence-report.js
+
     - name: Send mail on failure
       if: failure() && env.NOTIFICATION_EMAIL != '' && env.SMTP_HOST != '' && env.SMTP_PORT != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != ''
       uses: dawidd6/action-send-mail@v3

@@ -42,6 +42,8 @@ describe('PostVisitController', () => {
     getSessionBillingIntelligence: jest.fn(),
     reviewBillingSuggestion: jest.fn(),
     generateAppointmentPreVisitBrief: jest.fn(),
+    generatePreVisitBriefsForUpcomingAppointments: jest.fn(),
+    markAdminDocumentDispatched: jest.fn(),
     executeRecommendationAction: jest.fn(),
     transcribeSessionAudio: jest.fn(),
     publishSession: jest.fn(),
@@ -52,6 +54,12 @@ describe('PostVisitController', () => {
     getPatientStoryVersions: jest.fn(),
     getPatientStoryVersion: jest.fn(),
     getPatientStoryDiff: jest.fn(),
+    logFhirSyncAttempt: jest.fn(),
+    queueFhirWriteBack: jest.fn(),
+    getFhirSyncLogForSession: jest.fn(),
+    createPeerConsultRequest: jest.fn(),
+    respondPeerConsult: jest.fn(),
+    listPeerConsults: jest.fn(),
   };
 
   const uploadSecurityServiceMock = {
@@ -597,6 +605,28 @@ describe('PostVisitController', () => {
     expect(result.followUpRisk.score).toBe(72);
   });
 
+  it('POST jobs/generate-previsit-briefs calls service with tenantDb and optional withinMinutes', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: {},
+      user: { id: 'admin-1' },
+    } as any;
+    postVisitServiceMock.generatePreVisitBriefsForUpcomingAppointments.mockResolvedValue({
+      generated: 2,
+      skipped: 0,
+      errors: [],
+    });
+
+    const result = await controller.generatePreVisitBriefsJob(req, '90');
+
+    expect(postVisitServiceMock.generatePreVisitBriefsForUpcomingAppointments).toHaveBeenCalledWith(
+      req.tenantDb,
+      { withinMinutes: 90 },
+    );
+    expect(result.generated).toBe(2);
+    expect(result.errors).toEqual([]);
+  });
+
   it('generates and signs post-visit admin documents for doctor workflow', async () => {
     const req = {
       tenantId: 'tenant-a',
@@ -631,6 +661,31 @@ describe('PostVisitController', () => {
       }),
     );
     expect(result.generatedCount).toBe(2);
+  });
+
+  it('marks signed admin document as dispatched with audit', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: {},
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.markAdminDocumentDispatched.mockResolvedValue({
+      documentId: 'doc-1',
+      sessionId: 'session-1',
+      patientId: 'patient-1',
+      status: 'dispatched',
+      document: { id: 'doc-1', status: 'dispatched' },
+    });
+
+    const result = await controller.markAdminDocumentDispatched('doc-1', req);
+
+    expect(postVisitServiceMock.markAdminDocumentDispatched).toHaveBeenCalledWith(
+      req.tenantDb,
+      'doc-1',
+      { actorUserId: 'doctor-1' },
+    );
+    expect(result.status).toBe('dispatched');
   });
 
   it('executes voice command workflow action with tenant context', async () => {

@@ -261,4 +261,77 @@ describe('MaternityService hardening', () => {
     expect(result.task.task_context.recommendation_bundle.applied_count).toBe(2);
     expect(result.task.status).toBe('actioned');
   });
+
+  describe('suggestNextVisit (M4)', () => {
+    it('returns ANC suggested date from LMP and visit date', async () => {
+      const { service } = makeService();
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[]) => {
+          if (sql.includes('maternity_enrollments') && sql.includes('lmp_date')) {
+            return [{ id: 'e1', lmp_date: '2025-08-01', risk_category: 'low' }];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.suggestNextVisit(
+        tenantDb,
+        'e1',
+        'anc',
+        '2026-01-15',
+      );
+
+      expect(result.suggestedDate).toBeTruthy();
+      expect(result.reason).toContain('WHO');
+      expect(result.riskLevel).toBe('low');
+    });
+
+    it('returns null and reason when enrollment not found', async () => {
+      const { service } = makeService();
+      const tenantDb = { query: jest.fn(async () => []) } as any;
+
+      const result = await service.suggestNextVisit(tenantDb, 'bad-id', 'anc', '2026-01-15');
+
+      expect(result.suggestedDate).toBeNull();
+      expect(result.reason).toContain('not found');
+    });
+  });
+
+  describe('updateMaternityCareTaskStatus (M6 lifecycle)', () => {
+    it('allows transition open -> acknowledged -> actioned -> closed', async () => {
+      const { service } = makeService();
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[]) => {
+          if (sql.includes('SELECT id, status')) {
+            return [{ id: params[0], status: params[0] === 'task-1' ? 'open' : 'acknowledged' }];
+          }
+          if (sql.includes('UPDATE maternity_care_tasks')) {
+            return [{ id: 'task-1', status: params[0] }];
+          }
+          return [];
+        }),
+      } as any;
+
+      await service.updateMaternityCareTaskStatus(tenantDb, 'task-1', { status: 'acknowledged' }, 'user-1');
+      expect(tenantDb.query).toHaveBeenCalled();
+      const lastUpdate = (tenantDb.query as jest.Mock).mock.calls.find((c: any) =>
+        String(c[0]).includes('UPDATE maternity_care_tasks'),
+      );
+      expect(lastUpdate?.[1][0]).toBe('acknowledged');
+    });
+
+    it('rejects invalid status transition', async () => {
+      const { service } = makeService();
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[]) => {
+          if (sql.includes('SELECT id, status')) return [{ id: 'task-1', status: 'closed' }];
+          return [];
+        }),
+      } as any;
+
+      await expect(
+        service.updateMaternityCareTaskStatus(tenantDb, 'task-1', { status: 'open' }, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 });

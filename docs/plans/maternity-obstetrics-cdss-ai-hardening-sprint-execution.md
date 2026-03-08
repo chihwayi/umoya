@@ -232,8 +232,15 @@ Status key: `pending`, `in_progress`, `completed`
 
 - M0 Security + Contract Stabilization: `completed`
 - M1 Core Maternity Rule Engine: `completed`
-- M2 Vitals Auto-Propagation + Provenance: `in_progress`
-- M3 Nurse-Doctor Sync Pipeline: `pending`
-- M4 Intelligent UI Hardening: `pending`
-- M5 Guideline Encoding + Traceability: `pending`
-- M6 QA + Monitoring + Release Gates: `pending`
+- M2 Vitals Auto-Propagation + Provenance: `completed`
+- M3 Nurse-Doctor Sync Pipeline: `completed`
+- M4 Intelligent UI Hardening: `completed`
+- M5 Guideline Encoding + Traceability: `completed`
+- M6 QA + Monitoring + Release Gates: `completed`
+
+### Implementation notes (M3–M6)
+
+- **M3:** `maternity_care_tasks` table and provisioning; APIs: GET care-tasks, care-tasks/metrics, enrollments/:id/care-tasks; PATCH care-tasks/:id/status; POST care-tasks/:id/apply-recommendations. Auto-create from precheck when `doctor_escalation_required`. Doctor panel in MaternityDoctorView; nurse visibility in MaternityDashboard and MaternityEnrollmentDetailModal; NurseCrossModuleEscalations and NurseDashboard acknowledge.
+- **M4:** Backend-authoritative next-visit suggestion: `GET /maternity/enrollments/:enrollmentId/suggest-next-visit?type=anc|postnatal&visit_date=YYYY-MM-DD` returns `{ suggestedDate, reason, riskLevel }` (WHO ANC/postnatal milestones + risk-based interval). Frontend already has blocker panels and auto-suggest UI in MaternityEnrollmentDetailModal; can optionally call this endpoint for authoritative dates.
+- **M5:** `services/ehr-service/src/config/maternity-guideline-registry.ts` — rule_id → { source, citation, version } for WHO/Zimbabwe MoH. `getEffectiveGuidelineReference(ruleId, override)` used in all four prechecks so every rule has traceable guideline mapping in trace and guideline_citations.
+- **M6:** Maternity service spec: suggestNextVisit (M4) and updateMaternityCareTaskStatus lifecycle (M6) tests added. CI runs `npm test` for ehr-service (includes maternity.service.spec). Care task metrics already exposed via GET care-tasks/metrics (active_tasks, overdue_tasks, critical_open_tasks, etc.).

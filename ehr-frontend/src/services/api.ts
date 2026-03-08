@@ -5035,6 +5035,26 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getMaternitySuggestNextVisit: async (
+    tenantSlug: string,
+    token: string,
+    enrollmentId: string,
+    type: 'anc' | 'postnatal',
+    visitDate: string,
+  ) => {
+    const response = await ehrAxios.get(
+      `/maternity/enrollments/${enrollmentId}/suggest-next-visit`,
+      {
+        params: { type, visit_date: visitDate },
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
   // Maternity Indicators
   getMaternityIndicators: async (tenantSlug: string, token: string, startDate?: string, endDate?: string) => {
     const response = await ehrAxios.get('/maternity/indicators', {

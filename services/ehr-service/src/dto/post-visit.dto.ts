@@ -377,3 +377,11 @@ export class AcknowledgePostVisitIntraVisitAlertDto {
   @MaxLength(500)
   note?: string;
 }
+
+export class RespondPostVisitPeerConsultDto {
+  @ApiProperty({ description: 'De-identified response summary (no PHI)' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  responseSummaryDeidentified: string;
+}

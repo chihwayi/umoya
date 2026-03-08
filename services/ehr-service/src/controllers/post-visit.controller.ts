@@ -44,6 +44,7 @@ import {
   ReviewPostVisitBillingSuggestionDto,
   ReviewPostVisitArtifactDto,
   ReviewPostVisitTrialMatchDto,
+  RespondPostVisitPeerConsultDto,
 } from '../dto/post-visit.dto';
 import { PostVisitService } from '../services/post-visit.service';
 import { UploadSecurityService } from '../services/upload-security.service';
@@ -333,7 +334,22 @@ export class PostVisitController {
     @Param('id') id: string,
     @Request() req: RequestWithTenant,
   ) {
-    return this.postVisitService.listSessionAdminDocuments(req.tenantDb, id);
+    return this.postVisitService.listSessionAdminDocuments(req.tenantDb, id, {
+      actorUserId: this.resolveUserId(req),
+    });
+  }
+
+  @Post('admin-docs/:documentId/dispatch')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Mark a signed admin document as dispatched (audited)' })
+  @ApiResponse({ status: 200, description: 'Document marked as dispatched' })
+  async markAdminDocumentDispatched(
+    @Param('documentId') documentId: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.markAdminDocumentDispatched(req.tenantDb, documentId, {
+      actorUserId: this.resolveUserId(req),
+    });
   }
 
   @Get('sessions/:id/trial-matches')
@@ -383,6 +399,55 @@ export class PostVisitController {
     @Query('limit') limit?: string,
   ) {
     return this.postVisitService.listTrialMatchAuditLog(req.tenantDb, id, matchId, {
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('sessions/:id/fhir-sync-log')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'List FHIR write-back attempts for a post-visit session' })
+  @ApiResponse({ status: 200, description: 'FHIR sync log entries' })
+  async getFhirSyncLogForSession(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.postVisitService.getFhirSyncLogForSession(req.tenantDb, id);
+  }
+
+  @Post('sessions/:id/peer-consult')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Create a peer consultation request (de-identified summary)' })
+  @ApiResponse({ status: 201, description: 'Peer consult request created' })
+  async createPeerConsultRequest(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.postVisitService.createPeerConsultRequest(req.tenantDb, id, {
+      actorUserId: this.resolveUserId(req),
+    });
+  }
+
+  @Post('peer-consults/:consultId/respond')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Respond to a peer consult with de-identified summary' })
+  @ApiResponse({ status: 200, description: 'Peer consult responded' })
+  async respondPeerConsult(
+    @Param('consultId') consultId: string,
+    @Body() body: RespondPostVisitPeerConsultDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.respondPeerConsult(req.tenantDb, consultId, body, {
+      actorUserId: this.resolveUserId(req),
+    });
+  }
+
+  @Get('peer-consults')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'List peer consults (optional filter by sessionId or status)' })
+  @ApiResponse({ status: 200, description: 'Peer consults listed' })
+  async listPeerConsults(
+    @Request() req: RequestWithTenant,
+    @Query('sessionId') sessionId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.postVisitService.listPeerConsults(req.tenantDb, {
+      sessionId,
+      status,
       limit: limit ? Number(limit) : undefined,
     });
   }
@@ -996,6 +1061,19 @@ export class PostVisitController {
         forceRefresh: ['1', 'true', 'yes', 'refresh'].includes(String(refresh || '').toLowerCase()),
       },
     );
+  }
+
+  @Post('jobs/generate-previsit-briefs')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Generate pre-visit briefs for appointments in the next N minutes (cron/scheduler)' })
+  @ApiResponse({ status: 201, description: 'Job completed' })
+  async generatePreVisitBriefsJob(
+    @Request() req: RequestWithTenant,
+    @Query('withinMinutes') withinMinutes?: string,
+  ): Promise<{ generated: number; skipped: number; errors: Array<{ appointmentId: string; error: string }> }> {
+    return this.postVisitService.generatePreVisitBriefsForUpcomingAppointments(req.tenantDb, {
+      withinMinutes: withinMinutes != null ? parseInt(String(withinMinutes), 10) : undefined,
+    });
   }
 
   @Post('sessions/:id/publish')

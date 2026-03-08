@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Request, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { MaternityService } from '../services/maternity.service';
@@ -323,6 +323,21 @@ export class MaternityController {
     @Param('enrollmentId') enrollmentId: string,
   ) {
     return this.maternityService.getEnrollmentMaternityCareTasks(req.tenantDb, enrollmentId);
+  }
+
+  @Get('enrollments/:enrollmentId/suggest-next-visit')
+  @ApiOperation({ summary: 'Get backend-authoritative suggested next ANC or postnatal visit date (M4)' })
+  @ApiResponse({ status: 200, description: 'Suggested next visit date and reason' })
+  async suggestNextVisit(
+    @Request() req: RequestWithTenant,
+    @Param('enrollmentId') enrollmentId: string,
+    @Query('type') type: 'anc' | 'postnatal',
+    @Query('visit_date') visitDate: string,
+  ) {
+    if (!visitDate || !type || !['anc', 'postnatal'].includes(type)) {
+      throw new BadRequestException('Query params type (anc|postnatal) and visit_date are required.');
+    }
+    return this.maternityService.suggestNextVisit(req.tenantDb, enrollmentId, type, visitDate);
   }
 
   @Patch('care-tasks/:id/status')

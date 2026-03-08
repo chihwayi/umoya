@@ -1268,10 +1268,14 @@ describe('PostVisitService', () => {
                 generated_by: params[10],
                 generated_at: '2026-03-06T12:00:00.000Z',
                 metadata: JSON.parse(params[11] || '{}'),
+                delivered_at: params[12] || null,
                 created_at: '2026-03-06T12:00:00.000Z',
                 updated_at: '2026-03-06T12:00:00.000Z',
               },
             ];
+          }
+          if (sql.includes('INSERT INTO post_visit_coordinator_tasks')) {
+            return [];
           }
           return [];
         }),
@@ -1297,6 +1301,30 @@ describe('PostVisitService', () => {
       expect(result.reused).toBe(false);
     } finally {
       delete process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF;
+    }
+  });
+
+  it('generatePreVisitBriefsForUpcomingAppointments returns skipped count when feature disabled', async () => {
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('FROM appointments') && sql.includes('appointment_date >= NOW()')) {
+          return [{ id: 'apt-1' }, { id: 'apt-2' }];
+        }
+        return [];
+      }),
+    } as any;
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const prev = process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF;
+    delete process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF;
+    try {
+      const result = await service.generatePreVisitBriefsForUpcomingAppointments(tenantDb, {
+        withinMinutes: 60,
+      });
+      expect(result.generated).toBe(0);
+      expect(result.skipped).toBe(2);
+      expect(result.errors).toEqual([]);
+    } finally {
+      if (prev !== undefined) process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF = prev;
     }
   });
 
@@ -1394,12 +1422,61 @@ describe('PostVisitService', () => {
     }
   });
 
+  it('markAdminDocumentDispatched updates status to dispatched and only allows signed docs', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const signedRow = {
+      id: 'doc-1',
+      session_id: 'session-1',
+      patient_id: 'patient-1',
+      status: 'signed',
+      document_type: 'referral_letter',
+      title: 'Referral',
+      body_json: {},
+      immutable_hash: 'abc',
+      signed_by: 'doctor-1',
+      signed_at: new Date(),
+      metadata: {},
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT *') && sql.includes('post_visit_admin_documents')) {
+          return [{ ...signedRow, status: 'dispatched' }];
+        }
+        if (sql.includes('SELECT') && sql.includes('post_visit_admin_documents') && sql.includes('id = $1')) {
+          return [signedRow];
+        }
+        if (sql.includes('UPDATE') && sql.includes("status = 'dispatched'")) return [];
+        return [];
+      }),
+    } as any;
+
+    const result = await service.markAdminDocumentDispatched(tenantDb, 'doc-1', { actorUserId: 'doctor-1' });
+    expect(result.status).toBe('dispatched');
+    expect(result.documentId).toBe('doc-1');
+    expect(result.document?.status).toBe('dispatched');
+
+    tenantDb.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT') && sql.includes('post_visit_admin_documents')) {
+        return [{ ...signedRow, status: 'draft' }];
+      }
+      return [];
+    });
+    await expect(
+      service.markAdminDocumentDispatched(tenantDb, 'doc-1', { actorUserId: 'doctor-1' }),
+    ).rejects.toThrow('Only signed');
+  });
+
   it('requires explicit confirmation for voice SIGN_AND_PUBLISH command', async () => {
     process.env.FEATURE_POSTVISIT_VOICE_REVIEW = 'true';
     try {
       const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
       const tenantDb = {
-        query: jest.fn(async () => []),
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('post_visit_sessions') && sql.includes('id = $1')) return [{ id: 'session-1', patient_id: 'patient-1' }];
+          return [];
+        }),
       } as any;
 
       await expect(
@@ -1425,7 +1502,10 @@ describe('PostVisitService', () => {
     try {
       const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
       const tenantDb = {
-        query: jest.fn(async () => []),
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('post_visit_sessions') && sql.includes('id = $1')) return [{ id: 'session-1', patient_id: 'patient-1' }];
+          return [];
+        }),
       } as any;
       const reviewSpy = jest.spyOn(service, 'reviewDraftArtifact').mockResolvedValue({
         session: { id: 'session-1', status: 'doctor_reviewed' },

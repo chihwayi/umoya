@@ -817,7 +817,25 @@ export class PostVisitService {
       ADD COLUMN IF NOT EXISTS source VARCHAR(80) NOT NULL DEFAULT 'post_visit_previsit_brief_v1',
       ADD COLUMN IF NOT EXISTS generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP WITH TIME ZONE
+    `);
+
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_coordinator_tasks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        brief_id UUID NOT NULL REFERENCES post_visit_previsit_briefs(id) ON DELETE CASCADE,
+        appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        risk_tier VARCHAR(20) NOT NULL
+          CHECK (risk_tier IN ('high','critical')),
+        nudge_policy VARCHAR(120),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending','acknowledged','completed')),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(brief_id)
+      )
     `);
 
     await tenantDb.query(`
@@ -1003,6 +1021,46 @@ export class PostVisitService {
       )
     `);
 
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS fhir_sync_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(80),
+        session_id UUID REFERENCES post_visit_sessions(id) ON DELETE SET NULL,
+        resource_type VARCHAR(80) NOT NULL,
+        resource_id VARCHAR(255) NOT NULL,
+        fhir_resource_id VARCHAR(255),
+        operation VARCHAR(20) NOT NULL DEFAULT 'create'
+          CHECK (operation IN ('create','update','delete')),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending','success','failed')),
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        last_error TEXT,
+        next_retry_at TIMESTAMP WITH TIME ZONE,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_peer_consults (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        request_summary_deidentified TEXT NOT NULL,
+        response_summary_deidentified TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'requested'
+          CHECK (status IN ('requested','responded','closed')),
+        requested_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        responded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        responded_at TIMESTAMP WITH TIME ZONE,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_patient_id ON post_visit_sessions(patient_id)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_doctor_id ON post_visit_sessions(doctor_id)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_status ON post_visit_sessions(status)`);
@@ -1052,6 +1110,8 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_patient ON post_visit_previsit_briefs(patient_id, generated_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_doctor ON post_visit_previsit_briefs(doctor_id, generated_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_risk ON post_visit_previsit_briefs(follow_up_risk_tier, follow_up_risk_score DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_coordinator_tasks_status ON post_visit_coordinator_tasks(status, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_coordinator_tasks_patient ON post_visit_coordinator_tasks(patient_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_session ON post_visit_admin_documents(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_patient ON post_visit_admin_documents(patient_id, document_type, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_hash ON post_visit_admin_documents(immutable_hash)`);
@@ -1067,6 +1127,10 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_curation ON post_visit_companion_memory(patient_id, promoted_at DESC, retired_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_fhir_sync_log_status ON fhir_sync_log(status, next_retry_at)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_fhir_sync_log_session ON fhir_sync_log(session_id, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_peer_consults_session ON post_visit_peer_consults(session_id, status)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_peer_consults_status ON post_visit_peer_consults(status, created_at DESC)`);
   }
 
   private mapSession(row: any) {
@@ -1214,6 +1278,7 @@ export class PostVisitService {
       source: row.source || 'post_visit_previsit_brief_v1',
       generatedBy: row.generated_by || null,
       generatedAt: row.generated_at,
+      deliveredAt: row.delivered_at || null,
       metadata: row.metadata || {},
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -1502,6 +1567,14 @@ export class PostVisitService {
       return configured;
     }
     return String(process.env.FEATURE_POSTVISIT_COMPANION_MEMORY || 'true').toLowerCase() !== 'false';
+  }
+
+  private isFhirWriteBackEnabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_FHIR_WRITEBACK || 'false').toLowerCase() === 'true';
+  }
+
+  private isPeerConsultEnabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_PEER_CONSULT || 'false').toLowerCase() === 'true';
   }
 
   private resolveClinicalTrialsApiUrl(): string {
@@ -5576,7 +5649,7 @@ export class PostVisitService {
   async generateAppointmentPreVisitBrief(
     tenantDb: DataSource,
     appointmentId: string,
-    options: { actorUserId?: string | null; forceRefresh?: boolean } = {},
+    options: { actorUserId?: string | null; forceRefresh?: boolean; fromJob?: boolean } = {},
   ) {
     await this.ensurePostVisitSchema(tenantDb);
     const appointmentRows = await tenantDb.query(
@@ -5628,6 +5701,29 @@ export class PostVisitService {
     );
     const existing = existingRows?.[0] || null;
     if (existing && options.forceRefresh !== true) {
+      if (
+        this.hipaaAuditService &&
+        (options.actorUserId || options.fromJob) &&
+        appointment.patient_id
+      ) {
+        await this.hipaaAuditService
+          .logPhiAccess(
+            tenantDb,
+            options.actorUserId || 'system',
+            '',
+            undefined,
+            HipaaAuditAction.APPOINTMENT_VIEW,
+            'post_visit_previsit_brief',
+            existing.id,
+            appointment.patient_id,
+            undefined,
+            undefined,
+            undefined,
+            { fields: ['brief_content', 'follow_up_risk'], recordCount: 1 },
+            { appointmentId },
+          )
+          .catch(() => {});
+      }
       return {
         featureEnabled: true,
         ...this.mapPreVisitBrief(existing),
@@ -5762,6 +5858,7 @@ export class PostVisitService {
       generatedAt: new Date().toISOString(),
     };
 
+    const deliveredAt = options.fromJob === true ? new Date() : null;
     const upsertedRows = await tenantDb.query(
       `
         INSERT INTO post_visit_previsit_briefs (
@@ -5778,9 +5875,10 @@ export class PostVisitService {
           source,
           generated_by,
           generated_at,
-          metadata
+          metadata,
+          delivered_at
         ) VALUES (
-          $1,$2,$3,$4,'active',$5::jsonb,$6,$7,$8::jsonb,$9,$10,$11,NOW(),$12::jsonb
+          $1,$2,$3,$4,'active',$5::jsonb,$6,$7,$8::jsonb,$9,$10,$11,NOW(),$12::jsonb,$13
         )
         ON CONFLICT (appointment_id) DO UPDATE
         SET patient_id = EXCLUDED.patient_id,
@@ -5796,6 +5894,7 @@ export class PostVisitService {
             generated_by = EXCLUDED.generated_by,
             generated_at = NOW(),
             metadata = EXCLUDED.metadata,
+            delivered_at = COALESCE(EXCLUDED.delivered_at, post_visit_previsit_briefs.delivered_at),
             updated_at = NOW()
         RETURNING *
       `,
@@ -5815,13 +5914,140 @@ export class PostVisitService {
           regenerated: options.forceRefresh === true,
           latest_session_id: latestSessionId,
         }),
+        deliveredAt,
       ],
     );
 
+    const briefRow = upsertedRows[0];
+    if (
+      this.hipaaAuditService &&
+      (options.actorUserId || options.fromJob) &&
+      appointment.patient_id
+    ) {
+      await this.hipaaAuditService
+        .logPhiModification(
+          tenantDb,
+          options.actorUserId || 'system',
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_UPDATE,
+          'post_visit_previsit_brief',
+          briefRow.id,
+          appointment.patient_id,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { appointmentId, fromJob: options.fromJob === true },
+        )
+        .catch(() => {});
+      await this.hipaaAuditService
+        .logPhiAccess(
+          tenantDb,
+          options.actorUserId || 'system',
+          '',
+          undefined,
+          HipaaAuditAction.APPOINTMENT_VIEW,
+          'post_visit_previsit_brief',
+          briefRow.id,
+          appointment.patient_id,
+          undefined,
+          undefined,
+          undefined,
+          { fields: ['brief_content', 'follow_up_risk'], recordCount: 1 },
+          { appointmentId },
+        )
+        .catch(() => {});
+    }
+
+    if (
+      (risk.tier === 'high' || risk.tier === 'critical') &&
+      briefRow?.id &&
+      appointment.patient_id
+    ) {
+      await tenantDb
+        .query(
+          `
+            INSERT INTO post_visit_coordinator_tasks (
+              brief_id,
+              appointment_id,
+              patient_id,
+              risk_tier,
+              nudge_policy,
+              status
+            ) VALUES ($1,$2,$3,$4,$5,'pending')
+            ON CONFLICT (brief_id) DO UPDATE SET
+              risk_tier = EXCLUDED.risk_tier,
+              nudge_policy = EXCLUDED.nudge_policy,
+              updated_at = NOW()
+          `,
+          [
+            briefRow.id,
+            appointmentId,
+            appointment.patient_id,
+            risk.tier,
+            risk.nudgePolicy || null,
+          ],
+        )
+        .catch(() => {});
+    }
+
     return {
       featureEnabled: true,
-      ...this.mapPreVisitBrief(upsertedRows[0]),
+      ...this.mapPreVisitBrief(briefRow),
       reused: false,
+    };
+  }
+
+  /**
+   * Generate pre-visit briefs for appointments starting within the given window (e.g. next 60 minutes).
+   * Intended to be called by a cron/scheduler. When feature flag is off, skips generation.
+   */
+  async generatePreVisitBriefsForUpcomingAppointments(
+    tenantDb: DataSource,
+    options: { withinMinutes?: number } = {},
+  ): Promise<{ generated: number; skipped: number; errors: Array<{ appointmentId: string; error: string }> }> {
+    await this.ensurePostVisitSchema(tenantDb);
+    const withinMinutes = Math.min(1440, Math.max(1, Number(options.withinMinutes) || 60));
+    const appointmentRows = await tenantDb.query(
+      `
+        SELECT id
+        FROM appointments
+        WHERE appointment_date >= NOW()
+          AND appointment_date <= NOW() + ($1::int * interval '1 minute')
+          AND status IN ('scheduled','confirmed')
+        ORDER BY appointment_date ASC
+      `,
+      [withinMinutes],
+    );
+    let generated = 0;
+    let skipped = 0;
+    const errors: Array<{ appointmentId: string; error: string }> = [];
+    if (!this.isPreVisitBriefEnabled()) {
+      return { generated: 0, skipped: appointmentRows?.length || 0, errors: [] };
+    }
+    for (const row of appointmentRows || []) {
+      const appointmentId = row?.id;
+      if (!appointmentId) continue;
+      try {
+        const result = await this.generateAppointmentPreVisitBrief(tenantDb, appointmentId, {
+          fromJob: true,
+        });
+        const reused = 'reused' in result && result.reused;
+        if (result.featureEnabled && !reused) generated += 1;
+        else if (reused) skipped += 1;
+      } catch (e: any) {
+        errors.push({
+          appointmentId: String(appointmentId),
+          error: e?.message || String(e),
+        });
+      }
+    }
+    return {
+      generated,
+      skipped: (appointmentRows?.length || 0) - generated - errors.length,
+      errors,
     };
   }
 
@@ -6047,6 +6273,47 @@ export class PostVisitService {
       }
     }
 
+    if (
+      documents.length > 0 &&
+      this.hipaaAuditService &&
+      options.actorUserId &&
+      sessionRow.patient_id
+    ) {
+      await this.hipaaAuditService
+        .logPhiModification(
+          tenantDb,
+          options.actorUserId,
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_CREATE,
+          'post_visit_admin_document',
+          sessionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          sessionId,
+          {
+            documentCount: documents.length,
+            documentTypes: documentTypes,
+            signImmediately,
+          },
+        )
+        .catch(() => {});
+    }
+
+    if (signImmediately && documents.length > 0) {
+      for (const doc of documents) {
+        await this.queueFhirWriteBack(tenantDb, {
+          sessionId,
+          resourceType: 'DocumentReference',
+          resourceId: doc.id,
+          operation: 'create',
+        }).catch(() => {});
+      }
+    }
+
     return {
       featureEnabled: true,
       sessionId,
@@ -6058,9 +6325,10 @@ export class PostVisitService {
   async listSessionAdminDocuments(
     tenantDb: DataSource,
     sessionId: string,
+    options: { actorUserId?: string | null } = {},
   ) {
     await this.ensurePostVisitSchema(tenantDb);
-    await this.getSessionRow(tenantDb, sessionId);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
 
     if (!this.isAdminDocumentsEnabled()) {
       return {
@@ -6080,10 +6348,98 @@ export class PostVisitService {
       `,
       [sessionId],
     );
+
+    if (
+      this.hipaaAuditService &&
+      (options.actorUserId || '') !== '' &&
+      sessionRow.patient_id &&
+      (rows?.length ?? 0) > 0
+    ) {
+      await this.hipaaAuditService
+        .logPhiAccess(
+          tenantDb,
+          options.actorUserId!,
+          '',
+          undefined,
+          HipaaAuditAction.PRINT_DOCUMENT,
+          'post_visit_admin_document',
+          sessionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          sessionId,
+          { fields: ['title', 'body_json', 'document_type'], recordCount: rows.length },
+          { sessionId },
+        )
+        .catch(() => {});
+    }
+
     return {
       featureEnabled: true,
       sessionId,
       documents: rows.map((row: any) => this.mapAdminDocument(row)),
+    };
+  }
+
+  /**
+   * Mark a signed admin document as dispatched (e.g. sent to patient or external system).
+   * Only documents with status 'signed' can be dispatched. Emits HIPAA audit.
+   */
+  async markAdminDocumentDispatched(
+    tenantDb: DataSource,
+    documentId: string,
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const rows = await tenantDb.query(
+      `SELECT id, session_id, patient_id, status FROM post_visit_admin_documents WHERE id = $1 LIMIT 1`,
+      [documentId],
+    );
+    const doc = rows?.[0];
+    if (!doc) {
+      throw new NotFoundException('Admin document not found');
+    }
+    if (String(doc.status || '').toLowerCase() !== 'signed') {
+      throw new BadRequestException('Only signed admin documents can be marked as dispatched');
+    }
+    await tenantDb.query(
+      `UPDATE post_visit_admin_documents SET status = 'dispatched', updated_at = NOW() WHERE id = $1`,
+      [documentId],
+    );
+    if (
+      this.hipaaAuditService &&
+      options.actorUserId &&
+      doc.patient_id
+    ) {
+      await this.hipaaAuditService
+        .logPhiModification(
+          tenantDb,
+          options.actorUserId,
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_UPDATE,
+          'post_visit_admin_document_dispatch',
+          documentId,
+          doc.patient_id,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          doc.session_id,
+          { previousStatus: 'signed', newStatus: 'dispatched' },
+        )
+        .catch(() => {});
+    }
+    const [updated] = await tenantDb.query(
+      `SELECT * FROM post_visit_admin_documents WHERE id = $1 LIMIT 1`,
+      [documentId],
+    );
+    return {
+      documentId,
+      sessionId: doc.session_id,
+      patientId: doc.patient_id,
+      status: 'dispatched',
+      document: updated ? this.mapAdminDocument(updated) : null,
     };
   }
 
@@ -6115,6 +6471,7 @@ export class PostVisitService {
       );
     }
 
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
     const baseNote = String(payload.note || '').trim() || `Voice command ${normalizedCommand}`;
     let result: any = null;
     if (normalizedCommand === 'APPROVE_SUMMARY') {
@@ -6195,6 +6552,31 @@ export class PostVisitService {
       );
     }
 
+    if (
+      this.hipaaAuditService &&
+      options.actorUserId &&
+      sessionRow.patient_id
+    ) {
+      await this.hipaaAuditService
+        .logPhiModification(
+          tenantDb,
+          options.actorUserId,
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_UPDATE,
+          'post_visit_voice_command',
+          sessionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          sessionId,
+          { command: normalizedCommand, channel: 'voice_command' },
+        )
+        .catch(() => {});
+    }
+
     return {
       featureEnabled: true,
       sessionId,
@@ -6212,6 +6594,10 @@ export class PostVisitService {
       .trim();
   }
 
+  /**
+   * Returns only de-identified condition/search terms suitable for the external ClinicalTrials.gov API.
+   * No raw PHI (names, MRN, free text) is included. Only whitelisted condition terms or filtered tokens are returned.
+   */
   private deriveTrialSearchTerms(input: string): string[] {
     const normalized = this.normalizeTrialSearchToken(input);
     if (!normalized) return [];
@@ -6539,6 +6925,10 @@ export class PostVisitService {
     };
   }
 
+  /**
+   * Fetches trial candidates from external API. Called only with de-identified search terms from deriveTrialSearchTerms.
+   * No PHI is sent to the external API.
+   */
   private async fetchClinicalTrialCandidates(searchTerms: string[]) {
     const apiUrl = this.resolveClinicalTrialsApiUrl();
     const candidates = [] as Array<{
@@ -7219,6 +7609,31 @@ export class PostVisitService {
       enrolled: matches.filter((item: any) => item.matchStatus === 'enrolled').length,
     };
 
+    if (
+      this.hipaaAuditService &&
+      options.actorUserId &&
+      sessionRow.patient_id &&
+      matches.length > 0
+    ) {
+      await this.hipaaAuditService
+        .logPhiAccess(
+          tenantDb,
+          options.actorUserId,
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_VIEW,
+          'post_visit_trial_matches',
+          sessionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          sessionId,
+          { fields: ['matches', 'eligibility'], recordCount: matches.length },
+          { sessionId },
+        )
+        .catch(() => {});
+    }
+
     return {
       featureEnabled: true,
       sessionId,
@@ -7350,6 +7765,31 @@ export class PostVisitService {
       ],
     );
 
+    if (
+      this.hipaaAuditService &&
+      options.actorUserId &&
+      sessionRow.patient_id
+    ) {
+      await this.hipaaAuditService
+        .logPhiModification(
+          tenantDb,
+          options.actorUserId,
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_UPDATE,
+          'post_visit_trial_match_review',
+          matchId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          sessionId,
+          { action: payload.action, previousStatus, nextStatus },
+        )
+        .catch(() => {});
+    }
+
     return {
       sessionId,
       action: payload.action,
@@ -7387,6 +7827,287 @@ export class PostVisitService {
         lastAction: entries.length > 0 ? entries[0].action : null,
       },
     };
+  }
+
+  /**
+   * Log a FHIR write-back attempt to fhir_sync_log. Used for audit and retry queue.
+   */
+  async logFhirSyncAttempt(
+    tenantDb: DataSource,
+    params: {
+      tenantId?: string | null;
+      sessionId?: string | null;
+      resourceType: string;
+      resourceId: string;
+      fhirResourceId?: string | null;
+      operation?: 'create' | 'update' | 'delete';
+      status: 'pending' | 'success' | 'failed';
+      attemptCount?: number;
+      maxAttempts?: number;
+      lastError?: string | null;
+      nextRetryAt?: Date | null;
+      metadata?: Record<string, any>;
+    },
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const [row] = await tenantDb.query(
+      `
+        INSERT INTO fhir_sync_log (
+          tenant_id,
+          session_id,
+          resource_type,
+          resource_id,
+          fhir_resource_id,
+          operation,
+          status,
+          attempt_count,
+          max_attempts,
+          last_error,
+          next_retry_at,
+          metadata
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
+        RETURNING *
+      `,
+      [
+        params.tenantId || null,
+        params.sessionId || null,
+        params.resourceType,
+        params.resourceId,
+        params.fhirResourceId || null,
+        params.operation || 'create',
+        params.status,
+        Math.max(0, params.attemptCount ?? 0),
+        Math.min(20, Math.max(1, params.maxAttempts ?? 5)),
+        params.lastError || null,
+        params.nextRetryAt || null,
+        JSON.stringify(params.metadata || {}),
+      ],
+    );
+    return row;
+  }
+
+  /**
+   * Queue a FHIR write-back for a signed artifact. Logs to fhir_sync_log with status pending.
+   */
+  async queueFhirWriteBack(
+    tenantDb: DataSource,
+    params: {
+      tenantId?: string | null;
+      sessionId: string;
+      resourceType: string;
+      resourceId: string;
+      operation?: 'create' | 'update';
+    },
+  ) {
+    if (!this.isFhirWriteBackEnabled()) return null;
+    return this.logFhirSyncAttempt(tenantDb, {
+      ...params,
+      status: 'pending',
+      attemptCount: 0,
+      nextRetryAt: new Date(),
+      metadata: { queued_at: new Date().toISOString() },
+    });
+  }
+
+  async getFhirSyncLogForSession(tenantDb: DataSource, sessionId: string) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const rows = await tenantDb.query(
+      `SELECT * FROM fhir_sync_log WHERE session_id = $1 ORDER BY created_at DESC LIMIT 100`,
+      [sessionId],
+    );
+    return rows.map((row: any) => ({
+      id: row.id,
+      sessionId: row.session_id,
+      resourceType: row.resource_type,
+      resourceId: row.resource_id,
+      fhirResourceId: row.fhir_resource_id,
+      operation: row.operation,
+      status: row.status,
+      attemptCount: row.attempt_count,
+      lastError: row.last_error,
+      nextRetryAt: row.next_retry_at,
+      createdAt: row.created_at,
+    }));
+  }
+
+  /**
+   * Build a de-identified summary for peer consult (condition/demographic buckets only, no names/MRN).
+   */
+  private async buildDeidentifiedPeerConsultSummary(tenantDb: DataSource, sessionId: string): Promise<string> {
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+    const [summaryArtifact, recommendationArtifact, entityRows] = await Promise.all([
+      this.getArtifactRow(tenantDb, sessionId, 'visit_summary'),
+      this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle'),
+      tenantDb.query(
+        `SELECT entity_type, normalized_value FROM post_visit_extracted_entities WHERE session_id = $1 LIMIT 50`,
+        [sessionId],
+      ),
+    ]);
+    const conditions = (entityRows || [])
+      .filter((r: any) => ['condition', 'problem', 'diagnosis'].includes(String(r.entity_type || '').toLowerCase()))
+      .map((r: any) => String(r.normalized_value || r.entity_type || '').trim())
+      .filter(Boolean);
+    const summarySnippet = String(summaryArtifact?.content?.plain_language_summary || '')
+      .trim()
+      .slice(0, 500)
+      .replace(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g, '[Name]')
+      .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[ID]')
+      .replace(/\b\d{10,}\b/g, '[Number]');
+    const recTitles = Array.isArray(recommendationArtifact?.content?.items)
+      ? recommendationArtifact.content.items.map((item: any) => String(item?.title || '').trim()).filter(Boolean)
+      : [];
+    const parts = [
+      conditions.length ? `Conditions: ${[...new Set(conditions)].slice(0, 10).join(', ')}` : '',
+      recTitles.length ? `Recommendations: ${recTitles.slice(0, 5).join('; ')}` : '',
+      summarySnippet ? `Summary excerpt: ${summarySnippet}` : '',
+    ].filter(Boolean);
+    return parts.join(' | ') || 'Post-visit session summary (de-identified).';
+  }
+
+  /**
+   * Create a peer consultation request with de-identified summary. Traceable via consult id and audit.
+   */
+  async createPeerConsultRequest(
+    tenantDb: DataSource,
+    sessionId: string,
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!this.isPeerConsultEnabled()) {
+      throw new BadRequestException('Peer consultation is disabled by feature flag');
+    }
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+    const requestSummary = await this.buildDeidentifiedPeerConsultSummary(tenantDb, sessionId);
+    const [row] = await tenantDb.query(
+      `
+        INSERT INTO post_visit_peer_consults (
+          session_id,
+          patient_id,
+          request_summary_deidentified,
+          status,
+          requested_by
+        ) VALUES ($1,$2,$3,'requested',$4)
+        RETURNING *
+      `,
+      [sessionId, sessionRow.patient_id, requestSummary, options.actorUserId || null],
+    );
+    if (this.hipaaAuditService && options.actorUserId && sessionRow.patient_id) {
+      await this.hipaaAuditService
+        .logPhiModification(tenantDb, options.actorUserId, '', undefined, HipaaAuditAction.MEDICAL_RECORD_CREATE, 'post_visit_peer_consult', row.id, sessionRow.patient_id, undefined, undefined, undefined, undefined, sessionId, { action: 'request_created' })
+        .catch(() => {});
+    }
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      status: row.status,
+      requestSummaryDeidentified: row.request_summary_deidentified,
+      requestedBy: row.requested_by,
+      createdAt: row.created_at,
+    };
+  }
+
+  /**
+   * Respond to a peer consult with de-identified response summary.
+   */
+  async respondPeerConsult(
+    tenantDb: DataSource,
+    consultId: string,
+    payload: { responseSummaryDeidentified: string },
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!this.isPeerConsultEnabled()) {
+      throw new BadRequestException('Peer consultation is disabled by feature flag');
+    }
+    const [existing] = await tenantDb.query(
+      `SELECT * FROM post_visit_peer_consults WHERE id = $1 LIMIT 1`,
+      [consultId],
+    );
+    if (!existing) throw new NotFoundException('Peer consult not found');
+    if (String(existing.status) !== 'requested') {
+      throw new BadRequestException('Consult already responded or closed');
+    }
+    const summary = String(payload.responseSummaryDeidentified || '').trim().slice(0, 4000) || 'No summary provided.';
+    await tenantDb.query(
+      `UPDATE post_visit_peer_consults SET response_summary_deidentified = $2, status = 'responded', responded_by = $3, responded_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [consultId, summary, options.actorUserId || null],
+    );
+    if (this.hipaaAuditService && options.actorUserId && existing.patient_id) {
+      await this.hipaaAuditService
+        .logPhiModification(tenantDb, options.actorUserId, '', undefined, HipaaAuditAction.MEDICAL_RECORD_UPDATE, 'post_visit_peer_consult', consultId, existing.patient_id, undefined, undefined, undefined, undefined, existing.session_id, { action: 'responded' })
+        .catch(() => {});
+    }
+    const [updated] = await tenantDb.query(`SELECT * FROM post_visit_peer_consults WHERE id = $1 LIMIT 1`, [consultId]);
+    return {
+      id: updated.id,
+      sessionId: updated.session_id,
+      status: updated.status,
+      responseSummaryDeidentified: updated.response_summary_deidentified,
+      respondedBy: updated.responded_by,
+      respondedAt: updated.responded_at,
+    };
+  }
+
+  async listPeerConsults(
+    tenantDb: DataSource,
+    options: { sessionId?: string; status?: string; limit?: number } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!this.isPeerConsultEnabled()) {
+      return { featureEnabled: false, consults: [], message: 'Peer consultation is disabled by feature flag.' };
+    }
+    const limit = Math.min(Math.max(Number(options.limit) || 50, 1), 200);
+    const conditions: string[] = [];
+    const params: any[] = [];
+    if (options.sessionId) {
+      params.push(options.sessionId);
+      conditions.push(`session_id = $${params.length}`);
+    }
+    if (options.status) {
+      params.push(options.status);
+      conditions.push(`status = $${params.length}`);
+    }
+    params.push(limit);
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const rows = await tenantDb.query(
+      `SELECT id, session_id, patient_id, request_summary_deidentified, response_summary_deidentified, status, requested_by, responded_by, responded_at, created_at FROM post_visit_peer_consults ${where} ORDER BY created_at DESC LIMIT $${params.length}`,
+      params,
+    );
+    return {
+      featureEnabled: true,
+      consults: rows.map((r: any) => ({
+        id: r.id,
+        sessionId: r.session_id,
+        status: r.status,
+        requestSummaryDeidentified: r.request_summary_deidentified,
+        responseSummaryDeidentified: r.response_summary_deidentified ?? null,
+        requestedBy: r.requested_by,
+        respondedBy: r.responded_by ?? null,
+        respondedAt: r.responded_at ?? null,
+        createdAt: r.created_at,
+      })),
+    };
+  }
+
+  /**
+   * Derives a short, safe topic label from a patient question for topic persistence.
+   * Used so companion answers can reference "prior session turns" via topic_discussed memory. No PHI in label.
+   */
+  private deriveTopicLabelFromQuestion(question: string): string | null {
+    const lower = String(question || '').trim().toLowerCase();
+    if (!lower || lower.length < 3) return null;
+    const topicRules: Array<{ pattern: RegExp; label: string }> = [
+      { pattern: /\b(medication|medicine|meds|dose|pill|prescription)\b/, label: 'medication' },
+      { pattern: /\b(follow[- ]?up|return|next visit|appointment)\b/, label: 'follow-up' },
+      { pattern: /\b(symptom|pain|warning sign|when to call|emergency)\b/, label: 'symptoms and warning signs' },
+      { pattern: /\b(diet|food|eat|exercise|activity)\b/, label: 'lifestyle' },
+      { pattern: /\b(test|lab|result|blood)\b/, label: 'tests and results' },
+      { pattern: /\b(referral|specialist|doctor)\b/, label: 'referrals' },
+    ];
+    for (const { pattern, label } of topicRules) {
+      if (pattern.test(lower)) return label;
+    }
+    return 'general care instructions';
   }
 
   private extractCompanionMemoryCandidates(message: string) {
@@ -7518,6 +8239,10 @@ export class PostVisitService {
     return inserted;
   }
 
+  /**
+   * Loads companion memory facts for use in grounded answers. Prior session turns are referenced only via
+   * these persisted facts (no raw message text), so answers stay within safe, curated context.
+   */
   private async getPatientCompanionMemoryFacts(
     tenantDb: DataSource,
     patientId: string,
@@ -9937,6 +10662,15 @@ export class PostVisitService {
     await this.touchCompanionThreadAfterMessage(tenantDb, thread.id, 'patient');
 
     const memoryCandidates = this.extractCompanionMemoryCandidates(messageText);
+    const topicLabel = this.deriveTopicLabelFromQuestion(messageText);
+    if (topicLabel && this.isCompanionMemoryEnabled()) {
+      memoryCandidates.push({
+        memoryType: 'topic_discussed',
+        memoryKey: topicLabel.replace(/\s+/g, '_'),
+        memoryValue: topicLabel,
+        confidence: 0.6,
+      });
+    }
     const persistedMemories = await this.persistCompanionMemoryEntries(tenantDb, {
       sessionId,
       patientId,

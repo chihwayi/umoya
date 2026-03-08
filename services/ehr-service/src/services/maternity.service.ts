@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { getGuidelineForRule } from '../config/maternity-guideline-registry';
 import { TerminologyService } from './terminology.service';
 import { CreateOrderDto, OrderService } from './order.service';
 import { LabOrderService } from './lab-order.service';
@@ -179,6 +180,14 @@ export class MaternityService {
       default:
         return 48;
     }
+  }
+
+  /** Resolve guideline reference for a rule (M5 registry fallback). */
+  private getEffectiveGuidelineReference(ruleId: string, override?: string | null): string | undefined {
+    const ref = this.normalizeString(override);
+    if (ref) return ref;
+    const entry = getGuidelineForRule(ruleId);
+    return entry?.citation ?? undefined;
   }
 
   private getGuidelineSource(guidelineReference?: string | null): string {
@@ -1337,11 +1346,12 @@ export class MaternityService {
       field?: string,
       guidelineReference?: string,
     ) => {
+      const ref = this.getEffectiveGuidelineReference(code, guidelineReference);
       const issue: MaternityPrecheckIssue = {
         code,
         field,
         message,
-        guideline_reference: guidelineReference,
+        guideline_reference: ref,
       };
       if (severity === 'blocker') {
         blockers.push(issue);
@@ -1352,9 +1362,9 @@ export class MaternityService {
         rule_id: code,
         severity,
         message,
-        guideline_reference: guidelineReference,
+        guideline_reference: ref,
       });
-      this.appendGuidelineCitation(guidelineCitations, code, guidelineReference);
+      this.appendGuidelineCitation(guidelineCitations, code, ref ?? undefined);
     };
 
     const toNumber = (value: any): number | null => {
@@ -1632,19 +1642,20 @@ export class MaternityService {
       field?: string,
       guidelineReference?: string,
     ) => {
+      const ref = this.getEffectiveGuidelineReference(code, guidelineReference);
       const issue: MaternityPrecheckIssue = {
         code,
         field,
         message,
-        guideline_reference: guidelineReference,
+        guideline_reference: ref,
       };
       if (severity === 'blocker') {
         blockers.push(issue);
       } else {
         warnings.push(issue);
       }
-      trace.push({ rule_id: code, severity, message, guideline_reference: guidelineReference });
-      this.appendGuidelineCitation(guidelineCitations, code, guidelineReference);
+      trace.push({ rule_id: code, severity, message, guideline_reference: ref });
+      this.appendGuidelineCitation(guidelineCitations, code, ref ?? undefined);
     };
 
     const toNumber = (value: any): number | null => {
@@ -1807,19 +1818,20 @@ export class MaternityService {
       field?: string,
       guidelineReference?: string,
     ) => {
+      const ref = this.getEffectiveGuidelineReference(code, guidelineReference);
       const issue: MaternityPrecheckIssue = {
         code,
         field,
         message,
-        guideline_reference: guidelineReference,
+        guideline_reference: ref,
       };
       if (severity === 'blocker') {
         blockers.push(issue);
       } else {
         warnings.push(issue);
       }
-      trace.push({ rule_id: code, severity, message, guideline_reference: guidelineReference });
-      this.appendGuidelineCitation(guidelineCitations, code, guidelineReference);
+      trace.push({ rule_id: code, severity, message, guideline_reference: ref });
+      this.appendGuidelineCitation(guidelineCitations, code, ref ?? undefined);
     };
 
     const toNumber = (value: any): number | null => {
@@ -1951,19 +1963,20 @@ export class MaternityService {
       field?: string,
       guidelineReference?: string,
     ) => {
+      const ref = this.getEffectiveGuidelineReference(code, guidelineReference);
       const issue: MaternityPrecheckIssue = {
         code,
         field,
         message,
-        guideline_reference: guidelineReference,
+        guideline_reference: ref,
       };
       if (severity === 'blocker') {
         blockers.push(issue);
       } else {
         warnings.push(issue);
       }
-      trace.push({ rule_id: code, severity, message, guideline_reference: guidelineReference });
-      this.appendGuidelineCitation(guidelineCitations, code, guidelineReference);
+      trace.push({ rule_id: code, severity, message, guideline_reference: ref });
+      this.appendGuidelineCitation(guidelineCitations, code, ref ?? undefined);
     };
 
     const toNumber = (value: any): number | null => {
@@ -3959,5 +3972,96 @@ export class MaternityService {
     );
 
     return { visits, total: visits.length };
+  }
+
+  /** Backend-authoritative next visit suggestion for ANC or postnatal (M4 UI hardening). */
+  async suggestNextVisit(
+    tenantDb: DataSource,
+    enrollmentId: string,
+    type: 'anc' | 'postnatal',
+    visitDate: string,
+  ): Promise<{ suggestedDate: string | null; reason: string; riskLevel: string }> {
+    const enrollmentRows = await tenantDb.query(
+      `SELECT id, lmp_date, risk_category FROM maternity_enrollments WHERE id = $1 LIMIT 1`,
+      [enrollmentId],
+    );
+    if (enrollmentRows.length === 0) {
+      return { suggestedDate: null, reason: 'Enrollment not found.', riskLevel: 'low' };
+    }
+    const enrollment = enrollmentRows[0];
+    const riskCategory = String(enrollment.risk_category || 'low').toLowerCase();
+    const riskLevel = riskCategory === 'high' ? 'high' : 'low';
+    const visit = this.normalizeToDateOnly(visitDate);
+    if (!visit) {
+      return { suggestedDate: null, reason: 'Valid visit date is required.', riskLevel };
+    }
+
+    if (type === 'anc') {
+      const lmp = this.normalizeToDateOnly(enrollment.lmp_date);
+      const ancMilestoneWeeks = [20, 26, 30, 34, 36, 38, 40];
+      if (lmp) {
+        const gestationDays = Math.floor((visit.getTime() - lmp.getTime()) / (24 * 60 * 60 * 1000));
+        const gestationWeeks = gestationDays / 7;
+        const nextMilestoneWeek = ancMilestoneWeeks.find((w) => w > gestationWeeks + 0.01);
+        if (nextMilestoneWeek) {
+          const targetDate = new Date(lmp);
+          targetDate.setDate(targetDate.getDate() + nextMilestoneWeek * 7);
+          const targetIso = targetDate.toISOString().slice(0, 10);
+          if (riskCategory === 'high') {
+            const highRiskDate = new Date(visit);
+            highRiskDate.setDate(highRiskDate.getDate() + 14);
+            const highRiskIso = highRiskDate.toISOString().slice(0, 10);
+            const suggestedDate = highRiskDate.getTime() < targetDate.getTime() ? highRiskIso : targetIso;
+            const reason =
+              suggestedDate === highRiskIso
+                ? 'High-risk pregnancy: review earlier than the routine WHO milestone.'
+                : `WHO ANC timing suggests the next review around ${nextMilestoneWeek} weeks gestation.`;
+            return { suggestedDate, reason, riskLevel };
+          }
+          return {
+            suggestedDate: targetIso,
+            reason: `WHO ANC timing suggests the next review around ${nextMilestoneWeek} weeks gestation.`,
+            riskLevel,
+          };
+        }
+      }
+      const fallbackDays = riskCategory === 'high' ? 14 : 28;
+      const fallback = new Date(visit);
+      fallback.setDate(fallback.getDate() + fallbackDays);
+      const suggestedDate = fallback.toISOString().slice(0, 10);
+      const reason =
+        riskCategory === 'high'
+          ? 'High-risk pregnancy without exact gestation timing: schedule closer follow-up in 2 weeks.'
+          : 'Routine follow-up interval suggested at 4 weeks.';
+      return { suggestedDate, reason, riskLevel };
+    }
+
+    // postnatal
+    const deliveryRows = await tenantDb.query(
+      `SELECT d.delivery_date FROM deliveries d WHERE d.maternity_enrollment_id = $1 ORDER BY d.delivery_date DESC LIMIT 1`,
+      [enrollmentId],
+    );
+    if (deliveryRows.length === 0) {
+      return { suggestedDate: null, reason: 'No delivery recorded for this enrollment.', riskLevel };
+    }
+    const deliveryDate = this.normalizeToDateOnly(deliveryRows[0].delivery_date);
+    if (!deliveryDate) {
+      return { suggestedDate: null, reason: 'Valid delivery date required.', riskLevel };
+    }
+    const postpartumDays = Math.floor((visit.getTime() - deliveryDate.getTime()) / (24 * 60 * 60 * 1000));
+    const postnatalMilestoneDays = [2, 7, 14, 42];
+    const nextMilestone = postnatalMilestoneDays.find((d) => d > postpartumDays);
+    if (!nextMilestone) {
+      return {
+        suggestedDate: null,
+        reason: 'Postnatal milestones (2, 7, 14, 42 days) are covered; schedule as clinically indicated.',
+        riskLevel,
+      };
+    }
+    const nextDate = new Date(deliveryDate);
+    nextDate.setDate(nextDate.getDate() + nextMilestone);
+    const suggestedDate = nextDate.toISOString().slice(0, 10);
+    const reason = `WHO postnatal schedule: next recommended visit at ${nextMilestone} days postpartum.`;
+    return { suggestedDate, reason, riskLevel };
   }
 }
