@@ -2962,14 +2962,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                           );
                         })()}
                       </p>
-                      {Array.isArray(visitSummaryArtifact?.content?.teach_back_questions) &&
-                        visitSummaryArtifact?.content?.teach_back_questions.length > 0 && (
+                      {(visitSummaryArtifact?.content?.teach_back_questions?.length ?? 0) > 0 && (
                           <div className="mt-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                               Teach-back prompts
                             </p>
                             <p className="mt-1 text-[11px] text-slate-700">
-                              {visitSummaryArtifact.content.teach_back_questions.slice(0, 3).join(' | ')}
+                              {(visitSummaryArtifact?.content?.teach_back_questions ?? []).slice(0, 3).join(' | ')}
                             </p>
                           </div>
                         )}
@@ -3301,9 +3300,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                         <p className="mt-1 text-[11px] text-slate-600">
                           Nudge policy: {preVisitBrief?.followUpRisk?.nudgePolicy || 'routine_weekly_checkin'}
                         </p>
-                        {Array.isArray(preVisitBrief?.followUpRisk?.reasons) && preVisitBrief.followUpRisk.reasons.length > 0 && (
+                        {(preVisitBrief?.followUpRisk?.reasons?.length ?? 0) > 0 && (
                           <p className="mt-1 text-[11px] text-slate-700">
-                            {preVisitBrief.followUpRisk.reasons.slice(0, 3).join(' • ')}
+                            {(preVisitBrief?.followUpRisk?.reasons ?? []).slice(0, 3).join(' • ')}
                           </p>
                         )}
                       </div>
@@ -3316,8 +3315,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pending follow-up actions</p>
                         <div className="mt-1 space-y-1">
-                          {Array.isArray(preVisitBrief?.brief?.pendingActions) && preVisitBrief.brief.pendingActions.length > 0 ? (
-                            preVisitBrief.brief.pendingActions.slice(0, 5).map((action, index) => (
+                          {(preVisitBrief?.brief?.pendingActions?.length ?? 0) > 0 ? (
+                            (preVisitBrief?.brief?.pendingActions ?? []).slice(0, 5).map((action, index) => (
                               <p key={`${action.title || 'action'}-${index}`} className="text-[11px] text-slate-700">
                                 {action.title || 'Untitled action'} • {action.urgency || 'routine'}
                               </p>
@@ -3481,22 +3480,22 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                   {trialSlaAccountability?.summary && (
                     <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
                       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                        Clinicians tracked: {Number(trialSlaAccountability.summary.cliniciansWithAssignments || 0)}
+                        Clinicians tracked: {Number(trialSlaAccountability?.summary?.cliniciansWithAssignments || 0)}
                       </div>
                       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                        Open escalations: {Number(trialSlaAccountability.summary.openEscalations || 0)}
+                        Open escalations: {Number(trialSlaAccountability?.summary?.openEscalations || 0)}
                       </div>
                       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
-                        Breached open: {Number(trialSlaAccountability.summary.breachedOpenEscalations || 0)}
+                        Breached open: {Number(trialSlaAccountability?.summary?.breachedOpenEscalations || 0)}
                       </div>
                       <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
-                        SLA compliance: {Number(trialSlaAccountability.summary.resolvedWithinSlaPercent || 0)}%
+                        SLA compliance: {Number(trialSlaAccountability?.summary?.resolvedWithinSlaPercent || 0)}%
                       </div>
                     </div>
                   )}
-                  {Array.isArray(trialSlaAccountability?.items) && trialSlaAccountability.items.length > 0 && (
+                  {(trialSlaAccountability?.items?.length ?? 0) > 0 && (
                     <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
-                      {trialSlaAccountability.items.slice(0, 5).map((row, index) => {
+                      {(trialSlaAccountability?.items ?? []).slice(0, 5).map((row, index) => {
                         const clinicianName = [row.clinician?.firstName, row.clinician?.lastName]
                           .filter(Boolean)
                           .join(' ')
@@ -3574,8 +3573,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        {Array.isArray(trialMatches?.matches) && trialMatches.matches.length > 0 ? (
-                          trialMatches.matches.map((match) => (
+                        {(trialMatches?.matches?.length ?? 0) > 0 ? (
+                          (trialMatches?.matches ?? []).map((match) => (
                             <article key={match.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                               <div className="flex flex-wrap items-start justify-between gap-2">
                                 <div>
