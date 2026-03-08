@@ -65,6 +65,79 @@ export class ImmunizationService {
     return saved;
   }
 
+  async getSchedules(
+    tenantDb: DataSource,
+    scheduleType?: 'routine' | 'travel',
+  ): Promise<ImmunizationSchedule[]> {
+    const repo = tenantDb.getRepository(ImmunizationSchedule);
+    const qb = repo
+      .createQueryBuilder('s')
+      .where('s.isActive = :active', { active: true })
+      .orderBy('s.scheduleType', 'ASC')
+      .addOrderBy('s.vaccineCode', 'ASC')
+      .addOrderBy('s.doseNumber', 'ASC');
+    if (scheduleType) {
+      qb.andWhere('s.scheduleType = :scheduleType', { scheduleType });
+    }
+    return qb.getMany();
+  }
+
+  async getInventory(
+    tenantDb: DataSource,
+    vaccineCode?: string,
+  ): Promise<VaccineInventory[]> {
+    const repo = tenantDb.getRepository(VaccineInventory);
+    const qb = repo
+      .createQueryBuilder('v')
+      .where('v.status = :status', { status: 'active' })
+      .orderBy('v.vaccineCode', 'ASC')
+      .addOrderBy('v.expirationDate', 'ASC');
+    if (vaccineCode) {
+      qb.andWhere('v.vaccineCode = :vaccineCode', { vaccineCode });
+    }
+    return qb.getMany();
+  }
+
+  async administerVaccine(
+    data: {
+      patientId: string;
+      vaccineCode: string;
+      vaccineName: string;
+      lotNumber?: string;
+      manufacturer?: string;
+      expirationDate?: Date;
+      doseNumber?: number;
+      doseQuantity?: number;
+      route?: string;
+      site?: string;
+      notes?: string;
+      appointmentId?: string;
+    },
+    userId: string,
+    tenantDb: DataSource,
+  ): Promise<Immunization> {
+    const administrationDate = new Date();
+    return this.recordImmunization(
+      {
+        patientId: data.patientId,
+        vaccineCode: data.vaccineCode,
+        vaccineName: data.vaccineName,
+        manufacturer: data.manufacturer,
+        lotNumber: data.lotNumber,
+        expirationDate: data.expirationDate,
+        administrationDate,
+        doseNumber: data.doseNumber,
+        doseQuantity: data.doseQuantity,
+        route: data.route,
+        site: data.site,
+        notes: data.notes,
+        appointmentId: data.appointmentId,
+      },
+      userId,
+      tenantDb,
+    );
+  }
+
   async getPatientImmunizations(
     patientId: string,
     filters: { vaccineCode?: string; startDate?: Date; endDate?: Date },

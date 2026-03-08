@@ -26,6 +26,33 @@ export class ImmunizationController {
     private readonly tenantService: TenantService,
   ) {}
 
+  @Get('schedules')
+  @ApiOperation({ summary: 'Get immunization schedules (routine and/or travel)' })
+  async getSchedules(
+    @Query('scheduleType') scheduleType: 'routine' | 'travel' | undefined,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.immunizationService.getSchedules(tenantDb, scheduleType);
+  }
+
+  @Get('inventory')
+  @ApiOperation({ summary: 'Get vaccine inventory' })
+  async getInventory(
+    @Query('vaccineCode') vaccineCode: string | undefined,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.immunizationService.getInventory(tenantDb, vaccineCode);
+  }
+
+  @Post('administer')
+  @ApiOperation({ summary: 'Administer vaccine (record and decrement inventory)' })
+  async administerVaccine(@Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.immunizationService.administerVaccine(body, req.user.userId, tenantDb);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Record vaccine administration' })
   async recordImmunization(@Body() immunizationData: any, @Req() req: RequestWithTenant) {
