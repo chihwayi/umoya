@@ -18,7 +18,7 @@ export class DietaryController {
   @Post('orders')
   async orderDiet(@Body() dietData: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.dietaryService.orderDiet(dietData, req.user.id, tenantDb);
+    return this.dietaryService.orderDiet(dietData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Get('orders/patient/:patientId')
@@ -30,7 +30,7 @@ export class DietaryController {
   @Post('assessments')
   async createAssessment(@Body() data: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.dietaryService.createNutritionalAssessment(data, req.user.id, tenantDb);
+    return this.dietaryService.createNutritionalAssessment(data, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 }
 

@@ -15,7 +15,7 @@ export class BillingController {
   @Post('bills')
   @ApiOperation({ summary: 'Create bill' })
   async createBill(@Body() createDto: any, @Request() req: RequestWithTenant) {
-    return this.billingService.createBill(createDto, req.tenantDb, (req.user as any).id);
+    return this.billingService.createBill(createDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get('bills')
@@ -27,6 +27,6 @@ export class BillingController {
   @Post('bills/:id/payments')
   @ApiOperation({ summary: 'Add payment to bill' })
   async addPayment(@Param('id') id: string, @Body() paymentDto: any, @Request() req: RequestWithTenant) {
-    return this.billingService.addPayment(id, paymentDto, req.tenantDb, (req.user as any).id);
+    return this.billingService.addPayment(id, paymentDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 }

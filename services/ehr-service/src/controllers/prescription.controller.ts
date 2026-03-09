@@ -20,7 +20,7 @@ export class PrescriptionController {
   @Post()
   @ApiOperation({ summary: 'Create prescription' })
   async createPrescription(@Body() createDto: any, @Request() req: RequestWithTenant) {
-    return this.prescriptionService.create(createDto, req.tenantDb, (req.user as any).id, req.tenantId);
+    return this.prescriptionService.create(createDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id, req.tenantId);
   }
 
   @Get('patient/:patientId')
@@ -32,7 +32,7 @@ export class PrescriptionController {
   @Put(':id/dispense')
   @ApiOperation({ summary: 'Dispense prescription' })
   async dispensePrescription(@Param('id') id: string, @Request() req: RequestWithTenant) {
-    return this.prescriptionService.dispense(id, req.tenantDb, (req.user as any).id);
+    return this.prescriptionService.dispense(id, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get(':id/download')
@@ -57,7 +57,7 @@ export class PrescriptionController {
       await req.tenantDb.query(
         `INSERT INTO prescription_downloads (prescription_id, downloaded_by, downloaded_at, user_type)
          VALUES ($1, $2, NOW(), $3)`,
-        [id, (req.user as any).id, 'doctor'],
+        [id, (req.user as any)?.userId ?? (req.user as any)?.id, 'doctor'],
       );
 
       res.send(buffer);

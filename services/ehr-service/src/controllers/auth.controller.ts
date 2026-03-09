@@ -42,7 +42,7 @@ export class AuthController {
     @Body() changePasswordDto: ChangePasswordDto
   ) {
     await this.authService.changePassword(
-      (req.user as any).id,
+      (req.user as any)?.userId ?? (req.user as any)?.id,
       changePasswordDto.oldPassword,
       changePasswordDto.newPassword,
       req.tenantDb
@@ -61,7 +61,7 @@ export class AuthController {
     @Body() body: { newPassword: string }
   ) {
     await this.authService.forcePasswordChange(
-      (req.user as any).id,
+      (req.user as any)?.userId ?? (req.user as any)?.id,
       body.newPassword,
       req.tenantDb
     );

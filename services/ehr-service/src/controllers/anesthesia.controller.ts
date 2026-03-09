@@ -27,7 +27,7 @@ export class AnesthesiaController {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     return this.anesthesiaService.createPreAnesthesiaAssessment(
       assessmentData,
-      req.user.id,
+      ((req.user as any)?.userId ?? (req.user as any)?.id),
       tenantDb,
     );
   }
@@ -65,7 +65,7 @@ export class AnesthesiaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.anesthesiaService.startAnesthesiaRecord(recordData, req.user.id, tenantDb);
+    return this.anesthesiaService.startAnesthesiaRecord(recordData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Get('record/case/:caseId')
@@ -113,7 +113,7 @@ export class AnesthesiaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.anesthesiaService.recordVitals(id, vitalsData, req.user.id, tenantDb);
+    return this.anesthesiaService.recordVitals(id, vitalsData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Get('record/:id/vitals')
@@ -173,7 +173,7 @@ export class AnesthesiaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.anesthesiaService.admitToPACU(pacuData, req.user.id, tenantDb);
+    return this.anesthesiaService.admitToPACU(pacuData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Get('pacu/:id')
@@ -208,7 +208,7 @@ export class AnesthesiaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.anesthesiaService.dischargePACU(id, dischargeData, req.user.id, tenantDb);
+    return this.anesthesiaService.dischargePACU(id, dischargeData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   // ==================== BILLING ====================
@@ -247,7 +247,7 @@ export class AnesthesiaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.anesthesiaService.markBilled(id, req.user.id, tenantDb);
+    return this.anesthesiaService.markBilled(id, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 }
 

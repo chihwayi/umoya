@@ -116,7 +116,7 @@ export class PharmacyController {
   @Post('purchase-orders')
   @ApiOperation({ summary: 'Create purchase order' })
   async createPurchaseOrder(@Body() dto: CreatePurchaseOrderDto, @Request() req: RequestWithTenant) {
-    return this.pharmacyService.createPurchaseOrder(req.tenantDb, dto, (req.user as any)?.id);
+    return this.pharmacyService.createPurchaseOrder(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get('purchase-orders/:id')
@@ -138,7 +138,7 @@ export class PharmacyController {
   @Post('receipts')
   @ApiOperation({ summary: 'Create receipt' })
   async createReceipt(@Body() dto: CreateReceiptDto, @Request() req: RequestWithTenant) {
-    return this.pharmacyService.createReceipt(req.tenantDb, dto, (req.user as any)?.id);
+    return this.pharmacyService.createReceipt(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get('receipts')
@@ -160,7 +160,7 @@ export class PharmacyController {
   @Post('dispensings')
   @ApiOperation({ summary: 'Create dispensing' })
   async createDispensing(@Body() dto: CreateDispensingDto, @Request() req: RequestWithTenant) {
-    return this.pharmacyService.createDispensing(req.tenantDb, dto, (req.user as any)?.id);
+    return this.pharmacyService.createDispensing(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get('dispensings/:id')
@@ -182,7 +182,7 @@ export class PharmacyController {
   @Post('returns')
   @ApiOperation({ summary: 'Create return' })
   async createReturn(@Body() dto: CreateReturnDto, @Request() req: RequestWithTenant) {
-    return this.pharmacyService.createReturn(req.tenantDb, dto, (req.user as any)?.id);
+    return this.pharmacyService.createReturn(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get('returns/:id')
@@ -198,7 +198,7 @@ export class PharmacyController {
   @Post('stock-adjustments')
   @ApiOperation({ summary: 'Create stock adjustment' })
   async createStockAdjustment(@Body() dto: CreateStockAdjustmentDto, @Request() req: RequestWithTenant) {
-    return this.pharmacyService.createStockAdjustment(req.tenantDb, dto, (req.user as any)?.id);
+    return this.pharmacyService.createStockAdjustment(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get('stock-adjustments/:id')
@@ -270,7 +270,7 @@ export class PharmacyController {
   @Put('alerts/:id')
   @ApiOperation({ summary: 'Update alert' })
   async updateAlert(@Param('id') id: string, @Body() dto: any, @Request() req: RequestWithTenant) {
-    return this.pharmacyService.updateAlert(req.tenantDb, id, dto, (req.user as any)?.id);
+    return this.pharmacyService.updateAlert(req.tenantDb, id, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   // ============================================
@@ -306,7 +306,7 @@ export class PharmacyController {
     },
     @Request() req: RequestWithTenant,
   ) {
-    return this.pharmacyService.dispensePrescription(req.tenantDb, id, dto, (req.user as any).id);
+    return this.pharmacyService.dispensePrescription(req.tenantDb, id, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Post('dispensings/:id/payment')
@@ -316,7 +316,7 @@ export class PharmacyController {
     @Body() dto: { amount: number; method: string; reference?: string },
     @Request() req: RequestWithTenant,
   ) {
-    return this.pharmacyService.processDispensingPayment(req.tenantDb, id, dto, (req.user as any).id);
+    return this.pharmacyService.processDispensingPayment(req.tenantDb, id, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 }
 

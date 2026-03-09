@@ -15,7 +15,7 @@ export class CriticalAlertController {
   @Get('pending')
   @ApiOperation({ summary: 'Get pending critical alerts for ordering provider' })
   async getPendingAlerts(@Request() req: RequestWithTenant) {
-    const userId = (req.user as any).id;
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.criticalAlertService.getPendingAlerts(userId, req.tenantDb);
   }
 
@@ -32,14 +32,14 @@ export class CriticalAlertController {
     @Body() body: { notes?: string },
     @Request() req: RequestWithTenant
   ) {
-    const userId = (req.user as any).id;
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.criticalAlertService.acknowledgeAlert(id, userId, body.notes, req.tenantDb);
   }
 
   @Put(':id/dismiss')
   @ApiOperation({ summary: 'Dismiss a critical alert' })
   async dismissAlert(@Param('id') id: string, @Request() req: RequestWithTenant) {
-    const userId = (req.user as any).id;
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.criticalAlertService.dismissAlert(id, userId, req.tenantDb);
   }
 }

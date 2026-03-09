@@ -16,7 +16,7 @@ export class LabOrderController {
   @Post()
   @ApiOperation({ summary: 'Create lab order' })
   async createLabOrder(@Body() createDto: any, @Request() req: RequestWithTenant) {
-    return this.labOrderService.create(createDto, req.tenantDb, (req.user as any).id, req.tenantId);
+    return this.labOrderService.create(createDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id, req.tenantId);
   }
 
   @Get()
@@ -28,7 +28,7 @@ export class LabOrderController {
   @Put(':id/results')
   @ApiOperation({ summary: 'Add lab results' })
   async addResults(@Param('id') id: string, @Body() resultsDto: any, @Request() req: RequestWithTenant) {
-    return this.labOrderService.addResults(id, resultsDto, req.tenantDb, (req.user as any).id);
+    return this.labOrderService.addResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get('patient/:patientId/results')
@@ -53,7 +53,7 @@ export class LabOrderController {
   @Put(':id/collect')
   @ApiOperation({ summary: 'Mark sample as collected' })
   async collectSample(@Param('id') id: string, @Request() req: RequestWithTenant) {
-    return this.labOrderService.collectSample(id, req.tenantDb, (req.user as any).id);
+    return this.labOrderService.collectSample(id, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Put(':id/start-processing')
@@ -65,7 +65,7 @@ export class LabOrderController {
   @Put(':id/submit-results')
   @ApiOperation({ summary: 'Submit lab results (with optional documents)' })
   async submitResults(@Param('id') id: string, @Body() resultsDto: any, @Request() req: RequestWithTenant) {
-    return this.labOrderService.submitResults(id, resultsDto, req.tenantDb, (req.user as any).id);
+    return this.labOrderService.submitResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Put(':id/status')
@@ -93,7 +93,7 @@ export class LabOrderController {
     },
     @Request() req: RequestWithTenant,
   ) {
-    const userId = (req.user as any)?.id;
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.labOrderService.updateProcessingContext(id, body, req.tenantDb, userId);
   }
 
@@ -128,7 +128,7 @@ export class LabOrderController {
     },
     @Request() req: RequestWithTenant,
   ) {
-    const userId = (req.user as any)?.id;
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.labOrderService.createQualityControlEntry(req.tenantDb, body, userId);
   }
 
@@ -156,7 +156,7 @@ export class LabOrderController {
     },
     @Request() req: RequestWithTenant,
   ) {
-    const userId = (req.user as any)?.id;
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.labOrderService.upsertReagentInventoryItem(req.tenantDb, body, userId);
   }
 
@@ -167,7 +167,7 @@ export class LabOrderController {
     @Body() body: { quantity_available: number; status?: 'ok' | 'warning' | 'critical' | 'expired' },
     @Request() req: RequestWithTenant,
   ) {
-    const userId = (req.user as any)?.id;
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.labOrderService.updateReagentInventoryQuantity(req.tenantDb, id, body, userId);
   }
 }

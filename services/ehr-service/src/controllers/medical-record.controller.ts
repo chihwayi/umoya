@@ -15,7 +15,7 @@ export class MedicalRecordController {
   @Post()
   @ApiOperation({ summary: 'Create medical record' })
   async createRecord(@Body() createDto: any, @Request() req: RequestWithTenant) {
-    return this.medicalRecordService.create(createDto, req.tenantDb, (req.user as any).id);
+    return this.medicalRecordService.create(createDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Get('patient/:patientId')

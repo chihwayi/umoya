@@ -47,17 +47,31 @@ export class ImmunizationController {
   }
 
   @Post('administer')
-  @ApiOperation({ summary: 'Administer vaccine (record and decrement inventory)' })
+  @ApiOperation({ summary: 'Administer vaccine (legacy — patientId in body)' })
   async administerVaccine(@Body() body: any, @Req() req: RequestWithTenant) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.immunizationService.administerVaccine(body, req.user.userId, tenantDb);
+    return await this.immunizationService.administerVaccine(body, userId, tenantDb);
+  }
+
+  @Post('patient/:patientId/administer')
+  @ApiOperation({ summary: 'Administer vaccine to patient (patientId in path)' })
+  async administerVaccineForPatient(
+    @Param('patientId') patientId: string,
+    @Body() body: any,
+    @Req() req: RequestWithTenant,
+  ) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.immunizationService.administerVaccine({ ...body, patientId }, userId, tenantDb);
   }
 
   @Post()
   @ApiOperation({ summary: 'Record vaccine administration' })
   async recordImmunization(@Body() immunizationData: any, @Req() req: RequestWithTenant) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.immunizationService.recordImmunization(immunizationData, req.user.userId, tenantDb);
+    return await this.immunizationService.recordImmunization(immunizationData, userId, tenantDb);
   }
 
   @Get('patient/:patientId')

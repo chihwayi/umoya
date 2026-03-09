@@ -51,7 +51,7 @@ export class RevenueCycleController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.revenueCycleService.captureCharge(chargeData, req.user.id, tenantDb);
+    return this.revenueCycleService.captureCharge(chargeData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Get('charges/patient/:patientId')
@@ -91,7 +91,7 @@ export class RevenueCycleController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    const userId = doctorId || req.user.id;
+    const userId = doctorId || ((req.user as any)?.userId ?? (req.user as any)?.id);
     return this.revenueCycleService.getPendingChargesForDoctor(userId, tenantDb);
   }
 
@@ -115,7 +115,7 @@ export class RevenueCycleController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.revenueCycleService.approveAllChargesForAdmission(admissionId, req.user.id, body.notes || null, tenantDb);
+    return this.revenueCycleService.approveAllChargesForAdmission(admissionId, ((req.user as any)?.userId ?? (req.user as any)?.id), body.notes || null, tenantDb);
   }
 
   @Post('charges/notify-accounts/:admissionId')
@@ -126,7 +126,7 @@ export class RevenueCycleController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.revenueCycleService.notifyAccounts(admissionId, req.user.id, tenantDb);
+    return this.revenueCycleService.notifyAccounts(admissionId, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   // Parameterized routes come AFTER specific routes
@@ -139,7 +139,7 @@ export class RevenueCycleController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.revenueCycleService.approveCharge(chargeId, req.user.id, body.notes || null, tenantDb);
+    return this.revenueCycleService.approveCharge(chargeId, ((req.user as any)?.userId ?? (req.user as any)?.id), body.notes || null, tenantDb);
   }
 
   @Put('charges/:id/reject')
@@ -154,7 +154,7 @@ export class RevenueCycleController {
     if (!body.reason) {
       throw new BadRequestException('Rejection reason is required');
     }
-    return this.revenueCycleService.rejectCharge(chargeId, req.user.id, body.reason, tenantDb);
+    return this.revenueCycleService.rejectCharge(chargeId, ((req.user as any)?.userId ?? (req.user as any)?.id), body.reason, tenantDb);
   }
 
   @Put('charges/:id/mark-reviewed')
@@ -166,7 +166,7 @@ export class RevenueCycleController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.revenueCycleService.reviewCharge(chargeId, req.user.id, body.notes || null, tenantDb);
+    return this.revenueCycleService.reviewCharge(chargeId, ((req.user as any)?.userId ?? (req.user as any)?.id), body.notes || null, tenantDb);
   }
 
   @Get('notifications')
@@ -177,7 +177,7 @@ export class RevenueCycleController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.revenueCycleService.getChargeNotifications(req.user.id, status || null, tenantDb);
+    return this.revenueCycleService.getChargeNotifications(((req.user as any)?.userId ?? (req.user as any)?.id), status || null, tenantDb);
   }
 
   @Put('notifications/:id/read')
@@ -188,7 +188,7 @@ export class RevenueCycleController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.revenueCycleService.markNotificationRead(notificationId, req.user.id, tenantDb);
+    return this.revenueCycleService.markNotificationRead(notificationId, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 }
 

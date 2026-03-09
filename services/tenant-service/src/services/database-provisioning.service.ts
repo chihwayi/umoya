@@ -2300,6 +2300,59 @@ export class DatabaseProvisioningService {
       `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
        SELECT 'BCG', '19', 'BCG (Tuberculosis)', 'infant', 1, 0, NULL, true, 'routine', CURRENT_DATE
        WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = '19' AND schedule_type = 'routine')`,
+
+      // Routine childhood vaccines (EPI + CDC recommended)
+      `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       SELECT v.* FROM (VALUES
+         ('Hepatitis B - Birth', '45', 'Hepatitis B', 'infant', 1, 0, NULL, true, 'routine', CURRENT_DATE),
+         ('Hepatitis B - Dose 2', '45', 'Hepatitis B', 'infant', 2, 1, 28, true, 'routine', CURRENT_DATE),
+         ('Hepatitis B - Dose 3', '45', 'Hepatitis B', 'infant', 3, 6, 56, true, 'routine', CURRENT_DATE),
+         ('OPV - Birth', '02', 'Oral Polio Vaccine', 'infant', 0, 0, NULL, true, 'routine', CURRENT_DATE),
+         ('OPV - Dose 1', '02', 'Oral Polio Vaccine', 'infant', 1, 6, 28, true, 'routine', CURRENT_DATE),
+         ('OPV - Dose 2', '02', 'Oral Polio Vaccine', 'infant', 2, 10, 28, true, 'routine', CURRENT_DATE),
+         ('OPV - Dose 3', '02', 'Oral Polio Vaccine', 'infant', 3, 14, 28, true, 'routine', CURRENT_DATE),
+         ('IPV', '10', 'Inactivated Polio Vaccine', 'infant', 1, 14, NULL, true, 'routine', CURRENT_DATE),
+         ('Pentavalent - Dose 1', '170', 'DTP-HepB-Hib (Pentavalent)', 'infant', 1, 6, NULL, true, 'routine', CURRENT_DATE),
+         ('Pentavalent - Dose 2', '170', 'DTP-HepB-Hib (Pentavalent)', 'infant', 2, 10, 28, true, 'routine', CURRENT_DATE),
+         ('Pentavalent - Dose 3', '170', 'DTP-HepB-Hib (Pentavalent)', 'infant', 3, 14, 28, true, 'routine', CURRENT_DATE),
+         ('PCV13 - Dose 1', '152', 'Pneumococcal Conjugate (PCV13)', 'infant', 1, 6, NULL, true, 'routine', CURRENT_DATE),
+         ('PCV13 - Dose 2', '152', 'Pneumococcal Conjugate (PCV13)', 'infant', 2, 10, 28, true, 'routine', CURRENT_DATE),
+         ('PCV13 - Dose 3', '152', 'Pneumococcal Conjugate (PCV13)', 'infant', 3, 14, 28, true, 'routine', CURRENT_DATE),
+         ('Rotavirus - Dose 1', '119', 'Rotavirus (Rotarix)', 'infant', 1, 6, NULL, true, 'routine', CURRENT_DATE),
+         ('Rotavirus - Dose 2', '119', 'Rotavirus (Rotarix)', 'infant', 2, 10, 28, true, 'routine', CURRENT_DATE),
+         ('Measles - Dose 1', '05', 'Measles', 'infant', 1, 9, NULL, true, 'routine', CURRENT_DATE),
+         ('MMR - Dose 1', '03', 'Measles-Mumps-Rubella', 'child', 1, 12, NULL, true, 'routine', CURRENT_DATE),
+         ('MMR - Dose 2', '03', 'Measles-Mumps-Rubella', 'child', 2, 18, 28, true, 'routine', CURRENT_DATE),
+         ('Varicella - Dose 1', '21', 'Varicella (Chickenpox)', 'child', 1, 12, NULL, true, 'routine', CURRENT_DATE),
+         ('Varicella - Dose 2', '21', 'Varicella (Chickenpox)', 'child', 2, 48, 90, true, 'routine', CURRENT_DATE),
+         ('DTaP - Dose 4', '20', 'DTaP Booster', 'child', 4, 15, NULL, true, 'routine', CURRENT_DATE),
+         ('DTaP - Dose 5', '20', 'DTaP Booster', 'child', 5, 48, NULL, true, 'routine', CURRENT_DATE),
+         ('Hepatitis A - Dose 1', '83', 'Hepatitis A', 'child', 1, 12, NULL, true, 'routine', CURRENT_DATE),
+         ('Hepatitis A - Dose 2', '83', 'Hepatitis A', 'child', 2, 18, 180, true, 'routine', CURRENT_DATE),
+         ('HPV - Dose 1', '137', 'HPV (Gardasil 9)', 'adolescent', 1, 108, NULL, true, 'routine', CURRENT_DATE),
+         ('HPV - Dose 2', '137', 'HPV (Gardasil 9)', 'adolescent', 2, 114, 60, true, 'routine', CURRENT_DATE),
+         ('Tdap Booster', '115', 'Tdap (Tetanus-Diphtheria-Pertussis)', 'adolescent', 1, 132, NULL, true, 'routine', CURRENT_DATE),
+         ('Meningococcal ACWY', '147', 'Meningococcal ACWY (MenACWY)', 'adolescent', 1, 132, NULL, true, 'routine', CURRENT_DATE),
+         ('Meningococcal ACWY Booster', '147', 'Meningococcal ACWY (MenACWY)', 'adolescent', 2, 192, NULL, true, 'routine', CURRENT_DATE),
+         ('Influenza (Annual)', '141', 'Influenza (IIV4)', 'all_ages', 1, 6, NULL, false, 'routine', CURRENT_DATE),
+         ('PPSV23', '33', 'Pneumococcal Polysaccharide (PPSV23)', 'adult', 1, 780, NULL, false, 'routine', CURRENT_DATE),
+         ('Td Booster', '138', 'Td (Tetanus-Diphtheria)', 'adult', 1, NULL, 3650, false, 'routine', CURRENT_DATE),
+         ('Shingles (Shingrix)', '187', 'Recombinant Zoster (Shingrix)', 'senior', 1, 600, NULL, false, 'routine', CURRENT_DATE),
+         ('Shingles (Shingrix) Dose 2', '187', 'Recombinant Zoster (Shingrix)', 'senior', 2, 602, 60, false, 'routine', CURRENT_DATE),
+         ('COVID-19 Primary', '213', 'COVID-19 mRNA', 'all_ages', 1, 6, NULL, false, 'routine', CURRENT_DATE)
+       ) AS v(schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = v.vaccine_code AND dose_number = v.dose_number AND schedule_type = v.schedule_type)`,
+
+      // Travel vaccines
+      `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       SELECT v.* FROM (VALUES
+         ('Japanese Encephalitis', '134', 'Japanese Encephalitis (Ixiaro)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
+         ('Rabies Pre-Exposure', '40', 'Rabies (Pre-Exposure)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
+         ('Cholera (Oral)', '26', 'Cholera Oral (Dukoral)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
+         ('Meningococcal ACWY Travel', '147', 'Meningococcal ACWY', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
+         ('Tick-Borne Encephalitis', '77', 'TBE Vaccine', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE)
+       ) AS v(schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = v.vaccine_code AND schedule_type = 'travel')`,
     ];
   }
 

@@ -23,7 +23,7 @@ export class CaseManagementController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.caseManagementService.createAssessment(assessmentData, req.user.id, tenantDb);
+    return this.caseManagementService.createAssessment(assessmentData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Post('discharge-plans')
@@ -34,7 +34,7 @@ export class CaseManagementController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.caseManagementService.createDischargePlan(planData, req.user.id, tenantDb);
+    return this.caseManagementService.createDischargePlan(planData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Get('discharge-plans/admission/:admissionId')

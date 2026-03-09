@@ -59,7 +59,7 @@ export class OrderController {
   async getOrdersByDoctor(@Req() req: any) {
     try {
       const tenantId = req.tenantId;
-      const doctorId = req.user.id;
+      const doctorId = (req.user as any)?.userId ?? (req.user as any)?.id;
       const orders = await this.orderService.getOrdersByDoctor(doctorId, tenantId);
       return { orders, total: orders.length };
     } catch (error) {
@@ -71,7 +71,7 @@ export class OrderController {
   @Put(':id/authorize')
   async authorizeOrder(@Param('id') orderId: string, @Req() req: any) {
     const tenantId = req.tenantId;
-    const authorizedBy = req.user.id;
+    const authorizedBy = (req.user as any)?.userId ?? (req.user as any)?.id;
     
     const order = await this.orderService.authorizeOrder(orderId, authorizedBy, tenantId);
     return { success: true, order };
@@ -84,7 +84,7 @@ export class OrderController {
     @Req() req: any
   ) {
     const tenantId = req.tenantId;
-    const executedBy = req.user.id;
+    const executedBy = (req.user as any)?.userId ?? (req.user as any)?.id;
     
     const order = await this.orderService.executeOrder(orderId, executedBy, body.executionNotes, tenantId);
     return { success: true, order };

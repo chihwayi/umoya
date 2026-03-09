@@ -23,7 +23,7 @@ export class CdiController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.cdiService.createCdiReview(reviewData, req.user.id, tenantDb);
+    return this.cdiService.createCdiReview(reviewData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Post('queries')
@@ -34,7 +34,7 @@ export class CdiController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.cdiService.sendPhysicianQuery(queryData, req.user.id, tenantDb);
+    return this.cdiService.sendPhysicianQuery(queryData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
   @Get('queries/physician/:physicianId')
