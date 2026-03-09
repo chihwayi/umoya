@@ -133,5 +133,99 @@ export class OperatingRoomController {
     const end = endDate ? new Date(endDate) : new Date();
     return await this.orService.getORMetrics(start, end, tenantDb);
   }
+
+  @Get('cases/:id/safety-checklist')
+  @ApiOperation({ summary: 'Get WHO safety checklist for case' })
+  async getSafetyChecklist(@Param('id') caseId: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.getSafetyChecklist(caseId, tenantDb);
+  }
+
+  @Post('cases/:id/safety-checklist/sign-in')
+  @ApiOperation({ summary: 'Complete Sign In (before anesthesia)' })
+  @HttpCode(HttpStatus.OK)
+  async safetyChecklistSignIn(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.updateSafetyChecklistSignIn(caseId, body, req.user.userId, tenantDb);
+  }
+
+  @Post('cases/:id/safety-checklist/time-out')
+  @ApiOperation({ summary: 'Complete Time Out (before skin incision)' })
+  @HttpCode(HttpStatus.OK)
+  async safetyChecklistTimeOut(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.updateSafetyChecklistTimeOut(caseId, body, req.user.userId, tenantDb);
+  }
+
+  @Post('cases/:id/safety-checklist/sign-out')
+  @ApiOperation({ summary: 'Complete Sign Out (before patient leaves OR)' })
+  @HttpCode(HttpStatus.OK)
+  async safetyChecklistSignOut(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.updateSafetyChecklistSignOut(caseId, body, req.user.userId, tenantDb);
+  }
+
+  @Get('cases/:id/count-sheets')
+  @ApiOperation({ summary: 'Get count sheets for case' })
+  async getCountSheets(@Param('id') caseId: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.getCountSheets(caseId, tenantDb);
+  }
+
+  @Post('cases/:id/count-sheets')
+  @ApiOperation({ summary: 'Add count sheet item' })
+  async addCountSheet(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.addCountSheet(caseId, body, req.user.userId, tenantDb);
+  }
+
+  @Put('count-sheets/:id/verify')
+  @ApiOperation({ summary: 'Verify count (final count)' })
+  async verifyCountSheet(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.verifyCountSheet(id, body, req.user.userId, tenantDb);
+  }
+
+  @Get('cases/:id/specimens')
+  @ApiOperation({ summary: 'Get specimens for case' })
+  async getSpecimens(@Param('id') caseId: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.getSpecimens(caseId, tenantDb);
+  }
+
+  @Post('cases/:id/specimens')
+  @ApiOperation({ summary: 'Add specimen' })
+  async addSpecimen(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.addSpecimen(caseId, body, req.user.userId, tenantDb);
+  }
+
+  @Get('preference-cards')
+  @ApiOperation({ summary: 'Get all preference cards' })
+  async getPreferenceCards(@Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.getPreferenceCards(tenantDb);
+  }
+
+  @Get('preference-cards/surgeon/:surgeonId')
+  @ApiOperation({ summary: 'Get preference cards by surgeon' })
+  async getPreferenceCardsBySurgeon(@Param('surgeonId') surgeonId: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.getPreferenceCardsBySurgeon(surgeonId, tenantDb);
+  }
+
+  @Post('preference-cards')
+  @ApiOperation({ summary: 'Create preference card' })
+  async createPreferenceCard(@Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.createPreferenceCard(body, req.user.userId, tenantDb);
+  }
+
+  @Put('preference-cards/:id')
+  @ApiOperation({ summary: 'Update preference card' })
+  async updatePreferenceCard(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return await this.orService.updatePreferenceCard(id, body, tenantDb);
+  }
 }
 

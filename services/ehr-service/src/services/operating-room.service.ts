@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { OperatingRoom } from '../entities/operating-room.entity';
 import { SurgicalCase } from '../entities/surgical-case.entity';
 import { SurgicalImplant } from '../entities/surgical-implant.entity';
+import { SurgicalPreferenceCard } from '../entities/surgical-preference-card.entity';
 
 @Injectable()
 export class OperatingRoomService {
@@ -384,6 +385,235 @@ export class OperatingRoomService {
     this.logger.log(`Surgical case cancelled: ${updated.caseNumber}. Reason: ${reason}`);
 
     return updated;
+  }
+
+  // --- Safety checklist ---
+  async getSafetyChecklist(caseId: string, tenantDb: DataSource): Promise<any> {
+    const [row] = await tenantDb.query(
+      `SELECT * FROM surgical_safety_checklists WHERE surgical_case_id = $1 LIMIT 1`,
+      [caseId],
+    );
+    return row || null;
+  }
+
+  async updateSafetyChecklistSignIn(caseId: string, body: any, userId: string, tenantDb: DataSource): Promise<any> {
+    await this.getSurgicalCase(caseId, tenantDb);
+    const [existing] = await tenantDb.query(`SELECT id FROM surgical_safety_checklists WHERE surgical_case_id = $1`, [caseId]);
+    const now = new Date();
+    if (existing) {
+      await tenantDb.query(
+        `UPDATE surgical_safety_checklists SET
+          sign_in_completed = true, sign_in_completed_at = $1, sign_in_completed_by = $2,
+          patient_identity_confirmed = $3, site_marked = $4, consent_confirmed = $5,
+          anesthesia_safety_check = $6, known_allergy = $7, allergy_details = $8,
+          difficult_airway_risk = $9, aspiration_risk = $10, blood_loss_risk = $11, blood_loss_estimated_ml = $12,
+          updated_at = $1
+          WHERE surgical_case_id = $13`,
+        [
+          now, userId,
+          body.patientIdentityConfirmed ?? false, body.siteMarked ?? false, body.consentConfirmed ?? false,
+          body.anesthesiaSafetyCheck ?? false, body.knownAllergy ?? false, body.allergyDetails ?? null,
+          body.difficultAirwayRisk ?? false, body.aspirationRisk ?? false, body.bloodLossRisk ?? false, body.bloodLossEstimatedMl ?? null,
+          caseId,
+        ],
+      );
+    } else {
+      await tenantDb.query(
+        `INSERT INTO surgical_safety_checklists (
+          surgical_case_id, sign_in_completed, sign_in_completed_at, sign_in_completed_by,
+          patient_identity_confirmed, site_marked, consent_confirmed, anesthesia_safety_check,
+          known_allergy, allergy_details, difficult_airway_risk, aspiration_risk, blood_loss_risk, blood_loss_estimated_ml
+        ) VALUES ($1, true, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          caseId, now, userId,
+          body.patientIdentityConfirmed ?? false, body.siteMarked ?? false, body.consentConfirmed ?? false,
+          body.anesthesiaSafetyCheck ?? false, body.knownAllergy ?? false, body.allergyDetails ?? null,
+          body.difficultAirwayRisk ?? false, body.aspirationRisk ?? false, body.bloodLossRisk ?? false, body.bloodLossEstimatedMl ?? null,
+        ],
+      );
+    }
+    return this.getSafetyChecklist(caseId, tenantDb);
+  }
+
+  async updateSafetyChecklistTimeOut(caseId: string, body: any, userId: string, tenantDb: DataSource): Promise<any> {
+    await this.getSurgicalCase(caseId, tenantDb);
+    const [existing] = await tenantDb.query(`SELECT id FROM surgical_safety_checklists WHERE surgical_case_id = $1`, [caseId]);
+    const now = new Date();
+    if (existing) {
+      await tenantDb.query(
+        `UPDATE surgical_safety_checklists SET
+          time_out_completed = true, time_out_completed_at = $1, time_out_completed_by = $2,
+          team_members_introduced = $3, procedure_confirmed = $4, site_confirmed = $5,
+          anticipated_critical_events = $6, antibiotic_prophylaxis_given = $7, antibiotic_time = $8, imaging_displayed = $9,
+          updated_at = $1
+          WHERE surgical_case_id = $10`,
+        [
+          now, userId,
+          body.teamMembersIntroduced ?? false, body.procedureConfirmed ?? false, body.siteConfirmed ?? false,
+          body.anticipatedCriticalEvents ?? null, body.antibioticProphylaxisGiven ?? false,
+          body.antibioticProphylaxisGiven ? now : null, body.imagingDisplayed ?? false,
+          caseId,
+        ],
+      );
+    } else {
+      await tenantDb.query(
+        `INSERT INTO surgical_safety_checklists (
+          surgical_case_id, time_out_completed, time_out_completed_at, time_out_completed_by,
+          team_members_introduced, procedure_confirmed, site_confirmed, anticipated_critical_events,
+          antibiotic_prophylaxis_given, antibiotic_time, imaging_displayed
+        ) VALUES ($1, true, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          caseId, now, userId,
+          body.teamMembersIntroduced ?? false, body.procedureConfirmed ?? false, body.siteConfirmed ?? false,
+          body.anticipatedCriticalEvents ?? null, body.antibioticProphylaxisGiven ?? false,
+          body.antibioticProphylaxisGiven ? now : null, body.imagingDisplayed ?? false,
+        ],
+      );
+    }
+    return this.getSafetyChecklist(caseId, tenantDb);
+  }
+
+  async updateSafetyChecklistSignOut(caseId: string, body: any, userId: string, tenantDb: DataSource): Promise<any> {
+    await this.getSurgicalCase(caseId, tenantDb);
+    const [existing] = await tenantDb.query(`SELECT id FROM surgical_safety_checklists WHERE surgical_case_id = $1`, [caseId]);
+    const now = new Date();
+    if (existing) {
+      await tenantDb.query(
+        `UPDATE surgical_safety_checklists SET
+          sign_out_completed = true, sign_out_completed_at = $1, sign_out_completed_by = $2,
+          procedure_recorded = $3, instrument_sponge_needle_counts_correct = $4, specimen_labelled = $5,
+          equipment_issues = $6, key_concerns_recovery = $7, updated_at = $1
+          WHERE surgical_case_id = $8`,
+        [
+          now, userId,
+          body.procedureRecorded ?? false, body.instrumentSpongeNeedleCountsCorrect ?? false, body.specimenLabelled ?? false,
+          body.equipmentIssues ?? null, body.keyConcernsRecovery ?? null,
+          caseId,
+        ],
+      );
+    } else {
+      await tenantDb.query(
+        `INSERT INTO surgical_safety_checklists (
+          surgical_case_id, sign_out_completed, sign_out_completed_at, sign_out_completed_by,
+          procedure_recorded, instrument_sponge_needle_counts_correct, specimen_labelled, equipment_issues, key_concerns_recovery
+        ) VALUES ($1, true, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          caseId, now, userId,
+          body.procedureRecorded ?? false, body.instrumentSpongeNeedleCountsCorrect ?? false, body.specimenLabelled ?? false,
+          body.equipmentIssues ?? null, body.keyConcernsRecovery ?? null,
+        ],
+      );
+    }
+    return this.getSafetyChecklist(caseId, tenantDb);
+  }
+
+  // --- Count sheets ---
+  async getCountSheets(caseId: string, tenantDb: DataSource): Promise<any[]> {
+    return tenantDb.query(
+      `SELECT * FROM surgical_count_sheets WHERE surgical_case_id = $1 ORDER BY count_type, item_name`,
+      [caseId],
+    );
+  }
+
+  async addCountSheet(caseId: string, body: { countType: string; itemName: string; initialCount: number }, userId: string, tenantDb: DataSource): Promise<any> {
+    await this.getSurgicalCase(caseId, tenantDb);
+    const validTypes = ['sponge', 'needle', 'instrument', 'other'];
+    if (!validTypes.includes(body.countType)) {
+      throw new BadRequestException(`countType must be one of: ${validTypes.join(', ')}`);
+    }
+    const [row] = await tenantDb.query(
+      `INSERT INTO surgical_count_sheets (surgical_case_id, count_type, item_name, initial_count, counted_by)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [caseId, body.countType, body.itemName, body.initialCount, userId],
+    );
+    return row;
+  }
+
+  async verifyCountSheet(sheetId: string, body: { finalCount: number; countCorrect: boolean; discrepancyNote?: string }, userId: string, tenantDb: DataSource): Promise<any> {
+    const [row] = await tenantDb.query(
+      `UPDATE surgical_count_sheets SET final_count = $1, count_correct = $2, discrepancy_note = $3, verified_by = $4, count_time = NOW() WHERE id = $5 RETURNING *`,
+      [body.finalCount, body.countCorrect, body.discrepancyNote ?? null, userId, sheetId],
+    );
+    if (!row) throw new NotFoundException(`Count sheet not found: ${sheetId}`);
+    return row;
+  }
+
+  // --- Specimens ---
+  async getSpecimens(caseId: string, tenantDb: DataSource): Promise<any[]> {
+    return tenantDb.query(
+      `SELECT * FROM surgical_specimens WHERE surgical_case_id = $1 ORDER BY collected_at`,
+      [caseId],
+    );
+  }
+
+  async addSpecimen(caseId: string, body: any, userId: string, tenantDb: DataSource): Promise<any> {
+    await this.getSurgicalCase(caseId, tenantDb);
+    const [row] = await tenantDb.query(
+      `INSERT INTO surgical_specimens (surgical_case_id, specimen_type, specimen_source, quantity, fixative, collected_by, pathology_lab_order_id, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        caseId,
+        body.specimenType ?? 'tissue',
+        body.specimenSource ?? '',
+        body.quantity ?? 1,
+        body.fixative ?? 'formalin',
+        userId,
+        body.pathologyLabOrderId ?? null,
+        body.notes ?? null,
+      ],
+    );
+    return row;
+  }
+
+  // --- Preference cards ---
+  async getPreferenceCards(tenantDb: DataSource): Promise<SurgicalPreferenceCard[]> {
+    const repo = tenantDb.getRepository(SurgicalPreferenceCard);
+    return repo.find({ where: { isActive: true }, order: { procedureName: 'ASC' } });
+  }
+
+  async getPreferenceCardsBySurgeon(surgeonId: string, tenantDb: DataSource): Promise<SurgicalPreferenceCard[]> {
+    const repo = tenantDb.getRepository(SurgicalPreferenceCard);
+    return repo.find({ where: { surgeonId, isActive: true }, order: { procedureName: 'ASC' } });
+  }
+
+  async createPreferenceCard(body: any, userId: string, tenantDb: DataSource): Promise<SurgicalPreferenceCard> {
+    const repo = tenantDb.getRepository(SurgicalPreferenceCard);
+    const card = repo.create({
+      surgeonId: body.surgeonId,
+      procedureName: body.procedureName,
+      procedureCodeCpt: body.procedureCodeCpt,
+      preferredOrType: body.preferredOrType,
+      preferredPosition: body.preferredPosition,
+      preferredAnesthesia: body.preferredAnesthesia,
+      requiredEquipment: body.requiredEquipment ?? [],
+      preferredInstruments: body.preferredInstruments ?? [],
+      suturePreferences: body.suturePreferences ?? [],
+      supplyList: body.supplyList ?? [],
+      implantOptions: body.implantOptions ?? [],
+      preferredScrubTech: body.preferredScrubTech,
+      specialInstructions: body.specialInstructions,
+    });
+    return repo.save(card);
+  }
+
+  async updatePreferenceCard(id: string, body: any, tenantDb: DataSource): Promise<SurgicalPreferenceCard> {
+    const repo = tenantDb.getRepository(SurgicalPreferenceCard);
+    const card = await repo.findOne({ where: { id } });
+    if (!card) throw new NotFoundException(`Preference card not found: ${id}`);
+    if (body.procedureName != null) card.procedureName = body.procedureName;
+    if (body.procedureCodeCpt != null) card.procedureCodeCpt = body.procedureCodeCpt;
+    if (body.preferredOrType != null) card.preferredOrType = body.preferredOrType;
+    if (body.preferredPosition != null) card.preferredPosition = body.preferredPosition;
+    if (body.preferredAnesthesia != null) card.preferredAnesthesia = body.preferredAnesthesia;
+    if (body.requiredEquipment != null) card.requiredEquipment = body.requiredEquipment;
+    if (body.preferredInstruments != null) card.preferredInstruments = body.preferredInstruments;
+    if (body.suturePreferences != null) card.suturePreferences = body.suturePreferences;
+    if (body.supplyList != null) card.supplyList = body.supplyList;
+    if (body.implantOptions != null) card.implantOptions = body.implantOptions;
+    if (body.preferredScrubTech != null) card.preferredScrubTech = body.preferredScrubTech;
+    if (body.specialInstructions != null) card.specialInstructions = body.specialInstructions;
+    if (body.isActive != null) card.isActive = body.isActive;
+    return repo.save(card);
   }
 }
 
