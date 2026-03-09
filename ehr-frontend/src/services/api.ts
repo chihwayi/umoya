@@ -1649,6 +1649,36 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  generatePostVisitReferralLetterDraft: async (
+    sessionId: string,
+    payload: { recipientLabel?: string; referralReason?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/draft/referral-letter`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  generatePostVisitClinicalNoteDraft: async (
+    sessionId: string,
+    payload: { includeTranscript?: boolean } | undefined,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/draft/clinical-note`, payload || {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   getPostVisitAdminDocuments: async (
     sessionId: string,
     token: string,

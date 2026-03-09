@@ -326,6 +326,36 @@ export class PostVisitController {
     );
   }
 
+  @Post('sessions/:id/draft/referral-letter')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Generate AI referral letter draft from encounter context' })
+  @ApiResponse({ status: 200, description: 'Referral letter draft generated' })
+  async generateReferralLetterDraft(
+    @Param('id') id: string,
+    @Body() body: { recipientLabel?: string; referralReason?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.generateSessionReferralLetterDraft(req.tenantDb, id, body || {}, {
+      tenantId: req.tenantId,
+      actorUserId: this.resolveUserId(req),
+    });
+  }
+
+  @Post('sessions/:id/draft/clinical-note')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Generate AI clinical note draft from transcription + artifacts' })
+  @ApiResponse({ status: 200, description: 'Clinical note draft generated' })
+  async generateClinicalNoteDraft(
+    @Param('id') id: string,
+    @Body() body: { includeTranscript?: boolean } | undefined,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.generateSessionClinicalNoteDraft(req.tenantDb, id, body || {}, {
+      tenantId: req.tenantId,
+      actorUserId: this.resolveUserId(req),
+    });
+  }
+
   @Get('sessions/:id/admin-docs')
   @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'List generated post-visit admin documents for doctor workspace' })

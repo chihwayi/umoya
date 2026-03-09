@@ -111,6 +111,126 @@ export class PostVisitGroundedLlmService {
     return this.enabled && this.apiKey.length > 0;
   }
 
+  async draftReferralLetter(input: {
+    sessionId: string;
+    language?: string | null;
+    patientLabel?: string | null;
+    clinicianLabel?: string | null;
+    recipientLabel?: string | null;
+    referralReason?: string | null;
+    soapNote?: Record<string, any> | null;
+    visitSummary?: Record<string, any> | null;
+    recommendationItems?: any[];
+  }): Promise<{ letterText: string; model: string; audit?: LlmAuditMetadata } | null> {
+    if (!this.canUseLlm()) return null;
+    if (!input?.sessionId) return null;
+
+    try {
+      const llmResponse = await this.requestJsonCompletion(
+        [
+          {
+            role: 'system',
+            content:
+              'You write clinician referral letters. Use only the provided encounter context. Do not invent diagnoses, labs, medications, allergies, or history. If insufficient context, abstain.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              task: 'draft_referral_letter',
+              language: input.language || 'en',
+              session_id: input.sessionId,
+              constraints: {
+                max_chars: 3500,
+                tone: 'professional_clinical',
+                include_sections: ['header', 'reason', 'summary', 'assessment', 'plan', 'requested_action', 'signature'],
+              },
+              context: {
+                patient: input.patientLabel || null,
+                clinician: input.clinicianLabel || null,
+                recipient: input.recipientLabel || null,
+                referral_reason: input.referralReason || null,
+                soap_note: input.soapNote || {},
+                visit_summary: input.visitSummary || {},
+                recommendations: Array.isArray(input.recommendationItems) ? input.recommendationItems.slice(0, 12) : [],
+              },
+              output_schema: {
+                abstain: 'boolean',
+                abstain_reason: 'string|null',
+                letter_text: 'string',
+              },
+            }),
+          },
+        ],
+        0.2,
+      );
+
+      const json = llmResponse.json;
+      if (json?.abstain === true) return null;
+      const letterText = this.normalizeText(json?.letter_text, 3600);
+      if (!letterText) return null;
+      return { letterText, model: this.apiModel, audit: llmResponse.audit };
+    } catch {
+      return null;
+    }
+  }
+
+  async draftClinicalNote(input: {
+    sessionId: string;
+    language?: string | null;
+    transcriptText?: string | null;
+    soapNote?: Record<string, any> | null;
+    visitSummary?: Record<string, any> | null;
+    recommendationItems?: any[];
+  }): Promise<{ noteText: string; model: string; audit?: LlmAuditMetadata } | null> {
+    if (!this.canUseLlm()) return null;
+    if (!input?.sessionId) return null;
+
+    try {
+      const llmResponse = await this.requestJsonCompletion(
+        [
+          {
+            role: 'system',
+            content:
+              'You draft clinician progress notes from transcription + structured context. Do not invent diagnoses, medications, labs, or vitals. If insufficient context, abstain. Output a concise but complete note.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              task: 'draft_clinical_note',
+              language: input.language || 'en',
+              session_id: input.sessionId,
+              constraints: {
+                max_chars: 5000,
+                format: 'markdown',
+                required_sections: ['Subjective', 'Objective', 'Assessment', 'Plan', 'Follow-up'],
+              },
+              context: {
+                transcript_text: (input.transcriptText || '').slice(0, 12000),
+                soap_note: input.soapNote || {},
+                visit_summary: input.visitSummary || {},
+                recommendations: Array.isArray(input.recommendationItems) ? input.recommendationItems.slice(0, 15) : [],
+              },
+              output_schema: {
+                abstain: 'boolean',
+                abstain_reason: 'string|null',
+                note_text: 'string',
+              },
+            }),
+          },
+        ],
+        0.2,
+      );
+
+      const json = llmResponse.json;
+      if (json?.abstain === true) return null;
+      const noteText = this.normalizeText(json?.note_text, 5200);
+      if (!noteText) return null;
+      return { noteText, model: this.apiModel, audit: llmResponse.audit };
+    } catch {
+      return null;
+    }
+  }
+
   async polishDoctorContent(input: PostVisitDoctorPolishInput): Promise<PostVisitDoctorPolishOutput | null> {
     if (!this.canUseLlm()) {
       return null;

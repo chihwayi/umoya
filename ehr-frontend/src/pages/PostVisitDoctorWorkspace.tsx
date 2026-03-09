@@ -59,7 +59,7 @@ interface SessionListItem {
 
 interface DraftArtifact {
   id: string;
-  type: 'soap_note' | 'visit_summary' | 'recommendation_bundle' | 'letter';
+  type: 'soap_note' | 'visit_summary' | 'recommendation_bundle' | 'letter' | 'referral_letter_draft' | 'clinical_note_draft';
   status: string;
   content: Record<string, any>;
   citations?: any[];
@@ -477,6 +477,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [fhirPreview, setFhirPreview] = useState<Record<string, any> | null>(null);
   const [mobilePreview, setMobilePreview] = useState<Record<string, any> | null>(null);
 
+  const [draftRecipientLabel, setDraftRecipientLabel] = useState('');
+  const [draftReferralReason, setDraftReferralReason] = useState('');
+
   const [newPatientId, setNewPatientId] = useState('');
   const [newAppointmentId, setNewAppointmentId] = useState('');
   const [newConsultationId, setNewConsultationId] = useState('');
@@ -586,6 +589,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   );
   const visitSummaryArtifact = useMemo(
     () => draftData?.artifacts?.find((artifact) => artifact.type === 'visit_summary') || null,
+    [draftData],
+  );
+  const clinicalNoteDraftArtifact = useMemo(
+    () => draftData?.artifacts?.find((artifact) => artifact.type === 'clinical_note_draft') || null,
+    [draftData],
+  );
+  const referralLetterDraftArtifact = useMemo(
+    () => draftData?.artifacts?.find((artifact) => artifact.type === 'referral_letter_draft') || null,
     [draftData],
   );
 
@@ -3009,6 +3020,112 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                         <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
                         Accept Bundle
                       </button>
+                    </article>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Clinician Drafts (J1)</h3>
+                    <p className="text-xs text-slate-500">Generate, review, and copy before publishing.</p>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Clinical note draft</p>
+                      <p className="mt-1 text-xs text-slate-600">Status: {clinicalNoteDraftArtifact?.status || 'missing'}</p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!selectedSessionId || !token || !tenantSlug) return;
+                          setWorkingActionKey('draft:clinical_note');
+                          try {
+                            await ehrApi.generatePostVisitClinicalNoteDraft(
+                              selectedSessionId,
+                              { includeTranscript: true },
+                              token,
+                              tenantSlug,
+                            );
+                            const refreshed = await ehrApi.getPostVisitSessionDraft(selectedSessionId, token, tenantSlug);
+                            setDraftData(refreshed.data);
+                            showSuccess('Draft generated', 'Clinical note draft updated.');
+                          } catch (e: any) {
+                            console.error(e);
+                            showError('Error', e?.message || 'Failed to generate clinical note draft');
+                          } finally {
+                            setWorkingActionKey(null);
+                          }
+                        }}
+                        disabled={workingActionKey === 'draft:clinical_note' || !selectedSessionId}
+                        className="mt-3 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        {workingActionKey === 'draft:clinical_note' ? 'Generating…' : 'Generate note draft'}
+                      </button>
+                      <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white p-3">
+                        <pre className="whitespace-pre-wrap text-xs text-slate-800">
+                          {String(clinicalNoteDraftArtifact?.content?.noteText || '').trim() || 'No note draft yet.'}
+                        </pre>
+                      </div>
+                    </article>
+
+                    <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Referral letter draft</p>
+                      <p className="mt-1 text-xs text-slate-600">Status: {referralLetterDraftArtifact?.status || 'missing'}</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <input
+                          value={draftRecipientLabel}
+                          onChange={(e) => setDraftRecipientLabel(e.target.value)}
+                          placeholder="Recipient (e.g., Cardiology)"
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                        />
+                        <input
+                          value={draftReferralReason}
+                          onChange={(e) => setDraftReferralReason(e.target.value)}
+                          placeholder="Referral reason"
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!selectedSessionId || !token || !tenantSlug) return;
+                          setWorkingActionKey('draft:referral_letter');
+                          try {
+                            await ehrApi.generatePostVisitReferralLetterDraft(
+                              selectedSessionId,
+                              {
+                                recipientLabel: draftRecipientLabel || undefined,
+                                referralReason: draftReferralReason || undefined,
+                              },
+                              token,
+                              tenantSlug,
+                            );
+                            const refreshed = await ehrApi.getPostVisitSessionDraft(selectedSessionId, token, tenantSlug);
+                            setDraftData(refreshed.data);
+                            showSuccess('Draft generated', 'Referral letter draft updated.');
+                          } catch (e: any) {
+                            console.error(e);
+                            showError('Error', e?.message || 'Failed to generate referral letter draft');
+                          } finally {
+                            setWorkingActionKey(null);
+                          }
+                        }}
+                        disabled={workingActionKey === 'draft:referral_letter' || !selectedSessionId}
+                        className="mt-3 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        {workingActionKey === 'draft:referral_letter' ? 'Generating…' : 'Generate referral letter'}
+                      </button>
+                      <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white p-3">
+                        <pre className="whitespace-pre-wrap text-xs text-slate-800">
+                          {String(referralLetterDraftArtifact?.content?.letterText || '').trim() ||
+                            String(
+                              referralLetterDraftArtifact?.content?.fallbackTemplate?.body
+                                ? JSON.stringify(referralLetterDraftArtifact?.content?.fallbackTemplate?.body, null, 2)
+                                : '',
+                            ).trim() ||
+                            'No referral draft yet.'}
+                        </pre>
+                      </div>
                     </article>
                   </div>
                 </section>

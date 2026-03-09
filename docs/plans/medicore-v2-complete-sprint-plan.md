@@ -16,10 +16,10 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** **J1 — Auto-Generated Referral Letters + Clinical Note Drafts**
+**Next sprint in order:** **J2 — Deterioration Detection + Early Warning Score (NEWS2)**
 
 - **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, **H1**, **H2**, **H3**, and **H4** are complete.
-- Next: **J1** (referral letters + note drafts), then J2, J3.
+- Next: **J2** (NEWS2 early warning), then J3.
 
 ---
 
@@ -1612,6 +1612,8 @@ Medical aid integration stubs for CIMAS, First Mutual, PSMAS (claim submission f
 
 <a id="sprint-j1"></a>
 ### Sprint J1 — Auto-Generated Referral Letters + Clinical Note Drafts
+
+Status: **done**
 
 Use CDSS LLM to auto-generate referral letters from encounter context. Doctor reviews and sends.
 

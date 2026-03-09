@@ -6322,6 +6322,180 @@ export class PostVisitService {
     };
   }
 
+  async generateSessionReferralLetterDraft(
+    tenantDb: DataSource,
+    sessionId: string,
+    payload: { recipientLabel?: string; referralReason?: string } = {},
+    options: { tenantId?: string; actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+
+    const [patientRows, doctorRows] = await Promise.all([
+      tenantDb.query(
+        `SELECT id, first_name, last_name, patient_number FROM patients WHERE id = $1 LIMIT 1`,
+        [sessionRow.patient_id],
+      ),
+      sessionRow.doctor_id
+        ? tenantDb.query(`SELECT id, first_name, last_name FROM users WHERE id = $1 LIMIT 1`, [sessionRow.doctor_id])
+        : Promise.resolve([]),
+    ]);
+
+    const patientLabel = this.buildPatientDisplay(patientRows?.[0] || null);
+    const doctorLabel = this.buildUserDisplay(doctorRows?.[0] || null);
+
+    const [soapArtifact, visitSummaryArtifact, recommendationArtifact, transcriptRows] = await Promise.all([
+      this.getArtifactRow(tenantDb, sessionId, 'soap_note'),
+      this.getArtifactRow(tenantDb, sessionId, 'visit_summary'),
+      this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle'),
+      tenantDb.query(
+        `SELECT segment_text FROM post_visit_transcript_segments WHERE session_id = $1 ORDER BY start_second ASC LIMIT 250`,
+        [sessionId],
+      ),
+    ]);
+
+    const transcriptText = (transcriptRows || [])
+      .map((row: any) => String(row?.segment_text || '').trim())
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 12000);
+
+    const recommendationItems = Array.isArray(recommendationArtifact?.content?.items)
+      ? recommendationArtifact.content.items
+      : [];
+
+    const llmResult = await this.groundedLlmService?.draftReferralLetter({
+      sessionId,
+      language: sessionRow.language || 'en',
+      patientLabel,
+      clinicianLabel: doctorLabel,
+      recipientLabel: payload.recipientLabel || null,
+      referralReason: payload.referralReason || null,
+      soapNote: soapArtifact?.content?.soap_note || null,
+      visitSummary: visitSummaryArtifact?.content || null,
+      recommendationItems,
+    });
+
+    const fallback = this.buildAdminDocumentTemplate({
+      documentType: 'referral_letter',
+      sessionRow,
+      patientLabel,
+      doctorLabel,
+      summaryText: String(visitSummaryArtifact?.content?.plain_language_summary || '').trim(),
+      recommendationTitles: recommendationItems
+        .map((item: any) => String(item?.title || '').trim())
+        .filter((t: string) => t.length > 0),
+      note: payload.referralReason || null,
+      appointmentReason: payload.referralReason || null,
+    });
+
+    const content = {
+      type: 'referral_letter_draft',
+      generatedAt: new Date().toISOString(),
+      patientLabel,
+      clinicianLabel: doctorLabel,
+      recipientLabel: payload.recipientLabel || null,
+      referralReason: payload.referralReason || null,
+      transcriptExcerpt: transcriptText ? transcriptText.slice(0, 2000) : null,
+      letterText: llmResult?.letterText || null,
+      fallbackTemplate: fallback,
+      model: llmResult?.model || null,
+      audit: llmResult?.audit || null,
+      warnings: llmResult ? [] : ['LLM unavailable; fallback template only'],
+    };
+
+    const row = await this.upsertDraftArtifact(tenantDb, {
+      sessionId,
+      artifactType: 'referral_letter_draft',
+      content,
+      generatedBy: llmResult ? 'post_visit_grounded_llm' : 'post_visit_template_fallback',
+      actorUserId: options.actorUserId || null,
+      artifactStatus: 'draft',
+    });
+
+    return {
+      sessionId,
+      artifact: {
+        id: row.id,
+        type: row.artifact_type,
+        status: row.artifact_status,
+        content: row.content,
+        citations: row.citations,
+      },
+    };
+  }
+
+  async generateSessionClinicalNoteDraft(
+    tenantDb: DataSource,
+    sessionId: string,
+    payload: { includeTranscript?: boolean } = {},
+    options: { tenantId?: string; actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+
+    const [soapArtifact, visitSummaryArtifact, recommendationArtifact, transcriptRows] = await Promise.all([
+      this.getArtifactRow(tenantDb, sessionId, 'soap_note'),
+      this.getArtifactRow(tenantDb, sessionId, 'visit_summary'),
+      this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle'),
+      payload.includeTranscript === false
+        ? Promise.resolve([])
+        : tenantDb.query(
+            `SELECT segment_text FROM post_visit_transcript_segments WHERE session_id = $1 ORDER BY start_second ASC LIMIT 300`,
+            [sessionId],
+          ),
+    ]);
+
+    const transcriptText = (transcriptRows || [])
+      .map((row: any) => String(row?.segment_text || '').trim())
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 12000);
+
+    const recommendationItems = Array.isArray(recommendationArtifact?.content?.items)
+      ? recommendationArtifact.content.items
+      : [];
+
+    const llmResult = await this.groundedLlmService?.draftClinicalNote({
+      sessionId,
+      language: sessionRow.language || 'en',
+      transcriptText,
+      soapNote: soapArtifact?.content?.soap_note || null,
+      visitSummary: visitSummaryArtifact?.content || null,
+      recommendationItems,
+    });
+
+    const content = {
+      type: 'clinical_note_draft',
+      generatedAt: new Date().toISOString(),
+      noteText: llmResult?.noteText || '',
+      model: llmResult?.model || null,
+      audit: llmResult?.audit || null,
+      transcriptIncluded: payload.includeTranscript !== false,
+      warnings: llmResult ? [] : ['LLM unavailable; no clinical note draft generated'],
+    };
+
+    const row = await this.upsertDraftArtifact(tenantDb, {
+      sessionId,
+      artifactType: 'clinical_note_draft',
+      content,
+      generatedBy: llmResult ? 'post_visit_grounded_llm' : 'post_visit_grounded_llm_unavailable',
+      actorUserId: options.actorUserId || null,
+      artifactStatus: 'draft',
+    });
+
+    return {
+      sessionId,
+      artifact: {
+        id: row.id,
+        type: row.artifact_type,
+        status: row.artifact_status,
+        content: row.content,
+        citations: row.citations,
+      },
+    };
+  }
+
   async listSessionAdminDocuments(
     tenantDb: DataSource,
     sessionId: string,
