@@ -98,10 +98,56 @@ export class VitalsService {
       }
     }
 
+    try {
+      await this.checkQsofaAndAlertSepsis(tenantDb, saved);
+    } catch (err) {
+      this.logger.warn(`qSOFA check failed: ${err instanceof Error ? err.message : err}`);
+    }
+
     return {
       ...saved,
       cdssInsights,
     };
+  }
+
+  private async checkQsofaAndAlertSepsis(tenantDb: any, vitals: Vitals): Promise<void> {
+    let qsofaScore = 0;
+    const factors: string[] = [];
+
+    if (vitals.respiratoryRate && vitals.respiratoryRate >= 22) {
+      qsofaScore++;
+      factors.push(`RR ${vitals.respiratoryRate} >= 22`);
+    }
+
+    if (vitals.bloodPressure) {
+      const systolic = parseInt(String(vitals.bloodPressure).split('/')[0], 10);
+      if (!isNaN(systolic) && systolic <= 100) {
+        qsofaScore++;
+        factors.push(`SBP ${systolic} <= 100`);
+      }
+    }
+
+    if (qsofaScore < 2) return;
+
+    const existing = await tenantDb.query(
+      `SELECT id FROM sepsis_screenings
+       WHERE patient_id = $1 AND created_at > NOW() - INTERVAL '6 hours'
+       LIMIT 1`,
+      [vitals.patientId],
+    );
+    if (existing?.length) return;
+
+    await tenantDb.query(
+      `INSERT INTO sepsis_screenings (patient_id, screening_tool, qsofa_score, sirs_criteria_met, notes, screened_by, status)
+       VALUES ($1, 'qSOFA', $2, false, $3, NULL, 'positive')`,
+      [
+        vitals.patientId,
+        qsofaScore,
+        `Auto-generated from vitals: ${factors.join(', ')}. qSOFA >= 2 — sepsis workup recommended.`,
+      ],
+    );
+
+    this.logger.warn(`qSOFA >= 2 for patient ${vitals.patientId}: ${factors.join(', ')} — sepsis screening created`);
   }
 
   async getByPatient(

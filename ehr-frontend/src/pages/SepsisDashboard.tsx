@@ -230,6 +230,72 @@ const SepsisDashboard: React.FC = () => {
           ))}
         </div>
         )}
+
+      {/* Bundle Timeline Panel (K4) */}
+      {compliance?.bundles?.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-xl font-bold text-slate-900 mb-3">SEP-1 Bundle Timeline</h2>
+          <div className="space-y-3">
+            {compliance.bundles.slice(0, 10).map((bundle: any) => {
+              const elements = [
+                { key: 'lactate_measured', label: 'Lactate', time: bundle.lactate_measured_at },
+                { key: 'blood_cultures_drawn', label: 'Blood Cultures', time: bundle.blood_cultures_drawn_at },
+                { key: 'broad_spectrum_antibiotics_given', label: 'Antibiotics', time: bundle.antibiotics_given_at },
+                { key: 'fluid_bolus_given', label: 'Fluid Bolus', time: bundle.fluid_bolus_given_at },
+                { key: 'vasopressors_initiated', label: 'Vasopressors', time: bundle.vasopressors_initiated_at },
+              ];
+              const completed = elements.filter(e => bundle[e.key] === true).length;
+              const total = elements.length;
+
+              return (
+                <div
+                  key={bundle.id}
+                  className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 p-5"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-bold text-slate-900">Bundle #{String(bundle.id).slice(0, 8)}</p>
+                      <p className="text-xs text-slate-500">
+                        Onset: {bundle.sepsis_onset_time ? new Date(bundle.sepsis_onset_time).toLocaleString() : '—'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {bundle.three_hour_bundle_complete && (
+                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold">3h COMPLETE</span>
+                      )}
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        completed === total ? 'bg-green-100 text-green-800' :
+                        completed >= 3 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {completed}/{total} elements
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {elements.map((el) => {
+                      const done = bundle[el.key] === true;
+                      return (
+                        <div key={el.key} className="flex-1">
+                          <div className={`h-2 rounded-full ${done ? 'bg-green-500' : 'bg-slate-200'}`} />
+                          <p className={`text-[10px] mt-1 text-center ${done ? 'text-green-700 font-semibold' : 'text-slate-400'}`}>
+                            {el.label}
+                          </p>
+                          {el.time && (
+                            <p className="text-[9px] text-center text-slate-400">
+                              {new Date(el.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       </div>
     </div>
   );

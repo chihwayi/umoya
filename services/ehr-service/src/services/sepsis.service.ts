@@ -72,12 +72,61 @@ export class SepsisService {
     if (!ALLOWED_BUNDLE_ELEMENTS.includes(element as any)) {
       throw new BadRequestException(`Invalid bundle element: ${element}`);
     }
-    const timeColumn = element.replace('_given', '_time').replace('_measured', '_time');
+    const timeColMap: Record<string, string> = {
+      lactate_measured: 'lactate_measured_at',
+      blood_cultures_drawn: 'blood_cultures_drawn_at',
+      broad_spectrum_antibiotics_given: 'antibiotics_given_at',
+      fluid_bolus_given: 'fluid_bolus_given_at',
+      vasopressors_initiated: 'vasopressors_initiated_at',
+    };
+    const timeColumn = timeColMap[element] || element.replace('_given', '_time').replace('_measured', '_time');
+
     const result = await tenantDb.query(
       `UPDATE sepsis_bundles SET ${element} = $1, ${timeColumn} = NOW() WHERE id = $2 RETURNING *`,
-      [value, bundleId]
+      [value, bundleId],
     );
-    return result[0];
+    const updated = result[0];
+
+    if (updated && value === true) {
+      await this.checkThreeHourBundleComplete(tenantDb, bundleId, updated);
+    }
+
+    return updated;
+  }
+
+  private async checkThreeHourBundleComplete(
+    tenantDb: DataSource,
+    bundleId: string,
+    bundle: any,
+  ): Promise<void> {
+    const lactate = bundle.lactate_measured === true;
+    const cultures = bundle.blood_cultures_drawn === true;
+    const antibiotics = bundle.broad_spectrum_antibiotics_given === true;
+
+    if (!lactate || !cultures || !antibiotics) return;
+
+    const onset = bundle.sepsis_onset_time;
+    if (!onset) return;
+
+    const onsetMs = new Date(onset).getTime();
+    const threeHoursMs = 3 * 60 * 60 * 1000;
+
+    const times = [
+      bundle.lactate_measured_at,
+      bundle.blood_cultures_drawn_at,
+      bundle.antibiotics_given_at,
+    ].filter(Boolean).map((t: string) => new Date(t).getTime());
+
+    if (times.length < 3) return;
+
+    const allWithinThreeHours = times.every((t) => t - onsetMs <= threeHoursMs);
+    if (allWithinThreeHours) {
+      await tenantDb.query(
+        `UPDATE sepsis_bundles SET three_hour_bundle_complete = true WHERE id = $1`,
+        [bundleId],
+      );
+      this.logger.log(`Three-hour bundle auto-completed for bundle ${bundleId}`);
+    }
   }
 
   async getSepsisAlerts(

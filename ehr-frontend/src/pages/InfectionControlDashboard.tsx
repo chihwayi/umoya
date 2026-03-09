@@ -25,6 +25,12 @@ const InfectionControlDashboard: React.FC = () => {
   const [isolations, setIsolations] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [hhCompliance, setHhCompliance] = useState<any>(null);
+  const [deviceRates, setDeviceRates] = useState<any>(null);
+  const [hhDepartment, setHhDepartment] = useState('');
+  const [hhOpportunity, setHhOpportunity] = useState('before_patient_contact');
+  const [hhPerformed, setHhPerformed] = useState(true);
+  const [hhMethod, setHhMethod] = useState('alcohol_rub');
   const [dateRange, setDateRange] = useState({
     startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -59,6 +65,19 @@ const InfectionControlDashboard: React.FC = () => {
         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       });
       setIsolations(isolationsResponse.data || []);
+
+      const [hhRes, deviceRes] = await Promise.all([
+        ehrAxios.get('/infection-control/hand-hygiene/compliance', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: null })),
+        ehrAxios.get('/infection-control/device-days/rates', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: null })),
+      ]);
+      setHhCompliance(hhRes.data);
+      setDeviceRates(deviceRes.data);
     } catch (error) {
       showError('Error', 'Failed to load infection control data');
     } finally {
@@ -310,6 +329,101 @@ const InfectionControlDashboard: React.FC = () => {
           </div>
         )}
         </div>
+
+        {/* Hand Hygiene Compliance Panel (K4) */}
+        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+            <Users className="h-5 w-5 text-teal-600" />
+            Hand Hygiene Compliance (WHO 5 Moments)
+          </h2>
+          {hhCompliance && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-center">
+                <p className="text-2xl font-bold text-teal-700">{hhCompliance.overallRate ?? '—'}%</p>
+                <p className="text-xs text-teal-600">Overall compliance</p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                <p className="text-2xl font-bold text-slate-700">{hhCompliance.totalObservations ?? 0}</p>
+                <p className="text-xs text-slate-600">Observations</p>
+              </div>
+              <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-center">
+                <p className="text-2xl font-bold text-green-700">{hhCompliance.performedCount ?? 0}</p>
+                <p className="text-xs text-green-600">Performed</p>
+              </div>
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-center">
+                <p className="text-2xl font-bold text-red-700">{hhCompliance.missedCount ?? 0}</p>
+                <p className="text-xs text-red-600">Missed</p>
+              </div>
+            </div>
+          )}
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+            <p className="text-xs font-semibold text-slate-700 mb-2">Record Observation</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <input value={hhDepartment} onChange={(e) => setHhDepartment(e.target.value)} placeholder="Department" className="rounded-lg border border-slate-200 px-3 py-2 text-xs" />
+              <select value={hhOpportunity} onChange={(e) => setHhOpportunity(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">
+                <option value="before_patient_contact">Before patient contact</option>
+                <option value="before_aseptic_task">Before aseptic task</option>
+                <option value="after_body_fluid_exposure">After body fluid exposure</option>
+                <option value="after_patient_contact">After patient contact</option>
+                <option value="after_surroundings_contact">After surroundings contact</option>
+              </select>
+              <select value={hhMethod} onChange={(e) => setHhMethod(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">
+                <option value="alcohol_rub">Alcohol rub</option>
+                <option value="soap_and_water">Soap and water</option>
+                <option value="none">None</option>
+              </select>
+              <button
+                onClick={async () => {
+                  try {
+                    await ehrAxios.post('/infection-control/hand-hygiene', {
+                      department: hhDepartment,
+                      opportunityType: hhOpportunity,
+                      handHygienePerformed: hhPerformed,
+                      method: hhMethod,
+                    }, { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } });
+                    loadData();
+                  } catch { /* ignore */ }
+                }}
+                className="bg-teal-600 text-white text-xs font-semibold rounded-lg px-3 py-2 hover:bg-teal-700"
+              >
+                Record
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Device Day Tracking Panel (K4) */}
+        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+            <Activity className="h-5 w-5 text-purple-600" />
+            Device-Day HAI Rates
+          </h2>
+          {deviceRates ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-xl bg-purple-50 border border-purple-200">
+                <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">CAUTI Rate</p>
+                <p className="text-3xl font-bold text-purple-800 mt-1">{deviceRates.cautiRate ?? '—'}</p>
+                <p className="text-xs text-purple-600 mt-1">per 1,000 catheter-days</p>
+                <p className="text-xs text-slate-500">{deviceRates.urinaryCatheterDays ?? 0} device-days</p>
+              </div>
+              <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+                <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">CLABSI Rate</p>
+                <p className="text-3xl font-bold text-red-800 mt-1">{deviceRates.clabsiRate ?? '—'}</p>
+                <p className="text-xs text-red-600 mt-1">per 1,000 line-days</p>
+                <p className="text-xs text-slate-500">{deviceRates.centralLineDays ?? 0} device-days</p>
+              </div>
+              <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+                <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">VAP Rate</p>
+                <p className="text-3xl font-bold text-indigo-800 mt-1">{deviceRates.vapRate ?? '—'}</p>
+                <p className="text-xs text-indigo-600 mt-1">per 1,000 ventilator-days</p>
+                <p className="text-xs text-slate-500">{deviceRates.ventilatorDays ?? 0} device-days</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No device-day rate data available for this period.</p>
+          )}
+        </div>
+
       </div>
     </div>
   );
