@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Pill, X, Save, Calendar, Clock, User, Plus, AlertTriangle, Search, Loader, CreditCard, Lock, BookOpenCheck } from 'lucide-react';
+import { Pill, X, Save, Calendar, Clock, User, Plus, AlertTriangle, Search, Loader, CreditCard, Lock, BookOpenCheck, Shield } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { ehrApi, chartApi } from '../services/api';
@@ -103,6 +103,8 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   const [items, setItems] = useState<Rx[]>([{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]);
   const [loadingFood, setLoadingFood] = useState(false);
   const [foodInteractions, setFoodInteractions] = useState<any | null>(null);
+  const [medSafetyLoading, setMedSafetyLoading] = useState(false);
+  const [medSafetyAssessment, setMedSafetyAssessment] = useState<any | null>(null);
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PrescriptionTemplate | null>(null);
@@ -206,6 +208,31 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
       setLoadingFood(false);
     }
   }, [items, token, tenantSlug]);
+
+  const runMedicationSafety = useCallback(async () => {
+    try {
+      setMedSafetyLoading(true);
+      const meds = items
+        .filter((rx) => rx.name)
+        .map((rx) => ({
+          name: rx.name,
+          genericName: rx.foundDrug?.genericName || rx.name,
+          medication_name_snomed: rx.medicationSnomed?.conceptId,
+        }));
+      const resp = await ehrApi.assessMedicationSafety(
+        { patientId: appointment.patient.id, medications: meds },
+        token,
+        tenantSlug,
+      );
+      setMedSafetyAssessment(resp.data || resp);
+    } catch (err) {
+      console.error('Failed to assess medication safety:', err);
+      setMedSafetyAssessment(null);
+      showError('Safety check failed', 'Could not run pregnancy/renal/hepatic safety assessment.');
+    } finally {
+      setMedSafetyLoading(false);
+    }
+  }, [items, token, tenantSlug, appointment.patient.id, showError]);
 
   const applyTemplateToPrescription = (template: PrescriptionTemplate) => {
     const baseItem: Rx = {
@@ -586,6 +613,108 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                 )}
               </div>
             )}
+
+            {/* Pregnancy / Renal / Hepatic Safety (J3) */}
+            <div className="bg-gradient-to-r from-rose-50 to-amber-50 border-2 border-rose-300 rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-rose-700" />
+                  <h4 className="font-semibold text-rose-900">Pregnancy & Renal/Hepatic Safety</h4>
+                </div>
+                <button
+                  onClick={runMedicationSafety}
+                  disabled={medSafetyLoading || !items.some((rx) => rx.name && rx.name.trim().length > 0)}
+                  className="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-800 hover:bg-rose-50 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {medSafetyLoading ? (
+                    <>
+                      <Loader className="w-3 h-3 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-3 h-3" />
+                      Run Safety Check
+                    </>
+                  )}
+                </button>
+              </div>
+              {medSafetyAssessment ? (
+                <div className="space-y-2 text-xs">
+                  {medSafetyAssessment.pregnancy?.isPregnant && (
+                    <div className="border border-pink-200 bg-pink-50 rounded-lg px-3 py-2">
+                      <p className="font-semibold text-pink-900">
+                        Pregnancy: active maternity enrollment detected
+                        {medSafetyAssessment.pregnancy.riskCategory && ` (${medSafetyAssessment.pregnancy.riskCategory})`}
+                      </p>
+                      {(medSafetyAssessment.pregnancy.alerts || []).length > 0 ? (
+                        <ul className="list-disc pl-5 mt-1 text-pink-900">
+                          {medSafetyAssessment.pregnancy.alerts.map((a: any, idx: number) => (
+                            <li key={idx}>
+                              <span className="font-semibold">{a.medication}</span> — {a.rationale}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-pink-900">No specific teratogenic medications detected in current selection.</p>
+                      )}
+                    </div>
+                  )}
+                  {medSafetyAssessment.renal && (
+                    <div className="border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">
+                      <p className="font-semibold text-emerald-900">
+                        Renal function (eGFR):{' '}
+                        {medSafetyAssessment.renal.egfr != null
+                          ? `${medSafetyAssessment.renal.egfr} mL/min (latest)`
+                          : 'no recent eGFR result'}
+                      </p>
+                      {(medSafetyAssessment.renal.alerts || []).length > 0 && (
+                        <ul className="list-disc pl-5 mt-1 text-emerald-900">
+                          {medSafetyAssessment.renal.alerts.map((a: any, idx: number) => (
+                            <li key={idx}>
+                              <span className="font-semibold">{a.medication}</span> — {a.rationale}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                  {medSafetyAssessment.hepatic && (
+                    <div className="border border-amber-200 bg-amber-50 rounded-lg px-3 py-2">
+                      <p className="font-semibold text-amber-900">
+                        Hepatic status:{' '}
+                        {medSafetyAssessment.hepatic.suspectedImpairment
+                          ? 'possible impairment based on recent labs'
+                          : 'no clear impairment signal from recent labs'}
+                      </p>
+                      {medSafetyAssessment.hepatic.rationale && (
+                        <p className="mt-1 text-amber-900">{medSafetyAssessment.hepatic.rationale}</p>
+                      )}
+                      {(medSafetyAssessment.hepatic.alerts || []).length > 0 && (
+                        <ul className="list-disc pl-5 mt-1 text-amber-900">
+                          {medSafetyAssessment.hepatic.alerts.map((a: any, idx: number) => (
+                            <li key={idx}>
+                              <span className="font-semibold">{a.medication}</span> — {a.rationale}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                  {!medSafetyAssessment.pregnancy?.isPregnant &&
+                    (!medSafetyAssessment.renal?.alerts?.length || medSafetyAssessment.renal.egfr == null) &&
+                    (!medSafetyAssessment.hepatic?.alerts?.length && !medSafetyAssessment.hepatic?.suspectedImpairment) && (
+                      <p className="text-slate-700">
+                        No specific pregnancy, renal, or hepatic dose adjustment alerts detected for the current selection.
+                      </p>
+                    )}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-700">
+                  Use the safety check to surface pregnancy, renal, and hepatic-related warnings based on current medications and latest labs.
+                </p>
+              )}
+            </div>
             
             {items.map((rx, idx) => {
               const warning = allergyWarnings[idx];

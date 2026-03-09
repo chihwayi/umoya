@@ -100,6 +100,7 @@ import { TravelVaccineController } from './controllers/travel-vaccine.controller
 import { CurrencyExchangeController } from './controllers/currency-exchange.controller';
 import { MedicalAidIntegrationController } from './controllers/medical-aid-integration.controller';
 import { EarlyWarningController } from './controllers/early-warning.controller';
+import { MedicationSafetyController } from './controllers/medication-safety.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -243,6 +244,7 @@ import { TravelVaccineService } from './services/travel-vaccine.service';
 import { CurrencyExchangeService } from './services/currency-exchange.service';
 import { MedicalAidIntegrationService } from './services/medical-aid-integration.service';
 import { EarlyWarningService } from './services/early-warning.service';
+import { MedicationSafetyService } from './services/medication-safety.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -362,6 +364,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CurrencyExchangeController,
     MedicalAidIntegrationController,
     EarlyWarningController,
+    MedicationSafetyController,
   ],
   providers: [
     AuthService,
@@ -505,6 +508,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CurrencyExchangeService,
     MedicalAidIntegrationService,
     EarlyWarningService,
+    MedicationSafetyService,
     RolesGuard,
     JwtStrategy,
   ],

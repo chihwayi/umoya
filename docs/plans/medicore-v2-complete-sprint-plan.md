@@ -16,10 +16,10 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** **J3 — Pregnancy-Aware Prescribing + Renal/Hepatic Dose Adjustment**
+**Next sprint in order:** *(all Phase J sprints in this plan are now complete)*
 
 - **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, **H1**, **H2**, **H3**, and **H4** are complete.
-- Next: **J3** (pregnancy-aware prescribing + renal/hepatic dose adjustment).
+- Next: *(none — Phase J in this plan is complete)*.
 
 ---
 
@@ -1655,6 +1655,8 @@ Auto-calculate NEWS2 from vitals (respiratory rate, SpO2, supplemental O2, tempe
 
 <a id="sprint-j3"></a>
 ### Sprint J3 — Pregnancy-Aware Prescribing + Renal/Hepatic Dose Adjustment
+
+Status: **done**
 
 Add FDA pregnancy category / Australian category checks during prescribing. If patient has active maternity enrollment, flag teratogenic medications.
 

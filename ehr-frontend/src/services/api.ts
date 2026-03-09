@@ -2699,6 +2699,23 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  assessMedicationSafety: async (
+    payload: {
+      patientId: string;
+      medications: Array<{ name?: string; genericName?: string; medication_name_snomed?: string }>;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/medication-safety/assess', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   getPatientPrescriptions: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/prescriptions/patient/${patientId}`, {
       headers: {
