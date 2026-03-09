@@ -7378,6 +7378,63 @@ export const populationHealthApi = {
   },
 };
 
+export const campaignApi = {
+  listCampaigns: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/campaigns', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createCampaign: async (
+    body: {
+      name: string;
+      channel?: 'sms' | 'email';
+      messageTemplate: string;
+      targetType?: 'manual' | 'recall_list' | 'query';
+      targetRefId?: string;
+      criteria?: Record<string, any>;
+      scheduledAt?: string;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/campaigns', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updateCampaign: async (id: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/campaigns/${id}`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  cancelCampaign: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/campaigns/${id}/cancel`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  listRecipients: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/campaigns/${id}/recipients`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  prepareRecipients: async (id: string, body: { patientIds?: string[] }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/campaigns/${id}/recipients/prepare`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  sendNow: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/campaigns/${id}/send`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+};
+
 export const pharmacyApi = {
   // Suppliers
   listSuppliers: async (token: string, tenantSlug: string, filters?: { search?: string; status?: string; limit?: number; offset?: number }) => {

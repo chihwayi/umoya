@@ -127,6 +127,8 @@ import { PriorAuthorization } from '../entities/prior-authorization.entity';
 import { PatientPortalPayment } from '../entities/patient-portal-payment.entity';
 import { HealthEducationContent } from '../entities/health-education-content.entity';
 import { PatientFamilyAccess } from '../entities/patient-family-access.entity';
+import { NotificationCampaign } from '../entities/notification-campaign.entity';
+import { NotificationCampaignRecipient } from '../entities/notification-campaign-recipient.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -343,6 +345,8 @@ export class TenantService {
         PatientPortalPayment,
         HealthEducationContent,
         PatientFamilyAccess,
+        NotificationCampaign,
+        NotificationCampaignRecipient,
       ],
       logging: false,
     });

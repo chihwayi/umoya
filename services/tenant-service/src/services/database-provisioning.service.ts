@@ -630,6 +630,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintH3PatientPortalStatements(),
       },
       {
+        id: 'sprint_h4_recall_campaigns',
+        label: 'Sprint H4 Recall Campaigns + Bulk Notifications',
+        version: '2026.03.09',
+        description: 'notification_campaigns and notification_campaign_recipients',
+        statements: () => this.getSprintH4RecallCampaignStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -777,6 +784,42 @@ export class DatabaseProvisioningService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_pfa_patient ON patient_family_access(patient_id)`,
+    ];
+  }
+
+  private getSprintH4RecallCampaignStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS notification_campaigns (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        channel VARCHAR(20) DEFAULT 'sms' CHECK (channel IN ('sms','email')),
+        message_template TEXT NOT NULL,
+        target_type VARCHAR(50) DEFAULT 'manual' CHECK (target_type IN ('manual','recall_list','query')),
+        target_ref_id UUID,
+        criteria JSONB DEFAULT '{}'::jsonb,
+        status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft','scheduled','sending','completed','cancelled','failed')),
+        scheduled_at TIMESTAMP WITH TIME ZONE,
+        started_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS notification_campaign_recipients (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        campaign_id UUID NOT NULL REFERENCES notification_campaigns(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        destination VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'queued' CHECK (status IN ('queued','sent','delivered','failed','skipped')),
+        message_id VARCHAR(100),
+        error TEXT,
+        sent_at TIMESTAMP WITH TIME ZONE,
+        delivered_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ncr_campaign ON notification_campaign_recipients(campaign_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ncr_patient ON notification_campaign_recipients(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_nc_status ON notification_campaigns(status)`,
     ];
   }
 
