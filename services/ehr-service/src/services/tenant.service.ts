@@ -129,6 +129,8 @@ import { HealthEducationContent } from '../entities/health-education-content.ent
 import { PatientFamilyAccess } from '../entities/patient-family-access.entity';
 import { NotificationCampaign } from '../entities/notification-campaign.entity';
 import { NotificationCampaignRecipient } from '../entities/notification-campaign-recipient.entity';
+import { TravelVaccineDestination } from '../entities/travel-vaccine-destination.entity';
+import { VaccinationCertificate } from '../entities/vaccination-certificate.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -347,6 +349,8 @@ export class TenantService {
         PatientFamilyAccess,
         NotificationCampaign,
         NotificationCampaignRecipient,
+        TravelVaccineDestination,
+        VaccinationCertificate,
       ],
       logging: false,
     });

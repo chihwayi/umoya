@@ -8783,6 +8783,51 @@ export const immunizationApi = {
   },
 };
 
+export const travelVaccineApi = {
+  listDestinations: async (search: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/travel-vaccines/destinations', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: search ? { search } : {},
+    });
+    return { data: response.data };
+  },
+
+  getDestination: async (isoCode: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/travel-vaccines/destinations/${isoCode}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  assessTravelReadiness: async (
+    patientId: string,
+    destinations: string[],
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(
+      '/travel-vaccines/assess',
+      { patientId, destinations },
+      { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+    );
+    return { data: response.data };
+  },
+
+  generateYellowCard: async (
+    patientId: string,
+    payload: { issuingCenter?: string; immunizationIds?: string[] } | undefined,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(
+      '/travel-vaccines/yellow-card',
+      { patientId, ...(payload ?? {}) },
+      { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+    );
+    return { data: response.data };
+  },
+};
+
 export const clinicalPathwaysApi = {
   // ==================== CLINICAL PATHWAYS ====================
   

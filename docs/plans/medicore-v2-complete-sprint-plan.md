@@ -16,10 +16,10 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** **I1 — Travel Vaccine Engine + Yellow Card**
+**Next sprint in order:** **I2 — Multi-Currency Billing + Medical Aid Integration**
 
 - **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, **H1**, **H2**, **H3**, and **H4** are complete.
-- Next: **I1** (travel vaccines + yellow card), then I2, J.
+- Next: **I2** (multi-currency billing + medical aid stubs), then J.
 
 ---
 
@@ -1550,6 +1550,8 @@ Add bulk SMS/email campaign tables, campaign management service, and admin UI fo
 
 <a id="sprint-i1"></a>
 ### Sprint I1 — Travel Vaccine Destination Engine + Yellow Card
+
+Status: **done**
 
 #### Database
 

@@ -3,7 +3,7 @@ import {
   Syringe, Calendar, User, Building, AlertTriangle, CheckCircle,
   Clock, Download, Plus, Search, Filter, TrendingUp
 } from 'lucide-react';
-import { ehrApi, immunizationApi } from '../services/api';
+import { ehrApi, immunizationApi, travelVaccineApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import VaccineAdministrationModal from './VaccineAdministrationModal';
@@ -21,18 +21,28 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
   token,
   onAddImmunization,
 }) => {
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const [immunizations, setImmunizations] = useState<any[]>([]);
   const [forecast, setForecast] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [travelSearch, setTravelSearch] = useState('');
+  const [travelDestinations, setTravelDestinations] = useState<any[]>([]);
+  const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
+  const [travelAssessing, setTravelAssessing] = useState(false);
+  const [travelAssessment, setTravelAssessment] = useState<any | null>(null);
+  const [generatingYellowCard, setGeneratingYellowCard] = useState(false);
 
   useEffect(() => {
     loadImmunizations();
     loadForecast();
   }, [patientId]);
+
+  useEffect(() => {
+    loadTravelDestinations();
+  }, [tenantSlug, token]);
 
   const loadImmunizations = async () => {
     try {
@@ -58,6 +68,56 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
       setForecast(response.data || []);
     } catch (error) {
       console.error('Failed to load forecast:', error);
+    }
+  };
+
+  const loadTravelDestinations = async () => {
+    try {
+      const resp = await travelVaccineApi.listDestinations(undefined, token, tenantSlug);
+      setTravelDestinations(resp.data || []);
+    } catch (error) {
+      console.error('Failed to load travel destinations:', error);
+    }
+  };
+
+  const assessTravel = async () => {
+    if (selectedDestinations.length === 0) {
+      showError('Missing destinations', 'Select at least one destination');
+      return;
+    }
+    try {
+      setTravelAssessing(true);
+      const resp = await travelVaccineApi.assessTravelReadiness(
+        patientId,
+        selectedDestinations,
+        token,
+        tenantSlug,
+      );
+      setTravelAssessment(resp.data);
+    } catch (error) {
+      console.error('Failed to assess travel readiness:', error);
+      showError('Error', 'Failed to assess travel readiness');
+    } finally {
+      setTravelAssessing(false);
+    }
+  };
+
+  const generateYellowCard = async () => {
+    try {
+      setGeneratingYellowCard(true);
+      const resp = await travelVaccineApi.generateYellowCard(
+        patientId,
+        { immunizationIds: immunizations.map((i) => i.id).filter(Boolean).slice(0, 25) },
+        token,
+        tenantSlug,
+      );
+      const certNum = resp.data?.certificate?.certificateNumber;
+      showSuccess('Yellow card created', certNum ? `Certificate ${certNum}` : 'Certificate record created');
+    } catch (error) {
+      console.error('Failed to generate yellow card:', error);
+      showError('Error', 'Failed to generate yellow card');
+    } finally {
+      setGeneratingYellowCard(false);
     }
   };
 
@@ -294,6 +354,145 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
           ))}
         </div>
       )}
+
+      {/* Travel clinic workflow */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900">Travel clinic</h3>
+            <p className="text-xs sm:text-sm text-slate-600">
+              Select destinations to see vaccine gaps and generate a Yellow Card record.
+            </p>
+          </div>
+          <button
+            onClick={generateYellowCard}
+            disabled={generatingYellowCard}
+            className="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 text-sm font-medium w-full sm:w-auto"
+          >
+            {generatingYellowCard ? 'Creating…' : 'Create Yellow Card'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="border border-slate-200 rounded-lg p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Search className="w-4 h-4 text-slate-500" />
+              <input
+                value={travelSearch}
+                onChange={(e) => setTravelSearch(e.target.value)}
+                placeholder="Search destinations (country or ISO)"
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-200"
+              />
+            </div>
+
+            <div className="max-h-56 overflow-auto space-y-2">
+              {(travelDestinations || [])
+                .filter((d) => {
+                  const s = travelSearch.trim().toLowerCase();
+                  if (!s) return true;
+                  return (
+                    d.countryName?.toLowerCase().includes(s) ||
+                    d.isoCode?.toLowerCase().includes(s)
+                  );
+                })
+                .slice(0, 150)
+                .map((d) => {
+                  const checked = selectedDestinations.includes(d.isoCode);
+                  return (
+                    <label
+                      key={d.isoCode}
+                      className="flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-slate-50 border border-slate-100"
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...selectedDestinations, d.isoCode]
+                              : selectedDestinations.filter((x) => x !== d.isoCode);
+                            setSelectedDestinations(next);
+                          }}
+                        />
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {d.countryName}{' '}
+                            <span className="text-slate-500 font-medium">({d.isoCode})</span>
+                          </div>
+                          {d.region && <div className="text-xs text-slate-500">{d.region}</div>}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 mt-3">
+              <div className="text-xs text-slate-600">
+                Selected: <span className="font-semibold">{selectedDestinations.length}</span>
+              </div>
+              <button
+                onClick={assessTravel}
+                disabled={travelAssessing || selectedDestinations.length === 0}
+                className="px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 text-sm font-medium"
+              >
+                {travelAssessing ? 'Assessing…' : 'Assess readiness'}
+              </button>
+            </div>
+          </div>
+
+          <div className="border border-slate-200 rounded-lg p-3 sm:p-4">
+            {!travelAssessment ? (
+              <div className="text-sm text-slate-600">
+                Run an assessment to view required/recommended vaccine gaps per destination.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-900">Assessment results</div>
+                  <div className="text-xs text-slate-600">
+                    Required gaps: <span className="font-semibold">{travelAssessment?.totals?.requiredGaps ?? 0}</span>{' '}
+                    • Recommended gaps:{' '}
+                    <span className="font-semibold">{travelAssessment?.totals?.recommendedGaps ?? 0}</span>
+                  </div>
+                </div>
+
+                <div className="max-h-60 overflow-auto space-y-2">
+                  {(travelAssessment?.destinations || []).map((d: any) => (
+                    <div key={d.isoCode} className="border border-slate-100 rounded-lg p-3">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {d.countryName} <span className="text-slate-500 font-medium">({d.isoCode})</span>
+                      </div>
+                      {d.specialNotes && (
+                        <div className="text-xs text-slate-600 mt-1">{d.specialNotes}</div>
+                      )}
+
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                          <div className="text-xs font-bold text-red-800 mb-1">Required missing</div>
+                          <div className="text-xs text-red-900">
+                            {(d.requiredMissing || []).length === 0
+                              ? 'None'
+                              : (d.requiredMissing || []).map((v: any) => v?.name ?? v?.code ?? v).join(', ')}
+                          </div>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                          <div className="text-xs font-bold text-amber-800 mb-1">Recommended missing</div>
+                          <div className="text-xs text-amber-900">
+                            {(d.recommendedMissing || []).length === 0
+                              ? 'None'
+                              : (d.recommendedMissing || []).map((v: any) => v?.name ?? v?.code ?? v).join(', ')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Vaccine Administration Modal */}
       {showAdminModal && (

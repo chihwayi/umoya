@@ -96,6 +96,7 @@ import { PopulationHealthController } from './controllers/population-health.cont
 import { PracticeManagementController } from './controllers/practice-management.controller';
 import { PriorAuthorizationController } from './controllers/prior-authorization.controller';
 import { NotificationCampaignController } from './controllers/notification-campaign.controller';
+import { TravelVaccineController } from './controllers/travel-vaccine.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -235,6 +236,7 @@ import { PopulationHealthService } from './services/population-health.service';
 import { PracticeManagementService } from './services/practice-management.service';
 import { PriorAuthorizationService } from './services/prior-authorization.service';
 import { NotificationCampaignService } from './services/notification-campaign.service';
+import { TravelVaccineService } from './services/travel-vaccine.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -350,6 +352,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PracticeManagementController,
     PriorAuthorizationController,
     NotificationCampaignController,
+    TravelVaccineController,
   ],
   providers: [
     AuthService,
@@ -489,6 +492,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PracticeManagementService,
     PriorAuthorizationService,
     NotificationCampaignService,
+    TravelVaccineService,
     RolesGuard,
     JwtStrategy,
   ],

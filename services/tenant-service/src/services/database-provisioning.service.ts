@@ -637,6 +637,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintH4RecallCampaignStatements(),
       },
       {
+        id: 'sprint_i1_travel_vaccines',
+        label: 'Sprint I1 Travel Vaccine Engine + Yellow Card',
+        version: '2026.03.09',
+        description: 'travel_vaccine_destinations, vaccination_certificates + seed destination requirements',
+        statements: () => this.getSprintI1TravelVaccineStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -820,6 +827,123 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_ncr_campaign ON notification_campaign_recipients(campaign_id)`,
       `CREATE INDEX IF NOT EXISTS idx_ncr_patient ON notification_campaign_recipients(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_nc_status ON notification_campaigns(status)`,
+    ];
+  }
+
+  private getSprintI1TravelVaccineStatements(): string[] {
+    const upsert = (countryName: string, iso: string, region: string, required: any[], recommended: any[], malaria: any[], notes: string) =>
+      `INSERT INTO travel_vaccine_destinations (country_name, iso_code, region, required_vaccines, recommended_vaccines, malaria_prophylaxis_zones, special_notes, last_updated)\n` +
+      `VALUES (\n` +
+      `  '${countryName.replace(/'/g, "''")}',\n` +
+      `  '${iso}',\n` +
+      `  '${region.replace(/'/g, "''")}',\n` +
+      `  '${JSON.stringify(required).replace(/'/g, "''")}'::jsonb,\n` +
+      `  '${JSON.stringify(recommended).replace(/'/g, "''")}'::jsonb,\n` +
+      `  '${JSON.stringify(malaria).replace(/'/g, "''")}'::jsonb,\n` +
+      `  '${notes.replace(/'/g, "''")}',\n` +
+      `  CURRENT_DATE\n` +
+      `)\n` +
+      `ON CONFLICT (iso_code) DO UPDATE SET\n` +
+      `  country_name = EXCLUDED.country_name,\n` +
+      `  region = EXCLUDED.region,\n` +
+      `  required_vaccines = EXCLUDED.required_vaccines,\n` +
+      `  recommended_vaccines = EXCLUDED.recommended_vaccines,\n` +
+      `  malaria_prophylaxis_zones = EXCLUDED.malaria_prophylaxis_zones,\n` +
+      `  special_notes = EXCLUDED.special_notes,\n` +
+      `  last_updated = EXCLUDED.last_updated`;
+
+    const YF = { code: 'YF', name: 'Yellow fever' };
+    const TYP = { code: 'TYP', name: 'Typhoid' };
+    const RAB = { code: 'RAB', name: 'Rabies' };
+    const CHO = { code: 'CHO', name: 'Cholera' };
+    const JE = { code: 'JE', name: 'Japanese encephalitis' };
+    const MEN = { code: 'MEN', name: 'Meningococcal' };
+    const HEPA = { code: 'HEPA', name: 'Hepatitis A' };
+    const HEPB = { code: 'HEPB', name: 'Hepatitis B' };
+    const POL = { code: 'POL', name: 'Polio' };
+    const MMR = { code: 'MMR', name: 'Measles/Mumps/Rubella' };
+    const TDAP = { code: 'TDAP', name: 'Tdap/Tetanus' };
+    const C19 = { code: 'COVID', name: 'COVID-19' };
+
+    return [
+      `CREATE TABLE IF NOT EXISTS travel_vaccine_destinations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        country_name VARCHAR(100) NOT NULL,
+        iso_code VARCHAR(3) NOT NULL UNIQUE,
+        region VARCHAR(100),
+        required_vaccines JSONB DEFAULT '[]'::jsonb,
+        recommended_vaccines JSONB DEFAULT '[]'::jsonb,
+        malaria_prophylaxis_zones JSONB DEFAULT '[]'::jsonb,
+        special_notes TEXT,
+        last_updated DATE DEFAULT CURRENT_DATE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_tvd_iso ON travel_vaccine_destinations(iso_code)`,
+      `CREATE TABLE IF NOT EXISTS vaccination_certificates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        certificate_number VARCHAR(50) NOT NULL UNIQUE,
+        certificate_type VARCHAR(30) DEFAULT 'yellow_card' CHECK (certificate_type IN ('yellow_card','covid_card','general')),
+        issued_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        issued_by UUID REFERENCES users(id),
+        issuing_center VARCHAR(255),
+        immunization_ids JSONB DEFAULT '[]'::jsonb,
+        pdf_storage_key VARCHAR(500),
+        is_valid BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_vc_patient ON vaccination_certificates(patient_id)`,
+
+      // Seed destination requirements (55 countries)
+      upsert('Zimbabwe', 'ZWE', 'Africa', [], [YF, TYP, HEPA, HEPB, TDAP, POL, MMR, C19], [{ zone: 'low', name: 'Zimbabwe (selected areas)' }], 'Routine + travel vaccines recommended; malaria risk varies by region.'),
+      upsert('South Africa', 'ZAF', 'Africa', [], [TYP, HEPA, TDAP, MMR, C19], [{ zone: 'limited', name: 'Limpopo/Mpumalanga/KZN (some areas)' }], 'Yellow fever certificate required if arriving from risk countries.'),
+      upsert('Kenya', 'KEN', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Most regions below 2,500m' }], 'Yellow fever recommended/required; malaria widespread.'),
+      upsert('Tanzania', 'TZA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever often required for Zanzibar travel; malaria risk.'),
+      upsert('Uganda', 'UGA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required; malaria high risk.'),
+      upsert('Ghana', 'GHA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required for entry.'),
+      upsert('Nigeria', 'NGA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required for entry.'),
+      upsert('Senegal', 'SEN', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'moderate', name: 'Some regions' }], 'Yellow fever required for entry.'),
+      upsert('Ethiopia', 'ETH', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, TDAP, POL, MMR, C19], [{ zone: 'variable', name: 'Lowlands' }], 'Yellow fever recommended for some areas.'),
+      upsert('Rwanda', 'RWA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'low', name: 'Limited' }], 'Yellow fever required/recommended depending on travel route.'),
+      upsert('Mozambique', 'MOZ', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'High malaria risk; YF certificate required if from risk countries.'),
+      upsert('Angola', 'AGO', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required.'),
+      upsert('Democratic Republic of the Congo', 'COD', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, CHO, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required; cholera outbreaks possible.'),
+      upsert('Cameroon', 'CMR', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required; malaria risk.'),
+      upsert('Cote d’Ivoire', 'CIV', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required.'),
+      upsert('Brazil', 'BRA', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Amazon basin' }], 'Yellow fever recommended for many states.'),
+      upsert('Peru', 'PER', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Amazon regions' }], 'Yellow fever recommended for Amazon travel.'),
+      upsert('Colombia', 'COL', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Lowland areas' }], 'Yellow fever recommended for some areas.'),
+      upsert('Ecuador', 'ECU', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Amazon regions' }], 'Yellow fever recommended for Amazon travel.'),
+      upsert('Bolivia', 'BOL', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Lowlands' }], 'Yellow fever recommended for lowland travel.'),
+      upsert('Argentina', 'ARG', 'South America', [], [YF, TYP, HEPA, TDAP, MMR, C19], [{ zone: 'low', name: 'Limited' }], 'Yellow fever recommended for Iguazú region travel.'),
+      upsert('India', 'IND', 'South Asia', [], [TYP, HEPA, HEPB, RAB, CHO, JE, TDAP, POL, MMR, C19], [{ zone: 'variable', name: 'Widespread in season' }], 'Consider JE for rural/long stays; malaria varies by region.'),
+      upsert('Nepal', 'NPL', 'South Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Lowlands (Terai)' }], 'Malaria limited to some lowland areas.'),
+      upsert('Pakistan', 'PAK', 'South Asia', [], [TYP, HEPA, HEPB, RAB, POL, TDAP, MMR, C19], [{ zone: 'variable', name: 'Some regions' }], 'Polio booster may be required for some travelers.'),
+      upsert('Bangladesh', 'BGD', 'South Asia', [], [TYP, HEPA, HEPB, RAB, CHO, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Some regions' }], 'Cholera outbreaks possible; consider cholera vaccine for high-risk travel.'),
+      upsert('Sri Lanka', 'LKA', 'South Asia', [], [TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'low', name: 'Limited' }], 'Malaria currently low/limited.'),
+      upsert('Thailand', 'THA', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Border/rural areas' }], 'JE for rural/long stays; malaria limited to some areas.'),
+      upsert('Vietnam', 'VNM', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Rural areas' }], 'JE for rural/long stays; malaria in some regions.'),
+      upsert('Cambodia', 'KHM', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Rural areas' }], 'Malaria risk in some rural areas.'),
+      upsert('Laos', 'LAO', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Rural areas' }], 'Malaria risk in rural areas.'),
+      upsert('Indonesia', 'IDN', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Many islands' }], 'Malaria risk depends on island/region.'),
+      upsert('Philippines', 'PHL', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Some provinces' }], 'Malaria in some rural provinces; JE for rural/long stays.'),
+      upsert('Malaysia', 'MYS', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'limited', name: 'Borneo (some areas)' }], 'Malaria mainly limited; JE for rural areas.'),
+      upsert('Singapore', 'SGP', 'Southeast Asia', [], [TDAP, MMR, C19], [], 'Routine vaccines recommended.'),
+      upsert('China', 'CHN', 'East Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'limited', name: 'Some provinces' }], 'JE for rural/long stays in endemic areas.'),
+      upsert('Japan', 'JPN', 'East Asia', [], [TDAP, MMR, C19], [], 'Routine vaccines recommended.'),
+      upsert('South Korea', 'KOR', 'East Asia', [], [TDAP, MMR, C19], [], 'Routine vaccines recommended.'),
+      upsert('United Arab Emirates', 'ARE', 'Middle East', [], [TDAP, MMR, C19], [], 'Routine vaccines recommended.'),
+      upsert('Saudi Arabia', 'SAU', 'Middle East', [], [MEN, TDAP, MMR, C19], [], 'Meningococcal required for Hajj/Umrah.'),
+      upsert('Egypt', 'EGY', 'Middle East', [], [TYP, HEPA, TDAP, MMR, C19], [{ zone: 'limited', name: 'Some areas' }], 'Malaria limited; routine + travel vaccines recommended.'),
+      upsert('Turkey', 'TUR', 'Europe/West Asia', [], [TYP, HEPA, TDAP, MMR, C19], [], 'Routine + selected travel vaccines.'),
+      upsert('France', 'FRA', 'Europe', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+      upsert('United Kingdom', 'GBR', 'Europe', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+      upsert('United States', 'USA', 'North America', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+      upsert('Mexico', 'MEX', 'North America', [], [TYP, HEPA, TDAP, MMR, C19], [{ zone: 'limited', name: 'Some regions' }], 'Typhoid recommended for some travelers.'),
+      upsert('Haiti', 'HTI', 'Caribbean', [], [TYP, HEPA, CHO, TDAP, MMR, C19], [], 'Cholera outbreaks possible; consider cholera vaccine.'),
+      upsert('Dominican Republic', 'DOM', 'Caribbean', [], [TYP, HEPA, TDAP, MMR, C19], [], 'Routine + typhoid for some travelers.'),
+      upsert('Australia', 'AUS', 'Oceania', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+      upsert('New Zealand', 'NZL', 'Oceania', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
     ];
   }
 
