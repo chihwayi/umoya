@@ -560,6 +560,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintE3_2FAStatements(),
       },
       {
+        id: 'sprint_f1_or_surgical_safety',
+        label: 'Sprint F1 OR Surgical Safety + Counts + Specimens',
+        version: '2026.03.08',
+        description: 'WHO checklist, count sheets, specimen tracking tables',
+        statements: () => this.getSprintF1ORSurgicalSafetyStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1793,6 +1800,80 @@ export class DatabaseProvisioningService {
     return [
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(64)`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT false`,
+    ];
+  }
+
+  private getSprintF1ORSurgicalSafetyStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS surgical_safety_checklists (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id) ON DELETE CASCADE,
+        sign_in_completed BOOLEAN DEFAULT false,
+        sign_in_completed_at TIMESTAMP WITH TIME ZONE,
+        sign_in_completed_by UUID REFERENCES users(id),
+        patient_identity_confirmed BOOLEAN DEFAULT false,
+        site_marked BOOLEAN DEFAULT false,
+        consent_confirmed BOOLEAN DEFAULT false,
+        anesthesia_safety_check BOOLEAN DEFAULT false,
+        known_allergy BOOLEAN DEFAULT false,
+        allergy_details TEXT,
+        difficult_airway_risk BOOLEAN DEFAULT false,
+        aspiration_risk BOOLEAN DEFAULT false,
+        blood_loss_risk BOOLEAN DEFAULT false,
+        blood_loss_estimated_ml INTEGER,
+        time_out_completed BOOLEAN DEFAULT false,
+        time_out_completed_at TIMESTAMP WITH TIME ZONE,
+        time_out_completed_by UUID REFERENCES users(id),
+        team_members_introduced BOOLEAN DEFAULT false,
+        procedure_confirmed BOOLEAN DEFAULT false,
+        site_confirmed BOOLEAN DEFAULT false,
+        anticipated_critical_events TEXT,
+        antibiotic_prophylaxis_given BOOLEAN DEFAULT false,
+        antibiotic_time TIMESTAMP WITH TIME ZONE,
+        imaging_displayed BOOLEAN DEFAULT false,
+        sign_out_completed BOOLEAN DEFAULT false,
+        sign_out_completed_at TIMESTAMP WITH TIME ZONE,
+        sign_out_completed_by UUID REFERENCES users(id),
+        procedure_recorded BOOLEAN DEFAULT false,
+        instrument_sponge_needle_counts_correct BOOLEAN DEFAULT false,
+        specimen_labelled BOOLEAN DEFAULT false,
+        equipment_issues TEXT,
+        key_concerns_recovery TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ssc_case ON surgical_safety_checklists(surgical_case_id)`,
+      `CREATE TABLE IF NOT EXISTS surgical_count_sheets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id) ON DELETE CASCADE,
+        count_type VARCHAR(30) NOT NULL CHECK (count_type IN ('sponge', 'needle', 'instrument', 'other')),
+        item_name VARCHAR(255) NOT NULL,
+        initial_count INTEGER NOT NULL,
+        final_count INTEGER,
+        count_correct BOOLEAN,
+        discrepancy_note TEXT,
+        counted_by UUID REFERENCES users(id),
+        verified_by UUID REFERENCES users(id),
+        count_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_count_case ON surgical_count_sheets(surgical_case_id)`,
+      `CREATE TABLE IF NOT EXISTS surgical_specimens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id) ON DELETE CASCADE,
+        specimen_type VARCHAR(100) NOT NULL,
+        specimen_source VARCHAR(255) NOT NULL,
+        quantity INTEGER DEFAULT 1,
+        fixative VARCHAR(100) DEFAULT 'formalin',
+        collected_by UUID REFERENCES users(id),
+        collected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        pathology_lab_order_id UUID,
+        label_verified BOOLEAN DEFAULT false,
+        label_verified_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_specimen_case ON surgical_specimens(surgical_case_id)`,
     ];
   }
 
