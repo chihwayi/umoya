@@ -102,6 +102,7 @@ import { MedicalAidIntegrationController } from './controllers/medical-aid-integ
 import { EarlyWarningController } from './controllers/early-warning.controller';
 import { MedicationSafetyController } from './controllers/medication-safety.controller';
 import { EncounterCodingController } from './controllers/encounter-coding.controller';
+import { SchedulingIntelligenceController } from './controllers/scheduling-intelligence.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -247,6 +248,7 @@ import { MedicalAidIntegrationService } from './services/medical-aid-integration
 import { EarlyWarningService } from './services/early-warning.service';
 import { MedicationSafetyService } from './services/medication-safety.service';
 import { EncounterCodingService } from './services/encounter-coding.service';
+import { SchedulingIntelligenceService } from './services/scheduling-intelligence.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -368,6 +370,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EarlyWarningController,
     MedicationSafetyController,
     EncounterCodingController,
+    SchedulingIntelligenceController,
   ],
   providers: [
     AuthService,
@@ -513,6 +516,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EarlyWarningService,
     MedicationSafetyService,
     EncounterCodingService,
+    SchedulingIntelligenceService,
     RolesGuard,
     JwtStrategy,
   ],

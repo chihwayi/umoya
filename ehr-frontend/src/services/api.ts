@@ -2742,6 +2742,32 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getNoShowPrediction: async (appointmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/appointments/${appointmentId}/no-show-prediction`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getHighRiskNoShowToday: async (token: string, tenantSlug: string, threshold?: number) => {
+    const qs = threshold ? `?threshold=${threshold}` : '';
+    const response = await ehrAxios.get(`/appointments/no-show-risk/today${qs}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getSmartSlotSuggestions: async (
+    payload: { patientId: string; visitType?: string; preferredDoctorId?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/appointments/smart-suggestions', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getPatientPrescriptions: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/prescriptions/patient/${patientId}`, {
       headers: {

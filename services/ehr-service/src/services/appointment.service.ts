@@ -12,6 +12,7 @@ import { NotificationsService } from './notifications.service';
 import { EmailService } from './email.service';
 import { PatientProService } from './patient-pro.service';
 import { ClinicalWorkflowService } from './clinical-workflow.service';
+import { SchedulingIntelligenceService } from './scheduling-intelligence.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
@@ -27,6 +28,7 @@ export class AppointmentService {
     private emailService: EmailService,
     @Optional() private patientProService?: PatientProService,
     @Optional() private workflowService?: ClinicalWorkflowService,
+    @Optional() private schedulingIntelligenceService?: SchedulingIntelligenceService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -203,6 +205,14 @@ export class AppointmentService {
       } catch (error) {
         this.logger.error(`Failed to assign pre-visit questionnaires for appointment ${savedAppointment.id}:`, error);
         // Don't fail the appointment creation if questionnaire assignment fails
+      }
+    }
+
+    if (this.schedulingIntelligenceService) {
+      try {
+        await this.schedulingIntelligenceService.predictNoShow(connection, savedAppointment.id, savedAppointment.patientId);
+      } catch (error) {
+        this.logger.warn(`No-show prediction failed for appointment ${savedAppointment.id}: ${error.message}`);
       }
     }
 

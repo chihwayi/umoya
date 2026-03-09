@@ -66,6 +66,8 @@ const AppointmentManagement: React.FC = () => {
   const [reminderAppointment, setReminderAppointment] = useState<Appointment | null>(null);
   const [showWaitlist, setShowWaitlist] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showHighRiskOnly, setShowHighRiskOnly] = useState(false);
+  const [noShowPredictions, setNoShowPredictions] = useState<Record<string, { probability: number; action: string | null }>>({});
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -78,6 +80,29 @@ const AppointmentManagement: React.FC = () => {
     fetchAppointments();
     fetchAppointmentStats();
   }, [selectedDate, statusFilter, currentUser, viewMode]);
+
+  useEffect(() => {
+    if (!appointments.length || !currentUser) return;
+    const token = localStorage.getItem('ehr_token');
+    if (!token || !tenantSlug) return;
+    const active = appointments.filter(a => ['scheduled', 'confirmed'].includes(a.status));
+    if (!active.length) return;
+    Promise.allSettled(
+      active.slice(0, 20).map(a =>
+        ehrApi.getNoShowPrediction(a.id, token, tenantSlug).then(r => ({
+          id: a.id,
+          probability: r.data?.noShowProbability ?? 0,
+          action: r.data?.suggestedAction ?? null,
+        }))
+      )
+    ).then(results => {
+      const map: Record<string, { probability: number; action: string | null }> = {};
+      for (const r of results) {
+        if (r.status === 'fulfilled') map[r.value.id] = { probability: r.value.probability, action: r.value.action };
+      }
+      setNoShowPredictions(map);
+    });
+  }, [appointments, currentUser, tenantSlug]);
 
   // Calculate stats for doctors when appointments change
   useEffect(() => {
@@ -336,13 +361,20 @@ const AppointmentManagement: React.FC = () => {
     }
   };
 
-  const filteredAppointments = appointments.filter(appointment =>
-    appointment.patient.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    appointment.patient.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    appointment.patient.patientNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    appointment.doctor.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    appointment.doctor.lastName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredAppointments = appointments.filter(appointment => {
+    const matchesSearch =
+      appointment.patient.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.patient.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.patient.patientNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.doctor.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.doctor.lastName.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!matchesSearch) return false;
+    if (showHighRiskOnly) {
+      const pred = noShowPredictions[appointment.id];
+      return pred && pred.probability >= 0.4;
+    }
+    return true;
+  });
 
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('en-US', {
@@ -434,6 +466,17 @@ const AppointmentManagement: React.FC = () => {
             >
               <FileText className="w-4 h-4" />
               Templates
+            </button>
+            <button
+              onClick={() => setShowHighRiskOnly(!showHighRiskOnly)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                showHighRiskOnly
+                  ? 'bg-red-500 text-white'
+                  : 'bg-white/70 backdrop-blur-sm border border-slate-200/50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <AlertCircle className="w-4 h-4" />
+              High Risk
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
@@ -594,6 +637,21 @@ const AppointmentManagement: React.FC = () => {
                       <span className="text-sm text-gray-500">
                         ({appointment.patient.patientNumber})
                       </span>
+                      {noShowPredictions[appointment.id] && noShowPredictions[appointment.id].probability >= 0.25 && (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            noShowPredictions[appointment.id].probability >= 0.6
+                              ? 'bg-red-100 text-red-800'
+                              : noShowPredictions[appointment.id].probability >= 0.4
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-yellow-50 text-yellow-700'
+                          }`}
+                          title={noShowPredictions[appointment.id].action ? `Suggested: ${(noShowPredictions[appointment.id].action || '').replace(/_/g, ' ')}` : undefined}
+                        >
+                          <AlertCircle className="h-3 w-3" />
+                          {Math.round(noShowPredictions[appointment.id].probability * 100)}% no-show
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       <div className="flex items-center gap-1">
