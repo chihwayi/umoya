@@ -671,6 +671,13 @@ export class DatabaseProvisioningService {
         description: 'Adds medication_reminders table for tracking patient medication adherence reminders',
         statements: () => this.getMedicationRemindersSchemaStatements(),
       },
+      {
+        id: 'sprint_l1_continuous_learning',
+        label: 'Continuous Learning Infrastructure',
+        version: '2026.03.07',
+        description: 'ML feedback loop tables: model metrics, training snapshots, coding corpus, and prediction outcome tracking',
+        statements: () => this.getSprintL1ContinuousLearningStatements(),
+      },
     ];
   }
 
@@ -1170,6 +1177,53 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_recipient" ON "patient_messages" ("recipient_type", "recipient_id")`,
       `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_read" ON "patient_messages" ("patient_id", "read")`,
       `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_created_at" ON "patient_messages" ("created_at")`
+    ];
+  }
+
+  private getSprintL1ContinuousLearningStatements(): string[] {
+    return [
+      `ALTER TABLE appointment_no_show_predictions ADD COLUMN IF NOT EXISTS actual_outcome VARCHAR(20)`,
+      `ALTER TABLE appointment_no_show_predictions ADD COLUMN IF NOT EXISTS outcome_recorded_at TIMESTAMP WITH TIME ZONE`,
+      `CREATE TABLE IF NOT EXISTS ml_model_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(100) NOT NULL,
+        metric_name VARCHAR(100) NOT NULL,
+        metric_value DOUBLE PRECISION NOT NULL,
+        sample_size INTEGER NOT NULL DEFAULT 0,
+        period_start TIMESTAMP WITH TIME ZONE,
+        period_end TIMESTAMP WITH TIME ZONE,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ml_metrics_model ON ml_model_metrics(model_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_ml_metrics_period ON ml_model_metrics(period_start, period_end)`,
+      `CREATE TABLE IF NOT EXISTS ml_training_snapshots (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(100) NOT NULL,
+        model_version VARCHAR(50) NOT NULL,
+        training_data_hash VARCHAR(64),
+        feature_names JSONB DEFAULT '[]'::jsonb,
+        feature_weights JSONB DEFAULT '[]'::jsonb,
+        feature_means JSONB DEFAULT '[]'::jsonb,
+        feature_stds JSONB DEFAULT '[]'::jsonb,
+        intercept DOUBLE PRECISION DEFAULT 0,
+        performance_metrics JSONB DEFAULT '{}'::jsonb,
+        training_sample_count INTEGER DEFAULT 0,
+        trained_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        is_active BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ml_snapshots_model ON ml_training_snapshots(model_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_ml_snapshots_active ON ml_training_snapshots(is_active)`,
+      `CREATE TABLE IF NOT EXISTS ml_coding_corpus (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        clinical_text TEXT NOT NULL,
+        accepted_icd_codes JSONB DEFAULT '[]'::jsonb,
+        accepted_cpt_codes JSONB DEFAULT '[]'::jsonb,
+        tfidf_vector JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ml_coding_corpus_created ON ml_coding_corpus(created_at)`,
     ];
   }
 

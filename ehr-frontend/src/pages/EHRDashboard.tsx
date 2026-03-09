@@ -227,6 +227,7 @@ const EHRDashboard: React.FC = () => {
     trialSlaBreached: 0,
     trialSlaCompliancePercent: 0,
   });
+  const [mlPerformance, setMlPerformance] = useState<{ noShow: any; coding: any } | null>(null);
   const [postVisitAdminTrialAnalytics, setPostVisitAdminTrialAnalytics] = useState<PostVisitTrialMemoryAnalyticsSnapshot | null>(null);
   const [postVisitAdminTrialSlaAccountability, setPostVisitAdminTrialSlaAccountability] = useState<PostVisitTrialSlaAccountabilitySnapshot | null>(null);
   const [postVisitAdminTrialLoading, setPostVisitAdminTrialLoading] = useState(false);
@@ -316,6 +317,19 @@ const EHRDashboard: React.FC = () => {
         }
       } catch (err) {
         console.error('Failed to load breaches:', err);
+      }
+
+      // Load ML model performance metrics
+      try {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+        const now = new Date().toISOString();
+        const [noShowRes, codingRes] = await Promise.all([
+          ehrApi.getModelPerformance('no_show_prediction', thirtyDaysAgo, now, token, tenantSlug).catch(() => ({ data: null })),
+          ehrApi.getModelPerformance('encounter_coding', thirtyDaysAgo, now, token, tenantSlug).catch(() => ({ data: null })),
+        ]);
+        setMlPerformance({ noShow: noShowRes.data, coding: codingRes.data });
+      } catch (err) {
+        console.error('Failed to load ML performance:', err);
       }
 
       // Load post-visit trial SLA accountability and analytics
@@ -710,6 +724,45 @@ const EHRDashboard: React.FC = () => {
                     <p className="text-sm text-green-600">Audit Logging Active</p>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {user.role === 'admin' && mlPerformance && (
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-800">AI Model Performance (Last 30 Days)</h3>
+                <div className="flex items-center gap-1 px-2 py-1 bg-violet-100 rounded-lg">
+                  <TrendingUp className="w-3 h-3 text-violet-600" />
+                  <span className="text-xs font-medium text-violet-700">Continuous Learning</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {mlPerformance.noShow && (
+                  <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <p className="font-semibold text-blue-800 mb-2">No-Show Prediction</p>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div><p className="text-blue-500">Accuracy</p><p className="font-bold text-blue-800">{(mlPerformance.noShow.accuracy * 100).toFixed(1)}%</p></div>
+                      <div><p className="text-blue-500">Precision</p><p className="font-bold text-blue-800">{(mlPerformance.noShow.precision * 100).toFixed(1)}%</p></div>
+                      <div><p className="text-blue-500">Samples</p><p className="font-bold text-blue-800">{mlPerformance.noShow.sampleSize}</p></div>
+                    </div>
+                  </div>
+                )}
+                {mlPerformance.coding && (
+                  <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
+                    <p className="font-semibold text-purple-800 mb-2">Encounter Coding</p>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div><p className="text-purple-500">Precision</p><p className="font-bold text-purple-800">{(mlPerformance.coding.precision * 100).toFixed(1)}%</p></div>
+                      <div><p className="text-purple-500">Recall</p><p className="font-bold text-purple-800">{(mlPerformance.coding.recall * 100).toFixed(1)}%</p></div>
+                      <div><p className="text-purple-500">Samples</p><p className="font-bold text-purple-800">{mlPerformance.coding.sampleSize}</p></div>
+                    </div>
+                  </div>
+                )}
+                {!mlPerformance.noShow && !mlPerformance.coding && (
+                  <div className="col-span-2 text-center text-sm text-slate-500 py-4">
+                    No ML prediction data yet. Models will auto-train once sufficient outcomes are recorded.
+                  </div>
+                )}
               </div>
             </div>
           )}

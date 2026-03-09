@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
+import { MedicalNlpService } from './medical-nlp.service';
 
 @Injectable()
 export class PatientService {
+  private readonly logger = new Logger(PatientService.name);
+
+  constructor(@Optional() private readonly medicalNlpService?: MedicalNlpService) {}
+
   private isMissingRelationError(error: any): boolean {
     return (
       error?.code === '42P01' ||
@@ -795,8 +800,21 @@ export class PatientService {
     const patientRepository = tenantDb.getRepository(Patient);
     const patient = await this.getPatientById(id, tenantDb);
     
+    const allergiesChanged = updatePatientDto.allergies !== undefined
+      && updatePatientDto.allergies !== patient.allergies;
+
     Object.assign(patient, updatePatientDto);
-    return patientRepository.save(patient);
+    const saved = await patientRepository.save(patient);
+
+    if (allergiesChanged && this.medicalNlpService) {
+      try {
+        await this.medicalNlpService.reconcilePatientAllergies(tenantDb, id);
+      } catch (e) {
+        this.logger.warn(`NLP allergy reconciliation failed for patient ${id}: ${e.message}`);
+      }
+    }
+
+    return saved;
   }
 
   async deactivatePatient(id: string, tenantDb: DataSource): Promise<{ message: string }> {

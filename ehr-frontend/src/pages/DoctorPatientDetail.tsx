@@ -13,6 +13,7 @@ import { GuidelineResult } from '../types/guidelines';
 import ModalPortal from '../components/ModalPortal';
 import ProblemListModal from '../components/ProblemListModal';
 import AllergiesModal from '../components/AllergiesModal';
+import VoiceInput from '../components/VoiceInput';
 
 interface Patient {
   id: string;
@@ -511,6 +512,20 @@ const DoctorPatientDetail: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Patient Information */}
             <div className="lg:col-span-2 space-y-8">
+              <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <h4 className="text-sm font-bold text-slate-900">Voice Input (L5)</h4>
+                  <span className="text-xs text-slate-500">Dictate or use voice commands during consultation</span>
+                </div>
+                <VoiceInput
+                  tenantSlug={tenantSlug || ''}
+                  mode="continuous"
+                  onTranscript={() => {}}
+                  onCommand={(cmd) => {
+                    if (cmd.type === 'add_note') { /* integrate */ }
+                  }}
+                />
+              </div>
               <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-8">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">

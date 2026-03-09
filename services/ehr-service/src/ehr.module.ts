@@ -103,6 +103,7 @@ import { EarlyWarningController } from './controllers/early-warning.controller';
 import { MedicationSafetyController } from './controllers/medication-safety.controller';
 import { EncounterCodingController } from './controllers/encounter-coding.controller';
 import { SchedulingIntelligenceController } from './controllers/scheduling-intelligence.controller';
+import { MlAdminController } from './controllers/ml-admin.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -249,6 +250,11 @@ import { EarlyWarningService } from './services/early-warning.service';
 import { MedicationSafetyService } from './services/medication-safety.service';
 import { EncounterCodingService } from './services/encounter-coding.service';
 import { SchedulingIntelligenceService } from './services/scheduling-intelligence.service';
+import { MlFeedbackService } from './services/ml-feedback.service';
+import { MlModelsService } from './services/ml-models.service';
+import { MedicalNlpService } from './services/medical-nlp.service';
+import { TemplateFallbackService } from './services/template-fallback.service';
+import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -371,6 +377,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MedicationSafetyController,
     EncounterCodingController,
     SchedulingIntelligenceController,
+    MlAdminController,
   ],
   providers: [
     AuthService,
@@ -517,6 +524,11 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MedicationSafetyService,
     EncounterCodingService,
     SchedulingIntelligenceService,
+    MlFeedbackService,
+    MlModelsService,
+    MedicalNlpService,
+    TemplateFallbackService,
+    VoiceTranscriptionGateway,
     RolesGuard,
     JwtStrategy,
   ],

@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { MlModelsService } from './ml-models.service';
 
 export interface NoShowPrediction {
   id: string;
@@ -31,11 +32,42 @@ export class SchedulingIntelligenceService {
   private readonly logger = new Logger(SchedulingIntelligenceService.name);
   private readonly MODEL_VERSION = 'rule_v1';
 
+  constructor(@Optional() private readonly mlModelsService?: MlModelsService) {}
+
   async predictNoShow(
     tenantDb: DataSource,
     appointmentId: string,
     patientId: string,
   ): Promise<NoShowPrediction> {
+    // Try ML model first
+    if (this.mlModelsService) {
+      try {
+        const mlProb = await this.mlModelsService.predictNoShowMl(tenantDb, appointmentId, patientId);
+        if (mlProb !== null) {
+          const suggestedAction = this.deriveSuggestedAction(mlProb);
+          const insertResult = await tenantDb.query(
+            `INSERT INTO appointment_no_show_predictions
+              (appointment_id, patient_id, no_show_probability, risk_factors, suggested_action, model_version)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id`,
+            [appointmentId, patientId, mlProb, JSON.stringify([{ factor: 'ml_model', weight: mlProb, detail: 'Logistic regression prediction' }]), suggestedAction, 'lr_v1'],
+          );
+          return {
+            id: insertResult[0].id,
+            appointmentId,
+            patientId,
+            noShowProbability: mlProb,
+            riskFactors: [{ factor: 'ml_model', weight: mlProb, detail: 'Logistic regression prediction' }],
+            suggestedAction,
+            modelVersion: 'lr_v1',
+          };
+        }
+      } catch (e) {
+        this.logger.warn(`ML no-show prediction failed, falling back to rules: ${e.message}`);
+      }
+    }
+
+    // Rule-based fallback
     const [historyRows, appointmentRows] = await Promise.all([
       tenantDb.query(
         `SELECT status, appointment_date FROM appointments

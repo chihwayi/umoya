@@ -13,6 +13,7 @@ import { EmailService } from './email.service';
 import { PatientProService } from './patient-pro.service';
 import { ClinicalWorkflowService } from './clinical-workflow.service';
 import { SchedulingIntelligenceService } from './scheduling-intelligence.service';
+import { MlFeedbackService } from './ml-feedback.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
@@ -29,6 +30,7 @@ export class AppointmentService {
     @Optional() private patientProService?: PatientProService,
     @Optional() private workflowService?: ClinicalWorkflowService,
     @Optional() private schedulingIntelligenceService?: SchedulingIntelligenceService,
+    @Optional() private mlFeedbackService?: MlFeedbackService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -454,6 +456,13 @@ export class AppointmentService {
     
     appointment.status = 'cancelled';
     await appointmentRepository.save(appointment);
+
+    if (this.mlFeedbackService) {
+      try {
+        const connection = await this.tenantService.getTenantDatabase(tenantId);
+        await this.mlFeedbackService.recordNoShowOutcome(connection, id, 'cancelled');
+      } catch (e) { this.logger.warn(`ML feedback failed: ${e.message}`); }
+    }
   }
 
   async updateStatus(id: string, status: string, tenantId: string): Promise<AppointmentSimple> {
@@ -567,6 +576,12 @@ export class AppointmentService {
       } catch (error) {
         this.logger.warn(`Failed to trigger workflow for appointment_completed: ${error.message}`);
       }
+    }
+
+    if (this.mlFeedbackService && connection) {
+      try {
+        await this.mlFeedbackService.recordNoShowOutcome(connection, id, 'completed');
+      } catch (e) { this.logger.warn(`ML feedback failed: ${e.message}`); }
     }
 
     return savedAppointment;
@@ -995,7 +1010,16 @@ export class AppointmentService {
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
     
     appointment.status = 'no_show';
-    return appointmentRepository.save(appointment);
+    const saved = await appointmentRepository.save(appointment);
+
+    if (this.mlFeedbackService) {
+      try {
+        const connection = await this.tenantService.getTenantDatabase(tenantId);
+        await this.mlFeedbackService.recordNoShowOutcome(connection, id, 'no_show');
+      } catch (e) { this.logger.warn(`ML feedback failed: ${e.message}`); }
+    }
+
+    return saved;
   }
 
   async searchAppointments(query: string, tenantId: string): Promise<any[]> {

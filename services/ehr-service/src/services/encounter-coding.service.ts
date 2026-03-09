@@ -1,7 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PostVisitGroundedLlmService } from './post-visit-grounded-llm.service';
 import { Icd10Service } from './icd10.service';
+import { MlFeedbackService } from './ml-feedback.service';
+import { MlModelsService } from './ml-models.service';
 
 export interface CodeSuggestion {
   code: string;
@@ -27,6 +29,8 @@ export class EncounterCodingService {
   constructor(
     private readonly llmService: PostVisitGroundedLlmService,
     private readonly icd10Service: Icd10Service,
+    @Optional() private readonly mlFeedbackService?: MlFeedbackService,
+    @Optional() private readonly mlModelsService?: MlModelsService,
   ) {}
 
   async suggestEncounterCodes(
@@ -37,6 +41,39 @@ export class EncounterCodingService {
     actorId: string,
   ): Promise<EncounterCodeResult> {
     const clinicalText = await this.gatherClinicalText(tenantDb, sessionId, appointmentId);
+
+    // Try ML model first (3-tier: ML -> LLM -> keyword)
+    if (this.mlModelsService && clinicalText.trim()) {
+      try {
+        const mlResult = await this.mlModelsService.suggestCodesMl(tenantDb, clinicalText);
+        if (mlResult && (mlResult.icd10.length > 0 || mlResult.cpt.length > 0)) {
+          const ctx = this.emptyContext();
+          ctx.problemsAddressed = mlResult.icd10.length;
+          const emResult = this.calculateEmLevel(ctx);
+          const modifiers = this.suggestModifiers(mlResult.cpt, emResult.level);
+          const overallConfidence = this.computeOverallConfidence(mlResult.icd10, mlResult.cpt);
+
+          const row = await tenantDb.query(
+            `INSERT INTO encounter_code_suggestions
+              (session_id, appointment_id, patient_id, suggested_icd10, suggested_cpt,
+               em_level, em_rationale, suggested_modifiers, confidence, source)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ml')
+             RETURNING id`,
+            [sessionId, appointmentId, patientId, JSON.stringify(mlResult.icd10), JSON.stringify(mlResult.cpt),
+             emResult.level, emResult.rationale, JSON.stringify(modifiers), overallConfidence],
+          );
+          return {
+            id: row[0].id, icd10: mlResult.icd10, cpt: mlResult.cpt,
+            emLevel: emResult.level, emRationale: emResult.rationale,
+            modifiers, confidence: overallConfidence, source: 'ml',
+          };
+        }
+      } catch (e) {
+        this.logger.warn(`ML coding suggestion failed, falling back to LLM/keyword: ${e.message}`);
+      }
+    }
+
+    // LLM -> keyword fallback
     const diagnoses = await this.extractDiagnosesAndProcedures(clinicalText);
 
     const icd10Suggestions = await this.resolveIcd10Codes(tenantDb, diagnoses.diagnoses);
@@ -96,6 +133,12 @@ export class EncounterCodingService {
        WHERE id = $4`,
       [JSON.stringify(body.acceptedCodes), JSON.stringify(body.rejectedCodes), actorId, suggestionId],
     );
+
+    if (this.mlFeedbackService) {
+      try {
+        await this.mlFeedbackService.recordCodingFeedback(tenantDb, suggestionId);
+      } catch (e) { this.logger.warn(`ML coding feedback failed: ${e.message}`); }
+    }
 
     return { id: suggestionId, acceptedCodes: body.acceptedCodes, rejectedCodes: body.rejectedCodes };
   }

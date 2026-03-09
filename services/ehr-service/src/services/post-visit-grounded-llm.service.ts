@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { createHash } from 'crypto';
+import { CircuitBreaker } from '../utils/circuit-breaker';
+import { LruCache } from '../utils/lru-cache';
 
 export interface GroundingCitation {
   id: string;
@@ -96,6 +98,8 @@ export interface LlmAuditMetadata {
 export class PostVisitGroundedLlmService {
   private readonly logger = new Logger(PostVisitGroundedLlmService.name);
   private readonly enabled = String(process.env.POSTVISIT_GROUNDED_LLM_ENABLED || 'true').toLowerCase() !== 'false';
+  private readonly circuitBreaker = new CircuitBreaker(5, 30000);
+  private readonly responseCache = new LruCache<{ json: any; audit: LlmAuditMetadata }>(200, 3600000);
   private readonly apiUrl = String(process.env.POSTVISIT_LLM_API_URL || 'https://api.openai.com/v1/chat/completions');
   private readonly apiModel = String(process.env.POSTVISIT_LLM_MODEL || 'gpt-4o-mini');
   private readonly timeoutMs = Math.min(
@@ -558,38 +562,53 @@ export class PostVisitGroundedLlmService {
     return Math.max(1, Math.ceil(String(text || '').length / 4));
   }
 
-  private async requestJsonCompletion(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>, temperature = 0.1) {
+  async requestJsonCompletion(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>, temperature = 0.1) {
     const promptText = messages.map((message) => `${message.role}:${message.content}`).join('\n');
     const promptHash = createHash('sha256').update(promptText).digest('hex');
-    const startedAt = Date.now();
-    const response = await axios.post(
-      this.apiUrl,
-      {
-        model: this.apiModel,
-        temperature,
-        response_format: {
-          type: 'json_object',
-        },
-        messages,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: this.timeoutMs,
-      },
-    );
-    const latencyMs = Date.now() - startedAt;
 
-    const content = response?.data?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || content.trim().length === 0) {
-      throw new Error('Missing LLM JSON content');
+    // 1. Check cache
+    const cached = this.responseCache.get(promptHash);
+    if (cached) {
+      this.logger.debug(`LLM cache hit for prompt ${promptHash.substring(0, 8)}`);
+      return { ...cached, source: 'cache' as const };
     }
 
+    // 2. Check circuit breaker
+    if (!this.circuitBreaker.canExecute()) {
+      this.logger.warn(`Circuit breaker OPEN — skipping LLM call (state: ${this.circuitBreaker.getState()})`);
+      return null;
+    }
+
+    // 3. Make API call
     try {
-      return {
-        json: JSON.parse(content),
+      const startedAt = Date.now();
+      const response = await axios.post(
+        this.apiUrl,
+        {
+          model: this.apiModel,
+          temperature,
+          response_format: { type: 'json_object' },
+          messages,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: this.timeoutMs,
+        },
+      );
+      const latencyMs = Date.now() - startedAt;
+
+      const content = response?.data?.choices?.[0]?.message?.content;
+      if (typeof content !== 'string' || content.trim().length === 0) {
+        this.circuitBreaker.recordFailure();
+        return null;
+      }
+
+      const parsed = JSON.parse(content);
+      const result = {
+        json: parsed,
         audit: {
           promptHash,
           templateVersion: 'postvisit-grounded-v1',
@@ -599,8 +618,14 @@ export class PostVisitGroundedLlmService {
           safetyGateTriggered: false,
         } as LlmAuditMetadata,
       };
-    } catch (error) {
-      throw new Error('LLM JSON parse failed');
+
+      this.circuitBreaker.recordSuccess();
+      this.responseCache.set(promptHash, result);
+      return { ...result, source: 'llm' as const };
+    } catch (error: any) {
+      this.circuitBreaker.recordFailure();
+      this.logger.warn(`LLM call failed (circuit: ${this.circuitBreaker.getState()}): ${error.message}`);
+      return null;
     }
   }
 }

@@ -2768,6 +2768,20 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getModelPerformance: async (
+    modelName: string,
+    startDate: string,
+    endDate: string,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get(`/admin/ml/performance/${modelName}`, {
+      params: { startDate, endDate },
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   allergyCheckStructured: async (
     payload: { patientId: string; medications: string[] },
     token: string,
