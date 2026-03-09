@@ -6,6 +6,15 @@ import * as FormData from 'form-data';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
 import { createHash, createHmac, randomUUID } from 'crypto';
 import { MetricsService } from './metrics.service';
+import { CROSS_REACTIVITY_MAP, DRUG_CLASS_MEMBERS, CrossReactivityEntry } from '../config/allergy-cross-reactivity';
+
+export interface AllergyWarning {
+  severity: 'low' | 'moderate' | 'high';
+  allergen: string;
+  medication: string;
+  crossReactivity: boolean;
+  message: string;
+}
 
 @Injectable()
 export class CdssService {
@@ -1543,6 +1552,107 @@ export class CdssService {
         'CONTRAINDICATED - Patient has known allergy' : 
         'Safe to prescribe - No known allergies'
     };
+  }
+
+  async getAllergyWarnings(
+    patientId: string,
+    medications: string[],
+    tenantDb: DataSource,
+  ): Promise<{ warnings: AllergyWarning[]; structuredAllergies: any[] }> {
+    const structuredRows = await tenantDb.query(
+      `SELECT id, allergen, severity, reaction, allergy_type, status
+       FROM allergies WHERE patient_id = $1 AND status != 'inactive'`,
+      [patientId],
+    );
+
+    const patientRepo = tenantDb.getRepository(Patient);
+    const patient = await patientRepo.findOne({ where: { id: patientId } });
+    const legacyText = patient?.allergies?.toLowerCase() || '';
+
+    const allAllergens: string[] = structuredRows.map((r: any) => (r.allergen || '').toLowerCase());
+    if (legacyText) {
+      for (const chunk of legacyText.split(/[,;\/]+/)) {
+        const trimmed = chunk.trim();
+        if (trimmed && !allAllergens.includes(trimmed)) allAllergens.push(trimmed);
+      }
+    }
+
+    const warnings: AllergyWarning[] = [];
+
+    for (const medName of medications) {
+      const medLower = medName.toLowerCase();
+      const medClass = this.identifyDrugClass(medLower);
+
+      for (const allergen of allAllergens) {
+        if (this.isExactOrFuzzyMatch(medLower, allergen)) {
+          const row = structuredRows.find((r: any) => (r.allergen || '').toLowerCase() === allergen);
+          warnings.push({
+            severity: row?.severity === 'severe' ? 'high' : 'high',
+            allergen,
+            medication: medName,
+            crossReactivity: false,
+            message: `Direct allergy match: patient is allergic to "${allergen}".${row?.reaction ? ` Known reaction: ${row.reaction}` : ''}`,
+          });
+          continue;
+        }
+
+        const allergenClass = this.identifyDrugClass(allergen);
+        const crossEntry = this.findCrossReactivity(allergen, allergenClass, medLower, medClass);
+        if (crossEntry) {
+          warnings.push({
+            severity: crossEntry.riskLevel,
+            allergen,
+            medication: medName,
+            crossReactivity: true,
+            message: crossEntry.message,
+          });
+        }
+      }
+    }
+
+    return { warnings, structuredAllergies: structuredRows };
+  }
+
+  private identifyDrugClass(drugName: string): string | null {
+    for (const [className, members] of Object.entries(DRUG_CLASS_MEMBERS)) {
+      if (members.some(m => drugName.includes(m) || m.includes(drugName))) return className;
+    }
+    return null;
+  }
+
+  private isExactOrFuzzyMatch(med: string, allergen: string): boolean {
+    if (med === allergen) return true;
+    if (med.includes(allergen) || allergen.includes(med)) return true;
+    return false;
+  }
+
+  private findCrossReactivity(
+    allergen: string,
+    allergenClass: string | null,
+    medication: string,
+    medClass: string | null,
+  ): CrossReactivityEntry | null {
+    const keysToCheck: string[] = [];
+    if (allergenClass) keysToCheck.push(allergenClass);
+    keysToCheck.push(allergen);
+
+    for (const key of keysToCheck) {
+      const entry = CROSS_REACTIVITY_MAP[key];
+      if (!entry) continue;
+
+      if (medClass && entry.relatedClasses.includes(medClass)) return entry;
+      if (entry.relatedClasses.some(rc => medication.includes(rc) || rc.includes(medication))) return entry;
+    }
+
+    if (medClass) {
+      const medEntry = CROSS_REACTIVITY_MAP[medClass];
+      if (medEntry) {
+        if (allergenClass && medEntry.relatedClasses.includes(allergenClass)) return medEntry;
+        if (medEntry.relatedClasses.some(rc => allergen.includes(rc) || rc.includes(allergen))) return medEntry;
+      }
+    }
+
+    return null;
   }
 
   /**

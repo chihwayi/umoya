@@ -105,6 +105,8 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   const [foodInteractions, setFoodInteractions] = useState<any | null>(null);
   const [medSafetyLoading, setMedSafetyLoading] = useState(false);
   const [medSafetyAssessment, setMedSafetyAssessment] = useState<any | null>(null);
+  const [crossReactLoading, setCrossReactLoading] = useState(false);
+  const [crossReactWarnings, setCrossReactWarnings] = useState<any[]>([]);
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PrescriptionTemplate | null>(null);
@@ -613,6 +615,63 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                 )}
               </div>
             )}
+
+            {/* Cross-Reactivity Analysis (K3) */}
+            <div className="bg-gradient-to-r from-violet-50 to-indigo-50 border-2 border-violet-300 rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-violet-700" />
+                  <h4 className="font-semibold text-violet-900">Cross-Reactivity Check</h4>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!appointment?.patient?.id) return;
+                    const medNames = items.map(rx => rx.foundDrug?.genericName || rx.name).filter(Boolean);
+                    if (!medNames.length) return;
+                    const token = localStorage.getItem('ehr_token');
+                    const slug = (window as any).__tenantSlug || localStorage.getItem('ehr_tenant_slug') || '';
+                    if (!token) return;
+                    setCrossReactLoading(true);
+                    try {
+                      const res = await ehrApi.allergyCheckStructured({ patientId: appointment.patient.id, medications: medNames }, token, slug);
+                      setCrossReactWarnings(res.data?.warnings || []);
+                    } catch (e) {
+                      console.error(e);
+                    } finally {
+                      setCrossReactLoading(false);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded-lg hover:bg-violet-700 disabled:opacity-50"
+                  disabled={crossReactLoading || items.every(rx => !rx.name)}
+                >
+                  {crossReactLoading ? 'Checking…' : 'Run Cross-Reactivity Check'}
+                </button>
+              </div>
+              {crossReactWarnings.length > 0 && (
+                <div className="space-y-2 mt-2">
+                  {crossReactWarnings.map((w: any, i: number) => (
+                    <div
+                      key={i}
+                      className={`p-3 rounded-lg border flex items-start gap-2 ${
+                        w.severity === 'high' ? 'bg-red-100 border-red-300' : w.severity === 'moderate' ? 'bg-amber-100 border-amber-300' : 'bg-yellow-50 border-yellow-300'
+                      }`}
+                    >
+                      <AlertTriangle className={`w-4 h-4 mt-0.5 ${w.severity === 'high' ? 'text-red-700' : 'text-amber-700'}`} />
+                      <div className="flex-1">
+                        <p className={`text-xs font-bold ${w.severity === 'high' ? 'text-red-800' : 'text-amber-800'}`}>
+                          {w.crossReactivity ? 'CROSS-REACTIVITY' : 'DIRECT ALLERGY'}: {w.medication} ↔ {w.allergen}
+                          <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-white/60">{w.severity}</span>
+                        </p>
+                        <p className="text-xs text-slate-700 mt-0.5">{w.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {crossReactWarnings.length === 0 && !crossReactLoading && (
+                <p className="text-xs text-violet-600 mt-1">Click to analyze medications against structured allergy records and cross-reactivity rules.</p>
+              )}
+            </div>
 
             {/* Pregnancy / Renal / Hepatic Safety (J3) */}
             <div className="bg-gradient-to-r from-rose-50 to-amber-50 border-2 border-rose-300 rounded-xl p-4 mb-4">

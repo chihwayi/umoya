@@ -132,6 +132,16 @@ export class CdssController {
     return this.cdssService.allergyCheck(data.patientId, data.medication, req.tenantDb);
   }
 
+  @Post('allergy-check-structured')
+  @ApiOperation({ summary: 'Structured allergy check with cross-reactivity analysis' })
+  @ApiResponse({ status: 200, description: 'Structured allergy check with cross-reactivity warnings' })
+  async allergyCheckStructured(
+    @Body() data: { patientId: string; medications: string[] },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.cdssService.getAllergyWarnings(data.patientId, data.medications, req.tenantDb);
+  }
+
   @Post('dosing-recommendation')
   @ApiOperation({ summary: 'Get medication dosing recommendation' })
   @ApiResponse({ status: 200, description: 'Dosing recommendation provided' })

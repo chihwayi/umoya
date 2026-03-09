@@ -16,11 +16,11 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** K3 — Allergy Cross-Reactivity Engine
+**Next sprint in order:** K4 — Infection Control Frontend + Sepsis Auto-Screening
 
 - **Phase E–J** are complete (20 sprints).
-- **Phase K** (Gap Remediation): K1–K2 done, 4 sprints remaining.
-- Next: **K3** (Allergy Cross-Reactivity Engine).
+- **Phase K** (Gap Remediation): K1–K3 done, 3 sprints remaining.
+- Next: **K4** (Infection Control Frontend + Sepsis Auto-Screening).
 
 ---
 
@@ -2064,7 +2064,7 @@ All new patient-facing endpoints are designed for mobile consumption:
 | **Phase K — Gap Remediation** | |
 | K1 Encounter Auto-Coding Service + UI (G2 gap) | `done` |
 | K2 No-Show Prediction Service + UI (G3 gap) | `done` |
-| K3 Allergy Cross-Reactivity Engine (G1 gap) | `pending` |
+| K3 Allergy Cross-Reactivity Engine (G1 gap) | `done` |
 | K4 Infection Control Frontend + Sepsis Auto-Screening (F3 gap) | `pending` |
 | K5 Scheduled MAR Timeline + Witness UI (F4 gap) | `pending` |
 | K6 Auth Consistency Sweep + E1 Seed Data (E1/E2 gap) | `pending` |

@@ -2768,6 +2768,17 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  allergyCheckStructured: async (
+    payload: { patientId: string; medications: string[] },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/cdss/allergy-check-structured', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getPatientPrescriptions: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/prescriptions/patient/${patientId}`, {
       headers: {
