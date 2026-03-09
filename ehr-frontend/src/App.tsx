@@ -53,6 +53,7 @@ import SepsisDashboard from './pages/SepsisDashboard';
 import HIPAAComplianceDashboard from './pages/HIPAAComplianceDashboard';
 import PopulationHealthDashboard from './pages/PopulationHealthDashboard';
 import PracticeManagementDashboard from './pages/PracticeManagementDashboard';
+import PriorAuthorizationDashboard from './pages/PriorAuthorizationDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -440,6 +441,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
                   <PracticeManagementDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/prior-authorizations"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
+                  <PriorAuthorizationDashboard />
                 </RoleProtectedRoute>
               }
             />

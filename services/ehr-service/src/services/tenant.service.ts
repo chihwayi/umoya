@@ -123,6 +123,7 @@ import { FeeSchedule } from '../entities/fee-schedule.entity';
 import { FeeScheduleItem } from '../entities/fee-schedule-item.entity';
 import { SuperbillTemplate } from '../entities/superbill-template.entity';
 import { InsuranceVerification } from '../entities/insurance-verification.entity';
+import { PriorAuthorization } from '../entities/prior-authorization.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -335,6 +336,7 @@ export class TenantService {
         FeeScheduleItem,
         SuperbillTemplate,
         InsuranceVerification,
+        PriorAuthorization,
       ],
       logging: false,
     });

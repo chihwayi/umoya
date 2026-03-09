@@ -616,6 +616,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintH1PracticeManagementStatements(),
       },
       {
+        id: 'sprint_h2_prior_authorization',
+        label: 'Sprint H2 Prior Authorization Workflow',
+        version: '2026.03.09',
+        description: 'prior_authorizations table and indexes',
+        statements: () => this.getSprintH2PriorAuthorizationStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -690,6 +697,35 @@ export class DatabaseProvisioningService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_iv_patient ON insurance_verifications(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_iv_appointment ON insurance_verifications(appointment_id)`,
+    ];
+  }
+
+  private getSprintH2PriorAuthorizationStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS prior_authorizations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        payer_name VARCHAR(255),
+        authorization_type VARCHAR(50) CHECK (authorization_type IN ('medication','procedure','imaging','referral','dme','other')),
+        service_description TEXT NOT NULL,
+        cpt_code VARCHAR(10),
+        icd10_code VARCHAR(10),
+        status VARCHAR(30) DEFAULT 'draft' CHECK (status IN ('draft','submitted','pending','approved','denied','expired','appeal')),
+        submitted_at TIMESTAMP WITH TIME ZONE,
+        decision_at TIMESTAMP WITH TIME ZONE,
+        authorization_number VARCHAR(100),
+        authorized_units INTEGER,
+        authorized_from DATE,
+        authorized_to DATE,
+        denial_reason TEXT,
+        appeal_deadline DATE,
+        notes TEXT,
+        requested_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pa_patient ON prior_authorizations(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_pa_status ON prior_authorizations(status)`,
     ];
   }
 

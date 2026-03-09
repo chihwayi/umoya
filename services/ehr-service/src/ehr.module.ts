@@ -94,6 +94,7 @@ import { NurseWorklistController } from './controllers/nurse-worklist.controller
 import { PostVisitController } from './controllers/post-visit.controller';
 import { PopulationHealthController } from './controllers/population-health.controller';
 import { PracticeManagementController } from './controllers/practice-management.controller';
+import { PriorAuthorizationController } from './controllers/prior-authorization.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -230,6 +231,7 @@ import { PostVisitService } from './services/post-visit.service';
 import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.service';
 import { PopulationHealthService } from './services/population-health.service';
 import { PracticeManagementService } from './services/practice-management.service';
+import { PriorAuthorizationService } from './services/prior-authorization.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -343,6 +345,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PostVisitController,
     PopulationHealthController,
     PracticeManagementController,
+    PriorAuthorizationController,
   ],
   providers: [
     AuthService,
@@ -479,6 +482,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PostVisitService,
     PopulationHealthService,
     PracticeManagementService,
+    PriorAuthorizationService,
     RolesGuard,
     JwtStrategy,
   ],
