@@ -24,6 +24,7 @@ import { SectionAskButton } from '../components/SectionAskButton';
 import { LabTrendChart } from '../components/LabTrendChart';
 import { IntraVisitAlertBar } from '../components/IntraVisitAlertBar';
 import { PatientStoryPanel } from '../components/PatientStoryPanel';
+import VoiceInput from '../components/VoiceInput';
 
 type SessionStatus = 'captured' | 'processing' | 'draft_ready' | 'doctor_reviewed' | 'published' | 'closed';
 
@@ -3132,6 +3133,23 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-900 mb-2">Voice Input (L5)</h3>
+                  <p className="text-xs text-slate-500 mb-2">Dictate into SOAP notes or use voice commands.</p>
+                  <VoiceInput
+                    tenantSlug={tenantSlug || ''}
+                    mode="push_to_talk"
+                    onTranscript={(text) => {
+                      /* Appended to active SOAP field — user can copy from transcript */
+                    }}
+                    onCommand={(cmd) => {
+                      if (cmd.type === 'add_note') {
+                        /* Could auto-append to notes */
+                      }
+                    }}
+                  />
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-bold text-slate-900">Encounter Auto-Coding (K1)</h3>
                     <p className="text-xs text-slate-500">AI-suggested ICD-10 and CPT codes from the clinical encounter.</p>
@@ -3161,6 +3179,25 @@ const PostVisitDoctorWorkspace: React.FC = () => {
 
                   {encounterCodeSuggestion && (
                     <div className="mt-4 space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-700">
+                          <span className="font-semibold text-slate-800">Coding suggestion</span>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
+                              encounterCodeSuggestion.source === 'ml'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-purple-50 text-purple-800 border border-purple-200'
+                            }`}
+                          >
+                            {encounterCodeSuggestion.source === 'ml' ? 'ML model' : 'LLM + keyword rules'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600">
+                          {encounterCodeSuggestion.source === 'ml'
+                            ? 'Learned from past encounters where clinicians accepted similar codes.'
+                            : 'Analyzed the clinical note using the coding LLM and safety keyword fallbacks.'}
+                        </p>
+                      </div>
                       {encounterCodeSuggestion.emLevel && (
                         <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
                           <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">

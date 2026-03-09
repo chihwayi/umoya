@@ -67,7 +67,17 @@ const AppointmentManagement: React.FC = () => {
   const [showWaitlist, setShowWaitlist] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showHighRiskOnly, setShowHighRiskOnly] = useState(false);
-  const [noShowPredictions, setNoShowPredictions] = useState<Record<string, { probability: number; action: string | null }>>({});
+  const [noShowPredictions, setNoShowPredictions] = useState<
+    Record<
+      string,
+      {
+        probability: number;
+        action: string | null;
+        modelVersion?: string;
+        riskFactors?: { factor: string; weight: number; detail: string }[];
+      }
+    >
+  >({});
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -93,12 +103,30 @@ const AppointmentManagement: React.FC = () => {
           id: a.id,
           probability: r.data?.noShowProbability ?? 0,
           action: r.data?.suggestedAction ?? null,
+          modelVersion: r.data?.modelVersion ?? undefined,
+          riskFactors: Array.isArray(r.data?.riskFactors) ? r.data.riskFactors : undefined,
         }))
       )
     ).then(results => {
-      const map: Record<string, { probability: number; action: string | null }> = {};
+      const map: Record<
+        string,
+        {
+          probability: number;
+          action: string | null;
+          modelVersion?: string;
+          riskFactors?: { factor: string; weight: number; detail: string }[];
+        }
+      > = {};
       for (const r of results) {
-        if (r.status === 'fulfilled') map[r.value.id] = { probability: r.value.probability, action: r.value.action };
+        if (r.status === 'fulfilled') {
+          const value = r.value;
+          map[value.id] = {
+            probability: value.probability,
+            action: value.action,
+            modelVersion: value.modelVersion,
+            riskFactors: value.riskFactors,
+          };
+        }
       }
       setNoShowPredictions(map);
     });
@@ -630,7 +658,7 @@ const AppointmentManagement: React.FC = () => {
                     <Clock className="h-6 w-6 text-blue-600" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-center gap-3 mb-1">
                       <h3 className="text-lg font-semibold text-gray-900">
                         {appointment.patient.firstName} {appointment.patient.lastName}
                       </h3>
@@ -653,6 +681,30 @@ const AppointmentManagement: React.FC = () => {
                         </span>
                       )}
                     </div>
+                {noShowPredictions[appointment.id] && noShowPredictions[appointment.id].probability >= 0.25 && (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-600">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
+                        noShowPredictions[appointment.id].modelVersion?.startsWith('lr_')
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-slate-50 text-slate-800 border border-slate-200'
+                      }`}
+                    >
+                      {noShowPredictions[appointment.id].modelVersion?.startsWith('lr_') ? 'ML model' : 'Rules'}
+                    </span>
+                    {Array.isArray(noShowPredictions[appointment.id].riskFactors) &&
+                      noShowPredictions[appointment.id].riskFactors!.length > 0 && (
+                        <span className="inline-flex flex-wrap gap-1">
+                          <span className="font-semibold text-gray-700">Why:</span>
+                          {noShowPredictions[appointment.id].riskFactors!
+                            .slice(0, 3)
+                            .map(rf => rf.detail)
+                            .join(' • ')}
+                          {noShowPredictions[appointment.id].riskFactors!.length > 3 && ' …'}
+                        </span>
+                      )}
+                  </div>
+                )}
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       <div className="flex items-center gap-1">
                         <User className="h-4 w-4" />
