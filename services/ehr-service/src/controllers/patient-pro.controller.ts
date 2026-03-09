@@ -243,7 +243,7 @@ export class PatientProController {
     @Body() templateData: any,
     @Req() req: RequestWithTenant & { user: { id: string } },
   ) {
-    const createdBy = req.user.id;
+    const createdBy = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.patientProService.createQuestionnaireTemplate(req.tenantDb, templateData, createdBy);
   }
 

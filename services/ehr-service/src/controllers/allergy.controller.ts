@@ -15,7 +15,7 @@ export class AllergyController {
 
   @Put('patient/:patientId')
   async replaceForPatient(@Param('patientId') patientId: string, @Body() body: { allergies: any[] }, @Request() req: RequestWithTenant) {
-    const userId = (req.user as any)?.id;
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.allergyService.replaceForPatient(patientId, body?.allergies || [], userId, req.tenantId);
   }
 }
