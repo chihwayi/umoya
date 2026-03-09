@@ -2,7 +2,7 @@
 
 **Goal:** Transform MediCore into a production-grade, AI-First Human-Last, unique niche EHR that private practices and hospitals will want to buy.  
 **Created:** 2026-03-08  
-**Sprints:** 20 sprints across 6 phases  
+**Sprints:** 26 sprints across 7 phases (20 original + 6 gap remediation)  
 **Principle:** Every sprint must provision new database tables/columns in `database-provisioning.service.ts` (`getProvisioningBundles()`). No schema-only migrations — all changes flow through provisioning.
 
 **Sprint execution workflow:** At **every feature / milestone / deliverable** completion:
@@ -16,10 +16,11 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** *(all Phase J sprints in this plan are now complete)*
+**Next sprint in order:** K1 — Encounter Auto-Coding Service + UI
 
-- **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, **H1**, **H2**, **H3**, and **H4** are complete.
-- Next: *(none — Phase J in this plan is complete)*.
+- **Phase E–J** are complete (20 sprints).
+- **Phase K** (Gap Remediation) has 6 sprints remaining — see below.
+- Next: **K1** (Encounter Auto-Coding Service + UI).
 
 ---
 
@@ -51,6 +52,13 @@ So each completed milestone ends with a clean type-check and a push, not only at
   - [Sprint J1 — Auto-Generated Referral Letters + Clinical Note Drafts](#sprint-j1)
   - [Sprint J2 — Deterioration Detection + Early Warning Score (NEWS2)](#sprint-j2)
   - [Sprint J3 — Pregnancy-Aware Prescribing + Renal/Hepatic Dose Adjustment](#sprint-j3)
+- [Phase K — Gap Remediation & Hardening](#phase-k--gap-remediation--hardening)
+  - [Sprint K1 — Encounter Auto-Coding Service + UI](#sprint-k1)
+  - [Sprint K2 — No-Show Prediction Service + UI](#sprint-k2)
+  - [Sprint K3 — Allergy Cross-Reactivity Engine](#sprint-k3)
+  - [Sprint K4 — Infection Control Frontend + Sepsis Auto-Screening](#sprint-k4)
+  - [Sprint K5 — Scheduled MAR Timeline + Witness UI](#sprint-k5)
+  - [Sprint K6 — Auth Consistency Sweep + E1 Seed Data Completion](#sprint-k6)
 - [Appendix — Provisioning Checklist](#appendix--provisioning-checklist)
 - [Appendix — Mobile-Ready API Summary](#appendix--mobile-ready-api-summary)
 
@@ -1664,6 +1672,323 @@ Add renal dose adjustment: if patient has eGFR < 60 (from latest labs), suggest 
 
 ---
 
+## Phase K — Gap Remediation & Hardening
+
+> **Context:** A comprehensive audit on 2026-03-07 identified implementation gaps where database provisioning was completed but service logic, controller endpoints, or frontend UI were not built (or only partially built). Phase K ensures every planned feature is fully delivered end-to-end before MediCore v2 ships.
+
+---
+
+<a id="sprint-k1"></a>
+### Sprint K1 — Encounter Auto-Coding Service + UI (G2 gap)
+
+**Addresses:** Sprint G2 — Real-Time Encounter Auto-Coding (ICD/CPT). The `encounter_code_suggestions` table and provisioning bundle exist, but no service, controller, or frontend was implemented.
+
+#### Backend
+
+**File:** `services/ehr-service/src/services/encounter-coding.service.ts` (new)
+
+Create `EncounterCodingService` with:
+
+```typescript
+async suggestEncounterCodes(tenantDb, sessionId, appointmentId, patientId) {
+  // 1. Load clinical note / SOAP / transcript from session or appointment.
+  // 2. Extract diagnoses and procedures from text using CDSS diagnosis-assist + NLP.
+  // 3. Map diagnoses to ICD-10 codes using Icd10Service.
+  // 4. Map procedures to CPT codes using terminology mapping.
+  // 5. Calculate E&M level based on:
+  //    - Number of problems addressed
+  //    - Data reviewed (labs, imaging, external records)
+  //    - Risk of complications / management decisions
+  //    - Time-based if > 50% counseling
+  // 6. Suggest modifiers (25 for significant separate E&M, 59 for distinct procedure).
+  // 7. Persist suggestions to encounter_code_suggestions.
+  // 8. Return { icd10: [...], cpt: [...], emLevel, modifiers, confidence }.
+}
+
+async reviewEncounterCodes(tenantDb, suggestionId, body, actorId) {
+  // Accept/reject individual codes. Update accepted_codes, rejected_codes.
+}
+```
+
+**File:** `services/ehr-service/src/controllers/encounter-coding.controller.ts` (new)
+
+```
+POST /post-visit/sessions/:id/suggest-codes  — Generate ICD/CPT suggestions from session
+POST /encounters/:appointmentId/suggest-codes — Generate from appointment/note
+PUT  /encounter-codes/:id/review              — Accept/reject suggestions
+```
+
+Register in `ehr.module.ts`.
+
+#### Frontend
+
+Add to `PostVisitDoctorWorkspace` and/or `DoctorDashboard`:
+- "Suggest Codes" button that calls the API.
+- Panel showing suggested ICD-10 codes with descriptions and confidence.
+- Panel showing suggested CPT codes with E&M level rationale.
+- Accept/reject toggles per code.
+- Final accepted codes auto-populate the billing/charge capture.
+
+Add API helpers to `ehr-frontend/src/services/api.ts`.
+
+#### Acceptance
+
+- After completing a clinical note, doctor clicks "Suggest Codes" and gets ICD-10 + CPT recommendations.
+- E&M level calculated with rationale.
+- Doctor reviews and accepts/rejects; accepted codes flow into billing.
+
+---
+
+<a id="sprint-k2"></a>
+### Sprint K2 — No-Show Prediction Service + UI (G3 gap)
+
+**Addresses:** Sprint G3 — Predictive Scheduling + No-Show AI. The `appointment_no_show_predictions` table and provisioning bundle exist, but no service, controller, or frontend was implemented.
+
+#### Backend
+
+**File:** `services/ehr-service/src/services/scheduling-intelligence.service.ts` (new)
+
+Create `SchedulingIntelligenceService` with:
+
+```typescript
+async predictNoShow(tenantDb, appointmentId) {
+  // 1. Load appointment + patient history.
+  // 2. Calculate features:
+  //    - Historical no-show rate for this patient
+  //    - Day of week / time of day patterns
+  //    - Lead time (days between booking and appointment)
+  //    - Number of previous cancellations
+  //    - Insurance/payment status
+  // 3. Apply weighted scoring model (rule-based initially).
+  // 4. Persist prediction to appointment_no_show_predictions.
+  // 5. Return { probability, riskFactors, suggestedAction }.
+  //    Actions: 'send_extra_reminder', 'offer_telehealth', 'overbook_slot', 'call_patient'
+}
+
+async getSmartSlotSuggestions(tenantDb, patientId, visitType, preferredDoctor) {
+  // 1. Load patient appointment history (preferred day/time patterns).
+  // 2. Load doctor availability.
+  // 3. Score each available slot by patient preference, no-show rate, workload balance.
+  // 4. Return top 5 ranked slots with reasons.
+}
+```
+
+**File:** `services/ehr-service/src/controllers/scheduling-intelligence.controller.ts` (new)
+
+```
+GET  /appointments/:id/no-show-prediction   — Get no-show prediction
+POST /appointments/smart-suggestions        — Get AI slot suggestions
+GET  /appointments/no-show-risk/today        — Today's high-risk appointments
+```
+
+Register in `ehr.module.ts`.
+
+**Hook:** In `AppointmentService.createAppointment()`, after saving the appointment, call `schedulingIntelligenceService.predictNoShow()`. If probability > 0.5, auto-send extra reminder.
+
+#### Frontend
+
+Update `AppointmentManagement`:
+- Risk badge on appointment cards (green/yellow/red based on no-show probability).
+- "High Risk" filter tab showing appointments with > 40% no-show probability.
+- Smart slot suggestions in "Create Appointment" modal.
+
+Add API helpers to `ehr-frontend/src/services/api.ts`.
+
+#### Acceptance
+
+- Every new appointment gets a no-show prediction score.
+- High-risk appointments are flagged with suggested actions.
+- Smart slot suggestions rank by patient preference + workload balance.
+
+---
+
+<a id="sprint-k3"></a>
+### Sprint K3 — Allergy Cross-Reactivity Engine (G1 gap)
+
+**Addresses:** Sprint G1 — Allergy Cross-Reactivity + Structured CDSS Integration. The current allergy check uses legacy `patient.allergies` text field and local fuzzy matching. No cross-reactivity map, no structured CDSS endpoint.
+
+#### Backend
+
+**File:** `services/ehr-service/src/config/allergy-cross-reactivity.ts` (new)
+
+```typescript
+export const CROSS_REACTIVITY_MAP: Record<string, { relatedClasses: string[]; riskLevel: string; message: string }> = {
+  penicillin: {
+    relatedClasses: ['cephalosporin', 'carbapenem'],
+    riskLevel: 'moderate',
+    message: '1-2% cross-reactivity risk with cephalosporins; use with caution or avoid.',
+  },
+  sulfonamide: {
+    relatedClasses: ['sulfonylurea', 'thiazide'],
+    riskLevel: 'low',
+    message: 'Low cross-reactivity risk; monitor for hypersensitivity.',
+  },
+  nsaid: {
+    relatedClasses: ['aspirin', 'salicylate', 'cox2_inhibitor'],
+    riskLevel: 'high',
+    message: 'Cross-reactivity between NSAIDs is common; avoid entire class unless tested.',
+  },
+};
+```
+
+**File:** `services/ehr-service/src/services/cdss.service.ts`
+
+Add `getAllergyWarnings(patientId, medicationName, tenantDb)`:
+1. Load structured allergies from `allergies` table (not legacy text).
+2. Load drug class from `drugs` table or infer from medication name.
+3. Check exact allergen match.
+4. Check cross-reactivity via `CROSS_REACTIVITY_MAP`.
+5. Return `{ warnings: [{ severity, allergen, medication, crossReactivity, message }] }`.
+
+**File:** `services/ehr-service/src/controllers/cdss.controller.ts`
+
+Add endpoint:
+
+```
+POST /cdss/allergy-check-structured — Check structured allergies with cross-reactivity
+```
+
+#### Frontend
+
+In `PrescriptionsModal`, before save:
+1. Call `POST /cdss/allergy-check-structured` with patient ID and selected medication.
+2. If warnings returned, show alert panel with severity badges.
+3. If severity = 'high', require explicit acknowledgement before saving.
+
+#### Acceptance
+
+- Patient with penicillin allergy gets warning when prescribing amoxicillin (exact match) AND cefazolin (cross-reactivity).
+- Cross-reactivity map is configurable and extensible.
+- CDSS uses structured allergies table, not legacy text.
+
+---
+
+<a id="sprint-k4"></a>
+### Sprint K4 — Infection Control Frontend + Sepsis Auto-Screening (F3 gap)
+
+**Addresses:** Sprint F3 — Infection Control Completion + Sepsis Bundle Automation. Backend endpoints for hand hygiene and device days exist but frontend panels are missing. Auto sepsis screening via qSOFA in VitalsService and auto `three_hour_bundle_complete` are missing.
+
+#### Backend Fixes
+
+**File:** `services/ehr-service/src/services/sepsis.service.ts`
+
+In `updateBundleElement()`, after setting the element and timestamp:
+- Check if `lactate_measured`, `blood_cultures_drawn`, and `broad_spectrum_antibiotics_given` are all true.
+- If so, and all their `_at` timestamps are within 3 hours of `sepsis_onset_time`, set `three_hour_bundle_complete = true`.
+
+**File:** `services/ehr-service/src/services/vitals.service.ts`
+
+In `recordVitals()`, after saving vitals, add qSOFA check:
+- Respiratory rate >= 22
+- Systolic BP <= 100
+- Altered mental status (GCS < 15, if available)
+- If qSOFA >= 2, auto-create sepsis screening alert via `SepsisService`.
+
+#### Frontend
+
+**File:** `ehr-frontend/src/pages/InfectionControlDashboard.tsx`
+
+Add two new panels:
+1. **Hand Hygiene Compliance** — Call `GET /infection-control/hand-hygiene/compliance`, display WHO 5 Moments compliance % by department. Add observation recording form calling `POST /infection-control/hand-hygiene`.
+2. **Device Day Tracking** — Call `GET /infection-control/device-days/rates`, display CAUTI/CLABSI/VAP rates. Add device insertion/removal forms.
+
+**File:** `ehr-frontend/src/pages/SepsisDashboard.tsx`
+
+Add **Bundle Element Timeline** panel showing per-element completion times (lactate, cultures, antibiotics, fluids, vasopressors) with timestamps relative to `sepsis_onset_time`.
+
+#### Acceptance
+
+- Hand hygiene compliance tracked with WHO 5 Moments.
+- Device-day denominators enable standard HAI rate calculation.
+- Sepsis bundle auto-completes 3-hour bundle when criteria met.
+- qSOFA >= 2 from vitals auto-triggers sepsis screening.
+- Bundle timeline shows per-element timing.
+
+---
+
+<a id="sprint-k5"></a>
+### Sprint K5 — Scheduled MAR Timeline + Witness UI (F4 gap)
+
+**Addresses:** Sprint F4 — BCMA Prescription-to-MAR + Witness Workflow. Backend endpoints for scheduled MAR entries and witness enforcement exist but the frontend doesn't use them.
+
+#### Frontend
+
+**File:** `ehr-frontend/src/pages/MARDashboard.tsx`
+
+Replace or augment the current MAR records view:
+1. Fetch scheduled entries from `GET /bcma/mar/scheduled/:patientId`.
+2. Display as a **24-hour medication timeline** (08:00, 14:00, 20:00, etc.).
+3. Each entry shows: medication name, dose, route, status (scheduled/given/held/refused/missed/late).
+4. "Scan & Give" from a scheduled entry opens `MedicationScannerModal` pre-filled with the entry data.
+5. Use `POST /bcma/mar/scheduled/:id/administer` for administration.
+
+**File:** `ehr-frontend/src/components/MedicationScannerModal.tsx`
+
+Add witness enforcement:
+1. If the scheduled entry has `requires_witness = true` (high-alert or controlled substance), show a **Witness** field.
+2. Witness field: search for co-worker by name, select.
+3. Include `witnessedById` in the administration request body.
+4. Block submission without a witness when required.
+
+#### Acceptance
+
+- Prescriptions auto-generate scheduled MAR entries (backend already works).
+- MAR dashboard shows a 24-hour medication timeline.
+- High-alert / controlled substances require witness before administration.
+- Scanner modal opens and completes the verification flow from a scheduled entry.
+
+---
+
+<a id="sprint-k6"></a>
+### Sprint K6 — Auth Consistency Sweep + E1 Seed Data Completion
+
+**Addresses:** Multiple minor gaps from the audit.
+
+#### 1. Auth Consistency Sweep
+
+**Problem:** Several controllers still use `req.user.id` instead of the safe pattern `req.user?.userId ?? (req.user as any)?.id`. This can cause runtime errors if the JWT payload uses `userId` instead of `id`.
+
+**Files to fix (grep for `req.user.id` and `req.user.userId` without optional chaining):**
+- `services/ehr-service/src/controllers/anesthesia.controller.ts`
+- `services/ehr-service/src/controllers/dietary.controller.ts`
+- `services/ehr-service/src/controllers/lab-order.controller.ts`
+- `services/ehr-service/src/controllers/prescription.controller.ts`
+- `services/ehr-service/src/controllers/revenue-cycle.controller.ts`
+- Any other controllers found via grep.
+
+Replace all with: `req.user?.userId ?? (req.user as any)?.id`
+
+#### 2. E1 Vaccine Seed Data Completion
+
+**Problem:** Only 3 vaccine seeds were inserted in the E1 provisioning bundle. Plan calls for 23+ routine + 11+ travel vaccines.
+
+**File:** `services/tenant-service/src/services/database-provisioning.service.ts`
+
+In `getSprintE1ImmunizationAlignmentStatements()`, add the full vaccine schedule seed as specified in the E1 plan:
+- 23 routine vaccines (BCG, OPV x4, Rotavirus x2, PCV13 x3, Hib x3, Varicella x2, Hep A x2, MenACWY x2, Tdap, PPSV23, Zoster x2)
+- 11 travel vaccines (Yellow Fever, Typhoid Injectable + Oral, Rabies x3, Cholera x2, JE x2, MenACWY Travel)
+
+Use `INSERT ... WHERE NOT EXISTS` for idempotency.
+
+#### 3. E1 Administer Endpoint Alignment
+
+**File:** `services/ehr-service/src/controllers/immunization.controller.ts`
+
+Add `POST /patient/:patientId/administer` endpoint that maps to `recordImmunization` with `patientId` from the path parameter (as specified in plan). Keep existing `POST /administer` as well for backwards compatibility.
+
+#### 4. Provisioning Appendix Update
+
+Add `H4` bundle to the provisioning checklist appendix table (it was implemented but not listed).
+
+#### Acceptance
+
+- No controller uses `req.user.id` directly — all use the safe pattern.
+- E1 provisioning seeds 34 vaccines (23 routine + 11 travel).
+- `POST /immunizations/patient/:patientId/administer` endpoint exists.
+- Provisioning checklist appendix matches actual bundles.
+
+---
+
 ## Appendix — Provisioning Checklist
 
 Every sprint that introduces new tables or columns MUST add a provisioning bundle in `services/tenant-service/src/services/database-provisioning.service.ts` inside `getProvisioningBundles()`. The bundle must:
@@ -1690,6 +2015,7 @@ Every sprint that introduces new tables or columns MUST add a provisioning bundl
 | H1 | `sprint_h1_practice_management` | fee_schedules, fee_schedule_items, superbill_templates, insurance_verifications |
 | H2 | `sprint_h2_prior_auth` | prior_authorizations |
 | H3 | `sprint_h3_patient_portal_enhancements` | patient_portal_payments, health_education_content, patient_family_access |
+| H4 | `sprint_h4_recall_campaigns` | notification_campaigns, notification_campaign_recipients |
 | I1 | `sprint_i1_travel_vaccines` | travel_vaccine_destinations, vaccination_certificates |
 | J2 | `sprint_j2_early_warning` | patient_early_warning_scores |
 
@@ -1730,8 +2056,15 @@ All new patient-facing endpoints are designed for mobile consumption:
 | H2 Prior Authorization Workflow | `done` |
 | H3 Patient Portal (Pay/Education/Family) | `done` |
 | H4 Recall Campaigns + Bulk Notifications | `done` |
-| I1 Travel Vaccine Engine + Yellow Card | `pending` |
-| I2 Multi-Currency + Medical Aid | `pending` |
-| J1 Auto Referral Letters + Note Drafts | `pending` |
-| J2 Deterioration Detection + NEWS2 | `pending` |
-| J3 Pregnancy-Aware + Renal/Hepatic Dosing | `pending` |
+| I1 Travel Vaccine Engine + Yellow Card | `done` |
+| I2 Multi-Currency + Medical Aid | `done` |
+| J1 Auto Referral Letters + Note Drafts | `done` |
+| J2 Deterioration Detection + NEWS2 | `done` |
+| J3 Pregnancy-Aware + Renal/Hepatic Dosing | `done` |
+| **Phase K — Gap Remediation** | |
+| K1 Encounter Auto-Coding Service + UI (G2 gap) | `pending` |
+| K2 No-Show Prediction Service + UI (G3 gap) | `pending` |
+| K3 Allergy Cross-Reactivity Engine (G1 gap) | `pending` |
+| K4 Infection Control Frontend + Sepsis Auto-Screening (F3 gap) | `pending` |
+| K5 Scheduled MAR Timeline + Witness UI (F4 gap) | `pending` |
+| K6 Auth Consistency Sweep + E1 Seed Data (E1/E2 gap) | `pending` |
