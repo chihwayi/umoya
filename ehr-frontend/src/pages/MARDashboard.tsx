@@ -169,6 +169,65 @@ const MARDashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Scheduled MAR Timeline (K5) */}
+        {selectedPatient && marRecords.length > 0 && (
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-600" />
+              Today's Administration Timeline
+            </h3>
+            <div className="relative">
+              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200" />
+              <div className="space-y-3 pl-10">
+                {[...marRecords]
+                  .sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime())
+                  .map((mar) => {
+                    const isOverdue = mar.administrationStatus === 'pending' && new Date(mar.scheduledTime) < new Date();
+                    const isGiven = mar.administrationStatus === 'administered';
+                    const isRefused = mar.administrationStatus === 'refused';
+                    const isHeld = mar.administrationStatus === 'held' || mar.administrationStatus === 'omitted';
+                    return (
+                      <div key={`tl-${mar.id}`} className="relative flex items-center gap-3">
+                        <div className={`absolute -left-10 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          isGiven ? 'bg-green-500 border-green-600' :
+                          isRefused ? 'bg-red-400 border-red-500' :
+                          isHeld ? 'bg-amber-400 border-amber-500' :
+                          isOverdue ? 'bg-red-100 border-red-400 animate-pulse' :
+                          'bg-white border-slate-300'
+                        }`}>
+                          {isGiven && <CheckCircle className="w-3 h-3 text-white" />}
+                          {isOverdue && !isGiven && <AlertCircle className="w-3 h-3 text-red-500" />}
+                        </div>
+                        <div className={`flex-1 flex items-center justify-between rounded-lg px-3 py-2 text-xs ${
+                          isGiven ? 'bg-green-50 border border-green-200' :
+                          isOverdue ? 'bg-red-50 border border-red-200' :
+                          isRefused ? 'bg-red-50 border border-red-200' :
+                          isHeld ? 'bg-amber-50 border border-amber-200' :
+                          'bg-slate-50 border border-slate-200'
+                        }`}>
+                          <span className="font-semibold text-slate-800">
+                            {new Date(mar.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-slate-700">{mar.medicationName}</span>
+                          <span className="text-slate-500">{mar.dose} {mar.unit} ({mar.route})</span>
+                          <span className={`px-2 py-0.5 rounded-full font-bold ${
+                            isGiven ? 'bg-green-200 text-green-800' :
+                            isOverdue ? 'bg-red-200 text-red-800' :
+                            isRefused ? 'bg-red-200 text-red-800' :
+                            isHeld ? 'bg-amber-200 text-amber-800' :
+                            'bg-slate-200 text-slate-700'
+                          }`}>
+                            {isOverdue && !isGiven ? 'OVERDUE' : mar.administrationStatus.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* MAR Grid */}
       {!selectedPatient ? (
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 p-12 text-center shadow-sm">

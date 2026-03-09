@@ -28,6 +28,14 @@ const MedicationScannerModal: React.FC<MedicationScannerModalProps> = ({
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const [administrationSite, setAdministrationSite] = useState('');
   const [notes, setNotes] = useState('');
+  const [witnessRequired] = useState(() => {
+    const medName = (prescription.medicationName || prescription.medication || '').toLowerCase();
+    const highRiskPatterns = ['insulin', 'heparin', 'warfarin', 'morphine', 'fentanyl', 'oxycodone', 'hydromorphone', 'methadone', 'blood', 'chemotherapy', 'potassium chloride', 'digoxin'];
+    return highRiskPatterns.some(p => medName.includes(p));
+  });
+  const [witnessName, setWitnessName] = useState('');
+  const [witnessId, setWitnessId] = useState('');
+  const [witnessConfirmed, setWitnessConfirmed] = useState(false);
 
   const handleScanPatient = async () => {
     if (!patientBarcode) {
@@ -89,10 +97,15 @@ const MedicationScannerModal: React.FC<MedicationScannerModalProps> = ({
   };
 
   const handleAdminister = async () => {
+    if (witnessRequired && !witnessConfirmed) {
+      showError('Witness Required', 'This is a high-risk medication. A witness must confirm before administration.');
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const marData = {
+      const marData: any = {
         prescriptionId: prescription.id,
         patientId: patient.id,
         medicationName: prescription.medicationName || prescription.medication,
@@ -113,6 +126,12 @@ const MedicationScannerModal: React.FC<MedicationScannerModalProps> = ({
         administrationSite,
         notes,
       };
+
+      if (witnessRequired) {
+        marData.witnessName = witnessName;
+        marData.witnessId = witnessId;
+        marData.witnessConfirmed = true;
+      }
 
       await ehrAxios.post('/bcma/administer', marData, {
         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
@@ -354,9 +373,56 @@ const MedicationScannerModal: React.FC<MedicationScannerModalProps> = ({
                 />
               </div>
 
+              {/* Witness Enforcement (K5) */}
+              {witnessRequired && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-700" />
+                    <h4 className="font-bold text-amber-900 text-sm">Witness Required — High-Risk Medication</h4>
+                  </div>
+                  <p className="text-xs text-amber-800 mb-3">
+                    This medication requires an independent witness to verify dose and patient before administration.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Witness Name</label>
+                      <input
+                        type="text"
+                        value={witnessName}
+                        onChange={(e) => setWitnessName(e.target.value)}
+                        placeholder="e.g., Nurse Jane Smith"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Witness Staff ID</label>
+                      <input
+                        type="text"
+                        value={witnessId}
+                        onChange={(e) => setWitnessId(e.target.value)}
+                        placeholder="Staff ID or badge #"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400"
+                      />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={witnessConfirmed}
+                      onChange={(e) => setWitnessConfirmed(e.target.checked)}
+                      className="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-400"
+                      disabled={!witnessName.trim() || !witnessId.trim()}
+                    />
+                    <span className="text-sm font-semibold text-amber-900">
+                      I confirm that the witness has verified the medication, dose, and patient identity.
+                    </span>
+                  </label>
+                </div>
+              )}
+
               <button
                 onClick={handleAdminister}
-                disabled={loading}
+                disabled={loading || (witnessRequired && !witnessConfirmed)}
                 className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
