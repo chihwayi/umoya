@@ -16,10 +16,10 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** **H1 — Fee Schedule + Superbill + Insurance**
+**Next sprint in order:** **H2 — Prior Authorization Workflow**
 
-- **Phase E**, **Phase F**, **G1**, **G2**, **G3**, and **G4** are complete.
-- Next: **H1** (fee schedule, superbill, insurance), then H2–H4, I, J.
+- **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, and **H1** are complete.
+- Next: **H2** (prior authorization), then H3–H4, I, J.
 
 ---
 
@@ -1716,7 +1716,7 @@ All new patient-facing endpoints are designed for mobile consumption:
 | G2 Real-Time Encounter Auto-Coding | `done` |
 | G3 Predictive Scheduling + No-Show AI | `done` |
 | G4 Population Health + Preventive Care | `done` |
-| H1 Fee Schedule + Superbill + Insurance | `pending` |
+| H1 Fee Schedule + Superbill + Insurance | `done` |
 | H2 Prior Authorization Workflow | `pending` |
 | H3 Patient Portal (Pay/Education/Family) | `pending` |
 | H4 Recall Campaigns + Bulk Notifications | `pending` |

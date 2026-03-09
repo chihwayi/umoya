@@ -609,6 +609,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintG4PopulationHealthStatements(),
       },
       {
+        id: 'sprint_h1_practice_management',
+        label: 'Sprint H1 Fee Schedule + Superbill + Insurance Verification',
+        version: '2026.03.09',
+        description: 'fee_schedules, fee_schedule_items, superbill_templates, insurance_verifications',
+        statements: () => this.getSprintH1PracticeManagementStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -627,6 +634,63 @@ export class DatabaseProvisioningService {
 
   public getCoreSchemaStatements(): string[] {
     return [...this.getClinicSchema()];
+  }
+
+  private getSprintH1PracticeManagementStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS fee_schedules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        payer_type VARCHAR(50) CHECK (payer_type IN ('self_pay','medical_aid','insurance','government','other')),
+        payer_name VARCHAR(255),
+        effective_date DATE NOT NULL,
+        end_date DATE,
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS fee_schedule_items (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        fee_schedule_id UUID NOT NULL REFERENCES fee_schedules(id) ON DELETE CASCADE,
+        cpt_code VARCHAR(10) NOT NULL,
+        description VARCHAR(500),
+        charge_amount DECIMAL(12,2) NOT NULL,
+        allowed_amount DECIMAL(12,2),
+        modifier VARCHAR(10),
+        effective_date DATE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_fsi_schedule ON fee_schedule_items(fee_schedule_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_fsi_cpt ON fee_schedule_items(cpt_code)`,
+      `CREATE TABLE IF NOT EXISTS superbill_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        specialty VARCHAR(100),
+        sections JSONB NOT NULL DEFAULT '[]'::jsonb,
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS insurance_verifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        appointment_id UUID REFERENCES appointments(id),
+        payer_name VARCHAR(255),
+        policy_number VARCHAR(100),
+        group_number VARCHAR(100),
+        verification_status VARCHAR(30) DEFAULT 'pending' CHECK (verification_status IN ('pending','verified','denied','expired','not_found')),
+        coverage_details JSONB DEFAULT '{}'::jsonb,
+        copay_amount DECIMAL(10,2),
+        deductible_remaining DECIMAL(10,2),
+        verified_at TIMESTAMP WITH TIME ZONE,
+        verified_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_iv_patient ON insurance_verifications(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_iv_appointment ON insurance_verifications(appointment_id)`,
+    ];
   }
 
   private getGatewayConfigurationStatements(): string[] {

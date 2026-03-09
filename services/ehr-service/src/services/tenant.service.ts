@@ -119,6 +119,10 @@ import { PostVisitCompanionAcknowledgement } from '../entities/post-visit-compan
 import { ChronicDiseaseRegistry } from '../entities/chronic-disease-registry.entity';
 import { PreventiveCareReminder } from '../entities/preventive-care-reminder.entity';
 import { RecallList } from '../entities/recall-list.entity';
+import { FeeSchedule } from '../entities/fee-schedule.entity';
+import { FeeScheduleItem } from '../entities/fee-schedule-item.entity';
+import { SuperbillTemplate } from '../entities/superbill-template.entity';
+import { InsuranceVerification } from '../entities/insurance-verification.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -327,6 +331,10 @@ export class TenantService {
         ChronicDiseaseRegistry,
         PreventiveCareReminder,
         RecallList,
+        FeeSchedule,
+        FeeScheduleItem,
+        SuperbillTemplate,
+        InsuranceVerification,
       ],
       logging: false,
     });
