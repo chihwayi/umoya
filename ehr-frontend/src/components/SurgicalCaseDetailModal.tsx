@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Calendar, Clock, Activity, FileText, Play, CheckCircle, XCircle, Loader2, Package, BookOpen, Search } from 'lucide-react';
+import { X, User, Calendar, Clock, Activity, FileText, Play, CheckCircle, XCircle, Loader2, Package, BookOpen, Search, ClipboardList, ListOrdered, FlaskConical } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import ImplantTrackingModal from './ImplantTrackingModal';
 import { cdssApi, ehrAxios } from '../services/api';
@@ -24,6 +24,12 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [showImplantModal, setShowImplantModal] = useState(false);
+  const [safetyChecklist, setSafetyChecklist] = useState<any>(null);
+  const [countSheets, setCountSheets] = useState<any[]>([]);
+  const [specimens, setSpecimens] = useState<any[]>([]);
+  const [showSafetyPanel, setShowSafetyPanel] = useState(false);
+  const [countForm, setCountForm] = useState({ countType: 'sponge', itemName: '', initialCount: 0 });
+  const [specimenForm, setSpecimenForm] = useState({ specimenType: 'tissue', specimenSource: '', notes: '' });
   
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -65,6 +71,15 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
           drainsPlaced: response.data.drains_placed || [],
         });
       }
+      const headers = { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` };
+      const [checkRes, countsRes, specsRes] = await Promise.all([
+        ehrAxios.get(`/operating-room/cases/${caseId}/safety-checklist`, { headers }).catch(() => ({ data: null })),
+        ehrAxios.get(`/operating-room/cases/${caseId}/count-sheets`, { headers }).catch(() => ({ data: [] })),
+        ehrAxios.get(`/operating-room/cases/${caseId}/specimens`, { headers }).catch(() => ({ data: [] })),
+      ]);
+      setSafetyChecklist(checkRes.data);
+      setCountSheets(countsRes.data || []);
+      setSpecimens(specsRes.data || []);
     } catch (error) {
       showError('Error', 'Failed to load surgical case');
     } finally {
@@ -178,6 +193,71 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
         ...documentation,
         drainsPlaced: [...documentation.drainsPlaced, drain],
       });
+    }
+  };
+
+  const completeChecklistPhase = async (phase: 'sign-in' | 'time-out' | 'sign-out', body: any) => {
+    try {
+      const res = await ehrAxios.post(
+        `/operating-room/cases/${caseId}/safety-checklist/${phase}`,
+        body,
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+      );
+      setSafetyChecklist(res.data);
+      showSuccess('Success', `Checklist ${phase.replace('-', ' ')} completed`);
+    } catch (e: any) {
+      showError('Error', e.response?.data?.message || `Failed to complete ${phase}`);
+    }
+  };
+
+  const handleAddCount = async () => {
+    if (!countForm.itemName.trim() || countForm.initialCount < 0) {
+      showError('Error', 'Item name and initial count required');
+      return;
+    }
+    try {
+      const res = await ehrAxios.post(
+        `/operating-room/cases/${caseId}/count-sheets`,
+        countForm,
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+      );
+      setCountSheets((prev) => [...prev, res.data]);
+      setCountForm({ countType: 'sponge', itemName: '', initialCount: 0 });
+      showSuccess('Success', 'Count item added');
+    } catch (e: any) {
+      showError('Error', e.response?.data?.message || 'Failed to add count');
+    }
+  };
+
+  const handleVerifyCount = async (sheetId: string, finalCount: number, countCorrect: boolean, discrepancyNote?: string) => {
+    try {
+      await ehrAxios.put(
+        `/operating-room/count-sheets/${sheetId}/verify`,
+        { finalCount, countCorrect, discrepancyNote },
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+      );
+      loadCaseDetails();
+    } catch (e: any) {
+      showError('Error', e.response?.data?.message || 'Failed to verify count');
+    }
+  };
+
+  const handleAddSpecimen = async () => {
+    if (!specimenForm.specimenSource.trim()) {
+      showError('Error', 'Specimen source required');
+      return;
+    }
+    try {
+      const res = await ehrAxios.post(
+        `/operating-room/cases/${caseId}/specimens`,
+        specimenForm,
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+      );
+      setSpecimens((prev) => [...prev, res.data]);
+      setSpecimenForm({ specimenType: 'tissue', specimenSource: '', notes: '' });
+      showSuccess('Success', 'Specimen added');
+    } catch (e: any) {
+      showError('Error', e.response?.data?.message || 'Failed to add specimen');
     }
   };
 
@@ -425,6 +505,143 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* WHO Safety Checklist & Counts & Specimens */}
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowSafetyPanel(!showSafetyPanel)}
+                className="w-full flex items-center justify-between font-bold text-slate-900 mb-2"
+              >
+                <span className="flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-indigo-600" />
+                  WHO Safety Checklist, Counts & Specimens
+                </span>
+                <span className="text-slate-500">{showSafetyPanel ? '▼' : '▶'}</span>
+              </button>
+              {showSafetyPanel && (
+                <div className="space-y-4 pt-2 border-t border-slate-200">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">Checklist</h4>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium disabled:opacity-50"
+                        onClick={() => completeChecklistPhase('sign-in', { patientIdentityConfirmed: true, siteMarked: true, consentConfirmed: true })}
+                        disabled={!!safetyChecklist?.sign_in_completed}
+                      >
+                        {safetyChecklist?.sign_in_completed ? '✓ Sign In' : 'Complete Sign In'}
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-sm font-medium disabled:opacity-50"
+                        onClick={() => completeChecklistPhase('time-out', { teamMembersIntroduced: true, procedureConfirmed: true, siteConfirmed: true })}
+                        disabled={!!safetyChecklist?.time_out_completed}
+                      >
+                        {safetyChecklist?.time_out_completed ? '✓ Time Out' : 'Complete Time Out'}
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium disabled:opacity-50"
+                        onClick={() => completeChecklistPhase('sign-out', { procedureRecorded: true, instrumentSpongeNeedleCountsCorrect: true, specimenLabelled: true })}
+                        disabled={!!safetyChecklist?.sign_out_completed}
+                      >
+                        {safetyChecklist?.sign_out_completed ? '✓ Sign Out' : 'Complete Sign Out'}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1"><ListOrdered className="w-4 h-4" /> Counts</h4>
+                    <div className="flex gap-2 mb-2 flex-wrap items-end">
+                      <select
+                        value={countForm.countType}
+                        onChange={(e) => setCountForm((c) => ({ ...c, countType: e.target.value }))}
+                        className="px-2 py-1.5 border border-slate-300 rounded text-sm"
+                      >
+                        {['sponge', 'needle', 'instrument', 'other'].map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <input
+                        placeholder="Item name"
+                        value={countForm.itemName}
+                        onChange={(e) => setCountForm((c) => ({ ...c, itemName: e.target.value }))}
+                        className="px-2 py-1.5 border border-slate-300 rounded text-sm w-32"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Initial"
+                        value={countForm.initialCount || ''}
+                        onChange={(e) => setCountForm((c) => ({ ...c, initialCount: parseInt(e.target.value, 10) || 0 }))}
+                        className="px-2 py-1.5 border border-slate-300 rounded text-sm w-20"
+                      />
+                      <button type="button" onClick={handleAddCount} className="px-3 py-1.5 bg-indigo-600 text-white rounded text-sm font-medium">Add</button>
+                    </div>
+                    <ul className="text-sm space-y-1">
+                      {countSheets.map((row: any) => (
+                        <li key={row.id} className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{row.item_name}</span>
+                          <span className="text-slate-500">({row.count_type})</span>
+                          <span>Initial: {row.initial_count}</span>
+                          {row.final_count != null ? (
+                            <span>Final: {row.final_count} {row.count_correct ? '✓' : '✗'}</span>
+                          ) : (
+                            <>
+                              <input
+                                type="number"
+                                min={0}
+                                placeholder="Final"
+                                className="w-16 px-1 py-0.5 border rounded text-sm"
+                                id={`final-${row.id}`}
+                              />
+                              <button type="button" onClick={() => {
+                                const el = document.getElementById(`final-${row.id}`) as HTMLInputElement;
+                                const final = parseInt(el?.value ?? '0', 10);
+                                handleVerifyCount(row.id, final, final === row.initial_count);
+                              }} className="text-indigo-600 text-xs font-medium">Verify</button>
+                            </>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1"><FlaskConical className="w-4 h-4" /> Specimens</h4>
+                    <div className="flex gap-2 mb-2 flex-wrap items-end">
+                      <input
+                        placeholder="Source (e.g. left breast)"
+                        value={specimenForm.specimenSource}
+                        onChange={(e) => setSpecimenForm((s) => ({ ...s, specimenSource: e.target.value }))}
+                        className="px-2 py-1.5 border border-slate-300 rounded text-sm w-40"
+                      />
+                      <select
+                        value={specimenForm.specimenType}
+                        onChange={(e) => setSpecimenForm((s) => ({ ...s, specimenType: e.target.value }))}
+                        className="px-2 py-1.5 border border-slate-300 rounded text-sm"
+                      >
+                        <option value="tissue">Tissue</option>
+                        <option value="fluid">Fluid</option>
+                        <option value="bone">Bone</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <input
+                        placeholder="Notes"
+                        value={specimenForm.notes}
+                        onChange={(e) => setSpecimenForm((s) => ({ ...s, notes: e.target.value }))}
+                        className="px-2 py-1.5 border border-slate-300 rounded text-sm w-32"
+                      />
+                      <button type="button" onClick={handleAddSpecimen} className="px-3 py-1.5 bg-indigo-600 text-white rounded text-sm font-medium">Add</button>
+                    </div>
+                    <ul className="text-sm space-y-1">
+                      {specimens.map((s: any) => (
+                        <li key={s.id}>{s.specimen_source} ({s.specimen_type}) {s.notes ? `— ${s.notes}` : ''}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               )}
             </div>

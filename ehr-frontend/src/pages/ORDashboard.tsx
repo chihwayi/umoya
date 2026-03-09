@@ -9,6 +9,7 @@ import { ehrAxios } from '../services/api';
 import ScheduleSurgeryModal from '../components/ScheduleSurgeryModal';
 import SurgicalCaseDetailModal from '../components/SurgicalCaseDetailModal';
 import ORBoardView from '../components/ORBoardView';
+import PreferenceCardManager from '../components/PreferenceCardManager';
 
 const ORDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -25,6 +26,7 @@ const ORDashboard: React.FC = () => {
   const [selectedCase, setSelectedCase] = useState<any>(null);
   const [showCaseDetail, setShowCaseDetail] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
+  const [showPreferenceCards, setShowPreferenceCards] = useState(false);
 
   useEffect(() => {
     loadORData();
@@ -123,13 +125,22 @@ const ORDashboard: React.FC = () => {
                 <p className="text-indigo-100 mt-1">Surgical scheduling and management</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowScheduleModal(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold"
-            >
-              <Plus className="w-5 h-5" />
-              Schedule Surgery
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPreferenceCards(true)}
+                className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
+              >
+                Preference Cards
+              </button>
+              <button
+                onClick={() => setShowScheduleModal(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold"
+              >
+                <Plus className="w-5 h-5" />
+                Schedule Surgery
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -329,11 +340,19 @@ const ORDashboard: React.FC = () => {
 
         {showCaseDetail && selectedCase && (
           <SurgicalCaseDetailModal
-            caseId={selectedCase.caseid}
+            caseId={selectedCase.caseid || selectedCase.id}
             tenantSlug={tenantSlug || ''}
             token={token}
             onUpdate={loadORData}
             onClose={() => setShowCaseDetail(false)}
+          />
+        )}
+
+        {showPreferenceCards && (
+          <PreferenceCardManager
+            tenantSlug={tenantSlug || ''}
+            token={token}
+            onClose={() => setShowPreferenceCards(false)}
           />
         )}
       </div>
