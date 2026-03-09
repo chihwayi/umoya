@@ -25,10 +25,11 @@ export class BcmaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
     return this.bcmaService.issueWristband(
       data.patientId,
       data.admissionId || null,
-      req.user.id,
+      userId,
       tenantDb,
     );
   }
@@ -85,7 +86,8 @@ export class BcmaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.bcmaService.administerMedication(marData, req.user.id, tenantDb);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bcmaService.administerMedication(marData, userId, tenantDb);
   }
 
   @Get('mar/patient/:patientId')
@@ -110,7 +112,8 @@ export class BcmaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.bcmaService.holdMedication(id, data.reason, req.user.id, tenantDb);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bcmaService.holdMedication(id, data.reason, userId, tenantDb);
   }
 
   @Post('mar/:id/refuse')
@@ -147,7 +150,48 @@ export class BcmaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.bcmaService.acknowledgeAlert(id, req.user.id, data.overrideReason, tenantDb);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bcmaService.acknowledgeAlert(id, userId, data.overrideReason, tenantDb);
+  }
+
+  @Post('generate-mar/:prescriptionId')
+  @ApiOperation({ summary: 'Generate scheduled MAR entries from prescription' })
+  async generateMARFromPrescription(
+    @Param('prescriptionId') prescriptionId: string,
+    @Body() body: { patientId: string; admissionId?: string },
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.bcmaService.generateMARFromPrescription(
+      prescriptionId,
+      body.patientId,
+      body.admissionId || null,
+      tenantDb,
+    );
+  }
+
+  @Get('mar/scheduled/:patientId')
+  @ApiOperation({ summary: 'Get scheduled MAR entries for patient' })
+  async getScheduledMARByPatient(
+    @Param('patientId') patientId: string,
+    @Query('date') date: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const targetDate = date ? new Date(date) : new Date();
+    return this.bcmaService.getScheduledMARByPatient(patientId, targetDate, tenantDb);
+  }
+
+  @Post('mar/scheduled/:id/administer')
+  @ApiOperation({ summary: 'Administer from scheduled entry (witness enforced if required)' })
+  async administerFromScheduled(
+    @Param('id') id: string,
+    @Body() body: { witnessedById?: string; notes?: string },
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bcmaService.administerFromScheduledEntry(id, body, userId, tenantDb);
   }
 }
 

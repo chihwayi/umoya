@@ -4,6 +4,7 @@ import { MedicationAdministrationRecord } from '../entities/medication-administr
 import { PatientWristband } from '../entities/patient-wristband.entity';
 import { MedicationBarcodeMaster } from '../entities/medication-barcode-master.entity';
 import { MedicationAlert } from '../entities/medication-alert.entity';
+import { Prescription } from '../entities/prescription.entity';
 
 @Injectable()
 export class BcmaService {
@@ -266,6 +267,102 @@ export class BcmaService {
     alert.overrideReason = overrideReason;
 
     return await repository.save(alert);
+  }
+
+  // ==================== PRESCRIPTION-TO-MAR ====================
+
+  private frequencyToTimes(frequency: string, date: Date): Date[] {
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    const f = (frequency || '').toLowerCase();
+    const times: Date[] = [];
+    if (f.includes('once') || f === 'od' || f === 'daily') {
+      times.push(new Date(day.getTime() + 8 * 60 * 60 * 1000));
+    } else if (f.includes('twice') || f === 'bd' || f.includes('bid')) {
+      times.push(new Date(day.getTime() + 8 * 60 * 60 * 1000));
+      times.push(new Date(day.getTime() + 20 * 60 * 60 * 1000));
+    } else if (f.includes('three') || f === 'tds' || f.includes('tid') || f.includes('8hr')) {
+      times.push(new Date(day.getTime() + 8 * 60 * 60 * 1000));
+      times.push(new Date(day.getTime() + 14 * 60 * 60 * 1000));
+      times.push(new Date(day.getTime() + 20 * 60 * 60 * 1000));
+    } else if (f.includes('four') || f === 'qds' || f.includes('qid') || f.includes('6hr')) {
+      for (const h of [6, 12, 18, 24]) times.push(new Date(day.getTime() + h * 60 * 60 * 1000));
+    } else {
+      times.push(new Date(day.getTime() + 8 * 60 * 60 * 1000));
+    }
+    return times;
+  }
+
+  async generateMARFromPrescription(
+    prescriptionId: string,
+    patientId: string,
+    admissionId: string | null,
+    tenantDb: DataSource,
+  ): Promise<any[]> {
+    const prescription = await tenantDb.getRepository(Prescription).findOne({ where: { id: prescriptionId, patientId } });
+    if (!prescription) throw new NotFoundException('Prescription not found');
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    const times = this.frequencyToTimes(prescription.frequency, start);
+    const entries: any[] = [];
+    for (const t of times) {
+      if (t >= start && t < end) {
+        const [row] = await tenantDb.query(
+          `INSERT INTO mar_scheduled_entries (prescription_id, patient_id, admission_id, medication_name, dose, frequency, scheduled_time, requires_witness, is_high_alert, is_controlled)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, false) RETURNING *`,
+          [prescriptionId, patientId, admissionId, prescription.medicationName, prescription.dosage, prescription.frequency, t],
+        );
+        entries.push(row);
+      }
+    }
+    this.logger.log(`Generated ${entries.length} MAR scheduled entries for prescription ${prescriptionId}`);
+    return entries;
+  }
+
+  async getScheduledMARByPatient(patientId: string, date: Date, tenantDb: DataSource): Promise<any[]> {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return tenantDb.query(
+      `SELECT * FROM mar_scheduled_entries WHERE patient_id = $1 AND scheduled_time >= $2 AND scheduled_time < $3 ORDER BY scheduled_time`,
+      [patientId, start, end],
+    );
+  }
+
+  async administerFromScheduledEntry(
+    marEntryId: string,
+    body: { witnessedById?: string; notes?: string },
+    actorId: string,
+    tenantDb: DataSource,
+  ): Promise<any> {
+    const [entry] = await tenantDb.query(`SELECT * FROM mar_scheduled_entries WHERE id = $1`, [marEntryId]);
+    if (!entry) throw new NotFoundException('MAR scheduled entry not found');
+    if (entry.status === 'administered') throw new BadRequestException('Already administered');
+    if (entry.requires_witness && !body.witnessedById) {
+      throw new BadRequestException('Witness required for this medication');
+    }
+    const marRepo = tenantDb.getRepository(MedicationAdministrationRecord);
+    const mar = marRepo.create({
+      patientId: entry.patient_id,
+      prescriptionId: entry.prescription_id,
+      medicationName: entry.medication_name,
+      dose: entry.dose,
+      unit: entry.unit || 'tab',
+      route: entry.route || 'oral',
+      scheduledTime: entry.scheduled_time,
+      actualAdministrationTime: new Date(),
+      administeredById: actorId,
+      witnessedById: body.witnessedById || null,
+      administrationStatus: 'administered',
+      notes: body.notes,
+    });
+    const saved = await marRepo.save(mar);
+    await tenantDb.query(
+      `UPDATE mar_scheduled_entries SET status = 'administered', mar_id = $1, updated_at = NOW() WHERE id = $2`,
+      [saved.id, marEntryId],
+    );
+    return saved;
   }
 }
 
