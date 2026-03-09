@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Droplet, Activity, AlertTriangle, TrendingUp, Loader2, ArrowLeft } from 'lucide-react';
+import { Droplet, Activity, AlertTriangle, TrendingUp, Loader2, ArrowLeft, FlaskConical, Crosshair, AlertCircle, Zap } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, ehrAxios } from '../services/api';
 
 const BloodBankDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const token = localStorage.getItem('ehr_token') || '';
   const [user, setUser] = useState<any>(null);
 
@@ -24,6 +24,16 @@ const BloodBankDashboard: React.FC = () => {
   const [patientContextMap, setPatientContextMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [selectedComponent, setSelectedComponent] = useState('all');
+  const [showWorkflowPanel, setShowWorkflowPanel] = useState(false);
+  const [typeScreenPatientId, setTypeScreenPatientId] = useState('');
+  const [typeScreenBloodGroup, setTypeScreenBloodGroup] = useState('O');
+  const [typeScreenRh, setTypeScreenRh] = useState('positive');
+  const [crossmatchPatientId, setCrossmatchPatientId] = useState('');
+  const [crossmatchInventoryId, setCrossmatchInventoryId] = useState('');
+  const [reactionTransfusionId, setReactionTransfusionId] = useState<string | null>(null);
+  const [reactionForm, setReactionForm] = useState({ reactionType: 'febrile', severity: 'moderate', symptoms: '' });
+  const [mtpPatientId, setMtpPatientId] = useState('');
+  const [utilization, setUtilization] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -82,10 +92,68 @@ const BloodBankDashboard: React.FC = () => {
           ...Object.fromEntries(contextEntries),
         }));
       }
+      const utilRes = await ehrAxios.get('/blood-bank/utilization-report', { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } }).catch(() => ({ data: null }));
+      setUtilization(utilRes.data);
     } catch (error) {
       showError('Error', 'Failed to load blood bank data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const headers = () => ({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` });
+
+  const handleTypeAndScreen = async () => {
+    if (!typeScreenPatientId.trim()) { showError('Error', 'Patient ID required'); return; }
+    try {
+      await ehrAxios.post('/blood-bank/type-and-screen', {
+        patientId: typeScreenPatientId,
+        bloodGroup: typeScreenBloodGroup,
+        rhFactor: typeScreenRh,
+      }, { headers: headers() });
+      showSuccess('Success', 'Type and screen ordered');
+      setTypeScreenPatientId('');
+    } catch (e: any) {
+      showError('Error', e.response?.data?.message || 'Failed');
+    }
+  };
+
+  const handleCrossmatch = async () => {
+    if (!crossmatchPatientId.trim() || !crossmatchInventoryId) { showError('Error', 'Patient ID and unit required'); return; }
+    try {
+      await ehrAxios.post('/blood-bank/crossmatch', {
+        patientId: crossmatchPatientId,
+        inventoryId: crossmatchInventoryId,
+      }, { headers: headers() });
+      showSuccess('Success', 'Crossmatch performed');
+      setCrossmatchPatientId('');
+      setCrossmatchInventoryId('');
+      loadData();
+    } catch (e: any) {
+      showError('Error', e.response?.data?.message || 'Failed');
+    }
+  };
+
+  const handleReportReaction = async () => {
+    if (!reactionTransfusionId) return;
+    try {
+      await ehrAxios.post(`/blood-bank/transfusions/${reactionTransfusionId}/reaction`, reactionForm, { headers: headers() });
+      showSuccess('Success', 'Reaction reported');
+      setReactionTransfusionId(null);
+      loadData();
+    } catch (e: any) {
+      showError('Error', e.response?.data?.message || 'Failed');
+    }
+  };
+
+  const handleActivateMTP = async () => {
+    if (!mtpPatientId.trim()) { showError('Error', 'Patient ID required'); return; }
+    try {
+      await ehrAxios.post('/blood-bank/massive-transfusion-protocol', { patientId: mtpPatientId }, { headers: headers() });
+      showSuccess('Success', 'MTP activated');
+      setMtpPatientId('');
+    } catch (e: any) {
+      showError('Error', e.response?.data?.message || 'Failed');
     }
   };
 
@@ -145,6 +213,95 @@ const BloodBankDashboard: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
+        {/* Utilization summary */}
+        {utilization && (
+          <div className="mb-4 p-3 bg-white rounded-xl border border-slate-200 flex gap-4 text-sm">
+            <span><strong>Transfusions (30d):</strong> {utilization.total_transfusions ?? 0}</span>
+            <span><strong>Completed:</strong> {utilization.completed ?? 0}</span>
+            <span><strong>In progress:</strong> {utilization.in_progress ?? 0}</span>
+          </div>
+        )}
+
+        {/* Type & Screen / Crossmatch / Reaction / MTP */}
+        <div className="mb-6 bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <button type="button" onClick={() => setShowWorkflowPanel(!showWorkflowPanel)} className="w-full flex items-center justify-between p-4 text-left font-bold text-slate-900">
+            <span className="flex items-center gap-2"><FlaskConical className="w-5 h-5 text-red-600" /> Type & Screen, Crossmatch, Reactions, MTP</span>
+            <span className="text-slate-500">{showWorkflowPanel ? '▼' : '▶'}</span>
+          </button>
+          {showWorkflowPanel && (
+            <div className="p-4 pt-0 border-t border-slate-200 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-1"><Crosshair className="w-4 h-4" /> Type & Screen</h4>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <input placeholder="Patient ID" value={typeScreenPatientId} onChange={(e) => setTypeScreenPatientId(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-36" />
+                    <select value={typeScreenBloodGroup} onChange={(e) => setTypeScreenBloodGroup(e.target.value)} className="px-2 py-1.5 border rounded text-sm">
+                      {['O', 'A', 'B', 'AB'].map((g) => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                    <select value={typeScreenRh} onChange={(e) => setTypeScreenRh(e.target.value)} className="px-2 py-1.5 border rounded text-sm">
+                      <option value="positive">Rh+</option>
+                      <option value="negative">Rh-</option>
+                    </select>
+                    <button type="button" onClick={handleTypeAndScreen} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium">Order</button>
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <h4 className="font-semibold text-slate-800 mb-2">Crossmatch</h4>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <input placeholder="Patient ID" value={crossmatchPatientId} onChange={(e) => setCrossmatchPatientId(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-36" />
+                    <select value={crossmatchInventoryId} onChange={(e) => setCrossmatchInventoryId(e.target.value)} className="px-2 py-1.5 border rounded text-sm flex-1 min-w-[120px]">
+                      <option value="">Select unit...</option>
+                      {inventory.slice(0, 50).map((u: any) => (
+                        <option key={u.id} value={u.id}>{u.unitNumber} {u.bloodGroup}{u.rhFactor === 'positive' ? '+' : '-'}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={handleCrossmatch} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium">Perform</button>
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-1"><Zap className="w-4 h-4" /> Massive Transfusion Protocol</h4>
+                <div className="flex flex-wrap gap-2 items-end">
+                  <input placeholder="Patient ID" value={mtpPatientId} onChange={(e) => setMtpPatientId(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-36" />
+                  <button type="button" onClick={handleActivateMTP} className="px-3 py-1.5 bg-amber-600 text-white rounded text-sm font-medium">Activate MTP</button>
+                </div>
+              </div>
+              {activeTransfusions.length > 0 && (
+                <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                  <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> Report Transfusion Reaction</h4>
+                  {reactionTransfusionId ? (
+                    <div className="space-y-2">
+                      <select value={reactionForm.reactionType} onChange={(e) => setReactionForm((f) => ({ ...f, reactionType: e.target.value }))} className="px-2 py-1.5 border rounded text-sm">
+                        <option value="febrile">Febrile</option>
+                        <option value="allergic">Allergic</option>
+                        <option value="hemolytic">Hemolytic</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <select value={reactionForm.severity} onChange={(e) => setReactionForm((f) => ({ ...f, severity: e.target.value }))} className="px-2 py-1.5 border rounded text-sm ml-2">
+                        <option value="mild">Mild</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="severe">Severe</option>
+                        <option value="life_threatening">Life-threatening</option>
+                      </select>
+                      <input placeholder="Symptoms" value={reactionForm.symptoms} onChange={(e) => setReactionForm((f) => ({ ...f, symptoms: e.target.value }))} className="px-2 py-1.5 border rounded text-sm ml-2 w-48" />
+                      <button type="button" onClick={handleReportReaction} className="ml-2 px-3 py-1.5 bg-red-600 text-white rounded text-sm font-medium">Submit</button>
+                      <button type="button" onClick={() => setReactionTransfusionId(null)} className="ml-2 px-3 py-1.5 bg-slate-200 rounded text-sm">Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {activeTransfusions.map((tx: any) => (
+                        <button key={tx.id} type="button" onClick={() => setReactionTransfusionId(tx.id)} className="px-3 py-1.5 bg-red-100 text-red-800 rounded text-sm font-medium">
+                          Report reaction — {tx.patient?.firstName} {tx.patient?.lastName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Component Filter */}
         <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
           {components.map((comp) => (
