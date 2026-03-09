@@ -567,6 +567,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintF1ORSurgicalSafetyStatements(),
       },
       {
+        id: 'sprint_f2_blood_bank_crossmatch',
+        label: 'Sprint F2 Blood Bank Crossmatch + Transfusion Reactions',
+        version: '2026.03.08',
+        description: 'blood_cross_match and transfusion_reactions tables',
+        statements: () => this.getSprintF2BloodBankCrossmatchStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1874,6 +1881,52 @@ export class DatabaseProvisioningService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_specimen_case ON surgical_specimens(surgical_case_id)`,
+    ];
+  }
+
+  private getSprintF2BloodBankCrossmatchStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS blood_cross_match (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        inventory_id UUID REFERENCES blood_inventory(id),
+        blood_group VARCHAR(10) NOT NULL,
+        rh_factor VARCHAR(10) NOT NULL,
+        antibody_screen VARCHAR(20) DEFAULT 'negative',
+        antibody_identified TEXT,
+        major_cross_match VARCHAR(20),
+        minor_cross_match VARCHAR(20),
+        cross_match_result VARCHAR(20) CHECK (cross_match_result IN ('compatible', 'incompatible', 'pending')),
+        performed_by UUID REFERENCES users(id),
+        performed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_crossmatch_patient ON blood_cross_match(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_crossmatch_inventory ON blood_cross_match(inventory_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_crossmatch_result ON blood_cross_match(cross_match_result)`,
+      `CREATE TABLE IF NOT EXISTS transfusion_reactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        transfusion_id UUID NOT NULL REFERENCES blood_transfusions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        reaction_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        reaction_type VARCHAR(50) NOT NULL,
+        severity VARCHAR(20) CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening')),
+        symptoms TEXT,
+        vitals_at_reaction JSONB,
+        treatment_given TEXT,
+        transfusion_stopped BOOLEAN DEFAULT true,
+        blood_bank_notified BOOLEAN DEFAULT false,
+        physician_notified BOOLEAN DEFAULT false,
+        investigation_status VARCHAR(20) DEFAULT 'pending',
+        investigation_findings TEXT,
+        reported_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_txn_reaction_patient ON transfusion_reactions(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_txn_reaction_transfusion ON transfusion_reactions(transfusion_id)`,
     ];
   }
 

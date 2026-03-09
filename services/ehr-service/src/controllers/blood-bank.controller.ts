@@ -142,5 +142,60 @@ export class BloodBankController {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     return this.bloodBankService.getActiveTransfusions(tenantDb);
   }
+
+  @Post('type-and-screen')
+  @ApiOperation({ summary: 'Type and screen for patient' })
+  async typeAndScreen(@Body() body: { patientId: string; bloodGroup: string; rhFactor: string; antibodyScreen?: string }, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bloodBankService.typeAndScreen(body.patientId, body, userId, tenantDb);
+  }
+
+  @Post('crossmatch')
+  @ApiOperation({ summary: 'Perform crossmatch' })
+  async performCrossmatch(@Body() body: { patientId: string; inventoryId: string; majorCrossMatch?: string; minorCrossMatch?: string }, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bloodBankService.performCrossmatch(body, userId, tenantDb);
+  }
+
+  @Get('crossmatch/patient/:patientId')
+  @ApiOperation({ summary: 'Get patient crossmatch history' })
+  async getCrossmatchByPatient(@Param('patientId') patientId: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.bloodBankService.getCrossmatchByPatient(patientId, tenantDb);
+  }
+
+  @Post('transfusions/:id/reaction')
+  @ApiOperation({ summary: 'Report transfusion reaction' })
+  async reportTransfusionReaction(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bloodBankService.reportTransfusionReaction(id, body, userId, tenantDb);
+  }
+
+  @Get('transfusions/:id/reaction')
+  @ApiOperation({ summary: 'Get transfusion reaction details' })
+  async getTransfusionReactions(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.bloodBankService.getTransfusionReactions(id, tenantDb);
+  }
+
+  @Post('massive-transfusion-protocol')
+  @ApiOperation({ summary: 'Activate massive transfusion protocol' })
+  async activateMTP(@Body() body: { patientId: string; unitsRequested?: number; indication?: string }, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bloodBankService.activateMassiveTransfusionProtocol(body.patientId, body, userId, tenantDb);
+  }
+
+  @Get('utilization-report')
+  @ApiOperation({ summary: 'Blood utilization metrics' })
+  async getUtilizationReport(@Query('startDate') startDate: string, @Query('endDate') endDate: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.bloodBankService.getUtilizationReport(tenantDb, start, end);
+  }
 }
 
