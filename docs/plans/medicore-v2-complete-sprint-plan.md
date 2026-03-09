@@ -14,6 +14,15 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ---
 
+## Tackle now (current focus)
+
+**Next sprint in order:** **H1 — Fee Schedule + Superbill + Insurance**
+
+- **Phase E**, **Phase F**, **G1**, **G2**, **G3**, and **G4** are complete.
+- Next: **H1** (fee schedule, superbill, insurance), then H2–H4, I, J.
+
+---
+
 ## Table of Contents
 
 - [Phase E — Critical Bug Fixes & API Alignment](#phase-e--critical-bug-fixes--api-alignment)
@@ -1696,17 +1705,17 @@ All new patient-facing endpoints are designed for mobile consumption:
 
 | Sprint | Status |
 |--------|--------|
-| E1 Immunization API Alignment + Travel Vaccines | `pending` |
-| E2 Hospital Module Wiring (BCMA/OR/PACU/ED) | `pending` |
-| E3 Security Fixes (SQL injection, 2FA, session) | `pending` |
-| F1 OR Surgical Safety + Preference Cards | `pending` |
-| F2 Blood Bank Crossmatch + Transfusion | `pending` |
-| F3 Infection Control + Sepsis Automation | `pending` |
-| F4 BCMA Prescription-to-MAR + Witness | `pending` |
-| G1 Allergy Cross-Reactivity + CDSS | `pending` |
-| G2 Real-Time Encounter Auto-Coding | `pending` |
-| G3 Predictive Scheduling + No-Show AI | `pending` |
-| G4 Population Health + Preventive Care | `pending` |
+| E1 Immunization API Alignment + Travel Vaccines | `done` |
+| E2 Hospital Module Wiring (BCMA/OR/PACU/ED) | `done` |
+| E3 Security Fixes (SQL injection, 2FA, session) | `done` |
+| F1 OR Surgical Safety + Preference Cards | `done` |
+| F2 Blood Bank Crossmatch + Transfusion | `done` |
+| F3 Infection Control + Sepsis Automation | `done` |
+| F4 BCMA Prescription-to-MAR + Witness | `done` |
+| G1 Allergy Cross-Reactivity + CDSS | `done` |
+| G2 Real-Time Encounter Auto-Coding | `done` |
+| G3 Predictive Scheduling + No-Show AI | `done` |
+| G4 Population Health + Preventive Care | `done` |
 | H1 Fee Schedule + Superbill + Insurance | `pending` |
 | H2 Prior Authorization Workflow | `pending` |
 | H3 Patient Portal (Pay/Education/Family) | `pending` |

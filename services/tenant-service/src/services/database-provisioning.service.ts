@@ -581,6 +581,34 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintF3InfectionSepsisStatements(),
       },
       {
+        id: 'sprint_f4_bcma_mar',
+        label: 'Sprint F4 BCMA Prescription-to-MAR',
+        version: '2026.03.08',
+        description: 'mar_scheduled_entries for prescription-to-MAR and witness workflow',
+        statements: () => this.getSprintF4BcmaMarStatements(),
+      },
+      {
+        id: 'sprint_g2_encounter_coding',
+        label: 'Sprint G2 Encounter Auto-Coding (ICD/CPT)',
+        version: '2026.03.08',
+        description: 'encounter_code_suggestions for ICD-10/CPT suggestions and review',
+        statements: () => this.getSprintG2EncounterCodingStatements(),
+      },
+      {
+        id: 'sprint_g3_scheduling_ai',
+        label: 'Sprint G3 Predictive Scheduling + No-Show AI',
+        version: '2026.03.08',
+        description: 'appointment_no_show_predictions for no-show risk and smart slots',
+        statements: () => this.getSprintG3SchedulingAiStatements(),
+      },
+      {
+        id: 'sprint_g4_population_health',
+        label: 'Sprint G4 Population Health Registry + Preventive Care',
+        version: '2026.03.08',
+        description: 'chronic_disease_registry, preventive_care_reminders, recall_lists',
+        statements: () => this.getSprintG4PopulationHealthStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1976,6 +2004,136 @@ export class DatabaseProvisioningService {
       `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS fluid_bolus_given_at TIMESTAMP WITH TIME ZONE`,
       `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS vasopressors_initiated_at TIMESTAMP WITH TIME ZONE`,
       `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS sepsis_onset_time TIMESTAMP WITH TIME ZONE`,
+    ];
+  }
+
+  private getSprintF4BcmaMarStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS mar_scheduled_entries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        prescription_id UUID NOT NULL,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        medication_name VARCHAR(255) NOT NULL,
+        dose VARCHAR(100) NOT NULL,
+        unit VARCHAR(50),
+        route VARCHAR(50),
+        frequency VARCHAR(100),
+        scheduled_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        status VARCHAR(30) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'administered', 'held', 'refused', 'missed', 'late')),
+        mar_id UUID REFERENCES medication_administration_records(id),
+        requires_witness BOOLEAN DEFAULT false,
+        is_high_alert BOOLEAN DEFAULT false,
+        is_controlled BOOLEAN DEFAULT false,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_mar_sched_patient ON mar_scheduled_entries(patient_id, scheduled_time)`,
+      `CREATE INDEX IF NOT EXISTS idx_mar_sched_status ON mar_scheduled_entries(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_mar_sched_prescription ON mar_scheduled_entries(prescription_id)`,
+    ];
+  }
+
+  private getSprintG2EncounterCodingStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS encounter_code_suggestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id VARCHAR(100),
+        appointment_id UUID,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        suggested_icd10 JSONB DEFAULT '[]'::jsonb,
+        suggested_cpt JSONB DEFAULT '[]'::jsonb,
+        em_level VARCHAR(10),
+        em_rationale TEXT,
+        suggested_modifiers JSONB DEFAULT '[]'::jsonb,
+        confidence DOUBLE PRECISION,
+        source VARCHAR(30) DEFAULT 'ai',
+        accepted_codes JSONB DEFAULT '[]'::jsonb,
+        rejected_codes JSONB DEFAULT '[]'::jsonb,
+        reviewed_by UUID REFERENCES users(id),
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_enc_codes_patient ON encounter_code_suggestions(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_enc_codes_appointment ON encounter_code_suggestions(appointment_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_enc_codes_session ON encounter_code_suggestions(session_id)`,
+    ];
+  }
+
+  private getSprintG3SchedulingAiStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS appointment_no_show_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        no_show_probability DOUBLE PRECISION NOT NULL,
+        risk_factors JSONB DEFAULT '[]'::jsonb,
+        suggested_action VARCHAR(50),
+        action_taken VARCHAR(50),
+        model_version VARCHAR(20),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_noshow_appointment ON appointment_no_show_predictions(appointment_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_noshow_patient ON appointment_no_show_predictions(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_noshow_probability ON appointment_no_show_predictions(no_show_probability DESC)`,
+    ];
+  }
+
+  private getSprintG4PopulationHealthStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS chronic_disease_registry (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        condition_code VARCHAR(20) NOT NULL,
+        condition_name VARCHAR(255) NOT NULL,
+        condition_type VARCHAR(50) CHECK (condition_type IN ('hypertension','diabetes','asthma','copd','ckd','heart_failure','obesity','depression','other')),
+        onset_date DATE,
+        status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','controlled','uncontrolled','remission','resolved')),
+        risk_level VARCHAR(20) DEFAULT 'moderate' CHECK (risk_level IN ('low','moderate','high','critical')),
+        last_review_date DATE,
+        next_review_date DATE,
+        care_team JSONB DEFAULT '[]'::jsonb,
+        management_plan TEXT,
+        target_metrics JSONB DEFAULT '{}'::jsonb,
+        current_metrics JSONB DEFAULT '{}'::jsonb,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_cdr_patient ON chronic_disease_registry(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_cdr_condition ON chronic_disease_registry(condition_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_cdr_status ON chronic_disease_registry(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_cdr_risk ON chronic_disease_registry(risk_level)`,
+      `CREATE INDEX IF NOT EXISTS idx_cdr_next_review ON chronic_disease_registry(next_review_date)`,
+      `CREATE TABLE IF NOT EXISTS preventive_care_reminders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        screening_type VARCHAR(100) NOT NULL,
+        recommended_by VARCHAR(100) DEFAULT 'USPSTF',
+        due_date DATE,
+        last_completed_date DATE,
+        status VARCHAR(20) DEFAULT 'due' CHECK (status IN ('due','overdue','completed','declined','not_applicable')),
+        reminder_sent BOOLEAN DEFAULT false,
+        reminder_sent_at TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pcr_patient ON preventive_care_reminders(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_pcr_status ON preventive_care_reminders(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_pcr_due ON preventive_care_reminders(due_date)`,
+      `CREATE TABLE IF NOT EXISTS recall_lists (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        criteria JSONB NOT NULL,
+        patient_count INTEGER DEFAULT 0,
+        last_generated_at TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_recall_name ON recall_lists(name)`,
     ];
   }
 

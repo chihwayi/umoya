@@ -116,6 +116,9 @@ import { PostVisitCompanionThread } from '../entities/post-visit-companion-threa
 import { PostVisitCompanionMessage } from '../entities/post-visit-companion-message.entity';
 import { PostVisitEscalationEvent } from '../entities/post-visit-escalation-event.entity';
 import { PostVisitCompanionAcknowledgement } from '../entities/post-visit-companion-acknowledgement.entity';
+import { ChronicDiseaseRegistry } from '../entities/chronic-disease-registry.entity';
+import { PreventiveCareReminder } from '../entities/preventive-care-reminder.entity';
+import { RecallList } from '../entities/recall-list.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -321,6 +324,9 @@ export class TenantService {
         PostVisitCompanionMessage,
         PostVisitEscalationEvent,
         PostVisitCompanionAcknowledgement,
+        ChronicDiseaseRegistry,
+        PreventiveCareReminder,
+        RecallList,
       ],
       logging: false,
     });

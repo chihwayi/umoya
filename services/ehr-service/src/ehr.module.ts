@@ -92,6 +92,7 @@ import { WhoSmartGuidelinesController } from './controllers/who-smart-guidelines
 import { DiagnosticController } from './controllers/diagnostic.controller';
 import { NurseWorklistController } from './controllers/nurse-worklist.controller';
 import { PostVisitController } from './controllers/post-visit.controller';
+import { PopulationHealthController } from './controllers/population-health.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -226,6 +227,7 @@ import { QualityMeasuresService } from './services/quality-measures.service';
 import { NurseWorklistService } from './services/nurse-worklist.service';
 import { PostVisitService } from './services/post-visit.service';
 import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.service';
+import { PopulationHealthService } from './services/population-health.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -337,6 +339,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DiagnosticController,
     NurseWorklistController,
     PostVisitController,
+    PopulationHealthController,
   ],
   providers: [
     AuthService,
@@ -471,6 +474,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NurseWorklistService,
     PostVisitGroundedLlmService,
     PostVisitService,
+    PopulationHealthService,
     RolesGuard,
     JwtStrategy,
   ],

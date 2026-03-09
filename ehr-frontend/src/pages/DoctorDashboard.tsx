@@ -613,6 +613,20 @@ const DoctorDashboard: React.FC = () => {
         paymentLockedMessage: '',
       },
       {
+        title: 'Population Health',
+        description: 'Chronic disease registry, preventive care reminders, and recall lists.',
+        gradient: 'from-teal-600 via-cyan-600 to-teal-700',
+        border: 'border-teal-500',
+        icon: Users,
+        chips: ['Registry', 'Preventive Care', 'Recall Lists', 'Screenings'],
+        buttonLabel: 'Open Population Health',
+        buttonTextColor: 'text-teal-700',
+        buttonHover: 'hover:bg-teal-50',
+        route: tenantPath('/population-health'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
         title: 'HIV/AIDS Patient Management',
         description: 'Comprehensive HIV care oversight, ARV regimen management, and treatment failure alerts.',
         gradient: 'from-red-500 via-orange-500 to-red-600',
@@ -1754,6 +1768,7 @@ const DoctorDashboard: React.FC = () => {
       { icon: Heart, label: 'Oncology', desc: 'Cancer care & treatment', color: 'from-violet-500 to-purple-500', route: 'doctor/oncology' },
       { icon: Heart, label: 'Cardiology', desc: 'Heart & cardiovascular care', color: 'from-red-500 to-pink-500', route: 'doctor/cardiology' },
       { icon: Eye, label: 'Ophthalmology', desc: 'Eye care & vision', color: 'from-blue-500 to-cyan-500', route: 'doctor/ophthalmology' },
+      { icon: Users, label: 'Population Health', desc: 'Registry, preventive care & recall', color: 'from-teal-500 to-cyan-500', route: 'population-health' },
       { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-green-500 to-emerald-500' },
     ];
   };

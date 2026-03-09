@@ -7288,6 +7288,96 @@ export const prescriptionTemplateApi = {
   },
 };
 
+export const populationHealthApi = {
+  getRegistryDashboard: async (
+    token: string,
+    tenantSlug: string,
+    params?: { conditionType?: string; riskLevel?: string; status?: string },
+  ) => {
+    const response = await ehrAxios.get('/population-health/registry', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return { data: response.data };
+  },
+  getRegistryByPatient: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/population-health/registry/patient/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  enrollInRegistry: async (
+    body: {
+      patientId: string;
+      conditionCode: string;
+      conditionName: string;
+      conditionType: string;
+      onsetDate?: string;
+      status?: string;
+      riskLevel?: string;
+      nextReviewDate?: string;
+      managementPlan?: string;
+      notes?: string;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/population-health/registry', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getPreventiveCareReminders: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/population-health/preventive-care/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  generatePreventiveCare: async (token: string, tenantSlug: string, body?: { patientId?: string }) => {
+    const response = await ehrAxios.post('/population-health/preventive-care/generate', body ?? {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getRecallLists: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/population-health/recall-lists', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createRecallList: async (
+    body: { name: string; criteria: Record<string, any> },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/population-health/recall-lists', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  generateRecallList: async (listId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(
+      `/population-health/recall-lists/${listId}/generate`,
+      {},
+      { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+    );
+    return { data: response.data };
+  },
+  notifyRecallList: async (
+    listId: string,
+    token: string,
+    tenantSlug: string,
+    body?: { channel?: 'sms' | 'email' },
+  ) => {
+    const response = await ehrAxios.post(
+      `/population-health/recall-lists/${listId}/notify`,
+      body ?? {},
+      { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+    );
+    return { data: response.data };
+  },
+};
+
 export const pharmacyApi = {
   // Suppliers
   listSuppliers: async (token: string, tenantSlug: string, filters?: { search?: string; status?: string; limit?: number; offset?: number }) => {

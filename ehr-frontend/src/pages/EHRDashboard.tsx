@@ -156,6 +156,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Shield, label: 'Infection Control', desc: 'HAI surveillance, isolation & antimicrobial stewardship', color: 'from-green-600 to-emerald-600', route: 'infection-control' },
           { icon: DollarSign, label: 'Revenue Cycle', desc: 'Charge capture, DRG optimization & billing', color: 'from-green-600 to-emerald-600', route: 'revenue-cycle' },
           { icon: FileText, label: 'CDI Program', desc: 'Physician queries, DRG impact & documentation quality', color: 'from-blue-600 to-indigo-600', route: 'cdi' },
+          { icon: Users, label: 'Population Health', desc: 'Registry, preventive care & recall lists', color: 'from-teal-600 to-cyan-600', route: 'population-health' },
           { icon: AlertTriangle, label: 'Sepsis Management', desc: 'SEP-1 bundle tracking, qSOFA & SIRS screening', color: 'from-red-600 to-orange-600', route: 'sepsis' },
           { icon: Activity, label: 'Vitals', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', route: 'nurse/vitals' },
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
