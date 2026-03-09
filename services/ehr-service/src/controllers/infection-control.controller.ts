@@ -129,6 +129,56 @@ export class InfectionControlController {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     return this.infectionControlService.reviewAntibiotic(id, reviewData, req.user?.userId ?? (req.user as any)?.id, tenantDb);
   }
+
+  @Post('hand-hygiene')
+  @ApiOperation({ summary: 'Record hand hygiene observation' })
+  async recordHandHygiene(@Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.infectionControlService.recordHandHygiene(body, userId, tenantDb);
+  }
+
+  @Get('hand-hygiene/compliance')
+  @ApiOperation({ summary: 'Hand hygiene compliance by department/period' })
+  async getHandHygieneCompliance(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('department') department: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    return this.infectionControlService.getHandHygieneCompliance(start, end, department || null, tenantDb);
+  }
+
+  @Post('device-days')
+  @ApiOperation({ summary: 'Track device insertion' })
+  async trackDeviceDay(@Body() body: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.infectionControlService.trackDeviceDay(body, userId, tenantDb);
+  }
+
+  @Put('device-days/:id/remove')
+  @ApiOperation({ summary: 'Track device removal' })
+  async removeDeviceDay(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.infectionControlService.removeDeviceDay(id, tenantDb);
+  }
+
+  @Get('device-days/rates')
+  @ApiOperation({ summary: 'CAUTI/CLABSI/VAP rates per 1000 device-days' })
+  async getDeviceDayRates(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    return this.infectionControlService.getDeviceDayRates(start, end, tenantDb);
+  }
 }
 
 

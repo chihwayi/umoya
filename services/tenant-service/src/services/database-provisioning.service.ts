@@ -574,6 +574,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintF2BloodBankCrossmatchStatements(),
       },
       {
+        id: 'sprint_f3_infection_sepsis',
+        label: 'Sprint F3 Infection Control + Sepsis Bundle',
+        version: '2026.03.08',
+        description: 'Hand hygiene, device days, sepsis_bundles timestamp columns',
+        statements: () => this.getSprintF3InfectionSepsisStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1927,6 +1934,48 @@ export class DatabaseProvisioningService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_txn_reaction_patient ON transfusion_reactions(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_txn_reaction_transfusion ON transfusion_reactions(transfusion_id)`,
+    ];
+  }
+
+  private getSprintF3InfectionSepsisStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS hand_hygiene_observations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        observer_id UUID NOT NULL REFERENCES users(id),
+        observed_staff_id UUID REFERENCES users(id),
+        observation_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        department VARCHAR(100),
+        opportunity_type VARCHAR(50) NOT NULL CHECK (opportunity_type IN (
+          'before_patient_contact', 'before_aseptic_task', 'after_body_fluid_exposure',
+          'after_patient_contact', 'after_surroundings_contact'
+        )),
+        hand_hygiene_performed BOOLEAN NOT NULL,
+        method VARCHAR(30) CHECK (method IN ('soap_and_water', 'alcohol_rub', 'none')),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_hh_date ON hand_hygiene_observations(observation_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_hh_department ON hand_hygiene_observations(department)`,
+      `CREATE TABLE IF NOT EXISTS device_day_tracking (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        device_type VARCHAR(50) NOT NULL CHECK (device_type IN ('central_line', 'urinary_catheter', 'ventilator')),
+        inserted_date DATE NOT NULL,
+        removed_date DATE,
+        inserted_by UUID REFERENCES users(id),
+        location VARCHAR(100),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_device_patient ON device_day_tracking(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_device_type ON device_day_tracking(device_type)`,
+      `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS lactate_measured_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS blood_cultures_drawn_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS antibiotics_given_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS fluid_bolus_given_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS vasopressors_initiated_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS sepsis_onset_time TIMESTAMP WITH TIME ZONE`,
     ];
   }
 

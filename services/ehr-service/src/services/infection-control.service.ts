@@ -185,6 +185,108 @@ export class InfectionControlService {
 
     return await repository.save(stewardship);
   }
+
+  // ==================== HAND HYGIENE ====================
+
+  async recordHandHygiene(data: any, userId: string, tenantDb: DataSource): Promise<any> {
+    const [row] = await tenantDb.query(
+      `INSERT INTO hand_hygiene_observations (observer_id, observed_staff_id, department, opportunity_type, hand_hygiene_performed, method, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [
+        userId,
+        data.observedStaffId ?? null,
+        data.department ?? null,
+        data.opportunityType,
+        data.handHygienePerformed ?? false,
+        data.method ?? null,
+        data.notes ?? null,
+      ],
+    );
+    return row;
+  }
+
+  async getHandHygieneCompliance(startDate: Date, endDate: Date, department: string | null, tenantDb: DataSource): Promise<any> {
+    let query = `
+      SELECT department, opportunity_type,
+        COUNT(*)::int as total,
+        COUNT(*) FILTER (WHERE hand_hygiene_performed)::int as performed
+      FROM hand_hygiene_observations
+      WHERE observation_date >= $1 AND observation_date <= $2
+    `;
+    const params: any[] = [startDate, endDate];
+    if (department) {
+      query += ` AND department = $3`;
+      params.push(department);
+    }
+    query += ` GROUP BY department, opportunity_type`;
+    const rows = await tenantDb.query(query, params);
+    return rows.map((r: any) => ({
+      department: r.department,
+      opportunityType: r.opportunity_type,
+      total: Number(r.total),
+      performed: Number(r.performed),
+      complianceRate: r.total > 0 ? Number((r.performed / r.total * 100).toFixed(1)) : 0,
+    }));
+  }
+
+  // ==================== DEVICE DAYS ====================
+
+  async trackDeviceDay(data: any, userId: string, tenantDb: DataSource): Promise<any> {
+    const [row] = await tenantDb.query(
+      `INSERT INTO device_day_tracking (patient_id, admission_id, device_type, inserted_date, inserted_by, location, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [
+        data.patientId,
+        data.admissionId ?? null,
+        data.deviceType,
+        data.insertedDate || new Date().toISOString().split('T')[0],
+        userId,
+        data.location ?? null,
+        data.notes ?? null,
+      ],
+    );
+    return row;
+  }
+
+  async removeDeviceDay(id: string, tenantDb: DataSource): Promise<any> {
+    const [row] = await tenantDb.query(
+      `UPDATE device_day_tracking SET removed_date = CURRENT_DATE WHERE id = $1 RETURNING *`,
+      [id],
+    );
+    if (!row) throw new NotFoundException('Device day record not found');
+    return row;
+  }
+
+  async getDeviceDayRates(startDate: Date, endDate: Date, tenantDb: DataSource): Promise<any> {
+    const deviceDays = await tenantDb.query(
+      `SELECT device_type,
+        COUNT(*) FILTER (WHERE removed_date IS NULL OR removed_date > $2)::int as device_days
+       FROM device_day_tracking
+       WHERE inserted_date <= $2 AND (removed_date IS NULL OR removed_date >= $1)
+       GROUP BY device_type`,
+      [startDate, endDate],
+    );
+    const infections = await tenantDb.query(
+      `SELECT device_type, COUNT(*)::int as cnt FROM infection_surveillance
+       WHERE infection_date >= $1 AND infection_date <= $2 AND device_associated = true
+       GROUP BY device_type`,
+      [startDate, endDate],
+    );
+    const rates: any = { central_line: { deviceDays: 0, infections: 0, rate: 0 }, urinary_catheter: { deviceDays: 0, infections: 0, rate: 0 }, ventilator: { deviceDays: 0, infections: 0, rate: 0 } };
+    for (const row of deviceDays) {
+      const key = row.device_type;
+      if (rates[key]) rates[key].deviceDays = Number(row.device_days);
+    }
+    for (const row of infections) {
+      const key = row.device_type || 'central_line';
+      if (rates[key]) rates[key].infections = Number(row.cnt);
+    }
+    for (const key of Object.keys(rates)) {
+      const d = rates[key].deviceDays || 1;
+      rates[key].rate = ((rates[key].infections / d) * 1000).toFixed(2);
+    }
+    return rates;
+  }
 }
 
 
