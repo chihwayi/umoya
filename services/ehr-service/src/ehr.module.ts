@@ -101,6 +101,7 @@ import { CurrencyExchangeController } from './controllers/currency-exchange.cont
 import { MedicalAidIntegrationController } from './controllers/medical-aid-integration.controller';
 import { EarlyWarningController } from './controllers/early-warning.controller';
 import { MedicationSafetyController } from './controllers/medication-safety.controller';
+import { EncounterCodingController } from './controllers/encounter-coding.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -245,6 +246,7 @@ import { CurrencyExchangeService } from './services/currency-exchange.service';
 import { MedicalAidIntegrationService } from './services/medical-aid-integration.service';
 import { EarlyWarningService } from './services/early-warning.service';
 import { MedicationSafetyService } from './services/medication-safety.service';
+import { EncounterCodingService } from './services/encounter-coding.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -365,6 +367,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MedicalAidIntegrationController,
     EarlyWarningController,
     MedicationSafetyController,
+    EncounterCodingController,
   ],
   providers: [
     AuthService,
@@ -509,6 +512,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MedicalAidIntegrationService,
     EarlyWarningService,
     MedicationSafetyService,
+    EncounterCodingService,
     RolesGuard,
     JwtStrategy,
   ],

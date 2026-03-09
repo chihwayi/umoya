@@ -479,6 +479,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
 
   const [draftRecipientLabel, setDraftRecipientLabel] = useState('');
   const [draftReferralReason, setDraftReferralReason] = useState('');
+  const [encounterCodeSuggestion, setEncounterCodeSuggestion] = useState<any>(null);
 
   const [newPatientId, setNewPatientId] = useState('');
   const [newAppointmentId, setNewAppointmentId] = useState('');
@@ -3128,6 +3129,149 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       </div>
                     </article>
                   </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Encounter Auto-Coding (K1)</h3>
+                    <p className="text-xs text-slate-500">AI-suggested ICD-10 and CPT codes from the clinical encounter.</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!selectedSessionId || !token || !tenantSlug) return;
+                      setWorkingActionKey('encounter_codes');
+                      try {
+                        const result = await ehrApi.suggestEncounterCodes(selectedSessionId, token, tenantSlug);
+                        setEncounterCodeSuggestion(result.data);
+                        showSuccess('Codes suggested', 'ICD-10 and CPT suggestions generated.');
+                      } catch (e: any) {
+                        console.error(e);
+                        showError('Error', e?.message || 'Failed to suggest encounter codes');
+                      } finally {
+                        setWorkingActionKey(null);
+                      }
+                    }}
+                    disabled={workingActionKey === 'encounter_codes' || !selectedSessionId}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+                  >
+                    {workingActionKey === 'encounter_codes' ? 'Analyzing…' : 'Suggest Codes'}
+                  </button>
+
+                  {encounterCodeSuggestion && (
+                    <div className="mt-4 space-y-4">
+                      {encounterCodeSuggestion.emLevel && (
+                        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                            E&M Level: {encounterCodeSuggestion.emLevel}
+                          </p>
+                          <p className="mt-1 text-xs text-indigo-900">{encounterCodeSuggestion.emRationale}</p>
+                          {encounterCodeSuggestion.modifiers?.length > 0 && (
+                            <p className="mt-1 text-xs text-indigo-700">
+                              Modifiers: {encounterCodeSuggestion.modifiers.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <div>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">ICD-10 Suggestions</p>
+                          <div className="space-y-1">
+                            {(encounterCodeSuggestion.icd10 || []).map((code: any, idx: number) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <span className="mr-2 inline-block rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                    {code.code}
+                                  </span>
+                                  <span className="text-xs text-slate-700">{code.description}</span>
+                                </div>
+                                <span
+                                  className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    code.confidence >= 0.7
+                                      ? 'bg-green-100 text-green-800'
+                                      : code.confidence >= 0.4
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-red-100 text-red-800'
+                                  }`}
+                                >
+                                  {Math.round(code.confidence * 100)}%
+                                </span>
+                              </div>
+                            ))}
+                            {(!encounterCodeSuggestion.icd10 || encounterCodeSuggestion.icd10.length === 0) && (
+                              <p className="text-xs text-slate-500">No ICD-10 codes suggested.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">CPT Suggestions</p>
+                          <div className="space-y-1">
+                            {(encounterCodeSuggestion.cpt || []).map((code: any, idx: number) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <span className="mr-2 inline-block rounded bg-indigo-700 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                    {code.code}
+                                  </span>
+                                  <span className="text-xs text-slate-700">{code.description}</span>
+                                </div>
+                                <span
+                                  className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    code.confidence >= 0.7
+                                      ? 'bg-green-100 text-green-800'
+                                      : code.confidence >= 0.4
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-red-100 text-red-800'
+                                  }`}
+                                >
+                                  {Math.round(code.confidence * 100)}%
+                                </span>
+                              </div>
+                            ))}
+                            {(!encounterCodeSuggestion.cpt || encounterCodeSuggestion.cpt.length === 0) && (
+                              <p className="text-xs text-slate-500">No CPT codes suggested.</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <span className="text-xs text-slate-600">
+                          Overall confidence: <strong>{Math.round((encounterCodeSuggestion.confidence || 0) * 100)}%</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!encounterCodeSuggestion?.id || !token || !tenantSlug) return;
+                            const allIcd = (encounterCodeSuggestion.icd10 || []).map((c: any) => c.code).filter((c: string) => c !== '—');
+                            const allCpt = (encounterCodeSuggestion.cpt || []).map((c: any) => c.code).filter((c: string) => c !== '—');
+                            try {
+                              await ehrApi.reviewEncounterCodes(
+                                encounterCodeSuggestion.id,
+                                { acceptedCodes: [...allIcd, ...allCpt], rejectedCodes: [] },
+                                token,
+                                tenantSlug,
+                              );
+                              showSuccess('Codes accepted', 'All suggested codes accepted for billing.');
+                            } catch (e: any) {
+                              showError('Error', e?.message || 'Failed to accept codes');
+                            }
+                          }}
+                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-500"
+                        >
+                          Accept all codes
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </section>
 
                 {supersededCitations.length > 0 && (

@@ -1679,6 +1679,32 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  suggestEncounterCodes: async (sessionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/suggest-codes`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getEncounterCodeSuggestions: async (sessionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/encounter-codes`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  reviewEncounterCodes: async (
+    suggestionId: string,
+    payload: { acceptedCodes: string[]; rejectedCodes: string[] },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.put(`/encounter-codes/${suggestionId}/review`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getPostVisitAdminDocuments: async (
     sessionId: string,
     token: string,
