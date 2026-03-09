@@ -651,6 +651,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintI2MultiCurrencyMedicalAidStatements(),
       },
       {
+        id: 'sprint_j2_early_warning',
+        label: 'Sprint J2 Deterioration Detection + Early Warning Score (NEWS2)',
+        version: '2026.03.09',
+        description: 'patient_early_warning_scores table and indexes',
+        statements: () => this.getSprintJ2EarlyWarningStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1061,6 +1068,29 @@ export class DatabaseProvisioningService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_ma_remit_provider ON medical_aid_remittances(provider_id)`,
       `CREATE INDEX IF NOT EXISTS idx_ma_remit_status ON medical_aid_remittances(status)`,
+    ];
+  }
+
+  private getSprintJ2EarlyWarningStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS patient_early_warning_scores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        score_type VARCHAR(20) DEFAULT 'NEWS2' CHECK (score_type IN ('NEWS2', 'MEWS', 'PEWS')),
+        total_score INTEGER NOT NULL,
+        risk_level VARCHAR(20) CHECK (risk_level IN ('low', 'low_medium', 'medium', 'high')),
+        component_scores JSONB NOT NULL,
+        vitals_id UUID,
+        calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        alert_triggered BOOLEAN DEFAULT false,
+        alert_acknowledged_by UUID REFERENCES users(id),
+        alert_acknowledged_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ews_patient ON patient_early_warning_scores(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ews_score ON patient_early_warning_scores(total_score DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_ews_risk ON patient_early_warning_scores(risk_level)`,
     ];
   }
 
