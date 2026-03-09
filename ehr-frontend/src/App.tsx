@@ -54,6 +54,8 @@ import HIPAAComplianceDashboard from './pages/HIPAAComplianceDashboard';
 import PopulationHealthDashboard from './pages/PopulationHealthDashboard';
 import PracticeManagementDashboard from './pages/PracticeManagementDashboard';
 import PriorAuthorizationDashboard from './pages/PriorAuthorizationDashboard';
+import PatientPortalLogin from './pages/PatientPortalLogin';
+import PatientPortalDashboard from './pages/PatientPortalDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -100,6 +102,8 @@ function App() {
             <Route path="/" element={<TenantDirectory />} />
             <Route path="/:tenantSlug" element={<TenantRedirect />} />
             <Route path="/:tenantSlug/login" element={<TenantRedirect />} />
+            <Route path="/portal/:tenantSlug/login" element={<PatientPortalLogin />} />
+            <Route path="/portal/:tenantSlug" element={<PatientPortalDashboard />} />
             <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
             <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
             <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />

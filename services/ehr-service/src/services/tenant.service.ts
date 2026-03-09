@@ -124,6 +124,9 @@ import { FeeScheduleItem } from '../entities/fee-schedule-item.entity';
 import { SuperbillTemplate } from '../entities/superbill-template.entity';
 import { InsuranceVerification } from '../entities/insurance-verification.entity';
 import { PriorAuthorization } from '../entities/prior-authorization.entity';
+import { PatientPortalPayment } from '../entities/patient-portal-payment.entity';
+import { HealthEducationContent } from '../entities/health-education-content.entity';
+import { PatientFamilyAccess } from '../entities/patient-family-access.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -337,6 +340,9 @@ export class TenantService {
         SuperbillTemplate,
         InsuranceVerification,
         PriorAuthorization,
+        PatientPortalPayment,
+        HealthEducationContent,
+        PatientFamilyAccess,
       ],
       logging: false,
     });

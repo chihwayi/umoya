@@ -182,6 +182,7 @@ import { AppointmentResourceService } from './services/appointment-resource.serv
 import { ClinicalTemplateService } from './services/clinical-template.service';
 import { PatientAuthService } from './services/patient-auth.service';
 import { PatientPortalService } from './services/patient-portal.service';
+import { PatientPortalH3Service } from './services/patient-portal-h3.service';
 import { PatientMessagingService } from './services/patient-messaging.service';
 import { PatientNotificationsService } from './services/patient-notifications.service';
 import { PatientPortalAppointmentService } from './services/patient-portal-appointment.service';
@@ -437,6 +438,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalTemplateService,
     PatientAuthService,
     PatientPortalService,
+    PatientPortalH3Service,
     PatientMessagingService,
     PatientNotificationsService,
     PatientPortalAppointmentService,

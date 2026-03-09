@@ -8208,6 +8208,66 @@ export const patientPortalApi = {
     return { data: response.data };
   },
 
+  // H3: Bills / payments / education / family access
+  getBills: async (token: string, tenantSlug: string, params?: { startDate?: string; endDate?: string; status?: string }) => {
+    const response = await ehrAxios.get('/patient-portal/bills', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: params || {},
+    });
+    return { data: response.data };
+  },
+
+  createPortalPayment: async (
+    body: { billId?: string; amount: number; paymentMethod: 'ecocash' | 'onemoney' | 'card' | 'bank_transfer'; paymentReference?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/patient-portal/payments', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listEducation: async (token: string, tenantSlug: string, params?: { category?: string; language?: string }) => {
+    const response = await ehrAxios.get('/patient-portal/education', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: params || {},
+    });
+    return { data: response.data };
+  },
+
+  getEducation: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patient-portal/education/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listFamilyAccess: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/patient-portal/family-access', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  createFamilyAccess: async (
+    body: { proxyName: string; proxyEmail: string; proxyPhone?: string; relationship?: string; accessLevel?: 'view_only' | 'full' | 'emergency_only'; expiresAt?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/patient-portal/family-access', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  revokeFamilyAccess: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/patient-portal/family-access/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getPostVisitSessions: async (
     token: string,
     tenantSlug: string,

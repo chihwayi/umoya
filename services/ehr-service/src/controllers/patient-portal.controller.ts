@@ -27,6 +27,7 @@ import { ImmunizationService } from '../services/immunization.service';
 import { ADTService } from '../services/adt.service';
 import { EDService } from '../services/ed.service';
 import { TenantService } from '../services/tenant.service';
+import { PatientPortalH3Service } from '../services/patient-portal-h3.service';
 
 import { SignerRole, SignatureType } from '../dto/consent.dto';
 
@@ -56,6 +57,7 @@ export class PatientPortalController {
     private readonly adtService: ADTService,
     private readonly edService: EDService,
     private readonly tenantService: TenantService,
+    private readonly patientPortalH3Service: PatientPortalH3Service,
   ) {}
 
   @Post('register')
@@ -222,6 +224,84 @@ export class PatientPortalController {
       body.payment,
       req.tenantId,
     );
+  }
+
+  // ==================== H3: Bills / Payments / Education / Family Access ====================
+
+  @Post('payments')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create patient portal payment record' })
+  async createPortalPayment(
+    @Body()
+    body: {
+      billId?: string;
+      amount: number;
+      paymentMethod: 'ecocash' | 'onemoney' | 'card' | 'bank_transfer';
+      paymentReference?: string;
+    },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalH3Service.createPortalPayment(patientId, body, req.tenantDb);
+  }
+
+  @Get('education')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Browse published health education content' })
+  async listEducation(
+    @Query('category') category: string | undefined,
+    @Query('language') language: string | undefined,
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    return this.patientPortalH3Service.listEducation(req.tenantDb, { category, language, publishedOnly: true });
+  }
+
+  @Get('education/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get a health education content item' })
+  async getEducation(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    return this.patientPortalH3Service.getEducationById(req.tenantDb, id);
+  }
+
+  @Get('family-access')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List family/caregiver access grants' })
+  async listFamilyAccess(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalH3Service.listFamilyAccess(patientId, req.tenantDb);
+  }
+
+  @Post('family-access')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create family/caregiver access grant' })
+  async createFamilyAccess(
+    @Body()
+    body: {
+      proxyName: string;
+      proxyEmail: string;
+      proxyPhone?: string;
+      relationship?: string;
+      accessLevel?: 'view_only' | 'full' | 'emergency_only';
+      expiresAt?: string;
+    },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalH3Service.createFamilyAccess(patientId, body, req.tenantDb);
+  }
+
+  @Delete('family-access/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke family/caregiver access grant' })
+  async revokeFamilyAccess(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalH3Service.revokeFamilyAccess(patientId, id, req.tenantDb);
   }
 
 

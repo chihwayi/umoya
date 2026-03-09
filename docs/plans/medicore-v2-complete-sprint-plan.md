@@ -16,10 +16,10 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** **H3 — Patient Portal (Pay/Education/Family)**
+**Next sprint in order:** **H4 — Recall Campaigns + Bulk Notifications**
 
-- **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, **H1**, and **H2** are complete.
-- Next: **H3** (patient portal bill pay + education + family access), then H4, I, J.
+- **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, **H1**, **H2**, and **H3** are complete.
+- Next: **H4** (bulk campaigns + notifications), then I, J.
 
 ---
 
@@ -1718,7 +1718,7 @@ All new patient-facing endpoints are designed for mobile consumption:
 | G4 Population Health + Preventive Care | `done` |
 | H1 Fee Schedule + Superbill + Insurance | `done` |
 | H2 Prior Authorization Workflow | `done` |
-| H3 Patient Portal (Pay/Education/Family) | `pending` |
+| H3 Patient Portal (Pay/Education/Family) | `done` |
 | H4 Recall Campaigns + Bulk Notifications | `pending` |
 | I1 Travel Vaccine Engine + Yellow Card | `pending` |
 | I2 Multi-Currency + Medical Aid | `pending` |

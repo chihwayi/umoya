@@ -623,6 +623,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintH2PriorAuthorizationStatements(),
       },
       {
+        id: 'sprint_h3_patient_portal',
+        label: 'Sprint H3 Patient Portal: Payments + Education + Family Access',
+        version: '2026.03.09',
+        description: 'patient_portal_payments, health_education_content, patient_family_access',
+        statements: () => this.getSprintH3PatientPortalStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -726,6 +733,50 @@ export class DatabaseProvisioningService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_pa_patient ON prior_authorizations(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_pa_status ON prior_authorizations(status)`,
+    ];
+  }
+
+  private getSprintH3PatientPortalStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS patient_portal_payments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        bill_id UUID,
+        amount DECIMAL(12,2) NOT NULL,
+        payment_method VARCHAR(30) CHECK (payment_method IN ('ecocash','onemoney','card','bank_transfer')),
+        payment_reference VARCHAR(100),
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','completed','failed','refunded')),
+        paid_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS health_education_content (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR(500) NOT NULL,
+        category VARCHAR(100),
+        content_type VARCHAR(30) DEFAULT 'article' CHECK (content_type IN ('article','video','infographic','faq')),
+        body TEXT NOT NULL,
+        language VARCHAR(10) DEFAULT 'en',
+        tags JSONB DEFAULT '[]'::jsonb,
+        is_published BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_hec_category ON health_education_content(category)`,
+      `CREATE INDEX IF NOT EXISTS idx_hec_language ON health_education_content(language)`,
+      `CREATE TABLE IF NOT EXISTS patient_family_access (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        proxy_name VARCHAR(255) NOT NULL,
+        proxy_email VARCHAR(255) NOT NULL,
+        proxy_phone VARCHAR(30),
+        relationship VARCHAR(50),
+        access_level VARCHAR(30) DEFAULT 'view_only' CHECK (access_level IN ('view_only','full','emergency_only')),
+        granted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pfa_patient ON patient_family_access(patient_id)`,
     ];
   }
 
