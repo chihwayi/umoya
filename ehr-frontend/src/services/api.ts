@@ -1801,6 +1801,29 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  listEarlyWarningScoresForPatient: async (patientId: string, token: string, tenantSlug: string, limit: number = 50) => {
+    const response = await ehrAxios.get(`/early-warning/patient/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: { limit },
+    });
+    return { data: response.data };
+  },
+
+  listEarlyWarningAlerts: async (token: string, tenantSlug: string, limit: number = 50) => {
+    const response = await ehrAxios.get('/early-warning/alerts', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: { limit },
+    });
+    return { data: response.data };
+  },
+
+  acknowledgeEarlyWarningAlert: async (scoreId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/early-warning/alerts/${scoreId}/ack`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   executePostVisitRecommendation: async (
     sessionId: string,
     actionId: string,

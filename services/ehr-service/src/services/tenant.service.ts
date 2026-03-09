@@ -137,6 +137,7 @@ import { MedicalAidProvider } from '../entities/medical-aid-provider.entity';
 import { MedicalAidEligibilityCheck } from '../entities/medical-aid-eligibility-check.entity';
 import { MedicalAidClaimSubmission } from '../entities/medical-aid-claim-submission.entity';
 import { MedicalAidRemittance } from '../entities/medical-aid-remittance.entity';
+import { PatientEarlyWarningScore } from '../entities/patient-early-warning-score.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -363,6 +364,7 @@ export class TenantService {
         MedicalAidEligibilityCheck,
         MedicalAidClaimSubmission,
         MedicalAidRemittance,
+        PatientEarlyWarningScore,
       ],
       logging: false,
     });

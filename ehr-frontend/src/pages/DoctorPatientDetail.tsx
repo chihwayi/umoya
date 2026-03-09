@@ -69,6 +69,7 @@ const DoctorPatientDetail: React.FC = () => {
   const [aiRiskResult, setAiRiskResult] = useState<any | null>(null);
   const [aiDiagnosisResult, setAiDiagnosisResult] = useState<any | null>(null);
   const [aiSnapshotAt, setAiSnapshotAt] = useState<string | null>(null);
+  const [ewsScores, setEwsScores] = useState<any[] | null>(null);
 
   // Medical History State
   const [problems, setProblems] = useState<any[]>([]);
@@ -369,6 +370,15 @@ const DoctorPatientDetail: React.FC = () => {
       setAiRiskResult(riskResponse?.data || null);
       setAiDiagnosisResult(diagnosisResponse?.data || null);
       setAiSnapshotAt(new Date().toISOString());
+
+      // Load NEWS2 / early warning scores for this patient
+      try {
+        const ewsResponse = await ehrApi.listEarlyWarningScoresForPatient(patientId, token, tenantSlug, 10);
+        setEwsScores(Array.isArray(ewsResponse.data) ? ewsResponse.data : null);
+      } catch (ewsError) {
+        console.warn('Failed to load early warning scores:', ewsError);
+        setEwsScores(null);
+      }
     } catch (error) {
       console.error('Error running doctor AI snapshot:', error);
       showError('AI Error', 'Failed to run doctor AI snapshot');
@@ -598,6 +608,65 @@ const DoctorPatientDetail: React.FC = () => {
                     <p className="text-slate-900 font-medium">{patient.medicalAidPlan || 'Not provided'}</p>
                   </div>
                 </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-white to-red-50 rounded-2xl shadow-lg border border-rose-200/70 p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-gradient-to-r from-red-600 to-rose-600 rounded-xl">
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-rose-900">Early Warning (NEWS2)</h3>
+                    <p className="text-xs text-rose-800">
+                      Latest deterioration scores from vitals. Higher scores indicate higher risk.
+                    </p>
+                  </div>
+                </div>
+                {ewsScores && ewsScores.length > 0 ? (
+                  <div className="space-y-3">
+                    {ewsScores.slice(0, 5).map((score) => {
+                      const level = String(score.riskLevel || 'low').toLowerCase();
+                      const pillColor =
+                        level === 'high'
+                          ? 'bg-red-100 text-red-800 border-red-200'
+                          : level === 'medium'
+                            ? 'bg-amber-100 text-amber-800 border-amber-200'
+                            : level === 'low_medium'
+                              ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                      const label =
+                        level === 'high'
+                          ? 'High'
+                          : level === 'medium'
+                            ? 'Medium'
+                            : level === 'low_medium'
+                              ? 'Low–Medium'
+                              : 'Low';
+                      return (
+                        <div
+                          key={score.id}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-rose-100 bg-white/70 px-3 py-2"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              NEWS2 score {score.totalScore}
+                            </p>
+                            <p className="text-[11px] text-slate-600">
+                              {score.calculatedAt ? formatDateToDDMMYYYY(score.calculatedAt) : 'Recently calculated'}
+                            </p>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${pillColor}`}>
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-rose-900">
+                    No NEWS2 scores recorded yet. Record vitals and run AI snapshot to calculate risk.
+                  </p>
+                )}
               </div>
             </div>
           </div>

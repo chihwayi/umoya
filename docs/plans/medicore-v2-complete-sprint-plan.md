@@ -16,10 +16,10 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** **J2 — Deterioration Detection + Early Warning Score (NEWS2)**
+**Next sprint in order:** **J3 — Pregnancy-Aware Prescribing + Renal/Hepatic Dose Adjustment**
 
 - **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, **H1**, **H2**, **H3**, and **H4** are complete.
-- Next: **J2** (NEWS2 early warning), then J3.
+- Next: **J3** (pregnancy-aware prescribing + renal/hepatic dose adjustment).
 
 ---
 
@@ -1623,6 +1623,8 @@ Auto-generate clinical note drafts from transcription (beyond SOAP — include a
 
 <a id="sprint-j2"></a>
 ### Sprint J2 — Deterioration Detection + Early Warning Score (NEWS2)
+
+Status: **done**
 
 #### Database
 
