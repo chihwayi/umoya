@@ -97,6 +97,8 @@ import { PracticeManagementController } from './controllers/practice-management.
 import { PriorAuthorizationController } from './controllers/prior-authorization.controller';
 import { NotificationCampaignController } from './controllers/notification-campaign.controller';
 import { TravelVaccineController } from './controllers/travel-vaccine.controller';
+import { CurrencyExchangeController } from './controllers/currency-exchange.controller';
+import { MedicalAidIntegrationController } from './controllers/medical-aid-integration.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -237,6 +239,8 @@ import { PracticeManagementService } from './services/practice-management.servic
 import { PriorAuthorizationService } from './services/prior-authorization.service';
 import { NotificationCampaignService } from './services/notification-campaign.service';
 import { TravelVaccineService } from './services/travel-vaccine.service';
+import { CurrencyExchangeService } from './services/currency-exchange.service';
+import { MedicalAidIntegrationService } from './services/medical-aid-integration.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -353,6 +357,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PriorAuthorizationController,
     NotificationCampaignController,
     TravelVaccineController,
+    CurrencyExchangeController,
+    MedicalAidIntegrationController,
   ],
   providers: [
     AuthService,
@@ -493,6 +499,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PriorAuthorizationService,
     NotificationCampaignService,
     TravelVaccineService,
+    CurrencyExchangeService,
+    MedicalAidIntegrationService,
     RolesGuard,
     JwtStrategy,
   ],

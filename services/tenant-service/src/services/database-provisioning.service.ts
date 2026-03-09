@@ -644,6 +644,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintI1TravelVaccineStatements(),
       },
       {
+        id: 'sprint_i2_multi_currency_medical_aid',
+        label: 'Sprint I2 Multi-Currency Billing + Medical Aid Stubs',
+        version: '2026.03.09',
+        description: 'billing currency fields, exchange rates, medical aid providers + eligibility + remittance stubs',
+        statements: () => this.getSprintI2MultiCurrencyMedicalAidStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -944,6 +951,116 @@ export class DatabaseProvisioningService {
       upsert('Dominican Republic', 'DOM', 'Caribbean', [], [TYP, HEPA, TDAP, MMR, C19], [], 'Routine + typhoid for some travelers.'),
       upsert('Australia', 'AUS', 'Oceania', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
       upsert('New Zealand', 'NZL', 'Oceania', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+    ];
+  }
+
+  private getSprintI2MultiCurrencyMedicalAidStatements(): string[] {
+    return [
+      // Billing currency alignment
+      `ALTER TABLE billing ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD'`,
+      `CREATE INDEX IF NOT EXISTS idx_billing_currency ON billing(currency)`,
+
+      // Supported currencies + exchange rates (clinic-managed)
+      `CREATE TABLE IF NOT EXISTS supported_currencies (
+        code VARCHAR(10) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        symbol VARCHAR(10),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS exchange_rates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        base_currency VARCHAR(10) NOT NULL REFERENCES supported_currencies(code),
+        quote_currency VARCHAR(10) NOT NULL REFERENCES supported_currencies(code),
+        rate NUMERIC(18,8) NOT NULL,
+        effective_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        source VARCHAR(50) DEFAULT 'manual',
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_exchange_rates_unique ON exchange_rates(base_currency, quote_currency, effective_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_exchange_rates_pair ON exchange_rates(base_currency, quote_currency)`,
+      `CREATE INDEX IF NOT EXISTS idx_exchange_rates_effective ON exchange_rates(effective_at DESC)`,
+
+      // Seed common currencies
+      `INSERT INTO supported_currencies (code, name, symbol, is_active)
+       VALUES
+        ('USD','US Dollar','$',true),
+        ('ZAR','South African Rand','R',true),
+        ('ZIG','Zimbabwe Gold','ZiG',true)
+       ON CONFLICT (code) DO UPDATE SET
+        name = EXCLUDED.name,
+        symbol = EXCLUDED.symbol,
+        is_active = EXCLUDED.is_active`,
+
+      // Medical aid integration stubs
+      `CREATE TABLE IF NOT EXISTS medical_aid_providers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(100) NOT NULL UNIQUE,
+        code VARCHAR(30) UNIQUE,
+        is_active BOOLEAN DEFAULT true,
+        config JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_medical_aid_providers_active ON medical_aid_providers(is_active)`,
+      `INSERT INTO medical_aid_providers (name, code, is_active)
+       VALUES
+        ('CIMAS','CIMAS',true),
+        ('First Mutual','FIRST_MUTUAL',true),
+        ('PSMAS','PSMAS',true)
+       ON CONFLICT (name) DO UPDATE SET
+        code = EXCLUDED.code,
+        is_active = EXCLUDED.is_active`,
+
+      `CREATE TABLE IF NOT EXISTS medical_aid_eligibility_checks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        provider_id UUID REFERENCES medical_aid_providers(id),
+        member_number VARCHAR(100),
+        policy_number VARCHAR(100),
+        status VARCHAR(30) DEFAULT 'pending' CHECK (status IN ('pending','eligible','ineligible','error')),
+        request_payload JSONB DEFAULT '{}'::jsonb,
+        response_payload JSONB DEFAULT '{}'::jsonb,
+        checked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        checked_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ma_elig_patient ON medical_aid_eligibility_checks(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ma_elig_provider ON medical_aid_eligibility_checks(provider_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ma_elig_status ON medical_aid_eligibility_checks(status)`,
+
+      `CREATE TABLE IF NOT EXISTS medical_aid_claim_submissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        transaction_id UUID REFERENCES financial_transactions(id) ON DELETE SET NULL,
+        provider_id UUID REFERENCES medical_aid_providers(id),
+        claim_number VARCHAR(100),
+        status VARCHAR(30) DEFAULT 'draft' CHECK (status IN ('draft','submitted','accepted','rejected','paid','error')),
+        submission_format VARCHAR(50) DEFAULT 'stub',
+        payload JSONB DEFAULT '{}'::jsonb,
+        response JSONB DEFAULT '{}'::jsonb,
+        submitted_at TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ma_claim_tx ON medical_aid_claim_submissions(transaction_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ma_claim_provider ON medical_aid_claim_submissions(provider_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ma_claim_status ON medical_aid_claim_submissions(status)`,
+
+      `CREATE TABLE IF NOT EXISTS medical_aid_remittances (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id UUID REFERENCES medical_aid_providers(id),
+        remittance_reference VARCHAR(150),
+        received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        status VARCHAR(30) DEFAULT 'received' CHECK (status IN ('received','processed','error')),
+        payload JSONB DEFAULT '{}'::jsonb,
+        processed_by UUID REFERENCES users(id),
+        processed_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ma_remit_provider ON medical_aid_remittances(provider_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ma_remit_status ON medical_aid_remittances(status)`,
     ];
   }
 

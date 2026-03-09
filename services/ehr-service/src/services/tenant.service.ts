@@ -131,6 +131,12 @@ import { NotificationCampaign } from '../entities/notification-campaign.entity';
 import { NotificationCampaignRecipient } from '../entities/notification-campaign-recipient.entity';
 import { TravelVaccineDestination } from '../entities/travel-vaccine-destination.entity';
 import { VaccinationCertificate } from '../entities/vaccination-certificate.entity';
+import { SupportedCurrency } from '../entities/supported-currency.entity';
+import { ExchangeRate } from '../entities/exchange-rate.entity';
+import { MedicalAidProvider } from '../entities/medical-aid-provider.entity';
+import { MedicalAidEligibilityCheck } from '../entities/medical-aid-eligibility-check.entity';
+import { MedicalAidClaimSubmission } from '../entities/medical-aid-claim-submission.entity';
+import { MedicalAidRemittance } from '../entities/medical-aid-remittance.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -351,6 +357,12 @@ export class TenantService {
         NotificationCampaignRecipient,
         TravelVaccineDestination,
         VaccinationCertificate,
+        SupportedCurrency,
+        ExchangeRate,
+        MedicalAidProvider,
+        MedicalAidEligibilityCheck,
+        MedicalAidClaimSubmission,
+        MedicalAidRemittance,
       ],
       logging: false,
     });

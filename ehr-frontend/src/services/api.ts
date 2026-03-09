@@ -8828,6 +8828,116 @@ export const travelVaccineApi = {
   },
 };
 
+export const currencyApi = {
+  listCurrencies: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/currency/currencies', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  upsertCurrency: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/currency/currencies', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listExchangeRates: async (
+    filters: { baseCurrency?: string; quoteCurrency?: string; limit?: number },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get('/currency/exchange-rates', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+
+  createExchangeRate: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/currency/exchange-rates', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+};
+
+export const medicalAidApi = {
+  listProviders: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/medical-aid/providers', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  upsertProvider: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/medical-aid/providers', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listEligibility: async (patientId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/medical-aid/eligibility', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: patientId ? { patientId } : {},
+    });
+    return { data: response.data };
+  },
+
+  createEligibility: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/medical-aid/eligibility', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listClaims: async (providerId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/medical-aid/claims', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: providerId ? { providerId } : {},
+    });
+    return { data: response.data };
+  },
+
+  createClaim: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/medical-aid/claims', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  submitClaim: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/medical-aid/claims/${id}/submit`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listRemittances: async (providerId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/medical-aid/remittances', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: providerId ? { providerId } : {},
+    });
+    return { data: response.data };
+  },
+
+  createRemittance: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/medical-aid/remittances', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  processRemittance: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/medical-aid/remittances/${id}/process`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+};
+
 export const clinicalPathwaysApi = {
   // ==================== CLINICAL PATHWAYS ====================
   

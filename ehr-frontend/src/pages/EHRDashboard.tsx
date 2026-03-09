@@ -158,6 +158,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Building, label: 'Practice Mgmt', desc: 'Fee schedules, superbills & insurance verification', color: 'from-emerald-600 to-teal-600', route: 'practice-management' },
           { icon: FileText, label: 'Prior Auth', desc: 'Prior authorization workflow', color: 'from-indigo-600 to-purple-600', route: 'prior-authorizations' },
           { icon: Mail, label: 'Recall Campaigns', desc: 'Bulk SMS/email outreach', color: 'from-fuchsia-700 to-rose-700', route: 'campaigns' },
+          { icon: DollarSign, label: 'Multi-Currency', desc: 'Exchange rates & medical aid stubs', color: 'from-amber-600 to-orange-600', route: 'multi-currency' },
           { icon: FileText, label: 'CDI Program', desc: 'Physician queries, DRG impact & documentation quality', color: 'from-blue-600 to-indigo-600', route: 'cdi' },
           { icon: Users, label: 'Population Health', desc: 'Registry, preventive care & recall lists', color: 'from-teal-600 to-cyan-600', route: 'population-health' },
           { icon: AlertTriangle, label: 'Sepsis Management', desc: 'SEP-1 bundle tracking, qSOFA & SIRS screening', color: 'from-red-600 to-orange-600', route: 'sepsis' },

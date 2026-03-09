@@ -57,6 +57,7 @@ import PriorAuthorizationDashboard from './pages/PriorAuthorizationDashboard';
 import PatientPortalLogin from './pages/PatientPortalLogin';
 import PatientPortalDashboard from './pages/PatientPortalDashboard';
 import CampaignsDashboard from './pages/CampaignsDashboard';
+import MultiCurrencyMedicalAidDashboard from './pages/MultiCurrencyMedicalAidDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -462,6 +463,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin']}>
                   <CampaignsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/multi-currency"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
+                  <MultiCurrencyMedicalAidDashboard />
                 </RoleProtectedRoute>
               }
             />

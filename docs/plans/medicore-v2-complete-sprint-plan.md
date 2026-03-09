@@ -16,10 +16,10 @@ So each completed milestone ends with a clean type-check and a push, not only at
 
 ## Tackle now (current focus)
 
-**Next sprint in order:** **I2 — Multi-Currency Billing + Medical Aid Integration**
+**Next sprint in order:** **J1 — Auto-Generated Referral Letters + Clinical Note Drafts**
 
 - **Phase E**, **Phase F**, **G1**, **G2**, **G3**, **G4**, **H1**, **H2**, **H3**, and **H4** are complete.
-- Next: **I2** (multi-currency billing + medical aid stubs), then J.
+- Next: **J1** (referral letters + note drafts), then J2, J3.
 
 ---
 
@@ -1599,6 +1599,8 @@ Frontend: Travel clinic workflow in immunization module.
 
 <a id="sprint-i2"></a>
 ### Sprint I2 — Multi-Currency Billing + Medical Aid Integration
+
+Status: **done**
 
 Add currency field to billing tables, support USD/ZAR/ZiG, exchange rate management.
 
