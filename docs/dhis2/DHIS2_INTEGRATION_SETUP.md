@@ -233,3 +233,20 @@ Behavior:
 - Data push reference: `docs/dhis2/DHIS2_DATA_PUSH_REFERENCE.md`
 - Development plan: `docs/plans/dhis2-tenant-sync-development-plan.md`
 - Sprint plan: `docs/plans/dhis2-sync-sprint-execution-2026-03.md`
+
+## 10. Production Closure Checklist
+
+- [ ] Scheduler global enable: `DHIS2_SCHEDULED_SYNC_ENABLED=true`.
+- [ ] Each active tenant has:
+  - `enabled=true`
+  - `scheduledSyncEnabled=true`
+  - valid auth (`PAT` or basic) and `orgUnitId`.
+- [ ] Alert sink configured:
+  - Slack webhook or PagerDuty routing (`pagerduty://<routing_key>`), and tested.
+- [ ] Manual run-now is role-restricted:
+  - endpoint requires `admin` role (super admin override applies).
+- [ ] Manual run-now operations are audited:
+  - tenant `dhis2_sync_log` has `entity_type='scheduler_manual'` rows.
+- [ ] Retry-failed workflow tested (`POST /api/dhis2/retry-failed`) for at least one failed log row.
+- [ ] Multi-tenant isolation revalidated for at least two tenants/org units.
+- [ ] Burn-in monitoring complete (recommended 24-48h) with no sustained auth/push failures.

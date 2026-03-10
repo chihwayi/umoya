@@ -150,3 +150,4 @@ Start next execution block:
 Completed (Sprint 7):
 1. `S7-T1` Add Slack/PagerDuty alert sink support to scheduler alerting.
 2. `S7-T2` Add tenant-scoped manual run-now endpoint and admin UI trigger.
+3. `S7-T3` Add role-based guardrail (`admin`) and tenant audit trail for manual run-now operations.

@@ -229,5 +229,42 @@ describe('Dhis2SchedulerService', () => {
     expect(result.status).toBe('SUCCESS');
     expect(dhis2ServiceMock.syncPatients).toHaveBeenCalledWith(tenantDb, 'tenant-a');
     expect(dhis2ServiceMock.retryFailedSync).toHaveBeenCalledWith(tenantDb, 'tenant-a', { limit: 5 });
+    expect((tenantDb.query as any).mock.calls.some((call: any[]) => String(call[0]).includes('INSERT INTO dhis2_sync_log'))).toBe(true);
+  });
+
+  it('returns FAILED when manual tenant sync throws and still records audit', async () => {
+    const tenantDb = { query: jest.fn().mockResolvedValue([]) } as unknown as DataSource;
+    const tenantServiceMock = {
+      getAllActiveTenants: jest.fn(),
+      getTenantDhis2Config: jest.fn().mockResolvedValue({
+        tenantId: 'tenant-a',
+        baseUrl: 'http://localhost:8888',
+        apiVersion: '40',
+        authType: 'pat',
+        pat: 'd2pat_example',
+        orgUnitId: 'ou123',
+        enabled: true,
+        scheduledSyncEnabled: true,
+        scheduledRetryLimit: 5,
+        alertLookbackHours: 24,
+        alertErrorThreshold: 10,
+        alertWebhookUrl: '',
+      }),
+      getTenantDatabase: jest.fn().mockResolvedValue(tenantDb),
+    } as any;
+
+    const dhis2ServiceMock = {
+      syncPatients: jest.fn().mockRejectedValue(new Error('boom')),
+      sendAggregateReport: jest.fn(),
+      retryFailedSync: jest.fn(),
+      getRecentErrorCount: jest.fn(),
+    } as any;
+
+    const service = new Dhis2SchedulerService(tenantServiceMock, dhis2ServiceMock);
+    const result = await service.runTenantSyncNow('tenant-a', tenantDb, { includeAlerts: false });
+
+    expect(result.status).toBe('FAILED');
+    expect(String(result.message || '')).toContain('boom');
+    expect((tenantDb.query as any).mock.calls.some((call: any[]) => String(call[0]).includes('INSERT INTO dhis2_sync_log'))).toBe(true);
   });
 });

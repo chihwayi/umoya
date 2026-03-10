@@ -28,6 +28,13 @@ export interface TenantSyncCycleResult {
   alertSink: string | null;
 }
 
+interface TenantManualSyncActor {
+  userId?: string | null;
+  role?: string | null;
+  email?: string | null;
+  requestId?: string | null;
+}
+
 @Injectable()
 export class Dhis2SchedulerService {
   private readonly logger = new Logger(Dhis2SchedulerService.name);
@@ -226,6 +233,7 @@ export class Dhis2SchedulerService {
     tenantId: string,
     tenantDb?: DataSource | null,
     body?: { retryLimit?: number; includeAlerts?: boolean },
+    actor?: TenantManualSyncActor,
   ) {
     const tenantConfig = await this.tenantService.getTenantDhis2Config(tenantId);
     if (!tenantConfig) {
@@ -256,12 +264,89 @@ export class Dhis2SchedulerService {
     }
 
     const includeAlerts = body?.includeAlerts !== false;
-    const result = await this.runTenantCycle(tenantId, database, syncOptions, includeAlerts);
-    return {
-      status: 'SUCCESS',
-      message: `Tenant ${tenantId} DHIS2 sync cycle completed.`,
-      result,
-    };
+    try {
+      const result = await this.runTenantCycle(tenantId, database, syncOptions, includeAlerts);
+      await this.insertManualRunAuditLog(database, tenantId, 'success', null, {
+        actor,
+        options: syncOptions,
+        includeAlerts,
+        result,
+      });
+      return {
+        status: 'SUCCESS',
+        message: `Tenant ${tenantId} DHIS2 sync cycle completed.`,
+        result,
+      };
+    } catch (error: any) {
+      const message = error?.message || String(error);
+      await this.insertManualRunAuditLog(database, tenantId, 'error', message, {
+        actor,
+        options: syncOptions,
+        includeAlerts,
+      });
+      return {
+        status: 'FAILED',
+        message: `Tenant ${tenantId} DHIS2 sync cycle failed: ${message}`,
+      };
+    }
+  }
+
+  private async ensureTenantSyncLogTable(tenantDb: DataSource): Promise<void> {
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS dhis2_sync_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id UUID,
+        dhis2_id VARCHAR(64),
+        action VARCHAR(20) NOT NULL,
+        status VARCHAR(20) NOT NULL,
+        error_message TEXT,
+        payload JSONB DEFAULT '{}'::jsonb,
+        synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+  }
+
+  private async insertManualRunAuditLog(
+    tenantDb: DataSource,
+    tenantId: string,
+    status: 'success' | 'error',
+    errorMessage: string | null,
+    payload: Record<string, any>,
+  ): Promise<void> {
+    try {
+      await this.ensureTenantSyncLogTable(tenantDb);
+      await tenantDb.query(
+        `
+        INSERT INTO dhis2_sync_log (
+          entity_type,
+          entity_id,
+          dhis2_id,
+          action,
+          status,
+          error_message,
+          payload,
+          synced_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW())
+        `,
+        [
+          'scheduler_manual',
+          null,
+          null,
+          'run_now',
+          status,
+          errorMessage,
+          JSON.stringify({
+            tenantId,
+            ...payload,
+          }),
+        ],
+      );
+    } catch (error: any) {
+      this.logger.warn(`Failed to write manual DHIS2 run audit log for tenant ${tenantId}: ${error?.message || error}`);
+    }
   }
 
   private async runTenantCycle(

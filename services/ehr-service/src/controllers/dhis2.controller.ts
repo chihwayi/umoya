@@ -4,6 +4,8 @@ import { Dhis2Service } from '../services/dhis2.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { Dhis2SchedulerService } from '../services/dhis2-scheduler.service';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 
 @ApiTags('DHIS2 Integration')
 @ApiSecurity('tenant-key')
@@ -99,6 +101,8 @@ export class Dhis2Controller {
   }
 
   @Post('sync/run-now')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
   @ApiOperation({ summary: 'Run immediate DHIS2 sync cycle for current tenant' })
   @ApiResponse({ status: 200, description: 'Immediate tenant sync completed' })
   async runSyncNow(
@@ -109,6 +113,12 @@ export class Dhis2Controller {
       includeAlerts?: boolean;
     },
   ) {
-    return this.dhis2SchedulerService.runTenantSyncNow(req.tenantId!, req.tenantDb, body || {});
+    const requestId = (req.headers?.['x-request-id'] as string) || null;
+    return this.dhis2SchedulerService.runTenantSyncNow(req.tenantId!, req.tenantDb, body || {}, {
+      userId: req.user?.id ? String(req.user.id) : null,
+      role: req.user?.role ? String(req.user.role) : null,
+      email: req.user?.email ? String(req.user.email) : null,
+      requestId,
+    });
   }
 }
