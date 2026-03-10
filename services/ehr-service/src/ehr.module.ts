@@ -121,6 +121,7 @@ import { TenantService } from './services/tenant.service';
 import { ClaimsService } from './services/claims.service';
 import { CdssService } from './services/cdss.service';
 import { Dhis2Service } from './services/dhis2.service';
+import { Dhis2SchedulerService } from './services/dhis2-scheduler.service';
 import { ReportsService } from './services/reports.service';
 import { NotificationsService } from './services/notifications.service';
 import { PaymentsService } from './services/payments.service';
@@ -396,6 +397,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClaimsService,
     CdssService,
     Dhis2Service,
+    Dhis2SchedulerService,
     ReportsService,
     NotificationsService,
     PaymentsService,

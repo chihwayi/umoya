@@ -41,9 +41,13 @@ DHIS2_ORG_UNIT=YOUR_ORG_UNIT_ID
 DHIS2_TRACKED_ENTITY_TYPE=YOUR_TRACKED_ENTITY_TYPE_ID
 DHIS2_DATASET_ID=YOUR_DATASET_ID
 DHIS2_USE_MOCK=false
+DHIS2_SCHEDULED_SYNC_ENABLED=false
+DHIS2_SCHEDULED_RETRY_LIMIT=20
 ```
 
 If EHR runs outside Docker, use `http://localhost:8888` instead.
+
+`DHIS2_SCHEDULED_SYNC_ENABLED=true` turns on hourly background tenant sync in `ehr-service`.
 
 PAT auth header used by integration:
 

@@ -228,3 +228,20 @@ Tracker event data element IDs:
 - `MC_DE_EVENT_VISIT_TYPE`: `UMihKZi73GO`
 - `MC_DE_EVENT_PRIMARY_DIAGNOSIS`: `QeOHJlyaSG2`
 - `MC_DE_EVENT_CLINICAL_NOTES`: `tDFQWdzY69z`
+
+## 11. Multi-Tenant Isolation Validation
+
+Validated on 2026-03-10 using two active tenants:
+- `testghost` -> org unit `tRMlWBGMtE1`
+- `testghost2` -> org unit `kuDwB5vB5lm`
+
+Validation method:
+- push `data-values` for same data element (`W3hr49L40r0`) and period (`202602`) from each tenant with different values,
+- confirm DHIS2 stores tenant A value only in tenant A org unit and tenant B value only in tenant B org unit.
+
+Observed values in DHIS2:
+- org unit `tRMlWBGMtE1`: value `111`
+- org unit `kuDwB5vB5lm`: value `222`
+
+Conclusion:
+- tenant/org-unit write isolation is confirmed for aggregate/data-value submission path.

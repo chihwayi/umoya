@@ -88,6 +88,17 @@ const ensureResource = async ({ resource, listField, code, payload }) => {
 const ensureCurrentUserOrgUnitAccess = async (meId, orgUnitId) => {
   const meDetails = await request(`/me?fields=id,username,organisationUnits[id],dataViewOrganisationUnits[id],teiSearchOrganisationUnits[id]`);
   const hasOrgUnitAccess = (collection) => Array.isArray(collection) && collection.some((item) => item?.id === orgUnitId);
+  const mergeOrgUnitIds = (collection, targetId) => {
+    const ids = new Set([targetId]);
+    if (Array.isArray(collection)) {
+      for (const item of collection) {
+        if (item?.id) {
+          ids.add(item.id);
+        }
+      }
+    }
+    return Array.from(ids).map((id) => ({ id }));
+  };
 
   if (
     hasOrgUnitAccess(meDetails?.organisationUnits) &&
@@ -107,9 +118,9 @@ const ensureCurrentUserOrgUnitAccess = async (meId, orgUnitId) => {
           username: userForUpdate.username,
           userRoles: userForUpdate.userRoles || [],
           userGroups: userForUpdate.userGroups || [],
-          organisationUnits: [{ id: orgUnitId }],
-          dataViewOrganisationUnits: [{ id: orgUnitId }],
-          teiSearchOrganisationUnits: [{ id: orgUnitId }],
+          organisationUnits: mergeOrgUnitIds(meDetails?.organisationUnits, orgUnitId),
+          dataViewOrganisationUnits: mergeOrgUnitIds(meDetails?.dataViewOrganisationUnits, orgUnitId),
+          teiSearchOrganisationUnits: mergeOrgUnitIds(meDetails?.teiSearchOrganisationUnits, orgUnitId),
         },
       ],
     }),

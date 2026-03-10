@@ -115,14 +115,14 @@ Planned commits:
 3. `docs(dhis2): add push reference and sprint execution board`
 
 In progress (Sprint 5):
-1. `S5-T1` Add tenant-level sync log drilldown and replay controls.
-2. `S5-T2` Add scheduled tenant sync orchestration with safe defaults.
-3. `S5-T3` Validate multi-tenant org-unit isolation with at least two tenants.
+1. `S5-T1` Add tenant-level sync log drilldown and replay controls. (complete)
+2. `S5-T2` Add scheduled tenant sync orchestration with safe defaults. (complete, feature-flagged by `DHIS2_SCHEDULED_SYNC_ENABLED`)
+3. `S5-T3` Validate multi-tenant org-unit isolation with at least two tenants. (complete)
 4. `S5-T4` Add alerting hooks for sustained DHIS2 auth/push failures.
 
 ## 7. Immediate Next Action
 
 Start Sprint 5 acceptance checks:
 - expose tenant-level retry controls and error drilldown from `dhis2_sync_log` (S5-T1 complete in API),
-- add automated scheduled sync orchestration per tenant,
-- validate a second tenant/org unit end-to-end isolation.
+- add automated scheduled sync orchestration per tenant (S5-T2 complete, disabled by default),
+- validate a second tenant/org unit end-to-end isolation (S5-T3 complete: testghost=`tRMlWBGMtE1`, testghost2=`kuDwB5vB5lm`).

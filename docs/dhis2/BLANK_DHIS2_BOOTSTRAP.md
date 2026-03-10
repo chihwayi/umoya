@@ -59,6 +59,9 @@ Script: `scripts/bootstrap-dhis2-metadata.mjs`
 - DataSet:
   - code: `MC_DS_SERVICE_DELIVERY_MONTHLY`
   - period: monthly
+- DHIS2 user org-unit access:
+  - ensures authenticated PAT user has org-unit/data-view/TEI-search access,
+  - preserves previously assigned org units when bootstrapping additional clinics.
 
 ## 5. Output
 
