@@ -80,7 +80,13 @@ Bootstrap creates/reuses:
 - Tracked Entity Type (`MC_TET_PATIENT`),
 - Patient tracked entity attributes,
 - Aggregate data elements,
-- Monthly service delivery dataset.
+- Aggregate datasets:
+  - `MC_DS_SERVICE_DELIVERY_MONTHLY`
+  - `MC_DS_MATERNAL_NEWBORN_MONTHLY`
+  - `MC_DS_HIV_MONTHLY_RETURN`
+  - `MC_DS_IMMUNIZATION_MONTHLY`
+  - `MC_DS_PHARMACY_STOCK_MONTHLY`
+- Tracker program/stage metadata for clinic events.
 
 See details: `docs/dhis2/BLANK_DHIS2_BOOTSTRAP.md`.
 
@@ -131,6 +137,24 @@ Event linkage note:
 - For tracker events, `patientId` must already be mapped to a DHIS2 TEI via patient sync.
 - `POST /api/dhis2/events` now resolves `patientId -> dhis2_patient_mappings.dhis2_tei_id`.
 - If mapping is missing, event push returns an error instructing you to run patient sync first.
+
+Aggregate profile note:
+- `POST /api/dhis2/reports/aggregate` accepts `profile`:
+  - `service_delivery`
+  - `maternal_newborn`
+  - `hiv_monthly`
+  - `immunization_monthly`
+  - `pharmacy_stock`
+- If `dataSet` is omitted, service resolves dataset by profile code from DHIS2 metadata.
+
+Example:
+
+```json
+{
+  "profile": "hiv_monthly",
+  "period": "202602"
+}
+```
 
 ## 7. Ops Endpoints (Sprint 5)
 

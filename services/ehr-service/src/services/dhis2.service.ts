@@ -2,10 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
 import { Patient } from '../entities/patient.entity';
-import { AppointmentSimple } from '../entities/appointment-simple.entity';
-import { Admission } from '../entities/admission.entity';
-import { Discharge } from '../entities/discharge.entity';
-import { EDVisit } from '../entities/ed-visit.entity';
 import { TenantDhis2Config, TenantService } from './tenant.service';
 
 interface Dhis2RuntimeConfig {
@@ -68,6 +64,18 @@ interface PatientAttributeIdMap {
   phone?: string;
 }
 
+type AggregateProfileKey =
+  | 'service_delivery'
+  | 'maternal_newborn'
+  | 'hiv_monthly'
+  | 'immunization_monthly'
+  | 'pharmacy_stock';
+
+interface AggregateProfileDefinition {
+  dataSetCode: string;
+  metricCodes: Record<string, string>;
+}
+
 @Injectable()
 export class Dhis2Service {
   private readonly logger = new Logger(Dhis2Service.name);
@@ -94,6 +102,62 @@ export class Dhis2Service {
     dateOfBirth: 'FO4GPuUTfQU',
     gender: 'cejWyOfXge6',
     nationalId: 'AuPLng5hLbE',
+  };
+  private readonly aggregateProfileDefinitions: Record<AggregateProfileKey, AggregateProfileDefinition> = {
+    service_delivery: {
+      dataSetCode: 'MC_DS_SERVICE_DELIVERY_MONTHLY',
+      metricCodes: {
+        totalConsultations: 'MC_DE_TOTAL_CONSULTATIONS',
+        completedConsultations: 'MC_DE_COMPLETED_CONSULTATIONS',
+        totalAdmissions: 'MC_DE_TOTAL_ADMISSIONS',
+        totalDischarges: 'MC_DE_TOTAL_DISCHARGES',
+        totalEdVisits: 'MC_DE_TOTAL_ED_VISITS',
+      },
+    },
+    maternal_newborn: {
+      dataSetCode: 'MC_DS_MATERNAL_NEWBORN_MONTHLY',
+      metricCodes: {
+        anc1Plus: 'MC_DE_MATERNAL_ANC1_PLUS',
+        anc4Plus: 'MC_DE_MATERNAL_ANC4_PLUS',
+        anc8Plus: 'MC_DE_MATERNAL_ANC8_PLUS',
+        totalDeliveries: 'MC_DE_MATERNAL_TOTAL_DELIVERIES',
+        caesareanDeliveries: 'MC_DE_MATERNAL_CSECTION_TOTAL',
+        liveBirths: 'MC_DE_MATERNAL_LIVE_BIRTHS',
+        stillBirths: 'MC_DE_MATERNAL_STILLBIRTHS',
+        lowBirthWeightCount: 'MC_DE_MATERNAL_LOW_BIRTH_WEIGHT_COUNT',
+      },
+    },
+    hiv_monthly: {
+      dataSetCode: 'MC_DS_HIV_MONTHLY_RETURN',
+      metricCodes: {
+        plhivActiveInCare: 'MC_DE_HIV_PLHIV_ACTIVE_IN_CARE',
+        artCoverageCount: 'MC_DE_HIV_ART_COVERAGE_COUNT',
+        viralLoadSuppressed: 'MC_DE_HIV_VL_SUPPRESSED_LT1000',
+        viralLoadUndetectable: 'MC_DE_HIV_VL_UNDETECTABLE_LT50',
+        lossToFollowUpCount: 'MC_DE_HIV_LOST_TO_FOLLOWUP',
+        treatmentFailureCount: 'MC_DE_HIV_TREATMENT_FAILURE_GT1000',
+        tbScreenedCount: 'MC_DE_HIV_TB_SCREENED',
+      },
+    },
+    immunization_monthly: {
+      dataSetCode: 'MC_DS_IMMUNIZATION_MONTHLY',
+      metricCodes: {
+        dtp1Administered: 'MC_DE_IMMUNIZATION_DTP1',
+        dtp3Administered: 'MC_DE_IMMUNIZATION_DTP3',
+        measlesDose1Administered: 'MC_DE_IMMUNIZATION_MCV1',
+        fullyImmunizedProxy: 'MC_DE_IMMUNIZATION_FULLY_IMMUNIZED_PROXY',
+        aefiReports: 'MC_DE_IMMUNIZATION_AEFI_REPORTS',
+      },
+    },
+    pharmacy_stock: {
+      dataSetCode: 'MC_DS_PHARMACY_STOCK_MONTHLY',
+      metricCodes: {
+        stockOnHandTotal: 'MC_DE_PHARMACY_STOCK_ON_HAND_TOTAL',
+        stockOutItemCount: 'MC_DE_PHARMACY_STOCKOUT_ITEMS',
+        dispensedUnits: 'MC_DE_PHARMACY_DISPENSED_UNITS',
+        dispensingTransactions: 'MC_DE_PHARMACY_DISPENSING_TRANSACTIONS',
+      },
+    },
   };
 
   constructor(private readonly tenantService: TenantService) {
@@ -477,9 +541,35 @@ export class Dhis2Service {
     return rows[0].dhis2_tei_id || null;
   }
 
-  private async resolveServiceDeliveryElementIds(
+  private async resolveDataSetIdByCode(context: Dhis2Context, dataSetCode: string): Promise<string | null> {
+    if (!context.client || !dataSetCode) {
+      return null;
+    }
+
+    try {
+      const response = await context.client.get('/dataSets', {
+        params: {
+          fields: 'id,code',
+          paging: false,
+          filter: `code:eq:${dataSetCode}`,
+        },
+      });
+
+      const dataSets = response.data?.dataSets || [];
+      if (!Array.isArray(dataSets) || dataSets.length === 0) {
+        return null;
+      }
+      return dataSets[0]?.id || null;
+    } catch (error: any) {
+      this.logger.warn(`Unable to resolve dataset by code ${dataSetCode}: ${error?.message || error}`);
+      return null;
+    }
+  }
+
+  private async resolveAggregateElementIdsByCode(
     context: Dhis2Context,
-    dataSetId?: string,
+    dataSetId: string | undefined,
+    metricCodes: Record<string, string>,
   ): Promise<Record<string, string>> {
     if (!context.client || !dataSetId) {
       return {};
@@ -502,19 +592,503 @@ export class Dhis2Service {
         }
       }
 
-      return {
-        totalConsultations: byCode.MC_DE_TOTAL_CONSULTATIONS,
-        completedConsultations: byCode.MC_DE_COMPLETED_CONSULTATIONS,
-        totalAdmissions: byCode.MC_DE_TOTAL_ADMISSIONS,
-        totalDischarges: byCode.MC_DE_TOTAL_DISCHARGES,
-        totalEdVisits: byCode.MC_DE_TOTAL_ED_VISITS,
-      };
+      const resolved: Record<string, string> = {};
+      for (const [metricKey, metricCode] of Object.entries(metricCodes)) {
+        if (byCode[metricCode]) {
+          resolved[metricKey] = byCode[metricCode];
+        }
+      }
+      return resolved;
     } catch (error: any) {
       this.logger.warn(
         `Unable to resolve dataset data elements from DHIS2 (${dataSetId}): ${error?.message || error}`,
       );
       return {};
     }
+  }
+
+  private getAggregateProfile(profile?: string): {
+    key: AggregateProfileKey;
+    definition: AggregateProfileDefinition;
+  } | null {
+    const normalized = String(profile || 'service_delivery').trim().toLowerCase() as AggregateProfileKey;
+    const definition = this.aggregateProfileDefinitions[normalized];
+    if (!definition) {
+      return null;
+    }
+    return {
+      key: normalized,
+      definition,
+    };
+  }
+
+  private resolveMonthlyPeriodBounds(period: string): { startDate: string; endDate: string } {
+    const normalized = String(period || '').trim();
+    if (!/^\d{6}$/.test(normalized)) {
+      const now = new Date();
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+      return {
+        startDate: start.toISOString().slice(0, 10),
+        endDate: end.toISOString().slice(0, 10),
+      };
+    }
+
+    const year = Number(normalized.slice(0, 4));
+    const month = Number(normalized.slice(4, 6));
+    const start = new Date(Date.UTC(year, month - 1, 1));
+    const end = new Date(Date.UTC(year, month, 1));
+    return {
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
+    };
+  }
+
+  private async safeMetricCount(
+    tenantDb: DataSource,
+    label: string,
+    sql: string,
+    params: any[] = [],
+  ): Promise<number> {
+    try {
+      const rows: Array<{ total: number | string }> = await tenantDb.query(sql, params);
+      return Number(rows?.[0]?.total || 0);
+    } catch (error: any) {
+      if (this.isMissingRelationError(error)) {
+        this.logger.warn(`DHIS2 aggregate source for ${label} is missing; defaulting to 0.`);
+        return 0;
+      }
+      throw error;
+    }
+  }
+
+  private async safeMetricSum(
+    tenantDb: DataSource,
+    label: string,
+    sql: string,
+    params: any[] = [],
+  ): Promise<number> {
+    try {
+      const rows: Array<{ total: number | string }> = await tenantDb.query(sql, params);
+      return Number(rows?.[0]?.total || 0);
+    } catch (error: any) {
+      if (this.isMissingRelationError(error)) {
+        this.logger.warn(`DHIS2 aggregate source for ${label} is missing; defaulting to 0.`);
+        return 0;
+      }
+      throw error;
+    }
+  }
+
+  private async computeAggregateMetrics(
+    profile: AggregateProfileKey,
+    tenantDb: DataSource,
+    period: string,
+  ): Promise<Record<string, number>> {
+    const { startDate, endDate } = this.resolveMonthlyPeriodBounds(period);
+
+    if (profile === 'service_delivery') {
+      const [totalConsultations, completedConsultations, totalAdmissions, totalDischarges, totalEdVisits] =
+        await Promise.all([
+          this.safeMetricCount(
+            tenantDb,
+            'appointments_total',
+            `SELECT COUNT(*)::int AS total FROM appointments`,
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'appointments_completed',
+            `SELECT COUNT(*)::int AS total FROM appointments WHERE LOWER(COALESCE(status, '')) = 'completed'`,
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'admissions_total',
+            `SELECT COUNT(*)::int AS total FROM admissions`,
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'discharges_total',
+            `SELECT COUNT(*)::int AS total FROM discharges`,
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'ed_visits_total',
+            `SELECT COUNT(*)::int AS total FROM ed_visits`,
+          ),
+        ]);
+
+      return {
+        totalConsultations,
+        completedConsultations,
+        totalAdmissions,
+        totalDischarges,
+        totalEdVisits,
+      };
+    }
+
+    if (profile === 'maternal_newborn') {
+      const [
+        anc1Plus,
+        anc4Plus,
+        anc8Plus,
+        totalDeliveries,
+        caesareanDeliveries,
+        liveBirths,
+        stillBirths,
+        lowBirthWeightCount,
+      ] = await Promise.all([
+        this.safeMetricCount(
+          tenantDb,
+          'anc_1_plus',
+          `
+          SELECT COUNT(DISTINCT maternity_enrollment_id)::int AS total
+          FROM anc_visits
+          WHERE visit_date >= $1 AND visit_date < $2
+          `,
+          [startDate, endDate],
+        ),
+        this.safeMetricCount(
+          tenantDb,
+          'anc_4_plus',
+          `
+          SELECT COUNT(*)::int AS total
+          FROM (
+            SELECT maternity_enrollment_id
+            FROM anc_visits
+            WHERE visit_date >= $1 AND visit_date < $2
+            GROUP BY maternity_enrollment_id
+            HAVING COUNT(*) >= 4
+          ) coverage
+          `,
+          [startDate, endDate],
+        ),
+        this.safeMetricCount(
+          tenantDb,
+          'anc_8_plus',
+          `
+          SELECT COUNT(*)::int AS total
+          FROM (
+            SELECT maternity_enrollment_id
+            FROM anc_visits
+            WHERE visit_date >= $1 AND visit_date < $2
+            GROUP BY maternity_enrollment_id
+            HAVING COUNT(*) >= 8
+          ) coverage
+          `,
+          [startDate, endDate],
+        ),
+        this.safeMetricCount(
+          tenantDb,
+          'deliveries_total',
+          `
+          SELECT COUNT(*)::int AS total
+          FROM deliveries
+          WHERE delivery_date >= $1 AND delivery_date < $2
+          `,
+          [startDate, endDate],
+        ),
+        this.safeMetricCount(
+          tenantDb,
+          'deliveries_c_section',
+          `
+          SELECT COUNT(*)::int AS total
+          FROM deliveries
+          WHERE delivery_date >= $1
+            AND delivery_date < $2
+            AND (
+              LOWER(COALESCE(delivery_type, '')) LIKE '%c%section%'
+              OR LOWER(COALESCE(delivery_method, '')) LIKE '%caesar%'
+            )
+          `,
+          [startDate, endDate],
+        ),
+        this.safeMetricCount(
+          tenantDb,
+          'births_live',
+          `
+          SELECT COUNT(*)::int AS total
+          FROM birth_outcomes bo
+          JOIN deliveries d ON d.id = bo.delivery_id
+          WHERE d.delivery_date >= $1
+            AND d.delivery_date < $2
+            AND (
+              LOWER(COALESCE(bo.newborn_outcome, '')) LIKE '%live%'
+              OR LOWER(COALESCE(bo.birth_outcome, '')) LIKE '%live%'
+            )
+          `,
+          [startDate, endDate],
+        ),
+        this.safeMetricCount(
+          tenantDb,
+          'births_still',
+          `
+          SELECT COUNT(*)::int AS total
+          FROM birth_outcomes bo
+          JOIN deliveries d ON d.id = bo.delivery_id
+          WHERE d.delivery_date >= $1
+            AND d.delivery_date < $2
+            AND (
+              LOWER(COALESCE(bo.newborn_outcome, '')) LIKE '%still%'
+              OR LOWER(COALESCE(bo.birth_outcome, '')) LIKE '%still%'
+            )
+          `,
+          [startDate, endDate],
+        ),
+        this.safeMetricCount(
+          tenantDb,
+          'births_low_weight',
+          `
+          SELECT COUNT(*)::int AS total
+          FROM birth_outcomes bo
+          JOIN deliveries d ON d.id = bo.delivery_id
+          WHERE d.delivery_date >= $1
+            AND d.delivery_date < $2
+            AND bo.birth_weight IS NOT NULL
+            AND bo.birth_weight > 0
+            AND bo.birth_weight < 2500
+          `,
+          [startDate, endDate],
+        ),
+      ]);
+
+      return {
+        anc1Plus,
+        anc4Plus,
+        anc8Plus,
+        totalDeliveries,
+        caesareanDeliveries,
+        liveBirths,
+        stillBirths,
+        lowBirthWeightCount,
+      };
+    }
+
+    if (profile === 'hiv_monthly') {
+      const [plhivActiveInCare, artCoverageCount, viralLoadSuppressed, viralLoadUndetectable, lossToFollowUpCount, treatmentFailureCount, tbScreenedCount] =
+        await Promise.all([
+          this.safeMetricCount(
+            tenantDb,
+            'hiv_active_in_care',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM hiv_care_enrollments
+            WHERE LOWER(COALESCE(enrollment_status, '')) IN ('active', 'in_care', 'incare', 'on_art')
+            `,
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'hiv_on_art',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM hiv_care_enrollments
+            WHERE art_start_date IS NOT NULL
+              AND LOWER(COALESCE(enrollment_status, '')) IN ('active', 'in_care', 'incare', 'on_art')
+            `,
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'hiv_vl_suppressed',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM hiv_clinical_visits
+            WHERE visit_date >= $1
+              AND visit_date < $2
+              AND viral_load IS NOT NULL
+              AND viral_load > 0
+              AND viral_load < 1000
+            `,
+            [startDate, endDate],
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'hiv_vl_undetectable',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM hiv_clinical_visits
+            WHERE visit_date >= $1
+              AND visit_date < $2
+              AND viral_load IS NOT NULL
+              AND viral_load > 0
+              AND viral_load < 50
+            `,
+            [startDate, endDate],
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'hiv_ltfu',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM hiv_care_enrollments
+            WHERE LOWER(COALESCE(enrollment_status, '')) LIKE '%lost%'
+            `,
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'hiv_treatment_failure',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM hiv_clinical_visits
+            WHERE visit_date >= $1
+              AND visit_date < $2
+              AND viral_load IS NOT NULL
+              AND viral_load > 1000
+            `,
+            [startDate, endDate],
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'hiv_tb_screened',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM hiv_clinical_visits
+            WHERE visit_date >= $1
+              AND visit_date < $2
+              AND (
+                tb_screening IS NOT NULL
+                OR tb_screened_legacy IS NOT NULL
+              )
+            `,
+            [startDate, endDate],
+          ),
+        ]);
+
+      return {
+        plhivActiveInCare,
+        artCoverageCount,
+        viralLoadSuppressed,
+        viralLoadUndetectable,
+        lossToFollowUpCount,
+        treatmentFailureCount,
+        tbScreenedCount,
+      };
+    }
+
+    if (profile === 'immunization_monthly') {
+      const [dtp1Administered, dtp3Administered, measlesDose1Administered, fullyImmunizedProxy, aefiReports] =
+        await Promise.all([
+          this.safeMetricCount(
+            tenantDb,
+            'immunization_dtp1',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM immunizations
+            WHERE administration_date >= $1
+              AND administration_date < $2
+              AND (
+                LOWER(COALESCE(vaccine_code, '') || ' ' || COALESCE(vaccine_name, '') || ' ' || COALESCE(cvx_code, '')) LIKE '%dtp1%'
+                OR (LOWER(COALESCE(vaccine_name, '')) LIKE '%pentavalent%' AND dose_number = 1)
+              )
+            `,
+            [startDate, endDate],
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'immunization_dtp3',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM immunizations
+            WHERE administration_date >= $1
+              AND administration_date < $2
+              AND (
+                LOWER(COALESCE(vaccine_code, '') || ' ' || COALESCE(vaccine_name, '') || ' ' || COALESCE(cvx_code, '')) LIKE '%dtp3%'
+                OR (LOWER(COALESCE(vaccine_name, '')) LIKE '%pentavalent%' AND dose_number = 3)
+              )
+            `,
+            [startDate, endDate],
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'immunization_mcv1',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM immunizations
+            WHERE administration_date >= $1
+              AND administration_date < $2
+              AND LOWER(COALESCE(vaccine_name, '') || ' ' || COALESCE(vaccine_code, '')) LIKE '%measles%'
+              AND COALESCE(dose_number, 1) = 1
+            `,
+            [startDate, endDate],
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'immunization_fully_proxy',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM (
+              SELECT patient_id
+              FROM immunizations
+              WHERE administration_date >= $1
+                AND administration_date < $2
+              GROUP BY patient_id
+              HAVING COUNT(*) >= 3
+            ) coverage
+            `,
+            [startDate, endDate],
+          ),
+          this.safeMetricCount(
+            tenantDb,
+            'immunization_aefi',
+            `
+            SELECT COUNT(*)::int AS total
+            FROM vaccine_adverse_events
+            WHERE event_date >= $1
+              AND event_date < $2
+            `,
+            [startDate, endDate],
+          ),
+        ]);
+
+      return {
+        dtp1Administered,
+        dtp3Administered,
+        measlesDose1Administered,
+        fullyImmunizedProxy,
+        aefiReports,
+      };
+    }
+
+    const [stockOnHandTotal, stockOutItemCount, dispensedUnits, dispensingTransactions] = await Promise.all([
+      this.safeMetricSum(
+        tenantDb,
+        'pharmacy_stock_on_hand',
+        `SELECT COALESCE(SUM(quantity_on_hand), 0)::numeric AS total FROM pharmacy_inventory`,
+      ),
+      this.safeMetricCount(
+        tenantDb,
+        'pharmacy_stockout_items',
+        `SELECT COUNT(*)::int AS total FROM pharmacy_inventory WHERE COALESCE(quantity_on_hand, 0) <= 0`,
+      ),
+      this.safeMetricSum(
+        tenantDb,
+        'pharmacy_dispensed_units',
+        `
+        SELECT COALESCE(SUM(pi.quantity_dispensed), 0)::numeric AS total
+        FROM pharmacy_dispensing_items pi
+        JOIN pharmacy_dispensings pd ON pd.id = pi.dispensing_id
+        WHERE pd.dispensing_date >= $1
+          AND pd.dispensing_date < $2
+        `,
+        [startDate, endDate],
+      ),
+      this.safeMetricCount(
+        tenantDb,
+        'pharmacy_dispensing_transactions',
+        `
+        SELECT COUNT(*)::int AS total
+        FROM pharmacy_dispensings
+        WHERE dispensing_date >= $1
+          AND dispensing_date < $2
+        `,
+        [startDate, endDate],
+      ),
+    ]);
+
+    return {
+      stockOnHandTotal,
+      stockOutItemCount,
+      dispensedUnits,
+      dispensingTransactions,
+    };
   }
 
   private async getProgramType(context: Dhis2Context, programId: string): Promise<string | null> {
@@ -1456,71 +2030,56 @@ export class Dhis2Service {
 
   async sendAggregateReport(reportData: any, tenantDb: DataSource, tenantId?: string) {
     try {
-      const appointmentRepository = tenantDb.getRepository(AppointmentSimple);
-      const admissionRepository = tenantDb.getRepository(Admission);
-      const dischargeRepository = tenantDb.getRepository(Discharge);
-      const edVisitRepository = tenantDb.getRepository(EDVisit);
-
-      const safeCount = async (label: string, countFn: () => Promise<number>): Promise<number> => {
-        try {
-          return await countFn();
-        } catch (error: any) {
-          if (this.isMissingRelationError(error)) {
-            this.logger.warn(
-              `DHIS2 aggregate metric source table for ${label} is missing in tenant DB; defaulting to 0.`,
-            );
-            return 0;
-          }
-          throw error;
-        }
-      };
-
-      const [totalAppointments, completedAppointments, totalAdmissions, totalDischarges, totalEdVisits] =
-        await Promise.all([
-          safeCount('appointments_total', () => appointmentRepository.count()),
-          safeCount('appointments_completed', () => appointmentRepository.count({ where: { status: 'completed' } })),
-          safeCount('admissions_total', () => admissionRepository.count()),
-          safeCount('discharges_total', () => dischargeRepository.count()),
-          safeCount('ed_visits_total', () => edVisitRepository.count()),
-        ]);
+      const report = reportData || {};
       const context = await this.resolveContext(tenantId);
 
       if (!context.enabled) {
         return {
           status: 'NOT_CONFIGURED',
-          period: reportData.period || 'unknown',
+          period: report.period || 'unknown',
           dataValues: 0,
           message: context.reason || 'DHIS2 is not configured for this tenant.',
         };
       }
 
-      const dataSet =
-        reportData.dataSet ||
-        context.config?.dataSetId ||
-        this.envDataSetId;
-      const period = reportData.period || new Date().toISOString().slice(0, 7).replace('-', '');
-      const orgUnit = reportData.orgUnit || context.config?.orgUnitId || this.envOrgUnit || 'YOUR_ORG_UNIT_ID';
+      const profileSelection = this.getAggregateProfile(report.profile);
+      if (!profileSelection) {
+        return {
+          status: 'NOT_CONFIGURED',
+          period: report.period || 'unknown',
+          dataValues: 0,
+          message: `Unsupported aggregate profile "${report.profile}".`,
+        };
+      }
+
+      const profile = profileSelection.key;
+      const profileDefinition = profileSelection.definition;
+      const period = report.period || new Date().toISOString().slice(0, 7).replace('-', '');
+      const orgUnit = report.orgUnit || context.config?.orgUnitId || this.envOrgUnit || 'YOUR_ORG_UNIT_ID';
+
+      let dataSet =
+        report.dataSet ||
+        (profile === 'service_delivery'
+          ? context.config?.dataSetId || this.envDataSetId
+          : undefined);
+      if (!dataSet && context.client) {
+        dataSet = await this.resolveDataSetIdByCode(context, profileDefinition.dataSetCode);
+      }
 
       const fallbackElementMap =
-        !reportData.dataElements && context.client
-          ? await this.resolveServiceDeliveryElementIds(context, dataSet)
+        !report.dataElements && context.client
+          ? await this.resolveAggregateElementIdsByCode(context, dataSet, profileDefinition.metricCodes)
           : {};
       const elementMap = {
         ...fallbackElementMap,
-        ...(reportData.dataElements || {}),
+        ...(report.dataElements || {}),
       };
 
-      const computedMetrics: Record<string, number> = {
-        totalConsultations: totalAppointments,
-        completedConsultations: completedAppointments,
-        totalAdmissions,
-        totalDischarges,
-        totalEdVisits,
-      };
+      const computedMetrics = await this.computeAggregateMetrics(profile, tenantDb, period);
 
       const payloadDataValues =
-        Array.isArray(reportData.dataValues) && reportData.dataValues.length > 0
-          ? reportData.dataValues
+        Array.isArray(report.dataValues) && report.dataValues.length > 0
+          ? report.dataValues
           : Object.entries(computedMetrics)
               .filter(([metricKey]) => Boolean(elementMap[metricKey]))
               .map(([metricKey, value]) => ({
@@ -1533,7 +2092,7 @@ export class Dhis2Service {
           status: 'NOT_CONFIGURED',
           period,
           dataValues: 0,
-          message: 'DHIS2 dataset is not configured for this tenant.',
+          message: `DHIS2 dataset is not configured for aggregate profile "${profile}".`,
         };
       }
 
@@ -1542,8 +2101,8 @@ export class Dhis2Service {
           status: 'NOT_CONFIGURED',
           period,
           dataValues: 0,
-          message:
-            'No aggregate data elements are configured. Provide reportData.dataElements or include mapped data elements in the tenant dataset.',
+              message:
+            `No aggregate data elements are configured for profile "${profile}". Provide reportData.dataElements or include mapped data elements in the target dataset.`,
         };
       }
 
@@ -1562,6 +2121,7 @@ export class Dhis2Service {
         this.logger.warn(`DHIS2 sendAggregateReport running in MOCK mode (${context.reason || 'fallback'})`);
         return {
           status: 'SUCCESS',
+          profile,
           period: aggregateData.period,
           dataValues: aggregateData.dataValues.length,
           message: '[MOCK] Aggregate report sent to DHIS2 successfully',
@@ -1602,6 +2162,7 @@ export class Dhis2Service {
         action: 'upsert',
         status: 'success',
         payload: {
+          profile,
           dataSet: aggregateData.dataSet,
           period: aggregateData.period,
           orgUnit: aggregateData.orgUnit,
@@ -1613,6 +2174,7 @@ export class Dhis2Service {
 
       return {
         status: response.data.status || 'SUCCESS',
+        profile,
         period: aggregateData.period,
         imported: importCounts.imported,
         updated: importCounts.updated,
@@ -1633,6 +2195,7 @@ export class Dhis2Service {
             status: 'error',
             errorMessage: error?.message || 'DHIS2 aggregate report send failed',
             payload: {
+              profile: reportData?.profile || 'service_delivery',
               period: reportData?.period || null,
               dataSet: reportData?.dataSet || null,
               orgUnit: reportData?.orgUnit || null,
@@ -1646,7 +2209,8 @@ export class Dhis2Service {
       }
       return {
         status: 'ERROR',
-        period: reportData.period || 'unknown',
+        profile: reportData?.profile || 'service_delivery',
+        period: reportData?.period || 'unknown',
         dataValues: 0,
         message: `DHIS2 aggregate report send failed: ${error.message}`,
         error: error.response?.data || error.message,

@@ -190,62 +190,138 @@ const run = async () => {
     attributes[attr.code] = entry.id;
   }
 
-  const dataElementSpecs = [
-    { code: 'MC_DE_TOTAL_CONSULTATIONS', name: 'Total Consultations' },
-    { code: 'MC_DE_COMPLETED_CONSULTATIONS', name: 'Completed Consultations' },
-    { code: 'MC_DE_TOTAL_ADMISSIONS', name: 'Total Admissions' },
-    { code: 'MC_DE_TOTAL_DISCHARGES', name: 'Total Discharges' },
-    { code: 'MC_DE_TOTAL_ED_VISITS', name: 'Total ED Visits' },
+  const aggregateProfiles = [
+    {
+      key: 'serviceDelivery',
+      dataSetCode: 'MC_DS_SERVICE_DELIVERY_MONTHLY',
+      dataSetName: 'MediCore Service Delivery Monthly',
+      dataSetShortName: 'MC Service Monthly',
+      metrics: [
+        { code: 'MC_DE_TOTAL_CONSULTATIONS', name: 'Total Consultations' },
+        { code: 'MC_DE_COMPLETED_CONSULTATIONS', name: 'Completed Consultations' },
+        { code: 'MC_DE_TOTAL_ADMISSIONS', name: 'Total Admissions' },
+        { code: 'MC_DE_TOTAL_DISCHARGES', name: 'Total Discharges' },
+        { code: 'MC_DE_TOTAL_ED_VISITS', name: 'Total ED Visits' },
+      ],
+    },
+    {
+      key: 'maternalNewborn',
+      dataSetCode: 'MC_DS_MATERNAL_NEWBORN_MONTHLY',
+      dataSetName: 'MediCore Maternal Newborn Monthly',
+      dataSetShortName: 'MC Maternal Monthly',
+      metrics: [
+        { code: 'MC_DE_MATERNAL_ANC1_PLUS', name: 'ANC 1+ Coverage Count' },
+        { code: 'MC_DE_MATERNAL_ANC4_PLUS', name: 'ANC 4+ Coverage Count' },
+        { code: 'MC_DE_MATERNAL_ANC8_PLUS', name: 'ANC 8+ Coverage Count' },
+        { code: 'MC_DE_MATERNAL_TOTAL_DELIVERIES', name: 'Total Deliveries' },
+        { code: 'MC_DE_MATERNAL_CSECTION_TOTAL', name: 'Caesarean Deliveries' },
+        { code: 'MC_DE_MATERNAL_LIVE_BIRTHS', name: 'Live Births' },
+        { code: 'MC_DE_MATERNAL_STILLBIRTHS', name: 'Stillbirths' },
+        { code: 'MC_DE_MATERNAL_LOW_BIRTH_WEIGHT_COUNT', name: 'Low Birth Weight Count' },
+      ],
+    },
+    {
+      key: 'hivMonthly',
+      dataSetCode: 'MC_DS_HIV_MONTHLY_RETURN',
+      dataSetName: 'MediCore HIV Monthly Return',
+      dataSetShortName: 'MC HIV Monthly',
+      metrics: [
+        { code: 'MC_DE_HIV_PLHIV_ACTIVE_IN_CARE', name: 'PLHIV Active In Care' },
+        { code: 'MC_DE_HIV_ART_COVERAGE_COUNT', name: 'On ART Count' },
+        { code: 'MC_DE_HIV_VL_SUPPRESSED_LT1000', name: 'Viral Load Suppressed <1000' },
+        { code: 'MC_DE_HIV_VL_UNDETECTABLE_LT50', name: 'Viral Load Undetectable <50' },
+        { code: 'MC_DE_HIV_LOST_TO_FOLLOWUP', name: 'Lost To Follow-Up Count' },
+        { code: 'MC_DE_HIV_TREATMENT_FAILURE_GT1000', name: 'Treatment Failure >1000' },
+        { code: 'MC_DE_HIV_TB_SCREENED', name: 'TB Screened Among PLHIV' },
+      ],
+    },
+    {
+      key: 'immunizationMonthly',
+      dataSetCode: 'MC_DS_IMMUNIZATION_MONTHLY',
+      dataSetName: 'MediCore Immunization Monthly',
+      dataSetShortName: 'MC Immun Monthly',
+      metrics: [
+        { code: 'MC_DE_IMMUNIZATION_DTP1', name: 'DTP1 Administered Count' },
+        { code: 'MC_DE_IMMUNIZATION_DTP3', name: 'DTP3 Administered Count' },
+        { code: 'MC_DE_IMMUNIZATION_MCV1', name: 'Measles Dose 1 Count' },
+        { code: 'MC_DE_IMMUNIZATION_FULLY_IMMUNIZED_PROXY', name: 'Fully Immunized Proxy Count' },
+        { code: 'MC_DE_IMMUNIZATION_AEFI_REPORTS', name: 'AEFI Reports Count' },
+      ],
+    },
+    {
+      key: 'pharmacyStock',
+      dataSetCode: 'MC_DS_PHARMACY_STOCK_MONTHLY',
+      dataSetName: 'MediCore Pharmacy Stock Monthly',
+      dataSetShortName: 'MC Pharmacy Monthly',
+      metrics: [
+        { code: 'MC_DE_PHARMACY_STOCK_ON_HAND_TOTAL', name: 'Stock On Hand Total' },
+        { code: 'MC_DE_PHARMACY_STOCKOUT_ITEMS', name: 'Stockout Item Count' },
+        { code: 'MC_DE_PHARMACY_DISPENSED_UNITS', name: 'Dispensed Units' },
+        { code: 'MC_DE_PHARMACY_DISPENSING_TRANSACTIONS', name: 'Dispensing Transactions' },
+      ],
+    },
   ];
 
-  const dataElements = [];
-  for (const de of dataElementSpecs) {
-    const entry = await ensureResource({
-      resource: 'dataElements',
-      listField: 'dataElements',
-      code: de.code,
-      payload: {
-        name: de.name,
-        shortName: de.name.slice(0, 50),
-        code: de.code,
-        valueType: 'INTEGER',
-        domainType: 'AGGREGATE',
-        aggregationType: 'SUM',
-        zeroIsSignificant: false,
-      },
-    });
-    dataElements.push(entry.id);
-  }
-
-  const dataSetCode = 'MC_DS_SERVICE_DELIVERY_MONTHLY';
-  const existingDataSet = await findByCode('dataSets', dataSetCode, 'dataSets');
-
-  let dataSetId;
-  if (existingDataSet?.id) {
-    dataSetId = existingDataSet.id;
-  } else {
-    const createdDataSet = await request('/dataSets', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'MediCore Service Delivery Monthly',
-        shortName: 'MC Service Monthly',
-        code: dataSetCode,
-        periodType: 'Monthly',
-        formType: 'DEFAULT',
-        dataSetElements: dataElements.map((id) => ({ dataElement: { id } })),
-        organisationUnits: [{ id: orgUnit.id }],
-      }),
-    });
-
-    dataSetId = uidFromCreateResponse(createdDataSet);
-    if (!dataSetId) {
-      const retry = await findByCode('dataSets', dataSetCode, 'dataSets');
-      if (!retry?.id) {
-        throw new Error('Failed to resolve dataSet ID after creation.');
+  const aggregateDataElementIds = {};
+  for (const profile of aggregateProfiles) {
+    for (const metric of profile.metrics) {
+      if (aggregateDataElementIds[metric.code]) {
+        continue;
       }
-      dataSetId = retry.id;
+
+      const entry = await ensureResource({
+        resource: 'dataElements',
+        listField: 'dataElements',
+        code: metric.code,
+        payload: {
+          name: metric.name,
+          shortName: metric.name.slice(0, 50),
+          code: metric.code,
+          valueType: 'INTEGER',
+          domainType: 'AGGREGATE',
+          aggregationType: 'SUM',
+          zeroIsSignificant: false,
+        },
+      });
+      aggregateDataElementIds[metric.code] = entry.id;
     }
   }
+
+  const dataSetIds = {};
+  for (const profile of aggregateProfiles) {
+    const existingDataSet = await findByCode('dataSets', profile.dataSetCode, 'dataSets');
+    let profileDataSetId;
+
+    if (existingDataSet?.id) {
+      profileDataSetId = existingDataSet.id;
+    } else {
+      const createdDataSet = await request('/dataSets', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: profile.dataSetName,
+          shortName: profile.dataSetShortName,
+          code: profile.dataSetCode,
+          periodType: 'Monthly',
+          formType: 'DEFAULT',
+          dataSetElements: profile.metrics.map((metric) => ({ dataElement: { id: aggregateDataElementIds[metric.code] } })),
+          organisationUnits: [{ id: orgUnit.id }],
+        }),
+      });
+
+      profileDataSetId = uidFromCreateResponse(createdDataSet);
+      if (!profileDataSetId) {
+        const retry = await findByCode('dataSets', profile.dataSetCode, 'dataSets');
+        if (!retry?.id) {
+          throw new Error(`Failed to resolve dataSet ID after creation for ${profile.dataSetCode}.`);
+        }
+        profileDataSetId = retry.id;
+      }
+    }
+
+    dataSetIds[profile.key] = profileDataSetId;
+  }
+
+  const dataSetId = dataSetIds.serviceDelivery;
 
   const trackerEventDataElementSpecs = [
     { code: 'MC_DE_EVENT_VISIT_TYPE', name: 'Visit Type', valueType: 'TEXT' },
@@ -314,6 +390,8 @@ const run = async () => {
     orgUnitId: orgUnit.id,
     trackedEntityTypeId: tet.id,
     dataSetId,
+    dataSetIds,
+    aggregateDataElementIds,
     programId: program.id,
     programStageId: programStage.id,
     attributeIds: attributes,

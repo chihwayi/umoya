@@ -51,14 +51,17 @@ Script: `scripts/bootstrap-dhis2-metadata.mjs`
   - `MC_ATTR_NATIONAL_ID`
   - `MC_ATTR_PHONE`
 - Aggregate Data Elements:
-  - `MC_DE_TOTAL_CONSULTATIONS`
-  - `MC_DE_COMPLETED_CONSULTATIONS`
-  - `MC_DE_TOTAL_ADMISSIONS`
-  - `MC_DE_TOTAL_DISCHARGES`
-  - `MC_DE_TOTAL_ED_VISITS`
-- DataSet:
-  - code: `MC_DS_SERVICE_DELIVERY_MONTHLY`
-  - period: monthly
+  - service delivery metrics (`MC_DE_TOTAL_*`),
+  - maternal/newborn metrics (`MC_DE_MATERNAL_*`),
+  - HIV monthly metrics (`MC_DE_HIV_*`),
+  - immunization metrics (`MC_DE_IMMUNIZATION_*`),
+  - pharmacy stock metrics (`MC_DE_PHARMACY_*`).
+- DataSets (monthly):
+  - `MC_DS_SERVICE_DELIVERY_MONTHLY`
+  - `MC_DS_MATERNAL_NEWBORN_MONTHLY`
+  - `MC_DS_HIV_MONTHLY_RETURN`
+  - `MC_DS_IMMUNIZATION_MONTHLY`
+  - `MC_DS_PHARMACY_STOCK_MONTHLY`
 - DHIS2 user org-unit access:
   - ensures authenticated PAT user has org-unit/data-view/TEI-search access,
   - preserves previously assigned org units when bootstrapping additional clinics.
@@ -72,7 +75,9 @@ On success:
 Use output IDs in tenant config:
 - `orgUnitId`
 - `trackedEntityTypeId`
-- `dataSetId`
+- `dataSetId` (service delivery default)
+- `dataSetIds` (all aggregate datasets)
+- `aggregateDataElementIds`
 
 ## 6. Tenant Config Follow-Up
 

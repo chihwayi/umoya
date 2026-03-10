@@ -151,7 +151,7 @@ Indicators:
 Primary sources:
 - `immunizations`, `vaccine_adverse_events`, `immunization_registry_submissions`
 
-### Dataset 5: `MC_PHARMACY_STOCK_MONTHLY` (phase 2)
+### Dataset 5: `MC_PHARMACY_STOCK_MONTHLY`
 Cadence: Monthly
 
 Indicators:
@@ -161,6 +161,13 @@ Indicators:
 
 Primary sources:
 - `pharmacy_inventory`, `pharmacy_stock_movements`, `pharmacy_dispensings`
+
+Runtime `profile` keys for `POST /api/dhis2/reports/aggregate`:
+- `service_delivery`
+- `maternal_newborn`
+- `hiv_monthly`
+- `immunization_monthly`
+- `pharmacy_stock`
 
 ## 6. Indicator Mapping Template (Use Per Data Element)
 

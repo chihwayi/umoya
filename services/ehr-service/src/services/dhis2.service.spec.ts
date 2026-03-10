@@ -315,4 +315,75 @@ describe('Dhis2Service', () => {
     expect(result.attempted).toBe(0);
     expect(result.skipped).toBe(1);
   });
+
+  it('builds maternal monthly aggregate payload in mock mode', async () => {
+    process.env.DHIS2_USE_MOCK = 'true';
+
+    const { service } = createService(null);
+    const tenantDb = {
+      query: jest.fn().mockImplementation((sql: string) => {
+        if (sql.includes('COUNT(DISTINCT maternity_enrollment_id)')) {
+          return Promise.resolve([{ total: 4 }]);
+        }
+        if (sql.includes('HAVING COUNT(*) >= 4')) {
+          return Promise.resolve([{ total: 2 }]);
+        }
+        if (sql.includes('HAVING COUNT(*) >= 8')) {
+          return Promise.resolve([{ total: 1 }]);
+        }
+        if (sql.includes('FROM deliveries') && sql.includes('COUNT(*)::int AS total')) {
+          return Promise.resolve([{ total: 3 }]);
+        }
+        if (sql.includes('births_live')) {
+          return Promise.resolve([{ total: 2 }]);
+        }
+        if (sql.includes('births_still')) {
+          return Promise.resolve([{ total: 1 }]);
+        }
+        return Promise.resolve([{ total: 0 }]);
+      }),
+    } as unknown as DataSource;
+
+    const result = await service.sendAggregateReport(
+      {
+        profile: 'maternal_newborn',
+        dataSet: 'DS_MATERNAL',
+        period: '202602',
+        orgUnit: 'OU_A',
+        dataElements: {
+          anc1Plus: 'DE_ANC1',
+          totalDeliveries: 'DE_DELIVERIES',
+          liveBirths: 'DE_LIVE_BIRTHS',
+        },
+      },
+      tenantDb,
+      'tenant-a',
+    );
+
+    expect(result.status).toBe('SUCCESS');
+    expect(result.profile).toBe('maternal_newborn');
+    expect(result.dataValues).toBe(3);
+  });
+
+  it('returns not configured for unsupported aggregate profile', async () => {
+    process.env.DHIS2_USE_MOCK = 'true';
+
+    const { service } = createService(null);
+    const tenantDb = {
+      query: jest.fn().mockResolvedValue([{ total: 0 }]),
+    } as unknown as DataSource;
+
+    const result = await service.sendAggregateReport(
+      {
+        profile: 'unknown_profile',
+        dataSet: 'DS_X',
+        period: '202602',
+      },
+      tenantDb,
+      'tenant-a',
+    );
+
+    expect(result.status).toBe('NOT_CONFIGURED');
+    expect(result.message).toContain('Unsupported aggregate profile');
+  });
 });

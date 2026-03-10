@@ -1,6 +1,6 @@
 # DHIS2 Tenant Sync Sprint Execution (March 2026)
 
-Status: Active (Sprint 5 in progress)
+Status: Active (Sprint 6 high-value dataset expansion in progress)
 Start date: 2026-03-10
 Target baseline: DHIS2 `2.40.0` local UI (`http://localhost:8888`), container access (`http://host.docker.internal:8888`)
 
@@ -79,6 +79,18 @@ Scope:
 Acceptance:
 - Operators can see tenant-level health and retry safely.
 
+## Sprint 6: High-Value Dataset Expansion
+
+Scope:
+- Implement aggregate profile pipelines for maternal/newborn, HIV monthly, immunization monthly, and pharmacy stock.
+- Expand blank-DHIS2 bootstrap metadata so profile datasets and elements are available by code.
+- Validate profile pushes against live DHIS2 tenant flow.
+
+Acceptance:
+- Profile pushes succeed via `POST /dhis2/reports/aggregate` using profile keys.
+- Dataset/data-element resolution works by DHIS2 metadata codes.
+- Build/tests pass and live validation is documented.
+
 ## 4. Implementation Board (Current)
 
 Completed:
@@ -102,7 +114,7 @@ Completed (Sprint 4):
 ## 5. Validation Checklist
 
 - [x] PAT auth validated against local DHIS2 (`/api/me`).
-- [ ] Tenant A and Tenant B write only to their own org units.
+- [x] Tenant A and Tenant B write only to their own org units.
 - [x] No config => `not_configured` response, no DHIS2 writes.
 - [x] Build/test checks pass in touched services.
 - [x] Commit message references sprint task IDs.
@@ -120,10 +132,15 @@ In progress (Sprint 5):
 3. `S5-T3` Validate multi-tenant org-unit isolation with at least two tenants. (complete)
 4. `S5-T4` Add alerting hooks for sustained DHIS2 auth/push failures. (complete, optional webhook)
 
+Completed (Sprint 6):
+1. `S6-T1` Add aggregate profile engine for `maternal_newborn`, `hiv_monthly`, `immunization_monthly`, `pharmacy_stock`.
+2. `S6-T2` Add dataset/data-element resolution by DHIS2 metadata code for profile pushes.
+3. `S6-T3` Expand bootstrap metadata for all aggregate datasets and elements.
+4. `S6-T4` Validate profile pushes live against DHIS2 2.40.0.
+
 ## 7. Immediate Next Action
 
-Start Sprint 5 acceptance checks:
-- expose tenant-level retry controls and error drilldown from `dhis2_sync_log` (S5-T1 complete in API),
-- add automated scheduled sync orchestration per tenant (S5-T2 complete, disabled by default),
-- validate a second tenant/org unit end-to-end isolation (S5-T3 complete: testghost=`tRMlWBGMtE1`, testghost2=`kuDwB5vB5lm`).
-- alert hooks configured by env (`DHIS2_ALERT_*`, optional `DHIS2_ALERT_WEBHOOK_URL`) for sustained failure thresholds (S5-T4 complete).
+Start next execution block:
+- expose per-tenant scheduler controls (frequency, retry limit, alert threshold) in admin API/UI,
+- add alert sink integration for production channels (Slack/PagerDuty),
+- widen profile QA with denominator/coverage-specific validation rules.
