@@ -1390,6 +1390,7 @@ export class Dhis2Service {
       const retryDecision = this.getRetryDecision(row);
 
       if (entityType !== 'patient' && !retryDecision.retryable) {
+        await this.markSyncLogSkipped(tenantDb, row.id, retryDecision.reason);
         skipped += 1;
         results.push({
           logId: row.id,
@@ -1402,6 +1403,7 @@ export class Dhis2Service {
 
       if (entityType === 'patient') {
         if (patientSyncTriggered) {
+          await this.markSyncLogSkipped(tenantDb, row.id, 'Patient retry already triggered once in this batch.');
           skipped += 1;
           results.push({
             logId: row.id,
@@ -1429,6 +1431,7 @@ export class Dhis2Service {
         const retryResult = await this.syncPatients(tenantDb, tenantId);
         const ok = retryResult.status === 'SUCCESS' || retryResult.status === 'PARTIAL_SUCCESS';
         if (ok) {
+          await this.markSyncLogSkipped(tenantDb, row.id, 'Superseded by bulk patient sync retry.');
           succeeded += 1;
         } else {
           failed += 1;
@@ -1443,6 +1446,7 @@ export class Dhis2Service {
       }
 
       if (!requestPayload || typeof requestPayload !== 'object') {
+        await this.markSyncLogSkipped(tenantDb, row.id, 'No request payload found in sync log; cannot replay automatically.');
         skipped += 1;
         results.push({
           logId: row.id,
@@ -1518,6 +1522,7 @@ export class Dhis2Service {
       }
 
       skipped += 1;
+      await this.markSyncLogSkipped(tenantDb, row.id, `Entity type ${entityType} does not support automatic retry yet.`);
       results.push({
         logId: row.id,
         entityType,
@@ -1573,6 +1578,21 @@ export class Dhis2Service {
       retryable: true,
       reason: 'Retryable.',
     };
+  }
+
+  private async markSyncLogSkipped(tenantDb: DataSource, logId: string, reason: string): Promise<void> {
+    await tenantDb.query(
+      `
+      UPDATE dhis2_sync_log
+      SET
+        status = 'skipped',
+        action = 'skip',
+        error_message = $2,
+        synced_at = NOW()
+      WHERE id = $1
+      `,
+      [logId, reason],
+    );
   }
 
   async getRecentErrorCount(tenantDb: DataSource, lookbackHours = 24): Promise<number> {
