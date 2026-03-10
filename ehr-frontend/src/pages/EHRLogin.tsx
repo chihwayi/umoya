@@ -202,10 +202,7 @@ const EHRLogin: React.FC = () => {
             <div className="text-xs uppercase tracking-[0.24em] text-[#7A92B8]">Clinic access</div>
             <div className="mt-5 flex justify-center">
               <div className="h-28 w-28 rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(0,200,150,0.14),rgba(43,127,255,0.14))] p-[1px] shadow-[0_0_50px_rgba(0,200,150,0.14)]">
-                <div
-                  className="h-full w-full overflow-hidden bg-[#08111E]"
-                  style={{ clipPath: 'polygon(50% 0%, 100% 36%, 82% 100%, 18% 100%, 0% 36%)' }}
-                >
+                <div className="h-full w-full overflow-hidden rounded-[29px] bg-[#08111E]">
                   {!tenantInfoResolved || (tenantInfo?.logoUrl && !tenantLogoReady) ? (
                     <div className="h-full w-full animate-pulse bg-[linear-gradient(135deg,rgba(14,24,41,0.98),rgba(16,33,57,0.98))]" />
                   ) : tenantInfo?.logoUrl && !imgError ? (
