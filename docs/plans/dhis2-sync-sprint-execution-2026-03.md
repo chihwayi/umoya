@@ -1,6 +1,6 @@
 # DHIS2 Tenant Sync Sprint Execution (March 2026)
 
-Status: Active (Sprint 6 high-value dataset expansion in progress)
+Status: Active (Sprint 6 complete; Sprint 7 ops hardening in progress)
 Start date: 2026-03-10
 Target baseline: DHIS2 `2.40.0` local UI (`http://localhost:8888`), container access (`http://host.docker.internal:8888`)
 
@@ -131,6 +131,8 @@ In progress (Sprint 5):
 2. `S5-T2` Add scheduled tenant sync orchestration with safe defaults. (complete, feature-flagged by `DHIS2_SCHEDULED_SYNC_ENABLED`)
 3. `S5-T3` Validate multi-tenant org-unit isolation with at least two tenants. (complete)
 4. `S5-T4` Add alerting hooks for sustained DHIS2 auth/push failures. (complete, optional webhook)
+5. `S5-T5` Add per-tenant scheduler controls in `tenant_dhis2_config` (`scheduledSyncEnabled`, retry/alert fields) and wire scheduler to tenant config. (complete)
+6. `S5-T6` Apply master schema migration + run tenant repair across all provisioned tenant DBs. (complete)
 
 Completed (Sprint 6):
 1. `S6-T1` Add aggregate profile engine for `maternal_newborn`, `hiv_monthly`, `immunization_monthly`, `pharmacy_stock`.
@@ -141,6 +143,6 @@ Completed (Sprint 6):
 ## 7. Immediate Next Action
 
 Start next execution block:
-- expose per-tenant scheduler controls (frequency, retry limit, alert threshold) in admin API/UI,
 - add alert sink integration for production channels (Slack/PagerDuty),
+- add scheduler frequency override support (per-tenant cadence windows),
 - widen profile QA with denominator/coverage-specific validation rules.

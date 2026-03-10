@@ -16,6 +16,11 @@ export interface TenantDhis2ConfigPayload {
   trackedEntityTypeId?: string | null;
   datasetId?: string | null;
   enabled?: boolean;
+  scheduledSyncEnabled?: boolean;
+  scheduledRetryLimit?: number;
+  alertLookbackHours?: number;
+  alertErrorThreshold?: number;
+  alertWebhookUrl?: string | null;
 }
 
 export interface TenantDhis2ConfigView {
@@ -30,6 +35,11 @@ export interface TenantDhis2ConfigView {
   trackedEntityTypeId: string | null;
   datasetId: string | null;
   enabled: boolean;
+  scheduledSyncEnabled: boolean;
+  scheduledRetryLimit: number;
+  alertLookbackHours: number;
+  alertErrorThreshold: number;
+  alertWebhookUrl: string | null;
   updatedAt: string | null;
 }
 
@@ -188,6 +198,11 @@ export class TenantService implements OnModuleInit {
         tracked_entity_type_id,
         dataset_id,
         COALESCE(enabled, true) AS enabled,
+        COALESCE(scheduled_sync_enabled, false) AS scheduled_sync_enabled,
+        COALESCE(scheduled_retry_limit, 20) AS scheduled_retry_limit,
+        COALESCE(alert_lookback_hours, 24) AS alert_lookback_hours,
+        COALESCE(alert_error_threshold, 10) AS alert_error_threshold,
+        alert_webhook_url,
         updated_at
       FROM tenant_dhis2_config
       WHERE tenant_id = $1
@@ -216,6 +231,11 @@ export class TenantService implements OnModuleInit {
       trackedEntityTypeId: row.tracked_entity_type_id ?? null,
       datasetId: row.dataset_id ?? null,
       enabled: Boolean(row.enabled),
+      scheduledSyncEnabled: Boolean(row.scheduled_sync_enabled),
+      scheduledRetryLimit: Number(row.scheduled_retry_limit || 20),
+      alertLookbackHours: Number(row.alert_lookback_hours || 24),
+      alertErrorThreshold: Number(row.alert_error_threshold || 10),
+      alertWebhookUrl: row.alert_webhook_url ?? null,
       updatedAt: row.updated_at ? String(row.updated_at) : null,
     };
   }
@@ -225,11 +245,36 @@ export class TenantService implements OnModuleInit {
     payload: TenantDhis2ConfigPayload,
   ): Promise<TenantDhis2ConfigView> {
     await this.findById(tenantId);
+    const existingConfig = await this.getTenantDhis2Config(tenantId);
 
     const baseUrl = String(payload.baseUrl || '').trim();
     const orgUnitId = String(payload.orgUnitId || '').trim();
     const authType = payload.authType === 'basic' ? 'basic' : 'pat';
     const apiVersion = String(payload.apiVersion || '40').trim();
+    const enabled =
+      payload.enabled === undefined ? Boolean(existingConfig?.enabled ?? true) : payload.enabled !== false;
+    const scheduledSyncEnabled =
+      payload.scheduledSyncEnabled === undefined
+        ? Boolean(existingConfig?.scheduledSyncEnabled ?? false)
+        : payload.scheduledSyncEnabled === true;
+    const scheduledRetryLimit = Math.min(
+      Math.max(Number(payload.scheduledRetryLimit ?? existingConfig?.scheduledRetryLimit ?? 20), 1),
+      200,
+    );
+    const alertLookbackHours = Math.min(
+      Math.max(Number(payload.alertLookbackHours ?? existingConfig?.alertLookbackHours ?? 24), 1),
+      720,
+    );
+    const alertErrorThreshold = Math.min(
+      Math.max(Number(payload.alertErrorThreshold ?? existingConfig?.alertErrorThreshold ?? 10), 1),
+      10000,
+    );
+    const alertWebhookUrl =
+      payload.alertWebhookUrl === undefined
+        ? existingConfig?.alertWebhookUrl ?? null
+        : payload.alertWebhookUrl
+          ? String(payload.alertWebhookUrl).trim()
+          : null;
 
     if (!baseUrl) {
       throw new ConflictException('baseUrl is required');
@@ -262,10 +307,15 @@ export class TenantService implements OnModuleInit {
         tracked_entity_type_id,
         dataset_id,
         enabled,
+        scheduled_sync_enabled,
+        scheduled_retry_limit,
+        alert_lookback_hours,
+        alert_error_threshold,
+        alert_webhook_url,
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW())
       ON CONFLICT (tenant_id)
       DO UPDATE SET
         base_url = EXCLUDED.base_url,
@@ -278,6 +328,11 @@ export class TenantService implements OnModuleInit {
         tracked_entity_type_id = EXCLUDED.tracked_entity_type_id,
         dataset_id = EXCLUDED.dataset_id,
         enabled = EXCLUDED.enabled,
+        scheduled_sync_enabled = EXCLUDED.scheduled_sync_enabled,
+        scheduled_retry_limit = EXCLUDED.scheduled_retry_limit,
+        alert_lookback_hours = EXCLUDED.alert_lookback_hours,
+        alert_error_threshold = EXCLUDED.alert_error_threshold,
+        alert_webhook_url = EXCLUDED.alert_webhook_url,
         updated_at = NOW()
       `,
       [
@@ -291,7 +346,12 @@ export class TenantService implements OnModuleInit {
         orgUnitId,
         payload.trackedEntityTypeId ?? null,
         payload.datasetId ?? null,
-        payload.enabled !== false,
+        enabled,
+        scheduledSyncEnabled,
+        scheduledRetryLimit,
+        alertLookbackHours,
+        alertErrorThreshold,
+        alertWebhookUrl,
       ],
     );
 

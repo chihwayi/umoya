@@ -152,6 +152,11 @@ export interface TenantDhis2Config {
   trackedEntityTypeId?: string | null;
   dataSetId?: string | null;
   enabled: boolean;
+  scheduledSyncEnabled?: boolean;
+  scheduledRetryLimit?: number;
+  alertLookbackHours?: number;
+  alertErrorThreshold?: number;
+  alertWebhookUrl?: string | null;
 }
 
 @Injectable()
@@ -250,7 +255,12 @@ export class TenantService {
           c.org_unit_id,
           c.tracked_entity_type_id,
           c.dataset_id,
-          COALESCE(c.enabled, true) AS enabled
+          COALESCE(c.enabled, true) AS enabled,
+          COALESCE(c.scheduled_sync_enabled, false) AS scheduled_sync_enabled,
+          COALESCE(c.scheduled_retry_limit, 20) AS scheduled_retry_limit,
+          COALESCE(c.alert_lookback_hours, 24) AS alert_lookback_hours,
+          COALESCE(c.alert_error_threshold, 10) AS alert_error_threshold,
+          c.alert_webhook_url
         FROM tenants t
         LEFT JOIN tenant_dhis2_config c
           ON c.tenant_id = t.id
@@ -283,6 +293,11 @@ export class TenantService {
         trackedEntityTypeId: row.tracked_entity_type_id ?? null,
         dataSetId: row.dataset_id ?? null,
         enabled: Boolean(row.enabled),
+        scheduledSyncEnabled: Boolean(row.scheduled_sync_enabled),
+        scheduledRetryLimit: Number(row.scheduled_retry_limit || 20),
+        alertLookbackHours: Number(row.alert_lookback_hours || 24),
+        alertErrorThreshold: Number(row.alert_error_threshold || 10),
+        alertWebhookUrl: row.alert_webhook_url ?? null,
       };
     } catch (error) {
       this.logger.error(`Failed to load tenant DHIS2 config: ${tenantIdentifier}`, error);

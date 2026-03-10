@@ -31,7 +31,7 @@ Store generated token in backend env as `DHIS2_PAT` or tenant config API input.
 
 ## 3. Environment Variables (Fallback Mode)
 
-Per-tenant config is primary. These env vars are fallback/default when tenant config is absent:
+Per-tenant config is primary. These env vars are global defaults/kill-switches:
 
 ```bash
 DHIS2_URL=http://host.docker.internal:8888
@@ -51,7 +51,11 @@ DHIS2_ALERT_WEBHOOK_URL=
 If EHR runs outside Docker, use `http://localhost:8888` instead.
 
 `DHIS2_SCHEDULED_SYNC_ENABLED=true` turns on hourly background tenant sync in `ehr-service`.
-If `DHIS2_ALERT_WEBHOOK_URL` is set, the scheduler posts alert payloads when tenant DHIS2 error counts exceed threshold.
+Actual tenant execution still requires that tenant’s config to have:
+- `enabled=true`
+- `scheduledSyncEnabled=true`
+
+If tenant-level alert webhook is not set, scheduler falls back to `DHIS2_ALERT_WEBHOOK_URL`.
 
 PAT auth header used by integration:
 
@@ -109,11 +113,17 @@ Tenant service endpoints (JWT-protected):
   "orgUnitId": "DHIS2_ORG_UNIT_UID",
   "trackedEntityTypeId": "DHIS2_TET_UID",
   "datasetId": "DHIS2_DATASET_UID",
-  "enabled": true
+  "enabled": true,
+  "scheduledSyncEnabled": true,
+  "scheduledRetryLimit": 20,
+  "alertLookbackHours": 24,
+  "alertErrorThreshold": 10,
+  "alertWebhookUrl": ""
 }
 ```
 
 Secrets are not returned in full; PAT is masked in read responses.
+Scheduler/alert fields are optional; if omitted they keep existing tenant values (or system defaults for first create).
 
 ## 6. Sync Endpoints (Tenant Scoped)
 
@@ -192,6 +202,7 @@ Behavior:
 - `403 Forbidden`: PAT lacks required authorities.
 - `404 Not Found`: wrong API version or missing metadata IDs.
 - `status=PARTIAL_SUCCESS`: some entities failed; inspect `dhis2_sync_log`.
+- Hourly scheduler not running for a tenant: verify both `DHIS2_SCHEDULED_SYNC_ENABLED=true` and tenant `scheduledSyncEnabled=true`.
 
 ## 9. References
 
