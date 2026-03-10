@@ -316,6 +316,40 @@ describe('Dhis2Service', () => {
     expect(result.skipped).toBe(1);
   });
 
+  it('skips non-retryable 4xx failed logs to avoid replaying invalid payloads', async () => {
+    process.env.DHIS2_USE_MOCK = 'false';
+
+    const { service } = createService(null);
+    const sendEventSpy = jest.spyOn(service, 'sendEvent');
+
+    const tenantDb = {
+      query: jest.fn().mockImplementation((sql: string) => {
+        if (sql.includes('FROM dhis2_sync_log') && sql.includes('status = $1')) {
+          return Promise.resolve([
+            {
+              id: 'log-evt-409',
+              entity_type: 'event',
+              status: 'error',
+              error_message: 'Request failed with status code 409',
+              payload: {
+                request: { program: 'BAD_PROGRAM', patientId: 'p-1' },
+                response: { httpStatusCode: 409 },
+              },
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      }),
+    } as unknown as DataSource;
+
+    const result = await service.retryFailedSync(tenantDb, 'tenant-a', { entityType: 'event', limit: 10 });
+
+    expect(sendEventSpy).not.toHaveBeenCalled();
+    expect(result.attempted).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
+
   it('builds maternal monthly aggregate payload in mock mode', async () => {
     process.env.DHIS2_USE_MOCK = 'true';
 

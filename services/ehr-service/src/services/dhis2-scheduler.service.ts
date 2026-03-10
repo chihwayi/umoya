@@ -306,6 +306,15 @@ export class Dhis2SchedulerService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    await tenantDb.query(`
+      ALTER TABLE dhis2_sync_log
+      DROP CONSTRAINT IF EXISTS dhis2_sync_log_action_check
+    `);
+    await tenantDb.query(`
+      ALTER TABLE dhis2_sync_log
+      ADD CONSTRAINT dhis2_sync_log_action_check
+      CHECK (action IN ('create','update','upsert','skip','error','run_now'))
+    `);
   }
 
   private async insertManualRunAuditLog(

@@ -230,6 +230,10 @@ describe('Dhis2SchedulerService', () => {
     expect(dhis2ServiceMock.syncPatients).toHaveBeenCalledWith(tenantDb, 'tenant-a');
     expect(dhis2ServiceMock.retryFailedSync).toHaveBeenCalledWith(tenantDb, 'tenant-a', { limit: 5 });
     expect((tenantDb.query as any).mock.calls.some((call: any[]) => String(call[0]).includes('INSERT INTO dhis2_sync_log'))).toBe(true);
+    const insertCall = (tenantDb.query as any).mock.calls.find((call: any[]) =>
+      String(call[0]).includes('INSERT INTO dhis2_sync_log'),
+    );
+    expect(insertCall?.[1]?.[3]).toBe('run_now');
   });
 
   it('returns FAILED when manual tenant sync throws and still records audit', async () => {

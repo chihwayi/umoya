@@ -516,6 +516,15 @@ export class Dhis2Service {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    await tenantDb.query(`
+      ALTER TABLE dhis2_sync_log
+      DROP CONSTRAINT IF EXISTS dhis2_sync_log_action_check
+    `);
+    await tenantDb.query(`
+      ALTER TABLE dhis2_sync_log
+      ADD CONSTRAINT dhis2_sync_log_action_check
+      CHECK (action IN ('create','update','upsert','skip','error','run_now'))
+    `);
   }
 
   private async loadPatientMappings(tenantDb: DataSource): Promise<Map<string, string>> {
@@ -1378,6 +1387,18 @@ export class Dhis2Service {
       const payload = (row.payload || {}) as Record<string, any>;
       const requestPayload = payload.request;
       const entityType = row.entity_type;
+      const retryDecision = this.getRetryDecision(row);
+
+      if (entityType !== 'patient' && !retryDecision.retryable) {
+        skipped += 1;
+        results.push({
+          logId: row.id,
+          entityType,
+          status: 'skipped',
+          message: retryDecision.reason,
+        });
+        continue;
+      }
 
       if (entityType === 'patient') {
         if (patientSyncTriggered) {
@@ -1514,6 +1535,43 @@ export class Dhis2Service {
       failed,
       skipped,
       results,
+    };
+  }
+
+  private getRetryDecision(row: Dhis2SyncLogRow): { retryable: boolean; reason: string } {
+    const payload = (row.payload || {}) as Record<string, any>;
+    const rawStatusCode =
+      payload?.response?.httpStatusCode ??
+      payload?.response?.statusCode ??
+      payload?.httpStatusCode;
+    const statusCode = Number(rawStatusCode);
+
+    if (
+      Number.isFinite(statusCode) &&
+      statusCode >= 400 &&
+      statusCode < 500 &&
+      statusCode !== 408 &&
+      statusCode !== 429
+    ) {
+      return {
+        retryable: false,
+        reason: `Non-retryable DHIS2 client error (${statusCode}).`,
+      };
+    }
+
+    const importDescription = String(
+      payload?.response?.response?.importSummaries?.[0]?.description || '',
+    ).toLowerCase();
+    if (importDescription.includes('does not point to a valid')) {
+      return {
+        retryable: false,
+        reason: 'Non-retryable DHIS2 validation failure in import summary.',
+      };
+    }
+
+    return {
+      retryable: true,
+      reason: 'Retryable.',
     };
   }
 

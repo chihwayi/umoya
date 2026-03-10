@@ -200,6 +200,7 @@ Behavior:
 - replays failed logs in tenant scope only,
 - requires `payload.request` in the failed log for automatic replay,
 - supports entity types: `patient`, `event`, `aggregate`, `data_value_set`,
+- skips non-retryable DHIS2 client validation failures (HTTP 4xx except 408/429),
 - `dryRun=true` returns what would be retried without pushing.
 
 ### C) Manual run-now sync
