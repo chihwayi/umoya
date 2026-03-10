@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { pharmacyApi } from '../services/api';
 import { useParams } from 'react-router-dom';
+import { useNotification } from './GlobalNotification';
 
 interface PendingPrescription {
   id: string;
@@ -40,6 +41,7 @@ interface PendingPrescription {
 
 const PharmacyDispensing: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const { showSuccess } = useNotification();
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
   const [prescriptions, setPrescriptions] = useState<PendingPrescription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,7 +123,7 @@ const PharmacyDispensing: React.FC = () => {
       setDispensingItems([]);
       setPaymentMethod('cash');
       setNotes('');
-      alert('Prescription dispensed successfully!');
+      showSuccess('Dispensing complete', 'Prescription dispensed successfully.');
     } catch (err: any) {
       console.error('Failed to dispense prescription:', err);
       setError(err.response?.data?.message || 'Failed to dispense prescription');
@@ -328,4 +330,3 @@ const PharmacyDispensing: React.FC = () => {
 };
 
 export default PharmacyDispensing;
-

@@ -38,6 +38,12 @@ import LabResultsViewer from '../components/LabResultsViewer';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 import { GuidelineResult } from '../types/guidelines';
+import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
+import {
+  hasModuleAccess,
+  notifyTenantSubscriptionStatus,
+  getBillingToneClasses,
+} from '../utils/tenantSubscription';
 
 interface Patient {
   id: string;
@@ -201,9 +207,10 @@ const buildFinanceDetails = (appointment: Appointment) => {
 
 const NurseDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const brandLogoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
   const navigate = useNavigate();
   const location = useLocation();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showWarning } = useNotification();
 
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -980,7 +987,11 @@ const NurseDashboard: React.FC = () => {
           { label: 'Maternity Workspace', tab: 'maternity', icon: Heart },
         ]
       }
-    ];
+    ].filter((item) => {
+      if (item.section === 'hiv') return hasModuleAccess(tenantInfo, 'hiv');
+      if (item.section === 'maternity') return hasModuleAccess(tenantInfo, 'maternity');
+      return true;
+    });
   };
 
   // AI Guideline Search State
@@ -1545,7 +1556,15 @@ const NurseDashboard: React.FC = () => {
       { icon: FileText, label: 'Nursing Notes', desc: 'Document care provided', color: 'from-green-500 to-emerald-500', action: () => setActiveTab('notes') },
       { icon: TestTube, label: 'HIV Testing', desc: 'Perform HIV test', color: 'from-emerald-600 to-teal-700', action: () => setShowHivTestingModal(true) },
       { icon: FolderOpen, label: 'Shared Documents', desc: 'View shared patient documents', color: 'from-violet-500 to-purple-600', action: () => setShowSharedDocumentsModal(true), badge: sharedDocumentsCount > 0 ? sharedDocumentsCount : undefined },
-    ];
+    ].filter((action) => {
+      if (action.label === 'Emergency Dept') return hasModuleAccess(tenantInfo, 'emergency');
+      if (action.label === 'Operating Room') return hasModuleAccess(tenantInfo, 'operating_room');
+      if (action.label === 'Blood Bank') return hasModuleAccess(tenantInfo, 'blood_bank');
+      if (action.label === 'Sepsis Management') return hasModuleAccess(tenantInfo, 'emergency');
+      if (action.label === 'Infection Control') return hasModuleAccess(tenantInfo, 'infection_control');
+      if (action.label === 'HIV Testing') return hasModuleAccess(tenantInfo, 'hiv');
+      return true;
+    });
   };
 
   const queueStats = getQueueStats();
@@ -1563,6 +1582,12 @@ const NurseDashboard: React.FC = () => {
     { label: 'Awaiting Payment', value: queueStats.awaitingPayment.toString(), icon: CreditCard, color: 'text-amber-600' },
     { label: 'Cross-Module', value: crossModuleSummary.total.toString(), icon: Sparkles, color: 'text-indigo-600' },
   ];
+  const billingSummary = tenantInfo?.billingSummary;
+  const billingTone = getBillingToneClasses(billingSummary);
+
+  useEffect(() => {
+    notifyTenantSubscriptionStatus(tenantInfo, { showWarning, showError });
+  }, [tenantInfo, showWarning, showError]);
 
   const handleExecuteOrder = (orderId: string) => {
     setExecutingOrderId(orderId);
@@ -3122,13 +3147,18 @@ const NurseDashboard: React.FC = () => {
                 <img src={tenantInfo.logoUrl} alt="Logo" className="w-full h-full object-contain" />
               </div>
             ) : (
-              <div className="h-10 w-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
-                <Stethoscope className="h-6 w-6 text-white" />
+              <div className="h-10 bg-white px-1 rounded-lg flex items-center justify-center overflow-hidden">
+                <img src={brandLogoSrc} alt="MediCore logo" className="h-8 w-auto object-contain" />
               </div>
             )}
             <div>
               <h1 className="font-bold text-lg leading-tight">{tenantInfo?.clinicName || 'Medicore'}</h1>
               <p className="text-xs text-slate-400">Nurse Portal</p>
+              {billingSummary && (
+                <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${billingTone.pill}`}>
+                  {billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining ?? 'N/A'}d
+                </span>
+              )}
             </div>
             {/* Mobile Close Button */}
             <button 
@@ -3210,6 +3240,9 @@ const NurseDashboard: React.FC = () => {
 
       {/* Main Content Wrapper */}
       <div className="lg:pl-64 transition-all duration-300 flex flex-col min-h-screen">
+      <div className="px-4 pt-4 lg:px-6">
+        <TenantSubscriptionBanner tenantInfo={tenantInfo} />
+      </div>
       {/* Slim Top Bar: system title + notifications + user */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">
         <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">

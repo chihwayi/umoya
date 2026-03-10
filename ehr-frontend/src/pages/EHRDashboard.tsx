@@ -13,6 +13,12 @@ import {
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, tenantApi } from '../services/api';
+import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
+import {
+  getBillingToneClasses,
+  isTenantRouteAvailable,
+  notifyTenantSubscriptionStatus,
+} from '../utils/tenantSubscription';
 
 interface User {
   id: string;
@@ -60,7 +66,8 @@ interface PostVisitTrialSlaAccountabilitySnapshot {
 const EHRDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showSuccess, showInfo, showError } = useNotification();
+  const brandLogoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
+  const { showSuccess, showInfo, showError, showWarning } = useNotification();
   const [user, setUser] = useState<User | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -285,6 +292,10 @@ const EHRDashboard: React.FC = () => {
     }
   }, [tenantSlug]);
 
+  useEffect(() => {
+    notifyTenantSubscriptionStatus(tenantInfo, { showWarning, showError });
+  }, [tenantInfo, showWarning, showError]);
+
   const loadAdminStats = async () => {
     try {
       const token = localStorage.getItem('ehr_token');
@@ -435,6 +446,11 @@ const EHRDashboard: React.FC = () => {
   };
 
   if (!user) return null;
+  const billingSummary = tenantInfo?.billingSummary;
+  const billingTone = getBillingToneClasses(billingSummary);
+  const visibleRoleActions = getRoleActions(user.role).filter((action: any) =>
+    isTenantRouteAvailable(tenantInfo, action.route),
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -457,8 +473,12 @@ const EHRDashboard: React.FC = () => {
                   />
                 </div>
               ) : (
-                <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
-                  <Stethoscope className="w-6 h-6 text-white" />
+                <div className="h-10 bg-white px-1 rounded-xl flex items-center justify-center overflow-hidden">
+                  <img
+                    src={brandLogoSrc}
+                    alt="MediCore logo"
+                    className="h-8 w-auto object-contain"
+                  />
                 </div>
               )}
               <div>
@@ -631,12 +651,19 @@ const EHRDashboard: React.FC = () => {
                 <Bell className="w-5 h-5 text-white" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
               </button>
+              {billingSummary && (
+                <div className={`hidden md:inline-flex items-center rounded-full px-3 py-2 text-xs font-semibold ${billingTone.pill}`}>
+                  {billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining ?? 'N/A'}d
+                </div>
+              )}
             </div>
           </div>
         </header>
 
         {/* Dashboard Content */}
         <main className="p-6">
+          <TenantSubscriptionBanner tenantInfo={tenantInfo} />
+
           {/* Quick Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {getQuickStats(user.role).map((stat, index) => (
@@ -667,7 +694,7 @@ const EHRDashboard: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {getRoleActions(user.role).map((action, index) => (
+              {visibleRoleActions.map((action, index) => (
                 <button
                   key={index}
                   onClick={() => (action as any).route && navigate(`/ehr/${tenantSlug}/${(action as any).route}`)}

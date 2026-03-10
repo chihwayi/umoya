@@ -4,11 +4,13 @@ import { Bed, Activity, TrendingUp, Clock, AlertCircle, Loader2, ArrowLeft } fro
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 import AldreteScoreModal from '../components/AldreteScoreModal';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 const PACUDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const token = localStorage.getItem('ehr_token') || '';
 
   const [user, setUser] = useState<any>(null);
@@ -64,7 +66,14 @@ const PACUDashboard: React.FC = () => {
   };
 
   const handleDischarge = async (patient: any) => {
-    if (!window.confirm(`Discharge ${patient.patient?.firstName ?? ''} ${patient.patient?.lastName ?? ''} from PACU?`)) return;
+    const shouldProceed = await confirm({
+      title: 'Discharge PACU Patient',
+      message: `Discharge ${patient.patient?.firstName ?? ''} ${patient.patient?.lastName ?? ''} from PACU?`,
+      confirmText: 'Discharge',
+      cancelText: 'Keep in PACU',
+      type: 'warning',
+    });
+    if (!shouldProceed) return;
     const pacuId = patient.id;
     try {
       setDischargingId(pacuId);
@@ -92,6 +101,7 @@ const PACUDashboard: React.FC = () => {
 
   return (
     <>
+    {Dialog}
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-violet-700 text-white shadow-lg">

@@ -17,12 +17,33 @@ const browserOrigin = (): string => {
   return window.location.origin;
 };
 
+const hostOf = (value: string): string => {
+  try {
+    return new URL(value, browserOrigin() || undefined).hostname || '';
+  } catch {
+    return '';
+  }
+};
+
+const isLocalHostLike = (value: string): boolean => {
+  const host = hostOf(value).toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+};
+
 const resolveUrl = (explicitValue: string | undefined, inheritedBase: string | undefined, inheritedPath: string): string => {
   const explicit = trim(explicitValue);
-  if (explicit) return explicit;
 
   const base = trim(inheritedBase) || browserOrigin();
+  if (!base && explicit) return explicit;
   if (!base) return '';
+
+  // Prefer same-origin path routing during browser-based local development,
+  // even when legacy env vars still point to localhost service ports.
+  if (explicit && browserOrigin() && isLocalHostLike(explicit) && isLocalHostLike(base)) {
+    return joinUrl(base, inheritedPath);
+  }
+
+  if (explicit) return explicit;
 
   return joinUrl(base, inheritedPath);
 };

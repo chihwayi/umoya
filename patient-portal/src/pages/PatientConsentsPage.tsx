@@ -8,6 +8,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { format } from 'date-fns';
+import { usePrompt } from '../hooks/usePrompt';
+import { PromptDialog } from '../components/PromptDialog';
 
 interface Consent {
   id: string;
@@ -29,6 +31,7 @@ const PatientConsentsPage: React.FC = () => {
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { showSuccess, showError } = useNotification();
+  const { promptState, setPromptState, prompt, cancel, confirm } = usePrompt();
   const [consents, setConsents] = useState<Consent[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'signed' | 'declined'>('all');
@@ -80,7 +83,16 @@ const PatientConsentsPage: React.FC = () => {
   };
 
   const handleDeclineConsent = async (consentId: string) => {
-    const reason = prompt('Please provide a reason for declining:');
+    const reason = await prompt({
+      title: 'Decline Consent',
+      message: 'Please provide a reason for declining this consent.',
+      placeholder: 'Reason for declining',
+      confirmText: 'Decline Consent',
+      cancelText: 'Cancel',
+      type: 'danger',
+      multiline: true,
+      required: true,
+    });
     if (!reason) return;
 
     try {
@@ -148,6 +160,20 @@ const PatientConsentsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <PromptDialog
+        isOpen={promptState.isOpen}
+        title={promptState.title}
+        message={promptState.message}
+        value={promptState.value}
+        onChange={(value) => setPromptState((prev) => ({ ...prev, value }))}
+        onCancel={cancel}
+        onConfirm={confirm}
+        confirmText={promptState.confirmText}
+        cancelText={promptState.cancelText}
+        placeholder={promptState.placeholder}
+        type={promptState.type}
+        multiline={promptState.multiline}
+      />
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200/50 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -394,4 +420,3 @@ const PatientConsentsPage: React.FC = () => {
 };
 
 export default PatientConsentsPage;
-

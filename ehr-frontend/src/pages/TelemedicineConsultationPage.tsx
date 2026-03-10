@@ -24,11 +24,13 @@ import {
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { GuidelineResult } from '../types/guidelines';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 const TelemedicineConsultationPage: React.FC = () => {
   const { tenantSlug, consultationId } = useParams<{ tenantSlug: string; consultationId: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
 
   const [consultation, setConsultation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -82,15 +84,20 @@ const TelemedicineConsultationPage: React.FC = () => {
   };
 
   const handleEndConsultation = async () => {
-    if (window.confirm('Are you sure you want to end this consultation?')) {
-      try {
-        // End consultation via API
-        await ehrApi.updateTelemedicineConsultation(consultationId!, { status: 'completed' }, token, tenantSlug!);
-        showSuccess('Consultation ended', 'Returning to dashboard...');
-        navigate(`/ehr/${tenantSlug}/telemedicine`);
-      } catch (error: any) {
-        showError('Failed to end consultation', error.response?.data?.message || 'Please try again');
-      }
+    const shouldProceed = await confirm({
+      title: 'End Consultation',
+      message: 'Are you sure you want to end this consultation?',
+      confirmText: 'End Consultation',
+      cancelText: 'Continue Call',
+      type: 'warning',
+    });
+    if (!shouldProceed) return;
+    try {
+      await ehrApi.updateTelemedicineConsultation(consultationId!, { status: 'completed' }, token, tenantSlug!);
+      showSuccess('Consultation ended', 'Returning to dashboard...');
+      navigate(`/ehr/${tenantSlug}/telemedicine`);
+    } catch (error: any) {
+      showError('Failed to end consultation', error.response?.data?.message || 'Please try again');
     }
   };
 
@@ -151,7 +158,9 @@ const TelemedicineConsultationPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+    <>
+      {Dialog}
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
       {/* Header */}
       <div className="border-b border-white/10 bg-black/20 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -424,9 +433,9 @@ const TelemedicineConsultationPage: React.FC = () => {
         </div>
       </div>
 
-    </div>
+      </div>
+    </>
   );
 };
 
 export default TelemedicineConsultationPage;
-

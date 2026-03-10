@@ -10,6 +10,12 @@ This mobile plan is anchored on the selected design prototypes:
 
 The build must match that design direction, not reinterpret it into a generic mobile app.
 
+Brand source of truth:
+
+- app logo asset: `medicore.png` at repo root
+- web, admin, patient portal, and mobile must all use this same master logo
+- do not introduce alternate icons or lettermark placeholders unless a dedicated app-icon export set is created from this file
+
 ## 2. Product direction
 
 The mobile app should ship from one TypeScript codebase and build for both iOS and Android.

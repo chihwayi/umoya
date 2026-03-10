@@ -29,7 +29,10 @@ let TenantController = class TenantController {
     }
     toSafeTenant(tenant) {
         const { connectionString, ...safeTenant } = tenant;
-        return safeTenant;
+        return {
+            ...safeTenant,
+            billingSummary: this.tenantService.getBillingSummary(tenant),
+        };
     }
     toPublicTenant(tenant) {
         return {
@@ -38,6 +41,12 @@ let TenantController = class TenantController {
             clinicName: tenant.clinicName,
             status: tenant.status,
             logoUrl: tenant.logoUrl,
+            enabledModules: tenant.enabledModules,
+            subscriptionMode: tenant.subscriptionMode,
+            packagePreset: tenant.packagePreset,
+            subscriptionState: tenant.subscriptionState,
+            packageName: tenant.packageName,
+            billingSummary: this.tenantService.getBillingSummary(tenant),
         };
     }
     async uploadLogo(file) {

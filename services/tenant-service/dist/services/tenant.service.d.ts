@@ -1,7 +1,8 @@
 import { OnModuleInit } from '@nestjs/common';
 import { Repository } from 'typeorm';
-import { Tenant, TenantStatus } from '../entities/tenant.entity';
+import { Tenant, TenantStatus, SubscriptionMode, SubscriptionState, PackagePreset } from '../entities/tenant.entity';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
+import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { DatabaseProvisioningService } from './database-provisioning.service';
 export interface TenantDhis2ConfigPayload {
     baseUrl: string;
@@ -39,14 +40,33 @@ export interface TenantDhis2ConfigView {
     alertWebhookUrl: string | null;
     updatedAt: string | null;
 }
+export interface TenantBillingSummary {
+    mode: SubscriptionMode;
+    packagePreset: PackagePreset;
+    state: SubscriptionState;
+    packageName: string | null;
+    accessEndsAt: string | null;
+    suspensionAt: string | null;
+    autoDeleteAt: string | null;
+    daysRemaining: number | null;
+    daysUntilSuspension: number | null;
+    overdueDays: number;
+    warningDays: number;
+    tone: 'good' | 'warning' | 'critical' | 'expired';
+    label: string;
+    message: string;
+    enabledModules: string[];
+    coreModules: string[];
+}
 export declare class TenantService implements OnModuleInit {
     private tenantRepository;
     private databaseProvisioningService;
     private readonly logger;
     constructor(tenantRepository: Repository<Tenant>, databaseProvisioningService: DatabaseProvisioningService);
     onModuleInit(): Promise<void>;
+    reconcileTenantLifecycle(): Promise<void>;
     createTenant(createTenantDto: CreateTenantDto): Promise<Tenant>;
-    updateTenant(id: string, updateData: Partial<Tenant>): Promise<Tenant>;
+    updateTenant(id: string, updateData: UpdateTenantDto): Promise<Tenant>;
     findBySubdomain(subdomain: string): Promise<Tenant>;
     findById(id: string): Promise<Tenant>;
     findAll(): Promise<Tenant[]>;
@@ -56,6 +76,16 @@ export declare class TenantService implements OnModuleInit {
     getTenantDhis2Config(tenantId: string): Promise<TenantDhis2ConfigView | null>;
     upsertTenantDhis2Config(tenantId: string, payload: TenantDhis2ConfigPayload): Promise<TenantDhis2ConfigView>;
     clearTenantDhis2Config(tenantId: string): Promise<void>;
+    getBillingSummary(tenant: Tenant): TenantBillingSummary;
     private provisionTenantDatabase;
+    private getCoreModulesForPreset;
     private getDefaultFeatureFlags;
+    private resolvePackagePreset;
+    private normalizeEnabledModules;
+    private resolveSubscriptionFields;
+    private inferGracePeriodDays;
+    private applyLifecycleState;
+    private computeLifecycleState;
+    private diffInDays;
+    private ensureSubscriptionSchema;
 }

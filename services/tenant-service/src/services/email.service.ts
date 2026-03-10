@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { config as envConfig } from '@medicore/config';
 
 export interface EmailTemplate {
   to: string;
@@ -10,7 +9,14 @@ export interface EmailTemplate {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly adminAppUrl = String(process.env.WEB_APP_URL || envConfig.publicUrls.adminApp || '').replace(/\/+$/, '');
+  private readonly adminAppUrl = String(
+    process.env.WEB_APP_URL ||
+      (process.env.PUBLIC_APP_BASE_URL
+        ? `${String(process.env.PUBLIC_APP_BASE_URL).replace(/\/+$/, '')}${String(
+            process.env.PUBLIC_ADMIN_APP_PATH || '/admin',
+          ).startsWith('/') ? process.env.PUBLIC_ADMIN_APP_PATH || '/admin' : `/${process.env.PUBLIC_ADMIN_APP_PATH || 'admin'}`}`
+        : ''),
+  ).replace(/\/+$/, '');
   private readonly tenantAppProtocol = String(process.env.REACT_APP_PROTOCOL || 'https').trim().replace(/:$/, '');
 
   private buildAdminLink(path: string): string {

@@ -8,4 +8,12 @@ export declare class CreateTenantDto {
     city?: string;
     logoUrl?: string;
     subscriptionTier: SubscriptionTier;
+    subscriptionMode?: 'demo' | 'paid';
+    packagePreset?: 'full_ehr' | 'claims_only';
+    packageName?: string;
+    enabledModules?: string[];
+    demoDurationDays?: number;
+    billingEndsAt?: string;
+    gracePeriodDays?: number;
+    suspensionWarningDays?: number;
 }

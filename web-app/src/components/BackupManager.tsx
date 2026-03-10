@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { backupAPI } from '../services/api';
 import { useNotification } from '../contexts/NotificationContext';
+import { ConfirmModal, PromptModal } from './Modal';
 
 interface Backup {
   id: string;
@@ -18,6 +19,10 @@ export const BackupManager: React.FC = () => {
   const [backups, setBackups] = useState<Backup[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [restoreTargetKey, setRestoreTargetKey] = useState<string | null>(null);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [showRestorePrompt, setShowRestorePrompt] = useState(false);
+  const [restorePhrase, setRestorePhrase] = useState('');
 
   useEffect(() => {
     loadBackups();
@@ -56,26 +61,25 @@ export const BackupManager: React.FC = () => {
   };
 
   const handleRestore = async (key: string) => {
-    if (!window.confirm('WARNING: restoring will overwrite the current database. This action cannot be undone. Are you sure you want to proceed?')) {
-      return;
-    }
-    
-    // Additional safety confirmation
-    const confirmText = prompt('Type "RESTORE" to confirm this dangerous operation:');
-    if (confirmText !== 'RESTORE') {
-        info('Cancelled', 'Restore operation cancelled.');
-        return;
-    }
+    setRestoreTargetKey(key);
+    setRestorePhrase('');
+    setShowRestoreConfirm(true);
+  };
 
+  const executeRestore = async () => {
+    if (!restoreTargetKey) return;
     setLoading(true);
     try {
-      await backupAPI.restoreBackup(key);
+      await backupAPI.restoreBackup(restoreTargetKey);
       success('Restore Initiated', 'System restore started. The system may be unavailable for a few minutes.');
     } catch (error) {
       console.error('Failed to restore backup', error);
       notifyError('Restore Failed', 'Failed to restore backup. Check console for details.');
     } finally {
       setLoading(false);
+      setRestoreTargetKey(null);
+      setRestorePhrase('');
+      setShowRestorePrompt(false);
     }
   };
 
@@ -279,6 +283,48 @@ export const BackupManager: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showRestoreConfirm}
+        onClose={() => {
+          setShowRestoreConfirm(false);
+          setRestoreTargetKey(null);
+        }}
+        onConfirm={() => {
+          setShowRestoreConfirm(false);
+          setShowRestorePrompt(true);
+        }}
+        title="Restore Backup"
+        message="Restoring will overwrite the current database. This action cannot be undone."
+        confirmText="Continue"
+        cancelText="Cancel"
+        type="danger"
+      />
+
+      <PromptModal
+        isOpen={showRestorePrompt}
+        onClose={() => {
+          setShowRestorePrompt(false);
+          setRestoreTargetKey(null);
+          setRestorePhrase('');
+          info('Cancelled', 'Restore operation cancelled.');
+        }}
+        onConfirm={(value) => {
+          if (value.trim() !== 'RESTORE') {
+            notifyError('Confirmation failed', 'Type RESTORE exactly to continue.');
+            return;
+          }
+          void executeRestore();
+        }}
+        title="Final Restore Confirmation"
+        message='Type "RESTORE" to confirm this dangerous operation.'
+        value={restorePhrase}
+        onValueChange={setRestorePhrase}
+        confirmText="Start Restore"
+        cancelText="Abort"
+        placeholder="RESTORE"
+        type="danger"
+      />
     </div>
   );
 };

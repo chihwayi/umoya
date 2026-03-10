@@ -61,6 +61,52 @@ run_psql_file() {
   fi
 }
 
+run_psql_query() {
+  local db_name="$1"
+  local sql="$2"
+
+  if docker ps --format '{{.Names}}' | grep -qx "$DB_CONTAINER"; then
+    docker exec -i -e "PGPASSWORD=$DB_PASSWORD" "$DB_CONTAINER" \
+      psql -tA -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$db_name" -c "$sql"
+  else
+    PGPASSWORD="$DB_PASSWORD" psql -tA -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$db_name" -c "$sql"
+  fi
+}
+
+apply_master_schema() {
+  local db_name="$1"
+  local bootstrap_files=(
+    "database/schemas/tenant.sql"
+  )
+  local patch_files=(
+    "database/schemas/add-demo-access-requests.sql"
+    "database/schemas/add-tenant-dhis2-config.sql"
+    "database/schemas/add-tenant-dhis2-scheduler-controls.sql"
+    "database/schemas/add-tenant-subscription-lifecycle.sql"
+  )
+
+  local tenants_exists
+  tenants_exists="$(run_psql_query "$db_name" "SELECT to_regclass('public.tenants') IS NOT NULL;")"
+
+  if [ "$tenants_exists" = "t" ]; then
+    echo "Master tenants table already exists. Skipping full bootstrap schema file."
+  else
+    for sql_file in "${bootstrap_files[@]}"; do
+      if [ -f "$sql_file" ]; then
+        echo "Applying master schema bootstrap $(basename "$sql_file")"
+        run_psql_file "$db_name" "$sql_file"
+      fi
+    done
+  fi
+
+  for sql_file in "${patch_files[@]}"; do
+    if [ -f "$sql_file" ]; then
+      echo "Applying master schema patch $(basename "$sql_file")"
+      run_psql_file "$db_name" "$sql_file"
+    fi
+  done
+}
+
 "${COMPOSE_CMD[@]}" up -d postgres-master >/dev/null
 wait_for_postgres
 
@@ -68,8 +114,10 @@ echo "Master database '$MASTER_DB' is reachable."
 echo "Tenant clinic schemas are provisioned by tenant-service during tenant creation and repair flows."
 
 if [ -z "$TARGET_DB" ]; then
-  echo "No TARGET_DB supplied. Skipping SQL migration replay."
-  echo "Usage for an existing clinic DB: TARGET_DB=tenant_example ./scripts/migrate.sh"
+  echo "No TARGET_DB supplied. Applying master-database schema/bootstrap patches to '$MASTER_DB'."
+  apply_master_schema "$MASTER_DB"
+  echo "Master database provisioning completed."
+  echo "Usage for an existing clinic DB migration replay: TARGET_DB=tenant_example ./scripts/migrate.sh"
   exit 0
 fi
 

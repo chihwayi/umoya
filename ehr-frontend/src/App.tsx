@@ -2,6 +2,8 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { NotificationProvider } from './components/GlobalNotification';
 import { AutoLogoutProvider } from './components/AutoLogoutProvider';
+import { tenantApi } from './services/api';
+import { hasModuleAccess, TenantSubscriptionInfo } from './utils/tenantSubscription';
 const TenantDirectory = lazy(() => import('./pages/TenantDirectory'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const EHRLogin = lazy(() => import('./pages/EHRLogin'));
@@ -60,7 +62,99 @@ const PatientPortalDashboard = lazy(() => import('./pages/PatientPortalDashboard
 const CampaignsDashboard = lazy(() => import('./pages/CampaignsDashboard'));
 const MultiCurrencyMedicalAidDashboard = lazy(() => import('./pages/MultiCurrencyMedicalAidDashboard'));
 
-const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
+const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'medicore-tenant-subscription:';
+
+const readTenantSubscriptionCache = (tenantSlug?: string | null): TenantSubscriptionInfo | null => {
+  if (typeof window === 'undefined' || !tenantSlug) return null;
+  try {
+    const raw = sessionStorage.getItem(`${TENANT_SUBSCRIPTION_CACHE_PREFIX}${tenantSlug}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeTenantSubscriptionCache = (tenantSlug: string, tenantInfo: TenantSubscriptionInfo | null) => {
+  if (typeof window === 'undefined' || !tenantSlug || !tenantInfo) return;
+  try {
+    sessionStorage.setItem(`${TENANT_SUBSCRIPTION_CACHE_PREFIX}${tenantSlug}`, JSON.stringify(tenantInfo));
+  } catch {}
+};
+
+const TenantModuleRoute: React.FC<{ moduleKey: string; children: React.ReactElement }> = ({ moduleKey, children }) => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const [tenantInfo, setTenantInfo] = React.useState<TenantSubscriptionInfo | null>(() => readTenantSubscriptionCache(tenantSlug));
+  const [checkingModuleAccess, setCheckingModuleAccess] = React.useState(Boolean(tenantSlug && !readTenantSubscriptionCache(tenantSlug)));
+
+  React.useEffect(() => {
+    if (!tenantSlug) {
+      setCheckingModuleAccess(false);
+      return;
+    }
+
+    const cached = readTenantSubscriptionCache(tenantSlug);
+    if (cached) {
+      setTenantInfo(cached);
+      setCheckingModuleAccess(false);
+      return;
+    }
+
+    let active = true;
+    setCheckingModuleAccess(true);
+
+    tenantApi
+      .getTenantBySlug(tenantSlug)
+      .then(({ data }) => {
+        if (!active) return;
+        const nextTenantInfo: TenantSubscriptionInfo | null = data
+          ? {
+              id: data.id,
+              enabledModules: data.enabledModules,
+              subscriptionMode: data.subscriptionMode,
+              packagePreset: data.packagePreset,
+              subscriptionState: data.subscriptionState,
+              packageName: data.packageName,
+              billingSummary: data.billingSummary,
+            }
+          : null;
+        setTenantInfo(nextTenantInfo);
+        writeTenantSubscriptionCache(tenantSlug, nextTenantInfo);
+      })
+      .catch(() => {
+        if (!active) return;
+        setTenantInfo(null);
+      })
+      .finally(() => {
+        if (active) {
+          setCheckingModuleAccess(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [tenantSlug]);
+
+  if (!tenantSlug) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (checkingModuleAccess) {
+    return <RouteLoader />;
+  }
+
+  if (!hasModuleAccess(tenantInfo, moduleKey)) {
+    return <Navigate to={`/ehr/${tenantSlug}`} replace />;
+  }
+
+  return children;
+};
+
+const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; moduleKey?: string; children: React.ReactElement }> = ({
+  allowedRoles,
+  moduleKey,
+  children,
+}) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const storedUser = React.useMemo(() => {
     if (typeof window === 'undefined') return null;
@@ -72,6 +166,57 @@ const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.Rea
       return null;
     }
   }, []);
+  const [tenantInfo, setTenantInfo] = React.useState<TenantSubscriptionInfo | null>(() => readTenantSubscriptionCache(tenantSlug));
+  const [checkingModuleAccess, setCheckingModuleAccess] = React.useState(Boolean(moduleKey && tenantSlug && !readTenantSubscriptionCache(tenantSlug)));
+
+  React.useEffect(() => {
+    if (!moduleKey || !tenantSlug) {
+      setCheckingModuleAccess(false);
+      return;
+    }
+
+    const cached = readTenantSubscriptionCache(tenantSlug);
+    if (cached) {
+      setTenantInfo(cached);
+      setCheckingModuleAccess(false);
+      return;
+    }
+
+    let active = true;
+    setCheckingModuleAccess(true);
+
+    tenantApi
+      .getTenantBySlug(tenantSlug)
+      .then(({ data }) => {
+        if (!active) return;
+        const nextTenantInfo: TenantSubscriptionInfo | null = data
+          ? {
+              id: data.id,
+              enabledModules: data.enabledModules,
+              subscriptionMode: data.subscriptionMode,
+              packagePreset: data.packagePreset,
+              subscriptionState: data.subscriptionState,
+              packageName: data.packageName,
+              billingSummary: data.billingSummary,
+            }
+          : null;
+        setTenantInfo(nextTenantInfo);
+        writeTenantSubscriptionCache(tenantSlug, nextTenantInfo);
+      })
+      .catch(() => {
+        if (!active) return;
+        setTenantInfo(null);
+      })
+      .finally(() => {
+        if (active) {
+          setCheckingModuleAccess(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [moduleKey, tenantSlug]);
 
   if (!tenantSlug) {
     return <Navigate to="/" replace />;
@@ -83,6 +228,15 @@ const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.Rea
 
   if (!allowedRoles.includes(storedUser.role)) {
     return <Navigate to={`/ehr/${tenantSlug}/dashboard`} replace />;
+  }
+
+  if (moduleKey) {
+    if (checkingModuleAccess) {
+      return <RouteLoader />;
+    }
+    if (!hasModuleAccess(tenantInfo, moduleKey)) {
+      return <Navigate to={`/ehr/${tenantSlug}/dashboard`} replace />;
+    }
   }
 
   return children;
@@ -115,8 +269,22 @@ function App() {
               <Route path="/tenants" element={<TenantDirectory />} />
               <Route path="/:tenantSlug" element={<TenantRedirect />} />
               <Route path="/:tenantSlug/login" element={<TenantRedirect />} />
-              <Route path="/portal/:tenantSlug/login" element={<PatientPortalLogin />} />
-              <Route path="/portal/:tenantSlug" element={<PatientPortalDashboard />} />
+              <Route
+                path="/portal/:tenantSlug/login"
+                element={
+                  <TenantModuleRoute moduleKey="patient_portal">
+                    <PatientPortalLogin />
+                  </TenantModuleRoute>
+                }
+              />
+              <Route
+                path="/portal/:tenantSlug"
+                element={
+                  <TenantModuleRoute moduleKey="patient_portal">
+                    <PatientPortalDashboard />
+                  </TenantModuleRoute>
+                }
+              />
               <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
               <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
               <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />
@@ -205,7 +373,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/doctor/hiv"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor']}>
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="hiv">
                   <HIVDoctorDashboard />
                 </RoleProtectedRoute>
               }
@@ -213,7 +381,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/doctor/maternity"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor']}>
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="maternity">
                   <MaternityDoctorDashboard />
                 </RoleProtectedRoute>
               }
@@ -221,7 +389,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/doctor/cardiology"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor']}>
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="cardiology">
                   <CardiologyDashboard />
                 </RoleProtectedRoute>
               }
@@ -229,7 +397,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/diabetes"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'technologist']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'technologist']} moduleKey="diabetes">
                   <DiabetesManagementDashboard />
                 </RoleProtectedRoute>
               }
@@ -237,7 +405,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/doctor/oncology"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor']}>
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="oncology">
                   <OncologyDashboard />
                 </RoleProtectedRoute>
               }
@@ -245,7 +413,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/doctor/ophthalmology"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor']}>
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="ophthalmology">
                   <OphthalmologyDashboard />
                 </RoleProtectedRoute>
               }
@@ -253,7 +421,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/radiologist"
               element={
-                <RoleProtectedRoute allowedRoles={['radiologist']}>
+                <RoleProtectedRoute allowedRoles={['radiologist']} moduleKey="radiology">
                   <RadiologistDashboard />
                 </RoleProtectedRoute>
               }
@@ -286,7 +454,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/technologist/imaging"
               element={
-                <RoleProtectedRoute allowedRoles={['technologist']}>
+                <RoleProtectedRoute allowedRoles={['technologist']} moduleKey="radiology">
                   <TechnologistImagingDashboard />
                 </RoleProtectedRoute>
               }
@@ -335,7 +503,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/lab"
               element={
-                <RoleProtectedRoute allowedRoles={['lab_tech', 'lab_technician']}>
+                <RoleProtectedRoute allowedRoles={['lab_tech', 'lab_technician']} moduleKey="laboratory">
                   <LabDashboard />
                 </RoleProtectedRoute>
               }
@@ -343,7 +511,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/oncology"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor']}>
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="oncology">
                   <OncologyDashboard />
                 </RoleProtectedRoute>
               }
@@ -351,7 +519,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/ophthalmology"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor']}>
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="ophthalmology">
                   <OphthalmologyDashboard />
                 </RoleProtectedRoute>
               }
@@ -360,7 +528,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/emergency"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="emergency">
                   <EDDashboard />
                 </RoleProtectedRoute>
               }
@@ -386,7 +554,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/operating-room"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="operating_room">
                   <ORDashboard />
                 </RoleProtectedRoute>
               }
@@ -413,7 +581,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/blood-bank"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'lab_tech', 'admin']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'lab_tech', 'admin']} moduleKey="blood_bank">
                   <BloodBankDashboard />
                 </RoleProtectedRoute>
               }
@@ -422,7 +590,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/infection-control"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="infection_control">
                   <InfectionControlDashboard />
                 </RoleProtectedRoute>
               }
@@ -431,7 +599,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/revenue-cycle"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'doctor']}>
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'doctor']} moduleKey="revenue_cycle">
                   <RevenueCycleDashboard />
                 </RoleProtectedRoute>
               }
@@ -448,7 +616,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/population-health"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'admin', 'nurse']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'admin', 'nurse']} moduleKey="population_health">
                   <PopulationHealthDashboard />
                 </RoleProtectedRoute>
               }
@@ -456,7 +624,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/practice-management"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts']} moduleKey="finance">
                   <PracticeManagementDashboard />
                 </RoleProtectedRoute>
               }
@@ -464,7 +632,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/prior-authorizations"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts']} moduleKey="revenue_cycle">
                   <PriorAuthorizationDashboard />
                 </RoleProtectedRoute>
               }
@@ -472,7 +640,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/campaigns"
               element={
-                <RoleProtectedRoute allowedRoles={['admin']}>
+                <RoleProtectedRoute allowedRoles={['admin']} moduleKey="population_health">
                   <CampaignsDashboard />
                 </RoleProtectedRoute>
               }
@@ -480,7 +648,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/multi-currency"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts']} moduleKey="finance">
                   <MultiCurrencyMedicalAidDashboard />
                 </RoleProtectedRoute>
               }
@@ -498,7 +666,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/sepsis"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="emergency">
                   <SepsisDashboard />
                 </RoleProtectedRoute>
               }
@@ -506,7 +674,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/accounts"
               element={
-                <RoleProtectedRoute allowedRoles={['accounts']}>
+                <RoleProtectedRoute allowedRoles={['accounts']} moduleKey="finance">
                   <AccountsDashboard />
                 </RoleProtectedRoute>
               }
@@ -514,7 +682,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/accounts/analytics"
               element={
-                <RoleProtectedRoute allowedRoles={['accounts']}>
+                <RoleProtectedRoute allowedRoles={['accounts']} moduleKey="finance">
                   <AccountsDashboard />
                 </RoleProtectedRoute>
               }
@@ -522,7 +690,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/pharmacy"
               element={
-                <RoleProtectedRoute allowedRoles={['pharmacist', 'pharmacy_tech', 'pharmacy', 'doctor', 'nurse']}>
+                <RoleProtectedRoute allowedRoles={['pharmacist', 'pharmacy_tech', 'pharmacy', 'doctor', 'nurse']} moduleKey="pharmacy">
                   <PharmacyDashboard />
                 </RoleProtectedRoute>
               }
@@ -530,7 +698,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/billing"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'receptionist', 'doctor']}>
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'receptionist', 'doctor']} moduleKey="finance">
                   <BillingDashboard />
                 </RoleProtectedRoute>
               }
@@ -538,7 +706,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/claims"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'receptionist', 'doctor']}>
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'receptionist', 'doctor']} moduleKey="claims">
                   <ClaimsDashboard />
                 </RoleProtectedRoute>
               }
@@ -546,7 +714,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/telemedicine"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'receptionist']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'receptionist']} moduleKey="telemedicine">
                   <TelemedicineDashboard />
                 </RoleProtectedRoute>
               }
@@ -554,17 +722,31 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/telemedicine/consultation/:consultationId"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="telemedicine">
                   <TelemedicineConsultationPage />
                 </RoleProtectedRoute>
               }
             />
-            <Route path="/ehr/:tenantSlug/patient/post-visit" element={<PostVisitCompanionPortal />} />
-            <Route path="/ehr/:tenantSlug/post-visit/companion" element={<PostVisitCompanionPortal />} />
+            <Route
+              path="/ehr/:tenantSlug/patient/post-visit"
+              element={
+                <TenantModuleRoute moduleKey="patient_portal">
+                  <PostVisitCompanionPortal />
+                </TenantModuleRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/post-visit/companion"
+              element={
+                <TenantModuleRoute moduleKey="patient_portal">
+                  <PostVisitCompanionPortal />
+                </TenantModuleRoute>
+              }
+            />
             <Route
               path="/ehr/:tenantSlug/post-visit/doctor"
               element={
-                <RoleProtectedRoute allowedRoles={['doctor', 'admin']}>
+                <RoleProtectedRoute allowedRoles={['doctor', 'admin']} moduleKey="patient_portal">
                   <PostVisitDoctorWorkspace />
                 </RoleProtectedRoute>
               }

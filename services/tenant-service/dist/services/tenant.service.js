@@ -17,8 +17,34 @@ exports.TenantService = void 0;
 const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
+const schedule_1 = require("@nestjs/schedule");
 const tenant_entity_1 = require("../entities/tenant.entity");
 const database_provisioning_service_1 = require("./database-provisioning.service");
+const FULL_EHR_CORE_MODULES = ['finance', 'nurse_general'];
+const CLAIMS_ONLY_CORE_MODULES = ['claims'];
+const ALL_MODULE_KEYS = [
+    ...FULL_EHR_CORE_MODULES,
+    ...CLAIMS_ONLY_CORE_MODULES,
+    'hiv',
+    'maternity',
+    'radiology',
+    'oncology',
+    'cardiology',
+    'diabetes',
+    'pharmacy',
+    'laboratory',
+    'telemedicine',
+    'patient_portal',
+    'claims',
+    'operating_room',
+    'emergency',
+    'ophthalmology',
+    'blood_bank',
+    'infection_control',
+    'revenue_cycle',
+    'population_health',
+];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 let TenantService = TenantService_1 = class TenantService {
     constructor(tenantRepository, databaseProvisioningService) {
         this.tenantRepository = tenantRepository;
@@ -26,8 +52,13 @@ let TenantService = TenantService_1 = class TenantService {
         this.logger = new common_1.Logger(TenantService_1.name);
     }
     async onModuleInit() {
+        await this.ensureSubscriptionSchema();
         const tenants = await this.tenantRepository.find();
         for (const tenant of tenants) {
+            const normalized = this.applyLifecycleState(tenant);
+            if (normalized) {
+                await this.tenantRepository.save(tenant);
+            }
             if (!tenant.databaseName) {
                 continue;
             }
@@ -39,6 +70,21 @@ let TenantService = TenantService_1 = class TenantService {
             }
         }
     }
+    async reconcileTenantLifecycle() {
+        await this.ensureSubscriptionSchema();
+        const tenants = await this.tenantRepository.find();
+        const now = new Date();
+        for (const tenant of tenants) {
+            if (tenant.subscriptionMode === 'demo' && tenant.autoDeleteAt && tenant.autoDeleteAt.getTime() <= now.getTime()) {
+                this.logger.warn(`Auto-deleting expired demo tenant ${tenant.id} (${tenant.subdomain})`);
+                await this.deleteTenant(tenant.id);
+                continue;
+            }
+            if (this.applyLifecycleState(tenant, now)) {
+                await this.tenantRepository.save(tenant);
+            }
+        }
+    }
     async createTenant(createTenantDto) {
         const existingTenant = await this.tenantRepository.findOne({
             where: { subdomain: createTenantDto.subdomain }
@@ -47,11 +93,24 @@ let TenantService = TenantService_1 = class TenantService {
             throw new common_1.ConflictException('Subdomain already exists');
         }
         const databaseName = `clinic_${createTenantDto.subdomain}_db`;
+        const packagePreset = this.resolvePackagePreset(createTenantDto);
+        const enabledModules = this.normalizeEnabledModules(createTenantDto.enabledModules, packagePreset);
+        const subscription = this.resolveSubscriptionFields(createTenantDto);
         const tenant = this.tenantRepository.create({
             ...createTenantDto,
             databaseName,
             status: tenant_entity_1.TenantStatus.PENDING,
-            featureFlags: this.getDefaultFeatureFlags(createTenantDto.subscriptionTier),
+            subscriptionMode: subscription.subscriptionMode,
+            packagePreset,
+            subscriptionState: subscription.subscriptionState,
+            packageName: subscription.packageName,
+            enabledModules,
+            billingEndsAt: subscription.billingEndsAt,
+            demoExpiresAt: subscription.demoExpiresAt,
+            graceEndsAt: subscription.graceEndsAt,
+            autoDeleteAt: subscription.autoDeleteAt,
+            suspensionWarningDays: subscription.suspensionWarningDays,
+            featureFlags: this.getDefaultFeatureFlags(createTenantDto.subscriptionTier, enabledModules, packagePreset),
         });
         const savedTenant = await this.tenantRepository.save(tenant);
         this.logger.log(`Tenant created: ${savedTenant.id}`);
@@ -67,13 +126,28 @@ let TenantService = TenantService_1 = class TenantService {
     }
     async updateTenant(id, updateData) {
         const tenant = await this.findById(id);
-        Object.assign(tenant, updateData);
-        if (updateData.subscriptionTier) {
-            tenant.featureFlags = {
-                ...tenant.featureFlags,
-                ...this.getDefaultFeatureFlags(updateData.subscriptionTier)
-            };
-        }
+        const nextTier = updateData.subscriptionTier || tenant.subscriptionTier;
+        const packagePreset = this.resolvePackagePreset(updateData, tenant);
+        const enabledModules = this.normalizeEnabledModules(updateData.enabledModules ?? tenant.enabledModules, packagePreset);
+        const subscription = this.resolveSubscriptionFields(updateData, tenant);
+        Object.assign(tenant, {
+            ...updateData,
+            enabledModules,
+            subscriptionMode: subscription.subscriptionMode,
+            packagePreset,
+            subscriptionState: subscription.subscriptionState,
+            packageName: subscription.packageName,
+            billingEndsAt: subscription.billingEndsAt,
+            demoExpiresAt: subscription.demoExpiresAt,
+            graceEndsAt: subscription.graceEndsAt,
+            autoDeleteAt: subscription.autoDeleteAt,
+            suspensionWarningDays: subscription.suspensionWarningDays,
+        });
+        tenant.featureFlags = {
+            ...tenant.featureFlags,
+            ...this.getDefaultFeatureFlags(nextTier, enabledModules, packagePreset),
+        };
+        this.applyLifecycleState(tenant);
         const savedTenant = await this.tenantRepository.save(tenant);
         this.logger.log(`Tenant updated: ${savedTenant.id}`);
         return savedTenant;
@@ -107,6 +181,9 @@ let TenantService = TenantService_1 = class TenantService {
     async updateTenantStatus(id, status) {
         const tenant = await this.findById(id);
         tenant.status = status;
+        if (status === tenant_entity_1.TenantStatus.SUSPENDED) {
+            tenant.subscriptionState = 'suspended';
+        }
         return this.tenantRepository.save(tenant);
     }
     async deleteTenant(id) {
@@ -298,6 +375,66 @@ let TenantService = TenantService_1 = class TenantService {
         await this.findById(tenantId);
         await this.tenantRepository.query(`DELETE FROM tenant_dhis2_config WHERE tenant_id = $1`, [tenantId]);
     }
+    getBillingSummary(tenant) {
+        const now = new Date();
+        const warningDays = Number(tenant.suspensionWarningDays || 5);
+        const packagePreset = tenant.packagePreset || 'full_ehr';
+        const enabledModules = this.normalizeEnabledModules(tenant.enabledModules, packagePreset);
+        const mode = tenant.subscriptionMode === 'demo' ? 'demo' : 'paid';
+        const accessEndsAt = mode === 'demo' ? tenant.demoExpiresAt : tenant.billingEndsAt;
+        const suspensionAt = mode === 'demo' ? tenant.demoExpiresAt : tenant.graceEndsAt || tenant.billingEndsAt;
+        const daysRemaining = accessEndsAt ? this.diffInDays(accessEndsAt, now) : null;
+        const daysUntilSuspension = suspensionAt ? this.diffInDays(suspensionAt, now) : null;
+        const overdueDays = daysRemaining !== null && daysRemaining < 0 ? Math.abs(daysRemaining) : 0;
+        let tone = 'good';
+        if (tenant.subscriptionState === 'suspended' || tenant.subscriptionState === 'expired') {
+            tone = 'expired';
+        }
+        else if ((daysUntilSuspension ?? 999) <= 0 || tenant.subscriptionState === 'grace') {
+            tone = 'critical';
+        }
+        else if ((daysUntilSuspension ?? 999) <= warningDays) {
+            tone = 'warning';
+        }
+        const label = mode === 'demo'
+            ? tenant.subscriptionState === 'expired'
+                ? 'Demo expired'
+                : 'Demo access'
+            : tenant.subscriptionState === 'grace'
+                ? 'Grace period'
+                : tenant.subscriptionState === 'suspended'
+                    ? 'Suspended'
+                    : 'Subscription';
+        const message = mode === 'demo'
+            ? daysUntilSuspension !== null && daysUntilSuspension >= 0
+                ? `Demo tenant auto-deletes in ${daysUntilSuspension} day${daysUntilSuspension === 1 ? '' : 's'}.`
+                : `Demo expired${overdueDays ? ` ${overdueDays} day${overdueDays === 1 ? '' : 's'} ago` : ''}. Tenant pending deletion.`
+            : tenant.subscriptionState === 'grace'
+                ? `Payment overdue. ${Math.max(daysUntilSuspension ?? 0, 0)} day${Math.max(daysUntilSuspension ?? 0, 0) === 1 ? '' : 's'} left before suspension.`
+                : tenant.subscriptionState === 'suspended'
+                    ? `Account suspended for non-payment${overdueDays ? ` (${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue)` : ''}.`
+                    : daysUntilSuspension !== null
+                        ? `${daysUntilSuspension} day${daysUntilSuspension === 1 ? '' : 's'} of credit remaining before suspension window.`
+                        : 'Subscription status available.';
+        return {
+            mode,
+            packagePreset,
+            state: tenant.subscriptionState,
+            packageName: tenant.packageName || null,
+            accessEndsAt: accessEndsAt ? accessEndsAt.toISOString() : null,
+            suspensionAt: suspensionAt ? suspensionAt.toISOString() : null,
+            autoDeleteAt: tenant.autoDeleteAt ? tenant.autoDeleteAt.toISOString() : null,
+            daysRemaining,
+            daysUntilSuspension,
+            overdueDays,
+            warningDays,
+            tone,
+            label,
+            message,
+            enabledModules,
+            coreModules: [...this.getCoreModulesForPreset(packagePreset)],
+        };
+    }
     async provisionTenantDatabase(tenant) {
         try {
             this.logger.log(`Starting database provisioning for tenant: ${tenant.id}`);
@@ -314,41 +451,302 @@ let TenantService = TenantService_1 = class TenantService {
             throw error;
         }
     }
-    getDefaultFeatureFlags(tier) {
-        const baseFeatures = {
-            patientManagement: true,
-            appointments: true,
-            medicalRecords: true,
-            basicBilling: true,
-        };
-        switch (tier) {
-            case tenant_entity_1.SubscriptionTier.PROFESSIONAL:
-                return {
-                    ...baseFeatures,
-                    medicalAidClaims: true,
-                    basicCDSS: true,
-                    fhirIntegration: true,
-                    patientPortal: true,
-                };
-            case tenant_entity_1.SubscriptionTier.ENTERPRISE:
-                return {
-                    ...baseFeatures,
-                    medicalAidClaims: true,
-                    advancedCDSS: true,
-                    fhirIntegration: true,
-                    hl7Integration: true,
-                    customReports: true,
-                    apiAccess: true,
-                    patientPortal: true,
-                    telemedicine: true,
-                    pharmacyManagement: true,
-                };
-            default:
-                return baseFeatures;
+    getCoreModulesForPreset(packagePreset) {
+        return packagePreset === 'claims_only'
+            ? [...CLAIMS_ONLY_CORE_MODULES]
+            : [...FULL_EHR_CORE_MODULES];
+    }
+    getDefaultFeatureFlags(tier, enabledModules, packagePreset) {
+        const baseFeatures = packagePreset === 'claims_only'
+            ? {
+                patientManagement: false,
+                appointments: false,
+                medicalRecords: false,
+                basicBilling: false,
+                medicalAidClaims: true,
+            }
+            : {
+                patientManagement: true,
+                appointments: true,
+                medicalRecords: true,
+                basicBilling: true,
+            };
+        let tierFeatures = {};
+        if (packagePreset !== 'claims_only') {
+            switch (tier) {
+                case tenant_entity_1.SubscriptionTier.PROFESSIONAL:
+                    tierFeatures = {
+                        medicalAidClaims: true,
+                        basicCDSS: true,
+                        fhirIntegration: true,
+                        patientPortal: true,
+                    };
+                    break;
+                case tenant_entity_1.SubscriptionTier.ENTERPRISE:
+                    tierFeatures = {
+                        medicalAidClaims: true,
+                        advancedCDSS: true,
+                        fhirIntegration: true,
+                        hl7Integration: true,
+                        customReports: true,
+                        apiAccess: true,
+                        patientPortal: true,
+                        telemedicine: true,
+                        pharmacyManagement: true,
+                    };
+                    break;
+                default:
+                    break;
+            }
         }
+        const moduleFlags = enabledModules.reduce((acc, moduleKey) => {
+            acc[`module:${moduleKey}`] = true;
+            if (moduleKey === 'telemedicine')
+                acc.telemedicine = true;
+            if (moduleKey === 'patient_portal')
+                acc.patientPortal = true;
+            if (moduleKey === 'claims')
+                acc.medicalAidClaims = true;
+            return acc;
+        }, {});
+        return {
+            ...baseFeatures,
+            ...tierFeatures,
+            ...moduleFlags,
+        };
+    }
+    resolvePackagePreset(input, existing) {
+        const requestedPreset = input.packagePreset || existing?.packagePreset;
+        if (requestedPreset === 'claims_only' && (input.subscriptionMode || existing?.subscriptionMode || 'paid') === 'paid') {
+            return 'claims_only';
+        }
+        return 'full_ehr';
+    }
+    normalizeEnabledModules(input, packagePreset = 'full_ehr') {
+        const allowed = new Set(ALL_MODULE_KEYS);
+        const normalized = new Set(this.getCoreModulesForPreset(packagePreset));
+        for (const raw of input || []) {
+            const key = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+            if (allowed.has(key)) {
+                if (packagePreset === 'claims_only' && key !== 'claims') {
+                    continue;
+                }
+                normalized.add(key);
+            }
+        }
+        return Array.from(normalized.values()).sort();
+    }
+    resolveSubscriptionFields(input, existing) {
+        const now = new Date();
+        const subscriptionMode = input.subscriptionMode || existing?.subscriptionMode || 'paid';
+        const packagePreset = this.resolvePackagePreset(input, existing);
+        const packageName = input.packageName?.trim() ||
+            existing?.packageName ||
+            (subscriptionMode === 'demo'
+                ? 'Guided Demo'
+                : packagePreset === 'claims_only'
+                    ? 'Claims Only'
+                    : 'Module Subscription');
+        const suspensionWarningDays = Number(input.suspensionWarningDays ?? existing?.suspensionWarningDays ?? 5);
+        const gracePeriodDays = Number(input.gracePeriodDays ?? this.inferGracePeriodDays(existing) ?? 5);
+        if (subscriptionMode === 'demo') {
+            const demoDurationDays = Number(input.demoDurationDays || 14);
+            const demoExpiresAt = input.demoDurationDays !== undefined
+                ? new Date(now.getTime() + demoDurationDays * ONE_DAY_MS)
+                : existing?.demoExpiresAt || new Date(now.getTime() + demoDurationDays * ONE_DAY_MS);
+            const autoDeleteAt = new Date(demoExpiresAt.getTime());
+            const temp = {
+                subscriptionMode,
+                subscriptionState: 'demo',
+                packageName,
+                billingEndsAt: null,
+                demoExpiresAt,
+                graceEndsAt: null,
+                autoDeleteAt,
+                suspensionWarningDays,
+            };
+            temp.subscriptionState = this.computeLifecycleState(temp, now);
+            return temp;
+        }
+        const billingEndsAt = input.billingEndsAt !== undefined
+            ? new Date(input.billingEndsAt)
+            : existing?.billingEndsAt || new Date(now.getTime() + 30 * ONE_DAY_MS);
+        const graceEndsAt = new Date(billingEndsAt.getTime() + Math.max(gracePeriodDays, 0) * ONE_DAY_MS);
+        const temp = {
+            subscriptionMode,
+            subscriptionState: 'active',
+            packageName,
+            billingEndsAt,
+            demoExpiresAt: null,
+            graceEndsAt,
+            autoDeleteAt: null,
+            suspensionWarningDays,
+        };
+        temp.subscriptionState = this.computeLifecycleState(temp, now);
+        return temp;
+    }
+    inferGracePeriodDays(existing) {
+        if (!existing?.billingEndsAt || !existing?.graceEndsAt) {
+            return null;
+        }
+        return Math.max(0, Math.round((existing.graceEndsAt.getTime() - existing.billingEndsAt.getTime()) / ONE_DAY_MS));
+    }
+    applyLifecycleState(tenant, now = new Date()) {
+        const nextState = this.computeLifecycleState(tenant, now);
+        let changed = false;
+        if (tenant.subscriptionState !== nextState) {
+            tenant.subscriptionState = nextState;
+            changed = true;
+        }
+        if (tenant.status !== tenant_entity_1.TenantStatus.CANCELLED) {
+            const shouldBeSuspended = nextState === 'suspended' || nextState === 'expired';
+            const nextStatus = shouldBeSuspended ? tenant_entity_1.TenantStatus.SUSPENDED : tenant.connectionString ? tenant_entity_1.TenantStatus.ACTIVE : tenant.status;
+            if (tenant.status !== nextStatus) {
+                tenant.status = nextStatus;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+    computeLifecycleState(tenant, now = new Date()) {
+        if (tenant.subscriptionMode === 'demo') {
+            if (!tenant.demoExpiresAt) {
+                return 'demo';
+            }
+            return tenant.demoExpiresAt.getTime() >= now.getTime() ? 'demo' : 'expired';
+        }
+        if (tenant.billingEndsAt && tenant.billingEndsAt.getTime() >= now.getTime()) {
+            return 'active';
+        }
+        if (tenant.graceEndsAt && tenant.graceEndsAt.getTime() >= now.getTime()) {
+            return 'grace';
+        }
+        return 'suspended';
+    }
+    diffInDays(target, now = new Date()) {
+        return Math.ceil((target.getTime() - now.getTime()) / ONE_DAY_MS);
+    }
+    async ensureSubscriptionSchema() {
+        await this.tenantRepository.query(`
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS "subscriptionMode" VARCHAR(20) NOT NULL DEFAULT 'paid',
+      ADD COLUMN IF NOT EXISTS "packagePreset" VARCHAR(20) NOT NULL DEFAULT 'full_ehr',
+      ADD COLUMN IF NOT EXISTS "subscriptionState" VARCHAR(20) NOT NULL DEFAULT 'active',
+      ADD COLUMN IF NOT EXISTS "packageName" VARCHAR(120),
+      ADD COLUMN IF NOT EXISTS "enabledModules" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS "billingEndsAt" TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS "demoExpiresAt" TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS "graceEndsAt" TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS "autoDeleteAt" TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS "suspensionWarningDays" INTEGER NOT NULL DEFAULT 5
+    `);
+        await this.tenantRepository.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'subscription_mode'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "subscriptionMode" = COALESCE("subscriptionMode", subscription_mode)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'packagePreset'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "packagePreset" = COALESCE("packagePreset", ''full_ehr'')';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'package_preset'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "packagePreset" = COALESCE("packagePreset", package_preset)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'subscription_state'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "subscriptionState" = COALESCE("subscriptionState", subscription_state)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'package_name'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "packageName" = COALESCE("packageName", package_name)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'enabled_modules'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "enabledModules" = COALESCE("enabledModules", enabled_modules)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'billing_ends_at'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "billingEndsAt" = COALESCE("billingEndsAt", billing_ends_at)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'demo_expires_at'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "demoExpiresAt" = COALESCE("demoExpiresAt", demo_expires_at)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'grace_ends_at'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "graceEndsAt" = COALESCE("graceEndsAt", grace_ends_at)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'auto_delete_at'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "autoDeleteAt" = COALESCE("autoDeleteAt", auto_delete_at)';
+        END IF;
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'tenants' AND column_name = 'suspension_warning_days'
+        ) THEN
+          EXECUTE 'UPDATE tenants SET "suspensionWarningDays" = COALESCE("suspensionWarningDays", suspension_warning_days)';
+        END IF;
+      END $$;
+    `);
+        await this.tenantRepository.query(`
+      UPDATE tenants
+      SET "enabledModules" = '["finance","nurse_general"]'::jsonb
+      WHERE "enabledModules" IS NULL OR "enabledModules" = 'null'::jsonb
+    `);
+        await this.tenantRepository.query(`
+      UPDATE tenants
+      SET "packagePreset" = 'full_ehr'
+      WHERE "packagePreset" IS NULL
+    `);
+        await this.tenantRepository.query(`
+      UPDATE tenants
+      SET "packagePreset" = 'claims_only',
+          "enabledModules" = '["claims"]'::jsonb
+      WHERE "packagePreset" = 'claims_only'
+    `);
     }
 };
 exports.TenantService = TenantService;
+__decorate([
+    (0, schedule_1.Cron)(schedule_1.CronExpression.EVERY_HOUR),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], TenantService.prototype, "reconcileTenantLifecycle", null);
 exports.TenantService = TenantService = TenantService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(tenant_entity_1.Tenant)),

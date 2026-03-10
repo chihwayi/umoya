@@ -23,6 +23,7 @@ import {
   FileText,
   Clock,
 } from 'lucide-react';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface Supplier {
   id: string;
@@ -60,6 +61,7 @@ interface SupplierStatistics {
 const PharmacySuppliers: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { showSuccess, showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -192,7 +194,14 @@ const PharmacySuppliers: React.FC = () => {
   };
 
   const handleDelete = async (supplier: Supplier) => {
-    if (!window.confirm(`Are you sure you want to delete ${supplier.name}?`)) {
+    const shouldProceed = await confirm({
+      title: 'Delete Supplier',
+      message: `Are you sure you want to delete ${supplier.name}?`,
+      confirmText: 'Delete',
+      cancelText: 'Keep',
+      type: 'danger',
+    });
+    if (!shouldProceed) {
       return;
     }
 
@@ -223,7 +232,9 @@ const PharmacySuppliers: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      {Dialog}
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -661,9 +672,9 @@ const PharmacySuppliers: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
 export default PharmacySuppliers;
-

@@ -3,11 +3,18 @@ import {
   Tenant,
   TenantUser,
   CreateTenantUserRequest,
+  UpdateTenantRequest,
   TenantDhis2ConfigPayload,
   TenantDhis2ConfigView,
 } from '../types';
 import { tenantAPI } from '../services/api';
-import { Modal } from './Modal';
+import { ConfirmModal, Modal } from './Modal';
+import {
+  CORE_INCLUDED_MODULES,
+  DEMO_DEFAULT_MODULES,
+  SUBSCRIPTION_MODULE_OPTIONS,
+  normalizeModules,
+} from '../constants/subscriptions';
 
 interface TenantDetailsModalProps {
   tenant: Tenant | null;
@@ -57,6 +64,66 @@ const createDefaultDhis2Form = (): Dhis2FormState => ({
   alertWebhookUrl: '',
 });
 
+const formatDateInput = (value?: string | null) => (value ? new Date(value).toISOString().slice(0, 10) : '');
+const buildDefaultDemoExpiryDate = () => {
+  const expiry = new Date();
+  expiry.setDate(expiry.getDate() + 14);
+  return expiry.toISOString().slice(0, 10);
+};
+const sanitizeSelectedModules = (modules?: string[]) =>
+  Array.from(
+    new Set(
+      (modules || [])
+        .map((moduleKey) => String(moduleKey || '').trim().toLowerCase())
+        .filter((moduleKey) => SUBSCRIPTION_MODULE_OPTIONS.some((option) => option.key === moduleKey)),
+    ),
+  );
+const resolvePaidPackagePreset = (modules: string[]) =>
+  modules.length === 1 && modules[0] === 'claims' ? 'claims_only' : 'full_ehr';
+
+const getBillingToneStyles = (tone?: string) => {
+  switch (tone) {
+    case 'warning':
+      return 'border-amber-200 bg-amber-50 text-amber-800';
+    case 'critical':
+      return 'border-red-200 bg-red-50 text-red-800';
+    case 'expired':
+      return 'border-slate-300 bg-slate-100 text-slate-800';
+    default:
+      return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  }
+};
+
+const buildPackageForm = (tenant: Tenant): UpdateTenantRequest => ({
+  subscriptionTier: tenant.subscriptionTier,
+  subscriptionMode: tenant.subscriptionMode,
+  packagePreset: tenant.packagePreset,
+  packageName:
+    tenant.packageName ||
+    (tenant.subscriptionMode === 'demo'
+      ? 'Guided Demo'
+      : tenant.packagePreset === 'claims_only'
+        ? 'Claims Only'
+        : 'Module Subscription'),
+  enabledModules:
+    tenant.packagePreset === 'claims_only'
+      ? ['claims']
+      : sanitizeSelectedModules(tenant.enabledModules),
+  demoExpiresAt: formatDateInput(tenant.demoExpiresAt),
+  billingEndsAt: formatDateInput(tenant.billingEndsAt),
+  gracePeriodDays:
+    tenant.billingEndsAt && tenant.graceEndsAt
+      ? Math.max(
+          Math.round(
+            (new Date(tenant.graceEndsAt).getTime() - new Date(tenant.billingEndsAt).getTime()) /
+              (1000 * 60 * 60 * 24)
+          ),
+          0,
+        )
+      : 5,
+  suspensionWarningDays: tenant.suspensionWarningDays || tenant.billingSummary?.warningDays || 5,
+});
+
 export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   tenant,
   isOpen,
@@ -93,6 +160,9 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [dhis2PatMasked, setDhis2PatMasked] = useState<string | null>(null);
   const [dhis2Form, setDhis2Form] = useState<Dhis2FormState>(createDefaultDhis2Form());
   const [dhis2RunNowLoading, setDhis2RunNowLoading] = useState(false);
+  const [packageForm, setPackageForm] = useState<UpdateTenantRequest | null>(null);
+  const [packageSaving, setPackageSaving] = useState(false);
+  const [showDeleteDhis2ConfigConfirm, setShowDeleteDhis2ConfigConfirm] = useState(false);
 
   const loadUsers = useCallback(async () => {
     if (!tenant) return;
@@ -161,14 +231,98 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     if (tenant && isOpen) {
       loadUsers();
       loadDhis2Config();
+      setPackageForm(buildPackageForm(tenant));
     } else {
       setUsers([]); // Clear users when closed or tenant cleared
       setDhis2Configured(false);
       setDhis2HasPat(false);
       setDhis2PatMasked(null);
       setDhis2Form(createDefaultDhis2Form());
+      setPackageForm(null);
     }
   }, [isOpen, loadDhis2Config, loadUsers, tenant]);
+
+  const handlePackageFieldChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setPackageForm((prev) => {
+      if (!prev) return prev;
+      if (name === 'subscriptionMode') {
+        return {
+          ...prev,
+          subscriptionMode: value as 'demo' | 'paid',
+          subscriptionTier: value === 'demo' ? 'enterprise' : prev.subscriptionTier || 'basic',
+          packagePreset: 'full_ehr',
+          enabledModules:
+            value === 'demo'
+              ? [...CORE_INCLUDED_MODULES, ...DEMO_DEFAULT_MODULES]
+              : [...CORE_INCLUDED_MODULES],
+          demoExpiresAt: value === 'demo' ? (prev.demoExpiresAt || buildDefaultDemoExpiryDate()) : undefined,
+        };
+      }
+
+      return {
+        ...prev,
+        [name]: value,
+      };
+    });
+  };
+
+  const handleModuleToggle = (moduleKey: string) => {
+    if (packageForm?.subscriptionMode === 'demo') {
+      return;
+    }
+
+    setPackageForm((prev) => {
+      if (!prev) return prev;
+      const current = new Set(sanitizeSelectedModules(prev.enabledModules));
+      if (current.has(moduleKey)) {
+        current.delete(moduleKey);
+      } else {
+        current.add(moduleKey);
+      }
+      return {
+        ...prev,
+        enabledModules: Array.from(current),
+      };
+    });
+  };
+
+  const handleSavePackage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenant || !packageForm) return;
+
+    const isDemoMode = packageForm.subscriptionMode === 'demo';
+    const selectedModules = sanitizeSelectedModules(packageForm.enabledModules);
+    const paidPackagePreset = resolvePaidPackagePreset(selectedModules);
+    const payload: UpdateTenantRequest = {
+      subscriptionTier: isDemoMode ? 'enterprise' : packageForm.subscriptionTier,
+      subscriptionMode: packageForm.subscriptionMode,
+      packagePreset: isDemoMode ? 'full_ehr' : paidPackagePreset,
+      packageName: isDemoMode ? 'Guided Demo' : paidPackagePreset === 'claims_only' ? 'Claims Only' : 'Module Subscription',
+      enabledModules: isDemoMode
+        ? normalizeModules([...CORE_INCLUDED_MODULES, ...DEMO_DEFAULT_MODULES], 'full_ehr')
+        : normalizeModules(selectedModules, paidPackagePreset),
+      demoExpiresAt: isDemoMode ? packageForm.demoExpiresAt : undefined,
+      demoDurationDays: undefined,
+      billingEndsAt: isDemoMode ? undefined : packageForm.billingEndsAt,
+      gracePeriodDays: isDemoMode ? undefined : Number(packageForm.gracePeriodDays || 5),
+      suspensionWarningDays: Number(packageForm.suspensionWarningDays || 5),
+    };
+
+    setPackageSaving(true);
+    try {
+      const updatedTenant = await tenantAPI.updateTenant(tenant.id, payload);
+      setPackageForm(buildPackageForm(updatedTenant));
+      showSuccess('Tenant package updated');
+      onUpdate();
+    } catch (error: any) {
+      console.error('Failed to update tenant package:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to update tenant package');
+    } finally {
+      setPackageSaving(false);
+    }
+  };
 
   const handleSaveDhis2Config = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,9 +402,6 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
 
   const handleClearDhis2Config = async () => {
     if (!tenant) return;
-    if (!window.confirm('Delete this tenant DHIS2 configuration?')) {
-      return;
-    }
     setDhis2Saving(true);
     try {
       await tenantAPI.clearTenantDhis2Config(tenant.id);
@@ -265,6 +416,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to delete DHIS2 configuration');
     } finally {
       setDhis2Saving(false);
+      setShowDeleteDhis2ConfigConfirm(false);
     }
   };
 
@@ -441,6 +593,12 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   };
 
   if (!tenant) return null;
+  const packageMode = packageForm?.subscriptionMode || tenant.subscriptionMode;
+  const isDemoMode = packageMode === 'demo';
+  const selectedPaidModules = sanitizeSelectedModules(packageForm?.enabledModules || tenant.enabledModules);
+  const packagePreset = isDemoMode ? 'full_ehr' : resolvePaidPackagePreset(selectedPaidModules);
+  const isClaimsOnly = !isDemoMode && packagePreset === 'claims_only';
+  const billingSummary = tenant.billingSummary;
 
   return (
     <>
@@ -526,6 +684,184 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
               {errorMessage}
             </div>
           )}
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h4 className="font-bold text-slate-800">Subscription and lifecycle</h4>
+                <p className="text-xs text-slate-500 mt-1">
+                  Control demo expiry, paid billing windows, module entitlements, and warning lead time.
+                </p>
+              </div>
+              <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${getBillingToneStyles(billingSummary?.tone)}`}>
+                {billingSummary?.label || 'Lifecycle'}
+              </div>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <div className={`rounded-2xl border px-4 py-4 ${getBillingToneStyles(billingSummary?.tone)}`}>
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">{billingSummary?.message || 'No billing summary available yet.'}</p>
+                    <p className="mt-1 text-xs opacity-80">
+                      Access ends: {billingSummary?.accessEndsAt ? new Date(billingSummary.accessEndsAt).toLocaleString() : 'N/A'}
+                      {' · '}
+                      Suspension: {billingSummary?.suspensionAt ? new Date(billingSummary.suspensionAt).toLocaleString() : 'N/A'}
+                      {' · '}
+                      Auto-delete: {billingSummary?.autoDeleteAt ? new Date(billingSummary.autoDeleteAt).toLocaleString() : 'Not scheduled'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="rounded-xl bg-white/70 px-3 py-2">
+                      <p className="text-slate-500">Days remaining</p>
+                      <p className="text-lg font-bold text-slate-900">{billingSummary?.daysRemaining ?? 'N/A'}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 px-3 py-2">
+                      <p className="text-slate-500">Days to suspension</p>
+                      <p className="text-lg font-bold text-slate-900">{billingSummary?.daysUntilSuspension ?? 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSavePackage} className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Package Mode</label>
+                    <select
+                      name="subscriptionMode"
+                      value={packageMode}
+                      onChange={handlePackageFieldChange}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+                    >
+                      <option value="demo">Demo</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </div>
+                  {isDemoMode ? (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Demo Expiry Date</label>
+                      <input
+                        type="date"
+                        name="demoExpiresAt"
+                        value={packageForm?.demoExpiresAt || ''}
+                        onChange={handlePackageFieldChange}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Subscription Tier</label>
+                        <select
+                          name="subscriptionTier"
+                          value={packageForm?.subscriptionTier || tenant.subscriptionTier}
+                          onChange={handlePackageFieldChange}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+                        >
+                          <option value="basic">Basic</option>
+                          <option value="professional">Professional</option>
+                          <option value="enterprise">Enterprise</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Suspension Warning Days</label>
+                        <input
+                          type="number"
+                          name="suspensionWarningDays"
+                          min={1}
+                          max={30}
+                          value={packageForm?.suspensionWarningDays || 5}
+                          onChange={handlePackageFieldChange}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Billing Ends On</label>
+                        <input
+                          type="date"
+                          name="billingEndsAt"
+                          value={packageForm?.billingEndsAt || ''}
+                          onChange={handlePackageFieldChange}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Grace Period (Days)</label>
+                        <input
+                          type="number"
+                          name="gracePeriodDays"
+                          min={0}
+                          max={30}
+                          value={packageForm?.gracePeriodDays || 5}
+                          onChange={handlePackageFieldChange}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {!isDemoMode && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h5 className="text-sm font-semibold text-slate-800">Subscribed modules</h5>
+                    <span className="text-xs text-slate-500">
+                      {isClaimsOnly
+                        ? 'Standalone subscription: claims only.'
+                        : `Select the paid modules for this tenant. Standard EHR includes ${CORE_INCLUDED_MODULES.join(' + ').replace('nurse_general', 'nurse general')}.`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {SUBSCRIPTION_MODULE_OPTIONS.map((moduleOption) => {
+                      const checked = selectedPaidModules.includes(moduleOption.key);
+                      const locked = false;
+                      return (
+                        <label
+                          key={moduleOption.key}
+                          className={`rounded-xl border p-3 ${
+                            checked ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'
+                          } ${locked ? 'opacity-95' : 'cursor-pointer hover:border-slate-300'}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={locked}
+                              onChange={() => handleModuleToggle(moduleOption.key)}
+                              className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-slate-900">{moduleOption.label}</span>
+                                {(moduleOption.key === 'finance' || moduleOption.key === 'nurse_general') && !isClaimsOnly && (
+                                  <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                    Standard Core
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 text-xs leading-5 text-slate-500">{moduleOption.description}</p>
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={packageSaving}
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {packageSaving ? 'Saving package...' : 'Save package settings'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
 
           {/* DHIS2 Integration Section */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -740,7 +1076,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                 {dhis2Configured && (
                   <button
                     type="button"
-                    onClick={handleClearDhis2Config}
+                    onClick={() => setShowDeleteDhis2ConfigConfirm(true)}
                     disabled={dhis2Saving || dhis2RunNowLoading}
                     className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
                   >
@@ -1059,6 +1395,18 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={showDeleteDhis2ConfigConfirm}
+        onClose={() => setShowDeleteDhis2ConfigConfirm(false)}
+        onConfirm={() => {
+          void handleClearDhis2Config();
+        }}
+        title="Delete DHIS2 Configuration"
+        message="Delete this tenant DHIS2 configuration?"
+        confirmText="Delete"
+        cancelText="Keep"
+        type="danger"
+      />
     </>
   );
 };

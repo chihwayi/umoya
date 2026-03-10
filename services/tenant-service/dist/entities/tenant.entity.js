@@ -56,6 +56,46 @@ __decorate([
     __metadata("design:type", String)
 ], Tenant.prototype, "subscriptionTier", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ default: 'paid' }),
+    __metadata("design:type", String)
+], Tenant.prototype, "subscriptionMode", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: 'full_ehr' }),
+    __metadata("design:type", String)
+], Tenant.prototype, "packagePreset", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: 'active' }),
+    __metadata("design:type", String)
+], Tenant.prototype, "subscriptionState", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Tenant.prototype, "packageName", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'jsonb', default: () => "'[]'::jsonb" }),
+    __metadata("design:type", Array)
+], Tenant.prototype, "enabledModules", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Date)
+], Tenant.prototype, "billingEndsAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Date)
+], Tenant.prototype, "demoExpiresAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Date)
+], Tenant.prototype, "graceEndsAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Date)
+], Tenant.prototype, "autoDeleteAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', default: 5 }),
+    __metadata("design:type", Number)
+], Tenant.prototype, "suspensionWarningDays", void 0);
+__decorate([
     (0, typeorm_1.Column)({
         type: 'enum',
         enum: TenantStatus,

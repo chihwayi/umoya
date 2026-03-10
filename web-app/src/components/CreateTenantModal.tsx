@@ -3,6 +3,13 @@ import { CreateTenantRequest } from '../types';
 import { Modal } from './Modal';
 import { tenantAPI } from '../services/api';
 import { useNotification } from '../contexts/NotificationContext';
+import {
+  CORE_INCLUDED_MODULES,
+  DEMO_DEFAULT_MODULES,
+  SUBSCRIPTION_MODULE_OPTIONS,
+  buildDefaultBillingDate,
+  normalizeModules,
+} from '../constants/subscriptions';
 
 interface CreateTenantModalProps {
   isOpen: boolean;
@@ -17,8 +24,25 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
   onSubmit,
   loading
 }) => {
-  const { error: notifyError } = useNotification();
-  const [formData, setFormData] = useState<CreateTenantRequest>({
+  const buildDefaultDemoExpiryDate = () => {
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 14);
+    return expiry.toISOString().slice(0, 10);
+  };
+
+  const sanitizeSelectedModules = (modules?: string[]) =>
+    Array.from(
+      new Set(
+        (modules || [])
+          .map((moduleKey) => String(moduleKey || '').trim().toLowerCase())
+          .filter((moduleKey) => SUBSCRIPTION_MODULE_OPTIONS.some((option) => option.key === moduleKey)),
+      ),
+    );
+
+  const resolvePaidPackagePreset = (modules: string[]) =>
+    modules.length === 1 && modules[0] === 'claims' ? 'claims_only' : 'full_ehr';
+
+  const buildDefaultFormData = (): CreateTenantRequest => ({
     clinicName: '',
     subdomain: '',
     contactEmail: '',
@@ -26,12 +50,26 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
     address: '',
     city: '',
     subscriptionTier: 'basic',
+    subscriptionMode: 'paid',
+    packagePreset: 'full_ehr',
+    packageName: 'Module Subscription',
+    enabledModules: [...CORE_INCLUDED_MODULES],
+    demoExpiresAt: buildDefaultDemoExpiryDate(),
+    billingEndsAt: buildDefaultBillingDate(),
+    gracePeriodDays: 5,
+    suspensionWarningDays: 5,
     logoUrl: ''
   });
+
+  const { error: notifyError } = useNotification();
+  const [formData, setFormData] = useState<CreateTenantRequest>(buildDefaultFormData());
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isDemoMode = formData.subscriptionMode === 'demo';
+  const selectedPaidModules = sanitizeSelectedModules(formData.enabledModules);
+  const isClaimsOnly = !isDemoMode && resolvePaidPackagePreset(selectedPaidModules) === 'claims_only';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,17 +89,62 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
       }
     }
 
-    onSubmit({
+    const paidPackagePreset = resolvePaidPackagePreset(selectedPaidModules);
+    const payload: CreateTenantRequest = {
       ...formData,
-      logoUrl: finalLogoUrl
-    });
+      logoUrl: finalLogoUrl,
+      subscriptionTier: isDemoMode ? 'enterprise' : formData.subscriptionTier,
+      packagePreset: isDemoMode ? 'full_ehr' : paidPackagePreset,
+      enabledModules: isDemoMode
+        ? normalizeModules([...CORE_INCLUDED_MODULES, ...DEMO_DEFAULT_MODULES], 'full_ehr')
+        : normalizeModules(selectedPaidModules, paidPackagePreset),
+      demoExpiresAt: isDemoMode ? formData.demoExpiresAt : undefined,
+      demoDurationDays: undefined,
+      billingEndsAt: isDemoMode ? undefined : formData.billingEndsAt,
+      gracePeriodDays: isDemoMode ? undefined : Number(formData.gracePeriodDays || 5),
+      suspensionWarningDays: Number(formData.suspensionWarningDays || 5),
+      packageName: isDemoMode ? 'Guided Demo' : paidPackagePreset === 'claims_only' ? 'Claims Only' : 'Module Subscription',
+    };
+
+    onSubmit(payload);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [name]: value,
+      ...(name === 'subscriptionMode'
+        ? {
+            subscriptionTier: value === 'demo' ? 'enterprise' : 'basic',
+            enabledModules:
+              value === 'demo'
+                ? [...CORE_INCLUDED_MODULES, ...DEMO_DEFAULT_MODULES]
+                : [...CORE_INCLUDED_MODULES],
+            packagePreset: 'full_ehr',
+            demoExpiresAt: value === 'demo' ? buildDefaultDemoExpiryDate() : undefined,
+          }
+        : {}),
     }));
+  };
+
+  const handleModuleToggle = (moduleKey: string) => {
+    if (isDemoMode) {
+      return;
+    }
+
+    setFormData((prev) => {
+      const currentModules = new Set(sanitizeSelectedModules(prev.enabledModules));
+      if (currentModules.has(moduleKey)) {
+        currentModules.delete(moduleKey);
+      } else {
+        currentModules.add(moduleKey);
+      }
+      return {
+        ...prev,
+        enabledModules: Array.from(currentModules),
+      };
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,6 +166,12 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
       setLogoFile(file);
       setLogoPreview(URL.createObjectURL(file));
     }
+  };
+
+  const resetForm = () => {
+    setFormData(buildDefaultFormData());
+    setLogoFile(null);
+    setLogoPreview(null);
   };
 
   return (
@@ -209,75 +298,238 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-3">Subscription Tier</label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label className="block text-sm font-semibold text-slate-700 mb-3">Package Mode</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
-              { value: 'basic', name: 'Basic', price: '$99', features: ['Core eHR', '5 Users'], color: 'blue' },
-              { value: 'professional', name: 'Professional', price: '$199', features: ['Medical Claims', '25 Users'], color: 'indigo' },
-              { value: 'enterprise', name: 'Enterprise', price: '$299', features: ['AI CDSS', 'Unlimited'], color: 'purple' }
-            ].map((tier) => {
-              const isSelected = formData.subscriptionTier === tier.value;
-              const colorClasses = {
-                basic: isSelected ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : '',
-                professional: isSelected ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' : '',
-                enterprise: isSelected ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-500' : ''
-              };
-              const textClasses = {
-                basic: isSelected ? 'text-blue-700' : 'text-slate-700',
-                professional: isSelected ? 'text-indigo-700' : 'text-slate-700',
-                enterprise: isSelected ? 'text-purple-700' : 'text-slate-700'
-              };
-              const checkBg = {
-                basic: 'bg-blue-500',
-                professional: 'bg-indigo-500',
-                enterprise: 'bg-purple-500'
-              };
-
+              {
+                value: 'demo',
+                title: 'Guided Demo',
+                description: 'Time-boxed trial tenant with automatic expiry and database cleanup.',
+                accent: 'from-amber-500 to-orange-500',
+              },
+              {
+                value: 'paid',
+                title: 'Paid Subscription',
+                description: 'Long-running tenant with module-based billing and suspension grace windows.',
+                accent: 'from-emerald-500 to-teal-600',
+              },
+            ].map((option) => {
+              const selected = formData.subscriptionMode === option.value;
               return (
-                <label key={tier.value} className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all duration-200 hover:shadow-md ${
-                  isSelected ? colorClasses[tier.value as keyof typeof colorClasses] : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}>
+                <label
+                  key={option.value}
+                  className={`cursor-pointer rounded-2xl border p-4 transition-all ${
+                    selected
+                      ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
+                      : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
+                  }`}
+                >
                   <input
                     type="radio"
-                    name="subscriptionTier"
-                    value={tier.value}
-                    checked={formData.subscriptionTier === tier.value}
+                    name="subscriptionMode"
+                    value={option.value}
+                    checked={formData.subscriptionMode === option.value}
                     onChange={handleChange}
                     className="sr-only"
                   />
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={`font-bold ${textClasses[tier.value as keyof typeof textClasses]}`}>
-                      {tier.name}
-                    </span>
-                    {isSelected && (
-                      <div className={`h-5 w-5 rounded-full ${checkBg[tier.value as keyof typeof checkBg]} flex items-center justify-center`}>
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
+                  <div className={`inline-flex rounded-xl bg-gradient-to-r ${option.accent} px-3 py-1 text-xs font-semibold text-white`}>
+                    {option.title}
                   </div>
-                  <div className="text-xl font-bold text-slate-900 mb-2">{tier.price}<span className="text-sm font-normal text-slate-500">/mo</span></div>
-                  <ul className="space-y-1">
-                    {tier.features.map((feature, idx) => (
-                      <li key={idx} className="text-xs text-slate-600 flex items-center">
-                        <svg className="w-3 h-3 mr-1 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="mt-3 text-sm leading-6 opacity-90">{option.description}</p>
                 </label>
               );
             })}
           </div>
         </div>
 
+        {!isDemoMode && (
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-3">Subscription Tier</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[
+                { value: 'basic', name: 'Basic', price: '$99', features: ['Core eHR', '5 Users'], color: 'blue' },
+                { value: 'professional', name: 'Professional', price: '$199', features: ['Medical Claims', '25 Users'], color: 'indigo' },
+                { value: 'enterprise', name: 'Enterprise', price: '$299', features: ['AI CDSS', 'Unlimited'], color: 'purple' }
+              ].map((tier) => {
+                const isSelected = formData.subscriptionTier === tier.value;
+                const colorClasses = {
+                  basic: isSelected ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : '',
+                  professional: isSelected ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' : '',
+                  enterprise: isSelected ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-500' : ''
+                };
+                const textClasses = {
+                  basic: isSelected ? 'text-blue-700' : 'text-slate-700',
+                  professional: isSelected ? 'text-indigo-700' : 'text-slate-700',
+                  enterprise: isSelected ? 'text-purple-700' : 'text-slate-700'
+                };
+                const checkBg = {
+                  basic: 'bg-blue-500',
+                  professional: 'bg-indigo-500',
+                  enterprise: 'bg-purple-500'
+                };
+
+                return (
+                  <label key={tier.value} className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all duration-200 hover:shadow-md ${
+                    isSelected ? colorClasses[tier.value as keyof typeof colorClasses] : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="subscriptionTier"
+                      value={tier.value}
+                      checked={formData.subscriptionTier === tier.value}
+                      onChange={handleChange}
+                      className="sr-only"
+                    />
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={`font-bold ${textClasses[tier.value as keyof typeof textClasses]}`}>
+                        {tier.name}
+                      </span>
+                      {isSelected && (
+                        <div className={`h-5 w-5 rounded-full ${checkBg[tier.value as keyof typeof checkBg]} flex items-center justify-center`}>
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xl font-bold text-slate-900 mb-2">{tier.price}<span className="text-sm font-normal text-slate-500">/mo</span></div>
+                    <ul className="space-y-1">
+                      {tier.features.map((feature, idx) => (
+                        <li key={idx} className="text-xs text-slate-600 flex items-center">
+                          <svg className="w-3 h-3 mr-1 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+          <div className="flex flex-col gap-1 mb-4">
+            <h3 className="text-sm font-semibold text-slate-900">Billing and lifecycle</h3>
+            <p className="text-xs text-slate-500">
+              {isDemoMode
+                ? 'For demo tenants, set only the expiry date. The system will handle the rest.'
+                : isClaimsOnly
+                  ? 'Claims Only will provision a standalone insurance claims tenant.'
+                  : 'Select the modules the client has subscribed to. Claims can also be sold standalone.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {isDemoMode ? (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Demo Expiry Date</label>
+                <input
+                  type="date"
+                  name="demoExpiresAt"
+                  className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white shadow-sm"
+                  value={formData.demoExpiresAt || ''}
+                  onChange={handleChange}
+                />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Warning Days</label>
+                  <input
+                    type="number"
+                    name="suspensionWarningDays"
+                    min={1}
+                    max={30}
+                    className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white shadow-sm"
+                    value={formData.suspensionWarningDays || 5}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Billing Ends On</label>
+                  <input
+                    type="date"
+                    name="billingEndsAt"
+                    className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white shadow-sm"
+                    value={formData.billingEndsAt || ''}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Grace Period (Days)</label>
+                  <input
+                    type="number"
+                    name="gracePeriodDays"
+                    min={0}
+                    max={30}
+                    className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white shadow-sm"
+                    value={formData.gracePeriodDays || 5}
+                    onChange={handleChange}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {!isDemoMode && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-semibold text-slate-700">Enabled Modules</label>
+            <span className="text-xs text-slate-500">
+              {isClaimsOnly
+                ? 'Standalone subscription: claims only'
+                : `Standard EHR package will include ${CORE_INCLUDED_MODULES.join(' + ').replace('nurse_general', 'nurse general')}`}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {SUBSCRIPTION_MODULE_OPTIONS.map((moduleOption) => {
+              const checked = selectedPaidModules.includes(moduleOption.key);
+              const locked = false;
+              return (
+                <label
+                  key={moduleOption.key}
+                  className={`rounded-2xl border p-4 transition-all ${
+                    checked ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'
+                  } ${locked ? 'opacity-95' : 'cursor-pointer hover:border-slate-300'}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={locked}
+                      onChange={() => handleModuleToggle(moduleOption.key)}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900">{moduleOption.label}</span>
+                        {(moduleOption.key === 'finance' || moduleOption.key === 'nurse_general') && !isClaimsOnly && (
+                          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                            Standard Core
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{moduleOption.description}</p>
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        )}
+
         <div className="flex justify-end space-x-3 pt-6 border-t border-slate-100">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              resetForm();
+              onClose();
+            }}
             className="px-6 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-medium transition-colors"
           >
             Cancel

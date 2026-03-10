@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { UserPlus, Mail, Lock, Calendar, Phone, Hash, Eye, EyeOff, CheckCircle, AlertCircle, Heart, Shield } from 'lucide-react';
+import { UserPlus, Mail, Lock, Calendar, Phone, Hash, Eye, EyeOff, CheckCircle, AlertCircle, Shield } from 'lucide-react';
 
 const RegisterPage: React.FC = () => {
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { register } = usePatientAuth();
@@ -112,8 +113,8 @@ const RegisterPage: React.FC = () => {
         <div className="relative z-10 flex flex-col justify-center px-12 text-white">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                <Heart className="w-7 h-7 text-white" />
+              <div className="rounded-2xl bg-white/95 p-2 shadow-lg">
+                <img src={logoSrc} alt="MediCore logo" className="h-12 w-auto rounded-xl" />
               </div>
               <h1 className="text-3xl font-bold">MediCore</h1>
             </div>
@@ -153,10 +154,7 @@ const RegisterPage: React.FC = () => {
         <div className="w-full max-w-md my-8">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <Heart className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900">MediCore</h1>
+            <img src={logoSrc} alt="MediCore logo" className="h-14 w-auto rounded-xl shadow-lg" />
           </div>
 
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl p-8 sm:p-10 border border-white/20">

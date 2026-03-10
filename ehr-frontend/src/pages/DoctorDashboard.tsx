@@ -61,6 +61,12 @@ import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptP
 import VoiceConsultationPanel from '../components/VoiceConsultation/VoiceConsultationPanel';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
+import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
+import {
+  getBillingToneClasses,
+  isTenantRouteAvailable,
+  notifyTenantSubscriptionStatus,
+} from '../utils/tenantSubscription';
 
 interface Appointment {
   id: string;
@@ -181,9 +187,10 @@ type PatientVitalsWithUser = PatientVitals & {
 };
 
 const DoctorDashboard: React.FC = () => {
+  const brandLogoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
-  const { showError, showSuccess } = useNotification();
+  const { showError, showSuccess, showWarning } = useNotification();
   
   // State
   const [tenantInfo, setTenantInfo] = useState<any>(null);
@@ -1757,7 +1764,7 @@ const DoctorDashboard: React.FC = () => {
       { icon: Eye, label: 'Ophthalmology', desc: 'Eye care & vision', color: 'from-blue-500 to-cyan-500', route: 'doctor/ophthalmology' },
       { icon: Users, label: 'Population Health', desc: 'Registry, preventive care & recall', color: 'from-teal-500 to-cyan-500', route: 'population-health' },
       { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-green-500 to-emerald-500' },
-    ];
+    ].filter((action) => isTenantRouteAvailable(tenantInfo, action.route));
   };
 
   const inProgressCount = getCurrentAppointments().length;
@@ -1770,9 +1777,15 @@ const DoctorDashboard: React.FC = () => {
     { label: 'Waiting', value: waitingCount.toString(), icon: Clock, color: 'text-purple-600' },
   ];
 
+  useEffect(() => {
+    notifyTenantSubscriptionStatus(tenantInfo, { showWarning, showError });
+  }, [tenantInfo, showWarning, showError]);
+
   if (!currentUser) return null;
 
   const modalOpen = showVitalsModal || showComprehensiveNotes || showReferralModal || showCarePlanModal;
+  const billingSummary = tenantInfo?.billingSummary;
+  const billingTone = getBillingToneClasses(billingSummary);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -1795,8 +1808,12 @@ const DoctorDashboard: React.FC = () => {
                   />
                 </div>
               ) : (
-                <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
-                  <Stethoscope className="w-6 h-6 text-white" />
+                <div className="h-10 bg-white px-1 rounded-xl flex items-center justify-center overflow-hidden">
+                  <img
+                    src={brandLogoSrc}
+                    alt="MediCore logo"
+                    className="h-8 w-auto object-contain"
+                  />
                 </div>
               )}
               <div>
@@ -1804,6 +1821,11 @@ const DoctorDashboard: React.FC = () => {
                   {tenantInfo?.clinicName ? tenantInfo.clinicName : 'MediCore'}
                 </h2>
                 <p className="text-xs text-slate-300">Doctor Portal</p>
+                {billingSummary && (
+                  <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${billingTone.pill}`}>
+                    {billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining ?? 'N/A'}d
+                  </span>
+                )}
               </div>
             </div>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden">
@@ -1956,6 +1978,9 @@ const DoctorDashboard: React.FC = () => {
 
       {/* Main Content */}
       <div className="lg:pl-64">
+        <div className="px-4 pt-4 sm:px-6 lg:px-8">
+          <TenantSubscriptionBanner tenantInfo={tenantInfo} />
+        </div>
 
         {/* Top Header */}
         <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">

@@ -121,6 +121,12 @@ export class DemoAccessRequestService implements OnModuleInit {
       city: undefined,
       logoUrl: undefined,
       subscriptionTier: SubscriptionTier.ENTERPRISE,
+      subscriptionMode: 'demo',
+      packagePreset: 'full_ehr',
+      packageName: 'Guided Demo',
+      demoDurationDays: 14,
+      enabledModules: ['hiv', 'patient_portal', 'claims', 'telemedicine'],
+      suspensionWarningDays: 5,
     });
 
     request.status = 'provisioned';

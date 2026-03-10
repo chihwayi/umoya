@@ -4,6 +4,7 @@ import { doctorAvailabilityApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import DatePicker from './DatePicker';
 import { formatDateForAPI, formatDateToDDMMYYYY } from '../utils/dateUtils';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface DoctorAvailability {
   id: string;
@@ -30,6 +31,7 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
   onClose,
 }) => {
   const { showSuccess, showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const [availabilities, setAvailabilities] = useState<DoctorAvailability[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -161,7 +163,14 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this unavailability period?')) {
+    const shouldProceed = await confirm({
+      title: 'Delete Unavailability Period',
+      message: 'Are you sure you want to delete this unavailability period?',
+      confirmText: 'Delete',
+      cancelText: 'Keep',
+      type: 'danger',
+    });
+    if (!shouldProceed) {
       return;
     }
 
@@ -199,7 +208,9 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <>
+      {Dialog}
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex items-center justify-between">
@@ -434,9 +445,9 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
 export default DoctorAvailabilityManager;
-

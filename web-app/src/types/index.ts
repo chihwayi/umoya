@@ -1,3 +1,22 @@
+export interface TenantBillingSummary {
+  mode: 'demo' | 'paid';
+  packagePreset: 'full_ehr' | 'claims_only';
+  state: 'demo' | 'active' | 'grace' | 'suspended' | 'expired';
+  packageName: string | null;
+  accessEndsAt: string | null;
+  suspensionAt: string | null;
+  autoDeleteAt: string | null;
+  daysRemaining: number | null;
+  daysUntilSuspension: number | null;
+  overdueDays: number;
+  warningDays: number;
+  tone: 'good' | 'warning' | 'critical' | 'expired';
+  label: string;
+  message: string;
+  enabledModules: string[];
+  coreModules: string[];
+}
+
 export interface Tenant {
   id: string;
   clinicName: string;
@@ -5,6 +24,17 @@ export interface Tenant {
   databaseName: string;
   connectionString: string | null;
   subscriptionTier: 'basic' | 'professional' | 'enterprise';
+  subscriptionMode: 'demo' | 'paid';
+  packagePreset: 'full_ehr' | 'claims_only';
+  subscriptionState: 'demo' | 'active' | 'grace' | 'suspended' | 'expired';
+  packageName: string | null;
+  enabledModules: string[];
+  billingEndsAt: string | null;
+  demoExpiresAt: string | null;
+  graceEndsAt: string | null;
+  autoDeleteAt: string | null;
+  suspensionWarningDays: number;
+  billingSummary: TenantBillingSummary;
   status: 'pending' | 'active' | 'suspended' | 'cancelled';
   contactEmail: string;
   contactPhone: string;
@@ -26,6 +56,15 @@ export interface CreateTenantRequest {
   city?: string;
   logoUrl?: string;
   subscriptionTier: 'basic' | 'professional' | 'enterprise';
+  subscriptionMode?: 'demo' | 'paid';
+  packagePreset?: 'full_ehr' | 'claims_only';
+  packageName?: string;
+  enabledModules?: string[];
+  demoDurationDays?: number;
+  demoExpiresAt?: string;
+  billingEndsAt?: string;
+  gracePeriodDays?: number;
+  suspensionWarningDays?: number;
 }
 
 export interface UpdateTenantRequest {
@@ -36,6 +75,15 @@ export interface UpdateTenantRequest {
   city?: string;
   logoUrl?: string;
   subscriptionTier?: 'basic' | 'professional' | 'enterprise';
+  subscriptionMode?: 'demo' | 'paid';
+  packagePreset?: 'full_ehr' | 'claims_only';
+  packageName?: string;
+  enabledModules?: string[];
+  demoDurationDays?: number;
+  demoExpiresAt?: string;
+  billingEndsAt?: string;
+  gracePeriodDays?: number;
+  suspensionWarningDays?: number;
 }
 
 export interface TenantUser {

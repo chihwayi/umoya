@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, XCircle, Eye, DollarSign, Calendar, User, FileText, AlertCircle, Loader2 } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrAxios } from '../services/api';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface ChargeReviewModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ const ChargeReviewModal: React.FC<ChargeReviewModalProps> = ({
   tenantSlug,
 }) => {
   const { showSuccess, showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const token = localStorage.getItem('ehr_token') || '';
   const currentUser = JSON.parse(localStorage.getItem('ehr_user') || '{}');
 
@@ -130,7 +132,14 @@ const ChargeReviewModal: React.FC<ChargeReviewModalProps> = ({
       return;
     }
 
-    if (!window.confirm('Are you sure you want to approve all pending charges for this admission?')) {
+    const shouldProceed = await confirm({
+      title: 'Approve All Charges',
+      message: 'Are you sure you want to approve all pending charges for this admission?',
+      confirmText: 'Approve All',
+      cancelText: 'Cancel',
+      type: 'warning',
+    });
+    if (!shouldProceed) {
       return;
     }
 
@@ -177,7 +186,9 @@ const ChargeReviewModal: React.FC<ChargeReviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <>
+      {Dialog}
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-teal-50">
@@ -432,10 +443,10 @@ const ChargeReviewModal: React.FC<ChargeReviewModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
 export default ChargeReviewModal;
-
 

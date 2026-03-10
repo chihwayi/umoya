@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Tenant, CreateTenantRequest } from '../types';
 import { tenantAPI, authAPI } from '../services/api';
 import { TenantCard } from '../components/TenantCard';
@@ -30,15 +30,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [currentView, setCurrentView] = useState<'overview' | 'tenants' | 'requests' | 'health' | 'audit' | 'security' | 'backups' | 'terminology' | 'cdss'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    loadTenants();
-  }, []);
-
-  const loadTenants = async () => {
+  const loadTenants = useCallback(async () => {
     try {
       const data = await tenantAPI.getAllTenants();
       if (Array.isArray(data)) {
         setTenants(data);
+        setSelectedTenant((current) => {
+          if (!current) return current;
+          return data.find((tenant) => tenant.id === current.id) || current;
+        });
       } else {
         console.warn('Expected array of tenants but received:', data);
         setTenants([]);
@@ -51,7 +51,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notifyError]);
+
+  useEffect(() => {
+    loadTenants();
+  }, [loadTenants]);
 
   const handleCreateTenant = async (data: CreateTenantRequest) => {
     setCreateLoading(true);
@@ -221,8 +225,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </svg>
               </button>
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-slate-800 rounded flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">M</span>
+                <div className="rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
+                  <img src="/medicore.png" alt="MediCore logo" className="h-8 w-auto rounded-lg" />
                 </div>
                 <div>
                   <h1 className="text-lg font-bold text-slate-800 tracking-tight">

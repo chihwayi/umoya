@@ -4,10 +4,8 @@ import {
   Activity,
   ArrowRight,
   Brain,
-  Building2,
   CheckCircle2,
   ChevronRight,
-  FileText,
   FlaskConical,
   HeartPulse,
   MessageSquare,
@@ -15,7 +13,6 @@ import {
   ShieldCheck,
   Smartphone,
   Sparkles,
-  Stethoscope,
   Wallet,
   Workflow,
 } from 'lucide-react';
@@ -26,59 +23,69 @@ type ContactMethod = 'email' | 'phone' | 'whatsapp';
 const interestOptions = [
   'PostVisit AI',
   'CDSS and AI decision support',
+  'Maternity and newborn care',
+  'Diabetes and chronic care',
+  'Vaccination and preventive care',
+  'Lab and radiology workflows',
   'FHIR interoperability',
   'SNOMED and structured coding',
   'DHIS2 reporting',
   'HIV program workflows',
   'Cancer and specialty modules',
+  'Claims and revenue cycle',
   'Patient portal and mobile app',
 ];
 
 const featureHighlights = [
   {
-    title: 'PostVisit AI that closes the loop',
-    description: 'Turn visits into signed, patient-safe follow-through with grounded summaries, escalations, teach-back, and follow-up execution.',
+    title: 'CDSS and AI that are visible from the first demo',
+    description: 'Lead with CDSS, PostVisit AI, documentation support, risk cues, follow-up guidance, and patient-safe publishing instead of generic “AI-powered” marketing.',
     icon: Sparkles,
   },
   {
     title: 'Clinical intelligence without generic AI fluff',
-    description: 'CDSS, dosing safeguards, terminology-aware documentation, risk cues, and protocol-driven execution for real bedside work.',
+    description: 'Dose checks, terminology-aware charting, protocol-linked workflows, alerting, and execution support are built for real clinicians, not slide decks.',
     icon: Brain,
   },
   {
-    title: 'Interoperability built into care',
-    description: 'FHIR, SNOMED CT, ICD-10, RxNorm, and DHIS2 support make the record usable for referrals, reporting, public-health programs, and cleaner downstream data.',
-    icon: Network,
+    title: 'Balanced clinical coverage across core service lines',
+    description: 'Maternity, diabetes, vaccinations, lab, radiology, pharmacy, oncology, HIV, emergency, claims, and patient follow-up all sit inside one operational platform.',
+    icon: Workflow,
   },
   {
-    title: 'Depth where clinics actually compete',
-    description: 'HIV, oncology, cardiology, diabetes, ED, pharmacy, claims, medical-aid readiness, telemedicine, and doctor-nurse coordination.',
-    icon: Workflow,
+    title: 'Interoperability built into care delivery',
+    description: 'FHIR, SNOMED CT, ICD-10, RxNorm, and DHIS2 support make the record usable for referrals, reporting, public-health programs, research workflows, and cleaner downstream data.',
+    icon: Network,
   },
 ];
 
 const proofPoints = [
   {
-    title: 'HIV, chronic care, and specialty depth',
-    body: 'MediCore is not a thin notes app. It already carries HIV workflows, oncology, cardiology, diabetes, maternity, emergency, lab, imaging, pharmacy, and revenue-cycle surfaces.',
+    title: 'AI and CDSS are the headline, not an afterthought',
+    body: 'The strongest public story should be CDSS, PostVisit AI, grounded follow-up, and safer clinical execution. That is what separates MediCore from a generic records system.',
+    icon: Brain,
+  },
+  {
+    title: 'Primary care, specialty care, and operational depth',
+    body: 'MediCore already spans maternity, diabetes, vaccinations, HIV, oncology, lab, radiology, pharmacy, telemedicine, billing, claims, and coordinated doctor-nurse workflows.',
     icon: HeartPulse,
   },
   {
-    title: 'FHIR + SNOMED + HIPAA-aware operations',
-    body: 'Structured terminology, interoperability, and auditability make the platform more useful for quality improvement, cleaner data exchange, and safer longitudinal care.',
+    title: 'FHIR, SNOMED, HIPAA-aware operations, and DHIS2',
+    body: 'Structured terminology, interoperability, auditability, and DHIS2 alignment help clinics improve referrals, public-health reporting, program visibility, grants, registries, and research readiness.',
     icon: ShieldCheck,
-  },
-  {
-    title: 'DHIS2 that supports program reporting and research readiness',
-    body: 'DHIS2 alignment helps clinics and programs push cleaner operational and public-health data, improve cohort visibility, and strengthen reporting for grants, registries, and research workflows.',
-    icon: FileText,
   },
 ];
 
 const moduleChips = [
-  { label: 'HIV Program Workflow', icon: Activity },
-  { label: 'Cancer and Oncology', icon: FlaskConical },
   { label: 'CDSS + AI', icon: Brain },
+  { label: 'PostVisit AI', icon: Sparkles },
+  { label: 'Maternity + Newborn', icon: HeartPulse },
+  { label: 'Diabetes + Chronic Care', icon: Activity },
+  { label: 'Vaccination + Preventive Care', icon: ShieldCheck },
+  { label: 'Lab + Radiology', icon: FlaskConical },
+  { label: 'HIV Program Workflow', icon: Activity },
+  { label: 'Cancer + Specialty Care', icon: FlaskConical },
   { label: 'Claims + Medical Aid', icon: Wallet },
   { label: 'Telemedicine + Messaging', icon: MessageSquare },
   { label: 'Patient App + Mobile', icon: Smartphone },
@@ -86,6 +93,8 @@ const moduleChips = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
+  const currentYear = new Date().getFullYear();
   const [form, setForm] = useState({
     fullName: '',
     clinicName: '',
@@ -100,7 +109,7 @@ export default function LandingPage() {
   const [interestAreas, setInterestAreas] = useState<string[]>([
     'PostVisit AI',
     'CDSS and AI decision support',
-    'HIV program workflows',
+    'Maternity and newborn care',
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -149,7 +158,7 @@ export default function LandingPage() {
         interestSummary: '',
         preferredContactMethod: 'email',
       });
-      setInterestAreas(['PostVisit AI', 'CDSS and AI decision support', 'HIV program workflows']);
+      setInterestAreas(['PostVisit AI', 'CDSS and AI decision support', 'Maternity and newborn care']);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Unable to submit your request right now.');
     } finally {
@@ -169,8 +178,8 @@ export default function LandingPage() {
         <header className="sticky top-0 z-20 border-b border-white/10 bg-[#080E1A]/75 backdrop-blur-xl">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
             <button className="flex items-center gap-3" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#253A58] bg-[#0E1829] shadow-[0_0_40px_rgba(0,200,150,0.12)]">
-                <Stethoscope className="h-5 w-5 text-[#00C896]" />
+              <div className="rounded-[20px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.12)]">
+                <img src={logoSrc} alt="MediCore logo" className="h-10 w-auto md:h-11" />
               </div>
               <div className="text-left">
                 <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">MediCore</div>
@@ -208,7 +217,7 @@ export default function LandingPage() {
               </h1>
 
               <p className="mt-7 max-w-2xl text-lg leading-8 text-[#AFC1DF]">
-                MediCore combines doctor-nurse coordination, PostVisit AI, CDSS, FHIR interoperability, SNOMED-structured data, DHIS2 reporting, and specialty workflows like HIV and oncology in one platform designed for real clinical execution.
+                MediCore combines CDSS, PostVisit AI, doctor-nurse coordination, FHIR interoperability, SNOMED-structured data, DHIS2 reporting, and broad clinical coverage across maternity, diabetes, vaccinations, lab, radiology, HIV, oncology, pharmacy, and claims in one platform designed for real clinical execution.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
@@ -270,8 +279,10 @@ export default function LandingPage() {
 
               <div className="mt-6 space-y-4">
                 {[
+                  'CDSS and AI decision support are the most visible layer of the platform, not a hidden add-on',
                   'PostVisit AI summaries, signoff, patient-safe publishing, and grounded follow-up',
                   'Doctor-nurse coordination around triage, abnormal vitals, critical results, and shared action loops',
+                  'Maternity, diabetes, vaccination, lab, radiology, pharmacy, HIV, oncology, and claims workflows live inside the same system',
                   'FHIR, SNOMED CT, ICD-10, RxNorm, HIPAA-aware auditability, and cleaner downstream data',
                   'DHIS2 integration for stronger program reporting, cohort visibility, and research-ready data operations',
                 ].map((point) => (
@@ -337,28 +348,63 @@ export default function LandingPage() {
                 </h2>
                 <div className="mt-6 space-y-4 text-sm leading-7 text-[#B7C8E4]">
                   <p>
-                    <span className="font-semibold text-white">Clinical depth:</span> HIV workflows, specialty dashboards, pharmacy, imaging, telemedicine, billing, claims, and operational coordination.
+                    <span className="font-semibold text-white">AI and execution:</span> CDSS, PostVisit AI, safer documentation flows, patient-safe publishing, and follow-up execution are front and center.
                   </p>
                   <p>
-                    <span className="font-semibold text-white">Interoperability:</span> FHIR-ready records, SNOMED CT terminology support, ICD-10 coding, and DHIS2 alignment for reporting and data continuity.
+                    <span className="font-semibold text-white">Clinical breadth:</span> maternity, diabetes, vaccinations, HIV, oncology, lab, radiology, pharmacy, telemedicine, billing, claims, and care coordination all fit in one record system.
                   </p>
                   <p>
-                    <span className="font-semibold text-white">Patient engagement:</span> patient portal, medication reminders, post-visit AI follow-through, messaging, and the mobile app direction already defined.
+                    <span className="font-semibold text-white">Interoperability and patient engagement:</span> FHIR-ready records, SNOMED CT terminology support, ICD-10 coding, DHIS2 alignment, patient portal, medication reminders, messaging, and a defined mobile path.
                   </p>
+                </div>
+
+                <div className="mt-6 rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(43,127,255,0.12),rgba(0,200,150,0.1))] p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#102139] text-[#7DE8CA]">
+                      <Smartphone className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.2em] text-[#7A92B8]">Mobile glimpse</div>
+                      <div className="mt-1 text-sm font-semibold text-white">Patient mobile is part of the product story.</div>
+                      <p className="mt-2 text-sm leading-6 text-[#AFC1DF]">
+                        The mobile direction already includes patient-friendly PostVisit AI, reminders, bills, secure messages, and follow-up actions built from the same MediCore records.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {['PostVisit AI', 'Medication reminders', 'Bills', 'Secure messaging'].map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full border border-white/10 bg-[#091320]/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#C7D7EE]"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
                 {[
                   {
-                    title: 'AI workflow',
-                    copy: 'PostVisit AI, CDSS, dictation, guidance, and patient-safe follow-up.',
+                    title: 'AI + CDSS',
+                    copy: 'PostVisit AI, CDSS, dictation support, grounded follow-up, and clinical guidance.',
                     icon: Sparkles,
                   },
                   {
-                    title: 'Care operations',
-                    copy: 'Doctor-nurse handoffs, alerts, queues, tasks, and critical-result execution.',
+                    title: 'Maternity + chronic care',
+                    copy: 'Maternity, diabetes, vaccination tracking, and ongoing chronic-care management in one workflow set.',
                     icon: Activity,
+                  },
+                  {
+                    title: 'Lab + radiology',
+                    copy: 'Orders, results, worklists, imaging support, and cleaner diagnostic execution.',
+                    icon: FlaskConical,
+                  },
+                  {
+                    title: 'Specialty depth',
+                    copy: 'HIV, oncology, cardiology, emergency, and specialty-operational workflows that go beyond basic notes.',
+                    icon: HeartPulse,
                   },
                   {
                     title: 'Financial engine',
@@ -366,19 +412,9 @@ export default function LandingPage() {
                     icon: Wallet,
                   },
                   {
-                    title: 'Terminology',
-                    copy: 'SNOMED CT, ICD-10, RxNorm, and better structured clinical data.',
-                    icon: Building2,
-                  },
-                  {
-                    title: 'Interoperability',
-                    copy: 'FHIR exports and integration-ready records for external ecosystems.',
+                    title: 'Interoperable and mobile-ready',
+                    copy: 'FHIR exports, DHIS2-aligned reporting, patient portal, and provider/patient mobile workflows already planned from the real backend surface.',
                     icon: Network,
-                  },
-                  {
-                    title: 'Mobile-ready',
-                    copy: 'Provider and patient mobile workflows are already planned from the real backend surface.',
-                    icon: Smartphone,
                   },
                 ].map((card) => {
                   const Icon = card.icon;
@@ -411,7 +447,7 @@ export default function LandingPage() {
                   {[
                     'Doctor-first review of requests',
                     'Provisioned testing tenant after approval',
-                    'Useful for HIV, oncology, chronic care, claims, interoperability, and AI workflow evaluation',
+                    'Useful for AI/CDSS, maternity, diabetes, vaccination, lab, radiology, HIV, oncology, claims, interoperability, and patient workflow evaluation',
                   ].map((item) => (
                     <div key={item} className="flex gap-3">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#00C896]" />
@@ -482,7 +518,7 @@ export default function LandingPage() {
                       value={form.specialization}
                       onChange={(event) => updateField('specialization', event.target.value)}
                       className="w-full rounded-2xl border border-[#253A58] bg-[#091320] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#00C896]"
-                      placeholder="HIV, internal medicine, oncology"
+                      placeholder="Internal medicine, maternity, diabetes, radiology"
                     />
                   </label>
                 </div>
@@ -528,7 +564,7 @@ export default function LandingPage() {
                     value={form.interestSummary}
                     onChange={(event) => updateField('interestSummary', event.target.value)}
                     className="w-full rounded-[24px] border border-[#253A58] bg-[#091320] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#00C896]"
-                    placeholder="Tell us what you want to test: HIV program management, doctor-nurse coordination, patient follow-up, interoperability, oncology workflows, DHIS2 reporting, claims, or AI support."
+                    placeholder="Tell us what you want to test: CDSS, PostVisit AI, maternity, diabetes, vaccination, lab, radiology, doctor-nurse coordination, interoperability, DHIS2 reporting, claims, or specialty workflows."
                   />
                 </label>
 
@@ -579,6 +615,67 @@ export default function LandingPage() {
             </div>
           </section>
         </main>
+        <footer className="border-t border-white/8 bg-[#040B14]/96">
+          <div className="mx-auto flex max-w-7xl flex-col gap-8 px-5 py-10 lg:flex-row lg:items-start lg:justify-between lg:px-8">
+            <div className="max-w-xl">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2">
+                  <img src={logoSrc} alt="MediCore logo" className="h-full w-full object-contain" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#7A92B8]">MediCore</p>
+                  <p className="text-sm text-[#D7E5FF]">AI-assisted clinical execution, interoperability, and specialty workflows.</p>
+                </div>
+              </div>
+              <p className="mt-4 text-sm leading-7 text-[#8FA7CC]">
+                Built for clinics that want visible CDSS, practical PostVisit AI, stronger doctor-nurse coordination, balanced clinical coverage across maternity, chronic care, diagnostics, specialty workflows, cleaner claims, and DHIS2-aligned reporting.
+              </p>
+            </div>
+
+            <div className="grid gap-8 sm:grid-cols-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-[#7A92B8]">Platform</p>
+                <div className="mt-3 space-y-2 text-sm text-[#D7E5FF]">
+                  <p>CDSS + AI guidance</p>
+                  <p>PostVisit AI</p>
+                  <p>FHIR R4 + SNOMED CT</p>
+                  <p>DHIS2 reporting</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-[#7A92B8]">Clinical Focus</p>
+                <div className="mt-3 space-y-2 text-sm text-[#D7E5FF]">
+                  <p>Maternity + newborn care</p>
+                  <p>Diabetes + chronic care</p>
+                  <p>Lab + radiology</p>
+                  <p>HIV, oncology + claims</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-[#7A92B8]">Explore</p>
+                <div className="mt-3 flex flex-col gap-2 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/tenants')}
+                    className="text-left text-[#D7E5FF] transition hover:text-white"
+                  >
+                    Existing tenant login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('request-access')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="text-left text-[#D7E5FF] transition hover:text-white"
+                  >
+                    Request test access
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-white/8 px-5 py-4 text-xs text-[#6F87AB] lg:px-8">
+            © {currentYear} MediCore EHR. Demo and paid tenant deployment, subscription lifecycle controls, and mobile-ready platform direction.
+          </div>
+        </footer>
       </div>
     </div>
   );

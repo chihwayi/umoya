@@ -15,6 +15,7 @@ import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface MaternityEnrollmentDetailModalProps {
   enrollmentId: string;
@@ -425,6 +426,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   onUpdated,
 }) => {
   const { showError, showSuccess, showInfo } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [enrollment, setEnrollment] = useState<any | null>(null);
@@ -899,9 +901,13 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
             .map((item: any) => `- ${item?.message || 'Safety warning'}`)
             .join('\n');
           const extraCount = warnings.length > 4 ? `\n...and ${warnings.length - 4} more warning(s)` : '';
-          const proceed = window.confirm(
-            `${contextLabel} warnings:\n${preview}${extraCount}\n\nProceed anyway?`,
-          );
+          const proceed = await confirm({
+            title: `${contextLabel} warnings`,
+            message: `${preview}${extraCount}\n\nProceed anyway?`,
+            confirmText: 'Proceed Anyway',
+            cancelText: 'Review Warnings',
+            type: 'warning',
+          });
           if (!proceed) {
             return false;
           }
@@ -2762,7 +2768,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <>
+      {Dialog}
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col border border-pink-100">
         {/* Header */}
         <div className="bg-gradient-to-r from-pink-600 to-rose-600 text-white">
@@ -2841,7 +2849,8 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

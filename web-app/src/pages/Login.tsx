@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { authAPI } from '../services/api';
+import { Shield, Sparkles, Workflow, ArrowRight, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 interface LoginProps {
   onLogin: () => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
+  const logoSrc = '/medicore.png';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -28,119 +30,156 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="max-w-md w-full">
-        {/* Logo and Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-900 rounded-lg shadow-sm mb-6">
-            <span className="text-white text-3xl font-bold">M</span>
+    <div className="min-h-screen overflow-hidden bg-[#080E1A] px-4 py-8 text-[#E8F0FF]">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute inset-x-0 top-[-10rem] mx-auto h-[32rem] w-[32rem] rounded-full bg-[#00C896]/18 blur-3xl" />
+        <div className="absolute right-[-8rem] top-[16rem] h-[24rem] w-[24rem] rounded-full bg-[#2B7FFF]/16 blur-3xl" />
+        <div className="absolute bottom-[-10rem] left-[-6rem] h-[22rem] w-[22rem] rounded-full bg-[#FF7A40]/10 blur-3xl" />
+      </div>
+
+      <div className="relative z-10 mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.02fr_0.98fr]">
+        <section className="rounded-[36px] border border-white/10 bg-[linear-gradient(180deg,rgba(14,24,41,0.94),rgba(8,14,26,0.98))] p-8 shadow-[0_35px_120px_rgba(0,0,0,0.45)]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#00C896]/30 bg-[#00C896]/12 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#7DE8CA]">
+            <Sparkles className="h-4 w-4" />
+            Super admin
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">
-            MediCore Admin
-          </h1>
-          <p className="text-slate-600">
-            Sign in to access the super admin portal
+
+          <div className="mt-6 flex items-center gap-4">
+            <div className="rounded-[24px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.14)]">
+              <img src={logoSrc} alt="MediCore logo" className="h-14 w-auto rounded-xl" />
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">MediCore</div>
+              <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">
+                Control the platform, not just a dashboard.
+              </h1>
+            </div>
+          </div>
+
+          <p className="mt-6 max-w-xl text-sm leading-7 text-[#AFC1DF]">
+            Access the command layer for tenant provisioning, trial approvals, subscription lifecycle control, billing posture,
+            integrations, and platform-wide operational visibility.
           </p>
-        </div>
 
-        {/* Login Form */}
-        <div className="bg-white shadow-sm rounded-lg border border-slate-200 p-8">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {[
+              { title: 'Tenant control', body: 'Provision demo and paid clinics with module-aware subscriptions.', icon: Workflow },
+              { title: 'Platform signals', body: 'Review requests, lifecycle warnings, and deployment posture.', icon: Sparkles },
+              { title: 'Protected access', body: 'Restricted super-admin entry for sensitive platform operations.', icon: Shield },
+            ].map((item) => {
+              const IconComponent = item.icon;
+              return (
+                <div key={item.title} className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#102139] text-[#7DE8CA]">
+                    <IconComponent className="h-5 w-5" />
                   </div>
-                  <input
-                    type="email"
-                    required
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all duration-200 bg-white text-slate-900 placeholder-slate-400 sm:text-sm"
-                    placeholder="admin@medicore.co.zw"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
+                  <h2 className="text-sm font-semibold text-white">{item.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-[#97ADCF]">{item.body}</p>
                 </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-[36px] border border-[#253A58] bg-[linear-gradient(180deg,rgba(14,24,41,0.98),rgba(8,14,26,0.99))] p-8 shadow-[0_35px_120px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <div>
+            <div className="text-xs uppercase tracking-[0.24em] text-[#7A92B8]">Admin login</div>
+            <h2 style={{ fontFamily: '"Fraunces", serif' }} className="mt-2 text-3xl text-white">
+              Sign in to the MediCore control plane.
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-[#AFC1DF]">
+              The same visual language as the public site, tuned for platform administration instead of marketing.
+            </p>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            {['Tenant provisioning', 'Demo requests', 'Subscription lifecycle', 'DHIS2-ready'].map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#B6C9E6]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+
+          <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-[#D8E5F8]">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#5D789B]" />
+                <input
+                  type="email"
+                  required
+                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
+                  placeholder="admin@medicore.co.zw"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    className="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all duration-200 bg-white text-slate-900 placeholder-slate-400 sm:text-sm"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors duration-200"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-[#D8E5F8]">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#5D789B]" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7A92B8] transition hover:text-white"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center space-x-2 text-sm">
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="font-medium">{error}</span>
+              <div className="rounded-2xl border border-[#FF4D6A]/30 bg-[#FF4D6A]/10 px-4 py-3 text-sm text-[#FFD2DA]">
+                {error}
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#00C896] px-6 py-3.5 text-sm font-semibold text-[#051119] shadow-[0_20px_80px_rgba(0,200,150,0.22)] transition hover:bg-[#24D9A8] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#051119]/30 border-t-[#051119]"></div>
                   <span>Signing in...</span>
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                  </svg>
                   <span>Sign In</span>
+                  <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
-
-
           </form>
-        </div>
 
-        {/* Footer */}
-        <div className="text-center mt-8">
-          <p className="text-sm text-slate-500">
+          <div className="mt-6 rounded-[24px] border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center gap-2 text-[#7DE8CA]">
+              <Shield className="h-4 w-4" />
+              <span className="text-sm font-medium">Platform-secure access</span>
+            </div>
+            <p className="mt-2 text-xs leading-6 text-[#8EA7CD]">
+              Restricted super-admin authentication for provisioning, billing posture, and tenant lifecycle operations.
+            </p>
+          </div>
+
+          <div className="mt-6 text-center text-sm text-[#7A92B8]">
             © {new Date().getFullYear()} MediCore Solutions.
-          </p>
-        </div>
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { TenantService } from '../services/tenant.service';
+import { TenantBillingSummary, TenantService } from '../services/tenant.service';
 import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
@@ -9,8 +9,10 @@ import { Tenant, TenantStatus } from '../entities/tenant.entity';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { TenantDhis2ConfigPayload, TenantDhis2ConfigView } from '../services/tenant.service';
 
-type SafeTenant = Omit<Tenant, 'connectionString'>;
-type PublicTenant = Pick<Tenant, 'id' | 'subdomain' | 'clinicName' | 'status' | 'logoUrl'>;
+type SafeTenant = Omit<Tenant, 'connectionString'> & { billingSummary: TenantBillingSummary };
+type PublicTenant = Pick<Tenant, 'id' | 'subdomain' | 'clinicName' | 'status' | 'logoUrl' | 'enabledModules' | 'subscriptionMode' | 'packagePreset' | 'subscriptionState' | 'packageName'> & {
+  billingSummary: TenantBillingSummary;
+};
 
 @ApiTags('tenants')
 @ApiBearerAuth()
@@ -25,7 +27,10 @@ export class TenantController {
     // Never expose direct tenant DB credentials through API responses.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { connectionString, ...safeTenant } = tenant;
-    return safeTenant;
+    return {
+      ...safeTenant,
+      billingSummary: this.tenantService.getBillingSummary(tenant),
+    };
   }
 
   private toPublicTenant(tenant: Tenant): PublicTenant {
@@ -35,6 +40,12 @@ export class TenantController {
       clinicName: tenant.clinicName,
       status: tenant.status,
       logoUrl: tenant.logoUrl,
+      enabledModules: tenant.enabledModules,
+      subscriptionMode: tenant.subscriptionMode,
+      packagePreset: tenant.packagePreset,
+      subscriptionState: tenant.subscriptionState,
+      packageName: tenant.packageName,
+      billingSummary: this.tenantService.getBillingSummary(tenant),
     };
   }
 

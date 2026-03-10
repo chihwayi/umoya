@@ -9,6 +9,9 @@ export declare enum SubscriptionTier {
     PROFESSIONAL = "professional",
     ENTERPRISE = "enterprise"
 }
+export type SubscriptionMode = 'demo' | 'paid';
+export type SubscriptionState = 'demo' | 'active' | 'grace' | 'suspended' | 'expired';
+export type PackagePreset = 'full_ehr' | 'claims_only';
 export declare class Tenant {
     id: string;
     clinicName: string;
@@ -16,6 +19,16 @@ export declare class Tenant {
     databaseName: string;
     connectionString: string;
     subscriptionTier: SubscriptionTier;
+    subscriptionMode: SubscriptionMode;
+    packagePreset: PackagePreset;
+    subscriptionState: SubscriptionState;
+    packageName: string | null;
+    enabledModules: string[];
+    billingEndsAt: Date | null;
+    demoExpiresAt: Date | null;
+    graceEndsAt: Date | null;
+    autoDeleteAt: Date | null;
+    suspensionWarningDays: number;
     status: TenantStatus;
     contactEmail: string;
     contactPhone: string;

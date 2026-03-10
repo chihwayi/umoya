@@ -8,6 +8,7 @@ import {
   getImagingOrderDuplicateGuard,
   getImagingOrderPrefill,
 } from '../services/doctorContextAdapter';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface Modality {
   id: string;
@@ -62,6 +63,7 @@ export default function ImagingOrderModal({
   const [selectedPatientContext, setSelectedPatientContext] = useState<any>(null);
   const [loadingPatientContext, setLoadingPatientContext] = useState(false);
   const { showSuccess, showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
 
   const applyContextPrefill = useCallback((context: any) => {
     const prefill = getImagingOrderPrefill(context);
@@ -245,7 +247,13 @@ export default function ImagingOrderModal({
       suspectedDiagnosis,
     });
     if (duplicatePrompt) {
-      const shouldProceed = window.confirm(duplicatePrompt.message);
+      const shouldProceed = await confirm({
+        title: 'Potential Duplicate Imaging Order',
+        message: duplicatePrompt.message,
+        confirmText: 'Proceed Anyway',
+        cancelText: 'Review Order',
+        type: 'warning',
+      });
       if (!shouldProceed) {
         return;
       }
@@ -290,7 +298,9 @@ export default function ImagingOrderModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <>
+      {Dialog}
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6">
@@ -679,6 +689,7 @@ export default function ImagingOrderModal({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

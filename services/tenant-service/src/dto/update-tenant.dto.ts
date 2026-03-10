@@ -1,4 +1,18 @@
-import { IsString, IsEmail, IsEnum, IsOptional, MinLength, MaxLength, Matches } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  MinLength,
+  MaxLength,
+  Matches,
+  IsArray,
+  IsInt,
+  Min,
+  Max,
+  IsDateString,
+  IsIn,
+} from 'class-validator';
 import { SubscriptionTier } from '../entities/tenant.entity';
 
 export class UpdateTenantDto {
@@ -32,4 +46,48 @@ export class UpdateTenantDto {
   @IsOptional()
   @IsEnum(SubscriptionTier)
   subscriptionTier?: SubscriptionTier;
+
+  @IsOptional()
+  @IsIn(['demo', 'paid'])
+  subscriptionMode?: 'demo' | 'paid';
+
+  @IsOptional()
+  @IsIn(['full_ehr', 'claims_only'])
+  packagePreset?: 'full_ehr' | 'claims_only';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  packageName?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  enabledModules?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  demoDurationDays?: number;
+
+  @IsOptional()
+  @IsDateString()
+  demoExpiresAt?: string;
+
+  @IsOptional()
+  @IsDateString()
+  billingEndsAt?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(60)
+  gracePeriodDays?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  suspensionWarningDays?: number;
 }

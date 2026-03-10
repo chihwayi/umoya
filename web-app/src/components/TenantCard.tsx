@@ -33,6 +33,14 @@ export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, 
 
   const statusStyle = getStatusStyle(tenant.status);
   const tierStyle = getTierStyle(tenant.subscriptionTier);
+  const billingToneStyle =
+    tenant.billingSummary?.tone === 'warning'
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : tenant.billingSummary?.tone === 'critical'
+      ? 'bg-red-50 text-red-700 border-red-200'
+      : tenant.billingSummary?.tone === 'expired'
+      ? 'bg-slate-100 text-slate-700 border-slate-300'
+      : 'bg-emerald-50 text-emerald-700 border-emerald-200';
 
   return (
     <>
@@ -68,6 +76,9 @@ export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, 
                 <div className="flex gap-2 mt-2">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${tierStyle.bg} ${tierStyle.text} border ${tierStyle.border} capitalize`}>
                     {tenant.subscriptionTier}
+                  </span>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border capitalize ${billingToneStyle}`}>
+                    {tenant.subscriptionMode} · {tenant.subscriptionState}
                   </span>
                 </div>
               </div>
@@ -127,6 +138,24 @@ export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, 
             </div>
             <span className="truncate font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-500">{tenant.databaseName}</span>
           </div>
+
+          {tenant.billingSummary && (
+            <div className={`rounded-xl border px-3 py-3 text-sm ${billingToneStyle}`}>
+              <p className="font-semibold">{tenant.billingSummary.label}</p>
+              <p className="mt-1 text-xs leading-5">{tenant.billingSummary.message}</p>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                <span className="rounded-full bg-white/80 px-2 py-0.5 text-slate-700">
+                  Days left: {tenant.billingSummary.daysRemaining ?? 'N/A'}
+                </span>
+                <span className="rounded-full bg-white/80 px-2 py-0.5 text-slate-700">
+                  Suspend in: {tenant.billingSummary.daysUntilSuspension ?? 'N/A'}
+                </span>
+                <span className="rounded-full bg-white/80 px-2 py-0.5 text-slate-700">
+                  Modules: {tenant.enabledModules?.length || 0}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action Footer */}

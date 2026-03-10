@@ -4,13 +4,23 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Tenants table
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     "clinicName" VARCHAR(255) NOT NULL,
     subdomain VARCHAR(100) UNIQUE NOT NULL,
     "databaseName" VARCHAR(100) NOT NULL,
     "connectionString" TEXT,
     "subscriptionTier" VARCHAR(50) DEFAULT 'basic' CHECK ("subscriptionTier" IN ('basic', 'professional', 'enterprise')),
+    "subscriptionMode" VARCHAR(20) NOT NULL DEFAULT 'paid' CHECK ("subscriptionMode" IN ('demo', 'paid')),
+    "packagePreset" VARCHAR(20) NOT NULL DEFAULT 'full_ehr' CHECK ("packagePreset" IN ('full_ehr', 'claims_only')),
+    "subscriptionState" VARCHAR(20) NOT NULL DEFAULT 'active' CHECK ("subscriptionState" IN ('demo', 'active', 'grace', 'suspended', 'expired')),
+    "packageName" VARCHAR(120),
+    "enabledModules" JSONB NOT NULL DEFAULT '["finance","nurse_general"]'::jsonb,
+    "billingEndsAt" TIMESTAMP WITH TIME ZONE,
+    "demoExpiresAt" TIMESTAMP WITH TIME ZONE,
+    "graceEndsAt" TIMESTAMP WITH TIME ZONE,
+    "autoDeleteAt" TIMESTAMP WITH TIME ZONE,
+    "suspensionWarningDays" INTEGER NOT NULL DEFAULT 5 CHECK ("suspensionWarningDays" >= 1 AND "suspensionWarningDays" <= 30),
     status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'suspended', 'cancelled')),
     "contactEmail" VARCHAR(255) NOT NULL,
     "contactPhone" VARCHAR(50),
@@ -47,7 +57,7 @@ CREATE TABLE IF NOT EXISTS tenant_dhis2_config (
 );
 
 -- Tenant users table (for master database user management)
-CREATE TABLE tenant_users (
+CREATE TABLE IF NOT EXISTS tenant_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     "tenantId" UUID REFERENCES tenants(id) ON DELETE CASCADE,
     "firstName" VARCHAR(100) NOT NULL,
@@ -133,7 +143,7 @@ CREATE TABLE IF NOT EXISTS cdss_model_registry (
 CREATE INDEX IF NOT EXISTS idx_cdss_model_registry_status ON cdss_model_registry(status);
 
 -- Tenant analytics table
-CREATE TABLE tenant_analytics (
+CREATE TABLE IF NOT EXISTS tenant_analytics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     "tenantId" UUID REFERENCES tenants(id) ON DELETE CASCADE,
     "totalUsers" INTEGER DEFAULT 0,
@@ -146,7 +156,7 @@ CREATE TABLE tenant_analytics (
 );
 
 -- Admin users table (for super admin management)
-CREATE TABLE admin_users (
+CREATE TABLE IF NOT EXISTS admin_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     "passwordHash" VARCHAR(255) NOT NULL,
@@ -165,7 +175,7 @@ CREATE TABLE admin_users (
 );
 
 -- Audit logs table
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     "userId" UUID REFERENCES admin_users(id),
     action VARCHAR(100) NOT NULL,
@@ -179,17 +189,22 @@ CREATE TABLE audit_logs (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_tenants_subdomain ON tenants(subdomain);
-CREATE INDEX idx_tenants_status ON tenants(status);
+CREATE INDEX IF NOT EXISTS idx_tenants_subdomain ON tenants(subdomain);
+CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+CREATE INDEX IF NOT EXISTS idx_tenants_subscription_mode ON tenants("subscriptionMode");
+CREATE INDEX IF NOT EXISTS idx_tenants_package_preset ON tenants("packagePreset");
+CREATE INDEX IF NOT EXISTS idx_tenants_subscription_state ON tenants("subscriptionState");
+CREATE INDEX IF NOT EXISTS idx_tenants_billing_ends_at ON tenants("billingEndsAt");
+CREATE INDEX IF NOT EXISTS idx_tenants_demo_expires_at ON tenants("demoExpiresAt");
 CREATE INDEX IF NOT EXISTS idx_tenant_dhis2_config_tenant_id ON tenant_dhis2_config(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_tenant_dhis2_config_enabled ON tenant_dhis2_config(enabled);
 CREATE INDEX IF NOT EXISTS idx_tenant_dhis2_config_scheduled_sync_enabled ON tenant_dhis2_config(scheduled_sync_enabled);
-CREATE INDEX idx_tenant_users_tenant_id ON tenant_users("tenantId");
-CREATE INDEX idx_tenant_users_email ON tenant_users(email);
-CREATE INDEX idx_tenant_analytics_tenant_id ON tenant_analytics("tenantId");
-CREATE INDEX idx_admin_users_email ON admin_users(email);
-CREATE INDEX idx_audit_logs_user_id ON audit_logs("userId");
-CREATE INDEX idx_audit_logs_created_at ON audit_logs("createdAt");
+CREATE INDEX IF NOT EXISTS idx_tenant_users_tenant_id ON tenant_users("tenantId");
+CREATE INDEX IF NOT EXISTS idx_tenant_users_email ON tenant_users(email);
+CREATE INDEX IF NOT EXISTS idx_tenant_analytics_tenant_id ON tenant_analytics("tenantId");
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs("userId");
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs("createdAt");
 
 -- Insert default super admin user (password: medicore123)
 INSERT INTO admin_users (email, "passwordHash", "firstName", "lastName", role, "mustChangePassword")

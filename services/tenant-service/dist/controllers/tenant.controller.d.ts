@@ -1,11 +1,15 @@
-import { TenantService } from '../services/tenant.service';
+import { TenantBillingSummary, TenantService } from '../services/tenant.service';
 import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
 import { TenantDhis2ConfigPayload, TenantDhis2ConfigView } from '../services/tenant.service';
-type SafeTenant = Omit<Tenant, 'connectionString'>;
-type PublicTenant = Pick<Tenant, 'id' | 'subdomain' | 'clinicName' | 'status' | 'logoUrl'>;
+type SafeTenant = Omit<Tenant, 'connectionString'> & {
+    billingSummary: TenantBillingSummary;
+};
+type PublicTenant = Pick<Tenant, 'id' | 'subdomain' | 'clinicName' | 'status' | 'logoUrl' | 'enabledModules' | 'subscriptionMode' | 'packagePreset' | 'subscriptionState' | 'packageName'> & {
+    billingSummary: TenantBillingSummary;
+};
 export declare class TenantController {
     private readonly tenantService;
     private readonly storageService;
