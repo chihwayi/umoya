@@ -92,6 +92,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [dhis2HasPat, setDhis2HasPat] = useState(false);
   const [dhis2PatMasked, setDhis2PatMasked] = useState<string | null>(null);
   const [dhis2Form, setDhis2Form] = useState<Dhis2FormState>(createDefaultDhis2Form());
+  const [dhis2RunNowLoading, setDhis2RunNowLoading] = useState(false);
 
   const loadUsers = useCallback(async () => {
     if (!tenant) return;
@@ -264,6 +265,28 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to delete DHIS2 configuration');
     } finally {
       setDhis2Saving(false);
+    }
+  };
+
+  const handleRunDhis2SyncNow = async () => {
+    if (!tenant) return;
+    setDhis2RunNowLoading(true);
+    try {
+      const result = await tenantAPI.runTenantDhis2SyncNow(tenant.id);
+      if (result?.status === 'SUCCESS') {
+        const cycle = result?.result || {};
+        showSuccess(
+          `Sync now completed: patients=${cycle.patientStatus || 'UNKNOWN'}, aggregate=${cycle.aggregateStatus || 'UNKNOWN'}, retries=${cycle.retryAttempted || 0}/${cycle.retryFailed || 0}`,
+        );
+      } else {
+        showError(result?.message || 'Unable to run DHIS2 sync now');
+      }
+    } catch (error: any) {
+      console.error('Failed to run tenant DHIS2 sync now:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to run DHIS2 sync now');
+    } finally {
+      setDhis2RunNowLoading(false);
     }
   };
 
@@ -707,8 +730,18 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                 {dhis2Configured && (
                   <button
                     type="button"
+                    onClick={handleRunDhis2SyncNow}
+                    disabled={dhis2RunNowLoading || dhis2Saving || dhis2Loading}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {dhis2RunNowLoading ? 'Running...' : 'Run Sync Now'}
+                  </button>
+                )}
+                {dhis2Configured && (
+                  <button
+                    type="button"
                     onClick={handleClearDhis2Config}
-                    disabled={dhis2Saving}
+                    disabled={dhis2Saving || dhis2RunNowLoading}
                     className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
                   >
                     Delete Config
@@ -716,7 +749,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                 )}
                 <button
                   type="submit"
-                  disabled={dhis2Saving || dhis2Loading}
+                  disabled={dhis2Saving || dhis2Loading || dhis2RunNowLoading}
                   className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {dhis2Saving ? 'Saving...' : 'Save DHIS2 Config'}

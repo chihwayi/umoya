@@ -143,6 +143,10 @@ Completed (Sprint 6):
 ## 7. Immediate Next Action
 
 Start next execution block:
-- add alert sink integration for production channels (Slack/PagerDuty),
 - add scheduler frequency override support (per-tenant cadence windows),
-- widen profile QA with denominator/coverage-specific validation rules.
+- widen profile QA with denominator/coverage-specific validation rules,
+- add role-based guardrails and audit trail for manual run-now operations.
+
+Completed (Sprint 7):
+1. `S7-T1` Add Slack/PagerDuty alert sink support to scheduler alerting.
+2. `S7-T2` Add tenant-scoped manual run-now endpoint and admin UI trigger.

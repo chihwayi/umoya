@@ -249,6 +249,7 @@ services:
       - DHIS2_ALERT_LOOKBACK_HOURS=${DHIS2_ALERT_LOOKBACK_HOURS:-24}
       - DHIS2_ALERT_ERROR_THRESHOLD=${DHIS2_ALERT_ERROR_THRESHOLD:-10}
       - DHIS2_ALERT_WEBHOOK_URL=${DHIS2_ALERT_WEBHOOK_URL:-}
+      - DHIS2_PAGERDUTY_ROUTING_KEY=${DHIS2_PAGERDUTY_ROUTING_KEY:-}
     command: npm run dev
     volumes:
       - ./services/ehr-service/src:/app/services/ehr-service/src

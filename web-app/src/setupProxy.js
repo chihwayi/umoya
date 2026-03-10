@@ -19,6 +19,24 @@ module.exports = function(app) {
     })
   );
 
+  // Proxy DHIS2 API requests to ehr-service
+  app.use(
+    '/api/dhis2',
+    createProxyMiddleware({
+      target: process.env.EHR_SERVICE_URL || 'http://ehr-service:3013',
+      changeOrigin: true,
+      secure: false,
+      logLevel: 'debug',
+      onError: (err, req, res) => {
+        console.error('DHIS2 Proxy error:', err.message);
+        res.status(502).send('Proxy Error: ' + err.message);
+      },
+      onProxyReq: (proxyReq, req, res) => {
+        console.log('Proxying DHIS2 request:', req.method, req.url, '->', proxyReq.path);
+      }
+    })
+  );
+
   // Proxy CDSS Admin requests to cdss-service
   app.use(
     '/api/cdss-admin',

@@ -153,4 +153,81 @@ describe('Dhis2SchedulerService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('http://example.test/hook');
   });
+
+  it('formats PagerDuty alerts when pagerduty sink is configured', async () => {
+    process.env.DHIS2_SCHEDULED_SYNC_ENABLED = 'true';
+
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 202, statusText: 'Accepted' });
+    (global as any).fetch = fetchMock;
+
+    const tenantDb = { query: jest.fn() } as unknown as DataSource;
+    const tenantServiceMock = {
+      getAllActiveTenants: jest.fn().mockResolvedValue([{ id: 'tenant-a' }]),
+      getTenantDhis2Config: jest.fn().mockResolvedValue({
+        tenantId: 'tenant-a',
+        baseUrl: 'http://localhost:8888',
+        apiVersion: '40',
+        authType: 'pat',
+        pat: 'd2pat_example',
+        orgUnitId: 'ou123',
+        enabled: true,
+        scheduledSyncEnabled: true,
+        alertErrorThreshold: 1,
+        alertLookbackHours: 12,
+        alertWebhookUrl: 'pagerduty://pd-routing-key-1',
+      }),
+      getTenantDatabase: jest.fn().mockResolvedValue(tenantDb),
+    } as any;
+
+    const dhis2ServiceMock = {
+      syncPatients: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
+      sendAggregateReport: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
+      retryFailedSync: jest.fn().mockResolvedValue({ attempted: 0, failed: 0 }),
+      getRecentErrorCount: jest.fn().mockResolvedValue(5),
+    } as any;
+
+    const service = new Dhis2SchedulerService(tenantServiceMock, dhis2ServiceMock);
+    await service.runHourlyTenantSync();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://events.pagerduty.com/v2/enqueue');
+    expect(fetchMock.mock.calls[0][1]?.body).toContain('"routing_key":"pd-routing-key-1"');
+    expect(fetchMock.mock.calls[0][1]?.body).toContain('"event_action":"trigger"');
+  });
+
+  it('runs manual tenant sync even when scheduled sync is disabled', async () => {
+    const tenantDb = { query: jest.fn() } as unknown as DataSource;
+    const tenantServiceMock = {
+      getAllActiveTenants: jest.fn(),
+      getTenantDhis2Config: jest.fn().mockResolvedValue({
+        tenantId: 'tenant-a',
+        baseUrl: 'http://localhost:8888',
+        apiVersion: '40',
+        authType: 'pat',
+        pat: 'd2pat_example',
+        orgUnitId: 'ou123',
+        enabled: true,
+        scheduledSyncEnabled: false,
+        scheduledRetryLimit: 5,
+        alertLookbackHours: 24,
+        alertErrorThreshold: 10,
+        alertWebhookUrl: '',
+      }),
+      getTenantDatabase: jest.fn().mockResolvedValue(tenantDb),
+    } as any;
+
+    const dhis2ServiceMock = {
+      syncPatients: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
+      sendAggregateReport: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
+      retryFailedSync: jest.fn().mockResolvedValue({ attempted: 2, failed: 0 }),
+      getRecentErrorCount: jest.fn().mockResolvedValue(0),
+    } as any;
+
+    const service = new Dhis2SchedulerService(tenantServiceMock, dhis2ServiceMock);
+    const result = await service.runTenantSyncNow('tenant-a', tenantDb, { includeAlerts: false });
+
+    expect(result.status).toBe('SUCCESS');
+    expect(dhis2ServiceMock.syncPatients).toHaveBeenCalledWith(tenantDb, 'tenant-a');
+    expect(dhis2ServiceMock.retryFailedSync).toHaveBeenCalledWith(tenantDb, 'tenant-a', { limit: 5 });
+  });
 });

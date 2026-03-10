@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '
 import { Dhis2Service } from '../services/dhis2.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { Dhis2SchedulerService } from '../services/dhis2-scheduler.service';
 
 @ApiTags('DHIS2 Integration')
 @ApiSecurity('tenant-key')
@@ -10,7 +11,10 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 @UseGuards(JwtAuthGuard)
 @Controller('dhis2')
 export class Dhis2Controller {
-  constructor(private dhis2Service: Dhis2Service) {}
+  constructor(
+    private dhis2Service: Dhis2Service,
+    private readonly dhis2SchedulerService: Dhis2SchedulerService,
+  ) {}
 
   @Post('sync/patients')
   @ApiOperation({ summary: 'Sync patients to DHIS2' })
@@ -92,5 +96,19 @@ export class Dhis2Controller {
     },
   ) {
     return this.dhis2Service.retryFailedSync(req.tenantDb, req.tenantId, body || {});
+  }
+
+  @Post('sync/run-now')
+  @ApiOperation({ summary: 'Run immediate DHIS2 sync cycle for current tenant' })
+  @ApiResponse({ status: 200, description: 'Immediate tenant sync completed' })
+  async runSyncNow(
+    @Request() req: RequestWithTenant,
+    @Body()
+    body: {
+      retryLimit?: number;
+      includeAlerts?: boolean;
+    },
+  ) {
+    return this.dhis2SchedulerService.runTenantSyncNow(req.tenantId!, req.tenantDb, body || {});
   }
 }

@@ -11,6 +11,23 @@ interface TenantSyncExecutionOptions {
   alertWebhookUrl: string;
 }
 
+interface AlertSinkConfig {
+  type: 'generic' | 'slack' | 'pagerduty';
+  webhookUrl: string;
+  pagerDutyRoutingKey?: string;
+}
+
+export interface TenantSyncCycleResult {
+  tenantId: string;
+  patientStatus: string;
+  aggregateStatus: string;
+  retryAttempted: number;
+  retryFailed: number;
+  recentErrors: number;
+  alertTriggered: boolean;
+  alertSink: string | null;
+}
+
 @Injectable()
 export class Dhis2SchedulerService {
   private readonly logger = new Logger(Dhis2SchedulerService.name);
@@ -28,6 +45,7 @@ export class Dhis2SchedulerService {
     10000,
   );
   private readonly alertWebhookUrl = String(process.env.DHIS2_ALERT_WEBHOOK_URL || '').trim();
+  private readonly pagerDutyRoutingKey = String(process.env.DHIS2_PAGERDUTY_ROUTING_KEY || '').trim();
 
   constructor(
     private readonly tenantService: TenantService,
@@ -66,6 +84,86 @@ export class Dhis2SchedulerService {
       alertLookbackHours,
       alertErrorThreshold,
       alertWebhookUrl,
+    };
+  }
+
+  private resolveAlertSink(rawWebhookUrl: string): AlertSinkConfig | null {
+    const webhookUrl = String(rawWebhookUrl || '').trim();
+    if (!webhookUrl) {
+      return null;
+    }
+
+    if (webhookUrl.startsWith('pagerduty://')) {
+      const pagerDutyRoutingKey = webhookUrl.replace('pagerduty://', '').trim();
+      if (!pagerDutyRoutingKey) {
+        return null;
+      }
+      return {
+        type: 'pagerduty',
+        webhookUrl: 'https://events.pagerduty.com/v2/enqueue',
+        pagerDutyRoutingKey,
+      };
+    }
+
+    if (webhookUrl.includes('hooks.slack.com')) {
+      return {
+        type: 'slack',
+        webhookUrl,
+      };
+    }
+
+    if (webhookUrl.includes('events.pagerduty.com')) {
+      if (!this.pagerDutyRoutingKey) {
+        this.logger.warn(
+          'PagerDuty events endpoint configured but DHIS2_PAGERDUTY_ROUTING_KEY is missing; skipping alert delivery.',
+        );
+        return null;
+      }
+      return {
+        type: 'pagerduty',
+        webhookUrl,
+        pagerDutyRoutingKey: this.pagerDutyRoutingKey,
+      };
+    }
+
+    return {
+      type: 'generic',
+      webhookUrl,
+    };
+  }
+
+  private buildSlackPayload(payload: Record<string, any>) {
+    const tenantId = String(payload.tenantId || 'unknown');
+    const recentErrors = Number(payload.recentErrors || 0);
+    const threshold = Number(payload.threshold || 0);
+    const lookbackHours = Number(payload.lookbackHours || 0);
+    return {
+      text: `DHIS2 sync alert for tenant ${tenantId}`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*DHIS2 Sync Alert*\nTenant: \`${tenantId}\`\nRecent errors: *${recentErrors}* (threshold ${threshold}) in last ${lookbackHours}h`,
+          },
+        },
+      ],
+    };
+  }
+
+  private buildPagerDutyPayload(payload: Record<string, any>, routingKey: string) {
+    const tenantId = String(payload.tenantId || 'unknown');
+    return {
+      routing_key: routingKey,
+      event_action: 'trigger',
+      dedup_key: `dhis2-sync-${tenantId}`,
+      payload: {
+        summary: `DHIS2 sync errors exceeded threshold for tenant ${tenantId}`,
+        source: String(payload.source || 'ehr-service.dhis2-scheduler'),
+        severity: String(payload.severity || 'warning'),
+        timestamp: payload.timestamp || new Date().toISOString(),
+        custom_details: payload,
+      },
     };
   }
 
@@ -111,7 +209,7 @@ export class Dhis2SchedulerService {
         }
 
         const syncOptions = this.resolveTenantSyncOptions(tenantConfig);
-        await this.runTenantCycle(tenant.id, tenantDb, syncOptions);
+        await this.runTenantCycle(tenant.id, tenantDb, syncOptions, true);
         completed += 1;
       } catch (error: any) {
         failed += 1;
@@ -124,11 +222,54 @@ export class Dhis2SchedulerService {
     );
   }
 
+  async runTenantSyncNow(
+    tenantId: string,
+    tenantDb?: DataSource | null,
+    body?: { retryLimit?: number; includeAlerts?: boolean },
+  ) {
+    const tenantConfig = await this.tenantService.getTenantDhis2Config(tenantId);
+    if (!tenantConfig) {
+      return {
+        status: 'NOT_CONFIGURED',
+        message: `Tenant ${tenantId} has no DHIS2 configuration.`,
+      };
+    }
+
+    if (!tenantConfig.enabled) {
+      return {
+        status: 'DISABLED',
+        message: `Tenant ${tenantId} DHIS2 integration is disabled.`,
+      };
+    }
+
+    const database = tenantDb || (await this.tenantService.getTenantDatabase(tenantId));
+    if (!database) {
+      return {
+        status: 'FAILED',
+        message: `Tenant ${tenantId} database connection is unavailable.`,
+      };
+    }
+
+    const syncOptions = this.resolveTenantSyncOptions(tenantConfig);
+    if (body?.retryLimit !== undefined) {
+      syncOptions.retryLimit = this.clamp(body.retryLimit, 1, 200, syncOptions.retryLimit);
+    }
+
+    const includeAlerts = body?.includeAlerts !== false;
+    const result = await this.runTenantCycle(tenantId, database, syncOptions, includeAlerts);
+    return {
+      status: 'SUCCESS',
+      message: `Tenant ${tenantId} DHIS2 sync cycle completed.`,
+      result,
+    };
+  }
+
   private async runTenantCycle(
     tenantId: string,
     tenantDb: DataSource,
     options: TenantSyncExecutionOptions,
-  ): Promise<void> {
+    includeAlerts: boolean,
+  ): Promise<TenantSyncCycleResult> {
     const patientResult = await this.dhis2Service.syncPatients(tenantDb, tenantId);
     const aggregateResult = await this.dhis2Service.sendAggregateReport({}, tenantDb, tenantId);
     const retryResult = await this.dhis2Service.retryFailedSync(tenantDb, tenantId, {
@@ -140,7 +281,9 @@ export class Dhis2SchedulerService {
       `Tenant ${tenantId} DHIS2 cycle: patients=${patientResult.status}, aggregate=${aggregateResult.status}, retries attempted=${retryResult.attempted}, retries failed=${retryResult.failed}, recentErrors=${recentErrors}`,
     );
 
-    if (recentErrors >= options.alertErrorThreshold) {
+    let alertTriggered = false;
+    let alertSink: string | null = null;
+    if (includeAlerts && recentErrors >= options.alertErrorThreshold) {
       const alertPayload = {
         source: 'ehr-service.dhis2-scheduler',
         tenantId,
@@ -155,29 +298,56 @@ export class Dhis2SchedulerService {
       this.logger.warn(
         `DHIS2 alert threshold exceeded for tenant ${tenantId}: recentErrors=${recentErrors}, threshold=${options.alertErrorThreshold}`,
       );
-      await this.sendAlertWebhook(options.alertWebhookUrl, alertPayload);
+      const sink = await this.sendAlertWebhook(options.alertWebhookUrl, alertPayload);
+      alertTriggered = sink !== null;
+      alertSink = sink;
     }
+
+    return {
+      tenantId,
+      patientStatus: String(patientResult?.status || 'UNKNOWN'),
+      aggregateStatus: String(aggregateResult?.status || 'UNKNOWN'),
+      retryAttempted: Number(retryResult?.attempted || 0),
+      retryFailed: Number(retryResult?.failed || 0),
+      recentErrors: Number(recentErrors || 0),
+      alertTriggered,
+      alertSink,
+    };
   }
 
-  private async sendAlertWebhook(webhookUrl: string, payload: Record<string, any>): Promise<void> {
-    if (!webhookUrl) {
-      return;
+  private async sendAlertWebhook(webhookUrl: string, payload: Record<string, any>): Promise<string | null> {
+    const sink = this.resolveAlertSink(webhookUrl);
+    if (!sink) {
+      return null;
+    }
+
+    let requestBody: Record<string, any> = payload;
+    if (sink.type === 'slack') {
+      requestBody = this.buildSlackPayload(payload);
+    } else if (sink.type === 'pagerduty') {
+      if (!sink.pagerDutyRoutingKey) {
+        return null;
+      }
+      requestBody = this.buildPagerDutyPayload(payload, sink.pagerDutyRoutingKey);
     }
 
     try {
-      const response = await fetch(webhookUrl, {
+      const response = await fetch(sink.webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         this.logger.warn(
-          `DHIS2 alert webhook returned ${response.status} ${response.statusText} for url ${webhookUrl}`,
+          `DHIS2 alert ${sink.type} sink returned ${response.status} ${response.statusText} for url ${sink.webhookUrl}`,
         );
+        return null;
       }
+      return sink.type;
     } catch (error: any) {
-      this.logger.warn(`Failed to send DHIS2 alert webhook: ${error?.message || error}`);
+      this.logger.warn(`Failed to send DHIS2 alert (${sink.type}) webhook: ${error?.message || error}`);
+      return null;
     }
   }
 }

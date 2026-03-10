@@ -46,6 +46,7 @@ DHIS2_SCHEDULED_RETRY_LIMIT=20
 DHIS2_ALERT_LOOKBACK_HOURS=24
 DHIS2_ALERT_ERROR_THRESHOLD=10
 DHIS2_ALERT_WEBHOOK_URL=
+DHIS2_PAGERDUTY_ROUTING_KEY=
 ```
 
 If EHR runs outside Docker, use `http://localhost:8888` instead.
@@ -56,6 +57,10 @@ Actual tenant execution still requires that tenant’s config to have:
 - `scheduledSyncEnabled=true`
 
 If tenant-level alert webhook is not set, scheduler falls back to `DHIS2_ALERT_WEBHOOK_URL`.
+Alert sink options:
+- Slack: set webhook URL to `https://hooks.slack.com/...`
+- PagerDuty (tenant-level): set `alertWebhookUrl` to `pagerduty://<routing_key>`
+- PagerDuty (env-level): set `DHIS2_ALERT_WEBHOOK_URL=https://events.pagerduty.com/v2/enqueue` and `DHIS2_PAGERDUTY_ROUTING_KEY=...`
 
 PAT auth header used by integration:
 
@@ -133,6 +138,7 @@ Use tenant context in request (e.g. `X-Tenant-Id`):
 - `GET /api/dhis2/sync-status`
 - `GET /api/dhis2/sync-log`
 - `POST /api/dhis2/retry-failed`
+- `POST /api/dhis2/sync/run-now`
 - `POST /api/dhis2/events`
 - `POST /api/dhis2/reports/aggregate`
 
@@ -195,6 +201,24 @@ Behavior:
 - requires `payload.request` in the failed log for automatic replay,
 - supports entity types: `patient`, `event`, `aggregate`, `data_value_set`,
 - `dryRun=true` returns what would be retried without pushing.
+
+### C) Manual run-now sync
+
+`POST /api/dhis2/sync/run-now`
+
+Body (optional):
+
+```json
+{
+  "retryLimit": 20,
+  "includeAlerts": true
+}
+```
+
+Behavior:
+- runs immediate tenant sync cycle (patients, aggregate, retry failed),
+- requires tenant context (`X-Tenant-Id`),
+- returns cycle summary with statuses and retry counts.
 
 ## 8. Troubleshooting
 

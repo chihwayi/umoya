@@ -206,6 +206,18 @@ export const tenantAPI = {
     return response.data;
   },
 
+  runTenantDhis2SyncNow: async (
+    tenantId: string,
+    payload: { retryLimit?: number; includeAlerts?: boolean } = {},
+  ): Promise<any> => {
+    const response = await api.post('/dhis2/sync/run-now', payload, {
+      headers: {
+        'X-Tenant-ID': tenantId,
+      },
+    });
+    return response.data;
+  },
+
   repairAllTenants: async (): Promise<{ message: string; count: number }> => {
     const response = await api.post('/admin/tenants/repair-all');
     return response.data;
