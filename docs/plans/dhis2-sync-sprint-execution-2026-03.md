@@ -1,8 +1,8 @@
 # DHIS2 Tenant Sync Sprint Execution (March 2026)
 
-Status: Active (Sprint 4 in progress)
+Status: Active (Sprint 4 completed, Sprint 5 next)
 Start date: 2026-03-10
-Target baseline: DHIS2 `2.40.0` local (`http://localhost:8888`)
+Target baseline: DHIS2 `2.40.0` local UI (`http://localhost:8888`), container access (`http://host.docker.internal:8888`)
 
 ## 1. Sprint Goal
 
@@ -89,20 +89,23 @@ Completed:
 5. `S2-T1` Add blank-instance DHIS2 metadata bootstrap script + runbook.
 6. `S3-T1` Add idempotent patient sync mapping + tenant sync logs.
 
-In progress (Sprint 4):
+Completed (Sprint 4):
 1. `S4-T1` Event push must resolve patient UUID -> DHIS2 TEI mapping (`dhis2_patient_mappings`).
 2. `S4-T2` Aggregate push must use tenant org unit + dataset, with monthly service delivery metrics.
 3. `S4-T3` Write event/aggregate/data-value outcomes into `dhis2_sync_log`.
 4. `S4-T4` Expand `GET /dhis2/sync-status` to report per-tenant patient/event/data-value counters.
 5. `S4-T5` Validate with build/tests before commit and push.
+6. `S4-T6` Auto-enroll TEI for `WITH_REGISTRATION` programs before tracker event push.
+7. `S4-T7` Resolve patient tracked-entity attribute IDs by DHIS2 codes (`MC_ATTR_*`) with env/legacy fallback.
+8. `S4-T8` Retry aggregate push with DHIS2 latest open future period when current period is rejected (`E7641`).
 
 ## 5. Validation Checklist
 
-- [ ] PAT auth validated against local DHIS2 (`/api/me`).
+- [x] PAT auth validated against local DHIS2 (`/api/me`).
 - [ ] Tenant A and Tenant B write only to their own org units.
-- [ ] No config => `not_configured` response, no DHIS2 writes.
-- [ ] Build/test checks pass in touched services.
-- [ ] Commit message references sprint task IDs.
+- [x] No config => `not_configured` response, no DHIS2 writes.
+- [x] Build/test checks pass in touched services.
+- [x] Commit message references sprint task IDs.
 
 ## 6. Commit Strategy
 
@@ -113,7 +116,7 @@ Planned commits:
 
 ## 7. Immediate Next Action
 
-Finish Sprint 4 acceptance checks with real tenant payloads:
-- send one event linked to a synced patient TEI,
-- send one aggregate/data-value push to tenant dataset,
-- confirm counters in `GET /dhis2/sync-status`.
+Start Sprint 5 acceptance checks:
+- expose tenant-level retry controls and error drilldown from `dhis2_sync_log`,
+- add automated scheduled sync orchestration per tenant,
+- validate a second tenant/org unit end-to-end isolation.

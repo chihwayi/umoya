@@ -34,7 +34,7 @@ Store generated token in backend env as `DHIS2_PAT` or tenant config API input.
 Per-tenant config is primary. These env vars are fallback/default when tenant config is absent:
 
 ```bash
-DHIS2_URL=http://localhost:8888
+DHIS2_URL=http://host.docker.internal:8888
 DHIS2_API_VERSION=40
 DHIS2_PAT=your_dhis2_personal_access_token
 DHIS2_ORG_UNIT=YOUR_ORG_UNIT_ID
@@ -42,6 +42,8 @@ DHIS2_TRACKED_ENTITY_TYPE=YOUR_TRACKED_ENTITY_TYPE_ID
 DHIS2_DATASET_ID=YOUR_DATASET_ID
 DHIS2_USE_MOCK=false
 ```
+
+If EHR runs outside Docker, use `http://localhost:8888` instead.
 
 PAT auth header used by integration:
 
@@ -86,7 +88,7 @@ Tenant service endpoints (JWT-protected):
 
 ```json
 {
-  "baseUrl": "http://localhost:8888",
+  "baseUrl": "http://host.docker.internal:8888",
   "apiVersion": "40",
   "authType": "pat",
   "pat": "d2pat_...",

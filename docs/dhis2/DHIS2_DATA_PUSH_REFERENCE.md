@@ -1,8 +1,8 @@
 # Medicore → DHIS2 Data Push Reference
 
-Status: Draft v1 (execution baseline)
+Status: Draft v1.1 (D4 live validated)
 Date: 2026-03-10
-Scope: Tenant/clinic-based sync to DHIS2 `2.40.0` (local target `http://localhost:8888`)
+Scope: Tenant/clinic-based sync to DHIS2 `2.40.0` (local UI `http://localhost:8888`, container target `http://host.docker.internal:8888`)
 
 ## 1. Purpose
 
@@ -209,3 +209,22 @@ Before full national indicator parity, we still need:
   `https://www.who.int/data/gho/data/indicators/indicator-details/GHO/malaria-incidence-(per-1-000-population-at-risk)`
 - WHO DTP3 indicator metadata:
   `https://www.who.int/data/gho/data/indicators/indicator-details/GHO/diphtheria-tetanus-toxoid-and-pertussis-(dtp3)-immunization-coverage-among-1-year-olds-(-)`
+
+## 10. Live Validated Package (Tenant `testghost2`)
+
+Validated on 2026-03-10:
+- patient sync: success (idempotent update path confirmed),
+- tracker event sync: success (program enrollment auto-created when missing),
+- aggregate sync: success with period fallback from rejected `202603` to DHIS2-allowed `202602`.
+
+Bootstrap IDs currently used:
+- org unit: `kuDwB5vB5lm`
+- tracked entity type: `iWmMSizGfd2`
+- dataset: `H4IexxHRXIi`
+- program: `jAl3ZnTYssZ`
+- program stage: `agwBZMJuU7O`
+
+Tracker event data element IDs:
+- `MC_DE_EVENT_VISIT_TYPE`: `UMihKZi73GO`
+- `MC_DE_EVENT_PRIMARY_DIAGNOSIS`: `QeOHJlyaSG2`
+- `MC_DE_EVENT_CLINICAL_NOTES`: `tDFQWdzY69z`
