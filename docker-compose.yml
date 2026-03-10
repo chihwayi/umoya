@@ -241,6 +241,9 @@ services:
       - STORAGE_S3_PUBLIC_BASE_URL=${MINIO_PUBLIC_URL}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - WHISPER_API_KEY=${WHISPER_API_KEY}
+      - DHIS2_URL=${DHIS2_URL}
+      - DHIS2_API_VERSION=${DHIS2_API_VERSION}
+      - DHIS2_PAT=${DHIS2_PAT}
     command: npm run dev
     volumes:
       - ./services/ehr-service/src:/app/services/ehr-service/src

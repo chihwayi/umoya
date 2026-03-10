@@ -23,6 +23,24 @@ CREATE TABLE tenants (
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Per-tenant DHIS2 integration settings (tenant -> DHIS2 auth + org mapping)
+CREATE TABLE IF NOT EXISTS tenant_dhis2_config (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE UNIQUE,
+    base_url TEXT NOT NULL,
+    api_version VARCHAR(10) DEFAULT '40',
+    auth_type VARCHAR(20) NOT NULL DEFAULT 'pat' CHECK (auth_type IN ('pat', 'basic')),
+    pat TEXT,
+    username VARCHAR(255),
+    password TEXT,
+    org_unit_id VARCHAR(64) NOT NULL,
+    tracked_entity_type_id VARCHAR(64),
+    dataset_id VARCHAR(64),
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Tenant users table (for master database user management)
 CREATE TABLE tenant_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -158,6 +176,8 @@ CREATE TABLE audit_logs (
 -- Indexes for performance
 CREATE INDEX idx_tenants_subdomain ON tenants(subdomain);
 CREATE INDEX idx_tenants_status ON tenants(status);
+CREATE INDEX IF NOT EXISTS idx_tenant_dhis2_config_tenant_id ON tenant_dhis2_config(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_tenant_dhis2_config_enabled ON tenant_dhis2_config(enabled);
 CREATE INDEX idx_tenant_users_tenant_id ON tenant_users("tenantId");
 CREATE INDEX idx_tenant_users_email ON tenant_users(email);
 CREATE INDEX idx_tenant_analytics_tenant_id ON tenant_analytics("tenantId");

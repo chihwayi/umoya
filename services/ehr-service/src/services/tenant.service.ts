@@ -140,6 +140,20 @@ import { MedicalAidRemittance } from '../entities/medical-aid-remittance.entity'
 import { PatientEarlyWarningScore } from '../entities/patient-early-warning-score.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
+export interface TenantDhis2Config {
+  tenantId: string;
+  baseUrl: string;
+  apiVersion: string;
+  authType: 'pat' | 'basic';
+  pat?: string | null;
+  username?: string | null;
+  password?: string | null;
+  orgUnitId: string;
+  trackedEntityTypeId?: string | null;
+  dataSetId?: string | null;
+  enabled: boolean;
+}
+
 @Injectable()
 export class TenantService {
   private readonly logger = new Logger(TenantService.name);
@@ -214,6 +228,65 @@ export class TenantService {
     } catch (error) {
       this.logger.error('Failed to get active tenants:', error);
       return [];
+    }
+  }
+
+  async getTenantDhis2Config(tenantIdentifier: string): Promise<TenantDhis2Config | null> {
+    try {
+      const isUUID =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantIdentifier);
+
+      const tenantFilter = isUUID ? 't.id = $1' : 't.subdomain = $1';
+      const rows = await this.masterDb.query(
+        `
+        SELECT
+          t.id AS tenant_id,
+          c.base_url,
+          COALESCE(c.api_version, '40') AS api_version,
+          COALESCE(c.auth_type, 'pat') AS auth_type,
+          c.pat,
+          c.username,
+          c.password,
+          c.org_unit_id,
+          c.tracked_entity_type_id,
+          c.dataset_id,
+          COALESCE(c.enabled, true) AS enabled
+        FROM tenants t
+        LEFT JOIN tenant_dhis2_config c
+          ON c.tenant_id = t.id
+        WHERE ${tenantFilter}
+          AND t.status = 'active'
+        LIMIT 1
+        `,
+        [tenantIdentifier],
+      );
+
+      if (!rows || rows.length === 0) {
+        this.logger.warn(`Tenant not found for DHIS2 config lookup: ${tenantIdentifier}`);
+        return null;
+      }
+
+      const row = rows[0];
+      if (!row.base_url || !row.org_unit_id) {
+        return null;
+      }
+
+      return {
+        tenantId: row.tenant_id,
+        baseUrl: row.base_url,
+        apiVersion: String(row.api_version || '40'),
+        authType: row.auth_type === 'basic' ? 'basic' : 'pat',
+        pat: row.pat ?? null,
+        username: row.username ?? null,
+        password: row.password ?? null,
+        orgUnitId: row.org_unit_id,
+        trackedEntityTypeId: row.tracked_entity_type_id ?? null,
+        dataSetId: row.dataset_id ?? null,
+        enabled: Boolean(row.enabled),
+      };
+    } catch (error) {
+      this.logger.error(`Failed to load tenant DHIS2 config: ${tenantIdentifier}`, error);
+      return null;
     }
   }
 

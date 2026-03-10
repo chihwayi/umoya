@@ -12,10 +12,9 @@ Add these to your `services/ehr-service/.env` file:
 
 ```bash
 # DHIS2 Configuration
-DHIS2_URL=https://dhis2.mohcc.gov.zw
-DHIS2_USERNAME=your_dhis2_username
-DHIS2_PASSWORD=your_dhis2_password
-DHIS2_API_VERSION=38
+DHIS2_URL=http://localhost:8888
+DHIS2_API_VERSION=40
+DHIS2_PAT=your_dhis2_personal_access_token
 
 # Optional: Organization-specific settings
 DHIS2_ORG_UNIT=YOUR_ORG_UNIT_ID
@@ -28,11 +27,13 @@ DHIS2_USE_MOCK=false
 
 ### Getting DHIS2 Credentials
 
-1. **Contact Zimbabwe MOHCC** to get:
-   - DHIS2 API username
-   - DHIS2 API password
-   - Your organization unit ID
-   - Relevant program IDs (HIV, TB, Malaria, etc.)
+1. Generate a **Personal Access Token** in DHIS2 user profile:
+   - Path: `User Profile -> Personal Access Tokens`
+   - Context: `Server/script context`
+   - Methods: `GET, POST, PUT, PATCH` (and `DELETE` only if needed)
+   - For local dev, use a long expiry.
+2. Store the token as `DHIS2_PAT`.
+3. Use `DHIS2_USERNAME`/`DHIS2_PASSWORD` only as fallback.
 
 2. **Test Environment**: You can use DHIS2 test instance:
    - URL: `https://test.dhis2.mohcc.gov.zw` (if available)
@@ -104,16 +105,26 @@ Returns connection status and sync statistics.
 
 ### Test with Mock Mode
 
-1. Don't set `DHIS2_USERNAME` and `DHIS2_PASSWORD`
+1. Set `DHIS2_USE_MOCK=true`
 2. Service will automatically use MOCK mode
 3. All endpoints will return simulated responses
 
 ### Test with Real API
 
-1. Set environment variables
+1. Set `DHIS2_URL`, `DHIS2_API_VERSION`, and `DHIS2_PAT`
 2. Restart EHR service
 3. Check logs for "DHIS2 service initialized with real API integration"
 4. Test endpoints - should connect to real DHIS2
+
+### PAT Header Format (DHIS2 2.40)
+
+Use:
+
+```bash
+Authorization: ApiToken <DHIS2_PAT>
+```
+
+`Bearer <token>` does not work for DHIS2 personal access tokens in local 2.40 testing.
 
 ## Error Handling
 
@@ -147,14 +158,14 @@ Returns connection status and sync statistics.
 
 ### Connection Issues
 
-1. **Check credentials**: Verify username/password are correct
+1. **Check token**: Verify `DHIS2_PAT` is valid and not expired
 2. **Check URL**: Ensure DHIS2 URL is accessible
-3. **Check API version**: Default is 38, adjust if needed
+3. **Check API version**: For DHIS2 2.40 use `DHIS2_API_VERSION=40`
 4. **Check logs**: Look for detailed error messages
 
 ### Common Errors
 
-- **401 Unauthorized**: Wrong username/password
+- **401 Unauthorized**: Invalid/expired PAT or wrong header format
 - **404 Not Found**: Wrong API version or endpoint
 - **Timeout**: DHIS2 server not responding (check network)
 - **403 Forbidden**: User doesn't have API access
