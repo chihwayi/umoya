@@ -23,14 +23,14 @@ export class Dhis2Controller {
   @ApiOperation({ summary: 'Send event to DHIS2' })
   @ApiResponse({ status: 201, description: 'Event sent successfully' })
   async sendEvent(@Body() eventData: any, @Request() req: RequestWithTenant) {
-    return this.dhis2Service.sendEvent(eventData, req.tenantId);
+    return this.dhis2Service.sendEvent(eventData, req.tenantDb, req.tenantId);
   }
 
   @Post('data-values')
   @ApiOperation({ summary: 'Send data values to DHIS2' })
   @ApiResponse({ status: 201, description: 'Data values sent successfully' })
   async sendDataValues(@Body() dataValues: any, @Request() req: RequestWithTenant) {
-    return this.dhis2Service.sendDataValues(dataValues, req.tenantId);
+    return this.dhis2Service.sendDataValues(dataValues, req.tenantDb, req.tenantId);
   }
 
   @Get('programs')

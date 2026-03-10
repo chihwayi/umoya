@@ -189,6 +189,11 @@ Before full national indicator parity, we still need:
 - If tenant config missing or disabled, DHIS2 sync returns `not_configured` and does not push.
 - Idempotency required for tracker entities and periodic aggregate submissions.
 - DB changes must be done through provisioning/schema process, not ad-hoc manual SQL.
+- Sync observability is stored in tenant DB `dhis2_sync_log` with `entity_type` values:
+  - `patient` (TEI create/update),
+  - `event` (program stage event push),
+  - `aggregate` (aggregate DataValueSet push),
+  - `data_value_set` (explicit data-values endpoint push).
 
 ## 9. External References
 
@@ -204,4 +209,3 @@ Before full national indicator parity, we still need:
   `https://www.who.int/data/gho/data/indicators/indicator-details/GHO/malaria-incidence-(per-1-000-population-at-risk)`
 - WHO DTP3 indicator metadata:
   `https://www.who.int/data/gho/data/indicators/indicator-details/GHO/diphtheria-tetanus-toxoid-and-pertussis-(dtp3)-immunization-coverage-among-1-year-olds-(-)`
-

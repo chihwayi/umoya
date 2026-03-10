@@ -115,6 +115,11 @@ Behavior:
   - `dhis2_patient_mappings`
   - `dhis2_sync_log`
 
+Event linkage note:
+- For tracker events, `patientId` must already be mapped to a DHIS2 TEI via patient sync.
+- `POST /api/dhis2/events` now resolves `patientId -> dhis2_patient_mappings.dhis2_tei_id`.
+- If mapping is missing, event push returns an error instructing you to run patient sync first.
+
 ## 7. Troubleshooting
 
 - `401 Unauthorized`: PAT invalid/expired or wrong header format.

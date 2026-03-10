@@ -1,6 +1,6 @@
 # DHIS2 Tenant Sync Sprint Execution (March 2026)
 
-Status: Active
+Status: Active (Sprint 4 in progress)
 Start date: 2026-03-10
 Target baseline: DHIS2 `2.40.0` local (`http://localhost:8888`)
 
@@ -81,12 +81,20 @@ Acceptance:
 
 ## 4. Implementation Board (Current)
 
+Completed:
 1. `S1-T1` Add `tenant_dhis2_config` to master schema.
 2. `S1-T2` Add `TenantService.getTenantDhis2Config(tenantIdentifier)`.
 3. `S1-T3` Refactor DHIS2 service client creation per tenant + PAT support.
 4. `S1-T4` Pass `tenantId` from controller to DHIS2 service methods.
-5. `S1-T5` Update setup docs for PAT-first auth.
-6. `S1-T6` Run build/tests and fix regressions.
+5. `S2-T1` Add blank-instance DHIS2 metadata bootstrap script + runbook.
+6. `S3-T1` Add idempotent patient sync mapping + tenant sync logs.
+
+In progress (Sprint 4):
+1. `S4-T1` Event push must resolve patient UUID -> DHIS2 TEI mapping (`dhis2_patient_mappings`).
+2. `S4-T2` Aggregate push must use tenant org unit + dataset, with monthly service delivery metrics.
+3. `S4-T3` Write event/aggregate/data-value outcomes into `dhis2_sync_log`.
+4. `S4-T4` Expand `GET /dhis2/sync-status` to report per-tenant patient/event/data-value counters.
+5. `S4-T5` Validate with build/tests before commit and push.
 
 ## 5. Validation Checklist
 
@@ -105,5 +113,7 @@ Planned commits:
 
 ## 7. Immediate Next Action
 
-Execute Sprint 1 tasks `S1-T1` to `S1-T4` in this branch, then run checks and prepare push.
-
+Finish Sprint 4 acceptance checks with real tenant payloads:
+- send one event linked to a synced patient TEI,
+- send one aggregate/data-value push to tenant dataset,
+- confirm counters in `GET /dhis2/sync-status`.

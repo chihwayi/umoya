@@ -3,6 +3,9 @@ import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
 import { Patient } from '../entities/patient.entity';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
+import { Admission } from '../entities/admission.entity';
+import { Discharge } from '../entities/discharge.entity';
+import { EDVisit } from '../entities/ed-visit.entity';
 import { TenantDhis2Config, TenantService } from './tenant.service';
 
 interface Dhis2RuntimeConfig {
@@ -28,6 +31,14 @@ interface Dhis2Context {
 interface Dhis2PatientMappingRow {
   patient_id: string;
   dhis2_tei_id: string;
+}
+
+interface Dhis2SyncStatsRow {
+  last_sync?: string | null;
+  patient_success_count?: number | string | null;
+  event_success_count?: number | string | null;
+  data_value_success_count?: number | string | null;
+  total_error_count?: number | string | null;
 }
 
 @Injectable()
@@ -211,6 +222,52 @@ export class Dhis2Service {
     );
   }
 
+  private extractImportReference(responseData: any): string | null {
+    return (
+      responseData?.response?.importSummaries?.[0]?.reference ||
+      responseData?.response?.reference ||
+      responseData?.response?.uid ||
+      responseData?.reference ||
+      responseData?.uid ||
+      null
+    );
+  }
+
+  private toImportCount(value: any): number {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  }
+
+  private extractImportCounts(responseData: any): {
+    imported: number;
+    updated: number;
+    ignored: number;
+    deleted: number;
+  } {
+    const importCount = responseData?.importCount || {};
+    return {
+      imported: this.toImportCount(responseData?.imported ?? importCount.imported),
+      updated: this.toImportCount(responseData?.updated ?? importCount.updated),
+      ignored: this.toImportCount(responseData?.ignored ?? importCount.ignored),
+      deleted: this.toImportCount(responseData?.deleted ?? importCount.deleted),
+    };
+  }
+
+  private isUuid(value?: string | null): boolean {
+    if (!value) {
+      return false;
+    }
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  private asNullableUuid(value?: string | null): string | null {
+    return this.isUuid(value) ? String(value) : null;
+  }
+
+  private canQueryTenantDb(tenantDb?: DataSource): tenantDb is DataSource {
+    return Boolean(tenantDb && typeof (tenantDb as any).query === 'function');
+  }
+
   private async ensureTenantSyncTables(tenantDb: DataSource): Promise<void> {
     await tenantDb.query(`
       CREATE TABLE IF NOT EXISTS dhis2_patient_mappings (
@@ -245,6 +302,62 @@ export class Dhis2Service {
       `SELECT patient_id, dhis2_tei_id FROM dhis2_patient_mappings`,
     );
     return new Map(rows.map((row) => [row.patient_id, row.dhis2_tei_id]));
+  }
+
+  private async loadPatientTeiMapping(tenantDb: DataSource, patientId: string): Promise<string | null> {
+    const rows: Array<{ dhis2_tei_id: string }> = await tenantDb.query(
+      `
+      SELECT dhis2_tei_id
+      FROM dhis2_patient_mappings
+      WHERE patient_id = $1
+      LIMIT 1
+      `,
+      [patientId],
+    );
+    if (!rows || rows.length === 0) {
+      return null;
+    }
+    return rows[0].dhis2_tei_id || null;
+  }
+
+  private async resolveServiceDeliveryElementIds(
+    context: Dhis2Context,
+    dataSetId?: string,
+  ): Promise<Record<string, string>> {
+    if (!context.client || !dataSetId) {
+      return {};
+    }
+
+    try {
+      const response = await context.client.get(`/dataSets/${dataSetId}`, {
+        params: {
+          fields: 'dataSetElements[dataElement[id,code,name]]',
+        },
+      });
+
+      const byCode: Record<string, string> = {};
+      const dataSetElements = response.data?.dataSetElements || [];
+      for (const item of dataSetElements) {
+        const code = item?.dataElement?.code;
+        const id = item?.dataElement?.id;
+        if (code && id) {
+          byCode[String(code)] = String(id);
+        }
+      }
+
+      return {
+        totalConsultations: byCode.MC_DE_TOTAL_CONSULTATIONS,
+        completedConsultations: byCode.MC_DE_COMPLETED_CONSULTATIONS,
+        totalAdmissions: byCode.MC_DE_TOTAL_ADMISSIONS,
+        totalDischarges: byCode.MC_DE_TOTAL_DISCHARGES,
+        totalEdVisits: byCode.MC_DE_TOTAL_ED_VISITS,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `Unable to resolve dataset data elements from DHIS2 (${dataSetId}): ${error?.message || error}`,
+      );
+      return {};
+    }
   }
 
   private async upsertPatientMapping(
@@ -457,7 +570,7 @@ export class Dhis2Service {
     }
   }
 
-  async sendEvent(eventData: any, tenantId?: string) {
+  async sendEvent(eventData: any, tenantDb: DataSource, tenantId?: string) {
     try {
       const context = await this.resolveContext(tenantId);
 
@@ -478,24 +591,96 @@ export class Dhis2Service {
         };
       }
 
+      let trackedEntityInstance: string | undefined =
+        eventData.trackedEntityInstance || eventData.teiId || undefined;
+
+      if (!trackedEntityInstance && eventData.patientId && this.canQueryTenantDb(tenantDb)) {
+        await this.ensureTenantSyncTables(tenantDb);
+        trackedEntityInstance = await this.loadPatientTeiMapping(tenantDb, eventData.patientId);
+      }
+
+      if (!trackedEntityInstance && eventData.patientId) {
+        if (this.canQueryTenantDb(tenantDb)) {
+          await this.ensureTenantSyncTables(tenantDb);
+          await this.insertSyncLog(tenantDb, {
+            entityType: 'event',
+            entityId: this.asNullableUuid(eventData.patientId),
+            dhis2Id: null,
+            action: 'error',
+            status: 'error',
+            errorMessage: `Missing TEI mapping for patient ${eventData.patientId}`,
+            payload: {
+              program: eventData.program || null,
+              programStage: eventData.programStage || null,
+              patientId: eventData.patientId,
+            },
+          });
+        }
+        return {
+          status: 'ERROR',
+          reference: `EVENT_${Date.now()}`,
+          message: `No DHIS2 TEI mapping found for patient ${eventData.patientId}. Run patient sync first.`,
+        };
+      }
+
       const dhis2Event = {
         program: eventData.program,
+        programStage: eventData.programStage,
         orgUnit: eventData.orgUnit || context.config.orgUnitId || this.envOrgUnit,
         eventDate: eventData.eventDate,
         status: 'COMPLETED',
-        trackedEntityInstance: eventData.patientId,
-        dataValues: eventData.dataValues,
+        trackedEntityInstance,
+        dataValues: eventData.dataValues || [],
       };
 
       const response = await context.client.post('/events', dhis2Event);
+      const reference = this.extractImportReference(response.data) || `EVENT_${Date.now()}`;
+
+      if (this.canQueryTenantDb(tenantDb)) {
+        await this.ensureTenantSyncTables(tenantDb);
+        await this.insertSyncLog(tenantDb, {
+          entityType: 'event',
+          entityId: this.asNullableUuid(eventData.patientId),
+          dhis2Id: reference,
+          action: 'create',
+          status: 'success',
+          payload: {
+            program: eventData.program,
+            programStage: eventData.programStage || null,
+            orgUnit: dhis2Event.orgUnit,
+            trackedEntityInstance,
+            dataValuesCount: Array.isArray(eventData.dataValues) ? eventData.dataValues.length : 0,
+          },
+        });
+      }
 
       return {
         status: 'SUCCESS',
-        reference: response.data.response?.importSummaries?.[0]?.reference || `EVENT_${Date.now()}`,
+        reference,
         message: 'Event sent to DHIS2 successfully',
       };
     } catch (error: any) {
       this.logger.error('Error sending event to DHIS2:', error);
+      if (this.canQueryTenantDb(tenantDb)) {
+        try {
+          await this.ensureTenantSyncTables(tenantDb);
+          await this.insertSyncLog(tenantDb, {
+            entityType: 'event',
+            entityId: this.asNullableUuid(eventData?.patientId),
+            dhis2Id: null,
+            action: 'error',
+            status: 'error',
+            errorMessage: error?.message || 'DHIS2 event send failed',
+            payload: {
+              program: eventData?.program || null,
+              programStage: eventData?.programStage || null,
+              response: error?.response?.data || null,
+            },
+          });
+        } catch (logError: any) {
+          this.logger.warn(`Failed to write DHIS2 event sync log: ${logError?.message || logError}`);
+        }
+      }
       return {
         status: 'ERROR',
         reference: `EVENT_${Date.now()}`,
@@ -505,7 +690,7 @@ export class Dhis2Service {
     }
   }
 
-  async sendDataValues(dataValues: any, tenantId?: string) {
+  async sendDataValues(dataValues: any, tenantDb: DataSource, tenantId?: string) {
     try {
       const context = await this.resolveContext(tenantId);
 
@@ -535,17 +720,57 @@ export class Dhis2Service {
       };
 
       const response = await context.client.post('/dataValueSets', dhis2DataValues);
+      const importCounts = this.extractImportCounts(response.data);
+
+      if (this.canQueryTenantDb(tenantDb)) {
+        await this.ensureTenantSyncTables(tenantDb);
+        await this.insertSyncLog(tenantDb, {
+          entityType: 'data_value_set',
+          entityId: null,
+          dhis2Id: null,
+          action: 'upsert',
+          status: 'success',
+          payload: {
+            dataSet: dhis2DataValues.dataSet,
+            period: dhis2DataValues.period,
+            orgUnit: dhis2DataValues.orgUnit,
+            dataValuesCount: Array.isArray(dhis2DataValues.dataValues) ? dhis2DataValues.dataValues.length : 0,
+            ...importCounts,
+          },
+        });
+      }
 
       return {
         status: response.data.status || 'SUCCESS',
-        imported: response.data.imported || 0,
-        updated: response.data.updated || 0,
-        ignored: response.data.ignored || 0,
-        deleted: response.data.deleted || 0,
+        imported: importCounts.imported,
+        updated: importCounts.updated,
+        ignored: importCounts.ignored,
+        deleted: importCounts.deleted,
         message: 'Data values sent to DHIS2 successfully',
       };
     } catch (error: any) {
       this.logger.error('Error sending data values to DHIS2:', error);
+      if (this.canQueryTenantDb(tenantDb)) {
+        try {
+          await this.ensureTenantSyncTables(tenantDb);
+          await this.insertSyncLog(tenantDb, {
+            entityType: 'data_value_set',
+            entityId: null,
+            dhis2Id: null,
+            action: 'error',
+            status: 'error',
+            errorMessage: error?.message || 'DHIS2 data values send failed',
+            payload: {
+              dataSet: dataValues?.dataSet || null,
+              period: dataValues?.period || null,
+              orgUnit: dataValues?.orgUnit || null,
+              response: error?.response?.data || null,
+            },
+          });
+        } catch (logError: any) {
+          this.logger.warn(`Failed to write DHIS2 data-value sync log: ${logError?.message || logError}`);
+        }
+      }
       return {
         status: 'ERROR',
         imported: 0,
@@ -680,9 +905,18 @@ export class Dhis2Service {
   async sendAggregateReport(reportData: any, tenantDb: DataSource, tenantId?: string) {
     try {
       const appointmentRepository = tenantDb.getRepository(AppointmentSimple);
+      const admissionRepository = tenantDb.getRepository(Admission);
+      const dischargeRepository = tenantDb.getRepository(Discharge);
+      const edVisitRepository = tenantDb.getRepository(EDVisit);
 
-      const totalAppointments = await appointmentRepository.count();
-      const completedAppointments = await appointmentRepository.count({ where: { status: 'completed' } });
+      const [totalAppointments, completedAppointments, totalAdmissions, totalDischarges, totalEdVisits] =
+        await Promise.all([
+          appointmentRepository.count(),
+          appointmentRepository.count({ where: { status: 'completed' } }),
+          admissionRepository.count(),
+          dischargeRepository.count(),
+          edVisitRepository.count(),
+        ]);
       const context = await this.resolveContext(tenantId);
 
       if (!context.enabled) {
@@ -694,24 +928,64 @@ export class Dhis2Service {
         };
       }
 
+      const dataSet =
+        reportData.dataSet ||
+        context.config?.dataSetId ||
+        this.envDataSetId;
+      const period = reportData.period || new Date().toISOString().slice(0, 7).replace('-', '');
+      const orgUnit = reportData.orgUnit || context.config?.orgUnitId || this.envOrgUnit || 'YOUR_ORG_UNIT_ID';
+
+      const fallbackElementMap =
+        !reportData.dataElements && context.client
+          ? await this.resolveServiceDeliveryElementIds(context, dataSet)
+          : {};
+      const elementMap = {
+        ...fallbackElementMap,
+        ...(reportData.dataElements || {}),
+      };
+
+      const computedMetrics: Record<string, number> = {
+        totalConsultations: totalAppointments,
+        completedConsultations: completedAppointments,
+        totalAdmissions,
+        totalDischarges,
+        totalEdVisits,
+      };
+
+      const payloadDataValues =
+        Array.isArray(reportData.dataValues) && reportData.dataValues.length > 0
+          ? reportData.dataValues
+          : Object.entries(computedMetrics)
+              .filter(([metricKey]) => Boolean(elementMap[metricKey]))
+              .map(([metricKey, value]) => ({
+                dataElement: elementMap[metricKey],
+                value: String(value),
+              }));
+
+      if (!dataSet) {
+        return {
+          status: 'NOT_CONFIGURED',
+          period,
+          dataValues: 0,
+          message: 'DHIS2 dataset is not configured for this tenant.',
+        };
+      }
+
+      if (!payloadDataValues.length) {
+        return {
+          status: 'NOT_CONFIGURED',
+          period,
+          dataValues: 0,
+          message:
+            'No aggregate data elements are configured. Provide reportData.dataElements or include mapped data elements in the tenant dataset.',
+        };
+      }
+
       const aggregateData = {
-        dataSet:
-          reportData.dataSet ||
-          context.config?.dataSetId ||
-          this.envDataSetId ||
-          'BfMAe6Itzgt',
-        period: reportData.period || new Date().toISOString().slice(0, 7).replace('-', ''),
-        orgUnit: reportData.orgUnit || context.config?.orgUnitId || this.envOrgUnit || 'YOUR_ORG_UNIT_ID',
-        dataValues: [
-          {
-            dataElement: reportData.dataElements?.totalConsultations || 'FTRrcoaog83',
-            value: totalAppointments.toString(),
-          },
-          {
-            dataElement: reportData.dataElements?.completedConsultations || 'eY5ehpbEsB7',
-            value: completedAppointments.toString(),
-          },
-        ],
+        dataSet,
+        period,
+        orgUnit,
+        dataValues: payloadDataValues,
       };
 
       if (context.useMock || !context.client) {
@@ -725,18 +999,57 @@ export class Dhis2Service {
       }
 
       const response = await context.client.post('/dataValueSets', aggregateData);
+      const importCounts = this.extractImportCounts(response.data);
+
+      await this.ensureTenantSyncTables(tenantDb);
+      await this.insertSyncLog(tenantDb, {
+        entityType: 'aggregate',
+        entityId: null,
+        dhis2Id: null,
+        action: 'upsert',
+        status: 'success',
+        payload: {
+          dataSet: aggregateData.dataSet,
+          period: aggregateData.period,
+          orgUnit: aggregateData.orgUnit,
+          dataValuesCount: aggregateData.dataValues.length,
+          metrics: computedMetrics,
+          ...importCounts,
+        },
+      });
 
       return {
         status: response.data.status || 'SUCCESS',
         period: aggregateData.period,
-        imported: response.data.imported || 0,
-        updated: response.data.updated || 0,
-        ignored: response.data.ignored || 0,
+        imported: importCounts.imported,
+        updated: importCounts.updated,
+        ignored: importCounts.ignored,
         dataValues: aggregateData.dataValues.length,
         message: 'Aggregate report sent to DHIS2 successfully',
       };
     } catch (error: any) {
       this.logger.error('Error sending aggregate report to DHIS2:', error);
+      if (this.canQueryTenantDb(tenantDb)) {
+        try {
+          await this.ensureTenantSyncTables(tenantDb);
+          await this.insertSyncLog(tenantDb, {
+            entityType: 'aggregate',
+            entityId: null,
+            dhis2Id: null,
+            action: 'error',
+            status: 'error',
+            errorMessage: error?.message || 'DHIS2 aggregate report send failed',
+            payload: {
+              period: reportData?.period || null,
+              dataSet: reportData?.dataSet || null,
+              orgUnit: reportData?.orgUnit || null,
+              response: error?.response?.data || null,
+            },
+          });
+        } catch (logError: any) {
+          this.logger.warn(`Failed to write DHIS2 aggregate sync log: ${logError?.message || logError}`);
+        }
+      }
       return {
         status: 'ERROR',
         period: reportData.period || 'unknown',
@@ -782,27 +1095,32 @@ export class Dhis2Service {
 
       let lastSync: string | null = null;
       let patientSuccessCount = 0;
-      let patientErrorCount = 0;
-      let totalSuccessCount = 0;
+      let eventSuccessCount = 0;
+      let dataValueSuccessCount = 0;
+      let totalErrorCount = 0;
 
       if (tenantDb && typeof (tenantDb as any).query === 'function') {
         try {
           await this.ensureTenantSyncTables(tenantDb);
-          const statsRows = await tenantDb.query(
+          const statsRows: Dhis2SyncStatsRow[] = await tenantDb.query(
             `
             SELECT
               MAX(synced_at) AS last_sync,
               COUNT(*) FILTER (WHERE entity_type = 'patient' AND status = 'success')::int AS patient_success_count,
-              COUNT(*) FILTER (WHERE entity_type = 'patient' AND status = 'error')::int AS patient_error_count,
-              COUNT(*) FILTER (WHERE status = 'success')::int AS total_success_count
+              COUNT(*) FILTER (WHERE entity_type = 'event' AND status = 'success')::int AS event_success_count,
+              COUNT(*) FILTER (
+                WHERE entity_type IN ('data_value_set', 'aggregate') AND status = 'success'
+              )::int AS data_value_success_count,
+              COUNT(*) FILTER (WHERE status = 'error')::int AS total_error_count
             FROM dhis2_sync_log
             `,
           );
           const stats = statsRows?.[0] || {};
           lastSync = stats.last_sync ? String(stats.last_sync) : null;
           patientSuccessCount = Number(stats.patient_success_count || 0);
-          patientErrorCount = Number(stats.patient_error_count || 0);
-          totalSuccessCount = Number(stats.total_success_count || 0);
+          eventSuccessCount = Number(stats.event_success_count || 0);
+          dataValueSuccessCount = Number(stats.data_value_success_count || 0);
+          totalErrorCount = Number(stats.total_error_count || 0);
         } catch (statsError: any) {
           this.logger.warn(`Unable to read DHIS2 sync log stats: ${statsError?.message || statsError}`);
         }
@@ -813,9 +1131,9 @@ export class Dhis2Service {
         status: 'CONNECTED',
         dhis2Version: systemInfo.data?.version || 'unknown',
         patientsSynced: patientSuccessCount,
-        eventsSynced: totalSuccessCount - patientSuccessCount,
-        dataValuesSynced: 0,
-        errors: patientErrorCount,
+        eventsSynced: eventSuccessCount,
+        dataValuesSynced: dataValueSuccessCount,
+        errors: totalErrorCount,
         nextSync: null,
         message: 'Connected to DHIS2 successfully',
       };
