@@ -57,13 +57,66 @@ interface ARVChangeRequest {
   approval_date?: string;
 }
 
+type HivOperationsFocus =
+  | 'all'
+  | 'unsuppressed'
+  | 'overdue_visit'
+  | 'overdue_vl'
+  | 'adherence'
+  | 'regimen_review';
+
+interface HivCohortWorklistItem {
+  enrollmentId: string;
+  patientId: string;
+  enrollmentNumber: string;
+  patientNumber: string;
+  patientName: string;
+  currentRegimen?: string | null;
+  lastVisitDate?: string | null;
+  nextReviewDate?: string | null;
+  daysSinceLastVisit?: number | null;
+  lastViralLoad?: number | null;
+  lastViralLoadDate?: string | null;
+  viralLoadUnit?: string | null;
+  nextViralLoadDate?: string | null;
+  overdueViralLoadDays?: number | null;
+  adherencePercentage?: number | null;
+  primaryAction: string;
+  secondaryActions: string[];
+  priority: 'critical' | 'high' | 'medium';
+  flags: {
+    overdueVisit?: boolean;
+    overdueViralLoad?: boolean;
+    unsuppressed?: boolean;
+    activeEac?: boolean;
+    lowAdherence?: boolean;
+    ltfuRisk?: boolean;
+    pendingRegimenReview?: boolean;
+    approvedRegimenVisitPending?: boolean;
+    completedEacStillUnsuppressed?: boolean;
+  };
+  reasons: string[];
+}
+
+const HIV_ACTION_LABELS: Record<string, string> = {
+  doctor_review_pending_regimen_change: 'Doctor review pending regimen change',
+  document_regimen_change_visit: 'Document approved regimen change visit',
+  doctor_review_failed_eac: 'Doctor review failed EAC',
+  continue_eac: 'Continue enhanced adherence counseling',
+  start_eac: 'Start enhanced adherence counseling',
+  collect_viral_load: 'Collect viral load',
+  adherence_counseling: 'Adherence counseling',
+  patient_outreach: 'Patient outreach',
+  book_clinical_review: 'Book clinical review',
+};
+
 const HIVDoctorDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'patients' | 'regimen-changes' | 'eac-programs' | 'alerts' | 'quality' | 'cohort' | 'comparison' | 'ltfu' | 'monthly-return'>('patients');
+  const [activeTab, setActiveTab] = useState<'operations' | 'patients' | 'regimen-changes' | 'eac-programs' | 'alerts' | 'quality' | 'cohort' | 'comparison' | 'ltfu' | 'monthly-return'>('operations');
   const [enrollments, setEnrollments] = useState<HIVEnrollment[]>([]);
   const [filteredEnrollments, setFilteredEnrollments] = useState<HIVEnrollment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,6 +158,10 @@ const HIVDoctorDashboard: React.FC = () => {
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
   const [ltfuDays, setLtfuDays] = useState(90);
+  const [cohortWorklist, setCohortWorklist] = useState<HivCohortWorklistItem[]>([]);
+  const [cohortWorklistSummary, setCohortWorklistSummary] = useState<any>(null);
+  const [cohortWorklistLoading, setCohortWorklistLoading] = useState(false);
+  const [cohortWorklistFocus, setCohortWorklistFocus] = useState<HivOperationsFocus>('all');
 
   // AI/RAG Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -192,6 +249,35 @@ const HIVDoctorDashboard: React.FC = () => {
   useEffect(() => {
     filterEnrollments();
   }, [searchTerm, enrollments, statusFilter]);
+
+  useEffect(() => {
+    loadCohortWorklist(cohortWorklistFocus);
+  }, [cohortWorklistFocus, tenantSlug]);
+
+  const loadCohortWorklist = async (focus: HivOperationsFocus) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) return;
+
+      setCohortWorklistLoading(true);
+      const response = await ehrApi.getHivCohortWorklist(
+        {
+          limit: 50,
+          focus: focus === 'all' ? undefined : focus,
+        },
+        token,
+        tenantSlug,
+      );
+      setCohortWorklist(response.data?.items || []);
+      setCohortWorklistSummary(response.data?.summary || null);
+    } catch (error) {
+      console.error('Failed to load HIV cohort worklist:', error);
+      setCohortWorklist([]);
+      setCohortWorklistSummary(null);
+    } finally {
+      setCohortWorklistLoading(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -543,6 +629,54 @@ const HIVDoctorDashboard: React.FC = () => {
     return { color: 'text-red-600', label: 'High', icon: AlertTriangle };
   };
 
+  const getWorklistPriorityClasses = (priority: HivCohortWorklistItem['priority']) => {
+    if (priority === 'critical') {
+      return 'bg-red-100 text-red-700 border-red-200';
+    }
+    if (priority === 'high') {
+      return 'bg-amber-100 text-amber-700 border-amber-200';
+    }
+    return 'bg-sky-100 text-sky-700 border-sky-200';
+  };
+
+  const routeCohortItemToTab = (item: HivCohortWorklistItem) => {
+    if (
+      item.primaryAction === 'doctor_review_pending_regimen_change' ||
+      item.primaryAction === 'document_regimen_change_visit' ||
+      item.primaryAction === 'doctor_review_failed_eac'
+    ) {
+      setActiveTab('regimen-changes');
+      return;
+    }
+    if (
+      item.primaryAction === 'continue_eac' ||
+      item.primaryAction === 'start_eac'
+    ) {
+      setActiveTab('eac-programs');
+      return;
+    }
+    if (item.primaryAction === 'patient_outreach') {
+      setActiveTab('ltfu');
+      return;
+    }
+    if (item.primaryAction === 'collect_viral_load' || item.primaryAction === 'adherence_counseling') {
+      setActiveTab('alerts');
+      return;
+    }
+    setActiveTab('patients');
+  };
+
+  const openCohortPatient = (item: HivCohortWorklistItem) => {
+    const matchedEnrollment = enrollments.find((entry) => entry.id === item.enrollmentId);
+    if (!matchedEnrollment) {
+      routeCohortItemToTab(item);
+      showSuccess('Opened HIV workflow queue', 'Patient context is not loaded in the current list, so the matching work queue was opened instead.');
+      return;
+    }
+    setSelectedEnrollment(matchedEnrollment);
+    setShowPatientDetail(true);
+  };
+
   const regimenRationaleText = `${regimenChangeForm.changeReasonDetails} ${regimenChangeForm.clinicalJustification}`.toLowerCase();
   const regimenHasNonFailureIndication =
     /toxicity|toxic|intoler|allerg|pregnan|interaction|contraind|side effect|adverse|renal|hepatic/.test(
@@ -747,6 +881,7 @@ const HIVDoctorDashboard: React.FC = () => {
           <div className="border-b border-slate-200">
             <nav className="flex -mb-px overflow-x-auto scrollbar-hide">
               {[
+                { id: 'operations', label: 'Operations Queue', shortLabel: 'Queue', icon: Zap, badge: cohortWorklistSummary?.totalItems || null },
                 { id: 'patients', label: 'All Patients', shortLabel: 'Patients', icon: Users, badge: null },
                 { id: 'regimen-changes', label: 'Regimen Changes', shortLabel: 'Regimens', icon: FileText, badge: stats.pendingRegimenChanges },
                 { id: 'eac-programs', label: 'EAC Programs', shortLabel: 'EAC', icon: Activity, badge: stats.activeEac },
@@ -781,6 +916,197 @@ const HIVDoctorDashboard: React.FC = () => {
         </div>
 
         {/* Tab Content */}
+        {activeTab === 'operations' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">HIV cohort operations queue</h2>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Prioritized next-best actions for unsuppressed patients, regimen governance, adherence recovery, and lost-to-follow-up risk.
+                  </p>
+                </div>
+                <button
+                  onClick={() => loadCohortWorklist(cohortWorklistFocus)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${cohortWorklistLoading ? 'animate-spin' : ''}`} />
+                  Refresh queue
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+                <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Critical</p>
+                  <p className="text-2xl font-bold text-slate-900">{cohortWorklistSummary?.byPriority?.critical || 0}</p>
+                </div>
+                <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">High Priority</p>
+                  <p className="text-2xl font-bold text-slate-900">{cohortWorklistSummary?.byPriority?.high || 0}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Unsuppressed</p>
+                  <p className="text-2xl font-bold text-slate-900">{cohortWorklistSummary?.flagCounts?.unsuppressed || 0}</p>
+                </div>
+                <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">LTFU Risk</p>
+                  <p className="text-2xl font-bold text-slate-900">{cohortWorklistSummary?.flagCounts?.ltfuRisk || 0}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mt-5">
+                {[
+                  { key: 'all', label: 'All Actions' },
+                  { key: 'unsuppressed', label: 'Unsuppressed VL' },
+                  { key: 'regimen_review', label: 'Regimen Review' },
+                  { key: 'overdue_visit', label: 'Overdue Visit' },
+                  { key: 'overdue_vl', label: 'Overdue VL' },
+                  { key: 'adherence', label: 'Adherence Risk' },
+                ].map((focus) => (
+                  <button
+                    key={focus.key}
+                    onClick={() => setCohortWorklistFocus(focus.key as HivOperationsFocus)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                      cohortWorklistFocus === focus.key
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    {focus.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+              {cohortWorklistLoading ? (
+                <div className="py-12 text-center">
+                  <RefreshCw className="w-10 h-10 text-emerald-500 mx-auto animate-spin mb-4" />
+                  <p className="text-slate-600">Loading HIV operations queue...</p>
+                </div>
+              ) : cohortWorklist.length === 0 ? (
+                <div className="py-12 text-center">
+                  <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900">No cohort actions in this view</h3>
+                  <p className="text-slate-600 mt-2">Try another focus filter or refresh the queue.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cohortWorklist.map((item) => (
+                    <div
+                      key={item.enrollmentId}
+                      className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4"
+                    >
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold uppercase ${getWorklistPriorityClasses(item.priority)}`}>
+                              {item.priority}
+                            </span>
+                            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                              {HIV_ACTION_LABELS[item.primaryAction] || item.primaryAction.replace(/_/g, ' ')}
+                            </span>
+                            {item.flags.pendingRegimenReview && (
+                              <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700">
+                                Regimen governance
+                              </span>
+                            )}
+                            {item.flags.activeEac && (
+                              <span className="rounded-full bg-purple-100 px-2.5 py-1 text-xs font-semibold text-purple-700">
+                                Active EAC
+                              </span>
+                            )}
+                            {item.flags.ltfuRisk && (
+                              <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
+                                LTFU risk
+                              </span>
+                            )}
+                          </div>
+
+                          <div>
+                            <h3 className="text-lg font-semibold text-slate-900">{item.patientName}</h3>
+                            <p className="text-sm text-slate-600">
+                              {item.patientNumber} • {item.enrollmentNumber}
+                              {item.currentRegimen ? ` • ${item.currentRegimen}` : ''}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-slate-500">Last Visit</p>
+                              <p className="font-semibold text-slate-900">{item.lastVisitDate ? formatDateToDDMMYYYY(item.lastVisitDate) : 'No visit'}</p>
+                            </div>
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-slate-500">Next Review</p>
+                              <p className="font-semibold text-slate-900">{item.nextReviewDate ? formatDateToDDMMYYYY(item.nextReviewDate) : 'Not booked'}</p>
+                            </div>
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-slate-500">Latest VL</p>
+                              <p className="font-semibold text-slate-900">
+                                {item.lastViralLoad ? `${item.lastViralLoad.toLocaleString()} ${item.viralLoadUnit || 'copies/mL'}` : 'No VL'}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-slate-500">Adherence</p>
+                              <p className="font-semibold text-slate-900">
+                                {typeof item.adherencePercentage === 'number' ? `${item.adherencePercentage}%` : 'Not captured'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {item.reasons.length > 0 && (
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Why this patient is on the queue</p>
+                              <ul className="mt-2 space-y-1 text-sm text-emerald-900">
+                                {item.reasons.slice(0, 3).map((reason) => (
+                                  <li key={reason}>• {reason}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {item.secondaryActions.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Secondary actions</p>
+                              <div className="flex flex-wrap gap-2">
+                                {item.secondaryActions.map((secondaryAction) => (
+                                  <span
+                                    key={secondaryAction}
+                                    className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                                  >
+                                    {HIV_ACTION_LABELS[secondaryAction] || secondaryAction.replace(/_/g, ' ')}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-2 xl:min-w-[180px]">
+                          <button
+                            onClick={() => openCohortPatient(item)}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                          >
+                            <Eye className="w-4 h-4" />
+                            Open Patient
+                          </button>
+                          <button
+                            onClick={() => routeCohortItemToTab(item)}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            <ArrowLeft className="w-4 h-4 rotate-180" />
+                            Open Queue
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'patients' && (
           <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 md:p-6 overflow-hidden">
             {/* Search and Filters */}

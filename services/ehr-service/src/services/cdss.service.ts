@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
 import * as FormData from 'form-data';
+import { config as envConfig } from '@medicore/config';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
 import { createHash, createHmac, randomUUID } from 'crypto';
 import { MetricsService } from './metrics.service';
@@ -41,7 +42,7 @@ export class CdssService {
     @Optional() @Inject(MetricsService)
     private readonly metricsService?: MetricsService,
   ) {
-    this.cdssServiceUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
+    this.cdssServiceUrl = String(process.env.CDSS_SERVICE_URL || envConfig.urls.cdssService || '').trim();
     this.cdssServiceToken = process.env.CDSS_SERVICE_TOKEN;
     this.cdssServiceJwtSecret = process.env.CDSS_SERVICE_JWT_SECRET || undefined;
     this.cdssServiceJwtIssuer = process.env.CDSS_SERVICE_AUTH_ISSUER || 'medicore.ehr-service';
@@ -53,6 +54,10 @@ export class CdssService {
     this.retryBaseDelayMs = this.parsePositiveInt(process.env.CDSS_OUTBOUND_RETRY_BASE_MS, 200);
     this.circuitFailureThreshold = this.parsePositiveInt(process.env.CDSS_CIRCUIT_BREAKER_FAIL_THRESHOLD, 5);
     this.circuitOpenMs = this.parsePositiveInt(process.env.CDSS_CIRCUIT_BREAKER_OPEN_MS, 30000);
+
+    if (!this.cdssServiceUrl) {
+      throw new Error('CDSS service URL is not configured. Set CDSS_SERVICE_URL, SERVICE_CDSS_URL, or SERVICE_BASE_URL.');
+    }
 
     this.cdssClient = axios.create({
       baseURL: this.cdssServiceUrl,

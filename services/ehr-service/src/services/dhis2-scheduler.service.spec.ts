@@ -190,7 +190,7 @@ describe('Dhis2SchedulerService', () => {
     await service.runHourlyTenantSync();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe('https://events.pagerduty.com/v2/enqueue');
+    expect(fetchMock.mock.calls[0][0]).toBe(process.env.PAGERDUTY_EVENTS_API_URL);
     expect(fetchMock.mock.calls[0][1]?.body).toContain('"routing_key":"pd-routing-key-1"');
     expect(fetchMock.mock.calls[0][1]?.body).toContain('"event_action":"trigger"');
   });

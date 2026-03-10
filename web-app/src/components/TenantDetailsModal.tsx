@@ -561,7 +561,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                     type="url"
                     value={dhis2Form.baseUrl}
                     onChange={(e) => setDhis2Form((prev) => ({ ...prev, baseUrl: e.target.value }))}
-                    placeholder="http://host.docker.internal:8888"
+                    placeholder="https://dhis2.example.org"
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
                     required
                   />

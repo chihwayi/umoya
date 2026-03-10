@@ -6,6 +6,7 @@ describe('NurseWorklistController', () => {
 
   const nurseWorklistService = {
     getCrossModuleEscalationFeed: jest.fn(),
+    getDoctorSynchronizationFeed: jest.fn(),
     getDoctorOutcomeAnalytics: jest.fn(),
     executeLabRecommendationAction: jest.fn(),
     executeImagingRecommendationAction: jest.fn(),
@@ -42,6 +43,23 @@ describe('NurseWorklistController', () => {
       caseId: 'case-1',
       dateFrom: '2026-02-01',
       dateTo: '2026-03-01',
+    });
+  });
+
+  it('returns doctor synchronization feed with parsed filters', async () => {
+    const expected = { summary: { total: 3 } };
+    nurseWorklistService.getDoctorSynchronizationFeed.mockResolvedValue(expected);
+
+    const result = await controller.getDoctorSyncFeed(
+      'critical_results',
+      'true',
+      { tenantDb: mockTenantDb } as any,
+    );
+
+    expect(result).toEqual(expected);
+    expect(nurseWorklistService.getDoctorSynchronizationFeed).toHaveBeenCalledWith(mockTenantDb, {
+      focus: 'critical_results',
+      includeAcknowledged: true,
     });
   });
 

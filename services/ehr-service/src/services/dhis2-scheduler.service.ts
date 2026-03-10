@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
+import { env } from '@medicore/config';
 import { Dhis2Service } from './dhis2.service';
 import { TenantDhis2Config, TenantService } from './tenant.service';
 
@@ -102,12 +103,17 @@ export class Dhis2SchedulerService {
 
     if (webhookUrl.startsWith('pagerduty://')) {
       const pagerDutyRoutingKey = webhookUrl.replace('pagerduty://', '').trim();
+      const pagerDutyEventsUrl = String(env.PAGERDUTY_EVENTS_API_URL || '').trim();
       if (!pagerDutyRoutingKey) {
+        return null;
+      }
+      if (!pagerDutyEventsUrl) {
+        this.logger.warn('PAGERDUTY_EVENTS_API_URL is missing; skipping PagerDuty alert delivery.');
         return null;
       }
       return {
         type: 'pagerduty',
-        webhookUrl: 'https://events.pagerduty.com/v2/enqueue',
+        webhookUrl: pagerDutyEventsUrl,
         pagerDutyRoutingKey,
       };
     }
@@ -120,15 +126,20 @@ export class Dhis2SchedulerService {
     }
 
     if (webhookUrl.includes('events.pagerduty.com')) {
+      const pagerDutyEventsUrl = String(env.PAGERDUTY_EVENTS_API_URL || '').trim();
       if (!this.pagerDutyRoutingKey) {
         this.logger.warn(
           'PagerDuty events endpoint configured but DHIS2_PAGERDUTY_ROUTING_KEY is missing; skipping alert delivery.',
         );
         return null;
       }
+      if (!pagerDutyEventsUrl) {
+        this.logger.warn('PAGERDUTY_EVENTS_API_URL is missing; skipping PagerDuty alert delivery.');
+        return null;
+      }
       return {
         type: 'pagerduty',
-        webhookUrl,
+        webhookUrl: pagerDutyEventsUrl,
         pagerDutyRoutingKey: this.pagerDutyRoutingKey,
       };
     }

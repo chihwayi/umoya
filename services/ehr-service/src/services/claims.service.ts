@@ -4,11 +4,474 @@ import { MedicalAidClaim, ClaimStatus, MedicalAidProvider } from '../entities/me
 import { Bill } from '../entities/billing.entity';
 import { MedicalAidApiService } from './medical-aid-api.service';
 
+export interface ClaimReadinessIssue {
+  code: string;
+  message: string;
+}
+
 @Injectable()
 export class ClaimsService {
   private readonly logger = new Logger(ClaimsService.name);
 
   constructor(private readonly medicalAidApiService?: MedicalAidApiService) {}
+
+  private clampLimit(value: any, fallback = 50, max = 200) {
+    const parsed = Number.parseInt(String(value || fallback), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return fallback;
+    }
+    return Math.min(parsed, max);
+  }
+
+  private parseJsonObject<T = any>(value: any, fallback: T): T {
+    if (value === null || value === undefined) {
+      return fallback;
+    }
+    if (typeof value === 'object') {
+      return value as T;
+    }
+    try {
+      return JSON.parse(String(value)) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private parseArray(value: any): string[] {
+    if (Array.isArray(value)) {
+      return value.filter(Boolean).map((item) => String(item));
+    }
+    if (typeof value === 'string' && value.trim()) {
+      return [value.trim()];
+    }
+    return [];
+  }
+
+  private normalizeDate(value: any): Date | null {
+    if (!value) {
+      return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  }
+
+  private dateOnly(value: Date | null): string | null {
+    if (!value) {
+      return null;
+    }
+    return value.toISOString().split('T')[0];
+  }
+
+  private isMissingSchemaError(error: unknown) {
+    const code = (error as any)?.code;
+    return code === '42P01' || code === '42703';
+  }
+
+  private async safeQuery(tenantDb: DataSource, sql: string, params: any[] = []) {
+    try {
+      return await tenantDb.query(sql, params);
+    } catch (error) {
+      if (!this.isMissingSchemaError(error)) {
+        throw error;
+      }
+      return [];
+    }
+  }
+
+  private hasAttachmentOfType(claimData: Record<string, any>, expectedTypes: string[]) {
+    const attachments = Array.isArray(claimData?.attachments)
+      ? claimData.attachments
+      : Array.isArray(claimData?.documents)
+        ? claimData.documents
+        : [];
+
+    return attachments.some((attachment: any) => {
+      const type = String(
+        attachment?.documentType || attachment?.type || attachment?.category || attachment || '',
+      )
+        .trim()
+        .toLowerCase();
+      return expectedTypes.includes(type);
+    });
+  }
+
+  private buildClaimIssue(code: string, message: string): ClaimReadinessIssue {
+    return { code, message };
+  }
+
+  async getClaimReadiness(id: string, tenantDb: DataSource) {
+    const [claimRow] = await tenantDb.query(`SELECT * FROM medical_aid_claims WHERE id = $1`, [id]);
+
+    if (!claimRow) {
+      throw new NotFoundException('Claim not found');
+    }
+
+    const claimData = this.parseJsonObject<Record<string, any>>(claimRow.claim_data, {});
+    const diagnosisCodes = this.parseArray(claimRow.diagnosis_codes);
+    const primaryDiagnosisCode = String(claimRow.primary_diagnosis_code || '').trim();
+    const patientId = String(claimRow.patient_id || '').trim();
+    const billingId = String(claimRow.billing_id || '').trim() || null;
+    const preAuthorizationId = String(claimRow.pre_authorization_id || '').trim() || null;
+
+    const [patientRows, billRows, preAuthRows, patientDocumentRows, recentRecordRows, recentNursingNoteRows, historyRows] =
+      await Promise.all([
+        patientId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT id, first_name, last_name, patient_number FROM patients WHERE id = $1 LIMIT 1`,
+              [patientId],
+            )
+          : Promise.resolve([]),
+        billingId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT * FROM billing WHERE id = $1 LIMIT 1`,
+              [billingId],
+            )
+          : Promise.resolve([]),
+        preAuthorizationId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT * FROM pre_authorization_requests WHERE id = $1 LIMIT 1`,
+              [preAuthorizationId],
+            )
+          : Promise.resolve([]),
+        patientId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT document_type, COUNT(*)::int AS count
+               FROM patient_documents
+               WHERE patient_id = $1
+               GROUP BY document_type`,
+              [patientId],
+            )
+          : Promise.resolve([]),
+        patientId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT COUNT(*)::int AS count
+               FROM medical_records
+               WHERE patient_id = $1
+                 AND created_at >= NOW() - INTERVAL '90 days'`,
+              [patientId],
+            )
+          : Promise.resolve([]),
+        patientId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT COUNT(*)::int AS count
+               FROM nursing_notes
+               WHERE patient_id = $1
+                 AND recorded_at >= NOW() - INTERVAL '30 days'`,
+              [patientId],
+            )
+          : Promise.resolve([]),
+        this.safeQuery(
+          tenantDb,
+          `SELECT status, change_reason, created_at
+           FROM claim_status_history
+           WHERE claim_id = $1
+           ORDER BY created_at DESC
+           LIMIT 5`,
+          [id],
+        ),
+      ]);
+
+    const patient = patientRows[0] || null;
+    const bill = billRows[0] || null;
+    const preAuth = preAuthRows[0] || null;
+    const appointmentId =
+      String(claimData.appointmentId || '').trim() ||
+      String(bill?.appointment_id || '').trim() ||
+      null;
+
+    const [appointmentRows] = await Promise.all([
+      appointmentId
+        ? this.safeQuery(
+            tenantDb,
+            `SELECT id, appointment_date, insurance_verified, primary_diagnosis_code, primary_diagnosis_description, diagnosis_codes
+             FROM appointments
+             WHERE id = $1
+             LIMIT 1`,
+            [appointmentId],
+          )
+        : Promise.resolve([]),
+    ]);
+    const appointment = appointmentRows[0] || null;
+
+    const billDiagnosisCodes = this.parseArray(bill?.diagnosis_codes);
+    const appointmentDiagnosisCodes = this.parseArray(appointment?.diagnosis_codes);
+    const allDiagnosisCodes = Array.from(
+      new Set([
+        ...diagnosisCodes,
+        ...billDiagnosisCodes,
+        ...appointmentDiagnosisCodes,
+      ].filter(Boolean)),
+    );
+    const resolvedPrimaryDiagnosis =
+      primaryDiagnosisCode ||
+      String(bill?.primary_diagnosis_code || '').trim() ||
+      String(appointment?.primary_diagnosis_code || '').trim();
+
+    const documentCounts = Object.fromEntries(
+      (patientDocumentRows || []).map((row: any) => [String(row.document_type), Number(row.count || 0)]),
+    ) as Record<string, number>;
+
+    const recentMedicalRecords = Number(recentRecordRows[0]?.count || 0);
+    const recentNursingNotes = Number(recentNursingNoteRows[0]?.count || 0);
+    const clinicalNotesPresent =
+      Boolean(String(claimData.clinicalNotes || '').trim()) ||
+      Boolean(String(bill?.notes || '').trim()) ||
+      Boolean(String(preAuth?.clinical_notes || '').trim()) ||
+      recentMedicalRecords > 0 ||
+      recentNursingNotes > 0;
+
+    const blockers: ClaimReadinessIssue[] = [];
+    const warnings: ClaimReadinessIssue[] = [];
+    const missingDocuments: ClaimReadinessIssue[] = [];
+
+    if (!patientId || !patient) {
+      blockers.push(this.buildClaimIssue('missing_patient', 'Claim is not linked to a valid patient.'));
+    }
+    if (!String(claimRow.medical_aid_name || '').trim()) {
+      blockers.push(this.buildClaimIssue('missing_payer', 'Medical aid provider is required before submission.'));
+    }
+    if (!String(claimRow.member_number || '').trim()) {
+      blockers.push(this.buildClaimIssue('missing_member_number', 'Member number is required before submission.'));
+    }
+    if (!(Number(claimRow.claim_amount || 0) > 0)) {
+      blockers.push(this.buildClaimIssue('invalid_claim_amount', 'Claim amount must be greater than zero.'));
+    }
+    if (!resolvedPrimaryDiagnosis && allDiagnosisCodes.length === 0) {
+      blockers.push(this.buildClaimIssue('missing_diagnosis', 'Primary diagnosis or diagnosis codes must be documented.'));
+    }
+    if (!clinicalNotesPresent) {
+      blockers.push(this.buildClaimIssue('missing_clinical_documentation', 'Clinical documentation is missing for this claim.'));
+    }
+    if (!billingId && !appointmentId && !String(claimData.procedureId || '').trim()) {
+      warnings.push(
+        this.buildClaimIssue(
+          'missing_encounter_reference',
+          'Claim is not linked to a bill, appointment, or procedure reference.',
+        ),
+      );
+    }
+    if (appointment && appointment.insurance_verified === false) {
+      warnings.push(
+        this.buildClaimIssue(
+          'insurance_not_verified',
+          'Appointment insurance verification is still false; front-desk eligibility may be incomplete.',
+        ),
+      );
+    }
+
+    if (preAuthorizationId && !preAuth) {
+      blockers.push(
+        this.buildClaimIssue(
+          'missing_preauthorization_record',
+          'Claim references a pre-authorization that could not be found.',
+        ),
+      );
+    } else if (preAuth) {
+      const preAuthStatus = String(preAuth.status || '').toLowerCase();
+      if (preAuthStatus !== 'approved') {
+        blockers.push(
+          this.buildClaimIssue(
+            'preauthorization_not_approved',
+            `Pre-authorization is ${preAuth.status || 'not approved'} and must be approved before claim submission.`,
+          ),
+        );
+      }
+      const expiryDate = this.normalizeDate(preAuth.expiry_date);
+      if (expiryDate && expiryDate.getTime() < Date.now()) {
+        blockers.push(
+          this.buildClaimIssue('preauthorization_expired', 'Linked pre-authorization has expired.'),
+        );
+      }
+    } else if (claimData.requiresPreauthorization === true || claimData.requiresPreAuth === true) {
+      blockers.push(
+        this.buildClaimIssue(
+          'missing_preauthorization',
+          'This claim is marked as requiring pre-authorization but no approved record is linked.',
+        ),
+      );
+    }
+
+    const requiredDocumentTypes = new Set<string>();
+    const procedureType = String(claimData.procedureType || '').trim().toLowerCase();
+    if (procedureType === 'lab') {
+      requiredDocumentTypes.add('lab_result');
+    }
+    if (procedureType === 'imaging') {
+      requiredDocumentTypes.add('imaging_result');
+    }
+    if (Array.isArray(claimData.requiredDocuments)) {
+      for (const required of claimData.requiredDocuments) {
+        requiredDocumentTypes.add(String(required).trim().toLowerCase());
+      }
+    }
+    if (!documentCounts.insurance_card && !this.hasAttachmentOfType(claimData, ['insurance_card', 'insurance-card'])) {
+      missingDocuments.push(
+        this.buildClaimIssue(
+          'missing_insurance_card',
+          'No insurance card document is attached to the patient record.',
+        ),
+      );
+      warnings.push(
+        this.buildClaimIssue(
+          'missing_insurance_card',
+          'Insurance card is missing from patient documents, which increases denial risk.',
+        ),
+      );
+    }
+    for (const requiredType of requiredDocumentTypes) {
+      const hasDocument =
+        Number(documentCounts[requiredType] || 0) > 0 ||
+        this.hasAttachmentOfType(claimData, [requiredType, requiredType.replace(/_/g, '-')]);
+      if (!hasDocument) {
+        const issue = this.buildClaimIssue(
+          `missing_${requiredType}`,
+          `Required supporting document "${requiredType}" is missing.`,
+        );
+        missingDocuments.push(issue);
+        blockers.push(issue);
+      }
+    }
+
+    const latestRejection = (historyRows || []).find((row: any) => String(row.status || '').toLowerCase() === 'rejected');
+    if (latestRejection?.change_reason || claimRow.rejection_reason) {
+      warnings.push(
+        this.buildClaimIssue(
+          'prior_denial_history',
+          `Claim has prior denial history: ${latestRejection?.change_reason || claimRow.rejection_reason}.`,
+        ),
+      );
+    }
+
+    const status = blockers.length > 0 ? 'blocked' : warnings.length > 0 ? 'at_risk' : 'ready';
+    const readinessScore = Math.max(0, 100 - blockers.length * 25 - warnings.length * 8);
+
+    return {
+      claimId: id,
+      claimNumber: claimRow.claim_number,
+      status,
+      readyToSubmit: blockers.length === 0,
+      readinessScore,
+      blockers,
+      warnings,
+      missingDocuments,
+      evidence: {
+        patient: patient
+          ? {
+              id: patient.id,
+              patientNumber: patient.patient_number,
+              patientName: [patient.first_name, patient.last_name].filter(Boolean).join(' ').trim(),
+            }
+          : null,
+        billId: billingId,
+        appointmentId,
+        encounterLinked: Boolean(billingId || appointmentId || claimData.procedureId),
+        primaryDiagnosisCode: resolvedPrimaryDiagnosis || null,
+        diagnosisCodes: allDiagnosisCodes,
+        clinicalNotesPresent,
+        recentMedicalRecords,
+        recentNursingNotes,
+        insuranceVerified: appointment?.insurance_verified ?? null,
+        preAuthorization: preAuth
+          ? {
+              id: preAuth.id,
+              status: preAuth.status,
+              expiryDate: this.dateOnly(this.normalizeDate(preAuth.expiry_date)),
+              externalPreAuthId: preAuth.external_preauth_id || null,
+            }
+          : null,
+        supportingDocuments: {
+          insuranceCardCount: Number(documentCounts.insurance_card || 0),
+          medicalReportCount: Number(documentCounts.medical_report || 0),
+          labResultCount: Number(documentCounts.lab_result || 0),
+          imagingResultCount: Number(documentCounts.imaging_result || 0),
+          prescriptionCount: Number(documentCounts.prescription || 0),
+        },
+      },
+      financial: {
+        claimAmount: Number(claimRow.claim_amount || 0),
+        payer: claimRow.medical_aid_name,
+        memberNumber: claimRow.member_number,
+        createdAt: claimRow.created_at,
+        submissionDate: claimRow.submission_date,
+      },
+    };
+  }
+
+  async getClaimReadinessWorklist(query: any, tenantDb: DataSource) {
+    const limit = this.clampLimit(query?.limit, 50, 200);
+    const statuses = String(query?.statuses || 'draft,rejected,submitted,processing')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+
+    const rows = await tenantDb.query(
+      `
+      SELECT id, status, created_at, submission_date
+      FROM medical_aid_claims
+      WHERE status = ANY($1)
+      ORDER BY
+        CASE status
+          WHEN 'rejected' THEN 1
+          WHEN 'draft' THEN 2
+          WHEN 'submitted' THEN 3
+          WHEN 'processing' THEN 4
+          ELSE 5
+        END,
+        created_at DESC
+      LIMIT $2
+      `,
+      [statuses, limit],
+    );
+
+    const items = await Promise.all(
+      rows.map(async (row: any) => {
+        const readiness = await this.getClaimReadiness(row.id, tenantDb);
+        return {
+          claimId: row.id,
+          claimStatus: row.status,
+          createdAt: row.created_at,
+          submissionDate: row.submission_date,
+          ...readiness,
+        };
+      }),
+    );
+
+    const summary = {
+      total: items.length,
+      ready: items.filter((item) => item.status === 'ready').length,
+      atRisk: items.filter((item) => item.status === 'at_risk').length,
+      blocked: items.filter((item) => item.status === 'blocked').length,
+      missingDiagnosis: items.filter((item) =>
+        item.blockers.some((issue) => issue.code === 'missing_diagnosis'),
+      ).length,
+      missingClinicalDocumentation: items.filter((item) =>
+        item.blockers.some((issue) => issue.code === 'missing_clinical_documentation'),
+      ).length,
+      missingSupportingDocuments: items.filter((item) => item.missingDocuments.length > 0).length,
+      preAuthorizationIssues: items.filter((item) =>
+        item.blockers.some((issue) => issue.code.includes('preauthorization')),
+      ).length,
+    };
+
+    return {
+      generatedAt: new Date().toISOString(),
+      filters: {
+        statuses,
+        limit,
+      },
+      summary,
+      items,
+    };
+  }
   
   async createClaim(createClaimDto: any, tenantDb: DataSource) {
     const claimRepository = tenantDb.getRepository(MedicalAidClaim);
@@ -372,6 +835,14 @@ export class ClaimsService {
       throw new NotFoundException('Claim not found');
     }
 
+    const readiness = await this.getClaimReadiness(id, tenantDb);
+    if (!readiness.readyToSubmit) {
+      throw new BadRequestException({
+        message: 'Claim is not ready for submission',
+        blockers: readiness.blockers,
+      });
+    }
+
     // Simulate medical aid submission
     claim.status = ClaimStatus.SUBMITTED;
     claim.submissionDate = new Date();
@@ -709,6 +1180,15 @@ export class ClaimsService {
 
     if (claim.status !== ClaimStatus.DRAFT) {
       throw new BadRequestException('Only draft claims can be submitted');
+    }
+
+    const readiness = await this.getClaimReadiness(id, tenantDb);
+    if (!readiness.readyToSubmit) {
+      throw new BadRequestException({
+        message: 'Claim is not ready for submission',
+        blockers: readiness.blockers,
+        warnings: readiness.warnings,
+      });
     }
 
     const previousStatus = claim.status;

@@ -1,11 +1,61 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
+const trim = (value) => String(value || '').trim();
+const stripTrailingSlash = (value) => String(value || '').replace(/\/+$/, '');
+const ensureLeadingSlash = (value) => {
+  const normalized = trim(value);
+  if (!normalized) return '/';
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+};
+const joinUrl = (base, path) => `${stripTrailingSlash(base)}${ensureLeadingSlash(path)}`;
+
+const resolveUrl = (explicitValue, inheritedBase, inheritedPath) => {
+  const explicit = trim(explicitValue);
+  if (explicit) return explicit;
+  const base = trim(inheritedBase);
+  if (!base) return '';
+  return joinUrl(base, inheritedPath);
+};
+
+const requireUrl = (label, value) => {
+  const resolved = trim(value);
+  if (!resolved) {
+    throw new Error(`${label} is not configured. Set SERVICE_BASE_URL or explicit service URL environment variables.`);
+  }
+  return resolved;
+};
+
 module.exports = function(app) {
+  const ehrServiceUrl = requireUrl(
+    'EHR service proxy target',
+    resolveUrl(
+      process.env.EHR_SERVICE_URL || process.env.SERVICE_EHR_URL,
+      process.env.SERVICE_BASE_URL,
+      process.env.SERVICE_EHR_PATH || '/ehr-service',
+    ),
+  );
+  const cdssServiceUrl = requireUrl(
+    'CDSS service proxy target',
+    resolveUrl(
+      process.env.CDSS_SERVICE_URL || process.env.SERVICE_CDSS_URL,
+      process.env.SERVICE_BASE_URL,
+      process.env.SERVICE_CDSS_PATH || '/cdss-service',
+    ),
+  );
+  const tenantServiceUrl = requireUrl(
+    'Tenant service proxy target',
+    resolveUrl(
+      process.env.PROXY_TARGET || process.env.TENANT_SERVICE_URL || process.env.SERVICE_TENANT_URL,
+      process.env.SERVICE_BASE_URL,
+      process.env.SERVICE_TENANT_PATH || '/tenant-service',
+    ),
+  );
+
   // Proxy Terminology API requests to ehr-service
   app.use(
     '/api/terminology',
     createProxyMiddleware({
-      target: process.env.EHR_SERVICE_URL || 'http://ehr-service:3013',
+      target: ehrServiceUrl,
       changeOrigin: true,
       secure: false,
       logLevel: 'debug',
@@ -23,7 +73,7 @@ module.exports = function(app) {
   app.use(
     '/api/dhis2',
     createProxyMiddleware({
-      target: process.env.EHR_SERVICE_URL || 'http://ehr-service:3013',
+      target: ehrServiceUrl,
       changeOrigin: true,
       secure: false,
       logLevel: 'debug',
@@ -41,7 +91,7 @@ module.exports = function(app) {
   app.use(
     '/api/cdss-admin',
     createProxyMiddleware({
-      target: process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000',
+      target: cdssServiceUrl,
       changeOrigin: true,
       secure: false,
       logLevel: 'debug',
@@ -62,7 +112,7 @@ module.exports = function(app) {
   app.use(
     '/api',
     createProxyMiddleware({
-      target: process.env.PROXY_TARGET || 'http://tenant-service:3001',
+      target: tenantServiceUrl,
       changeOrigin: true,
       secure: false,
       logLevel: 'debug',

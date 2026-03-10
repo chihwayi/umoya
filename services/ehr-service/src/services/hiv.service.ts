@@ -122,6 +122,40 @@ export class HivService {
     return resolved;
   }
 
+  private parseOptionalDateValue(value: any): Date | null {
+    if (!value) {
+      return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  }
+
+  private formatDateOnly(value: Date | null): string | null {
+    if (!value) {
+      return null;
+    }
+    return value.toISOString().split('T')[0];
+  }
+
+  private diffDays(from: Date, to: Date): number {
+    const start = new Date(from);
+    const end = new Date(to);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  private clampLimit(value: any, fallback = 50, max = 200): number {
+    const parsed = Number.parseInt(String(value || fallback), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return fallback;
+    }
+    return Math.min(parsed, max);
+  }
+
   private hydrateNurseIntake(row: any) {
     if (!row) {
       return null;
@@ -3481,6 +3515,364 @@ export class HivService {
       treatmentFailure,
       ltfu,
       timeToSuppression
+    };
+  }
+
+  async getCohortWorklist(
+    query: {
+      focus?: string;
+      limit?: string | number;
+    },
+    tenantDb: DataSource,
+  ) {
+    const focus = String(query?.focus || 'all').trim().toLowerCase();
+    const limit = this.clampLimit(query?.limit, 50, 200);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const rows = await tenantDb.query(
+      `
+      SELECT
+        e.id AS enrollment_id,
+        e.patient_id,
+        e.enrollment_number,
+        e.enrollment_date,
+        e.art_start_date,
+        e.current_regimen,
+        p.patient_number,
+        p.first_name,
+        p.last_name,
+        latest_visit.visit_date,
+        latest_visit.next_review_date,
+        latest_visit.viral_load,
+        latest_visit.viral_load_test_date,
+        latest_visit.viral_load_unit,
+        latest_visit.viral_load_suppressed,
+        latest_visit.arv_status,
+        latest_visit.arv_regimen_name,
+        latest_visit.arv_adherence_percentage,
+        latest_visit.tpt_status,
+        latest_intake.recorded_at AS intake_recorded_at,
+        latest_intake.adherence_percentage AS intake_adherence_percentage,
+        latest_intake.regimen AS intake_regimen,
+        COALESCE(active_eac.active_session_count, 0) AS active_eac_session_count,
+        active_eac.latest_session_date AS active_eac_session_date,
+        completed_eac.latest_completion_date AS completed_eac_date,
+        COALESCE(arv_queue.pending_request_count, 0) AS pending_request_count,
+        COALESCE(arv_queue.approved_without_visit_count, 0) AS approved_without_visit_count
+      FROM hiv_care_enrollments e
+      INNER JOIN patients p ON p.id = e.patient_id
+      LEFT JOIN LATERAL (
+        SELECT
+          v.visit_date,
+          v.next_review_date,
+          v.viral_load,
+          v.viral_load_test_date,
+          v.viral_load_unit,
+          v.viral_load_suppressed,
+          v.arv_status,
+          v.arv_regimen_name,
+          v.arv_adherence_percentage,
+          v.tpt_status
+        FROM hiv_clinical_visits v
+        WHERE v.enrollment_id = e.id
+        ORDER BY v.visit_date DESC, v.created_at DESC
+        LIMIT 1
+      ) latest_visit ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          recorded_at,
+          adherence_percentage,
+          regimen
+        FROM hiv_nurse_intakes ni
+        WHERE ni.patient_id = e.patient_id
+        ORDER BY ni.recorded_at DESC
+        LIMIT 1
+      ) latest_intake ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'pending') AS pending_request_count,
+          COUNT(*) FILTER (
+            WHERE status = 'approved' AND COALESCE(visit_recorded, false) = false
+          ) AS approved_without_visit_count
+        FROM hiv_arv_change_requests r
+        WHERE r.enrollment_id = e.id
+      ) arv_queue ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*)::int AS active_session_count,
+          MAX(session_date) AS latest_session_date
+        FROM hiv_eac_sessions session
+        WHERE session.enrollment_id = e.id
+          AND session.eac_program_status = 'Active'
+      ) active_eac ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          MAX(eac_completion_date) AS latest_completion_date
+        FROM hiv_eac_sessions session
+        WHERE session.enrollment_id = e.id
+          AND session.eac_program_status = 'Completed'
+      ) completed_eac ON TRUE
+      WHERE e.enrollment_status = 'active'
+        AND (
+          latest_visit.visit_date IS NULL
+          OR latest_visit.visit_date < CURRENT_DATE - INTERVAL '30 days'
+          OR latest_visit.next_review_date < CURRENT_DATE
+          OR latest_visit.viral_load IS NULL
+          OR latest_visit.viral_load_test_date IS NULL
+          OR latest_visit.viral_load_test_date < CURRENT_DATE - INTERVAL '180 days'
+          OR latest_visit.viral_load >= 1000
+          OR COALESCE(latest_intake.adherence_percentage, latest_visit.arv_adherence_percentage, 100) < 95
+          OR COALESCE(arv_queue.pending_request_count, 0) > 0
+          OR COALESCE(arv_queue.approved_without_visit_count, 0) > 0
+        )
+      ORDER BY p.last_name ASC, p.first_name ASC
+      LIMIT $1
+      `,
+      [Math.max(limit * 3, 100)],
+    );
+
+    const items = rows
+      .map((row: any) => {
+        const enrollmentDate = this.parseOptionalDateValue(row.enrollment_date);
+        const artStartDate = this.parseOptionalDateValue(row.art_start_date);
+        const lastVisitDate = this.parseOptionalDateValue(row.visit_date);
+        const nextReviewDate = this.parseOptionalDateValue(row.next_review_date);
+        const lastVlDate = this.parseOptionalDateValue(row.viral_load_test_date || row.visit_date);
+        const intakeRecordedAt = this.parseOptionalDateValue(row.intake_recorded_at);
+        const completedEacDate = this.parseOptionalDateValue(row.completed_eac_date);
+        const activeEacSessionDate = this.parseOptionalDateValue(row.active_eac_session_date);
+        const lastViralLoad =
+          row.viral_load !== null && row.viral_load !== undefined
+            ? Number.parseFloat(String(row.viral_load))
+            : null;
+        const adherencePercentageRaw =
+          row.intake_adherence_percentage !== null && row.intake_adherence_percentage !== undefined
+            ? row.intake_adherence_percentage
+            : row.arv_adherence_percentage;
+        const adherencePercentage =
+          adherencePercentageRaw !== null && adherencePercentageRaw !== undefined
+            ? Number.parseInt(String(adherencePercentageRaw), 10)
+            : null;
+
+        const referenceVisitDate = lastVisitDate || enrollmentDate || today;
+        const daysSinceLastVisit = referenceVisitDate ? this.diffDays(referenceVisitDate, today) : null;
+        const overdueVisit =
+          (lastVisitDate && this.diffDays(lastVisitDate, today) >= 30) ||
+          (!lastVisitDate && enrollmentDate !== null && this.diffDays(enrollmentDate, today) >= 30) ||
+          (nextReviewDate !== null && this.diffDays(nextReviewDate, today) > 0);
+        const ltfuRisk = daysSinceLastVisit !== null && daysSinceLastVisit >= 90;
+        const unsuppressed = lastViralLoad !== null && lastViralLoad >= 1000;
+
+        let nextVlDate: Date | null = null;
+        if (artStartDate || lastVlDate || lastViralLoad !== null) {
+          nextVlDate = this.monitoringService.calculateNextViralLoadDate(
+            artStartDate,
+            lastVlDate,
+            lastViralLoad,
+            null,
+            today,
+          );
+        }
+
+        const overdueViralLoad = nextVlDate !== null && this.diffDays(nextVlDate, today) > 0;
+        const overdueViralLoadDays = nextVlDate !== null ? Math.max(this.diffDays(nextVlDate, today), 0) : 0;
+        const activeEac = Number(row.active_eac_session_count || 0) > 0;
+        const lowAdherence = adherencePercentage !== null && adherencePercentage < 95;
+        const pendingRegimenReview = Number(row.pending_request_count || 0) > 0;
+        const approvedRegimenVisitPending = Number(row.approved_without_visit_count || 0) > 0;
+        const completedEacStillUnsuppressed =
+          unsuppressed &&
+          completedEacDate !== null &&
+          lastVlDate !== null &&
+          completedEacDate.getTime() <= lastVlDate.getTime();
+
+        const reasons: string[] = [];
+        const secondaryActions: string[] = [];
+        let primaryAction = 'book_clinical_review';
+        let priority: 'critical' | 'high' | 'medium' = 'medium';
+
+        if (approvedRegimenVisitPending) {
+          primaryAction = 'document_regimen_change_visit';
+          priority = 'critical';
+          reasons.push('Approved regimen change is still missing a linked follow-up visit.');
+        } else if (pendingRegimenReview) {
+          primaryAction = 'doctor_review_pending_regimen_change';
+          priority = 'high';
+          reasons.push('Pending ARV change request is waiting for doctor review.');
+        } else if (completedEacStillUnsuppressed) {
+          primaryAction = 'doctor_review_failed_eac';
+          priority = 'critical';
+          reasons.push('Latest viral load remains unsuppressed after completed EAC.');
+        } else if (unsuppressed && activeEac) {
+          primaryAction = 'continue_eac';
+          priority = 'high';
+          reasons.push('Latest viral load is unsuppressed and the patient is already on active EAC.');
+        } else if (unsuppressed) {
+          primaryAction = 'start_eac';
+          priority = 'high';
+          reasons.push('Latest viral load is unsuppressed and requires EAC workflow.');
+        } else if (overdueViralLoad) {
+          primaryAction = 'collect_viral_load';
+          priority = overdueViralLoadDays >= 30 ? 'high' : 'medium';
+          reasons.push('Viral load monitoring is overdue.');
+        } else if (lowAdherence) {
+          primaryAction = 'adherence_counseling';
+          priority = adherencePercentage !== null && adherencePercentage < 85 ? 'high' : 'medium';
+          reasons.push('Recent adherence capture is below target.');
+        } else if (ltfuRisk) {
+          primaryAction = 'patient_outreach';
+          priority = 'critical';
+          reasons.push('Patient is at lost-to-follow-up risk based on last clinical contact.');
+        } else if (overdueVisit) {
+          primaryAction = 'book_clinical_review';
+          priority = 'high';
+          reasons.push('Clinical review is overdue.');
+        }
+
+        if (ltfuRisk && primaryAction !== 'patient_outreach') {
+          secondaryActions.push('patient_outreach');
+          reasons.push('Patient is at risk of becoming lost to follow-up.');
+          if (priority === 'medium') {
+            priority = 'high';
+          }
+        }
+        if (overdueVisit && primaryAction !== 'book_clinical_review') {
+          secondaryActions.push('book_clinical_review');
+        }
+        if (overdueViralLoad && primaryAction !== 'collect_viral_load') {
+          secondaryActions.push('collect_viral_load');
+        }
+        if (lowAdherence && primaryAction !== 'adherence_counseling') {
+          secondaryActions.push('adherence_counseling');
+        }
+        if (unsuppressed && activeEac && primaryAction !== 'continue_eac') {
+          secondaryActions.push('continue_eac');
+        } else if (unsuppressed && !activeEac && !completedEacStillUnsuppressed && primaryAction !== 'start_eac') {
+          secondaryActions.push('start_eac');
+        }
+        if (pendingRegimenReview && primaryAction !== 'doctor_review_pending_regimen_change') {
+          secondaryActions.push('doctor_review_pending_regimen_change');
+        }
+        if (approvedRegimenVisitPending && primaryAction !== 'document_regimen_change_visit') {
+          secondaryActions.push('document_regimen_change_visit');
+        }
+
+        const flags = {
+          overdueVisit,
+          overdueViralLoad,
+          unsuppressed,
+          activeEac,
+          lowAdherence,
+          ltfuRisk,
+          pendingRegimenReview,
+          approvedRegimenVisitPending,
+          completedEacStillUnsuppressed,
+        };
+
+        const item = {
+          enrollmentId: row.enrollment_id,
+          patientId: row.patient_id,
+          enrollmentNumber: row.enrollment_number,
+          patientNumber: row.patient_number,
+          patientName: [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || 'Unknown',
+          currentRegimen:
+            row.arv_regimen_name || row.intake_regimen || row.current_regimen || null,
+          lastVisitDate: this.formatDateOnly(lastVisitDate),
+          nextReviewDate: this.formatDateOnly(nextReviewDate),
+          daysSinceLastVisit,
+          lastViralLoad,
+          lastViralLoadDate: this.formatDateOnly(lastVlDate),
+          viralLoadUnit: row.viral_load_unit || 'copies/mL',
+          nextViralLoadDate: this.formatDateOnly(nextVlDate),
+          overdueViralLoadDays,
+          adherencePercentage,
+          lastIntakeDate: this.formatDateOnly(intakeRecordedAt),
+          activeEac,
+          activeEacSessionCount: Number(row.active_eac_session_count || 0),
+          activeEacSessionDate: this.formatDateOnly(activeEacSessionDate),
+          completedEacDate: this.formatDateOnly(completedEacDate),
+          pendingRegimenRequestCount: Number(row.pending_request_count || 0),
+          approvedRegimenChangesWithoutVisit: Number(row.approved_without_visit_count || 0),
+          primaryAction,
+          secondaryActions: Array.from(new Set(secondaryActions)),
+          priority,
+          flags,
+          reasons,
+        };
+
+        return item;
+      })
+      .filter((item: any) => {
+        switch (focus) {
+          case 'unsuppressed':
+            return item.flags.unsuppressed;
+          case 'overdue_visit':
+            return item.flags.overdueVisit || item.flags.ltfuRisk;
+          case 'overdue_vl':
+            return item.flags.overdueViralLoad;
+          case 'adherence':
+            return item.flags.lowAdherence;
+          case 'regimen_review':
+            return item.flags.pendingRegimenReview || item.flags.approvedRegimenVisitPending || item.flags.completedEacStillUnsuppressed;
+          default:
+            return true;
+        }
+      })
+      .sort((a: any, b: any) => {
+        const priorityWeight = { critical: 3, high: 2, medium: 1 };
+        const priorityDelta = priorityWeight[b.priority] - priorityWeight[a.priority];
+        if (priorityDelta !== 0) {
+          return priorityDelta;
+        }
+        const overdueVisitDelta = (b.daysSinceLastVisit || 0) - (a.daysSinceLastVisit || 0);
+        if (overdueVisitDelta !== 0) {
+          return overdueVisitDelta;
+        }
+        return (b.overdueViralLoadDays || 0) - (a.overdueViralLoadDays || 0);
+      })
+      .slice(0, limit);
+
+    const summary = items.reduce(
+      (acc: any, item: any) => {
+        acc.totalItems += 1;
+        acc.byPriority[item.priority] += 1;
+        acc.byPrimaryAction[item.primaryAction] = (acc.byPrimaryAction[item.primaryAction] || 0) + 1;
+        if (item.flags.unsuppressed) acc.flagCounts.unsuppressed += 1;
+        if (item.flags.overdueVisit) acc.flagCounts.overdueVisit += 1;
+        if (item.flags.overdueViralLoad) acc.flagCounts.overdueViralLoad += 1;
+        if (item.flags.lowAdherence) acc.flagCounts.lowAdherence += 1;
+        if (item.flags.ltfuRisk) acc.flagCounts.ltfuRisk += 1;
+        if (item.flags.pendingRegimenReview) acc.flagCounts.pendingRegimenReview += 1;
+        if (item.flags.approvedRegimenVisitPending) acc.flagCounts.approvedRegimenVisitPending += 1;
+        return acc;
+      },
+      {
+        totalItems: 0,
+        byPriority: {
+          critical: 0,
+          high: 0,
+          medium: 0,
+        },
+        byPrimaryAction: {} as Record<string, number>,
+        flagCounts: {
+          unsuppressed: 0,
+          overdueVisit: 0,
+          overdueViralLoad: 0,
+          lowAdherence: 0,
+          ltfuRisk: 0,
+          pendingRegimenReview: 0,
+          approvedRegimenVisitPending: 0,
+        },
+      },
+    );
+
+    return {
+      generatedAt: new Date().toISOString(),
+      focus,
+      limit,
+      summary,
+      items,
     };
   }
 

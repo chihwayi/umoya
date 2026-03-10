@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
+import { env } from '@medicore/config';
 import { Patient } from '../entities/patient.entity';
 import { TenantDhis2Config, TenantService } from './tenant.service';
 
@@ -80,7 +81,7 @@ interface AggregateProfileDefinition {
 export class Dhis2Service {
   private readonly logger = new Logger(Dhis2Service.name);
 
-  private readonly envBaseUrl = process.env.DHIS2_URL || 'https://dhis2.mohcc.gov.zw';
+  private readonly envBaseUrl = String(process.env.DHIS2_URL || env.DHIS2_URL || '').trim();
   private readonly envUsername = process.env.DHIS2_USERNAME;
   private readonly envPassword = process.env.DHIS2_PASSWORD;
   private readonly envPat = process.env.DHIS2_PAT;
@@ -273,7 +274,9 @@ export class Dhis2Service {
       return {
         enabled: true,
         useMock: true,
-        reason: 'No DHIS2 PAT/basic credentials configured for tenant or env fallback.',
+        reason: this.envBaseUrl
+          ? 'No DHIS2 PAT/basic credentials configured for tenant or env fallback.'
+          : 'DHIS2_URL is not configured for tenant or env fallback.',
       };
     }
 

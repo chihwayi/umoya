@@ -1,12 +1,13 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { handleAutoLogout } from '../utils/autoLogout';
+import { runtimeUrls } from '../config/runtime';
 
-const TENANT_API_URL = process.env.REACT_APP_TENANT_API_URL || process.env.REACT_APP_API_URL || '';
-const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || '';
+const TENANT_API_URL = runtimeUrls.tenantApi;
+const EHR_API_URL = runtimeUrls.ehrApi;
 
 if (!TENANT_API_URL || !EHR_API_URL) {
-  console.warn('One or more API URLs are missing in environment variables. Application may not function correctly.');
+  console.warn('One or more API URLs are missing in environment variables. Configure REACT_APP_API_BASE_URL or explicit API URLs.');
 }
 
 // Create axios instance with response interceptor
@@ -1236,6 +1237,21 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+
+  getDoctorSyncFeed: async (
+    token: string,
+    tenantSlug: string,
+    params?: { focus?: string; includeAcknowledged?: boolean },
+  ) => {
+    const response = await ehrAxios.get('/nurse-worklist/doctor-sync-feed', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params,
     });
     return { data: response.data };
   },
@@ -3582,6 +3598,20 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+  getHivCohortWorklist: async (
+    params: { focus?: string; limit?: number } | undefined,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get('/hiv/cohort-worklist', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params,
     });
     return { data: response.data };
   },
@@ -7874,6 +7904,31 @@ export const claimsApi = {
 
   getClaimById: async (tenantSlug: string, token: string, claimId: string) => {
     const response = await ehrAxios.get(`/claims/${claimId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getClaimReadiness: async (tenantSlug: string, token: string, claimId: string) => {
+    const response = await ehrAxios.get(`/claims/${claimId}/readiness`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getClaimReadinessWorklist: async (
+    tenantSlug: string,
+    token: string,
+    params?: { statuses?: string; limit?: number },
+  ) => {
+    const response = await ehrAxios.get('/claims/readiness/worklist', {
+      params,
       headers: {
         'X-Tenant-ID': tenantSlug,
         Authorization: `Bearer ${token}`,

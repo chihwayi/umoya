@@ -77,9 +77,12 @@ const ClaimsDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<any>(null);
   const [claims, setClaims] = useState<any[]>([]);
+  const [claimReadinessWorklist, setClaimReadinessWorklist] = useState<any[]>([]);
+  const [claimReadinessSummary, setClaimReadinessSummary] = useState<any>(null);
+  const [claimReadinessById, setClaimReadinessById] = useState<Record<string, any>>({});
   const [bills, setBills] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'claims' | 'create' | 'analytics' | 'preauth' | 'bulk' | 'api-config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'claims' | 'readiness' | 'create' | 'analytics' | 'preauth' | 'bulk' | 'api-config'>('overview');
   const [filters, setFilters] = useState({
     status: '',
     provider: '',
@@ -141,6 +144,24 @@ const ClaimsDashboard: React.FC = () => {
           limit: 50,
         });
         setClaims(claimsResponse.data.claims || claimsResponse.data || []);
+      }
+
+      if (activeTab === 'overview' || activeTab === 'claims' || activeTab === 'readiness') {
+        const readinessResponse = await claimsApi.getClaimReadinessWorklist(tenantSlug, token, {
+          statuses: 'draft,rejected,submitted,processing',
+          limit: 100,
+        });
+        const readinessItems = readinessResponse.data?.items || [];
+        setClaimReadinessWorklist(readinessItems);
+        setClaimReadinessSummary(readinessResponse.data?.summary || null);
+        setClaimReadinessById(
+          readinessItems.reduce((acc: Record<string, any>, item: any) => {
+            if (item.claimId) {
+              acc[item.claimId] = item;
+            }
+            return acc;
+          }, {}),
+        );
       }
 
       if (activeTab === 'create') {
@@ -281,6 +302,36 @@ const ClaimsDashboard: React.FC = () => {
     );
   };
 
+  const getReadinessBadge = (readiness?: any) => {
+    const status = String(readiness?.status || '').toLowerCase();
+    if (status === 'ready') {
+      return (
+        <span className="px-3 py-1 rounded-lg text-xs font-medium border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+          Ready
+        </span>
+      );
+    }
+    if (status === 'at_risk') {
+      return (
+        <span className="px-3 py-1 rounded-lg text-xs font-medium border bg-amber-500/20 text-amber-300 border-amber-500/30">
+          At Risk
+        </span>
+      );
+    }
+    if (status === 'blocked') {
+      return (
+        <span className="px-3 py-1 rounded-lg text-xs font-medium border bg-red-500/20 text-red-300 border-red-500/30">
+          Blocked
+        </span>
+      );
+    }
+    return (
+      <span className="px-3 py-1 rounded-lg text-xs font-medium border bg-slate-500/20 text-slate-300 border-slate-500/30">
+        Pending review
+      </span>
+    );
+  };
+
   if (loading && !summary) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -342,6 +393,7 @@ const ClaimsDashboard: React.FC = () => {
           {([
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'claims', label: 'Claims', icon: FileText },
+            { id: 'readiness', label: 'Readiness', icon: Shield },
             { id: 'create', label: 'Create', icon: Plus },
             { id: 'preauth', label: 'Pre-Auth', icon: Shield },
             { id: 'bulk', label: 'Bulk Ops', icon: Layers },
@@ -437,6 +489,41 @@ const ClaimsDashboard: React.FC = () => {
               </div>
             )}
 
+            {claimReadinessSummary && (
+              <div className="rounded-2xl border border-red-500/20 bg-white/5 backdrop-blur p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Claim Readiness Snapshot</h3>
+                    <p className="text-white/60 text-sm mt-1">Denial-prevention status for draft, rejected, submitted, and processing claims.</p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('readiness')}
+                    className="text-purple-400 hover:text-purple-300 text-sm"
+                  >
+                    Open readiness worklist
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4">
+                    <p className="text-sm text-white/60">Blocked</p>
+                    <p className="text-2xl font-bold text-white">{claimReadinessSummary.blocked || 0}</p>
+                  </div>
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+                    <p className="text-sm text-white/60">At Risk</p>
+                    <p className="text-2xl font-bold text-white">{claimReadinessSummary.atRisk || 0}</p>
+                  </div>
+                  <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-4">
+                    <p className="text-sm text-white/60">Missing Diagnosis</p>
+                    <p className="text-2xl font-bold text-white">{claimReadinessSummary.missingDiagnosis || 0}</p>
+                  </div>
+                  <div className="rounded-xl bg-purple-500/10 border border-purple-500/20 p-4">
+                    <p className="text-sm text-white/60">Missing Documents</p>
+                    <p className="text-2xl font-bold text-white">{claimReadinessSummary.missingSupportingDocuments || 0}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Recent Claims */}
             {summary.recentClaims && summary.recentClaims.length > 0 && (
               <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
@@ -477,6 +564,7 @@ const ClaimsDashboard: React.FC = () => {
                             <p className="text-white/60 text-sm">Approved: {formatCurrency(claim.approvedAmount)}</p>
                           )}
                         </div>
+                        {getReadinessBadge(claimReadinessById[claim.id])}
                         {getStatusBadge(claim.status)}
                       </div>
                     </div>
@@ -610,101 +698,252 @@ const ClaimsDashboard: React.FC = () => {
                 </div>
               )}
               <div className="space-y-2">
-                {claims.map((claim: any) => (
-                  <div
-                    key={claim.id}
-                    className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
-                      selectedClaims.has(claim.id)
-                        ? 'bg-purple-500/20 border-2 border-purple-500/50'
-                        : 'bg-white/5 hover:bg-white/10'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => toggleClaimSelection(claim.id)}
-                        className="p-1 hover:bg-white/10 rounded transition-colors"
-                      >
-                        {selectedClaims.has(claim.id) ? (
-                          <CheckSquare className="w-5 h-5 text-purple-400" />
-                        ) : (
-                          <Square className="w-5 h-5 text-white/40" />
-                        )}
-                      </button>
-                      <div className="p-2 rounded-lg bg-purple-500/20">
-                        <FileText className="w-5 h-5 text-purple-400" />
+                {claims.map((claim: any) => {
+                  const readiness = claimReadinessById[claim.id];
+
+                  return (
+                    <div
+                      key={claim.id}
+                      className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
+                        selectedClaims.has(claim.id)
+                          ? 'bg-purple-500/20 border-2 border-purple-500/50'
+                          : 'bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => toggleClaimSelection(claim.id)}
+                          className="p-1 hover:bg-white/10 rounded transition-colors"
+                        >
+                          {selectedClaims.has(claim.id) ? (
+                            <CheckSquare className="w-5 h-5 text-purple-400" />
+                          ) : (
+                            <Square className="w-5 h-5 text-white/40" />
+                          )}
+                        </button>
+                        <div className="p-2 rounded-lg bg-purple-500/20">
+                          <FileText className="w-5 h-5 text-purple-400" />
+                        </div>
+                        <div>
+                          <p className="text-white font-medium">{claim.claimNumber}</p>
+                          <p className="text-white/60 text-sm">
+                            {claim.patient?.firstName} {claim.patient?.lastName} • {claim.medicalAidProvider} • {new Date(claim.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-white font-medium">{claim.claimNumber}</p>
-                        <p className="text-white/60 text-sm">
-                          {claim.patient?.firstName} {claim.patient?.lastName} • {claim.medicalAidProvider} • {new Date(claim.createdAt).toLocaleDateString()}
-                        </p>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-white font-bold">{formatCurrency(claim.claimAmount)}</p>
+                          {claim.approvedAmount && (
+                            <p className="text-white/60 text-sm">Approved: {formatCurrency(claim.approvedAmount)}</p>
+                          )}
+                          {readiness && (
+                            <p className="text-white/50 text-xs mt-1">
+                              Score {readiness.readinessScore || 0} • {readiness.blockers?.length || 0} blockers • {readiness.warnings?.length || 0} warnings
+                            </p>
+                          )}
+                        </div>
+                        {getReadinessBadge(readiness)}
+                        {getStatusBadge(claim.status)}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedClaim(claim);
+                              setShowClaimDetailModal(true);
+                            }}
+                            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                          >
+                            <Eye className="w-4 h-4 text-white/60" />
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedClaims.has(claim.id)}
+                              onChange={(e) => {
+                                const newSelection = new Set(selectedClaims);
+                                if (e.target.checked) {
+                                  newSelection.add(claim.id);
+                                } else {
+                                  newSelection.delete(claim.id);
+                                }
+                                setSelectedClaims(newSelection);
+                              }}
+                              className="w-4 h-4 rounded border-white/20 bg-white/10 text-purple-600 focus:ring-purple-500"
+                            />
+                            {claim.status === 'draft' && (
+                              <button
+                                onClick={() => handleSubmitClaim(claim.id, 'api')}
+                                className="px-3 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm"
+                                title="Submit via API"
+                              >
+                                Submit
+                              </button>
+                            )}
+                            {claim.status === 'submitted' || claim.status === 'processing' ? (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await claimsApi.checkClaimStatusEnhanced(tenantSlug!, token, claim.id);
+                                    showSuccess('Status checked successfully', 'success');
+                                    loadDashboardData();
+                                  } catch (error: any) {
+                                    showError(error.response?.data?.message || 'Failed to check status', 'error');
+                                  }
+                                }}
+                                className="px-3 py-1 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-sm flex items-center gap-1"
+                                title="Check status with medical aid"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                Check
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-white font-bold">{formatCurrency(claim.claimAmount)}</p>
-                        {claim.approvedAmount && (
-                          <p className="text-white/60 text-sm">Approved: {formatCurrency(claim.approvedAmount)}</p>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'readiness' && (
+          <div className="space-y-6">
+            {claimReadinessSummary && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <StatCard
+                  title="Blocked Claims"
+                  value={claimReadinessSummary.blocked || 0}
+                  icon={XCircle}
+                  subtitle={`${claimReadinessSummary.missingDiagnosis || 0} missing diagnosis`}
+                  accent="from-red-500/20 to-rose-500/20"
+                />
+                <StatCard
+                  title="At Risk"
+                  value={claimReadinessSummary.atRisk || 0}
+                  icon={AlertCircle}
+                  subtitle={`${claimReadinessSummary.preAuthorizationIssues || 0} preauth issues`}
+                  accent="from-amber-500/20 to-orange-500/20"
+                />
+                <StatCard
+                  title="Missing Docs"
+                  value={claimReadinessSummary.missingSupportingDocuments || 0}
+                  icon={Upload}
+                  subtitle={`${claimReadinessSummary.missingClinicalDocumentation || 0} missing notes`}
+                  accent="from-purple-500/20 to-pink-500/20"
+                />
+                <StatCard
+                  title="Ready"
+                  value={claimReadinessSummary.ready || 0}
+                  icon={CheckCircle}
+                  subtitle={`${claimReadinessSummary.total || 0} monitored claims`}
+                  accent="from-emerald-500/20 to-teal-500/20"
+                />
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Denial-Prevention Worklist</h3>
+                  <p className="text-white/60 text-sm mt-1">Prioritize blocked and at-risk claims before submission or resubmission.</p>
+                </div>
+                <button
+                  onClick={loadDashboardData}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {claimReadinessWorklist.map((item: any) => (
+                  <div
+                    key={item.claimId}
+                    className="rounded-xl border border-white/10 bg-white/5 p-4"
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-white font-semibold">{item.claimNumber}</p>
+                          {getReadinessBadge(item)}
+                          {getStatusBadge(item.claimStatus || item.status || 'draft')}
+                        </div>
+                        <p className="text-white/70 text-sm">
+                          {item.evidence?.patient?.patientName || 'Unknown patient'}
+                          {item.evidence?.patient?.patientNumber ? ` • ${item.evidence.patient.patientNumber}` : ''}
+                          {item.financial?.payer ? ` • ${item.financial.payer}` : ''}
+                        </p>
+                        <p className="text-white/50 text-xs">
+                          Readiness score {item.readinessScore || 0}
+                          {item.financial?.claimAmount ? ` • ${formatCurrency(item.financial.claimAmount)}` : ''}
+                        </p>
+                        {item.blockers?.length > 0 && (
+                          <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-red-300">Blockers</p>
+                            <div className="mt-2 space-y-1 text-sm text-white/80">
+                              {item.blockers.slice(0, 3).map((issue: any) => (
+                                <p key={`${item.claimId}-${issue.code}`}>{issue.message}</p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {item.warnings?.length > 0 && (
+                          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Warnings</p>
+                            <div className="mt-2 space-y-1 text-sm text-white/80">
+                              {item.warnings.slice(0, 2).map((issue: any) => (
+                                <p key={`${item.claimId}-${issue.code}`}>{issue.message}</p>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
-                      {getStatusBadge(claim.status)}
-                      <div className="flex gap-2">
+
+                      <div className="flex flex-col gap-2 lg:min-w-[180px]">
                         <button
                           onClick={() => {
-                            setSelectedClaim(claim);
+                            const matchedClaim =
+                              claims.find((claim) => claim.id === item.claimId) || {
+                                id: item.claimId,
+                                claimNumber: item.claimNumber,
+                                status: item.claimStatus,
+                                claimAmount: item.financial?.claimAmount || 0,
+                                medicalAidProvider: item.financial?.payer || '',
+                                patient: {
+                                  firstName: item.evidence?.patient?.patientName || '',
+                                  lastName: '',
+                                },
+                              };
+                            setSelectedClaim(matchedClaim);
                             setShowClaimDetailModal(true);
                           }}
-                          className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
                         >
-                          <Eye className="w-4 h-4 text-white/60" />
+                          <Eye className="w-4 h-4" />
+                          Review claim
                         </button>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedClaims.has(claim.id)}
-                            onChange={(e) => {
-                              const newSelection = new Set(selectedClaims);
-                              if (e.target.checked) {
-                                newSelection.add(claim.id);
-                              } else {
-                                newSelection.delete(claim.id);
-                              }
-                              setSelectedClaims(newSelection);
-                            }}
-                            className="w-4 h-4 rounded border-white/20 bg-white/10 text-purple-600 focus:ring-purple-500"
-                          />
-                        {claim.status === 'draft' && (
+                        {item.claimStatus === 'draft' && (
                           <button
-                            onClick={() => handleSubmitClaim(claim.id, 'api')}
-                            className="px-3 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm"
-                            title="Submit via API"
+                            onClick={() => handleSubmitClaim(item.claimId, 'api')}
+                            disabled={item.status === 'blocked'}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                           >
+                            <Send className="w-4 h-4" />
                             Submit
                           </button>
                         )}
-                        {claim.status === 'submitted' || claim.status === 'processing' ? (
-                          <button
-                            onClick={async () => {
-                              try {
-                                await claimsApi.checkClaimStatusEnhanced(tenantSlug!, token, claim.id);
-                                showSuccess('Status checked successfully', 'success');
-                                loadDashboardData();
-                              } catch (error: any) {
-                                showError(error.response?.data?.message || 'Failed to check status', 'error');
-                              }
-                            }}
-                            className="px-3 py-1 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-sm flex items-center gap-1"
-                            title="Check status with medical aid"
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                            Check
-                          </button>
-                        ) : null}
-                        </div>
                       </div>
                     </div>
                   </div>
                 ))}
+                {claimReadinessWorklist.length === 0 && (
+                  <div className="py-12 text-center text-white/60">
+                    No claim readiness issues found in the current worklist.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1181,6 +1420,8 @@ const ClaimDetailModal: React.FC<{
   const [showStatusHistory, setShowStatusHistory] = useState(false);
   const [statusHistory, setStatusHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [claimReadiness, setClaimReadiness] = useState<any>(null);
+  const [loadingReadiness, setLoadingReadiness] = useState(false);
   const [resubmitData, setResubmitData] = useState({
     memberNumber: claim.memberNumber || '',
     memberName: claim.memberName || '',
@@ -1205,6 +1446,28 @@ const ClaimDetailModal: React.FC<{
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showStatusHistory]);
+
+  useEffect(() => {
+    const loadClaimReadiness = async () => {
+      setLoadingReadiness(true);
+      try {
+        const response = await claimsApi.getClaimReadiness(tenantSlug, token, claim.id);
+        setClaimReadiness(response.data || null);
+      } catch (error: any) {
+        showError('Failed to load claim readiness', error.response?.data?.message || '');
+        setClaimReadiness(null);
+      } finally {
+        setLoadingReadiness(false);
+      }
+    };
+
+    if (claim?.id) {
+      void loadClaimReadiness();
+    }
+  }, [claim?.id, showError, tenantSlug, token]);
+
+  const readinessStatus = String(claimReadiness?.status || '').toLowerCase();
+  const submitBlocked = readinessStatus === 'blocked';
 
   return (
     <div className="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1260,6 +1523,73 @@ const ClaimDetailModal: React.FC<{
             <p className="text-white/80 text-sm">{claim.rejectionReason}</p>
           </div>
         )}
+
+        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-white/60 text-sm">Claim readiness</p>
+              <p className="text-white font-medium">
+                {loadingReadiness ? 'Loading readiness...' : `Score ${claimReadiness?.readinessScore || 0}`}
+              </p>
+            </div>
+            {loadingReadiness ? (
+              <span className="px-2 py-1 rounded-lg text-xs font-medium bg-slate-500/20 text-slate-300">
+                Checking
+              </span>
+            ) : !claimReadiness ? (
+              <span className="px-2 py-1 rounded-lg text-xs font-medium bg-slate-500/20 text-slate-300">
+                Unavailable
+              </span>
+            ) : readinessStatus === 'ready' ? (
+              <span className="px-2 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-300">
+                Ready
+              </span>
+            ) : readinessStatus === 'at_risk' ? (
+              <span className="px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-300">
+                At Risk
+              </span>
+            ) : (
+              <span className="px-2 py-1 rounded-lg text-xs font-medium bg-red-500/20 text-red-300">
+                Blocked
+              </span>
+            )}
+          </div>
+
+          {!loadingReadiness && claimReadiness && (
+            <div className="mt-4 space-y-3">
+              {claimReadiness.blockers?.length > 0 && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-300">Blockers</p>
+                  <div className="mt-2 space-y-1 text-sm text-white/80">
+                    {claimReadiness.blockers.map((issue: any) => (
+                      <p key={issue.code}>{issue.message}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {claimReadiness.warnings?.length > 0 && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Warnings</p>
+                  <div className="mt-2 space-y-1 text-sm text-white/80">
+                    {claimReadiness.warnings.map((issue: any) => (
+                      <p key={issue.code}>{issue.message}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {claimReadiness.missingDocuments?.length > 0 && (
+                <div className="rounded-lg border border-purple-500/20 bg-purple-500/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-purple-300">Missing documents</p>
+                  <div className="mt-2 space-y-1 text-sm text-white/80">
+                    {claimReadiness.missingDocuments.map((issue: any) => (
+                      <p key={issue.code}>{issue.message}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Status History Section */}
         <div className="border-t border-white/10 pt-4">
@@ -1368,15 +1698,17 @@ const ClaimDetailModal: React.FC<{
             <div className="flex-1 flex gap-2">
               <button
                 onClick={() => onSubmit(claim.id, 'api')}
-                className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
+                disabled={submitBlocked}
+                className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 disabled:opacity-50"
                 title="Submit via API"
               >
                 <Send className="w-4 h-4" />
-                Submit (API)
+                {submitBlocked ? 'Blocked' : 'Submit (API)'}
               </button>
               <button
                 onClick={() => onSubmit(claim.id, 'edi')}
-                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-2"
+                disabled={submitBlocked}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-2 disabled:opacity-50"
                 title="Submit via EDI"
               >
                 <Upload className="w-4 h-4" />
@@ -1428,4 +1760,3 @@ const ClaimDetailModal: React.FC<{
 };
 
 export default ClaimsDashboard;
-

@@ -31,6 +31,21 @@ export class NurseWorklistController {
     return this.nurseWorklistService.getCrossModuleEscalationFeed(req.tenantDb);
   }
 
+  @Get('doctor-sync-feed')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Get doctor synchronization feed for handoffs, critical results, triage, and doctor-routed follow-up' })
+  @ApiResponse({ status: 200, description: 'Doctor synchronization feed fetched' })
+  async getDoctorSyncFeed(
+    @Query('focus') focus: string,
+    @Query('includeAcknowledged') includeAcknowledgedRaw: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.nurseWorklistService.getDoctorSynchronizationFeed(req.tenantDb, {
+      focus,
+      includeAcknowledged: String(includeAcknowledgedRaw || '').toLowerCase() === 'true',
+    });
+  }
+
   @Get('analytics/outcomes')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Get nurse outcome analytics for cross-module AI/CDSS workflow execution' })

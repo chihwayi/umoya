@@ -11,8 +11,9 @@ import ClinicalNotesModal from '../components/ClinicalNotesModal';
 import PrescriptionsModal from '../components/PrescriptionsModal';
 import LabOrdersModal from '../components/LabOrdersModal';
 import ICD10Picker from '../components/ICD10Picker';
+import { runtimeUrls } from '../config/runtime';
 
-const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
+const EHR_API_URL = runtimeUrls.ehrApi;
 const ehrAxios = axios.create({ baseURL: EHR_API_URL });
 
 const AdmittedPatientPage: React.FC = () => {
@@ -1092,4 +1093,3 @@ const AdmittedPatientPage: React.FC = () => {
 };
 
 export default AdmittedPatientPage;
-

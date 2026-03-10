@@ -161,25 +161,6 @@ interface DoctorOutcomeAnalyticsSnapshot {
   };
 }
 
-const DOCTOR_SYNC_SCOPE_MODULES = new Set([
-  'maternity',
-  'hiv',
-  'oncology',
-  'nursing',
-  'cardiology',
-  'ophthalmology',
-  'ed',
-  'sepsis',
-  'blood_bank',
-  'telemedicine',
-  'lab',
-  'pharmacy',
-  'accounts',
-  'billing',
-  'claims',
-  'revenue_cycle',
-]);
-
 const ACCOUNTS_SYNC_MODULES = new Set(['accounts', 'billing', 'claims', 'revenue_cycle']);
 const SPECIALTY_SYNC_MODULES = new Set([
   'cardiology',
@@ -717,6 +698,9 @@ const DoctorDashboard: React.FC = () => {
     total: 0,
     critical: 0,
     high: 0,
+    pending: 0,
+    acknowledged: 0,
+    doctorReviewRecommended: 0,
     maternity: 0,
     hiv: 0,
     oncology: 0,
@@ -733,12 +717,18 @@ const DoctorDashboard: React.FC = () => {
     specialty: 0,
     handoff: 0,
     medication: 0,
+    critical_results: 0,
+    triage: 0,
+    orders: 0,
+    coordination: 0,
   });
   const [doctorSyncLoading, setDoctorSyncLoading] = useState(false);
   const [doctorSyncMaternityAcknowledgeId, setDoctorSyncMaternityAcknowledgeId] = useState<string | null>(null);
   const [doctorSyncWorkflowItemId, setDoctorSyncWorkflowItemId] = useState<string | null>(null);
   const [doctorSyncRecommendationKey, setDoctorSyncRecommendationKey] = useState<string | null>(null);
   const [doctorOutcomeAnalytics, setDoctorOutcomeAnalytics] = useState<DoctorOutcomeAnalyticsSnapshot | null>(null);
+  const [doctorSyncFocus, setDoctorSyncFocus] = useState<'all' | 'handoff' | 'critical_results' | 'triage' | 'orders' | 'coordination'>('all');
+  const [doctorSyncIncludeAcknowledged, setDoctorSyncIncludeAcknowledged] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -1093,6 +1083,11 @@ const DoctorDashboard: React.FC = () => {
     total: items.length,
     critical: items.filter((item) => item.severity === 'critical').length,
     high: items.filter((item) => item.severity === 'high').length,
+    pending: items.filter((item) => String(item.workflow_status || '').toLowerCase() === 'pending').length,
+    acknowledged: items.filter((item) => String(item.workflow_status || '').toLowerCase() === 'acknowledged').length,
+    doctorReviewRecommended: items.filter((item) =>
+      String(item.doctor_sync_status || '').toLowerCase().includes('doctor_review'),
+    ).length,
     maternity: items.filter((item) => item.module === 'maternity').length,
     hiv: items.filter((item) => item.module === 'hiv').length,
     oncology: items.filter((item) => item.module === 'oncology').length,
@@ -1109,6 +1104,10 @@ const DoctorDashboard: React.FC = () => {
     specialty: items.filter((item) => SPECIALTY_SYNC_MODULES.has(String(item.module || '').toLowerCase())).length,
     handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
     medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
+    critical_results: items.filter((item) => item.metadata?.coordination_focus === 'critical_results').length,
+    triage: items.filter((item) => item.metadata?.coordination_focus === 'triage').length,
+    orders: items.filter((item) => item.metadata?.coordination_focus === 'orders').length,
+    coordination: items.filter((item) => item.metadata?.coordination_focus === 'coordination').length,
   }), []);
 
   const loadDoctorSyncPanel = useCallback(async () => {
@@ -1123,41 +1122,29 @@ const DoctorDashboard: React.FC = () => {
       }
 
       const [feedResponse, analyticsResponse] = await Promise.all([
-        ehrApi.getNurseCrossModuleFeed(token, tenantSlug),
+        ehrApi.getDoctorSyncFeed(token, tenantSlug, {
+          focus: doctorSyncFocus === 'all' ? undefined : doctorSyncFocus,
+          includeAcknowledged: doctorSyncIncludeAcknowledged,
+        }),
         ehrApi.getDoctorOutcomeAnalytics(30, token, tenantSlug),
       ]);
       const feedItems: NurseCrossModuleFeedItem[] = Array.isArray(feedResponse.data?.items)
         ? feedResponse.data.items
         : [];
-      const filteredItems = feedItems.filter((item) => {
-        const moduleKey = String(item.module || '').toLowerCase();
-        const destinationRole = String(item.destination_role || '').toLowerCase();
-        const destinationService = String(item.destination_service || '').toLowerCase();
-        const doctorSyncStatus = String(item.doctor_sync_status || '').toLowerCase();
-        const accountsSyncStatus =
-          String(
-            item.metadata?.accounts_sync_status ||
-              item.metadata?.workflow_context?.accounts_sync_status ||
-              item.metadata?.workflow_context?.payment_status ||
-              item.metadata?.workflow_context?.claim_status ||
-              item.metadata?.workflow_context?.billing_status ||
-              '',
-          ).toLowerCase();
-        return (
-          destinationRole === 'doctor' ||
-          DOCTOR_SYNC_SCOPE_MODULES.has(moduleKey) ||
-          destinationService === 'accounts' ||
-          destinationService === 'billing' ||
-          destinationService === 'claims' ||
-          destinationService === 'revenue_cycle' ||
-          destinationService === 'payment_clearance' ||
-          doctorSyncStatus.includes('doctor') ||
-          accountsSyncStatus.length > 0
-        );
-      });
+      const normalizedItems = feedItems.map((item) => ({
+        ...item,
+        metadata: {
+          ...(item.metadata || {}),
+          coordination_focus: (item as any).coordination_focus || item.metadata?.coordination_focus || 'coordination',
+        },
+      }));
+      const fallbackSummary = buildDoctorSyncSummary(normalizedItems);
 
-      setDoctorSyncItems(filteredItems);
-      setDoctorSyncSummary(buildDoctorSyncSummary(filteredItems));
+      setDoctorSyncItems(normalizedItems);
+      setDoctorSyncSummary({
+        ...fallbackSummary,
+        ...(feedResponse.data?.summary || {}),
+      });
       setDoctorOutcomeAnalytics(analyticsResponse.data || null);
     } catch (error) {
       console.error('Failed to load doctor sync panel:', error);
@@ -1167,7 +1154,7 @@ const DoctorDashboard: React.FC = () => {
     } finally {
       setDoctorSyncLoading(false);
     }
-  }, [buildDoctorSyncSummary, tenantSlug]);
+  }, [buildDoctorSyncSummary, doctorSyncFocus, doctorSyncIncludeAcknowledged, tenantSlug]);
 
   useEffect(() => {
     if (currentUser) {
@@ -2276,17 +2263,55 @@ const DoctorDashboard: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">Doctor Synchronization Panel</h3>
                     <p className="text-sm text-slate-600">
-                      Unified doctor sync for HIV, oncology, specialty workflows, and accounts handoff status.
+                      Closed-loop doctor follow-through for handoffs, critical results, triage escalations, and doctor-routed order work.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={loadDoctorSyncPanel}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${doctorSyncLoading ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={doctorSyncIncludeAcknowledged}
+                        onChange={(event) => setDoctorSyncIncludeAcknowledged(event.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      Include acknowledged
+                    </label>
+                    <button
+                      type="button"
+                      onClick={loadDoctorSyncPanel}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${doctorSyncLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-5">
+                  {[
+                    { key: 'all', label: 'All doctor sync', count: doctorSyncSummary.total },
+                    { key: 'handoff', label: 'Handoffs', count: doctorSyncSummary.handoff },
+                    { key: 'critical_results', label: 'Critical results', count: doctorSyncSummary.critical_results },
+                    { key: 'triage', label: 'Triage', count: doctorSyncSummary.triage },
+                    { key: 'orders', label: 'Orders', count: doctorSyncSummary.orders },
+                    { key: 'coordination', label: 'Coordination', count: doctorSyncSummary.coordination },
+                  ].map((focusOption) => (
+                    <button
+                      key={focusOption.key}
+                      type="button"
+                      onClick={() => setDoctorSyncFocus(focusOption.key as typeof doctorSyncFocus)}
+                      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                        doctorSyncFocus === focusOption.key
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span>{focusOption.label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${doctorSyncFocus === focusOption.key ? 'bg-white/20' : 'bg-white text-slate-600'}`}>
+                        {focusOption.count || 0}
+                      </span>
+                    </button>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-3 mb-5">
@@ -2297,9 +2322,27 @@ const DoctorDashboard: React.FC = () => {
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Pending</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorSyncSummary.pending}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Acknowledged</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorSyncSummary.acknowledged}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Pending &gt;24h</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.doctorQueue?.pendingOlderThan24h ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Doctor Review Flags</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorSyncSummary.doctorReviewRecommended}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -2389,7 +2432,6 @@ const DoctorDashboard: React.FC = () => {
                   items={doctorSyncItems}
                   summary={doctorSyncSummary}
                   loading={doctorSyncLoading}
-                  compact
                   acknowledgingTaskId={doctorSyncMaternityAcknowledgeId}
                   workflowActionItemId={doctorSyncWorkflowItemId}
                   recommendationActionKey={doctorSyncRecommendationKey}

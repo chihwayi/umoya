@@ -301,6 +301,13 @@ export class HivController {
     return this.hivService.getQualityMetrics(req.tenantDb);
   }
 
+  @Get('cohort-worklist')
+  @ApiOperation({ summary: 'Get HIV cohort worklist with next-best operational actions' })
+  @ApiResponse({ status: 200, description: 'Cohort worklist retrieved' })
+  async getCohortWorklist(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.hivService.getCohortWorklist(query, req.tenantDb);
+  }
+
   @Get('ltfu-patients')
   @ApiOperation({ summary: 'Get lost to follow-up patients' })
   @ApiResponse({ status: 200, description: 'LTFU patients retrieved' })

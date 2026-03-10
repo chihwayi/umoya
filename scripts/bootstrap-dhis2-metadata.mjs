@@ -4,13 +4,18 @@
  * Idempotent DHIS2 metadata bootstrap for blank/local instances.
  *
  * Usage:
- *   DHIS2_URL=http://localhost:8888 DHIS2_PAT=... node scripts/bootstrap-dhis2-metadata.mjs
+ *   DHIS2_URL=https://dhis2.example.org DHIS2_PAT=... node scripts/bootstrap-dhis2-metadata.mjs
  *   DHIS2_CLINIC_CODE=clinic_a DHIS2_CLINIC_NAME="Clinic A" node scripts/bootstrap-dhis2-metadata.mjs
  */
 
-const baseUrl = (process.env.DHIS2_URL || 'http://localhost:8888').replace(/\/$/, '');
+const baseUrl = (process.env.DHIS2_URL || '').replace(/\/$/, '');
 const apiVersion = process.env.DHIS2_API_VERSION || '40';
 const token = process.env.DHIS2_PAT || '';
+
+if (!baseUrl) {
+  console.error('Missing DHIS2_URL. Set DHIS2_URL in env before running bootstrap.');
+  process.exit(1);
+}
 
 if (!token) {
   console.error('Missing DHIS2_PAT. Set DHIS2_PAT in env before running bootstrap.');

@@ -118,6 +118,62 @@ export class NurseWorklistService {
     return normalized.toLowerCase().replace(/[\s-]+/g, '_');
   }
 
+  private isDoctorSyncCandidate(item: any) {
+    const destinationRole = String(item?.destination_role || '').toLowerCase();
+    const doctorSyncStatus = String(item?.doctor_sync_status || '').toLowerCase();
+    const itemType = String(item?.item_type || '').toLowerCase();
+    const moduleKey = this.normalizeModuleKey(item?.module);
+
+    if (destinationRole === 'doctor') {
+      return true;
+    }
+
+    if (
+      doctorSyncStatus.includes('doctor') ||
+      doctorSyncStatus === 'nurse_handoff_pending' ||
+      doctorSyncStatus === 'awaiting_doctor_review'
+    ) {
+      return true;
+    }
+
+    return (
+      itemType === 'nurse_handoff_risk' ||
+      itemType === 'medication_administration_followup' ||
+      itemType === 'lab_critical_alert_followup' ||
+      itemType === 'imaging_report_followup' ||
+      moduleKey === 'ed' ||
+      moduleKey === 'sepsis'
+    );
+  }
+
+  private classifyDoctorSyncFocus(item: any) {
+    const itemType = String(item?.item_type || '').toLowerCase();
+    const moduleKey = this.normalizeModuleKey(item?.module);
+
+    if (itemType === 'nurse_handoff_risk') {
+      return 'handoff';
+    }
+    if (
+      itemType === 'lab_critical_alert_followup' ||
+      itemType === 'imaging_report_followup' ||
+      moduleKey === 'lab' ||
+      moduleKey === 'imaging'
+    ) {
+      return 'critical_results';
+    }
+    if (moduleKey === 'ed' || moduleKey === 'sepsis') {
+      return 'triage';
+    }
+    if (
+      itemType === 'medication_administration_followup' ||
+      moduleKey === 'pharmacy' ||
+      moduleKey === 'hiv'
+    ) {
+      return 'orders';
+    }
+    return 'coordination';
+  }
+
   private readContextValue(context: Record<string, any>, keys: string[]) {
     for (const key of keys) {
       const value = this.normalizeText(context?.[key]);
@@ -5765,6 +5821,67 @@ export class NurseWorklistService {
         handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
         medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
       },
+    };
+  }
+
+  async getDoctorSynchronizationFeed(
+    tenantDb: DataSource,
+    options?: {
+      focus?: string;
+      includeAcknowledged?: boolean;
+    },
+  ) {
+    const feed = await this.getCrossModuleEscalationFeed(tenantDb);
+    const requestedFocus = this.normalizeText(options?.focus)?.toLowerCase() || 'all';
+    const includeAcknowledged = options?.includeAcknowledged === true;
+
+    const items = (Array.isArray(feed?.items) ? feed.items : [])
+      .filter((item: any) => this.isDoctorSyncCandidate(item))
+      .map((item: any) => ({
+        ...item,
+        coordination_focus: this.classifyDoctorSyncFocus(item),
+      }))
+      .filter((item: any) => {
+        if (!includeAcknowledged && String(item.workflow_status || '').toLowerCase() === 'acknowledged') {
+          return false;
+        }
+
+        switch (requestedFocus) {
+          case 'handoff':
+          case 'critical_results':
+          case 'triage':
+          case 'orders':
+          case 'coordination':
+            return item.coordination_focus === requestedFocus;
+          default:
+            return true;
+        }
+      });
+
+    const summary = {
+      total: items.length,
+      critical: items.filter((item: any) => item.severity === 'critical').length,
+      high: items.filter((item: any) => item.severity === 'high').length,
+      pending: items.filter((item: any) => String(item.workflow_status || '').toLowerCase() === 'pending').length,
+      acknowledged: items.filter((item: any) => String(item.workflow_status || '').toLowerCase() === 'acknowledged').length,
+      doctorReviewRecommended: items.filter((item: any) =>
+        String(item.doctor_sync_status || '').toLowerCase().includes('doctor_review'),
+      ).length,
+      handoff: items.filter((item: any) => item.coordination_focus === 'handoff').length,
+      critical_results: items.filter((item: any) => item.coordination_focus === 'critical_results').length,
+      triage: items.filter((item: any) => item.coordination_focus === 'triage').length,
+      orders: items.filter((item: any) => item.coordination_focus === 'orders').length,
+      coordination: items.filter((item: any) => item.coordination_focus === 'coordination').length,
+    };
+
+    return {
+      items,
+      summary,
+      filters: {
+        focus: requestedFocus,
+        includeAcknowledged,
+      },
+      generatedAt: new Date().toISOString(),
     };
   }
 

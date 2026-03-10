@@ -1,63 +1,63 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { NotificationProvider } from './components/GlobalNotification';
 import { AutoLogoutProvider } from './components/AutoLogoutProvider';
-import TenantDirectory from './pages/TenantDirectory';
-import EHRLogin from './pages/EHRLogin';
-import ChangePassword from './pages/ChangePassword';
-import EHRDashboard from './pages/EHRDashboard';
-import UserManagement from './pages/UserManagement';
-import ProfileSettings from './pages/ProfileSettings';
-import PatientManagement from './pages/PatientManagement';
-import PatientDetail from './pages/PatientDetail';
-import AppointmentManagement from './pages/AppointmentManagement';
-import DoctorDashboard from './pages/DoctorDashboard';
-import DoctorSyncExecutionHub from './pages/DoctorSyncExecutionHub';
-import DoctorPatientDetail from './pages/DoctorPatientDetail';
-import DoctorAppointmentManagement from './pages/DoctorAppointmentManagement';
-import DoctorPatientsList from './pages/DoctorPatientsList';
-import DoctorTreatmentHistory from './pages/DoctorTreatmentHistory';
-import DoctorTreatmentHistoryDetail from './pages/DoctorTreatmentHistoryDetail';
-import HIVDoctorDashboard from './pages/HIVDoctorDashboard';
-import MaternityDoctorDashboard from './pages/MaternityDoctorDashboard';
-import RadiologistDashboard from './pages/RadiologistDashboard';
-import NurseDashboard from './pages/NurseDashboard';
-import TechnologistImagingDashboard from './pages/TechnologistImagingDashboard';
-import NursePatientSummary from './pages/NursePatientSummary';
-import LabDashboard from './pages/LabDashboard';
-import PostVisitCompanionPortal from './pages/PostVisitCompanionPortal';
-import PostVisitDoctorWorkspace from './pages/PostVisitDoctorWorkspace';
-import OncologyDashboard from './pages/OncologyDashboard';
-import OphthalmologyDashboard from './pages/OphthalmologyDashboard';
-import AccountsDashboard from './pages/AccountsDashboard';
-import CardiologyDashboard from './pages/CardiologyDashboard';
-import DiabetesManagementDashboard from './pages/DiabetesManagementDashboard';
-import PharmacyDashboard from './pages/PharmacyDashboard';
-import BillingDashboard from './pages/BillingDashboard';
-import ClaimsDashboard from './pages/ClaimsDashboard';
-import TelemedicineDashboard from './pages/TelemedicineDashboard';
-import TelemedicineConsultationPage from './pages/TelemedicineConsultationPage';
-import AnalyticsDashboard from './pages/AnalyticsDashboard';
-import EDDashboard from './pages/EDDashboard';
-import BedManagementDashboard from './pages/BedManagementDashboard';
-import AdmittedPatientPage from './pages/AdmittedPatientPage';
-import ORDashboard from './pages/ORDashboard';
-import PACUDashboard from './pages/PACUDashboard';
-import MARDashboard from './pages/MARDashboard';
-import BloodBankDashboard from './pages/BloodBankDashboard';
-import InfectionControlDashboard from './pages/InfectionControlDashboard';
-import RevenueCycleDashboard from './pages/RevenueCycleDashboard';
-import CdiDashboard from './pages/CdiDashboard';
-import CaseManagementDashboard from './pages/CaseManagementDashboard';
-import SepsisDashboard from './pages/SepsisDashboard';
-import HIPAAComplianceDashboard from './pages/HIPAAComplianceDashboard';
-import PopulationHealthDashboard from './pages/PopulationHealthDashboard';
-import PracticeManagementDashboard from './pages/PracticeManagementDashboard';
-import PriorAuthorizationDashboard from './pages/PriorAuthorizationDashboard';
-import PatientPortalLogin from './pages/PatientPortalLogin';
-import PatientPortalDashboard from './pages/PatientPortalDashboard';
-import CampaignsDashboard from './pages/CampaignsDashboard';
-import MultiCurrencyMedicalAidDashboard from './pages/MultiCurrencyMedicalAidDashboard';
+const TenantDirectory = lazy(() => import('./pages/TenantDirectory'));
+const EHRLogin = lazy(() => import('./pages/EHRLogin'));
+const ChangePassword = lazy(() => import('./pages/ChangePassword'));
+const EHRDashboard = lazy(() => import('./pages/EHRDashboard'));
+const UserManagement = lazy(() => import('./pages/UserManagement'));
+const ProfileSettings = lazy(() => import('./pages/ProfileSettings'));
+const PatientManagement = lazy(() => import('./pages/PatientManagement'));
+const PatientDetail = lazy(() => import('./pages/PatientDetail'));
+const AppointmentManagement = lazy(() => import('./pages/AppointmentManagement'));
+const DoctorDashboard = lazy(() => import('./pages/DoctorDashboard'));
+const DoctorSyncExecutionHub = lazy(() => import('./pages/DoctorSyncExecutionHub'));
+const DoctorPatientDetail = lazy(() => import('./pages/DoctorPatientDetail'));
+const DoctorAppointmentManagement = lazy(() => import('./pages/DoctorAppointmentManagement'));
+const DoctorPatientsList = lazy(() => import('./pages/DoctorPatientsList'));
+const DoctorTreatmentHistory = lazy(() => import('./pages/DoctorTreatmentHistory'));
+const DoctorTreatmentHistoryDetail = lazy(() => import('./pages/DoctorTreatmentHistoryDetail'));
+const HIVDoctorDashboard = lazy(() => import('./pages/HIVDoctorDashboard'));
+const MaternityDoctorDashboard = lazy(() => import('./pages/MaternityDoctorDashboard'));
+const RadiologistDashboard = lazy(() => import('./pages/RadiologistDashboard'));
+const NurseDashboard = lazy(() => import('./pages/NurseDashboard'));
+const TechnologistImagingDashboard = lazy(() => import('./pages/TechnologistImagingDashboard'));
+const NursePatientSummary = lazy(() => import('./pages/NursePatientSummary'));
+const LabDashboard = lazy(() => import('./pages/LabDashboard'));
+const PostVisitCompanionPortal = lazy(() => import('./pages/PostVisitCompanionPortal'));
+const PostVisitDoctorWorkspace = lazy(() => import('./pages/PostVisitDoctorWorkspace'));
+const OncologyDashboard = lazy(() => import('./pages/OncologyDashboard'));
+const OphthalmologyDashboard = lazy(() => import('./pages/OphthalmologyDashboard'));
+const AccountsDashboard = lazy(() => import('./pages/AccountsDashboard'));
+const CardiologyDashboard = lazy(() => import('./pages/CardiologyDashboard'));
+const DiabetesManagementDashboard = lazy(() => import('./pages/DiabetesManagementDashboard'));
+const PharmacyDashboard = lazy(() => import('./pages/PharmacyDashboard'));
+const BillingDashboard = lazy(() => import('./pages/BillingDashboard'));
+const ClaimsDashboard = lazy(() => import('./pages/ClaimsDashboard'));
+const TelemedicineDashboard = lazy(() => import('./pages/TelemedicineDashboard'));
+const TelemedicineConsultationPage = lazy(() => import('./pages/TelemedicineConsultationPage'));
+const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'));
+const EDDashboard = lazy(() => import('./pages/EDDashboard'));
+const BedManagementDashboard = lazy(() => import('./pages/BedManagementDashboard'));
+const AdmittedPatientPage = lazy(() => import('./pages/AdmittedPatientPage'));
+const ORDashboard = lazy(() => import('./pages/ORDashboard'));
+const PACUDashboard = lazy(() => import('./pages/PACUDashboard'));
+const MARDashboard = lazy(() => import('./pages/MARDashboard'));
+const BloodBankDashboard = lazy(() => import('./pages/BloodBankDashboard'));
+const InfectionControlDashboard = lazy(() => import('./pages/InfectionControlDashboard'));
+const RevenueCycleDashboard = lazy(() => import('./pages/RevenueCycleDashboard'));
+const CdiDashboard = lazy(() => import('./pages/CdiDashboard'));
+const CaseManagementDashboard = lazy(() => import('./pages/CaseManagementDashboard'));
+const SepsisDashboard = lazy(() => import('./pages/SepsisDashboard'));
+const HIPAAComplianceDashboard = lazy(() => import('./pages/HIPAAComplianceDashboard'));
+const PopulationHealthDashboard = lazy(() => import('./pages/PopulationHealthDashboard'));
+const PracticeManagementDashboard = lazy(() => import('./pages/PracticeManagementDashboard'));
+const PriorAuthorizationDashboard = lazy(() => import('./pages/PriorAuthorizationDashboard'));
+const PatientPortalLogin = lazy(() => import('./pages/PatientPortalLogin'));
+const PatientPortalDashboard = lazy(() => import('./pages/PatientPortalDashboard'));
+const CampaignsDashboard = lazy(() => import('./pages/CampaignsDashboard'));
+const MultiCurrencyMedicalAidDashboard = lazy(() => import('./pages/MultiCurrencyMedicalAidDashboard'));
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -87,6 +87,14 @@ const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.Rea
   return children;
 };
 
+const RouteLoader: React.FC = () => (
+  <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-6 py-4 text-sm font-medium text-slate-200">
+      Loading workspace...
+    </div>
+  </div>
+);
+
 function App() {
   const TenantRedirect: React.FC = () => {
     const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -100,16 +108,17 @@ function App() {
     <NotificationProvider>
       <AutoLogoutProvider>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Routes>
-            <Route path="/" element={<TenantDirectory />} />
-            <Route path="/:tenantSlug" element={<TenantRedirect />} />
-            <Route path="/:tenantSlug/login" element={<TenantRedirect />} />
-            <Route path="/portal/:tenantSlug/login" element={<PatientPortalLogin />} />
-            <Route path="/portal/:tenantSlug" element={<PatientPortalDashboard />} />
-            <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
-            <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
-            <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />
-            <Route path="/ehr/:tenantSlug/users" element={<UserManagement />} />
+          <Suspense fallback={<RouteLoader />}>
+            <Routes>
+              <Route path="/" element={<TenantDirectory />} />
+              <Route path="/:tenantSlug" element={<TenantRedirect />} />
+              <Route path="/:tenantSlug/login" element={<TenantRedirect />} />
+              <Route path="/portal/:tenantSlug/login" element={<PatientPortalLogin />} />
+              <Route path="/portal/:tenantSlug" element={<PatientPortalDashboard />} />
+              <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
+              <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
+              <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />
+              <Route path="/ehr/:tenantSlug/users" element={<UserManagement />} />
             <Route
               path="/ehr/:tenantSlug/hipaa-compliance"
               element={
@@ -566,8 +575,9 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            <Route path="/ehr/:tenantSlug/settings" element={<ProfileSettings />} />
-          </Routes>
+              <Route path="/ehr/:tenantSlug/settings" element={<ProfileSettings />} />
+            </Routes>
+          </Suspense>
         </Router>
       </AutoLogoutProvider>
     </NotificationProvider>

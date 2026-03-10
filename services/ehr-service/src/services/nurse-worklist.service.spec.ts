@@ -44,6 +44,108 @@ describe('NurseWorklistService', () => {
     expect(tenantDb.query).not.toHaveBeenCalled();
   });
 
+  it('builds a doctor synchronization feed from doctor-routed coordination items', async () => {
+    const { service } = makeService();
+    jest.spyOn(service, 'getCrossModuleEscalationFeed').mockResolvedValue({
+      items: [
+        {
+          id: 'handoff:patient-1:draft',
+          module: 'nursing',
+          item_type: 'nurse_handoff_risk',
+          severity: 'high',
+          workflow_status: 'pending',
+          doctor_sync_status: 'nurse_handoff_pending',
+          destination_role: 'nurse',
+        },
+        {
+          id: 'lab-critical-alert:alert-1',
+          module: 'lab',
+          item_type: 'lab_critical_alert_followup',
+          severity: 'critical',
+          workflow_status: 'pending',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_role: 'doctor',
+        },
+        {
+          id: 'medication:mar-1',
+          module: 'nursing',
+          item_type: 'medication_administration_followup',
+          severity: 'high',
+          workflow_status: 'acknowledged',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_role: 'doctor',
+        },
+        {
+          id: 'pharmacy:rx-1',
+          module: 'pharmacy',
+          item_type: 'pharmacy_protocol_followup',
+          severity: 'medium',
+          workflow_status: 'pending',
+          doctor_sync_status: 'nurse_followup_required',
+          destination_role: 'nurse',
+        },
+      ],
+      summary: {},
+    } as any);
+
+    const result = await service.getDoctorSynchronizationFeed({} as any);
+
+    expect(result.summary.total).toBe(2);
+    expect(result.summary.handoff).toBe(1);
+    expect(result.summary.critical_results).toBe(1);
+    expect(result.summary.acknowledged).toBe(0);
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'handoff:patient-1:draft',
+          coordination_focus: 'handoff',
+        }),
+        expect.objectContaining({
+          id: 'lab-critical-alert:alert-1',
+          coordination_focus: 'critical_results',
+        }),
+      ]),
+    );
+  });
+
+  it('supports doctor synchronization focus filters and acknowledged inclusion', async () => {
+    const { service } = makeService();
+    jest.spyOn(service, 'getCrossModuleEscalationFeed').mockResolvedValue({
+      items: [
+        {
+          id: 'ed:visit-1',
+          module: 'ed',
+          item_type: 'ed_protocol_followup',
+          severity: 'critical',
+          workflow_status: 'pending',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_role: 'doctor',
+        },
+        {
+          id: 'medication:mar-1',
+          module: 'nursing',
+          item_type: 'medication_administration_followup',
+          severity: 'high',
+          workflow_status: 'acknowledged',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_role: 'doctor',
+        },
+      ],
+      summary: {},
+    } as any);
+
+    const triageOnly = await service.getDoctorSynchronizationFeed({} as any, { focus: 'triage' });
+    expect(triageOnly.items).toHaveLength(1);
+    expect(triageOnly.items[0].id).toBe('ed:visit-1');
+
+    const withAcknowledged = await service.getDoctorSynchronizationFeed({} as any, {
+      focus: 'orders',
+      includeAcknowledged: true,
+    });
+    expect(withAcknowledged.items).toHaveLength(1);
+    expect(withAcknowledged.items[0].id).toBe('medication:mar-1');
+  });
+
   it('persists task completion context and records the audit event', async () => {
     const { service, mocks } = makeService();
     const tenantDb = { query: jest.fn().mockResolvedValue([]) } as any;

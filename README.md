@@ -1,351 +1,98 @@
-# MediCore - Multi-Tenant eHR System
+# MediCore
 
-🏥 **Complete Electronic Health Record System for Private Clinics in Zimbabwe**
+MediCore is a multi-tenant EHR platform for clinics and hospitals. This repository contains the admin portal, clinician-facing EHR, patient portal, tenant management service, core EHR service, and the CDSS/AI service.
 
-## Overview
+The documentation set was consolidated on March 10, 2026. The root overview stays here; the full product and technical reference lives in [docs/MEDICORE_SYSTEM_REFERENCE.md](./docs/MEDICORE_SYSTEM_REFERENCE.md).
 
-MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system designed specifically for private surgeries and clinics in Zimbabwe. Built to compete with existing solutions like Health263, MediCore offers advanced features at competitive pricing with AI-powered clinical decision support.
+## What is in this repo
 
-## 🚀 Key Features
+| Area | Path | Purpose |
+| --- | --- | --- |
+| Super admin portal | `web-app/` | Tenant operations, backups, health, audit, terminology, CDSS admin |
+| Staff EHR frontend | `ehr-frontend/` | Multi-role clinical and operational web app |
+| Patient portal | `patient-portal/` | Patient self-service, messaging, telemedicine, reminders, records, bills |
+| Tenant service | `services/tenant-service/` | Tenant lifecycle, tenant users, analytics, backups, provisioning |
+| EHR service | `services/ehr-service/` | Main clinical API, interoperability, billing, specialty workflows |
+| CDSS service | `services/cdss-service/` | Clinical decision support, AI/LLM hooks, transcription support, evaluation |
+| Infra and schemas | `database/`, `monitoring/`, `infrastructure/`, `scripts/` | Provisioning, monitoring, utilities, seed data |
 
-### ✅ **Complete Tenant Management System**
-- **Multi-tenant Architecture** - Complete data isolation per clinic
-- **Automated Database Provisioning** - Each tenant gets dedicated database
-- **Role-Based Access Control** - 5 healthcare roles (Admin, Doctor, Nurse, Receptionist, Pharmacist)
-- **Manual Tenant Activation** - Control over clinic activation/suspension
-- **Comprehensive Analytics** - System-wide reporting and insights
+## Product scope
 
-### ✅ **User Management System** (NEW)
-- **Complete CRUD Operations** - Create, read, update, delete clinic staff
-- **Secure Password Management** - Auto-generated temporary passwords with copy functionality
-- **Role-Based Permissions** - Admin-only access to user management
-- **Account Status Control** - Activate/deactivate users as needed
-- **Profile Management** - User settings and password change functionality
+MediCore already goes far beyond a basic clinic EMR. The current codebase includes:
 
-### ⚙️ **Tenant Configuration System** (NEW)
-- **Gateway Isolation** - Unique SMS & Payment gateway credentials per tenant
-- **Dynamic Configuration** - Store and manage API keys securely in tenant databases
-- **Fallback Support** - System-level defaults with tenant-level overrides
+- Multi-tenant provisioning and tenant-scoped data isolation
+- Staff auth, RBAC, profile management, and EHR 2FA endpoints
+- Patient registration, appointments, vitals, notes, orders, prescriptions, billing, payments, claims, referrals, care plans, and documents
+- Secure provider messaging, notifications, reports, and analytics
+- HIV, maternity, oncology, ophthalmology, cardiology, diabetes, pharmacy, immunization, ED, OR, anesthesia, blood bank, infection control, sepsis, case management, and revenue cycle modules
+- Patient portal workflows for appointments, records, labs, prescriptions, reminders, bills, PROs, messages, telemedicine, goals, consents, pathways, immunizations, family access, and admission visibility
+- Interoperability through FHIR, HL7, CCDA, WHO SMART Guidelines, DHIS2, terminology, and medical-aid integrations
+- CDSS capabilities for drug safety, guidelines, risk scoring, diagnostic support, transcription, and post-visit AI workflows
 
-### 🏥 **Core eHR Functionality** 
-- **User Management** ✅ - Complete staff management system
-- **Patient Management** 🚧 - Patient registration and demographics (Next)
-- **Medical Records** 🚧 - Clinical documentation and history
-- **Appointment Scheduling** 🚧 - Booking and calendar management
-- **Prescription Management** 🚧 - Medication orders and tracking
-- **Laboratory & Imaging** 🚧 - Test orders and results
-- **Billing & Invoicing** 🚧 - Financial management
+## Default local runtime
 
-### ✅ **Medical Aid Claims Processing**
-- **Automated Claims** - Generation and submission via EDI/API
-- **Status Tracking** - Real-time claim status updates
-- **Pre-authorization** - Instant checks for procedures
-- **Provider Integration** - CIMAS, Premier, Econet Health, PSMAS
-- **Pricing** - Competitive model vs Health263
+| Component | Default port |
+| --- | --- |
+| EHR frontend | `3000` |
+| Tenant service | `3001` |
+| Web admin portal | `3011` |
+| Grafana | `3012` |
+| EHR API | `3013` |
+| Patient portal | `3015` |
+| CDSS API | `8000` |
+| PostgreSQL | `5432` |
+| Redis | `6379` |
+| MinIO API / console | `9000` / `9001` |
+| Prometheus | `9090` |
 
-### ✅ **Clinical Decision Support System (CDSS)**
-- **AI Diagnostics** - MedBERT & ClinicalBERT fusion for intelligent suggestions
-- **Medical Vision** - AI analysis for X-Rays and DICOM imagery
-- **Drug Safety** - Advanced interaction checking (Drug-Drug, Drug-Food)
-- **Guidelines** - Automated clinical protocols and compliance
-- **Dosing** - Renal and weight-based dosing calculators
+## Quick start
 
-### 🔗 **Interoperability**
-- **HL7 v2.x** - ADT, ORM, and ORU message processing
-- **FHIR R4** - Complete resource mapping & capability statement
-- **WHO Smart Guidelines** - Native FHIR-based guideline execution
-- **DHIS2 Integration** - Automated reporting and patient sync
-- **External APIs** - Webhooks for real-time status updates
+1. Create environment config.
 
-### 🇿🇼 **Zimbabwe-Specific Features**
-- **SMS Notifications** ✅ - Multi-network support (Econet, Telecel, NetOne) with tenant-specific sender IDs
-- **Mobile Money Integration** ✅ - EcoCash & OneMoney payment processing with tenant-specific merchant accounts
-- **Local Medical Aid Integration** ✅ - Direct integration with CIMAS, Premier, Econet Health
-- **ZMDC Compliance** (Planned) - Regulatory reporting standards
-- **Local Currency Support** 🚧 - ZWL/USD multi-currency handling
-
-## 🏗️ Architecture
-
-- **Multi-tenant SaaS** - Complete data isolation per clinic
-- **Microservices** - Scalable and maintainable
-- **Cloud-native** - Docker containerized
-- **Mobile-first** - Responsive design
-
-## 🛠️ Technology Stack
-
-- **Backend**: Node.js, NestJS, TypeScript, PostgreSQL
-- **Frontend**: React, TypeScript, Tailwind CSS
-- **AI/ML**: Python, FastAPI, PyTorch, HuggingFace Transformers
-- **Integration**: HAPI FHIR, Mirth Connect (Planned)
-- **Infrastructure**: Docker, Docker Compose, Redis
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Docker and Docker Compose
-- Node.js 18+ (for development)
-- Git
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/chihwayi/medicore.git
-   cd medicore
-   ```
-
-2. **Start the development environment**
-   ```bash
-   ./scripts/setup.sh
-   ```
-
-3. **Launch all services**
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Configure URLs once (no repeated host edits)**
-   ```bash
-   # Example production-style pattern
-   SERVICE_BASE_URL=https://api.your-domain.com
-   REACT_APP_API_BASE_URL=https://api.your-domain.com
-   SERVICE_TENANT_PATH=/tenant-service
-   SERVICE_EHR_PATH=/ehr-service
-   SERVICE_CDSS_PATH=/cdss-service
-   ```
-   You can still override any single endpoint with explicit `SERVICE_*_URL` / `REACT_APP_*_API_URL`.
-
-5. **Access the application**
-   - **Super Admin Portal**: http://localhost:3011 (admin@medicore.co.zw / medicore123)
-   - **EHR System**: http://localhost:3014/ehr/bulawayo-general (admin@bulawayo-general.co.zw / ildc3m37)
-   - **Features**: Complete tenant management, user management, modern medical UI
-
-## 📊 Current Status
-
-### ✅ **PRODUCTION-READY MULTI-TENANT EHR PLATFORM**
-- **🏥 Multi-tenant Architecture** - Complete database isolation per clinic
-- **🔐 Enterprise Security** - JWT auth, tenant isolation, audit logging
-- **👥 Complete User Management** - Staff CRUD, password management, role-based access
-- **🎨 Modern Medical UI** - Glassmorphism design with healthcare theme
-- **📱 Mobile Responsive** - Works perfectly on all devices
-- **🔔 Smart Notifications** - No browser popups, beautiful toast messages
-- **💚 Health Monitoring** - Real-time database health checks & alerts
-- **📋 Audit Logging** - Complete activity tracking & compliance
-- **📧 Email Notifications** - Welcome emails, alerts, password resets
-- **📊 Analytics Dashboard** - System-wide reporting & metrics
-- **💳 Payment Gateway Integration** - Tenant-specific EcoCash & OneMoney configuration
-- **📱 SMS Gateway Integration** - Isolated SMS credentials for Econet/Telecel/NetOne
-- **🌐 Professional Web Portal** - React TypeScript interface
-- **🔧 RESTful APIs** - 69+ EHR APIs ready for development
-- **🤖 CDSS** - AI-powered diagnostics & interaction checking
-- **💰 Medical Aid Claims** - Automated submission & status tracking
-
-### 🚧 **Next Phase: Core EHR Modules**
-- **Patient Management** - Registration, demographics, medical history
-- **Appointment Scheduling** - Calendar, booking, reminders
-- **Medical Records** - Clinical notes, diagnoses, treatment plans
-- **Prescription Management** - Medication orders, drug interactions
-- **Laboratory Integration** - Test orders, results management
-- **Billing & Invoicing** - Financial management, invoicing
-
-## 🎯 Competitive Advantages
-
-### vs Health263 Zimbabwe
-- **40% Lower Pricing** - Transparent, all-inclusive packages
-- **Modern Technology** - Cloud-native React/Node.js vs legacy systems
-- **Superior User Experience** - Modern glassmorphism UI, mobile-responsive
-- **Enterprise Security** - Multi-tenant isolation, JWT auth, audit logs
-- **Complete Staff Management** - Built-in user management with role-based access
-- **Smart Notifications** - No browser popups, beautiful toast messages
-- **AI-Powered CDSS** - First in Zimbabwe market
-- **Production-Ready** - Enterprise-grade multi-tenant architecture
-- **Developer-Friendly** - 69+ APIs, comprehensive documentation
-
-## 📈 Business Model
-
-### Subscription Tiers
-- **Basic** ($99/month) - Core eHR features
-- **Professional** ($199/month) - + Medical aid claims + Basic CDSS
-- **Enterprise** ($299/month) - + Advanced CDSS + Full integration suite
-
-## 🏥 Target Market
-
-- Private clinics and surgeries in Zimbabwe
-- Medical practitioners seeking modern eHR solutions
-- Healthcare facilities wanting to reduce costs
-- Clinics requiring medical aid integration
-
-## 🔧 Development Setup
-
-### Local Development
 ```bash
-# Install dependencies
+cp .env.example .env
+```
+
+2. Install workspace dependencies.
+
+```bash
 npm install
+```
 
-# Start individual services
-cd services/tenant-service
+3. Start the full stack.
+
+```bash
+docker compose up -d postgres-master redis minio tenant-service cdss-service cdss-worker ehr-service web-app ehr-frontend patient-portal prometheus grafana
+```
+
+4. Open the main surfaces.
+
+- Admin portal: [http://localhost:3011](http://localhost:3011)
+- Staff EHR: [http://localhost:3000](http://localhost:3000)
+- Patient portal: [http://localhost:3015](http://localhost:3015)
+- Tenant Swagger: [http://localhost:3001/api/docs](http://localhost:3001/api/docs)
+- EHR Swagger: [http://localhost:3013/api/docs](http://localhost:3013/api/docs)
+- CDSS Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+## Recommended commands
+
+```bash
 npm run dev
-
-# Start web application
-cd web-app
-npm start
+npm run build
+npm run test
+npm run lint
 ```
 
-### Docker Development
+Useful optional scripts:
+
 ```bash
-# Start essential services only
-docker-compose up -d postgres-master redis tenant-service web-app
-
-# View logs
-docker-compose logs -f tenant-service
-
-# Stop services
-docker-compose down
+npm run seed:sample-imaging
+npm run seed:thandeka
+npm run dhis2:bootstrap
 ```
 
-## 📚 API Documentation
+## Source of truth
 
-### EHR Authentication (Port 3013)
-- `POST /api/auth/login` - EHR user login with tenant isolation
-- `GET /api/auth/profile` - Get current EHR user profile
-- `PUT /api/auth/change-password` - Change EHR user password
-
-### User Management (EHR)
-- `GET /api/users` - List all clinic staff (with role filtering)
-- `GET /api/users/:id` - Get specific user details
-- `POST /api/users` - Create new clinic staff member
-- `PUT /api/users/:id` - Update user information
-- `DELETE /api/users/:id` - Deactivate user
-- `PUT /api/users/:id/reset-password` - Reset user password
-- `PUT /api/users/:id/activate` - Activate deactivated user
-
-### Tenant Management (Port 3001)
-- `GET /api/tenants` - List all tenants
-- `POST /api/tenants` - Create new tenant
-- `PUT /api/tenants/:id/status` - Update tenant status
-- `GET /api/tenants/:id/users` - Get tenant users
-- `POST /api/tenants/:id/users` - Create tenant user
-
-### Health Monitoring
-- `GET /api/health/system` - System health overview
-- `GET /api/health/tenants` - All tenant health status
-
-### Finance & Payment APIs
-- `POST /api/finance/transactions` - Create finance transaction
-- `POST /api/finance/transactions/:id/payments` - Record payment
-- `GET /api/finance/transactions` - List transactions with filters
-- `GET /api/finance/dashboard/summary` - Finance dashboard summary
-- `GET /api/finance/transactions/:id` - Get transaction details
-
-### HIV Module APIs
-- `POST /api/hiv/nurse-intakes` - Create/update HIV nurse intake
-- `GET /api/hiv/nurse-intakes/patient/:patientId` - Get intakes by patient
-- `GET /api/hiv/nurse-intakes/appointment/:appointmentId` - Get intake by appointment
-- `GET /api/hiv/enrollments` - List HIV enrollments
-- Additional HIV management endpoints available
-
-### 70+ Additional EHR APIs Ready
-- Patient Management, Appointments, Medical Records
-- Prescriptions, Lab Orders, Billing, Claims
-- Finance Gating (Appointments, Lab, Imaging, Cardiology)
-- FHIR, HL7, CDSS, DHIS2, Reports, Notifications
-- SMS, Mobile Money, and more...
-
-## 🗄️ Database Structure
-
-### Master Database
-- `tenants` - Tenant registry
-- `tenant_users` - User management
-- `tenant_analytics` - System metrics
-
-### Tenant Databases (Per Clinic)
-- `users` - Clinic staff
-- `patients` - Patient records
-- `appointments` - Scheduling
-- `medical_records` - Clinical data
-- `billing` - Financial records
-
-## 🔐 Security Features
-
-- **Multi-Tenant Isolation** - Complete database separation per clinic
-- **JWT Authentication** - Secure token-based authentication with tenant validation
-- **Role-Based Access Control** - 5 healthcare roles with granular permissions
-- **Secure Password Management** - Auto-generated temporary passwords, mandatory changes
-- **Account Security** - Password complexity enforcement, account lockout protection
-- **Tenant URL Enforcement** - Strict tenant slug validation in all routes
-- **Data Isolation** - No cross-tenant data access possible
-- **Audit Logging** - Complete activity tracking with IP addresses
-- **Health Monitoring** - Real-time database connectivity checks
-- **Session Management** - Secure token expiration and refresh
-- **Encryption** - Data encrypted at rest and in transit
-- **Compliance** - POPIA and healthcare standards ready
-
-## 🚀 Deployment
-
-### Production Deployment
-```bash
-# Build production images
-docker-compose -f docker-compose.prod.yml build
-
-# Deploy to production
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-### Cloud Deployment
-- AWS ECS/EKS ready
-- Azure Container Instances ready
-- Kubernetes manifests included
-
-## 📞 Support
-
-- **Email**: support@medicore.co.zw
-- **Documentation**: [docs.medicore.co.zw](https://docs.medicore.co.zw)
-- **Issues**: [GitHub Issues](https://github.com/chihwayi/medicore/issues)
-
-## 📄 License
-
-Proprietary - MediCore Solutions
-
-## 🤝 Contributing
-
-This is a proprietary project. For collaboration opportunities, please contact the development team.
-
-## 🎯 Roadmap
-
-### Phase 1 (Completed) ✅
-- **Multi-tenant architecture** - Complete database isolation per clinic
-- **Enterprise tenant management** - Full CRUD with health monitoring
-- **Complete user management** - Staff CRUD, password management, role-based access
-- **Modern medical UI** - Glassmorphism design with healthcare theme
-- **Security system** - JWT auth, tenant isolation, audit logs
-- **Smart notifications** - Toast messages, no browser popups
-- **Mobile responsive** - Works on all devices
-- **Health monitoring** - Real-time database connectivity checks
-- **Email notifications** - Welcome emails, alerts, password resets
-- **Analytics dashboard** - System-wide reporting and metrics
-
-### Phase 2 (Q1 2025) 🚧
-- Patient management system
-- Appointment scheduling
-- Medical records management
-
-### Phase 3 (Q2 2025) 📋
-- Billing and invoicing
-- Medical aid claims processing
-- Basic CDSS integration
-
-### Phase 4 (Q3 2025) 🤖
-- Advanced AI/CDSS features
-- FHIR/HL7 integration
-- Mobile applications
-
-### Phase 5 (Q4 2025) 🌍
-- Market launch in Zimbabwe
-- Regional expansion
-- Advanced analytics
-
----
-
-**Built with ❤️ for Zimbabwe's healthcare sector**
-
-*Revolutionizing healthcare management, one clinic at a time.*
+- System reference: [docs/MEDICORE_SYSTEM_REFERENCE.md](./docs/MEDICORE_SYSTEM_REFERENCE.md)
+- Environment template: [.env.example](./.env.example)
+- Compose stack: [docker-compose.yml](./docker-compose.yml)

@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { config as envConfig } from '@medicore/config';
 import { Patient } from '../entities/patient.entity';
 import { TenantService } from './tenant.service';
 import { EmailService } from './email.service';
@@ -32,12 +33,21 @@ export interface PatientPasswordResetConfirmDto {
 @Injectable()
 export class PatientAuthService {
   private readonly logger = new Logger(PatientAuthService.name);
+  private readonly portalBaseUrl = String(process.env.PORTAL_BASE_URL || envConfig.publicUrls.patientPortal || '').replace(/\/+$/, '');
 
   constructor(
     private jwtService: JwtService,
     private tenantService: TenantService,
     private emailService: EmailService,
   ) {}
+
+  private getPortalLink(path: string): string {
+    if (!this.portalBaseUrl) {
+      throw new Error('PORTAL_BASE_URL is not configured. Set PORTAL_BASE_URL or PUBLIC_APP_BASE_URL.');
+    }
+
+    return `${this.portalBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  }
 
   private async getPatientRepository(tenantId: string): Promise<Repository<Patient>> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
@@ -136,7 +146,7 @@ export class PatientAuthService {
             <p>Dear ${patient.firstName} ${patient.lastName},</p>
             <p>Thank you for registering for the MediCore Patient Portal. Please verify your email address by clicking the link below:</p>
             <p style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.PORTAL_BASE_URL}/patient/verify-email?token=${verificationToken}" 
+              <a href="${this.getPortalLink(`/patient/verify-email?token=${verificationToken}`)}" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
                 Verify Email Address
               </a>
@@ -298,7 +308,7 @@ export class PatientAuthService {
             <p>Dear ${patient.firstName} ${patient.lastName},</p>
             <p>You requested to reset your password. Click the link below to reset it:</p>
             <p style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.PORTAL_BASE_URL}/patient/reset-password?token=${resetToken}" 
+              <a href="${this.getPortalLink(`/patient/reset-password?token=${resetToken}`)}" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
                 Reset Password
               </a>
@@ -473,4 +483,3 @@ export class PatientAuthService {
     };
   }
 }
-

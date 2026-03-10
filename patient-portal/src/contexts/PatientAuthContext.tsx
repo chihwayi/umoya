@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { runtimeUrls } from '../config/runtime';
 
 interface Patient {
   id: string;
@@ -40,11 +41,11 @@ interface LinkAccountData {
 
 const PatientAuthContext = createContext<PatientAuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL;
+const API_BASE_URL = runtimeUrls.ehrApi;
 
-  if (!API_BASE_URL) {
-    console.warn('REACT_APP_EHR_API_URL is not defined');
-  }
+if (!API_BASE_URL) {
+  console.warn('Patient Portal API URL is not defined');
+}
 
 export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -198,4 +199,3 @@ export const usePatientAuth = () => {
   }
   return context;
 };
-

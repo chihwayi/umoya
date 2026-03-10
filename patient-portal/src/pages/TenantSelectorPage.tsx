@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Building2, Search, ArrowRight, AlertCircle, Heart, Shield, Sparkles } from 'lucide-react';
+import { runtimeUrls } from '../config/runtime';
 
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL;
+const API_BASE_URL = runtimeUrls.ehrApi;
 
 interface Tenant {
   id: string;
@@ -199,5 +200,4 @@ const TenantSelectorPage: React.FC = () => {
 };
 
 export default TenantSelectorPage;
-
 

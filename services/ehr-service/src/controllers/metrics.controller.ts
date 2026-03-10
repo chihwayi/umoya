@@ -1,5 +1,7 @@
-import { Controller, Get, Header } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Header, Request, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { MetricsService } from '../services/metrics.service';
 
 @ApiTags('Metrics (Prometheus)')
@@ -20,5 +22,14 @@ export class MetricsController {
   @ApiResponse({ status: 200, description: 'Nurse copilot KPI snapshot returned' })
   getNurseCopilotKpis() {
     return this.metricsService.getNurseCopilotKpis();
+  }
+
+  @Get('workflow-health')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get workflow health snapshot for HIV, coordination, and revenue cycle baselines' })
+  @ApiResponse({ status: 200, description: 'Workflow health snapshot returned' })
+  getWorkflowHealthSnapshot(@Request() req: RequestWithTenant) {
+    return this.metricsService.getWorkflowHealthSnapshot(req.tenantDb);
   }
 }

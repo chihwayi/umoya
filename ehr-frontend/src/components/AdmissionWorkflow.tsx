@@ -3,6 +3,7 @@ import { X, UserPlus, Bed, Stethoscope, FileText, Calendar, Check, AlertCircle }
 import { useNotification } from './GlobalNotification';
 import axios from 'axios';
 import ICD10Picker from './ICD10Picker';
+import { runtimeUrls } from '../config/runtime';
 
 interface AdmissionWorkflowProps {
   patientId?: string;
@@ -22,6 +23,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
   onSuccess,
 }) => {
   const { showSuccess, showError } = useNotification();
+  const ehrApiUrl = runtimeUrls.ehrApi;
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [doctors, setDoctors] = useState<any[]>([]);
@@ -54,8 +56,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadPatients = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
-      const response = await axios.get(`${EHR_API_URL}/patients`, {
+      const response = await axios.get(`${ehrApiUrl}/patients`, {
         headers: {
           'X-Tenant-ID': tenantSlug,
           'Authorization': `Bearer ${token}`
@@ -70,8 +71,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadAdmittedPatients = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
-      const response = await axios.get(`${EHR_API_URL}/beds/admissions`, {
+      const response = await axios.get(`${ehrApiUrl}/beds/admissions`, {
         headers: {
           'X-Tenant-ID': tenantSlug,
           'Authorization': `Bearer ${token}`
@@ -86,8 +86,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadDoctors = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
-      const response = await axios.get(`${EHR_API_URL}/users`, {
+      const response = await axios.get(`${ehrApiUrl}/users`, {
         headers: {
           'X-Tenant-ID': tenantSlug,
           'Authorization': `Bearer ${token}`
@@ -102,11 +101,10 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadAvailableBeds = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
       const params: any = {};
       if (formData.ward) params.wardName = formData.ward;
       
-      const response = await axios.get(`${EHR_API_URL}/beds/available`, {
+      const response = await axios.get(`${ehrApiUrl}/beds/available`, {
         headers: {
           'X-Tenant-ID': tenantSlug,
           'Authorization': `Bearer ${token}`
@@ -131,9 +129,8 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
       setLoading(true);
       
       // Use direct axios call to avoid ehrApi.post function error
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
       const response = await axios.post(
-        `${EHR_API_URL}/beds/admissions`,
+        `${ehrApiUrl}/beds/admissions`,
         {
           patientId: selectedPatient?.id || patientId,
           ...formData,
@@ -507,4 +504,3 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 };
 
 export default AdmissionWorkflow;
-

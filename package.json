@@ -7,14 +7,15 @@
     "dev": "docker-compose up -d",
     "build": "npm run build:services && npm run build:web",
     "build:services": "npm run build -w @medicore/config && npm run build -w @medicore/ehr-service && npm run build -w @medicore/tenant-service",
-    "build:web": "cd web-app && npm run build",
-    "test": "npm run test -w @medicore/ehr-service && npm run test -w @medicore/tenant-service && CI=true npm run test -w @medicore/web-app -- --watch=false && CI=true npm run test -w medicore-ehr-frontend -- --watch=false",
+    "build:web": "npm run build -w @medicore/web-app && npm run build -w medicore-ehr-frontend && npm run build -w patient-portal",
+    "test": "npm run test -w @medicore/ehr-service && npm run test -w @medicore/tenant-service && CI=true npm run test -w @medicore/web-app -- --watch=false && CI=true npm run test -w medicore-ehr-frontend -- --watch=false && CI=true npm run test -w patient-portal -- --watch=false",
     "test:e2e": "cd tests/e2e && npm test",
-    "lint": "npm run lint -w @medicore/web-app && npm run lint -w medicore-ehr-frontend",
+    "lint": "npm run lint -w @medicore/web-app && npm run lint -w medicore-ehr-frontend && npm run lint -w patient-portal",
     "setup": "./scripts/setup.sh",
     "migrate": "./scripts/migrate.sh",
     "deploy": "./scripts/deploy.sh",
     "backup": "./scripts/backup.sh",
+    "smoke:core": "./scripts/smoke-core.sh",
     "seed:sample-imaging": "node scripts/seed-sample-imaging.js",
     "imaging:backfill": "ts-node scripts/backfill-imaging-objects.ts",
     "seed:thandeka": "ts-node scripts/seed-thandeka-data.ts",
@@ -26,7 +27,8 @@
     "packages/*",
     "services/*",
     "web-app",
-    "ehr-frontend"
+    "ehr-frontend",
+    "patient-portal"
   ],
   "devDependencies": {
     "@playwright/test": "^1.56.1",

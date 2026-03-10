@@ -4,7 +4,7 @@ import 'multer';
 import axios from 'axios';
 import * as FormData from 'form-data';
 import { createHash } from 'crypto';
-import { config } from '@medicore/config';
+import { config, env } from '@medicore/config';
 import {
   CuratePostVisitCompanionMemoryDto,
   CreatePostVisitSessionDto,
@@ -1578,9 +1578,9 @@ export class PostVisitService {
   }
 
   private resolveClinicalTrialsApiUrl(): string {
-    const direct = String(process.env.POSTVISIT_CLINICALTRIALS_API_URL || '').trim();
+    const direct = String(process.env.POSTVISIT_CLINICALTRIALS_API_URL || env.POSTVISIT_CLINICALTRIALS_API_URL || '').trim();
     if (direct) return direct;
-    return 'https://clinicaltrials.gov/api/v2/studies';
+    throw new Error('POSTVISIT_CLINICALTRIALS_API_URL is not configured.');
   }
 
   private getTrialDecisionSlaHours(): number {
@@ -6913,7 +6913,10 @@ export class PostVisitService {
       const minAgeYears = this.parseTrialAgeYears(minimumAgeRaw);
       const maxAgeYears = this.parseTrialAgeYears(maximumAgeRaw);
 
-      const sourceUrl = `https://clinicaltrials.gov/study/${id}`;
+      const clinicalTrialsStudyBaseUrl = String(
+        process.env.POSTVISIT_CLINICALTRIALS_STUDY_BASE_URL || env.POSTVISIT_CLINICALTRIALS_STUDY_BASE_URL || '',
+      ).replace(/\/+$/, '');
+      const sourceUrl = clinicalTrialsStudyBaseUrl ? `${clinicalTrialsStudyBaseUrl}/${id}` : null;
       results.push({
         trialId: id,
         trialTitle: title,

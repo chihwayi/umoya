@@ -19,6 +19,8 @@ jobs:
             path: services/tenant-service
           - service: ehr-frontend
             path: ehr-frontend
+          - service: patient-portal
+            path: patient-portal
 
     steps:
     - uses: actions/checkout@v4
@@ -68,6 +70,11 @@ jobs:
       if: matrix.service == 'ehr-frontend'
       working-directory: ${{ matrix.path }}
       run: npm run lint:doctor:changed:strict
+
+    - name: Lint
+      if: matrix.service == 'patient-portal' || matrix.service == 'tenant-service' || matrix.service == 'ehr-service'
+      working-directory: ${{ matrix.path }}
+      run: npm run lint --if-present
 
     - name: Build
       working-directory: ${{ matrix.path }}

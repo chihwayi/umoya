@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { createHash } from 'crypto';
+import { env } from '@medicore/config';
 import { CircuitBreaker } from '../utils/circuit-breaker';
 import { LruCache } from '../utils/lru-cache';
 
@@ -100,7 +101,7 @@ export class PostVisitGroundedLlmService {
   private readonly enabled = String(process.env.POSTVISIT_GROUNDED_LLM_ENABLED || 'true').toLowerCase() !== 'false';
   private readonly circuitBreaker = new CircuitBreaker(5, 30000);
   private readonly responseCache = new LruCache<{ json: any; audit: LlmAuditMetadata }>(200, 3600000);
-  private readonly apiUrl = String(process.env.POSTVISIT_LLM_API_URL || 'https://api.openai.com/v1/chat/completions');
+  private readonly apiUrl = String(process.env.POSTVISIT_LLM_API_URL || env.POSTVISIT_LLM_API_URL || '').trim();
   private readonly apiModel = String(process.env.POSTVISIT_LLM_MODEL || 'gpt-4o-mini');
   private readonly timeoutMs = Math.min(
     Math.max(Number(process.env.POSTVISIT_LLM_TIMEOUT_MS || 12000), 3000),
@@ -112,7 +113,7 @@ export class PostVisitGroundedLlmService {
   }
 
   private canUseLlm() {
-    return this.enabled && this.apiKey.length > 0;
+    return this.enabled && this.apiKey.length > 0 && this.apiUrl.length > 0;
   }
 
   async draftReferralLetter(input: {

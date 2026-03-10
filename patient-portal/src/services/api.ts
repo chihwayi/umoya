@@ -1,7 +1,9 @@
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL || '';
+import { runtimeUrls } from '../config/runtime';
 
-if (!process.env.REACT_APP_EHR_API_URL) {
-  console.warn('REACT_APP_EHR_API_URL is missing in environment variables. Patient Portal may not function correctly.');
+const API_BASE_URL = runtimeUrls.ehrApi;
+
+if (!API_BASE_URL) {
+  console.warn('Patient Portal API URL is missing. Configure REACT_APP_API_BASE_URL or REACT_APP_EHR_API_URL.');
 }
 
 const _genRid = (): string => {

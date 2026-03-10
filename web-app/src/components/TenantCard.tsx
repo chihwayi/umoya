@@ -12,6 +12,7 @@ interface TenantCardProps {
 export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, onDelete, onManageUsers }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const protocol = process.env.REACT_APP_PROTOCOL || window.location.protocol.replace(':', '') || 'https';
   
   const getStatusStyle = (status: string) => {
     switch (status) {
@@ -58,7 +59,7 @@ export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, 
                 </h3>
                 <div className="flex items-center space-x-2 mt-1">
                   <span className="text-sm text-slate-500 font-medium">{tenant.subdomain}.{process.env.REACT_APP_BASE_DOMAIN}</span>
-                  <a href={`${process.env.REACT_APP_PROTOCOL || 'http'}://${tenant.subdomain}.${process.env.REACT_APP_BASE_DOMAIN}`} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-blue-500 transition-colors">
+                  <a href={`${protocol}://${tenant.subdomain}.${process.env.REACT_APP_BASE_DOMAIN}`} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-blue-500 transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>

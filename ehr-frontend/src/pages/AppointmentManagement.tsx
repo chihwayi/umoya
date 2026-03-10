@@ -10,6 +10,7 @@ import { ehrApi } from '../services/api';
 import { formatDateForAPI, formatDateForInput, getTodayFormatted } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
 import AppointmentTemplatesPanel from '../components/AppointmentTemplatesPanel';
+import { runtimeUrls } from '../config/runtime';
 
 interface Appointment {
   id: string;
@@ -44,7 +45,7 @@ interface Appointment {
 }
 
 const AppointmentManagement: React.FC = () => {
-  const API_URL = process.env.REACT_APP_EHR_API_URL;
+  const API_URL = runtimeUrls.ehrApi;
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();

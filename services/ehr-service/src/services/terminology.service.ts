@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
+import { env } from '@medicore/config';
 import { TerminologyPostgresService } from './terminology-postgres.service';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
@@ -81,7 +82,10 @@ export class TerminologyService {
 
   constructor() {
     // Initialize RxNorm API client (NLM RxNorm REST API)
-    this.rxnormBaseUrl = process.env.RXNORM_BASE_URL || 'https://rxnav.nlm.nih.gov/REST';
+    this.rxnormBaseUrl = String(process.env.RXNORM_BASE_URL || env.RXNORM_BASE_URL || '').trim();
+    if (!this.rxnormBaseUrl) {
+      throw new Error('RXNORM_BASE_URL is not configured.');
+    }
     this.rxnormApiClient = axios.create({
       baseURL: this.rxnormBaseUrl,
       timeout: 10000,
