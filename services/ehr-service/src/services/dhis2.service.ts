@@ -200,13 +200,39 @@ export class Dhis2Service {
     return Number(error?.response?.status) === 404;
   }
 
+  private isMissingRelationError(error: any): boolean {
+    const pgCode = error?.code;
+    const message = String(error?.message || '').toLowerCase();
+    return pgCode === '42P01' || message.includes('relation') && message.includes('does not exist');
+  }
+
+  private formatDateOnly(value: unknown): string {
+    if (!value) {
+      return '';
+    }
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? '' : value.toISOString().split('T')[0];
+    }
+
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+      return value.length >= 10 ? value.slice(0, 10) : '';
+    }
+
+    return '';
+  }
+
   private buildPatientAttributes(patient: Patient) {
     return [
       { attribute: 'w75KJ2mc4zz', value: patient.firstName || '' },
       { attribute: 'zDhUuAYrxNC', value: patient.lastName || '' },
       {
         attribute: 'FO4GPuUTfQU',
-        value: patient.dateOfBirth ? patient.dateOfBirth.toISOString().split('T')[0] : '',
+        value: this.formatDateOnly(patient.dateOfBirth),
       },
       { attribute: 'cejWyOfXge6', value: (patient.gender || '').toUpperCase() },
       { attribute: 'AuPLng5hLbE', value: patient.nationalId || '' },
@@ -909,13 +935,27 @@ export class Dhis2Service {
       const dischargeRepository = tenantDb.getRepository(Discharge);
       const edVisitRepository = tenantDb.getRepository(EDVisit);
 
+      const safeCount = async (label: string, countFn: () => Promise<number>): Promise<number> => {
+        try {
+          return await countFn();
+        } catch (error: any) {
+          if (this.isMissingRelationError(error)) {
+            this.logger.warn(
+              `DHIS2 aggregate metric source table for ${label} is missing in tenant DB; defaulting to 0.`,
+            );
+            return 0;
+          }
+          throw error;
+        }
+      };
+
       const [totalAppointments, completedAppointments, totalAdmissions, totalDischarges, totalEdVisits] =
         await Promise.all([
-          appointmentRepository.count(),
-          appointmentRepository.count({ where: { status: 'completed' } }),
-          admissionRepository.count(),
-          dischargeRepository.count(),
-          edVisitRepository.count(),
+          safeCount('appointments_total', () => appointmentRepository.count()),
+          safeCount('appointments_completed', () => appointmentRepository.count({ where: { status: 'completed' } })),
+          safeCount('admissions_total', () => admissionRepository.count()),
+          safeCount('discharges_total', () => dischargeRepository.count()),
+          safeCount('ed_visits_total', () => edVisitRepository.count()),
         ]);
       const context = await this.resolveContext(tenantId);
 
