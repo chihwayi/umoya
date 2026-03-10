@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Tenant, TenantUser, CreateTenantUserRequest } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Tenant,
+  TenantUser,
+  CreateTenantUserRequest,
+  TenantDhis2ConfigPayload,
+  TenantDhis2ConfigView,
+} from '../types';
 import { tenantAPI } from '../services/api';
 import { Modal } from './Modal';
 
@@ -14,6 +20,42 @@ interface TenantDetailsModalProps {
 const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>, current: CreateTenantUserRequest, setter: React.Dispatch<React.SetStateAction<CreateTenantUserRequest>>) => {
   setter({...current, role: e.target.value as CreateTenantUserRequest['role']});
 };
+
+interface Dhis2FormState {
+  baseUrl: string;
+  apiVersion: string;
+  authType: 'pat' | 'basic';
+  pat: string;
+  username: string;
+  password: string;
+  orgUnitId: string;
+  trackedEntityTypeId: string;
+  datasetId: string;
+  enabled: boolean;
+  scheduledSyncEnabled: boolean;
+  scheduledRetryLimit: number;
+  alertLookbackHours: number;
+  alertErrorThreshold: number;
+  alertWebhookUrl: string;
+}
+
+const createDefaultDhis2Form = (): Dhis2FormState => ({
+  baseUrl: '',
+  apiVersion: '40',
+  authType: 'pat',
+  pat: '',
+  username: '',
+  password: '',
+  orgUnitId: '',
+  trackedEntityTypeId: '',
+  datasetId: '',
+  enabled: true,
+  scheduledSyncEnabled: false,
+  scheduledRetryLimit: 20,
+  alertLookbackHours: 24,
+  alertErrorThreshold: 10,
+  alertWebhookUrl: '',
+});
 
 export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   tenant,
@@ -44,16 +86,14 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
+  const [dhis2Loading, setDhis2Loading] = useState(false);
+  const [dhis2Saving, setDhis2Saving] = useState(false);
+  const [dhis2Configured, setDhis2Configured] = useState(false);
+  const [dhis2HasPat, setDhis2HasPat] = useState(false);
+  const [dhis2PatMasked, setDhis2PatMasked] = useState<string | null>(null);
+  const [dhis2Form, setDhis2Form] = useState<Dhis2FormState>(createDefaultDhis2Form());
 
-  useEffect(() => {
-    if (tenant && isOpen) {
-      loadUsers();
-    } else {
-      setUsers([]); // Clear users when closed or tenant cleared
-    }
-  }, [tenant, isOpen]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!tenant) return;
     setUsers([]); // Clear users immediately to prevent showing stale data from previous tenant
     setLoading(true);
@@ -70,6 +110,160 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setUsers([]);
     } finally {
       setLoading(false);
+    }
+  }, [tenant]);
+
+  const loadDhis2Config = useCallback(async () => {
+    if (!tenant) return;
+    setDhis2Loading(true);
+    try {
+      const data = await tenantAPI.getTenantDhis2Config(tenant.id);
+      if ((data as any)?.configured === false) {
+        setDhis2Configured(false);
+        setDhis2HasPat(false);
+        setDhis2PatMasked(null);
+        setDhis2Form(createDefaultDhis2Form());
+        return;
+      }
+
+      const config = data as TenantDhis2ConfigView;
+      setDhis2Configured(true);
+      setDhis2HasPat(Boolean(config.hasPat));
+      setDhis2PatMasked(config.patMasked ?? null);
+      setDhis2Form({
+        baseUrl: config.baseUrl || '',
+        apiVersion: config.apiVersion || '40',
+        authType: config.authType === 'basic' ? 'basic' : 'pat',
+        pat: '',
+        username: config.username || '',
+        password: '',
+        orgUnitId: config.orgUnitId || '',
+        trackedEntityTypeId: config.trackedEntityTypeId || '',
+        datasetId: config.datasetId || '',
+        enabled: Boolean(config.enabled),
+        scheduledSyncEnabled: Boolean(config.scheduledSyncEnabled),
+        scheduledRetryLimit: Number(config.scheduledRetryLimit || 20),
+        alertLookbackHours: Number(config.alertLookbackHours || 24),
+        alertErrorThreshold: Number(config.alertErrorThreshold || 10),
+        alertWebhookUrl: config.alertWebhookUrl || '',
+      });
+    } catch (error) {
+      console.error('Failed to load tenant DHIS2 config:', error);
+      setErrorMessage('Failed to load DHIS2 configuration');
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setDhis2Loading(false);
+    }
+  }, [tenant]);
+
+  useEffect(() => {
+    if (tenant && isOpen) {
+      loadUsers();
+      loadDhis2Config();
+    } else {
+      setUsers([]); // Clear users when closed or tenant cleared
+      setDhis2Configured(false);
+      setDhis2HasPat(false);
+      setDhis2PatMasked(null);
+      setDhis2Form(createDefaultDhis2Form());
+    }
+  }, [isOpen, loadDhis2Config, loadUsers, tenant]);
+
+  const handleSaveDhis2Config = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenant) return;
+
+    const normalizedBaseUrl = dhis2Form.baseUrl.trim();
+    const normalizedOrgUnitId = dhis2Form.orgUnitId.trim();
+    if (!normalizedBaseUrl) {
+      showError('DHIS2 Base URL is required');
+      return;
+    }
+    if (!normalizedOrgUnitId) {
+      showError('DHIS2 Org Unit ID is required');
+      return;
+    }
+    if (dhis2Form.authType === 'pat' && !dhis2Form.pat.trim() && !dhis2HasPat) {
+      showError('PAT is required for PAT authentication');
+      return;
+    }
+
+    const payload: TenantDhis2ConfigPayload = {
+      baseUrl: normalizedBaseUrl,
+      apiVersion: dhis2Form.apiVersion.trim() || '40',
+      authType: dhis2Form.authType,
+      orgUnitId: normalizedOrgUnitId,
+      trackedEntityTypeId: dhis2Form.trackedEntityTypeId.trim() || null,
+      datasetId: dhis2Form.datasetId.trim() || null,
+      enabled: dhis2Form.enabled,
+      scheduledSyncEnabled: dhis2Form.scheduledSyncEnabled,
+      scheduledRetryLimit: Math.min(Math.max(Number(dhis2Form.scheduledRetryLimit || 20), 1), 200),
+      alertLookbackHours: Math.min(Math.max(Number(dhis2Form.alertLookbackHours || 24), 1), 720),
+      alertErrorThreshold: Math.min(Math.max(Number(dhis2Form.alertErrorThreshold || 10), 1), 10000),
+      alertWebhookUrl: dhis2Form.alertWebhookUrl.trim() || null,
+    };
+
+    if (dhis2Form.authType === 'pat' && dhis2Form.pat.trim()) {
+      payload.pat = dhis2Form.pat.trim();
+    }
+    if (dhis2Form.authType === 'basic') {
+      if (dhis2Form.username.trim()) {
+        payload.username = dhis2Form.username.trim();
+      }
+      if (dhis2Form.password.trim()) {
+        payload.password = dhis2Form.password.trim();
+      }
+      if (!payload.username && !dhis2Configured) {
+        showError('Username is required for basic authentication');
+        return;
+      }
+      if (!payload.password && !dhis2Configured) {
+        showError('Password is required for basic authentication');
+        return;
+      }
+    }
+
+    setDhis2Saving(true);
+    try {
+      const saved = await tenantAPI.upsertTenantDhis2Config(tenant.id, payload);
+      setDhis2Configured(true);
+      setDhis2HasPat(Boolean(saved.hasPat));
+      setDhis2PatMasked(saved.patMasked ?? null);
+      setDhis2Form((prev) => ({
+        ...prev,
+        pat: '',
+        password: '',
+        username: saved.username || prev.username,
+      }));
+      showSuccess('DHIS2 configuration saved');
+    } catch (error: any) {
+      console.error('Failed to save tenant DHIS2 config:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to save DHIS2 configuration');
+    } finally {
+      setDhis2Saving(false);
+    }
+  };
+
+  const handleClearDhis2Config = async () => {
+    if (!tenant) return;
+    if (!window.confirm('Delete this tenant DHIS2 configuration?')) {
+      return;
+    }
+    setDhis2Saving(true);
+    try {
+      await tenantAPI.clearTenantDhis2Config(tenant.id);
+      setDhis2Configured(false);
+      setDhis2HasPat(false);
+      setDhis2PatMasked(null);
+      setDhis2Form(createDefaultDhis2Form());
+      showSuccess('DHIS2 configuration deleted');
+    } catch (error: any) {
+      console.error('Failed to delete tenant DHIS2 config:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to delete DHIS2 configuration');
+    } finally {
+      setDhis2Saving(false);
     }
   };
 
@@ -309,6 +503,227 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
               {errorMessage}
             </div>
           )}
+
+          {/* DHIS2 Integration Section */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-50/50">
+              <div>
+                <h4 className="font-bold text-slate-800">DHIS2 Integration</h4>
+                <p className="text-xs text-slate-500 mt-1">Tenant-scoped DHIS2 auth, org unit mapping, and scheduler controls.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                    dhis2Configured ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  {dhis2Configured ? 'Configured' : 'Not configured'}
+                </span>
+                <button
+                  type="button"
+                  onClick={loadDhis2Config}
+                  disabled={dhis2Loading || dhis2Saving}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  {dhis2Loading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveDhis2Config} className="p-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">DHIS2 Base URL</label>
+                  <input
+                    type="url"
+                    value={dhis2Form.baseUrl}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, baseUrl: e.target.value }))}
+                    placeholder="http://host.docker.internal:8888"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">API Version</label>
+                  <input
+                    type="text"
+                    value={dhis2Form.apiVersion}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, apiVersion: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Auth Type</label>
+                  <select
+                    value={dhis2Form.authType}
+                    onChange={(e) =>
+                      setDhis2Form((prev) => ({ ...prev, authType: e.target.value === 'basic' ? 'basic' : 'pat' }))
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+                  >
+                    <option value="pat">Personal Access Token</option>
+                    <option value="basic">Username + Password</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Org Unit ID</label>
+                  <input
+                    type="text"
+                    value={dhis2Form.orgUnitId}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, orgUnitId: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Tracked Entity Type ID</label>
+                  <input
+                    type="text"
+                    value={dhis2Form.trackedEntityTypeId}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, trackedEntityTypeId: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Dataset ID</label>
+                  <input
+                    type="text"
+                    value={dhis2Form.datasetId}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, datasetId: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+              </div>
+
+              {dhis2Form.authType === 'pat' ? (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">PAT</label>
+                  <input
+                    type="password"
+                    value={dhis2Form.pat}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, pat: e.target.value }))}
+                    placeholder={dhis2HasPat ? 'PAT already stored. Enter only to rotate.' : 'd2pat_...'}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                  {dhis2HasPat && (
+                    <p className="text-xs text-slate-500 mt-1">Stored token: {dhis2PatMasked || 'set'}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={dhis2Form.username}
+                      onChange={(e) => setDhis2Form((prev) => ({ ...prev, username: e.target.value }))}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={dhis2Form.password}
+                      onChange={(e) => setDhis2Form((prev) => ({ ...prev, password: e.target.value }))}
+                      placeholder="Enter only to set/rotate password"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={dhis2Form.enabled}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Enable DHIS2 integration
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={dhis2Form.scheduledSyncEnabled}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, scheduledSyncEnabled: e.target.checked }))}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Enable scheduled sync for this tenant
+                </label>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Retry Limit (1-200)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={dhis2Form.scheduledRetryLimit}
+                    onChange={(e) =>
+                      setDhis2Form((prev) => ({ ...prev, scheduledRetryLimit: Number(e.target.value || 20) }))
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Alert Lookback Hours (1-720)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={720}
+                    value={dhis2Form.alertLookbackHours}
+                    onChange={(e) =>
+                      setDhis2Form((prev) => ({ ...prev, alertLookbackHours: Number(e.target.value || 24) }))
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Alert Error Threshold (1-10000)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={dhis2Form.alertErrorThreshold}
+                    onChange={(e) =>
+                      setDhis2Form((prev) => ({ ...prev, alertErrorThreshold: Number(e.target.value || 10) }))
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Alert Webhook URL (optional)</label>
+                  <input
+                    type="url"
+                    value={dhis2Form.alertWebhookUrl}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, alertWebhookUrl: e.target.value }))}
+                    placeholder="https://hooks.slack.com/..."
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                {dhis2Configured && (
+                  <button
+                    type="button"
+                    onClick={handleClearDhis2Config}
+                    disabled={dhis2Saving}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Delete Config
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={dhis2Saving || dhis2Loading}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {dhis2Saving ? 'Saving...' : 'Save DHIS2 Config'}
+                </button>
+              </div>
+            </form>
+          </div>
 
           {/* Users Section */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

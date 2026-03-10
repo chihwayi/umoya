@@ -1,6 +1,16 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import { Tenant, CreateTenantRequest, UpdateTenantRequest, TenantUser, CreateTenantUserRequest, SystemStats, TenantReport } from '../types';
+import {
+  Tenant,
+  CreateTenantRequest,
+  UpdateTenantRequest,
+  TenantUser,
+  CreateTenantUserRequest,
+  SystemStats,
+  TenantReport,
+  TenantDhis2ConfigView,
+  TenantDhis2ConfigPayload,
+} from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -175,6 +185,24 @@ export const tenantAPI = {
 
   deleteUser: async (tenantId: string, userId: string): Promise<{ message: string }> => {
     const response = await api.delete(`/tenants/${tenantId}/users/${userId}`);
+    return response.data;
+  },
+
+  getTenantDhis2Config: async (tenantId: string): Promise<TenantDhis2ConfigView | { configured: false }> => {
+    const response = await api.get(`/tenants/${tenantId}/dhis2-config`);
+    return response.data;
+  },
+
+  upsertTenantDhis2Config: async (
+    tenantId: string,
+    payload: TenantDhis2ConfigPayload,
+  ): Promise<TenantDhis2ConfigView> => {
+    const response = await api.put(`/tenants/${tenantId}/dhis2-config`, payload);
+    return response.data;
+  },
+
+  clearTenantDhis2Config: async (tenantId: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/tenants/${tenantId}/dhis2-config`);
     return response.data;
   },
 

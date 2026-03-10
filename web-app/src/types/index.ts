@@ -89,6 +89,44 @@ export interface TenantReport {
   generatedAt: string;
 }
 
+export interface TenantDhis2ConfigView {
+  tenantId: string;
+  baseUrl: string;
+  apiVersion: string;
+  authType: 'pat' | 'basic';
+  hasPat: boolean;
+  patMasked: string | null;
+  username: string | null;
+  orgUnitId: string;
+  trackedEntityTypeId: string | null;
+  datasetId: string | null;
+  enabled: boolean;
+  scheduledSyncEnabled: boolean;
+  scheduledRetryLimit: number;
+  alertLookbackHours: number;
+  alertErrorThreshold: number;
+  alertWebhookUrl: string | null;
+  updatedAt: string | null;
+}
+
+export interface TenantDhis2ConfigPayload {
+  baseUrl: string;
+  apiVersion?: string;
+  authType?: 'pat' | 'basic';
+  pat?: string | null;
+  username?: string | null;
+  password?: string | null;
+  orgUnitId: string;
+  trackedEntityTypeId?: string | null;
+  datasetId?: string | null;
+  enabled?: boolean;
+  scheduledSyncEnabled?: boolean;
+  scheduledRetryLimit?: number;
+  alertLookbackHours?: number;
+  alertErrorThreshold?: number;
+  alertWebhookUrl?: string | null;
+}
+
 export interface User {
   id: string;
   email: string;

@@ -246,10 +246,32 @@ export class TenantService implements OnModuleInit {
   ): Promise<TenantDhis2ConfigView> {
     await this.findById(tenantId);
     const existingConfig = await this.getTenantDhis2Config(tenantId);
+    const existingSecretRows: Array<{
+      auth_type: string;
+      pat: string | null;
+      username: string | null;
+      password: string | null;
+    }> = await this.tenantRepository.query(
+      `
+      SELECT auth_type, pat, username, password
+      FROM tenant_dhis2_config
+      WHERE tenant_id = $1
+      LIMIT 1
+      `,
+      [tenantId],
+    );
+    const existingSecret = existingSecretRows[0];
 
     const baseUrl = String(payload.baseUrl || '').trim();
     const orgUnitId = String(payload.orgUnitId || '').trim();
-    const authType = payload.authType === 'basic' ? 'basic' : 'pat';
+    const authType =
+      payload.authType === 'basic'
+        ? 'basic'
+        : payload.authType === 'pat'
+          ? 'pat'
+          : existingSecret?.auth_type === 'basic'
+            ? 'basic'
+            : 'pat';
     const apiVersion = String(payload.apiVersion || '40').trim();
     const enabled =
       payload.enabled === undefined ? Boolean(existingConfig?.enabled ?? true) : payload.enabled !== false;
@@ -275,6 +297,27 @@ export class TenantService implements OnModuleInit {
         : payload.alertWebhookUrl
           ? String(payload.alertWebhookUrl).trim()
           : null;
+    const resolvedPat =
+      payload.pat !== undefined
+        ? String(payload.pat || '').trim() || null
+        : existingSecret?.pat
+          ? String(existingSecret.pat)
+          : null;
+    const resolvedUsername =
+      payload.username !== undefined
+        ? String(payload.username || '').trim() || null
+        : existingSecret?.username
+          ? String(existingSecret.username)
+          : null;
+    const resolvedPassword =
+      payload.password !== undefined
+        ? String(payload.password || '').trim() || null
+        : existingSecret?.password
+          ? String(existingSecret.password)
+          : null;
+    const patValue = authType === 'pat' ? resolvedPat : null;
+    const usernameValue = authType === 'basic' ? resolvedUsername : null;
+    const passwordValue = authType === 'basic' ? resolvedPassword : null;
 
     if (!baseUrl) {
       throw new ConflictException('baseUrl is required');
@@ -283,12 +326,12 @@ export class TenantService implements OnModuleInit {
       throw new ConflictException('orgUnitId is required');
     }
 
-    if (authType === 'pat' && (!payload.pat || String(payload.pat).trim().length === 0)) {
+    if (authType === 'pat' && (!patValue || String(patValue).trim().length === 0)) {
       throw new ConflictException('PAT is required when authType is pat');
     }
     if (
       authType === 'basic' &&
-      (!payload.username || !payload.password || !String(payload.username).trim() || !String(payload.password).trim())
+      (!usernameValue || !passwordValue || !String(usernameValue).trim() || !String(passwordValue).trim())
     ) {
       throw new ConflictException('username and password are required when authType is basic');
     }
@@ -340,9 +383,9 @@ export class TenantService implements OnModuleInit {
         baseUrl,
         apiVersion,
         authType,
-        payload.pat ?? null,
-        payload.username ?? null,
-        payload.password ?? null,
+        patValue,
+        usernameValue,
+        passwordValue,
         orgUnitId,
         payload.trackedEntityTypeId ?? null,
         payload.datasetId ?? null,
