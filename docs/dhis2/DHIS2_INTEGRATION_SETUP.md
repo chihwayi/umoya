@@ -43,11 +43,15 @@ DHIS2_DATASET_ID=YOUR_DATASET_ID
 DHIS2_USE_MOCK=false
 DHIS2_SCHEDULED_SYNC_ENABLED=false
 DHIS2_SCHEDULED_RETRY_LIMIT=20
+DHIS2_ALERT_LOOKBACK_HOURS=24
+DHIS2_ALERT_ERROR_THRESHOLD=10
+DHIS2_ALERT_WEBHOOK_URL=
 ```
 
 If EHR runs outside Docker, use `http://localhost:8888` instead.
 
 `DHIS2_SCHEDULED_SYNC_ENABLED=true` turns on hourly background tenant sync in `ehr-service`.
+If `DHIS2_ALERT_WEBHOOK_URL` is set, the scheduler posts alert payloads when tenant DHIS2 error counts exceed threshold.
 
 PAT auth header used by integration:
 

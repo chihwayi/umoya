@@ -12,6 +12,15 @@ export class Dhis2SchedulerService {
     Math.max(Number(process.env.DHIS2_SCHEDULED_RETRY_LIMIT || 20), 1),
     200,
   );
+  private readonly alertLookbackHours = Math.min(
+    Math.max(Number(process.env.DHIS2_ALERT_LOOKBACK_HOURS || 24), 1),
+    720,
+  );
+  private readonly alertErrorThreshold = Math.min(
+    Math.max(Number(process.env.DHIS2_ALERT_ERROR_THRESHOLD || 10), 1),
+    10000,
+  );
+  private readonly alertWebhookUrl = String(process.env.DHIS2_ALERT_WEBHOOK_URL || '').trim();
 
   constructor(
     private readonly tenantService: TenantService,
@@ -57,9 +66,50 @@ export class Dhis2SchedulerService {
     const retryResult = await this.dhis2Service.retryFailedSync(tenantDb, tenantId, {
       limit: this.retryLimit,
     });
+    const recentErrors = await this.dhis2Service.getRecentErrorCount(tenantDb, this.alertLookbackHours);
 
     this.logger.log(
-      `Tenant ${tenantId} DHIS2 cycle: patients=${patientResult.status}, aggregate=${aggregateResult.status}, retries attempted=${retryResult.attempted}, retries failed=${retryResult.failed}`,
+      `Tenant ${tenantId} DHIS2 cycle: patients=${patientResult.status}, aggregate=${aggregateResult.status}, retries attempted=${retryResult.attempted}, retries failed=${retryResult.failed}, recentErrors=${recentErrors}`,
     );
+
+    if (recentErrors >= this.alertErrorThreshold) {
+      const alertPayload = {
+        source: 'ehr-service.dhis2-scheduler',
+        tenantId,
+        severity: 'warning',
+        type: 'dhis2_sync_error_threshold_exceeded',
+        lookbackHours: this.alertLookbackHours,
+        threshold: this.alertErrorThreshold,
+        recentErrors,
+        timestamp: new Date().toISOString(),
+      };
+
+      this.logger.warn(
+        `DHIS2 alert threshold exceeded for tenant ${tenantId}: recentErrors=${recentErrors}, threshold=${this.alertErrorThreshold}`,
+      );
+      await this.sendAlertWebhook(alertPayload);
+    }
+  }
+
+  private async sendAlertWebhook(payload: Record<string, any>): Promise<void> {
+    if (!this.alertWebhookUrl) {
+      return;
+    }
+
+    try {
+      const response = await fetch(this.alertWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        this.logger.warn(
+          `DHIS2 alert webhook returned ${response.status} ${response.statusText} for url ${this.alertWebhookUrl}`,
+        );
+      }
+    } catch (error: any) {
+      this.logger.warn(`Failed to send DHIS2 alert webhook: ${error?.message || error}`);
+    }
   }
 }

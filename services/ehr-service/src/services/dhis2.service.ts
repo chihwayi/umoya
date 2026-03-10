@@ -943,6 +943,21 @@ export class Dhis2Service {
     };
   }
 
+  async getRecentErrorCount(tenantDb: DataSource, lookbackHours = 24): Promise<number> {
+    await this.ensureTenantSyncTables(tenantDb);
+    const normalizedHours = Math.min(Math.max(Number(lookbackHours || 24), 1), 720);
+    const rows: Array<{ total: number | string }> = await tenantDb.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM dhis2_sync_log
+      WHERE status = 'error'
+        AND synced_at >= NOW() - ($1 * INTERVAL '1 hour')
+      `,
+      [normalizedHours],
+    );
+    return Number(rows?.[0]?.total || 0);
+  }
+
   async syncPatients(tenantDb: DataSource, tenantId?: string) {
     try {
       const patientRepository = tenantDb.getRepository(Patient);

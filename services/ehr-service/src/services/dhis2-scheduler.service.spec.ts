@@ -6,6 +6,7 @@ describe('Dhis2SchedulerService', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete (global as any).fetch;
   });
 
   afterAll(() => {
@@ -24,6 +25,7 @@ describe('Dhis2SchedulerService', () => {
       syncPatients: jest.fn(),
       sendAggregateReport: jest.fn(),
       retryFailedSync: jest.fn(),
+      getRecentErrorCount: jest.fn(),
     } as any;
 
     const service = new Dhis2SchedulerService(tenantServiceMock, dhis2ServiceMock);
@@ -47,6 +49,7 @@ describe('Dhis2SchedulerService', () => {
       syncPatients: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
       sendAggregateReport: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
       retryFailedSync: jest.fn().mockResolvedValue({ attempted: 1, failed: 0 }),
+      getRecentErrorCount: jest.fn().mockResolvedValue(0),
     } as any;
 
     const service = new Dhis2SchedulerService(tenantServiceMock, dhis2ServiceMock);
@@ -57,5 +60,36 @@ describe('Dhis2SchedulerService', () => {
     expect(dhis2ServiceMock.syncPatients).toHaveBeenCalledWith(tenantDb, 'tenant-a');
     expect(dhis2ServiceMock.sendAggregateReport).toHaveBeenCalledWith({}, tenantDb, 'tenant-a');
     expect(dhis2ServiceMock.retryFailedSync).toHaveBeenCalledWith(tenantDb, 'tenant-a', { limit: 10 });
+    expect(dhis2ServiceMock.getRecentErrorCount).toHaveBeenCalledWith(tenantDb, 24);
+  });
+
+  it('sends webhook alert when recent DHIS2 errors exceed threshold', async () => {
+    process.env.DHIS2_SCHEDULED_SYNC_ENABLED = 'true';
+    process.env.DHIS2_ALERT_ERROR_THRESHOLD = '3';
+    process.env.DHIS2_ALERT_LOOKBACK_HOURS = '12';
+    process.env.DHIS2_ALERT_WEBHOOK_URL = 'http://example.test/hook';
+
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+    (global as any).fetch = fetchMock;
+
+    const tenantDb = { query: jest.fn() } as unknown as DataSource;
+    const tenantServiceMock = {
+      getAllActiveTenants: jest.fn().mockResolvedValue([{ id: 'tenant-a' }]),
+      getTenantDatabase: jest.fn().mockResolvedValue(tenantDb),
+    } as any;
+
+    const dhis2ServiceMock = {
+      syncPatients: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
+      sendAggregateReport: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
+      retryFailedSync: jest.fn().mockResolvedValue({ attempted: 0, failed: 0 }),
+      getRecentErrorCount: jest.fn().mockResolvedValue(5),
+    } as any;
+
+    const service = new Dhis2SchedulerService(tenantServiceMock, dhis2ServiceMock);
+    await service.runHourlyTenantSync();
+
+    expect(dhis2ServiceMock.getRecentErrorCount).toHaveBeenCalledWith(tenantDb, 12);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://example.test/hook');
   });
 });
