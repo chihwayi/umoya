@@ -498,6 +498,125 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 statements: () => this.getSprint57PostVisitDocumentIntelligenceAndNotificationsSchemaStatements(),
             },
             {
+                id: 'sprint58_post_visit_audio_storage',
+                label: 'Post-Visit Audio Storage',
+                version: '2026.03.07',
+                description: 'Adds recording storage columns to post_visit_sessions',
+                statements: () => this.getSprint58PostVisitAudioStorageSchemaStatements(),
+            },
+            {
+                id: 'sprint_e1_immunization_alignment',
+                label: 'Sprint E1 Immunization API Alignment',
+                version: '2026.03.08',
+                description: 'Adds immunization tables and vaccine schedule seed (routine + travel)',
+                statements: () => this.getSprintE1ImmunizationAlignmentStatements(),
+            },
+            {
+                id: 'sprint_e3_2fa',
+                label: 'Sprint E3 Two-Factor Authentication',
+                version: '2026.03.08',
+                description: 'Adds users two_factor_secret and two_factor_enabled columns',
+                statements: () => this.getSprintE3_2FAStatements(),
+            },
+            {
+                id: 'sprint_f1_or_surgical_safety',
+                label: 'Sprint F1 OR Surgical Safety + Counts + Specimens',
+                version: '2026.03.08',
+                description: 'WHO checklist, count sheets, specimen tracking tables',
+                statements: () => this.getSprintF1ORSurgicalSafetyStatements(),
+            },
+            {
+                id: 'sprint_f2_blood_bank_crossmatch',
+                label: 'Sprint F2 Blood Bank Crossmatch + Transfusion Reactions',
+                version: '2026.03.08',
+                description: 'blood_cross_match and transfusion_reactions tables',
+                statements: () => this.getSprintF2BloodBankCrossmatchStatements(),
+            },
+            {
+                id: 'sprint_f3_infection_sepsis',
+                label: 'Sprint F3 Infection Control + Sepsis Bundle',
+                version: '2026.03.08',
+                description: 'Hand hygiene, device days, sepsis_bundles timestamp columns',
+                statements: () => this.getSprintF3InfectionSepsisStatements(),
+            },
+            {
+                id: 'sprint_f4_bcma_mar',
+                label: 'Sprint F4 BCMA Prescription-to-MAR',
+                version: '2026.03.08',
+                description: 'mar_scheduled_entries for prescription-to-MAR and witness workflow',
+                statements: () => this.getSprintF4BcmaMarStatements(),
+            },
+            {
+                id: 'sprint_g2_encounter_coding',
+                label: 'Sprint G2 Encounter Auto-Coding (ICD/CPT)',
+                version: '2026.03.08',
+                description: 'encounter_code_suggestions for ICD-10/CPT suggestions and review',
+                statements: () => this.getSprintG2EncounterCodingStatements(),
+            },
+            {
+                id: 'sprint_g3_scheduling_ai',
+                label: 'Sprint G3 Predictive Scheduling + No-Show AI',
+                version: '2026.03.08',
+                description: 'appointment_no_show_predictions for no-show risk and smart slots',
+                statements: () => this.getSprintG3SchedulingAiStatements(),
+            },
+            {
+                id: 'sprint_g4_population_health',
+                label: 'Sprint G4 Population Health Registry + Preventive Care',
+                version: '2026.03.08',
+                description: 'chronic_disease_registry, preventive_care_reminders, recall_lists',
+                statements: () => this.getSprintG4PopulationHealthStatements(),
+            },
+            {
+                id: 'sprint_h1_practice_management',
+                label: 'Sprint H1 Fee Schedule + Superbill + Insurance Verification',
+                version: '2026.03.09',
+                description: 'fee_schedules, fee_schedule_items, superbill_templates, insurance_verifications',
+                statements: () => this.getSprintH1PracticeManagementStatements(),
+            },
+            {
+                id: 'sprint_h2_prior_authorization',
+                label: 'Sprint H2 Prior Authorization Workflow',
+                version: '2026.03.09',
+                description: 'prior_authorizations table and indexes',
+                statements: () => this.getSprintH2PriorAuthorizationStatements(),
+            },
+            {
+                id: 'sprint_h3_patient_portal',
+                label: 'Sprint H3 Patient Portal: Payments + Education + Family Access',
+                version: '2026.03.09',
+                description: 'patient_portal_payments, health_education_content, patient_family_access',
+                statements: () => this.getSprintH3PatientPortalStatements(),
+            },
+            {
+                id: 'sprint_h4_recall_campaigns',
+                label: 'Sprint H4 Recall Campaigns + Bulk Notifications',
+                version: '2026.03.09',
+                description: 'notification_campaigns and notification_campaign_recipients',
+                statements: () => this.getSprintH4RecallCampaignStatements(),
+            },
+            {
+                id: 'sprint_i1_travel_vaccines',
+                label: 'Sprint I1 Travel Vaccine Engine + Yellow Card',
+                version: '2026.03.09',
+                description: 'travel_vaccine_destinations, vaccination_certificates + seed destination requirements',
+                statements: () => this.getSprintI1TravelVaccineStatements(),
+            },
+            {
+                id: 'sprint_i2_multi_currency_medical_aid',
+                label: 'Sprint I2 Multi-Currency Billing + Medical Aid Stubs',
+                version: '2026.03.09',
+                description: 'billing currency fields, exchange rates, medical aid providers + eligibility + remittance stubs',
+                statements: () => this.getSprintI2MultiCurrencyMedicalAidStatements(),
+            },
+            {
+                id: 'sprint_j2_early_warning',
+                label: 'Sprint J2 Deterioration Detection + Early Warning Score (NEWS2)',
+                version: '2026.03.09',
+                description: 'patient_early_warning_scores table and indexes',
+                statements: () => this.getSprintJ2EarlyWarningStatements(),
+            },
+            {
                 id: 'maternity_care_tasks',
                 label: 'Maternity Care Task Workflow',
                 version: '2026.03.04',
@@ -511,10 +630,451 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 description: 'Adds medication_reminders table for tracking patient medication adherence reminders',
                 statements: () => this.getMedicationRemindersSchemaStatements(),
             },
+            {
+                id: 'dhis2_sync_foundation',
+                label: 'DHIS2 Sync Foundation',
+                version: '2026.03.10',
+                description: 'Tenant-level patient TEI mapping and sync audit log tables for idempotent DHIS2 push',
+                statements: () => this.getDhis2SyncFoundationStatements(),
+            },
+            {
+                id: 'sprint_l1_continuous_learning',
+                label: 'Continuous Learning Infrastructure',
+                version: '2026.03.07',
+                description: 'ML feedback loop tables: model metrics, training snapshots, coding corpus, and prediction outcome tracking',
+                statements: () => this.getSprintL1ContinuousLearningStatements(),
+            },
         ];
     }
     getCoreSchemaStatements() {
         return [...this.getClinicSchema()];
+    }
+    getDhis2SyncFoundationStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS dhis2_patient_mappings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE UNIQUE,
+        dhis2_tei_id VARCHAR(64) NOT NULL,
+        org_unit_id VARCHAR(64),
+        tenant_identifier VARCHAR(128),
+        last_synced_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_dhis2_patient_mappings_patient_id ON dhis2_patient_mappings(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_dhis2_patient_mappings_tei_id ON dhis2_patient_mappings(dhis2_tei_id)`,
+            `CREATE TABLE IF NOT EXISTS dhis2_sync_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id UUID,
+        dhis2_id VARCHAR(64),
+        action VARCHAR(20) NOT NULL CHECK (action IN ('create','update','upsert','skip','error','run_now')),
+        status VARCHAR(20) NOT NULL CHECK (status IN ('success','error','skipped')),
+        error_message TEXT,
+        payload JSONB DEFAULT '{}'::jsonb,
+        synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `ALTER TABLE dhis2_sync_log DROP CONSTRAINT IF EXISTS dhis2_sync_log_action_check`,
+            `ALTER TABLE dhis2_sync_log ADD CONSTRAINT dhis2_sync_log_action_check CHECK (action IN ('create','update','upsert','skip','error','run_now'))`,
+            `CREATE INDEX IF NOT EXISTS idx_dhis2_sync_log_entity_type ON dhis2_sync_log(entity_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_dhis2_sync_log_status ON dhis2_sync_log(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_dhis2_sync_log_synced_at ON dhis2_sync_log(synced_at DESC)`,
+        ];
+    }
+    getSprintH1PracticeManagementStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS fee_schedules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        payer_type VARCHAR(50) CHECK (payer_type IN ('self_pay','medical_aid','insurance','government','other')),
+        payer_name VARCHAR(255),
+        effective_date DATE NOT NULL,
+        end_date DATE,
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS fee_schedule_items (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        fee_schedule_id UUID NOT NULL REFERENCES fee_schedules(id) ON DELETE CASCADE,
+        cpt_code VARCHAR(10) NOT NULL,
+        description VARCHAR(500),
+        charge_amount DECIMAL(12,2) NOT NULL,
+        allowed_amount DECIMAL(12,2),
+        modifier VARCHAR(10),
+        effective_date DATE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_fsi_schedule ON fee_schedule_items(fee_schedule_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_fsi_cpt ON fee_schedule_items(cpt_code)`,
+            `CREATE TABLE IF NOT EXISTS superbill_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        specialty VARCHAR(100),
+        sections JSONB NOT NULL DEFAULT '[]'::jsonb,
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS insurance_verifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        appointment_id UUID REFERENCES appointments(id),
+        payer_name VARCHAR(255),
+        policy_number VARCHAR(100),
+        group_number VARCHAR(100),
+        verification_status VARCHAR(30) DEFAULT 'pending' CHECK (verification_status IN ('pending','verified','denied','expired','not_found')),
+        coverage_details JSONB DEFAULT '{}'::jsonb,
+        copay_amount DECIMAL(10,2),
+        deductible_remaining DECIMAL(10,2),
+        verified_at TIMESTAMP WITH TIME ZONE,
+        verified_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_iv_patient ON insurance_verifications(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_iv_appointment ON insurance_verifications(appointment_id)`,
+        ];
+    }
+    getSprintH2PriorAuthorizationStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS prior_authorizations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        payer_name VARCHAR(255),
+        authorization_type VARCHAR(50) CHECK (authorization_type IN ('medication','procedure','imaging','referral','dme','other')),
+        service_description TEXT NOT NULL,
+        cpt_code VARCHAR(10),
+        icd10_code VARCHAR(10),
+        status VARCHAR(30) DEFAULT 'draft' CHECK (status IN ('draft','submitted','pending','approved','denied','expired','appeal')),
+        submitted_at TIMESTAMP WITH TIME ZONE,
+        decision_at TIMESTAMP WITH TIME ZONE,
+        authorization_number VARCHAR(100),
+        authorized_units INTEGER,
+        authorized_from DATE,
+        authorized_to DATE,
+        denial_reason TEXT,
+        appeal_deadline DATE,
+        notes TEXT,
+        requested_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_pa_patient ON prior_authorizations(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_pa_status ON prior_authorizations(status)`,
+        ];
+    }
+    getSprintH3PatientPortalStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS patient_portal_payments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        bill_id UUID,
+        amount DECIMAL(12,2) NOT NULL,
+        payment_method VARCHAR(30) CHECK (payment_method IN ('ecocash','onemoney','card','bank_transfer')),
+        payment_reference VARCHAR(100),
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','completed','failed','refunded')),
+        paid_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS health_education_content (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR(500) NOT NULL,
+        category VARCHAR(100),
+        content_type VARCHAR(30) DEFAULT 'article' CHECK (content_type IN ('article','video','infographic','faq')),
+        body TEXT NOT NULL,
+        language VARCHAR(10) DEFAULT 'en',
+        tags JSONB DEFAULT '[]'::jsonb,
+        is_published BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_hec_category ON health_education_content(category)`,
+            `CREATE INDEX IF NOT EXISTS idx_hec_language ON health_education_content(language)`,
+            `CREATE TABLE IF NOT EXISTS patient_family_access (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        proxy_name VARCHAR(255) NOT NULL,
+        proxy_email VARCHAR(255) NOT NULL,
+        proxy_phone VARCHAR(30),
+        relationship VARCHAR(50),
+        access_level VARCHAR(30) DEFAULT 'view_only' CHECK (access_level IN ('view_only','full','emergency_only')),
+        granted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_pfa_patient ON patient_family_access(patient_id)`,
+        ];
+    }
+    getSprintH4RecallCampaignStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS notification_campaigns (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        channel VARCHAR(20) DEFAULT 'sms' CHECK (channel IN ('sms','email')),
+        message_template TEXT NOT NULL,
+        target_type VARCHAR(50) DEFAULT 'manual' CHECK (target_type IN ('manual','recall_list','query')),
+        target_ref_id UUID,
+        criteria JSONB DEFAULT '{}'::jsonb,
+        status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft','scheduled','sending','completed','cancelled','failed')),
+        scheduled_at TIMESTAMP WITH TIME ZONE,
+        started_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS notification_campaign_recipients (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        campaign_id UUID NOT NULL REFERENCES notification_campaigns(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        destination VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'queued' CHECK (status IN ('queued','sent','delivered','failed','skipped')),
+        message_id VARCHAR(100),
+        error TEXT,
+        sent_at TIMESTAMP WITH TIME ZONE,
+        delivered_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ncr_campaign ON notification_campaign_recipients(campaign_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ncr_patient ON notification_campaign_recipients(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_nc_status ON notification_campaigns(status)`,
+        ];
+    }
+    getSprintI1TravelVaccineStatements() {
+        const upsert = (countryName, iso, region, required, recommended, malaria, notes) => `INSERT INTO travel_vaccine_destinations (country_name, iso_code, region, required_vaccines, recommended_vaccines, malaria_prophylaxis_zones, special_notes, last_updated)\n` +
+            `VALUES (\n` +
+            `  '${countryName.replace(/'/g, "''")}',\n` +
+            `  '${iso}',\n` +
+            `  '${region.replace(/'/g, "''")}',\n` +
+            `  '${JSON.stringify(required).replace(/'/g, "''")}'::jsonb,\n` +
+            `  '${JSON.stringify(recommended).replace(/'/g, "''")}'::jsonb,\n` +
+            `  '${JSON.stringify(malaria).replace(/'/g, "''")}'::jsonb,\n` +
+            `  '${notes.replace(/'/g, "''")}',\n` +
+            `  CURRENT_DATE\n` +
+            `)\n` +
+            `ON CONFLICT (iso_code) DO UPDATE SET\n` +
+            `  country_name = EXCLUDED.country_name,\n` +
+            `  region = EXCLUDED.region,\n` +
+            `  required_vaccines = EXCLUDED.required_vaccines,\n` +
+            `  recommended_vaccines = EXCLUDED.recommended_vaccines,\n` +
+            `  malaria_prophylaxis_zones = EXCLUDED.malaria_prophylaxis_zones,\n` +
+            `  special_notes = EXCLUDED.special_notes,\n` +
+            `  last_updated = EXCLUDED.last_updated`;
+        const YF = { code: 'YF', name: 'Yellow fever' };
+        const TYP = { code: 'TYP', name: 'Typhoid' };
+        const RAB = { code: 'RAB', name: 'Rabies' };
+        const CHO = { code: 'CHO', name: 'Cholera' };
+        const JE = { code: 'JE', name: 'Japanese encephalitis' };
+        const MEN = { code: 'MEN', name: 'Meningococcal' };
+        const HEPA = { code: 'HEPA', name: 'Hepatitis A' };
+        const HEPB = { code: 'HEPB', name: 'Hepatitis B' };
+        const POL = { code: 'POL', name: 'Polio' };
+        const MMR = { code: 'MMR', name: 'Measles/Mumps/Rubella' };
+        const TDAP = { code: 'TDAP', name: 'Tdap/Tetanus' };
+        const C19 = { code: 'COVID', name: 'COVID-19' };
+        return [
+            `CREATE TABLE IF NOT EXISTS travel_vaccine_destinations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        country_name VARCHAR(100) NOT NULL,
+        iso_code VARCHAR(3) NOT NULL UNIQUE,
+        region VARCHAR(100),
+        required_vaccines JSONB DEFAULT '[]'::jsonb,
+        recommended_vaccines JSONB DEFAULT '[]'::jsonb,
+        malaria_prophylaxis_zones JSONB DEFAULT '[]'::jsonb,
+        special_notes TEXT,
+        last_updated DATE DEFAULT CURRENT_DATE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_tvd_iso ON travel_vaccine_destinations(iso_code)`,
+            `CREATE TABLE IF NOT EXISTS vaccination_certificates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        certificate_number VARCHAR(50) NOT NULL UNIQUE,
+        certificate_type VARCHAR(30) DEFAULT 'yellow_card' CHECK (certificate_type IN ('yellow_card','covid_card','general')),
+        issued_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        issued_by UUID REFERENCES users(id),
+        issuing_center VARCHAR(255),
+        immunization_ids JSONB DEFAULT '[]'::jsonb,
+        pdf_storage_key VARCHAR(500),
+        is_valid BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_vc_patient ON vaccination_certificates(patient_id)`,
+            upsert('Zimbabwe', 'ZWE', 'Africa', [], [YF, TYP, HEPA, HEPB, TDAP, POL, MMR, C19], [{ zone: 'low', name: 'Zimbabwe (selected areas)' }], 'Routine + travel vaccines recommended; malaria risk varies by region.'),
+            upsert('South Africa', 'ZAF', 'Africa', [], [TYP, HEPA, TDAP, MMR, C19], [{ zone: 'limited', name: 'Limpopo/Mpumalanga/KZN (some areas)' }], 'Yellow fever certificate required if arriving from risk countries.'),
+            upsert('Kenya', 'KEN', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Most regions below 2,500m' }], 'Yellow fever recommended/required; malaria widespread.'),
+            upsert('Tanzania', 'TZA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever often required for Zanzibar travel; malaria risk.'),
+            upsert('Uganda', 'UGA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required; malaria high risk.'),
+            upsert('Ghana', 'GHA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required for entry.'),
+            upsert('Nigeria', 'NGA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required for entry.'),
+            upsert('Senegal', 'SEN', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'moderate', name: 'Some regions' }], 'Yellow fever required for entry.'),
+            upsert('Ethiopia', 'ETH', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, TDAP, POL, MMR, C19], [{ zone: 'variable', name: 'Lowlands' }], 'Yellow fever recommended for some areas.'),
+            upsert('Rwanda', 'RWA', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'low', name: 'Limited' }], 'Yellow fever required/recommended depending on travel route.'),
+            upsert('Mozambique', 'MOZ', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'High malaria risk; YF certificate required if from risk countries.'),
+            upsert('Angola', 'AGO', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required.'),
+            upsert('Democratic Republic of the Congo', 'COD', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, CHO, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required; cholera outbreaks possible.'),
+            upsert('Cameroon', 'CMR', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required; malaria risk.'),
+            upsert('Cote d’Ivoire', 'CIV', 'Africa', [YF], [TYP, HEPA, HEPB, RAB, MEN, TDAP, POL, MMR, C19], [{ zone: 'high', name: 'Widespread' }], 'Yellow fever required.'),
+            upsert('Brazil', 'BRA', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Amazon basin' }], 'Yellow fever recommended for many states.'),
+            upsert('Peru', 'PER', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Amazon regions' }], 'Yellow fever recommended for Amazon travel.'),
+            upsert('Colombia', 'COL', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Lowland areas' }], 'Yellow fever recommended for some areas.'),
+            upsert('Ecuador', 'ECU', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Amazon regions' }], 'Yellow fever recommended for Amazon travel.'),
+            upsert('Bolivia', 'BOL', 'South America', [], [YF, TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'variable', name: 'Lowlands' }], 'Yellow fever recommended for lowland travel.'),
+            upsert('Argentina', 'ARG', 'South America', [], [YF, TYP, HEPA, TDAP, MMR, C19], [{ zone: 'low', name: 'Limited' }], 'Yellow fever recommended for Iguazú region travel.'),
+            upsert('India', 'IND', 'South Asia', [], [TYP, HEPA, HEPB, RAB, CHO, JE, TDAP, POL, MMR, C19], [{ zone: 'variable', name: 'Widespread in season' }], 'Consider JE for rural/long stays; malaria varies by region.'),
+            upsert('Nepal', 'NPL', 'South Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Lowlands (Terai)' }], 'Malaria limited to some lowland areas.'),
+            upsert('Pakistan', 'PAK', 'South Asia', [], [TYP, HEPA, HEPB, RAB, POL, TDAP, MMR, C19], [{ zone: 'variable', name: 'Some regions' }], 'Polio booster may be required for some travelers.'),
+            upsert('Bangladesh', 'BGD', 'South Asia', [], [TYP, HEPA, HEPB, RAB, CHO, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Some regions' }], 'Cholera outbreaks possible; consider cholera vaccine for high-risk travel.'),
+            upsert('Sri Lanka', 'LKA', 'South Asia', [], [TYP, HEPA, HEPB, RAB, TDAP, MMR, C19], [{ zone: 'low', name: 'Limited' }], 'Malaria currently low/limited.'),
+            upsert('Thailand', 'THA', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Border/rural areas' }], 'JE for rural/long stays; malaria limited to some areas.'),
+            upsert('Vietnam', 'VNM', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Rural areas' }], 'JE for rural/long stays; malaria in some regions.'),
+            upsert('Cambodia', 'KHM', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Rural areas' }], 'Malaria risk in some rural areas.'),
+            upsert('Laos', 'LAO', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Rural areas' }], 'Malaria risk in rural areas.'),
+            upsert('Indonesia', 'IDN', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Many islands' }], 'Malaria risk depends on island/region.'),
+            upsert('Philippines', 'PHL', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'variable', name: 'Some provinces' }], 'Malaria in some rural provinces; JE for rural/long stays.'),
+            upsert('Malaysia', 'MYS', 'Southeast Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'limited', name: 'Borneo (some areas)' }], 'Malaria mainly limited; JE for rural areas.'),
+            upsert('Singapore', 'SGP', 'Southeast Asia', [], [TDAP, MMR, C19], [], 'Routine vaccines recommended.'),
+            upsert('China', 'CHN', 'East Asia', [], [TYP, HEPA, HEPB, RAB, JE, TDAP, MMR, C19], [{ zone: 'limited', name: 'Some provinces' }], 'JE for rural/long stays in endemic areas.'),
+            upsert('Japan', 'JPN', 'East Asia', [], [TDAP, MMR, C19], [], 'Routine vaccines recommended.'),
+            upsert('South Korea', 'KOR', 'East Asia', [], [TDAP, MMR, C19], [], 'Routine vaccines recommended.'),
+            upsert('United Arab Emirates', 'ARE', 'Middle East', [], [TDAP, MMR, C19], [], 'Routine vaccines recommended.'),
+            upsert('Saudi Arabia', 'SAU', 'Middle East', [], [MEN, TDAP, MMR, C19], [], 'Meningococcal required for Hajj/Umrah.'),
+            upsert('Egypt', 'EGY', 'Middle East', [], [TYP, HEPA, TDAP, MMR, C19], [{ zone: 'limited', name: 'Some areas' }], 'Malaria limited; routine + travel vaccines recommended.'),
+            upsert('Turkey', 'TUR', 'Europe/West Asia', [], [TYP, HEPA, TDAP, MMR, C19], [], 'Routine + selected travel vaccines.'),
+            upsert('France', 'FRA', 'Europe', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+            upsert('United Kingdom', 'GBR', 'Europe', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+            upsert('United States', 'USA', 'North America', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+            upsert('Mexico', 'MEX', 'North America', [], [TYP, HEPA, TDAP, MMR, C19], [{ zone: 'limited', name: 'Some regions' }], 'Typhoid recommended for some travelers.'),
+            upsert('Haiti', 'HTI', 'Caribbean', [], [TYP, HEPA, CHO, TDAP, MMR, C19], [], 'Cholera outbreaks possible; consider cholera vaccine.'),
+            upsert('Dominican Republic', 'DOM', 'Caribbean', [], [TYP, HEPA, TDAP, MMR, C19], [], 'Routine + typhoid for some travelers.'),
+            upsert('Australia', 'AUS', 'Oceania', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+            upsert('New Zealand', 'NZL', 'Oceania', [], [TDAP, MMR, C19], [], 'Routine vaccines.'),
+        ];
+    }
+    getSprintI2MultiCurrencyMedicalAidStatements() {
+        return [
+            `ALTER TABLE billing ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD'`,
+            `CREATE INDEX IF NOT EXISTS idx_billing_currency ON billing(currency)`,
+            `CREATE TABLE IF NOT EXISTS supported_currencies (
+        code VARCHAR(10) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        symbol VARCHAR(10),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS exchange_rates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        base_currency VARCHAR(10) NOT NULL REFERENCES supported_currencies(code),
+        quote_currency VARCHAR(10) NOT NULL REFERENCES supported_currencies(code),
+        rate NUMERIC(18,8) NOT NULL,
+        effective_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        source VARCHAR(50) DEFAULT 'manual',
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE UNIQUE INDEX IF NOT EXISTS idx_exchange_rates_unique ON exchange_rates(base_currency, quote_currency, effective_at)`,
+            `CREATE INDEX IF NOT EXISTS idx_exchange_rates_pair ON exchange_rates(base_currency, quote_currency)`,
+            `CREATE INDEX IF NOT EXISTS idx_exchange_rates_effective ON exchange_rates(effective_at DESC)`,
+            `INSERT INTO supported_currencies (code, name, symbol, is_active)
+       VALUES
+        ('USD','US Dollar','$',true),
+        ('ZAR','South African Rand','R',true),
+        ('ZIG','Zimbabwe Gold','ZiG',true)
+       ON CONFLICT (code) DO UPDATE SET
+        name = EXCLUDED.name,
+        symbol = EXCLUDED.symbol,
+        is_active = EXCLUDED.is_active`,
+            `CREATE TABLE IF NOT EXISTS medical_aid_providers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(100) NOT NULL UNIQUE,
+        code VARCHAR(30) UNIQUE,
+        is_active BOOLEAN DEFAULT true,
+        config JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_medical_aid_providers_active ON medical_aid_providers(is_active)`,
+            `INSERT INTO medical_aid_providers (name, code, is_active)
+       VALUES
+        ('CIMAS','CIMAS',true),
+        ('First Mutual','FIRST_MUTUAL',true),
+        ('PSMAS','PSMAS',true)
+       ON CONFLICT (name) DO UPDATE SET
+        code = EXCLUDED.code,
+        is_active = EXCLUDED.is_active`,
+            `CREATE TABLE IF NOT EXISTS medical_aid_eligibility_checks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        provider_id UUID REFERENCES medical_aid_providers(id),
+        member_number VARCHAR(100),
+        policy_number VARCHAR(100),
+        status VARCHAR(30) DEFAULT 'pending' CHECK (status IN ('pending','eligible','ineligible','error')),
+        request_payload JSONB DEFAULT '{}'::jsonb,
+        response_payload JSONB DEFAULT '{}'::jsonb,
+        checked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        checked_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ma_elig_patient ON medical_aid_eligibility_checks(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ma_elig_provider ON medical_aid_eligibility_checks(provider_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ma_elig_status ON medical_aid_eligibility_checks(status)`,
+            `CREATE TABLE IF NOT EXISTS medical_aid_claim_submissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        transaction_id UUID REFERENCES financial_transactions(id) ON DELETE SET NULL,
+        provider_id UUID REFERENCES medical_aid_providers(id),
+        claim_number VARCHAR(100),
+        status VARCHAR(30) DEFAULT 'draft' CHECK (status IN ('draft','submitted','accepted','rejected','paid','error')),
+        submission_format VARCHAR(50) DEFAULT 'stub',
+        payload JSONB DEFAULT '{}'::jsonb,
+        response JSONB DEFAULT '{}'::jsonb,
+        submitted_at TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ma_claim_tx ON medical_aid_claim_submissions(transaction_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ma_claim_provider ON medical_aid_claim_submissions(provider_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ma_claim_status ON medical_aid_claim_submissions(status)`,
+            `CREATE TABLE IF NOT EXISTS medical_aid_remittances (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id UUID REFERENCES medical_aid_providers(id),
+        remittance_reference VARCHAR(150),
+        received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        status VARCHAR(30) DEFAULT 'received' CHECK (status IN ('received','processed','error')),
+        payload JSONB DEFAULT '{}'::jsonb,
+        processed_by UUID REFERENCES users(id),
+        processed_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ma_remit_provider ON medical_aid_remittances(provider_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ma_remit_status ON medical_aid_remittances(status)`,
+        ];
+    }
+    getSprintJ2EarlyWarningStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS patient_early_warning_scores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        score_type VARCHAR(20) DEFAULT 'NEWS2' CHECK (score_type IN ('NEWS2', 'MEWS', 'PEWS')),
+        total_score INTEGER NOT NULL,
+        risk_level VARCHAR(20) CHECK (risk_level IN ('low', 'low_medium', 'medium', 'high')),
+        component_scores JSONB NOT NULL,
+        vitals_id UUID,
+        calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        alert_triggered BOOLEAN DEFAULT false,
+        alert_acknowledged_by UUID REFERENCES users(id),
+        alert_acknowledged_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ews_patient ON patient_early_warning_scores(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ews_score ON patient_early_warning_scores(total_score DESC)`,
+            `CREATE INDEX IF NOT EXISTS idx_ews_risk ON patient_early_warning_scores(risk_level)`,
+        ];
     }
     getGatewayConfigurationStatements() {
         return [
@@ -587,6 +1147,52 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_recipient" ON "patient_messages" ("recipient_type", "recipient_id")`,
             `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_read" ON "patient_messages" ("patient_id", "read")`,
             `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_created_at" ON "patient_messages" ("created_at")`
+        ];
+    }
+    getSprintL1ContinuousLearningStatements() {
+        return [
+            `ALTER TABLE appointment_no_show_predictions ADD COLUMN IF NOT EXISTS actual_outcome VARCHAR(20)`,
+            `ALTER TABLE appointment_no_show_predictions ADD COLUMN IF NOT EXISTS outcome_recorded_at TIMESTAMP WITH TIME ZONE`,
+            `CREATE TABLE IF NOT EXISTS ml_model_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(100) NOT NULL,
+        metric_name VARCHAR(100) NOT NULL,
+        metric_value DOUBLE PRECISION NOT NULL,
+        sample_size INTEGER NOT NULL DEFAULT 0,
+        period_start TIMESTAMP WITH TIME ZONE,
+        period_end TIMESTAMP WITH TIME ZONE,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ml_metrics_model ON ml_model_metrics(model_name)`,
+            `CREATE INDEX IF NOT EXISTS idx_ml_metrics_period ON ml_model_metrics(period_start, period_end)`,
+            `CREATE TABLE IF NOT EXISTS ml_training_snapshots (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(100) NOT NULL,
+        model_version VARCHAR(50) NOT NULL,
+        training_data_hash VARCHAR(64),
+        feature_names JSONB DEFAULT '[]'::jsonb,
+        feature_weights JSONB DEFAULT '[]'::jsonb,
+        feature_means JSONB DEFAULT '[]'::jsonb,
+        feature_stds JSONB DEFAULT '[]'::jsonb,
+        intercept DOUBLE PRECISION DEFAULT 0,
+        performance_metrics JSONB DEFAULT '{}'::jsonb,
+        training_sample_count INTEGER DEFAULT 0,
+        trained_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        is_active BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ml_snapshots_model ON ml_training_snapshots(model_name)`,
+            `CREATE INDEX IF NOT EXISTS idx_ml_snapshots_active ON ml_training_snapshots(is_active)`,
+            `CREATE TABLE IF NOT EXISTS ml_coding_corpus (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        clinical_text TEXT NOT NULL,
+        accepted_icd_codes JSONB DEFAULT '[]'::jsonb,
+        accepted_cpt_codes JSONB DEFAULT '[]'::jsonb,
+        tfidf_vector JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ml_coding_corpus_created ON ml_coding_corpus(created_at)`,
         ];
     }
     getMedicationRemindersSchemaStatements() {
@@ -1581,6 +2187,466 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `CREATE INDEX IF NOT EXISTS idx_patient_notifications_patient_read ON patient_notifications(patient_id, read)`,
             `CREATE INDEX IF NOT EXISTS idx_patient_notifications_type ON patient_notifications(notification_type)`,
             `CREATE INDEX IF NOT EXISTS idx_patient_notifications_sent_at ON patient_notifications(sent_at DESC)`,
+        ];
+    }
+    getSprint58PostVisitAudioStorageSchemaStatements() {
+        return [
+            `ALTER TABLE IF EXISTS post_visit_sessions
+       ADD COLUMN IF NOT EXISTS recording_storage_key   VARCHAR(500),
+       ADD COLUMN IF NOT EXISTS recording_bucket         VARCHAR(120)  DEFAULT 'post-visit-recordings',
+       ADD COLUMN IF NOT EXISTS recording_mime_type       VARCHAR(60),
+       ADD COLUMN IF NOT EXISTS recording_size_bytes      BIGINT,
+       ADD COLUMN IF NOT EXISTS recording_duration_ms     INTEGER,
+       ADD COLUMN IF NOT EXISTS recording_sha256          VARCHAR(64),
+       ADD COLUMN IF NOT EXISTS recording_uploaded_at     TIMESTAMP WITH TIME ZONE`,
+        ];
+    }
+    getSprintE1ImmunizationAlignmentStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS immunizations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        immunization_number VARCHAR(30),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        vaccine_code VARCHAR(20) NOT NULL,
+        vaccine_name VARCHAR(255) NOT NULL,
+        cvx_code VARCHAR(10),
+        dose_number INTEGER,
+        dose_quantity DECIMAL(5,2),
+        dose_unit VARCHAR(20) DEFAULT 'mL',
+        route VARCHAR(50),
+        site VARCHAR(100),
+        lot_number VARCHAR(50),
+        manufacturer VARCHAR(100),
+        expiration_date DATE,
+        administration_date TIMESTAMP WITH TIME ZONE NOT NULL,
+        administered_by UUID REFERENCES users(id),
+        vis_document VARCHAR(255),
+        vis_date DATE,
+        vis_presented BOOLEAN DEFAULT false,
+        status VARCHAR(50) DEFAULT 'completed',
+        refusal_reason TEXT,
+        notes TEXT,
+        registry_status VARCHAR(50) DEFAULT 'pending',
+        snomed_vaccine_code VARCHAR(20),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_immunizations_patient ON immunizations(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_immunizations_vaccine ON immunizations(vaccine_code)`,
+            `CREATE INDEX IF NOT EXISTS idx_immunizations_date ON immunizations(administration_date)`,
+            `CREATE TABLE IF NOT EXISTS vaccine_inventory (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        vaccine_code VARCHAR(20) NOT NULL,
+        vaccine_name VARCHAR(255) NOT NULL,
+        manufacturer VARCHAR(100),
+        lot_number VARCHAR(50) NOT NULL,
+        expiration_date DATE NOT NULL,
+        quantity_received INTEGER NOT NULL,
+        quantity_remaining INTEGER NOT NULL,
+        quantity_administered INTEGER DEFAULT 0,
+        quantity_wasted INTEGER DEFAULT 0,
+        storage_location VARCHAR(100),
+        storage_temperature_min DECIMAL(5,2),
+        storage_temperature_max DECIMAL(5,2),
+        status VARCHAR(50) DEFAULT 'active',
+        received_date DATE NOT NULL,
+        received_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_vaccine_inventory_code ON vaccine_inventory(vaccine_code)`,
+            `CREATE INDEX IF NOT EXISTS idx_vaccine_inventory_status ON vaccine_inventory(status)`,
+            `CREATE TABLE IF NOT EXISTS immunization_schedules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        schedule_name VARCHAR(255) NOT NULL,
+        vaccine_code VARCHAR(20) NOT NULL,
+        vaccine_name VARCHAR(255) NOT NULL,
+        age_group VARCHAR(50),
+        minimum_age_months INTEGER,
+        maximum_age_months INTEGER,
+        dose_number INTEGER NOT NULL,
+        recommended_age_months INTEGER,
+        minimum_interval_days INTEGER,
+        is_required BOOLEAN DEFAULT true,
+        schedule_type VARCHAR(50) DEFAULT 'routine',
+        contraindications JSONB DEFAULT '[]'::jsonb,
+        effective_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_imm_schedules_type ON immunization_schedules(schedule_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_imm_schedules_code ON immunization_schedules(vaccine_code)`,
+            `CREATE TABLE IF NOT EXISTS vaccine_adverse_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        immunization_id UUID NOT NULL,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        event_date TIMESTAMP WITH TIME ZONE NOT NULL,
+        event_type VARCHAR(100) NOT NULL,
+        description TEXT NOT NULL,
+        severity VARCHAR(20),
+        reported_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS immunization_forecasts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        vaccine_code VARCHAR(20) NOT NULL,
+        vaccine_name VARCHAR(255) NOT NULL,
+        dose_number INTEGER NOT NULL,
+        recommended_date DATE,
+        status VARCHAR(20) DEFAULT 'due',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       SELECT 'Yellow Fever', 'YF', 'Yellow Fever (17D)', 'adult', 1, NULL, NULL, true, 'travel', CURRENT_DATE
+       WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = 'YF' AND schedule_type = 'travel')`,
+            `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       SELECT 'Typhoid Vi', '101', 'Typhoid Vi Polysaccharide', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE
+       WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = '101' AND schedule_type = 'travel')`,
+            `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       SELECT 'BCG', '19', 'BCG (Tuberculosis)', 'infant', 1, 0, NULL, true, 'routine', CURRENT_DATE
+       WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = '19' AND schedule_type = 'routine')`,
+            `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       SELECT v.* FROM (VALUES
+         ('Hepatitis B - Birth', '45', 'Hepatitis B', 'infant', 1, 0, NULL, true, 'routine', CURRENT_DATE),
+         ('Hepatitis B - Dose 2', '45', 'Hepatitis B', 'infant', 2, 1, 28, true, 'routine', CURRENT_DATE),
+         ('Hepatitis B - Dose 3', '45', 'Hepatitis B', 'infant', 3, 6, 56, true, 'routine', CURRENT_DATE),
+         ('OPV - Birth', '02', 'Oral Polio Vaccine', 'infant', 0, 0, NULL, true, 'routine', CURRENT_DATE),
+         ('OPV - Dose 1', '02', 'Oral Polio Vaccine', 'infant', 1, 6, 28, true, 'routine', CURRENT_DATE),
+         ('OPV - Dose 2', '02', 'Oral Polio Vaccine', 'infant', 2, 10, 28, true, 'routine', CURRENT_DATE),
+         ('OPV - Dose 3', '02', 'Oral Polio Vaccine', 'infant', 3, 14, 28, true, 'routine', CURRENT_DATE),
+         ('IPV', '10', 'Inactivated Polio Vaccine', 'infant', 1, 14, NULL, true, 'routine', CURRENT_DATE),
+         ('Pentavalent - Dose 1', '170', 'DTP-HepB-Hib (Pentavalent)', 'infant', 1, 6, NULL, true, 'routine', CURRENT_DATE),
+         ('Pentavalent - Dose 2', '170', 'DTP-HepB-Hib (Pentavalent)', 'infant', 2, 10, 28, true, 'routine', CURRENT_DATE),
+         ('Pentavalent - Dose 3', '170', 'DTP-HepB-Hib (Pentavalent)', 'infant', 3, 14, 28, true, 'routine', CURRENT_DATE),
+         ('PCV13 - Dose 1', '152', 'Pneumococcal Conjugate (PCV13)', 'infant', 1, 6, NULL, true, 'routine', CURRENT_DATE),
+         ('PCV13 - Dose 2', '152', 'Pneumococcal Conjugate (PCV13)', 'infant', 2, 10, 28, true, 'routine', CURRENT_DATE),
+         ('PCV13 - Dose 3', '152', 'Pneumococcal Conjugate (PCV13)', 'infant', 3, 14, 28, true, 'routine', CURRENT_DATE),
+         ('Rotavirus - Dose 1', '119', 'Rotavirus (Rotarix)', 'infant', 1, 6, NULL, true, 'routine', CURRENT_DATE),
+         ('Rotavirus - Dose 2', '119', 'Rotavirus (Rotarix)', 'infant', 2, 10, 28, true, 'routine', CURRENT_DATE),
+         ('Measles - Dose 1', '05', 'Measles', 'infant', 1, 9, NULL, true, 'routine', CURRENT_DATE),
+         ('MMR - Dose 1', '03', 'Measles-Mumps-Rubella', 'child', 1, 12, NULL, true, 'routine', CURRENT_DATE),
+         ('MMR - Dose 2', '03', 'Measles-Mumps-Rubella', 'child', 2, 18, 28, true, 'routine', CURRENT_DATE),
+         ('Varicella - Dose 1', '21', 'Varicella (Chickenpox)', 'child', 1, 12, NULL, true, 'routine', CURRENT_DATE),
+         ('Varicella - Dose 2', '21', 'Varicella (Chickenpox)', 'child', 2, 48, 90, true, 'routine', CURRENT_DATE),
+         ('DTaP - Dose 4', '20', 'DTaP Booster', 'child', 4, 15, NULL, true, 'routine', CURRENT_DATE),
+         ('DTaP - Dose 5', '20', 'DTaP Booster', 'child', 5, 48, NULL, true, 'routine', CURRENT_DATE),
+         ('Hepatitis A - Dose 1', '83', 'Hepatitis A', 'child', 1, 12, NULL, true, 'routine', CURRENT_DATE),
+         ('Hepatitis A - Dose 2', '83', 'Hepatitis A', 'child', 2, 18, 180, true, 'routine', CURRENT_DATE),
+         ('HPV - Dose 1', '137', 'HPV (Gardasil 9)', 'adolescent', 1, 108, NULL, true, 'routine', CURRENT_DATE),
+         ('HPV - Dose 2', '137', 'HPV (Gardasil 9)', 'adolescent', 2, 114, 60, true, 'routine', CURRENT_DATE),
+         ('Tdap Booster', '115', 'Tdap (Tetanus-Diphtheria-Pertussis)', 'adolescent', 1, 132, NULL, true, 'routine', CURRENT_DATE),
+         ('Meningococcal ACWY', '147', 'Meningococcal ACWY (MenACWY)', 'adolescent', 1, 132, NULL, true, 'routine', CURRENT_DATE),
+         ('Meningococcal ACWY Booster', '147', 'Meningococcal ACWY (MenACWY)', 'adolescent', 2, 192, NULL, true, 'routine', CURRENT_DATE),
+         ('Influenza (Annual)', '141', 'Influenza (IIV4)', 'all_ages', 1, 6, NULL, false, 'routine', CURRENT_DATE),
+         ('PPSV23', '33', 'Pneumococcal Polysaccharide (PPSV23)', 'adult', 1, 780, NULL, false, 'routine', CURRENT_DATE),
+         ('Td Booster', '138', 'Td (Tetanus-Diphtheria)', 'adult', 1, NULL, 3650, false, 'routine', CURRENT_DATE),
+         ('Shingles (Shingrix)', '187', 'Recombinant Zoster (Shingrix)', 'senior', 1, 600, NULL, false, 'routine', CURRENT_DATE),
+         ('Shingles (Shingrix) Dose 2', '187', 'Recombinant Zoster (Shingrix)', 'senior', 2, 602, 60, false, 'routine', CURRENT_DATE),
+         ('COVID-19 Primary', '213', 'COVID-19 mRNA', 'all_ages', 1, 6, NULL, false, 'routine', CURRENT_DATE)
+       ) AS v(schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = v.vaccine_code AND dose_number = v.dose_number AND schedule_type = v.schedule_type)`,
+            `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       SELECT v.* FROM (VALUES
+         ('Japanese Encephalitis', '134', 'Japanese Encephalitis (Ixiaro)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
+         ('Rabies Pre-Exposure', '40', 'Rabies (Pre-Exposure)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
+         ('Cholera (Oral)', '26', 'Cholera Oral (Dukoral)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
+         ('Meningococcal ACWY Travel', '147', 'Meningococcal ACWY', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
+         ('Tick-Borne Encephalitis', '77', 'TBE Vaccine', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE)
+       ) AS v(schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
+       WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = v.vaccine_code AND schedule_type = 'travel')`,
+        ];
+    }
+    getSprintE3_2FAStatements() {
+        return [
+            `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(64)`,
+            `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT false`,
+        ];
+    }
+    getSprintF1ORSurgicalSafetyStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS surgical_safety_checklists (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id) ON DELETE CASCADE,
+        sign_in_completed BOOLEAN DEFAULT false,
+        sign_in_completed_at TIMESTAMP WITH TIME ZONE,
+        sign_in_completed_by UUID REFERENCES users(id),
+        patient_identity_confirmed BOOLEAN DEFAULT false,
+        site_marked BOOLEAN DEFAULT false,
+        consent_confirmed BOOLEAN DEFAULT false,
+        anesthesia_safety_check BOOLEAN DEFAULT false,
+        known_allergy BOOLEAN DEFAULT false,
+        allergy_details TEXT,
+        difficult_airway_risk BOOLEAN DEFAULT false,
+        aspiration_risk BOOLEAN DEFAULT false,
+        blood_loss_risk BOOLEAN DEFAULT false,
+        blood_loss_estimated_ml INTEGER,
+        time_out_completed BOOLEAN DEFAULT false,
+        time_out_completed_at TIMESTAMP WITH TIME ZONE,
+        time_out_completed_by UUID REFERENCES users(id),
+        team_members_introduced BOOLEAN DEFAULT false,
+        procedure_confirmed BOOLEAN DEFAULT false,
+        site_confirmed BOOLEAN DEFAULT false,
+        anticipated_critical_events TEXT,
+        antibiotic_prophylaxis_given BOOLEAN DEFAULT false,
+        antibiotic_time TIMESTAMP WITH TIME ZONE,
+        imaging_displayed BOOLEAN DEFAULT false,
+        sign_out_completed BOOLEAN DEFAULT false,
+        sign_out_completed_at TIMESTAMP WITH TIME ZONE,
+        sign_out_completed_by UUID REFERENCES users(id),
+        procedure_recorded BOOLEAN DEFAULT false,
+        instrument_sponge_needle_counts_correct BOOLEAN DEFAULT false,
+        specimen_labelled BOOLEAN DEFAULT false,
+        equipment_issues TEXT,
+        key_concerns_recovery TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ssc_case ON surgical_safety_checklists(surgical_case_id)`,
+            `CREATE TABLE IF NOT EXISTS surgical_count_sheets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id) ON DELETE CASCADE,
+        count_type VARCHAR(30) NOT NULL CHECK (count_type IN ('sponge', 'needle', 'instrument', 'other')),
+        item_name VARCHAR(255) NOT NULL,
+        initial_count INTEGER NOT NULL,
+        final_count INTEGER,
+        count_correct BOOLEAN,
+        discrepancy_note TEXT,
+        counted_by UUID REFERENCES users(id),
+        verified_by UUID REFERENCES users(id),
+        count_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_count_case ON surgical_count_sheets(surgical_case_id)`,
+            `CREATE TABLE IF NOT EXISTS surgical_specimens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id) ON DELETE CASCADE,
+        specimen_type VARCHAR(100) NOT NULL,
+        specimen_source VARCHAR(255) NOT NULL,
+        quantity INTEGER DEFAULT 1,
+        fixative VARCHAR(100) DEFAULT 'formalin',
+        collected_by UUID REFERENCES users(id),
+        collected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        pathology_lab_order_id UUID,
+        label_verified BOOLEAN DEFAULT false,
+        label_verified_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_specimen_case ON surgical_specimens(surgical_case_id)`,
+        ];
+    }
+    getSprintF2BloodBankCrossmatchStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS blood_cross_match (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        inventory_id UUID REFERENCES blood_inventory(id),
+        blood_group VARCHAR(10) NOT NULL,
+        rh_factor VARCHAR(10) NOT NULL,
+        antibody_screen VARCHAR(20) DEFAULT 'negative',
+        antibody_identified TEXT,
+        major_cross_match VARCHAR(20),
+        minor_cross_match VARCHAR(20),
+        cross_match_result VARCHAR(20) CHECK (cross_match_result IN ('compatible', 'incompatible', 'pending')),
+        performed_by UUID REFERENCES users(id),
+        performed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_crossmatch_patient ON blood_cross_match(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_crossmatch_inventory ON blood_cross_match(inventory_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_crossmatch_result ON blood_cross_match(cross_match_result)`,
+            `CREATE TABLE IF NOT EXISTS transfusion_reactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        transfusion_id UUID NOT NULL REFERENCES blood_transfusions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        reaction_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        reaction_type VARCHAR(50) NOT NULL,
+        severity VARCHAR(20) CHECK (severity IN ('mild', 'moderate', 'severe', 'life_threatening')),
+        symptoms TEXT,
+        vitals_at_reaction JSONB,
+        treatment_given TEXT,
+        transfusion_stopped BOOLEAN DEFAULT true,
+        blood_bank_notified BOOLEAN DEFAULT false,
+        physician_notified BOOLEAN DEFAULT false,
+        investigation_status VARCHAR(20) DEFAULT 'pending',
+        investigation_findings TEXT,
+        reported_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_txn_reaction_patient ON transfusion_reactions(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_txn_reaction_transfusion ON transfusion_reactions(transfusion_id)`,
+        ];
+    }
+    getSprintF3InfectionSepsisStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS hand_hygiene_observations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        observer_id UUID NOT NULL REFERENCES users(id),
+        observed_staff_id UUID REFERENCES users(id),
+        observation_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        department VARCHAR(100),
+        opportunity_type VARCHAR(50) NOT NULL CHECK (opportunity_type IN (
+          'before_patient_contact', 'before_aseptic_task', 'after_body_fluid_exposure',
+          'after_patient_contact', 'after_surroundings_contact'
+        )),
+        hand_hygiene_performed BOOLEAN NOT NULL,
+        method VARCHAR(30) CHECK (method IN ('soap_and_water', 'alcohol_rub', 'none')),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_hh_date ON hand_hygiene_observations(observation_date)`,
+            `CREATE INDEX IF NOT EXISTS idx_hh_department ON hand_hygiene_observations(department)`,
+            `CREATE TABLE IF NOT EXISTS device_day_tracking (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        device_type VARCHAR(50) NOT NULL CHECK (device_type IN ('central_line', 'urinary_catheter', 'ventilator')),
+        inserted_date DATE NOT NULL,
+        removed_date DATE,
+        inserted_by UUID REFERENCES users(id),
+        location VARCHAR(100),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_device_patient ON device_day_tracking(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_device_type ON device_day_tracking(device_type)`,
+            `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS lactate_measured_at TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS blood_cultures_drawn_at TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS antibiotics_given_at TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS fluid_bolus_given_at TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS vasopressors_initiated_at TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE sepsis_bundles ADD COLUMN IF NOT EXISTS sepsis_onset_time TIMESTAMP WITH TIME ZONE`,
+        ];
+    }
+    getSprintF4BcmaMarStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS mar_scheduled_entries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        prescription_id UUID NOT NULL,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        medication_name VARCHAR(255) NOT NULL,
+        dose VARCHAR(100) NOT NULL,
+        unit VARCHAR(50),
+        route VARCHAR(50),
+        frequency VARCHAR(100),
+        scheduled_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        status VARCHAR(30) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'administered', 'held', 'refused', 'missed', 'late')),
+        mar_id UUID REFERENCES medication_administration_records(id),
+        requires_witness BOOLEAN DEFAULT false,
+        is_high_alert BOOLEAN DEFAULT false,
+        is_controlled BOOLEAN DEFAULT false,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_mar_sched_patient ON mar_scheduled_entries(patient_id, scheduled_time)`,
+            `CREATE INDEX IF NOT EXISTS idx_mar_sched_status ON mar_scheduled_entries(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_mar_sched_prescription ON mar_scheduled_entries(prescription_id)`,
+        ];
+    }
+    getSprintG2EncounterCodingStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS encounter_code_suggestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id VARCHAR(100),
+        appointment_id UUID,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        suggested_icd10 JSONB DEFAULT '[]'::jsonb,
+        suggested_cpt JSONB DEFAULT '[]'::jsonb,
+        em_level VARCHAR(10),
+        em_rationale TEXT,
+        suggested_modifiers JSONB DEFAULT '[]'::jsonb,
+        confidence DOUBLE PRECISION,
+        source VARCHAR(30) DEFAULT 'ai',
+        accepted_codes JSONB DEFAULT '[]'::jsonb,
+        rejected_codes JSONB DEFAULT '[]'::jsonb,
+        reviewed_by UUID REFERENCES users(id),
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_enc_codes_patient ON encounter_code_suggestions(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_enc_codes_appointment ON encounter_code_suggestions(appointment_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_enc_codes_session ON encounter_code_suggestions(session_id)`,
+        ];
+    }
+    getSprintG3SchedulingAiStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS appointment_no_show_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        no_show_probability DOUBLE PRECISION NOT NULL,
+        risk_factors JSONB DEFAULT '[]'::jsonb,
+        suggested_action VARCHAR(50),
+        action_taken VARCHAR(50),
+        model_version VARCHAR(20),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_noshow_appointment ON appointment_no_show_predictions(appointment_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_noshow_patient ON appointment_no_show_predictions(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_noshow_probability ON appointment_no_show_predictions(no_show_probability DESC)`,
+        ];
+    }
+    getSprintG4PopulationHealthStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS chronic_disease_registry (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        condition_code VARCHAR(20) NOT NULL,
+        condition_name VARCHAR(255) NOT NULL,
+        condition_type VARCHAR(50) CHECK (condition_type IN ('hypertension','diabetes','asthma','copd','ckd','heart_failure','obesity','depression','other')),
+        onset_date DATE,
+        status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','controlled','uncontrolled','remission','resolved')),
+        risk_level VARCHAR(20) DEFAULT 'moderate' CHECK (risk_level IN ('low','moderate','high','critical')),
+        last_review_date DATE,
+        next_review_date DATE,
+        care_team JSONB DEFAULT '[]'::jsonb,
+        management_plan TEXT,
+        target_metrics JSONB DEFAULT '{}'::jsonb,
+        current_metrics JSONB DEFAULT '{}'::jsonb,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_cdr_patient ON chronic_disease_registry(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_cdr_condition ON chronic_disease_registry(condition_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_cdr_status ON chronic_disease_registry(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_cdr_risk ON chronic_disease_registry(risk_level)`,
+            `CREATE INDEX IF NOT EXISTS idx_cdr_next_review ON chronic_disease_registry(next_review_date)`,
+            `CREATE TABLE IF NOT EXISTS preventive_care_reminders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        screening_type VARCHAR(100) NOT NULL,
+        recommended_by VARCHAR(100) DEFAULT 'USPSTF',
+        due_date DATE,
+        last_completed_date DATE,
+        status VARCHAR(20) DEFAULT 'due' CHECK (status IN ('due','overdue','completed','declined','not_applicable')),
+        reminder_sent BOOLEAN DEFAULT false,
+        reminder_sent_at TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_pcr_patient ON preventive_care_reminders(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_pcr_status ON preventive_care_reminders(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_pcr_due ON preventive_care_reminders(due_date)`,
+            `CREATE TABLE IF NOT EXISTS recall_lists (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        criteria JSONB NOT NULL,
+        patient_count INTEGER DEFAULT 0,
+        last_generated_at TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_recall_name ON recall_lists(name)`,
         ];
     }
     getWhoSmartFormsDataSchemaStatements() {

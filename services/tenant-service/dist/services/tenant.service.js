@@ -117,6 +117,187 @@ let TenantService = TenantService_1 = class TenantService {
         await this.tenantRepository.remove(tenant);
         this.logger.log(`Tenant deleted: ${id}`);
     }
+    async getTenantDhis2Config(tenantId) {
+        await this.findById(tenantId);
+        const rows = await this.tenantRepository.query(`
+      SELECT
+        tenant_id,
+        base_url,
+        COALESCE(api_version, '40') AS api_version,
+        COALESCE(auth_type, 'pat') AS auth_type,
+        pat,
+        username,
+        org_unit_id,
+        tracked_entity_type_id,
+        dataset_id,
+        COALESCE(enabled, true) AS enabled,
+        COALESCE(scheduled_sync_enabled, false) AS scheduled_sync_enabled,
+        COALESCE(scheduled_retry_limit, 20) AS scheduled_retry_limit,
+        COALESCE(alert_lookback_hours, 24) AS alert_lookback_hours,
+        COALESCE(alert_error_threshold, 10) AS alert_error_threshold,
+        alert_webhook_url,
+        updated_at
+      FROM tenant_dhis2_config
+      WHERE tenant_id = $1
+      LIMIT 1
+      `, [tenantId]);
+        if (!rows || rows.length === 0) {
+            return null;
+        }
+        const row = rows[0];
+        const pat = row.pat ? String(row.pat) : '';
+        const patMasked = pat.length >= 8 ? `${pat.slice(0, 6)}...${pat.slice(-4)}` : pat || null;
+        return {
+            tenantId: row.tenant_id,
+            baseUrl: row.base_url,
+            apiVersion: String(row.api_version || '40'),
+            authType: row.auth_type === 'basic' ? 'basic' : 'pat',
+            hasPat: Boolean(pat),
+            patMasked,
+            username: row.username ?? null,
+            orgUnitId: row.org_unit_id,
+            trackedEntityTypeId: row.tracked_entity_type_id ?? null,
+            datasetId: row.dataset_id ?? null,
+            enabled: Boolean(row.enabled),
+            scheduledSyncEnabled: Boolean(row.scheduled_sync_enabled),
+            scheduledRetryLimit: Number(row.scheduled_retry_limit || 20),
+            alertLookbackHours: Number(row.alert_lookback_hours || 24),
+            alertErrorThreshold: Number(row.alert_error_threshold || 10),
+            alertWebhookUrl: row.alert_webhook_url ?? null,
+            updatedAt: row.updated_at ? String(row.updated_at) : null,
+        };
+    }
+    async upsertTenantDhis2Config(tenantId, payload) {
+        await this.findById(tenantId);
+        const existingConfig = await this.getTenantDhis2Config(tenantId);
+        const existingSecretRows = await this.tenantRepository.query(`
+      SELECT auth_type, pat, username, password
+      FROM tenant_dhis2_config
+      WHERE tenant_id = $1
+      LIMIT 1
+      `, [tenantId]);
+        const existingSecret = existingSecretRows[0];
+        const baseUrl = String(payload.baseUrl || '').trim();
+        const orgUnitId = String(payload.orgUnitId || '').trim();
+        const authType = payload.authType === 'basic'
+            ? 'basic'
+            : payload.authType === 'pat'
+                ? 'pat'
+                : existingSecret?.auth_type === 'basic'
+                    ? 'basic'
+                    : 'pat';
+        const apiVersion = String(payload.apiVersion || '40').trim();
+        const enabled = payload.enabled === undefined ? Boolean(existingConfig?.enabled ?? true) : payload.enabled !== false;
+        const scheduledSyncEnabled = payload.scheduledSyncEnabled === undefined
+            ? Boolean(existingConfig?.scheduledSyncEnabled ?? false)
+            : payload.scheduledSyncEnabled === true;
+        const scheduledRetryLimit = Math.min(Math.max(Number(payload.scheduledRetryLimit ?? existingConfig?.scheduledRetryLimit ?? 20), 1), 200);
+        const alertLookbackHours = Math.min(Math.max(Number(payload.alertLookbackHours ?? existingConfig?.alertLookbackHours ?? 24), 1), 720);
+        const alertErrorThreshold = Math.min(Math.max(Number(payload.alertErrorThreshold ?? existingConfig?.alertErrorThreshold ?? 10), 1), 10000);
+        const alertWebhookUrl = payload.alertWebhookUrl === undefined
+            ? existingConfig?.alertWebhookUrl ?? null
+            : payload.alertWebhookUrl
+                ? String(payload.alertWebhookUrl).trim()
+                : null;
+        const resolvedPat = payload.pat !== undefined
+            ? String(payload.pat || '').trim() || null
+            : existingSecret?.pat
+                ? String(existingSecret.pat)
+                : null;
+        const resolvedUsername = payload.username !== undefined
+            ? String(payload.username || '').trim() || null
+            : existingSecret?.username
+                ? String(existingSecret.username)
+                : null;
+        const resolvedPassword = payload.password !== undefined
+            ? String(payload.password || '').trim() || null
+            : existingSecret?.password
+                ? String(existingSecret.password)
+                : null;
+        const patValue = authType === 'pat' ? resolvedPat : null;
+        const usernameValue = authType === 'basic' ? resolvedUsername : null;
+        const passwordValue = authType === 'basic' ? resolvedPassword : null;
+        if (!baseUrl) {
+            throw new common_1.ConflictException('baseUrl is required');
+        }
+        if (!orgUnitId) {
+            throw new common_1.ConflictException('orgUnitId is required');
+        }
+        if (authType === 'pat' && (!patValue || String(patValue).trim().length === 0)) {
+            throw new common_1.ConflictException('PAT is required when authType is pat');
+        }
+        if (authType === 'basic' &&
+            (!usernameValue || !passwordValue || !String(usernameValue).trim() || !String(passwordValue).trim())) {
+            throw new common_1.ConflictException('username and password are required when authType is basic');
+        }
+        await this.tenantRepository.query(`
+      INSERT INTO tenant_dhis2_config (
+        tenant_id,
+        base_url,
+        api_version,
+        auth_type,
+        pat,
+        username,
+        password,
+        org_unit_id,
+        tracked_entity_type_id,
+        dataset_id,
+        enabled,
+        scheduled_sync_enabled,
+        scheduled_retry_limit,
+        alert_lookback_hours,
+        alert_error_threshold,
+        alert_webhook_url,
+        created_at,
+        updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW())
+      ON CONFLICT (tenant_id)
+      DO UPDATE SET
+        base_url = EXCLUDED.base_url,
+        api_version = EXCLUDED.api_version,
+        auth_type = EXCLUDED.auth_type,
+        pat = EXCLUDED.pat,
+        username = EXCLUDED.username,
+        password = EXCLUDED.password,
+        org_unit_id = EXCLUDED.org_unit_id,
+        tracked_entity_type_id = EXCLUDED.tracked_entity_type_id,
+        dataset_id = EXCLUDED.dataset_id,
+        enabled = EXCLUDED.enabled,
+        scheduled_sync_enabled = EXCLUDED.scheduled_sync_enabled,
+        scheduled_retry_limit = EXCLUDED.scheduled_retry_limit,
+        alert_lookback_hours = EXCLUDED.alert_lookback_hours,
+        alert_error_threshold = EXCLUDED.alert_error_threshold,
+        alert_webhook_url = EXCLUDED.alert_webhook_url,
+        updated_at = NOW()
+      `, [
+            tenantId,
+            baseUrl,
+            apiVersion,
+            authType,
+            patValue,
+            usernameValue,
+            passwordValue,
+            orgUnitId,
+            payload.trackedEntityTypeId ?? null,
+            payload.datasetId ?? null,
+            enabled,
+            scheduledSyncEnabled,
+            scheduledRetryLimit,
+            alertLookbackHours,
+            alertErrorThreshold,
+            alertWebhookUrl,
+        ]);
+        const view = await this.getTenantDhis2Config(tenantId);
+        if (!view) {
+            throw new common_1.ConflictException('Failed to load saved DHIS2 config');
+        }
+        return view;
+    }
+    async clearTenantDhis2Config(tenantId) {
+        await this.findById(tenantId);
+        await this.tenantRepository.query(`DELETE FROM tenant_dhis2_config WHERE tenant_id = $1`, [tenantId]);
+    }
     async provisionTenantDatabase(tenant) {
         try {
             this.logger.log(`Starting database provisioning for tenant: ${tenant.id}`);

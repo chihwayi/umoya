@@ -88,6 +88,20 @@ let TenantController = class TenantController {
             database: tenant.connectionString ? 'connected' : 'not_connected'
         };
     }
+    async getTenantDhis2Config(id) {
+        const config = await this.tenantService.getTenantDhis2Config(id);
+        if (!config) {
+            return { configured: false };
+        }
+        return config;
+    }
+    async upsertTenantDhis2Config(id, body) {
+        return this.tenantService.upsertTenantDhis2Config(id, body);
+    }
+    async clearTenantDhis2Config(id) {
+        await this.tenantService.clearTenantDhis2Config(id);
+        return { message: 'Tenant DHIS2 config deleted' };
+    }
 };
 exports.TenantController = TenantController;
 __decorate([
@@ -191,6 +205,34 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "checkTenantHealth", null);
+__decorate([
+    (0, common_1.Get)(':id/dhis2-config'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiOperation)({ summary: 'Get tenant DHIS2 integration config (secret-safe view)' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "getTenantDhis2Config", null);
+__decorate([
+    (0, common_1.Put)(':id/dhis2-config'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiOperation)({ summary: 'Create/update tenant DHIS2 integration config' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)(common_1.ValidationPipe)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "upsertTenantDhis2Config", null);
+__decorate([
+    (0, common_1.Delete)(':id/dhis2-config'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiOperation)({ summary: 'Delete tenant DHIS2 integration config' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "clearTenantDhis2Config", null);
 exports.TenantController = TenantController = __decorate([
     (0, swagger_1.ApiTags)('tenants'),
     (0, swagger_1.ApiBearerAuth)(),

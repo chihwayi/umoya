@@ -3,6 +3,7 @@ import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
+import { TenantDhis2ConfigPayload, TenantDhis2ConfigView } from '../services/tenant.service';
 type SafeTenant = Omit<Tenant, 'connectionString'>;
 type PublicTenant = Pick<Tenant, 'id' | 'subdomain' | 'clinicName' | 'status' | 'logoUrl'>;
 export declare class TenantController {
@@ -30,6 +31,13 @@ export declare class TenantController {
     checkTenantHealth(id: string): Promise<{
         status: string;
         database: string;
+    }>;
+    getTenantDhis2Config(id: string): Promise<TenantDhis2ConfigView | {
+        configured: false;
+    }>;
+    upsertTenantDhis2Config(id: string, body: TenantDhis2ConfigPayload): Promise<TenantDhis2ConfigView>;
+    clearTenantDhis2Config(id: string): Promise<{
+        message: string;
     }>;
 }
 export {};
