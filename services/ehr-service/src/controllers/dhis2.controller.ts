@@ -60,4 +60,37 @@ export class Dhis2Controller {
   async getSyncStatus(@Request() req: RequestWithTenant) {
     return this.dhis2Service.getSyncStatus(req.tenantDb, req.tenantId);
   }
+
+  @Get('sync-log')
+  @ApiOperation({ summary: 'Get tenant DHIS2 sync log with filters' })
+  @ApiResponse({ status: 200, description: 'Sync log retrieved' })
+  async getSyncLog(
+    @Request() req: RequestWithTenant,
+    @Query('entityType') entityType?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.dhis2Service.getSyncLog(req.tenantDb, {
+      entityType: entityType || undefined,
+      status: status || undefined,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
+
+  @Post('retry-failed')
+  @ApiOperation({ summary: 'Retry failed DHIS2 sync log entries for the tenant' })
+  @ApiResponse({ status: 200, description: 'Retry attempt completed' })
+  async retryFailed(
+    @Request() req: RequestWithTenant,
+    @Body()
+    body: {
+      entityType?: string;
+      limit?: number;
+      dryRun?: boolean;
+    },
+  ) {
+    return this.dhis2Service.retryFailedSync(req.tenantDb, req.tenantId, body || {});
+  }
 }

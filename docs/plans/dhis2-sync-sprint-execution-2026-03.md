@@ -1,6 +1,6 @@
 # DHIS2 Tenant Sync Sprint Execution (March 2026)
 
-Status: Active (Sprint 4 completed, Sprint 5 next)
+Status: Active (Sprint 5 in progress)
 Start date: 2026-03-10
 Target baseline: DHIS2 `2.40.0` local UI (`http://localhost:8888`), container access (`http://host.docker.internal:8888`)
 
@@ -114,9 +114,15 @@ Planned commits:
 2. `feat(dhis2): add PAT auth and tenant-scoped dhis2 client`
 3. `docs(dhis2): add push reference and sprint execution board`
 
+In progress (Sprint 5):
+1. `S5-T1` Add tenant-level sync log drilldown and replay controls.
+2. `S5-T2` Add scheduled tenant sync orchestration with safe defaults.
+3. `S5-T3` Validate multi-tenant org-unit isolation with at least two tenants.
+4. `S5-T4` Add alerting hooks for sustained DHIS2 auth/push failures.
+
 ## 7. Immediate Next Action
 
 Start Sprint 5 acceptance checks:
-- expose tenant-level retry controls and error drilldown from `dhis2_sync_log`,
+- expose tenant-level retry controls and error drilldown from `dhis2_sync_log` (S5-T1 complete in API),
 - add automated scheduled sync orchestration per tenant,
 - validate a second tenant/org unit end-to-end isolation.

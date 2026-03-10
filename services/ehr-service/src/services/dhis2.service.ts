@@ -46,6 +46,18 @@ interface Dhis2SyncStatsRow {
   total_error_count?: number | string | null;
 }
 
+export interface Dhis2SyncLogRow {
+  id: string;
+  entity_type: string;
+  entity_id?: string | null;
+  dhis2_id?: string | null;
+  action: string;
+  status: string;
+  error_message?: string | null;
+  payload?: Record<string, any> | null;
+  synced_at?: string | null;
+}
+
 interface PatientAttributeIdMap {
   patientNumber?: string;
   firstName?: string;
@@ -659,6 +671,278 @@ export class Dhis2Service {
     );
   }
 
+  async getSyncLog(
+    tenantDb: DataSource,
+    filters?: {
+      entityType?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ) {
+    await this.ensureTenantSyncTables(tenantDb);
+
+    const limit = Math.min(Math.max(Number(filters?.limit || 50), 1), 500);
+    const offset = Math.max(Number(filters?.offset || 0), 0);
+
+    const params: any[] = [];
+    const whereClauses: string[] = [];
+
+    if (filters?.entityType) {
+      params.push(filters.entityType);
+      whereClauses.push(`entity_type = $${params.length}`);
+    }
+
+    if (filters?.status) {
+      params.push(filters.status);
+      whereClauses.push(`status = $${params.length}`);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const countRows: Array<{ total: number | string }> = await tenantDb.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM dhis2_sync_log
+      ${whereSql}
+      `,
+      params,
+    );
+
+    const pagedRows: Dhis2SyncLogRow[] = await tenantDb.query(
+      `
+      SELECT
+        id,
+        entity_type,
+        entity_id,
+        dhis2_id,
+        action,
+        status,
+        error_message,
+        payload,
+        synced_at
+      FROM dhis2_sync_log
+      ${whereSql}
+      ORDER BY synced_at DESC
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+      `,
+      [...params, limit, offset],
+    );
+
+    const summaryRows: Array<{ entity_type: string; status: string; count: number | string }> = await tenantDb.query(
+      `
+      SELECT entity_type, status, COUNT(*)::int AS count
+      FROM dhis2_sync_log
+      GROUP BY entity_type, status
+      ORDER BY entity_type, status
+      `,
+    );
+
+    return {
+      total: Number(countRows?.[0]?.total || 0),
+      limit,
+      offset,
+      logs: pagedRows,
+      summary: summaryRows.map((row) => ({
+        entityType: row.entity_type,
+        status: row.status,
+        count: Number(row.count || 0),
+      })),
+    };
+  }
+
+  async retryFailedSync(
+    tenantDb: DataSource,
+    tenantId: string | undefined,
+    options?: {
+      entityType?: string;
+      limit?: number;
+      dryRun?: boolean;
+    },
+  ) {
+    await this.ensureTenantSyncTables(tenantDb);
+
+    const limit = Math.min(Math.max(Number(options?.limit || 25), 1), 200);
+    const dryRun = Boolean(options?.dryRun);
+    const params: any[] = ['error'];
+    const whereClauses: string[] = [`status = $1`];
+
+    if (options?.entityType) {
+      params.push(options.entityType);
+      whereClauses.push(`entity_type = $${params.length}`);
+    }
+
+    const rows: Dhis2SyncLogRow[] = await tenantDb.query(
+      `
+      SELECT
+        id,
+        entity_type,
+        entity_id,
+        action,
+        status,
+        error_message,
+        payload,
+        synced_at
+      FROM dhis2_sync_log
+      WHERE ${whereClauses.join(' AND ')}
+      ORDER BY synced_at DESC
+      LIMIT $${params.length + 1}
+      `,
+      [...params, limit],
+    );
+
+    const retryCandidates = rows.reverse();
+    let attempted = 0;
+    let succeeded = 0;
+    let failed = 0;
+    let skipped = 0;
+    let patientSyncTriggered = false;
+    const results: Array<{ logId: string; entityType: string; status: string; message: string }> = [];
+
+    for (const row of retryCandidates) {
+      const payload = (row.payload || {}) as Record<string, any>;
+      const requestPayload = payload.request;
+      const entityType = row.entity_type;
+
+      if (entityType === 'patient') {
+        if (patientSyncTriggered) {
+          skipped += 1;
+          results.push({
+            logId: row.id,
+            entityType,
+            status: 'skipped',
+            message: 'Patient retry already triggered once in this batch.',
+          });
+          continue;
+        }
+
+        attempted += 1;
+        patientSyncTriggered = true;
+
+        if (dryRun) {
+          succeeded += 1;
+          results.push({
+            logId: row.id,
+            entityType,
+            status: 'dry_run',
+            message: 'Would run patient sync retry.',
+          });
+          continue;
+        }
+
+        const retryResult = await this.syncPatients(tenantDb, tenantId);
+        const ok = retryResult.status === 'SUCCESS' || retryResult.status === 'PARTIAL_SUCCESS';
+        if (ok) {
+          succeeded += 1;
+        } else {
+          failed += 1;
+        }
+        results.push({
+          logId: row.id,
+          entityType,
+          status: ok ? 'success' : 'error',
+          message: retryResult.message || 'Patient retry completed.',
+        });
+        continue;
+      }
+
+      if (!requestPayload || typeof requestPayload !== 'object') {
+        skipped += 1;
+        results.push({
+          logId: row.id,
+          entityType,
+          status: 'skipped',
+          message: 'No request payload found in sync log; cannot replay automatically.',
+        });
+        continue;
+      }
+
+      attempted += 1;
+
+      if (dryRun) {
+        succeeded += 1;
+        results.push({
+          logId: row.id,
+          entityType,
+          status: 'dry_run',
+          message: 'Would retry this payload.',
+        });
+        continue;
+      }
+
+      if (entityType === 'event') {
+        const retryResult = await this.sendEvent(requestPayload, tenantDb, tenantId);
+        const ok = retryResult.status === 'SUCCESS';
+        if (ok) {
+          succeeded += 1;
+        } else {
+          failed += 1;
+        }
+        results.push({
+          logId: row.id,
+          entityType,
+          status: ok ? 'success' : 'error',
+          message: retryResult.message || 'Event retry completed.',
+        });
+        continue;
+      }
+
+      if (entityType === 'aggregate') {
+        const retryResult = await this.sendAggregateReport(requestPayload, tenantDb, tenantId);
+        const ok = retryResult.status === 'SUCCESS' || retryResult.status === 'OK';
+        if (ok) {
+          succeeded += 1;
+        } else {
+          failed += 1;
+        }
+        results.push({
+          logId: row.id,
+          entityType,
+          status: ok ? 'success' : 'error',
+          message: retryResult.message || 'Aggregate retry completed.',
+        });
+        continue;
+      }
+
+      if (entityType === 'data_value_set') {
+        const retryResult = await this.sendDataValues(requestPayload, tenantDb, tenantId);
+        const ok = retryResult.status === 'SUCCESS' || retryResult.status === 'OK';
+        if (ok) {
+          succeeded += 1;
+        } else {
+          failed += 1;
+        }
+        results.push({
+          logId: row.id,
+          entityType,
+          status: ok ? 'success' : 'error',
+          message: retryResult.message || 'Data value retry completed.',
+        });
+        continue;
+      }
+
+      skipped += 1;
+      results.push({
+        logId: row.id,
+        entityType,
+        status: 'skipped',
+        message: `Entity type ${entityType} does not support automatic retry yet.`,
+      });
+    }
+
+    return {
+      dryRun,
+      requestedLimit: limit,
+      found: retryCandidates.length,
+      attempted,
+      succeeded,
+      failed,
+      skipped,
+      results,
+    };
+  }
+
   async syncPatients(tenantDb: DataSource, tenantId?: string) {
     try {
       const patientRepository = tenantDb.getRepository(Patient);
@@ -845,6 +1129,7 @@ export class Dhis2Service {
               program: eventData.program || null,
               programStage: eventData.programStage || null,
               patientId: eventData.patientId,
+              request: eventData || null,
             },
           });
         }
@@ -920,6 +1205,7 @@ export class Dhis2Service {
             payload: {
               program: eventData?.program || null,
               programStage: eventData?.programStage || null,
+              request: eventData || null,
               response: error?.response?.data || null,
             },
           });
@@ -1014,6 +1300,7 @@ export class Dhis2Service {
               dataSet: dataValues?.dataSet || null,
               period: dataValues?.period || null,
               orgUnit: dataValues?.orgUnit || null,
+              request: dataValues || null,
               response: error?.response?.data || null,
             },
           });
@@ -1334,6 +1621,7 @@ export class Dhis2Service {
               period: reportData?.period || null,
               dataSet: reportData?.dataSet || null,
               orgUnit: reportData?.orgUnit || null,
+              request: reportData || null,
               response: error?.response?.data || null,
             },
           });

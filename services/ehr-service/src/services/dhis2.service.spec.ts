@@ -213,4 +213,106 @@ describe('Dhis2Service', () => {
     expect(result.dataValuesSynced).toBe(2);
     expect(result.errors).toBe(1);
   });
+
+  it('returns filtered sync log rows with summary', async () => {
+    process.env.DHIS2_USE_MOCK = 'false';
+
+    const { service } = createService(null);
+    const tenantDb = {
+      query: jest.fn().mockImplementation((sql: string) => {
+        if (sql.includes('SELECT COUNT(*)::int AS total')) {
+          return Promise.resolve([{ total: 2 }]);
+        }
+        if (sql.includes('FROM dhis2_sync_log') && sql.includes('ORDER BY synced_at DESC')) {
+          return Promise.resolve([
+            {
+              id: 'log-1',
+              entity_type: 'event',
+              status: 'error',
+              payload: { request: { program: 'p1' } },
+              synced_at: '2026-03-10T07:00:00.000Z',
+            },
+          ]);
+        }
+        if (sql.includes('GROUP BY entity_type, status')) {
+          return Promise.resolve([{ entity_type: 'event', status: 'error', count: 2 }]);
+        }
+        return Promise.resolve([]);
+      }),
+    } as unknown as DataSource;
+
+    const result = await service.getSyncLog(tenantDb, { status: 'error', limit: 20, offset: 0 });
+
+    expect(result.total).toBe(2);
+    expect(result.logs).toHaveLength(1);
+    expect(result.summary).toEqual([{ entityType: 'event', status: 'error', count: 2 }]);
+  });
+
+  it('retries failed event logs when request payload is available', async () => {
+    process.env.DHIS2_USE_MOCK = 'false';
+
+    const { service } = createService(null);
+    const sendEventSpy = jest.spyOn(service, 'sendEvent').mockResolvedValue({
+      status: 'SUCCESS',
+      reference: 'EVT_999',
+      message: 'Event sent',
+    });
+
+    const tenantDb = {
+      query: jest.fn().mockImplementation((sql: string) => {
+        if (sql.includes('FROM dhis2_sync_log') && sql.includes('status = $1')) {
+          return Promise.resolve([
+            {
+              id: 'log-evt-1',
+              entity_type: 'event',
+              status: 'error',
+              payload: { request: { program: 'prog-1', patientId: 'p-1' } },
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      }),
+    } as unknown as DataSource;
+
+    const result = await service.retryFailedSync(tenantDb, 'tenant-a', { entityType: 'event', limit: 10 });
+
+    expect(sendEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ program: 'prog-1' }),
+      tenantDb,
+      'tenant-a',
+    );
+    expect(result.attempted).toBe(1);
+    expect(result.succeeded).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.skipped).toBe(0);
+  });
+
+  it('skips retries when failed log has no request payload', async () => {
+    process.env.DHIS2_USE_MOCK = 'false';
+
+    const { service } = createService(null);
+    const sendEventSpy = jest.spyOn(service, 'sendEvent');
+
+    const tenantDb = {
+      query: jest.fn().mockImplementation((sql: string) => {
+        if (sql.includes('FROM dhis2_sync_log') && sql.includes('status = $1')) {
+          return Promise.resolve([
+            {
+              id: 'log-evt-2',
+              entity_type: 'event',
+              status: 'error',
+              payload: {},
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      }),
+    } as unknown as DataSource;
+
+    const result = await service.retryFailedSync(tenantDb, 'tenant-a', { entityType: 'event', limit: 10 });
+
+    expect(sendEventSpy).not.toHaveBeenCalled();
+    expect(result.attempted).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
 });

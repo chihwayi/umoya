@@ -107,6 +107,8 @@ Use tenant context in request (e.g. `X-Tenant-Id`):
 
 - `POST /api/dhis2/sync/patients`
 - `GET /api/dhis2/sync-status`
+- `GET /api/dhis2/sync-log`
+- `POST /api/dhis2/retry-failed`
 - `POST /api/dhis2/events`
 - `POST /api/dhis2/reports/aggregate`
 
@@ -122,14 +124,44 @@ Event linkage note:
 - `POST /api/dhis2/events` now resolves `patientId -> dhis2_patient_mappings.dhis2_tei_id`.
 - If mapping is missing, event push returns an error instructing you to run patient sync first.
 
-## 7. Troubleshooting
+## 7. Ops Endpoints (Sprint 5)
+
+### A) Sync log drilldown
+
+`GET /api/dhis2/sync-log?status=error&entityType=event&limit=50&offset=0`
+
+Returns:
+- paged tenant-local `dhis2_sync_log` entries,
+- summary counts grouped by entity type and status.
+
+### B) Retry failed pushes
+
+`POST /api/dhis2/retry-failed`
+
+Body example:
+
+```json
+{
+  "entityType": "event",
+  "limit": 25,
+  "dryRun": true
+}
+```
+
+Behavior:
+- replays failed logs in tenant scope only,
+- requires `payload.request` in the failed log for automatic replay,
+- supports entity types: `patient`, `event`, `aggregate`, `data_value_set`,
+- `dryRun=true` returns what would be retried without pushing.
+
+## 8. Troubleshooting
 
 - `401 Unauthorized`: PAT invalid/expired or wrong header format.
 - `403 Forbidden`: PAT lacks required authorities.
 - `404 Not Found`: wrong API version or missing metadata IDs.
 - `status=PARTIAL_SUCCESS`: some entities failed; inspect `dhis2_sync_log`.
 
-## 8. References
+## 9. References
 
 - Data push reference: `docs/dhis2/DHIS2_DATA_PUSH_REFERENCE.md`
 - Development plan: `docs/plans/dhis2-tenant-sync-development-plan.md`
