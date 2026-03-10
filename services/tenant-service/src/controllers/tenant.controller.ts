@@ -7,6 +7,7 @@ import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { TenantDhis2ConfigPayload, TenantDhis2ConfigView } from '../services/tenant.service';
 
 type SafeTenant = Omit<Tenant, 'connectionString'>;
 type PublicTenant = Pick<Tenant, 'id' | 'subdomain' | 'clinicName' | 'status' | 'logoUrl'>;
@@ -142,5 +143,34 @@ export class TenantController {
       status: tenant.status,
       database: tenant.connectionString ? 'connected' : 'not_connected'
     };
+  }
+
+  @Get(':id/dhis2-config')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get tenant DHIS2 integration config (secret-safe view)' })
+  async getTenantDhis2Config(@Param('id') id: string): Promise<TenantDhis2ConfigView | { configured: false }> {
+    const config = await this.tenantService.getTenantDhis2Config(id);
+    if (!config) {
+      return { configured: false };
+    }
+    return config;
+  }
+
+  @Put(':id/dhis2-config')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Create/update tenant DHIS2 integration config' })
+  async upsertTenantDhis2Config(
+    @Param('id') id: string,
+    @Body(ValidationPipe) body: TenantDhis2ConfigPayload,
+  ): Promise<TenantDhis2ConfigView> {
+    return this.tenantService.upsertTenantDhis2Config(id, body);
+  }
+
+  @Delete(':id/dhis2-config')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Delete tenant DHIS2 integration config' })
+  async clearTenantDhis2Config(@Param('id') id: string): Promise<{ message: string }> {
+    await this.tenantService.clearTenantDhis2Config(id);
+    return { message: 'Tenant DHIS2 config deleted' };
   }
 }

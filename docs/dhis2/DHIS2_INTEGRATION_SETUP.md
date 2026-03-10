@@ -1,190 +1,129 @@
-# DHIS2 Integration Setup Guide
+# DHIS2 Integration Setup Guide (Tenant-Based)
 
-## Overview
+Date: 2026-03-10  
+Target: DHIS2 `2.40.0` (`d2 cluster up --port 8888`)
 
-The DHIS2 integration has been upgraded from mocked calls to real API integration. The service automatically falls back to mock mode if credentials are not configured, ensuring backward compatibility.
+## 1. Objective
 
-## Configuration
+Configure MediCore so each tenant/clinic syncs to DHIS2 with its own:
+- auth binding (PAT preferred),
+- org unit,
+- metadata mapping (tracked entity type, dataset).
 
-### Environment Variables
+## 2. PAT Generation (DHIS2 UI)
 
-Add these to your `services/ehr-service/.env` file:
+Path: `User Profile -> Personal Access Tokens -> Generate new token`
+
+Use:
+- Context: `Server/script context`
+- Allowed HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`
+- Expiration: long-lived for local dev, shorter in production
+
+### Allowed IP addresses (what to put)
+
+- Local dev on your machine: leave it blank.
+- Locked-down environment:
+  - put exact backend egress IP(s), one per line,
+  - include `127.0.0.1` only if backend reaches DHIS2 locally on loopback.
+- Important: enforce `X-Forwarded-For` overwrite at proxy/load balancer, otherwise source IP checks are weak.
+
+Store generated token in backend env as `DHIS2_PAT` or tenant config API input.
+
+## 3. Environment Variables (Fallback Mode)
+
+Per-tenant config is primary. These env vars are fallback/default when tenant config is absent:
 
 ```bash
-# DHIS2 Configuration
 DHIS2_URL=http://localhost:8888
 DHIS2_API_VERSION=40
 DHIS2_PAT=your_dhis2_personal_access_token
-
-# Optional: Organization-specific settings
 DHIS2_ORG_UNIT=YOUR_ORG_UNIT_ID
-DHIS2_TRACKED_ENTITY_TYPE=MCPQUTHX1Ze
-DHIS2_DATASET_ID=BfMAe6Itzgt
-
-# Enable/Disable Mock Mode (for testing)
+DHIS2_TRACKED_ENTITY_TYPE=YOUR_TRACKED_ENTITY_TYPE_ID
+DHIS2_DATASET_ID=YOUR_DATASET_ID
 DHIS2_USE_MOCK=false
 ```
 
-### Getting DHIS2 Credentials
-
-1. Generate a **Personal Access Token** in DHIS2 user profile:
-   - Path: `User Profile -> Personal Access Tokens`
-   - Context: `Server/script context`
-   - Methods: `GET, POST, PUT, PATCH` (and `DELETE` only if needed)
-   - For local dev, use a long expiry.
-2. Store the token as `DHIS2_PAT`.
-3. Use `DHIS2_USERNAME`/`DHIS2_PASSWORD` only as fallback.
-
-2. **Test Environment**: You can use DHIS2 test instance:
-   - URL: `https://test.dhis2.mohcc.gov.zw` (if available)
-   - Or set up local DHIS2 instance for testing
-
-## Features
-
-### ✅ Real API Integration
-
-- **Patient Sync**: Syncs patients to DHIS2 as tracked entity instances
-- **Event Sending**: Sends clinical events (visits, lab results, etc.)
-- **Data Values**: Sends aggregate data values
-- **Programs**: Fetches available DHIS2 programs
-- **Data Elements**: Fetches data elements for programs
-- **Sync Status**: Checks connection and sync status
-
-### 🔄 Automatic Fallback
-
-- If credentials are not set, service runs in **MOCK mode**
-- MOCK mode returns simulated responses
-- No breaking changes - existing code continues to work
-- Logs clearly indicate when running in MOCK mode
-
-## Usage
-
-### Sync Patients
-
-```typescript
-POST /api/dhis2/sync/patients
-```
-
-Syncs all active patients to DHIS2.
-
-### Send Event
-
-```typescript
-POST /api/dhis2/events
-Body: {
-  program: 'uy2gU8kT1jF', // HIV Care Program
-  orgUnit: 'YOUR_ORG_UNIT_ID',
-  eventDate: '2024-12-09',
-  patientId: 'patient-uuid',
-  dataValues: [
-    { dataElement: 'element-id', value: 'value' }
-  ]
-}
-```
-
-### Send Aggregate Report
-
-```typescript
-POST /api/dhis2/reports/aggregate
-Body: {
-  dataSet: 'BfMAe6Itzgt',
-  period: '202412', // YYYYMM format
-  orgUnit: 'YOUR_ORG_UNIT_ID'
-}
-```
-
-### Check Sync Status
-
-```typescript
-GET /api/dhis2/sync-status
-```
-
-Returns connection status and sync statistics.
-
-## Testing
-
-### Test with Mock Mode
-
-1. Set `DHIS2_USE_MOCK=true`
-2. Service will automatically use MOCK mode
-3. All endpoints will return simulated responses
-
-### Test with Real API
-
-1. Set `DHIS2_URL`, `DHIS2_API_VERSION`, and `DHIS2_PAT`
-2. Restart EHR service
-3. Check logs for "DHIS2 service initialized with real API integration"
-4. Test endpoints - should connect to real DHIS2
-
-### PAT Header Format (DHIS2 2.40)
-
-Use:
+PAT auth header used by integration:
 
 ```bash
 Authorization: ApiToken <DHIS2_PAT>
 ```
 
-`Bearer <token>` does not work for DHIS2 personal access tokens in local 2.40 testing.
+## 4. Blank Instance Bootstrap
 
-## Error Handling
+For a fresh DHIS2 instance, bootstrap minimum metadata:
 
-- All methods have try-catch blocks
-- Errors are logged but don't break the application
-- Error responses include error details for debugging
-- MOCK mode fallback ensures service always responds
+```bash
+DHIS2_URL=http://localhost:8888 \
+DHIS2_API_VERSION=40 \
+DHIS2_PAT=... \
+DHIS2_CLINIC_CODE=clinic_a \
+DHIS2_CLINIC_NAME="Clinic A" \
+npm run dhis2:bootstrap
+```
 
-## Data Mapping
+Script: `scripts/bootstrap-dhis2-metadata.mjs`  
+Output file (default): `/tmp/dhis2-bootstrap-output.json`
 
-### Patient Attributes
+Bootstrap creates/reuses:
+- Organisation Unit (clinic code/name),
+- Tracked Entity Type (`MC_TET_PATIENT`),
+- Patient tracked entity attributes,
+- Aggregate data elements,
+- Monthly service delivery dataset.
 
-- First Name: `w75KJ2mc4zz`
-- Last Name: `zDhUuAYrxNC`
-- Date of Birth: `FO4GPuUTfQU`
-- Gender: `cejWyOfXge6`
-- National ID: `AuPLng5hLbE`
+See details: `docs/dhis2/BLANK_DHIS2_BOOTSTRAP.md`.
 
-**Note**: These attribute IDs are examples. Get actual IDs from your DHIS2 instance.
+## 5. Tenant ↔ DHIS2 Link API
 
-### Programs
+Tenant service endpoints (JWT-protected):
 
-- HIV Care and Treatment: `uy2gU8kT1jF`
-- TB Care and Treatment: `M3xtLkYBlKI`
-- Malaria Case Management: `WSGAb5XwJ3Y`
-- Child Programme: `IpHINAT79UW`
+- `GET /api/tenants/:id/dhis2-config`
+- `PUT /api/tenants/:id/dhis2-config`
+- `DELETE /api/tenants/:id/dhis2-config`
 
-**Note**: Program IDs vary by DHIS2 instance. Fetch using `/api/dhis2/programs`.
+`PUT` payload example:
 
-## Troubleshooting
+```json
+{
+  "baseUrl": "http://localhost:8888",
+  "apiVersion": "40",
+  "authType": "pat",
+  "pat": "d2pat_...",
+  "orgUnitId": "DHIS2_ORG_UNIT_UID",
+  "trackedEntityTypeId": "DHIS2_TET_UID",
+  "datasetId": "DHIS2_DATASET_UID",
+  "enabled": true
+}
+```
 
-### Connection Issues
+Secrets are not returned in full; PAT is masked in read responses.
 
-1. **Check token**: Verify `DHIS2_PAT` is valid and not expired
-2. **Check URL**: Ensure DHIS2 URL is accessible
-3. **Check API version**: For DHIS2 2.40 use `DHIS2_API_VERSION=40`
-4. **Check logs**: Look for detailed error messages
+## 6. Sync Endpoints (Tenant Scoped)
 
-### Common Errors
+Use tenant context in request (e.g. `X-Tenant-Id`):
 
-- **401 Unauthorized**: Invalid/expired PAT or wrong header format
-- **404 Not Found**: Wrong API version or endpoint
-- **Timeout**: DHIS2 server not responding (check network)
-- **403 Forbidden**: User doesn't have API access
+- `POST /api/dhis2/sync/patients`
+- `GET /api/dhis2/sync-status`
+- `POST /api/dhis2/events`
+- `POST /api/dhis2/reports/aggregate`
 
-## Next Steps
+Behavior:
+- if tenant config exists and enabled: push to that tenant’s DHIS2 org unit,
+- if missing/disabled: return not configured / fallback behavior,
+- patient sync is idempotent using tenant tables:
+  - `dhis2_patient_mappings`
+  - `dhis2_sync_log`
 
-1. ✅ **Get DHIS2 credentials** from MOHCC
-2. ✅ **Configure environment variables**
-3. ✅ **Test connection** using `/api/dhis2/sync-status`
-4. ✅ **Map data elements** for your specific programs
-5. ✅ **Set up sync schedule** (daily/weekly)
-6. ✅ **Monitor sync logs** for errors
+## 7. Troubleshooting
 
-## Support
+- `401 Unauthorized`: PAT invalid/expired or wrong header format.
+- `403 Forbidden`: PAT lacks required authorities.
+- `404 Not Found`: wrong API version or missing metadata IDs.
+- `status=PARTIAL_SUCCESS`: some entities failed; inspect `dhis2_sync_log`.
 
-For DHIS2-specific questions:
-- DHIS2 Documentation: https://docs.dhis2.org/
-- Zimbabwe MOHCC DHIS2 Support: Contact MOHCC IT department
+## 8. References
 
-For integration issues:
-- Check service logs: `docker logs medicore-ehr-service`
-- Review error responses from API endpoints
+- Data push reference: `docs/dhis2/DHIS2_DATA_PUSH_REFERENCE.md`
+- Development plan: `docs/plans/dhis2-tenant-sync-development-plan.md`
+- Sprint plan: `docs/plans/dhis2-sync-sprint-execution-2026-03.md`

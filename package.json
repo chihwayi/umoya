@@ -19,7 +19,8 @@
     "imaging:backfill": "ts-node scripts/backfill-imaging-objects.ts",
     "seed:thandeka": "ts-node scripts/seed-thandeka-data.ts",
     "provision:sprint46-nurse-copilot": "npx ts-node scripts/provision-sprint46-nurse-copilot.ts",
-    "provision:sprint57-post-visit-intravisit-alerts": "npx ts-node scripts/provision-sprint57-post-visit-intravisit-alerts.ts"
+    "provision:sprint57-post-visit-intravisit-alerts": "npx ts-node scripts/provision-sprint57-post-visit-intravisit-alerts.ts",
+    "dhis2:bootstrap": "node scripts/bootstrap-dhis2-metadata.mjs"
   },
   "workspaces": [
     "packages/*",

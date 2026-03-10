@@ -672,6 +672,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getMedicationRemindersSchemaStatements(),
       },
       {
+        id: 'dhis2_sync_foundation',
+        label: 'DHIS2 Sync Foundation',
+        version: '2026.03.10',
+        description: 'Tenant-level patient TEI mapping and sync audit log tables for idempotent DHIS2 push',
+        statements: () => this.getDhis2SyncFoundationStatements(),
+      },
+      {
         id: 'sprint_l1_continuous_learning',
         label: 'Continuous Learning Infrastructure',
         version: '2026.03.07',
@@ -683,6 +690,38 @@ export class DatabaseProvisioningService {
 
   public getCoreSchemaStatements(): string[] {
     return [...this.getClinicSchema()];
+  }
+
+  private getDhis2SyncFoundationStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS dhis2_patient_mappings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE UNIQUE,
+        dhis2_tei_id VARCHAR(64) NOT NULL,
+        org_unit_id VARCHAR(64),
+        tenant_identifier VARCHAR(128),
+        last_synced_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_dhis2_patient_mappings_patient_id ON dhis2_patient_mappings(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_dhis2_patient_mappings_tei_id ON dhis2_patient_mappings(dhis2_tei_id)`,
+      `CREATE TABLE IF NOT EXISTS dhis2_sync_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id UUID,
+        dhis2_id VARCHAR(64),
+        action VARCHAR(20) NOT NULL CHECK (action IN ('create','update','upsert','skip','error')),
+        status VARCHAR(20) NOT NULL CHECK (status IN ('success','error','skipped')),
+        error_message TEXT,
+        payload JSONB DEFAULT '{}'::jsonb,
+        synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_dhis2_sync_log_entity_type ON dhis2_sync_log(entity_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_dhis2_sync_log_status ON dhis2_sync_log(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_dhis2_sync_log_synced_at ON dhis2_sync_log(synced_at DESC)`,
+    ];
   }
 
   private getSprintH1PracticeManagementStatements(): string[] {

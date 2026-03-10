@@ -5,6 +5,34 @@ import { Tenant, TenantStatus, SubscriptionTier } from '../entities/tenant.entit
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { DatabaseProvisioningService } from './database-provisioning.service';
 
+export interface TenantDhis2ConfigPayload {
+  baseUrl: string;
+  apiVersion?: string;
+  authType?: 'pat' | 'basic';
+  pat?: string | null;
+  username?: string | null;
+  password?: string | null;
+  orgUnitId: string;
+  trackedEntityTypeId?: string | null;
+  datasetId?: string | null;
+  enabled?: boolean;
+}
+
+export interface TenantDhis2ConfigView {
+  tenantId: string;
+  baseUrl: string;
+  apiVersion: string;
+  authType: 'pat' | 'basic';
+  hasPat: boolean;
+  patMasked: string | null;
+  username: string | null;
+  orgUnitId: string;
+  trackedEntityTypeId: string | null;
+  datasetId: string | null;
+  enabled: boolean;
+  updatedAt: string | null;
+}
+
 @Injectable()
 export class TenantService implements OnModuleInit {
   private readonly logger = new Logger(TenantService.name);
@@ -142,6 +170,141 @@ export class TenantService implements OnModuleInit {
     // Delete tenant record
     await this.tenantRepository.remove(tenant);
     this.logger.log(`Tenant deleted: ${id}`);
+  }
+
+  async getTenantDhis2Config(tenantId: string): Promise<TenantDhis2ConfigView | null> {
+    await this.findById(tenantId);
+
+    const rows = await this.tenantRepository.query(
+      `
+      SELECT
+        tenant_id,
+        base_url,
+        COALESCE(api_version, '40') AS api_version,
+        COALESCE(auth_type, 'pat') AS auth_type,
+        pat,
+        username,
+        org_unit_id,
+        tracked_entity_type_id,
+        dataset_id,
+        COALESCE(enabled, true) AS enabled,
+        updated_at
+      FROM tenant_dhis2_config
+      WHERE tenant_id = $1
+      LIMIT 1
+      `,
+      [tenantId],
+    );
+
+    if (!rows || rows.length === 0) {
+      return null;
+    }
+
+    const row = rows[0];
+    const pat = row.pat ? String(row.pat) : '';
+    const patMasked = pat.length >= 8 ? `${pat.slice(0, 6)}...${pat.slice(-4)}` : pat || null;
+
+    return {
+      tenantId: row.tenant_id,
+      baseUrl: row.base_url,
+      apiVersion: String(row.api_version || '40'),
+      authType: row.auth_type === 'basic' ? 'basic' : 'pat',
+      hasPat: Boolean(pat),
+      patMasked,
+      username: row.username ?? null,
+      orgUnitId: row.org_unit_id,
+      trackedEntityTypeId: row.tracked_entity_type_id ?? null,
+      datasetId: row.dataset_id ?? null,
+      enabled: Boolean(row.enabled),
+      updatedAt: row.updated_at ? String(row.updated_at) : null,
+    };
+  }
+
+  async upsertTenantDhis2Config(
+    tenantId: string,
+    payload: TenantDhis2ConfigPayload,
+  ): Promise<TenantDhis2ConfigView> {
+    await this.findById(tenantId);
+
+    const baseUrl = String(payload.baseUrl || '').trim();
+    const orgUnitId = String(payload.orgUnitId || '').trim();
+    const authType = payload.authType === 'basic' ? 'basic' : 'pat';
+    const apiVersion = String(payload.apiVersion || '40').trim();
+
+    if (!baseUrl) {
+      throw new ConflictException('baseUrl is required');
+    }
+    if (!orgUnitId) {
+      throw new ConflictException('orgUnitId is required');
+    }
+
+    if (authType === 'pat' && (!payload.pat || String(payload.pat).trim().length === 0)) {
+      throw new ConflictException('PAT is required when authType is pat');
+    }
+    if (
+      authType === 'basic' &&
+      (!payload.username || !payload.password || !String(payload.username).trim() || !String(payload.password).trim())
+    ) {
+      throw new ConflictException('username and password are required when authType is basic');
+    }
+
+    await this.tenantRepository.query(
+      `
+      INSERT INTO tenant_dhis2_config (
+        tenant_id,
+        base_url,
+        api_version,
+        auth_type,
+        pat,
+        username,
+        password,
+        org_unit_id,
+        tracked_entity_type_id,
+        dataset_id,
+        enabled,
+        created_at,
+        updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
+      ON CONFLICT (tenant_id)
+      DO UPDATE SET
+        base_url = EXCLUDED.base_url,
+        api_version = EXCLUDED.api_version,
+        auth_type = EXCLUDED.auth_type,
+        pat = EXCLUDED.pat,
+        username = EXCLUDED.username,
+        password = EXCLUDED.password,
+        org_unit_id = EXCLUDED.org_unit_id,
+        tracked_entity_type_id = EXCLUDED.tracked_entity_type_id,
+        dataset_id = EXCLUDED.dataset_id,
+        enabled = EXCLUDED.enabled,
+        updated_at = NOW()
+      `,
+      [
+        tenantId,
+        baseUrl,
+        apiVersion,
+        authType,
+        payload.pat ?? null,
+        payload.username ?? null,
+        payload.password ?? null,
+        orgUnitId,
+        payload.trackedEntityTypeId ?? null,
+        payload.datasetId ?? null,
+        payload.enabled !== false,
+      ],
+    );
+
+    const view = await this.getTenantDhis2Config(tenantId);
+    if (!view) {
+      throw new ConflictException('Failed to load saved DHIS2 config');
+    }
+    return view;
+  }
+
+  async clearTenantDhis2Config(tenantId: string): Promise<void> {
+    await this.findById(tenantId);
+    await this.tenantRepository.query(`DELETE FROM tenant_dhis2_config WHERE tenant_id = $1`, [tenantId]);
   }
 
   private async provisionTenantDatabase(tenant: Tenant): Promise<void> {

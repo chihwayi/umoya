@@ -25,6 +25,11 @@ interface Dhis2Context {
   client?: AxiosInstance;
 }
 
+interface Dhis2PatientMappingRow {
+  patient_id: string;
+  dhis2_tei_id: string;
+}
+
 @Injectable()
 export class Dhis2Service {
   private readonly logger = new Logger(Dhis2Service.name);
@@ -180,6 +185,136 @@ export class Dhis2Service {
     };
   }
 
+  private isNotFoundError(error: any): boolean {
+    return Number(error?.response?.status) === 404;
+  }
+
+  private buildPatientAttributes(patient: Patient) {
+    return [
+      { attribute: 'w75KJ2mc4zz', value: patient.firstName || '' },
+      { attribute: 'zDhUuAYrxNC', value: patient.lastName || '' },
+      {
+        attribute: 'FO4GPuUTfQU',
+        value: patient.dateOfBirth ? patient.dateOfBirth.toISOString().split('T')[0] : '',
+      },
+      { attribute: 'cejWyOfXge6', value: (patient.gender || '').toUpperCase() },
+      { attribute: 'AuPLng5hLbE', value: patient.nationalId || '' },
+    ];
+  }
+
+  private extractTeiId(responseData: any): string | null {
+    return (
+      responseData?.response?.importSummaries?.[0]?.reference ||
+      responseData?.response?.reference ||
+      responseData?.reference ||
+      null
+    );
+  }
+
+  private async ensureTenantSyncTables(tenantDb: DataSource): Promise<void> {
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS dhis2_patient_mappings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL UNIQUE,
+        dhis2_tei_id VARCHAR(64) NOT NULL,
+        org_unit_id VARCHAR(64),
+        tenant_identifier VARCHAR(128),
+        last_synced_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS dhis2_sync_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id UUID,
+        dhis2_id VARCHAR(64),
+        action VARCHAR(20) NOT NULL,
+        status VARCHAR(20) NOT NULL,
+        error_message TEXT,
+        payload JSONB DEFAULT '{}'::jsonb,
+        synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+  }
+
+  private async loadPatientMappings(tenantDb: DataSource): Promise<Map<string, string>> {
+    const rows: Dhis2PatientMappingRow[] = await tenantDb.query(
+      `SELECT patient_id, dhis2_tei_id FROM dhis2_patient_mappings`,
+    );
+    return new Map(rows.map((row) => [row.patient_id, row.dhis2_tei_id]));
+  }
+
+  private async upsertPatientMapping(
+    tenantDb: DataSource,
+    patientId: string,
+    teiId: string,
+    orgUnitId?: string,
+    tenantId?: string,
+  ): Promise<void> {
+    await tenantDb.query(
+      `
+      INSERT INTO dhis2_patient_mappings (
+        patient_id,
+        dhis2_tei_id,
+        org_unit_id,
+        tenant_identifier,
+        last_synced_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, NOW(), NOW())
+      ON CONFLICT (patient_id)
+      DO UPDATE SET
+        dhis2_tei_id = EXCLUDED.dhis2_tei_id,
+        org_unit_id = EXCLUDED.org_unit_id,
+        tenant_identifier = EXCLUDED.tenant_identifier,
+        last_synced_at = NOW(),
+        updated_at = NOW()
+      `,
+      [patientId, teiId, orgUnitId || null, tenantId || null],
+    );
+  }
+
+  private async insertSyncLog(
+    tenantDb: DataSource,
+    args: {
+      entityType: string;
+      entityId?: string | null;
+      dhis2Id?: string | null;
+      action: 'create' | 'update' | 'upsert' | 'skip' | 'error';
+      status: 'success' | 'error' | 'skipped';
+      errorMessage?: string | null;
+      payload?: Record<string, any>;
+    },
+  ): Promise<void> {
+    await tenantDb.query(
+      `
+      INSERT INTO dhis2_sync_log (
+        entity_type,
+        entity_id,
+        dhis2_id,
+        action,
+        status,
+        error_message,
+        payload,
+        synced_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW())
+      `,
+      [
+        args.entityType,
+        args.entityId || null,
+        args.dhis2Id || null,
+        args.action,
+        args.status,
+        args.errorMessage || null,
+        JSON.stringify(args.payload || {}),
+      ],
+    );
+  }
+
   async syncPatients(tenantDb: DataSource, tenantId?: string) {
     try {
       const patientRepository = tenantDb.getRepository(Patient);
@@ -212,33 +347,101 @@ export class Dhis2Service {
       const trackedEntityType =
         context.config.trackedEntityTypeId || this.envTrackedEntityType || 'MCPQUTHX1Ze';
       const orgUnit = context.config.orgUnitId || this.envOrgUnit || 'YOUR_ORG_UNIT_ID';
+      await this.ensureTenantSyncTables(tenantDb);
+      const existingMappings = await this.loadPatientMappings(tenantDb);
 
-      const importPayload = {
-        trackedEntityInstances: patients.map((patient) => ({
+      let created = 0;
+      let updated = 0;
+      let failed = 0;
+      let skipped = 0;
+
+      for (const patient of patients) {
+        const existingTeiId = existingMappings.get(patient.id);
+        const payload = {
           trackedEntityType,
           orgUnit,
-          attributes: [
-            { attribute: 'w75KJ2mc4zz', value: patient.firstName },
-            { attribute: 'zDhUuAYrxNC', value: patient.lastName },
-            {
-              attribute: 'FO4GPuUTfQU',
-              value: patient.dateOfBirth ? patient.dateOfBirth.toISOString().split('T')[0] : '',
-            },
-            { attribute: 'cejWyOfXge6', value: (patient.gender || '').toUpperCase() },
-            { attribute: 'AuPLng5hLbE', value: patient.nationalId || '' },
-          ],
-        })),
-      };
+          attributes: this.buildPatientAttributes(patient),
+        };
 
-      const response = await context.client.post('/trackedEntityInstances', importPayload);
+        try {
+          if (existingTeiId) {
+            try {
+              await context.client.put(`/trackedEntityInstances/${existingTeiId}`, payload);
+              updated += 1;
+              await this.upsertPatientMapping(tenantDb, patient.id, existingTeiId, orgUnit, tenantId);
+              await this.insertSyncLog(tenantDb, {
+                entityType: 'patient',
+                entityId: patient.id,
+                dhis2Id: existingTeiId,
+                action: 'update',
+                status: 'success',
+                payload: { patientId: patient.id, orgUnit },
+              });
+              continue;
+            } catch (updateError: any) {
+              if (!this.isNotFoundError(updateError)) {
+                throw updateError;
+              }
+              this.logger.warn(
+                `Mapped TEI not found in DHIS2 for patient ${patient.id}; re-creating record.`,
+              );
+            }
+          }
+
+          const createResponse = await context.client.post('/trackedEntityInstances', {
+            trackedEntityInstances: [payload],
+          });
+          const createdTeiId = this.extractTeiId(createResponse.data);
+          if (!createdTeiId) {
+            skipped += 1;
+            await this.insertSyncLog(tenantDb, {
+              entityType: 'patient',
+              entityId: patient.id,
+              dhis2Id: null,
+              action: 'skip',
+              status: 'skipped',
+              errorMessage: 'TEI ID not returned by DHIS2 create response',
+              payload: { patientId: patient.id, orgUnit, response: createResponse.data || null },
+            });
+            continue;
+          }
+
+          await this.upsertPatientMapping(tenantDb, patient.id, createdTeiId, orgUnit, tenantId);
+          created += 1;
+          await this.insertSyncLog(tenantDb, {
+            entityType: 'patient',
+            entityId: patient.id,
+            dhis2Id: createdTeiId,
+            action: 'create',
+            status: 'success',
+            payload: { patientId: patient.id, orgUnit },
+          });
+        } catch (patientError: any) {
+          failed += 1;
+          await this.insertSyncLog(tenantDb, {
+            entityType: 'patient',
+            entityId: patient.id,
+            dhis2Id: existingTeiId || null,
+            action: 'error',
+            status: 'error',
+            errorMessage: patientError?.message || 'Patient sync failed',
+            payload: {
+              patientId: patient.id,
+              orgUnit,
+              response: patientError?.response?.data || null,
+            },
+          });
+        }
+      }
 
       return {
-        status: response.data.status || 'SUCCESS',
-        imported: response.data.imported || 0,
-        updated: response.data.updated || 0,
-        ignored: response.data.ignored || 0,
-        deleted: response.data.deleted || 0,
-        message: `Successfully synced ${response.data.imported || 0} patients to DHIS2`,
+        status: failed > 0 ? 'PARTIAL_SUCCESS' : 'SUCCESS',
+        imported: created,
+        updated,
+        ignored: skipped,
+        deleted: 0,
+        failed,
+        message: `Patient sync complete. Created ${created}, updated ${updated}, skipped ${skipped}, failed ${failed}.`,
       };
     } catch (error: any) {
       this.logger.error('Error syncing patients to DHIS2:', error);
@@ -544,7 +747,7 @@ export class Dhis2Service {
     }
   }
 
-  async getSyncStatus(_tenantDb: DataSource, tenantId?: string) {
+  async getSyncStatus(tenantDb: DataSource, tenantId?: string) {
     try {
       const context = await this.resolveContext(tenantId);
 
@@ -577,14 +780,42 @@ export class Dhis2Service {
 
       const systemInfo = await context.client.get('/system/info');
 
+      let lastSync: string | null = null;
+      let patientSuccessCount = 0;
+      let patientErrorCount = 0;
+      let totalSuccessCount = 0;
+
+      if (tenantDb && typeof (tenantDb as any).query === 'function') {
+        try {
+          await this.ensureTenantSyncTables(tenantDb);
+          const statsRows = await tenantDb.query(
+            `
+            SELECT
+              MAX(synced_at) AS last_sync,
+              COUNT(*) FILTER (WHERE entity_type = 'patient' AND status = 'success')::int AS patient_success_count,
+              COUNT(*) FILTER (WHERE entity_type = 'patient' AND status = 'error')::int AS patient_error_count,
+              COUNT(*) FILTER (WHERE status = 'success')::int AS total_success_count
+            FROM dhis2_sync_log
+            `,
+          );
+          const stats = statsRows?.[0] || {};
+          lastSync = stats.last_sync ? String(stats.last_sync) : null;
+          patientSuccessCount = Number(stats.patient_success_count || 0);
+          patientErrorCount = Number(stats.patient_error_count || 0);
+          totalSuccessCount = Number(stats.total_success_count || 0);
+        } catch (statsError: any) {
+          this.logger.warn(`Unable to read DHIS2 sync log stats: ${statsError?.message || statsError}`);
+        }
+      }
+
       return {
-        lastSync: null,
+        lastSync,
         status: 'CONNECTED',
         dhis2Version: systemInfo.data?.version || 'unknown',
-        patientsSynced: 0,
-        eventsSynced: 0,
+        patientsSynced: patientSuccessCount,
+        eventsSynced: totalSuccessCount - patientSuccessCount,
         dataValuesSynced: 0,
-        errors: 0,
+        errors: patientErrorCount,
         nextSync: null,
         message: 'Connected to DHIS2 successfully',
       };
