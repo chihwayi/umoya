@@ -33,12 +33,27 @@ interface Dhis2PatientMappingRow {
   dhis2_tei_id: string;
 }
 
+interface Dhis2EnrollmentRow {
+  enrollment: string;
+  status?: string;
+}
+
 interface Dhis2SyncStatsRow {
   last_sync?: string | null;
   patient_success_count?: number | string | null;
   event_success_count?: number | string | null;
   data_value_success_count?: number | string | null;
   total_error_count?: number | string | null;
+}
+
+interface PatientAttributeIdMap {
+  patientNumber?: string;
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  nationalId?: string;
+  phone?: string;
 }
 
 @Injectable()
@@ -53,7 +68,21 @@ export class Dhis2Service {
   private readonly envOrgUnit = process.env.DHIS2_ORG_UNIT;
   private readonly envTrackedEntityType = process.env.DHIS2_TRACKED_ENTITY_TYPE;
   private readonly envDataSetId = process.env.DHIS2_DATASET_ID;
+  private readonly envAttrPatientNumber = process.env.DHIS2_ATTR_PATIENT_NUMBER;
+  private readonly envAttrFirstName = process.env.DHIS2_ATTR_FIRST_NAME;
+  private readonly envAttrLastName = process.env.DHIS2_ATTR_LAST_NAME;
+  private readonly envAttrDob = process.env.DHIS2_ATTR_DOB;
+  private readonly envAttrGender = process.env.DHIS2_ATTR_GENDER;
+  private readonly envAttrNationalId = process.env.DHIS2_ATTR_NATIONAL_ID;
+  private readonly envAttrPhone = process.env.DHIS2_ATTR_PHONE;
   private readonly forceMockMode = process.env.DHIS2_USE_MOCK === 'true';
+  private readonly legacyAttributeFallbacks: PatientAttributeIdMap = {
+    firstName: 'w75KJ2mc4zz',
+    lastName: 'zDhUuAYrxNC',
+    dateOfBirth: 'FO4GPuUTfQU',
+    gender: 'cejWyOfXge6',
+    nationalId: 'AuPLng5hLbE',
+  };
 
   constructor(private readonly tenantService: TenantService) {
     if (this.forceMockMode) {
@@ -226,17 +255,85 @@ export class Dhis2Service {
     return '';
   }
 
-  private buildPatientAttributes(patient: Patient) {
-    return [
-      { attribute: 'w75KJ2mc4zz', value: patient.firstName || '' },
-      { attribute: 'zDhUuAYrxNC', value: patient.lastName || '' },
-      {
-        attribute: 'FO4GPuUTfQU',
-        value: this.formatDateOnly(patient.dateOfBirth),
-      },
-      { attribute: 'cejWyOfXge6', value: (patient.gender || '').toUpperCase() },
-      { attribute: 'AuPLng5hLbE', value: patient.nationalId || '' },
-    ];
+  private getConfiguredPatientAttributeFallbacks(): PatientAttributeIdMap {
+    return {
+      patientNumber: this.envAttrPatientNumber || undefined,
+      firstName: this.envAttrFirstName || this.legacyAttributeFallbacks.firstName,
+      lastName: this.envAttrLastName || this.legacyAttributeFallbacks.lastName,
+      dateOfBirth: this.envAttrDob || this.legacyAttributeFallbacks.dateOfBirth,
+      gender: this.envAttrGender || this.legacyAttributeFallbacks.gender,
+      nationalId: this.envAttrNationalId || this.legacyAttributeFallbacks.nationalId,
+      phone: this.envAttrPhone || undefined,
+    };
+  }
+
+  private async resolvePatientAttributeIds(context: Dhis2Context): Promise<PatientAttributeIdMap> {
+    const fallback = this.getConfiguredPatientAttributeFallbacks();
+    if (!context.client) {
+      return fallback;
+    }
+
+    try {
+      const response = await context.client.get('/trackedEntityAttributes', {
+        params: {
+          fields: 'id,code,name',
+          paging: false,
+        },
+      });
+
+      const trackedEntityAttributes = response.data?.trackedEntityAttributes || [];
+      const byCode: Record<string, string> = {};
+      for (const item of trackedEntityAttributes) {
+        const code = item?.code;
+        const id = item?.id;
+        if (code && id) {
+          byCode[String(code)] = String(id);
+        }
+      }
+
+      return {
+        patientNumber: byCode.MC_ATTR_PATIENT_NUMBER || fallback.patientNumber,
+        firstName: byCode.MC_ATTR_FIRST_NAME || fallback.firstName,
+        lastName: byCode.MC_ATTR_LAST_NAME || fallback.lastName,
+        dateOfBirth: byCode.MC_ATTR_DOB || fallback.dateOfBirth,
+        gender: byCode.MC_ATTR_GENDER || fallback.gender,
+        nationalId: byCode.MC_ATTR_NATIONAL_ID || fallback.nationalId,
+        phone: byCode.MC_ATTR_PHONE || fallback.phone,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `Unable to resolve DHIS2 patient attributes by code, using fallback IDs: ${error?.message || error}`,
+      );
+      return fallback;
+    }
+  }
+
+  private buildPatientAttributes(patient: Patient, attributeIds: PatientAttributeIdMap) {
+    const attributes: Array<{ attribute: string; value: string }> = [];
+
+    if (attributeIds.patientNumber) {
+      attributes.push({ attribute: attributeIds.patientNumber, value: patient.patientNumber || patient.id || '' });
+    }
+    if (attributeIds.firstName) {
+      attributes.push({ attribute: attributeIds.firstName, value: patient.firstName || '' });
+    }
+    if (attributeIds.lastName) {
+      attributes.push({ attribute: attributeIds.lastName, value: patient.lastName || '' });
+    }
+    if (attributeIds.dateOfBirth) {
+      attributes.push({ attribute: attributeIds.dateOfBirth, value: this.formatDateOnly(patient.dateOfBirth) });
+    }
+    if (attributeIds.gender) {
+      attributes.push({ attribute: attributeIds.gender, value: (patient.gender || '').toUpperCase() });
+    }
+    if (attributeIds.nationalId) {
+      attributes.push({ attribute: attributeIds.nationalId, value: patient.nationalId || '' });
+    }
+    if (attributeIds.phone) {
+      attributes.push({ attribute: attributeIds.phone, value: patient.phone || '' });
+    }
+
+    return attributes;
   }
 
   private extractTeiId(responseData: any): string | null {
@@ -277,6 +374,28 @@ export class Dhis2Service {
       ignored: this.toImportCount(responseData?.ignored ?? importCount.ignored),
       deleted: this.toImportCount(responseData?.deleted ?? importCount.deleted),
     };
+  }
+
+  private extractLatestOpenFuturePeriod(errorData: any): string | null {
+    const conflicts = errorData?.response?.conflicts || errorData?.conflicts || [];
+    if (!Array.isArray(conflicts) || conflicts.length === 0) {
+      return null;
+    }
+
+    const periods = new Set<string>();
+    for (const conflict of conflicts) {
+      const value = String(conflict?.value || '');
+      const match = value.match(/latest open future period:\s*`?(\d{6})`?/i);
+      if (match?.[1]) {
+        periods.add(match[1]);
+      }
+    }
+
+    if (periods.size !== 1) {
+      return null;
+    }
+
+    return Array.from(periods)[0];
   }
 
   private isUuid(value?: string | null): boolean {
@@ -386,6 +505,92 @@ export class Dhis2Service {
     }
   }
 
+  private async getProgramType(context: Dhis2Context, programId: string): Promise<string | null> {
+    if (!context.client) {
+      return null;
+    }
+
+    try {
+      const response = await context.client.get(`/programs/${programId}`, {
+        params: {
+          fields: 'id,programType',
+        },
+      });
+      return response.data?.programType || null;
+    } catch (error: any) {
+      this.logger.warn(`Unable to resolve DHIS2 program type for ${programId}: ${error?.message || error}`);
+      return null;
+    }
+  }
+
+  private async getExistingEnrollment(
+    context: Dhis2Context,
+    programId: string,
+    teiId: string,
+  ): Promise<string | null> {
+    if (!context.client) {
+      return null;
+    }
+
+    try {
+      const response = await context.client.get('/enrollments', {
+        params: {
+          program: programId,
+          trackedEntityInstance: teiId,
+          paging: false,
+          fields: 'enrollments[enrollment,status]',
+        },
+      });
+      const enrollments: Dhis2EnrollmentRow[] = response.data?.enrollments || [];
+      if (!Array.isArray(enrollments) || enrollments.length === 0) {
+        return null;
+      }
+      return enrollments[0]?.enrollment || null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Unable to lookup DHIS2 enrollment for program ${programId} and TEI ${teiId}: ${error?.message || error}`,
+      );
+      return null;
+    }
+  }
+
+  private async ensureEnrollmentForEvent(
+    context: Dhis2Context,
+    args: {
+      programId: string;
+      teiId: string;
+      orgUnit: string;
+      eventDate?: string;
+    },
+  ): Promise<string | null> {
+    const programType = await this.getProgramType(context, args.programId);
+    if (!programType || programType !== 'WITH_REGISTRATION') {
+      return null;
+    }
+
+    const existingEnrollment = await this.getExistingEnrollment(context, args.programId, args.teiId);
+    if (existingEnrollment) {
+      return existingEnrollment;
+    }
+
+    if (!context.client) {
+      return null;
+    }
+
+    const dateOnly = this.formatDateOnly(args.eventDate || new Date().toISOString());
+    const payload = {
+      trackedEntityInstance: args.teiId,
+      program: args.programId,
+      orgUnit: args.orgUnit,
+      enrollmentDate: dateOnly,
+      incidentDate: dateOnly,
+      status: 'ACTIVE',
+    };
+
+    const response = await context.client.post('/enrollments', payload);
+    return this.extractImportReference(response.data);
+  }
+
   private async upsertPatientMapping(
     tenantDb: DataSource,
     patientId: string,
@@ -486,6 +691,7 @@ export class Dhis2Service {
       const trackedEntityType =
         context.config.trackedEntityTypeId || this.envTrackedEntityType || 'MCPQUTHX1Ze';
       const orgUnit = context.config.orgUnitId || this.envOrgUnit || 'YOUR_ORG_UNIT_ID';
+      const patientAttributeIds = await this.resolvePatientAttributeIds(context);
       await this.ensureTenantSyncTables(tenantDb);
       const existingMappings = await this.loadPatientMappings(tenantDb);
 
@@ -499,7 +705,7 @@ export class Dhis2Service {
         const payload = {
           trackedEntityType,
           orgUnit,
-          attributes: this.buildPatientAttributes(patient),
+          attributes: this.buildPatientAttributes(patient, patientAttributeIds),
         };
 
         try {
@@ -659,6 +865,19 @@ export class Dhis2Service {
         dataValues: eventData.dataValues || [],
       };
 
+      const enrollmentId =
+        eventData.enrollment ||
+        await this.ensureEnrollmentForEvent(context, {
+          programId: String(eventData.program),
+          teiId: String(trackedEntityInstance),
+          orgUnit: String(dhis2Event.orgUnit || ''),
+          eventDate: eventData.eventDate,
+        });
+
+      if (enrollmentId) {
+        (dhis2Event as any).enrollment = enrollmentId;
+      }
+
       const response = await context.client.post('/events', dhis2Event);
       const reference = this.extractImportReference(response.data) || `EVENT_${Date.now()}`;
 
@@ -675,6 +894,7 @@ export class Dhis2Service {
             programStage: eventData.programStage || null,
             orgUnit: dhis2Event.orgUnit,
             trackedEntityInstance,
+            enrollmentId: enrollmentId || null,
             dataValuesCount: Array.isArray(eventData.dataValues) ? eventData.dataValues.length : 0,
           },
         });
@@ -742,7 +962,11 @@ export class Dhis2Service {
         completeDate: new Date().toISOString(),
         period: dataValues.period,
         orgUnit: dataValues.orgUnit || context.config.orgUnitId || this.envOrgUnit,
-        dataValues: dataValues.values,
+        dataValues: (dataValues.values || []).map((item: any) => ({
+          ...item,
+          orgUnit: item?.orgUnit || dataValues.orgUnit || context.config.orgUnitId || this.envOrgUnit,
+          period: item?.period || dataValues.period,
+        })),
       };
 
       const response = await context.client.post('/dataValueSets', dhis2DataValues);
@@ -1021,11 +1245,15 @@ export class Dhis2Service {
         };
       }
 
-      const aggregateData = {
+      let aggregateData = {
         dataSet,
         period,
         orgUnit,
-        dataValues: payloadDataValues,
+        dataValues: payloadDataValues.map((item: any) => ({
+          ...item,
+          orgUnit: item?.orgUnit || orgUnit,
+          period: item?.period || period,
+        })),
       };
 
       if (context.useMock || !context.client) {
@@ -1038,7 +1266,30 @@ export class Dhis2Service {
         };
       }
 
-      const response = await context.client.post('/dataValueSets', aggregateData);
+      let response;
+      try {
+        response = await context.client.post('/dataValueSets', aggregateData);
+      } catch (error: any) {
+        const fallbackPeriod = this.extractLatestOpenFuturePeriod(error?.response?.data);
+        if (!fallbackPeriod || fallbackPeriod === aggregateData.period) {
+          throw error;
+        }
+
+        aggregateData = {
+          ...aggregateData,
+          period: fallbackPeriod,
+          dataValues: aggregateData.dataValues.map((item: any) => ({
+            ...item,
+            period: fallbackPeriod,
+          })),
+        };
+
+        this.logger.warn(
+          `Aggregate period ${period} rejected by DHIS2; retrying with latest allowed period ${fallbackPeriod}.`,
+        );
+        response = await context.client.post('/dataValueSets', aggregateData);
+      }
+
       const importCounts = this.extractImportCounts(response.data);
 
       await this.ensureTenantSyncTables(tenantDb);

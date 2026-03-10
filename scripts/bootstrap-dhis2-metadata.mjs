@@ -85,6 +85,39 @@ const ensureResource = async ({ resource, listField, code, payload }) => {
   return { id: createdId, created: true };
 };
 
+const ensureCurrentUserOrgUnitAccess = async (meId, orgUnitId) => {
+  const meDetails = await request(`/me?fields=id,username,organisationUnits[id],dataViewOrganisationUnits[id],teiSearchOrganisationUnits[id]`);
+  const hasOrgUnitAccess = (collection) => Array.isArray(collection) && collection.some((item) => item?.id === orgUnitId);
+
+  if (
+    hasOrgUnitAccess(meDetails?.organisationUnits) &&
+    hasOrgUnitAccess(meDetails?.dataViewOrganisationUnits) &&
+    hasOrgUnitAccess(meDetails?.teiSearchOrganisationUnits)
+  ) {
+    return { updated: false };
+  }
+
+  const userForUpdate = await request(`/users/${meId}?fields=id,username,userRoles[id],userGroups[id]`);
+  await request('/metadata?importStrategy=UPDATE&mergeMode=MERGE', {
+    method: 'POST',
+    body: JSON.stringify({
+      users: [
+        {
+          id: userForUpdate.id,
+          username: userForUpdate.username,
+          userRoles: userForUpdate.userRoles || [],
+          userGroups: userForUpdate.userGroups || [],
+          organisationUnits: [{ id: orgUnitId }],
+          dataViewOrganisationUnits: [{ id: orgUnitId }],
+          teiSearchOrganisationUnits: [{ id: orgUnitId }],
+        },
+      ],
+    }),
+  });
+
+  return { updated: true };
+};
+
 const run = async () => {
   const me = await request('/me?fields=id,username,name');
   console.log(`Authenticated to DHIS2 as ${me?.username || 'unknown'} (${me?.id || 'n/a'})`);
@@ -114,6 +147,8 @@ const run = async () => {
       description: 'Tracked entity type for MediCore patient sync',
     },
   });
+
+  const userOrgAccess = await ensureCurrentUserOrgUnitAccess(me.id, orgUnit.id);
 
   const attributesSpec = [
     { code: 'MC_ATTR_PATIENT_NUMBER', name: 'Patient Number', valueType: 'TEXT', unique: true },
@@ -201,6 +236,65 @@ const run = async () => {
     }
   }
 
+  const trackerEventDataElementSpecs = [
+    { code: 'MC_DE_EVENT_VISIT_TYPE', name: 'Visit Type', valueType: 'TEXT' },
+    { code: 'MC_DE_EVENT_PRIMARY_DIAGNOSIS', name: 'Primary Diagnosis', valueType: 'TEXT' },
+    { code: 'MC_DE_EVENT_CLINICAL_NOTES', name: 'Clinical Notes', valueType: 'LONG_TEXT' },
+  ];
+
+  const trackerEventDataElementIds = {};
+  for (const de of trackerEventDataElementSpecs) {
+    const entry = await ensureResource({
+      resource: 'dataElements',
+      listField: 'dataElements',
+      code: de.code,
+      payload: {
+        name: de.name,
+        shortName: de.name.slice(0, 50),
+        code: de.code,
+        valueType: de.valueType,
+        domainType: 'TRACKER',
+        aggregationType: 'NONE',
+        zeroIsSignificant: false,
+      },
+    });
+    trackerEventDataElementIds[de.code] = entry.id;
+  }
+
+  const program = await ensureResource({
+    resource: 'programs',
+    listField: 'programs',
+    code: 'MC_PRG_CLINIC_VISIT',
+    payload: {
+      name: 'MediCore Clinic Visit Program',
+      shortName: 'MC Clinic Visit',
+      code: 'MC_PRG_CLINIC_VISIT',
+      programType: 'WITH_REGISTRATION',
+      trackedEntityType: { id: tet.id },
+      organisationUnits: [{ id: orgUnit.id }],
+    },
+  });
+
+  const programStage = await ensureResource({
+    resource: 'programStages',
+    listField: 'programStages',
+    code: 'MC_PST_CLINIC_VISIT',
+    payload: {
+      name: 'Clinic Visit Stage',
+      shortName: 'Clinic Visit',
+      code: 'MC_PST_CLINIC_VISIT',
+      program: { id: program.id },
+      repeatable: true,
+      executionDateLabel: 'Visit Date',
+      programStageDataElements: Object.values(trackerEventDataElementIds).map((id, index) => ({
+        dataElement: { id },
+        compulsory: false,
+        displayInReports: true,
+        sortOrder: index + 1,
+      })),
+    },
+  });
+
   const summary = {
     dhis2Url: baseUrl,
     apiVersion,
@@ -209,7 +303,11 @@ const run = async () => {
     orgUnitId: orgUnit.id,
     trackedEntityTypeId: tet.id,
     dataSetId,
+    programId: program.id,
+    programStageId: programStage.id,
     attributeIds: attributes,
+    eventDataElementIds: trackerEventDataElementIds,
+    userOrgAccessUpdated: userOrgAccess.updated,
     createdAt: new Date().toISOString(),
   };
 
