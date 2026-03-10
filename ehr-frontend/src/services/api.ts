@@ -72,6 +72,21 @@ export const tenantApi = {
   getTenantBySlug: async (slug: string) => {
     const response = await tenantAxios.get(`/tenants/subdomain/${slug}`);
     return { data: response.data };
+  },
+  submitDemoAccessRequest: async (payload: {
+    fullName: string;
+    clinicName: string;
+    workEmail: string;
+    phone: string;
+    roleTitle?: string;
+    specialization?: string;
+    currentSystem?: string;
+    interestSummary: string;
+    interestAreas: string[];
+    preferredContactMethod?: 'email' | 'phone' | 'whatsapp';
+  }) => {
+    const response = await tenantAxios.post('/demo-access-requests', payload);
+    return { data: response.data };
   }
 };
 

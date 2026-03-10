@@ -28,12 +28,15 @@ const backup_service_1 = require("./services/backup.service");
 const storage_service_1 = require("./services/storage.service");
 const auth_controller_1 = require("./controllers/auth.controller");
 const backup_controller_1 = require("./controllers/backup.controller");
+const demo_access_request_controller_1 = require("./controllers/demo-access-request.controller");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const tenant_entity_1 = require("./entities/tenant.entity");
 const tenant_user_entity_1 = require("./entities/tenant-user.entity");
 const tenant_analytics_entity_1 = require("./entities/tenant-analytics.entity");
 const admin_user_entity_1 = require("./entities/admin-user.entity");
 const audit_log_entity_1 = require("./entities/audit-log.entity");
+const demo_access_request_entity_1 = require("./entities/demo-access-request.entity");
+const demo_access_request_service_1 = require("./services/demo-access-request.service");
 function resolveJwtSecret() {
     const secret = process.env.JWT_SECRET;
     if (secret && secret.trim().length > 0) {
@@ -59,12 +62,12 @@ exports.TenantModule = TenantModule = __decorate([
             typeorm_1.TypeOrmModule.forRoot({
                 type: 'postgres',
                 url: process.env.DATABASE_URL,
-                entities: [tenant_entity_1.Tenant, tenant_user_entity_1.TenantUser, tenant_analytics_entity_1.TenantAnalytics, admin_user_entity_1.AdminUser, audit_log_entity_1.AuditLog],
+                entities: [tenant_entity_1.Tenant, tenant_user_entity_1.TenantUser, tenant_analytics_entity_1.TenantAnalytics, admin_user_entity_1.AdminUser, audit_log_entity_1.AuditLog, demo_access_request_entity_1.DemoAccessRequest],
                 synchronize: false,
             }),
-            typeorm_1.TypeOrmModule.forFeature([tenant_entity_1.Tenant, tenant_user_entity_1.TenantUser, tenant_analytics_entity_1.TenantAnalytics, admin_user_entity_1.AdminUser, audit_log_entity_1.AuditLog]),
+            typeorm_1.TypeOrmModule.forFeature([tenant_entity_1.Tenant, tenant_user_entity_1.TenantUser, tenant_analytics_entity_1.TenantAnalytics, admin_user_entity_1.AdminUser, audit_log_entity_1.AuditLog, demo_access_request_entity_1.DemoAccessRequest]),
         ],
-        controllers: [tenant_controller_1.TenantController, tenant_user_controller_1.TenantUserController, tenant_analytics_controller_1.TenantAnalyticsController, auth_controller_1.AuthController, admin_maintenance_controller_1.AdminMaintenanceController, backup_controller_1.BackupController],
+        controllers: [tenant_controller_1.TenantController, tenant_user_controller_1.TenantUserController, tenant_analytics_controller_1.TenantAnalyticsController, auth_controller_1.AuthController, admin_maintenance_controller_1.AdminMaintenanceController, backup_controller_1.BackupController, demo_access_request_controller_1.DemoAccessRequestController],
         providers: [
             tenant_service_1.TenantService,
             tenant_analytics_service_1.TenantAnalyticsService,
@@ -76,6 +79,7 @@ exports.TenantModule = TenantModule = __decorate([
             health_monitor_service_1.HealthMonitorService,
             backup_service_1.BackupService,
             storage_service_1.StorageService,
+            demo_access_request_service_1.DemoAccessRequestService,
             jwt_strategy_1.JwtStrategy
         ],
         exports: [tenant_service_1.TenantService, tenant_analytics_service_1.TenantAnalyticsService, tenant_database_service_1.TenantDatabaseService, auth_service_1.AuthService],

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'rea
 import { NotificationProvider } from './components/GlobalNotification';
 import { AutoLogoutProvider } from './components/AutoLogoutProvider';
 const TenantDirectory = lazy(() => import('./pages/TenantDirectory'));
+const LandingPage = lazy(() => import('./pages/LandingPage'));
 const EHRLogin = lazy(() => import('./pages/EHRLogin'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 const EHRDashboard = lazy(() => import('./pages/EHRDashboard'));
@@ -110,7 +111,8 @@ function App() {
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Suspense fallback={<RouteLoader />}>
             <Routes>
-              <Route path="/" element={<TenantDirectory />} />
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/tenants" element={<TenantDirectory />} />
               <Route path="/:tenantSlug" element={<TenantRedirect />} />
               <Route path="/:tenantSlug/login" element={<TenantRedirect />} />
               <Route path="/portal/:tenantSlug/login" element={<PatientPortalLogin />} />

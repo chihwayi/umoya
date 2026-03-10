@@ -10,6 +10,8 @@ import {
   TenantReport,
   TenantDhis2ConfigView,
   TenantDhis2ConfigPayload,
+  DemoAccessRequest,
+  DemoAccessRequestStatus,
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
@@ -243,6 +245,33 @@ export const analyticsAPI = {
 
   generateTenantReport: async (tenantId: string): Promise<TenantReport> => {
     const response = await api.get(`/analytics/tenants/${tenantId}/report`);
+    return response.data;
+  },
+};
+
+export const demoAccessRequestAPI = {
+  list: async (status?: DemoAccessRequestStatus): Promise<DemoAccessRequest[]> => {
+    const response = await api.get('/demo-access-requests', {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
+  updateStatus: async (
+    id: string,
+    payload: {
+      status: DemoAccessRequestStatus;
+      adminNotes?: string;
+      assignedTenantId?: string;
+      assignedSubdomain?: string;
+    },
+  ): Promise<DemoAccessRequest> => {
+    const response = await api.patch(`/demo-access-requests/${id}/status`, payload);
+    return response.data;
+  },
+
+  provisionTenant: async (id: string): Promise<{ request: DemoAccessRequest; tenant: Tenant }> => {
+    const response = await api.post(`/demo-access-requests/${id}/provision-tenant`);
     return response.data;
   },
 };

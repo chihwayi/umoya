@@ -132,3 +132,30 @@ export interface User {
   email: string;
   role: 'super_admin' | 'admin';
 }
+
+export type DemoAccessRequestStatus =
+  | 'new'
+  | 'reviewing'
+  | 'approved'
+  | 'provisioned'
+  | 'rejected';
+
+export interface DemoAccessRequest {
+  id: string;
+  fullName: string;
+  clinicName: string;
+  workEmail: string;
+  phone: string;
+  roleTitle?: string | null;
+  specialization?: string | null;
+  currentSystem?: string | null;
+  interestSummary: string;
+  interestAreas: string[];
+  preferredContactMethod: 'email' | 'phone' | 'whatsapp';
+  status: DemoAccessRequestStatus;
+  adminNotes?: string | null;
+  assignedTenantId?: string | null;
+  assignedSubdomain?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

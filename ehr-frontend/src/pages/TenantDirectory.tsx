@@ -77,26 +77,38 @@ const TenantDirectory: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-600/20">
+              <button
+                onClick={() => navigate('/')}
+                className="bg-slate-900 p-2 rounded-lg shadow-lg shadow-slate-900/20 transition hover:scale-[1.02]"
+                title="Back to MediCore overview"
+              >
                 <Stethoscope className="w-6 h-6 text-white" />
-              </div>
+              </button>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight">MediCore EHR</h1>
-                <p className="text-xs text-slate-500 font-medium">Professional Healthcare Platform</p>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">MediCore Tenant Access</h1>
+                <p className="text-xs text-slate-500 font-medium">Existing clinic directory and login entry point</p>
               </div>
             </div>
             
-            <div className="relative max-w-md w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-400" />
+            <div className="flex w-full flex-col gap-3 md:max-w-2xl md:flex-row md:items-center md:justify-end">
+              <button
+                onClick={() => navigate('/#request-access')}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                Request test access
+              </button>
+              <div className="relative max-w-md w-full">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg leading-5 bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm shadow-sm"
+                  placeholder="Search for a clinic..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
-              <input
-                type="text"
-                className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg leading-5 bg-slate-50 text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm shadow-sm"
-                placeholder="Search for a clinic..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
             </div>
           </div>
         </div>
@@ -228,9 +240,9 @@ const TenantDirectory: React.FC = () => {
             © {new Date().getFullYear()} MediCore Health Systems. All rights reserved.
           </p>
           <div className="flex gap-6 text-sm text-slate-500">
-            <a href="#" className="hover:text-blue-600 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-blue-600 transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-blue-600 transition-colors">Support</a>
+            <button onClick={() => navigate('/')} className="hover:text-blue-600 transition-colors">Overview</button>
+            <button onClick={() => navigate('/#request-access')} className="hover:text-blue-600 transition-colors">Request Access</button>
+            <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-blue-600 transition-colors">Back to Top</button>
           </div>
         </div>
       </footer>
