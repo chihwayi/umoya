@@ -24,6 +24,7 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
   const [loading, setLoading] = useState(true);
   const [filterESI, setFilterESI] = useState('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [loadFailureCount, setLoadFailureCount] = useState(0);
   const [selectedVisit, setSelectedVisit] = useState<any>(null);
   const [showDispositionModal, setShowDispositionModal] = useState(false);
 
@@ -46,10 +47,18 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
     try {
       const response = await ehrApi.getEDTrackingBoard(token, tenantSlug);
       setVisits(response.data || []);
+      setLoadFailureCount(0);
       setLoading(false);
     } catch (error) {
-      console.error('Failed to load ED board:', error);
-      showError('Error', 'Failed to load ED tracking board');
+      const nextFailureCount = loadFailureCount + 1;
+      setLoadFailureCount(nextFailureCount);
+      if (nextFailureCount === 1) {
+        showError('Error', 'Failed to load ED tracking board');
+      }
+      if (nextFailureCount >= 3 && autoRefresh) {
+        setAutoRefresh(false);
+        showError('Auto-refresh paused', 'ED tracking board auto-refresh paused after repeated failures.');
+      }
       setLoading(false);
     }
   };
@@ -384,4 +393,3 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
 };
 
 export default EDTrackingBoard;
-

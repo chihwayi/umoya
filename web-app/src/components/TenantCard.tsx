@@ -7,9 +7,10 @@ interface TenantCardProps {
   onStatusChange: (id: string, status: string) => void;
   onDelete: (id: string) => void;
   onManageUsers: (tenant: Tenant) => void;
+  onConfigureDhis2?: (tenant: Tenant) => void;
 }
 
-export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, onDelete, onManageUsers }) => {
+export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, onDelete, onManageUsers, onConfigureDhis2 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const protocol = process.env.REACT_APP_PROTOCOL || window.location.protocol.replace(':', '') || 'https';
@@ -85,6 +86,17 @@ export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, 
             </div>
             
             <div className="flex flex-col gap-2">
+              {onConfigureDhis2 && (
+                <button
+                  onClick={() => onConfigureDhis2(tenant)}
+                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                  title="DHIS2 Configuration"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16h6M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                  </svg>
+                </button>
+              )}
               <button 
                 onClick={() => onManageUsers(tenant)}
                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -144,13 +156,13 @@ export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, 
               <p className="font-semibold">{tenant.billingSummary.label}</p>
               <p className="mt-1 text-xs leading-5">{tenant.billingSummary.message}</p>
               <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                <span className="rounded-full bg-white/80 px-2 py-0.5 text-slate-700">
+                <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-900 font-semibold">
                   Days left: {tenant.billingSummary.daysRemaining ?? 'N/A'}
                 </span>
-                <span className="rounded-full bg-white/80 px-2 py-0.5 text-slate-700">
+                <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-900 font-semibold">
                   Suspend in: {tenant.billingSummary.daysUntilSuspension ?? 'N/A'}
                 </span>
-                <span className="rounded-full bg-white/80 px-2 py-0.5 text-slate-700">
+                <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-slate-900 font-semibold">
                   Modules: {tenant.enabledModules?.length || 0}
                 </span>
               </div>

@@ -65,6 +65,21 @@ export class MedicalAidClaim {
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string;
 
+  @Column({ name: 'submission_method', type: 'varchar', nullable: true })
+  submissionMethod?: string;
+
+  @Column({ name: 'external_claim_id', type: 'varchar', nullable: true })
+  externalClaimId?: string;
+
+  @Column({ name: 'api_response_data', type: 'jsonb', nullable: true })
+  apiResponseData?: any;
+
+  @Column({ name: 'last_status_check_at', type: 'timestamp', nullable: true })
+  lastStatusCheckAt?: Date;
+
+  @Column({ name: 'next_status_check_at', type: 'timestamp', nullable: true })
+  nextStatusCheckAt?: Date;
+
   @Column({ name: 'diagnosis_codes', type: 'text', array: true, nullable: true })
   diagnosisCodes?: string[];
 

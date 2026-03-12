@@ -198,13 +198,17 @@ export class RemoteMonitoringService {
   async getActiveAlerts(tenantDb: DataSource, patientId?: string) {
     this.ensureTenantDb(tenantDb);
 
-    const where = patientId ? 'WHERE patient_id = $1 AND alert_triggered = true' : 'WHERE alert_triggered = true';
+    const where = patientId ? 'WHERE rpm.patient_id = $1 AND rpm.alert_triggered = true' : 'WHERE rpm.alert_triggered = true';
     const params = patientId ? [patientId] : [];
 
     const alerts = await tenantDb.query(
-      `SELECT * FROM remote_patient_monitoring
+      `SELECT rpm.*,
+              p.first_name || ' ' || p.last_name AS patient_name,
+              p.patient_number
+       FROM remote_patient_monitoring rpm
+       LEFT JOIN patients p ON p.id = rpm.patient_id
        ${where}
-       ORDER BY reading_date DESC
+       ORDER BY rpm.reading_date DESC
        LIMIT 50`,
       params,
     );
@@ -275,4 +279,3 @@ export class RemoteMonitoringService {
     };
   }
 }
-

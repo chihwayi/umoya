@@ -4,6 +4,7 @@ import { Mail, Lock, Eye, EyeOff, Shield, Sparkles, Workflow, ArrowRight } from 
 import { v4 as uuidv4 } from 'uuid';
 import { ehrApi, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import { cacheTenantBranding, formatTenantDisplayName } from '../utils/tenantBranding';
 
 const EHRLogin: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -37,30 +38,25 @@ const EHRLogin: React.FC = () => {
             name: tenant.clinicName,
             logoUrl: tenant.logoUrl
           });
-          try {
-            if (tenant.clinicName) {
-              localStorage.setItem('ehr_tenant_name', tenant.clinicName);
-            }
-          } catch {}
+          cacheTenantBranding(tenantSlug, {
+            clinicName: tenant.clinicName,
+            logoUrl: tenant.logoUrl,
+          });
         } else {
-          const fallbackName = location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login';
+          const fallbackName = location.state?.tenantName || formatTenantDisplayName(tenantSlug);
           setTenantInfo({
             name: fallbackName
           });
-          try {
-            localStorage.setItem('ehr_tenant_name', fallbackName);
-          } catch {}
+          cacheTenantBranding(tenantSlug, { clinicName: fallbackName });
         }
       } catch (error) {
         console.error('Failed to fetch tenant details', error);
         // Fallback on error
-        const fallbackName = location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login';
+        const fallbackName = location.state?.tenantName || formatTenantDisplayName(tenantSlug);
         setTenantInfo({
           name: fallbackName
         });
-        try {
-          localStorage.setItem('ehr_tenant_name', fallbackName);
-        } catch {}
+        cacheTenantBranding(tenantSlug, { clinicName: fallbackName });
       } finally {
         setTenantInfoResolved(true);
       }
@@ -249,7 +245,7 @@ const EHRLogin: React.FC = () => {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
-                  placeholder="doctor@clinic.com"
+                  placeholder="name@example.com"
                 />
               </div>
             </div>

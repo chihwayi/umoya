@@ -1187,6 +1187,23 @@ _INGEST_JOBS = _ADMIN_JOBS
 _INGEST_LOCK = _ADMIN_JOBS_LOCK
 
 
+def _derive_version_label(filename: Optional[str]) -> Optional[str]:
+    raw = str(filename or "").strip()
+    if not raw:
+        return None
+    base = pathlib.Path(raw).stem
+    patterns = [
+        r"(v(?:ersion)?[\s._-]?\d+(?:\.\d+)*)",
+        r"(rev(?:ision)?[\s._-]?\d+(?:\.\d+)*)",
+        r"(20\d{2}[\s._-]?(?:0[1-9]|1[0-2])(?:[\s._-]?(?:0[1-9]|[12]\d|3[01]))?)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, base, flags=re.IGNORECASE)
+        if match:
+            return re.sub(r"[\s._-]+", " ", match.group(1)).strip()
+    return None
+
+
 def _create_job(
     *,
     job_type: str,
@@ -1573,8 +1590,11 @@ def _run_job(job_id: str) -> None:
 
         if job_type == "ingest":
             from ingest_guidelines import ingest_guidelines
-            ingest_guidelines()
-            result = {"ingested": True}
+            ingest_result = ingest_guidelines()
+            if isinstance(ingest_result, dict):
+                result = {"ingested": bool(ingest_result.get("ok", True)), **ingest_result}
+            else:
+                result = {"ingested": True}
         elif job_type == "reindex":
             result = _run_reindex_job()
         elif job_type == "cache_flush":
@@ -1879,6 +1899,9 @@ async def admin_ingest(file: Optional[UploadFile] = File(None), owner: str = Dep
         s = settings_provider.get_settings()
         if not s.get("allow_pdf_uploads", True) and file is not None:
             raise HTTPException(status_code=403, detail="PDF uploads disabled")
+    upload_meta: Dict[str, Any] = {}
+    file_sha256: Optional[str] = None
+    version_label: Optional[str] = None
     if file is not None:
         upload_meta = _validate_upload_constraints(
             file,
@@ -1891,6 +1914,8 @@ async def admin_ingest(file: Optional[UploadFile] = File(None), owner: str = Dep
         target_dir.mkdir(parents=True, exist_ok=True)
         dest = target_dir / upload_meta["safe_filename"]
         content = await file.read()
+        file_sha256 = hashlib.sha256(content).hexdigest()
+        version_label = _derive_version_label(upload_meta.get("safe_filename"))
         scan_tmp_path = ""
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", prefix="ingest_scan_") as tmp:
@@ -1906,9 +1931,12 @@ async def admin_ingest(file: Optional[UploadFile] = File(None), owner: str = Dep
         job_type="ingest",
         owner=owner,
         payload={
+            "source_mode": "uploaded_file" if file is not None else "corpus_sync",
             "filename": upload_meta["safe_filename"] if file is not None else None,
             "size_bytes": upload_meta["size_bytes"] if file is not None else None,
             "content_type": upload_meta["content_type"] if file is not None else None,
+            "file_sha256": file_sha256,
+            "version_label": version_label,
         },
     )
     _dispatch_job(job_id)
@@ -1942,6 +1970,101 @@ async def admin_ingest_jobs(limit: int = 20, owner: str = Depends(require_owner_
         arr = [j for j in _ADMIN_JOBS.values() if j.get("type") == "ingest"]
     arr.sort(key=lambda x: x.get("started_at") or "", reverse=True)
     return {"jobs": arr[:limit], "limit": limit}
+
+
+@app.get("/admin/ingest/history")
+async def admin_ingest_history(
+    limit: int = 100,
+    query: Optional[str] = None,
+    owner: str = Depends(require_owner_scope("cdss.admin.jobs.read")),
+):
+    capped = max(1, min(int(limit or 100), 500))
+    if settings_provider:
+        try:
+            jobs = settings_provider.get_jobs(limit=2000, job_type="ingest")
+        except Exception:
+            jobs = []
+    else:
+        with _ADMIN_JOBS_LOCK:
+            jobs = [dict(j) for j in _ADMIN_JOBS.values() if str(j.get("type")) == "ingest"]
+
+    jobs.sort(key=lambda x: x.get("finished_at") or x.get("started_at") or "", reverse=True)
+
+    normalized_query = str(query or "").strip().lower()
+    seen_by_hash: Dict[str, int] = {}
+    records: List[Dict[str, Any]] = []
+
+    for job in jobs:
+        if str(job.get("type") or "") != "ingest":
+            continue
+        payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
+        result = job.get("result") if isinstance(job.get("result"), dict) else {}
+        finished_at = job.get("finished_at") or job.get("started_at")
+        owner_email = str(job.get("owner") or "system")
+        source_mode = str(payload.get("source_mode") or "corpus_sync")
+        processed_files = result.get("processedFiles") if isinstance(result.get("processedFiles"), list) else []
+
+        def _append_record(row: Dict[str, Any]) -> None:
+            nonlocal records
+            file_name = str(row.get("fileName") or row.get("filename") or "").strip()
+            version_label = str(row.get("versionLabel") or row.get("version_label") or payload.get("version_label") or _derive_version_label(file_name) or "").strip()
+            file_sha = str(row.get("sha256") or row.get("fileSha256") or payload.get("file_sha256") or "").strip().lower()
+            size_bytes = row.get("sizeBytes") if row.get("sizeBytes") is not None else payload.get("size_bytes")
+            chunk_count = row.get("chunkCount") if row.get("chunkCount") is not None else result.get("totalChunks")
+            page_count = row.get("pageCount")
+
+            if normalized_query:
+                haystack = " ".join(
+                    [
+                        file_name,
+                        version_label,
+                        file_sha,
+                        str(job.get("jobId") or ""),
+                        owner_email,
+                        str(row.get("status") or job.get("status") or ""),
+                    ]
+                ).lower()
+                if normalized_query not in haystack:
+                    return
+
+            duplicate_count = 0
+            if file_sha:
+                duplicate_count = seen_by_hash.get(file_sha, 0)
+                seen_by_hash[file_sha] = duplicate_count + 1
+
+            records.append(
+                {
+                    "jobId": job.get("jobId"),
+                    "status": row.get("status") or job.get("status"),
+                    "owner": owner_email,
+                    "sourceMode": source_mode,
+                    "fileName": file_name or (source_mode == "corpus_sync" and "WHO guideline corpus") or "Unknown",
+                    "versionLabel": version_label or None,
+                    "fileSha256": file_sha or None,
+                    "sizeBytes": int(size_bytes) if isinstance(size_bytes, (int, float)) else None,
+                    "chunkCount": int(chunk_count) if isinstance(chunk_count, (int, float)) else None,
+                    "pageCount": int(page_count) if isinstance(page_count, (int, float)) else None,
+                    "contentType": payload.get("content_type"),
+                    "ingestedAt": finished_at,
+                    "duplicate": duplicate_count > 0,
+                    "duplicateCountBefore": duplicate_count,
+                }
+            )
+
+        if processed_files:
+            for f in processed_files:
+                if isinstance(f, dict):
+                    _append_record(f)
+        else:
+            _append_record({})
+
+    records.sort(key=lambda x: str(x.get("ingestedAt") or ""), reverse=True)
+    return {
+        "records": records[:capped],
+        "total": len(records),
+        "limit": capped,
+        "query": normalized_query or None,
+    }
 
 @app.get("/admin/ingest/status/{job_id}")
 async def admin_ingest_status(job_id: str, owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):

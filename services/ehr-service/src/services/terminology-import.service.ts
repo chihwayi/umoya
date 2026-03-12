@@ -264,14 +264,30 @@ export class TerminologyImportService implements OnModuleDestroy {
     const zip = new AdmZip(zipPath);
     const zipEntries = zip.getEntries();
     const extractPath = path.join(path.dirname(zipPath), `extract_${job.jobId}`);
+    const maxEntries = 10000;
     
     if (!fs.existsSync(extractPath)) {
         fs.mkdirSync(extractPath);
     }
 
     try {
+        if (zipEntries.length > maxEntries) {
+          throw new Error(`Zip contains too many entries (${zipEntries.length}). Maximum allowed is ${maxEntries}.`);
+        }
         job.message = `Extracting ${zipEntries.length} files...`;
-        zip.extractAllTo(extractPath, true);
+        const extractRoot = path.resolve(extractPath);
+        for (const entry of zipEntries) {
+          const entryName = String(entry.entryName || '').replace(/\\/g, '/');
+          if (!entryName || entryName.endsWith('/')) {
+            continue;
+          }
+          const destination = path.resolve(extractRoot, entryName);
+          if (!destination.startsWith(`${extractRoot}${path.sep}`)) {
+            throw new Error(`Unsafe zip entry path detected: ${entryName}`);
+          }
+          fs.mkdirSync(path.dirname(destination), { recursive: true });
+          fs.writeFileSync(destination, entry.getData());
+        }
 
         if (type === 'snomed') {
             await this.importSnomedFromFolder(job, extractPath);

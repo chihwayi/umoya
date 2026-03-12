@@ -16,6 +16,7 @@
     "deploy": "./scripts/deploy.sh",
     "backup": "./scripts/backup.sh",
     "smoke:core": "./scripts/smoke-core.sh",
+    "smoke:tele-post": "node scripts/smoke-telemedicine-postvisit.mjs",
     "seed:sample-imaging": "node scripts/seed-sample-imaging.js",
     "imaging:backfill": "ts-node scripts/backfill-imaging-objects.ts",
     "seed:thandeka": "ts-node scripts/seed-thandeka-data.ts",

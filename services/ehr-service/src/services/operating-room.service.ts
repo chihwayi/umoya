@@ -9,7 +9,41 @@ import { SurgicalPreferenceCard } from '../entities/surgical-preference-card.ent
 export class OperatingRoomService {
   private readonly logger = new Logger(OperatingRoomService.name);
 
+  private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
+    const [row] = await tenantDb.query(`SELECT to_regclass($1) as table_name`, [`public.${tableName}`]);
+    return Boolean(row?.table_name);
+  }
+
+  private async ensureTableForWrite(
+    tenantDb: DataSource,
+    tableName: string,
+    featureDescription: string,
+  ): Promise<void> {
+    if (await this.hasTable(tenantDb, tableName)) return;
+    throw new BadRequestException(
+      `${featureDescription} is not initialized for this tenant. Missing table: ${tableName}.`,
+    );
+  }
+
+  private getEmptyMetrics() {
+    return {
+      total_cases: 0,
+      completed_cases: 0,
+      cancelled_cases: 0,
+      in_progress_cases: 0,
+      avg_case_duration_minutes: 0,
+      avg_blood_loss_ml: 0,
+      rooms_utilized: 0,
+      surgeons_active: 0,
+    };
+  }
+
   async getOperatingRooms(filters: any, tenantDb: DataSource): Promise<OperatingRoom[]> {
+    if (!(await this.hasTable(tenantDb, 'operating_rooms'))) {
+      this.logger.warn('OR rooms requested but operating_rooms table is missing. Returning empty room list.');
+      return [];
+    }
+
     const repository = tenantDb.getRepository(OperatingRoom);
     const queryBuilder = repository.createQueryBuilder('or');
 
@@ -31,6 +65,12 @@ export class OperatingRoomService {
   }
 
   async getORById(orId: string, tenantDb: DataSource): Promise<OperatingRoom> {
+    if (!(await this.hasTable(tenantDb, 'operating_rooms'))) {
+      throw new BadRequestException(
+        'Operating Room schema is not initialized for this tenant. Missing table: operating_rooms.',
+      );
+    }
+
     const repository = tenantDb.getRepository(OperatingRoom);
     const or = await repository.findOne({ where: { id: orId } });
 
@@ -42,8 +82,37 @@ export class OperatingRoomService {
   }
 
   async getORAvailability(date: Date, tenantDb: DataSource): Promise<any> {
+    if (!(await this.hasTable(tenantDb, 'operating_rooms'))) {
+      this.logger.warn('OR availability requested but operating_rooms table is missing. Returning empty availability.');
+      return [];
+    }
+
     const dateStr = date.toISOString().split('T')[0];
-    
+    const hasSurgicalCases = await this.hasTable(tenantDb, 'surgical_cases');
+    if (!hasSurgicalCases) {
+      return await tenantDb.query(
+        `
+        SELECT
+          or_rooms.id,
+          or_rooms.room_number,
+          or_rooms.room_name,
+          or_rooms.room_type,
+          or_rooms.status,
+          '[]'::json as scheduled_cases
+        FROM operating_rooms or_rooms
+        WHERE or_rooms.is_active = true
+        ORDER BY or_rooms.room_number
+      `,
+      );
+    }
+
+    const hasPatients = await this.hasTable(tenantDb, 'patients');
+    const hasUsers = await this.hasTable(tenantDb, 'users');
+    const patientNameExpr = hasPatients ? `p.first_name || ' ' || p.last_name` : `NULL`;
+    const surgeonNameExpr = hasUsers ? `u.first_name || ' ' || u.last_name` : `NULL`;
+    const patientJoin = hasPatients ? `LEFT JOIN patients p ON sc.patient_id = p.id` : '';
+    const surgeonJoin = hasUsers ? `LEFT JOIN users u ON sc.primary_surgeon_id = u.id` : '';
+
     const query = `
       SELECT 
         or_rooms.id,
@@ -55,11 +124,11 @@ export class OperatingRoomService {
           json_build_object(
             'caseId', sc.id,
             'caseNumber', sc.case_number,
-            'patientName', p.first_name || ' ' || p.last_name,
+            'patientName', ${patientNameExpr},
             'procedureName', sc.procedure_name,
             'scheduledStartTime', sc.scheduled_start_time,
             'scheduledEndTime', sc.scheduled_end_time,
-            'surgeonName', u.first_name || ' ' || u.last_name,
+            'surgeonName', ${surgeonNameExpr},
             'status', sc.status
           ) ORDER BY sc.scheduled_start_time
         ) FILTER (WHERE sc.id IS NOT NULL) as scheduled_cases
@@ -67,8 +136,8 @@ export class OperatingRoomService {
       LEFT JOIN surgical_cases sc ON sc.operating_room_id = or_rooms.id 
         AND sc.scheduled_date = $1
         AND sc.status NOT IN ('cancelled', 'completed')
-      LEFT JOIN patients p ON sc.patient_id = p.id
-      LEFT JOIN users u ON sc.primary_surgeon_id = u.id
+      ${patientJoin}
+      ${surgeonJoin}
       WHERE or_rooms.is_active = true
       GROUP BY or_rooms.id, or_rooms.room_number, or_rooms.room_name, or_rooms.room_type, or_rooms.status
       ORDER BY or_rooms.room_number
@@ -78,6 +147,11 @@ export class OperatingRoomService {
   }
 
   async scheduleSurgicalCase(caseData: any, userId: string, tenantDb: DataSource): Promise<SurgicalCase> {
+    await this.ensureTableForWrite(tenantDb, 'surgical_cases', 'Operating Room scheduling');
+    if (caseData.operatingRoomId) {
+      await this.ensureTableForWrite(tenantDb, 'operating_rooms', 'Operating Room scheduling');
+    }
+
     const repository = tenantDb.getRepository(SurgicalCase);
 
     // Generate case number
@@ -143,24 +217,55 @@ export class OperatingRoomService {
   }
 
   async getSurgicalCase(caseId: string, tenantDb: DataSource): Promise<any> {
+    if (!(await this.hasTable(tenantDb, 'surgical_cases'))) {
+      throw new BadRequestException(
+        'Operating Room surgical cases are not initialized for this tenant. Missing table: surgical_cases.',
+      );
+    }
+
+    const hasPatients = await this.hasTable(tenantDb, 'patients');
+    const hasUsers = await this.hasTable(tenantDb, 'users');
+    const hasOperatingRooms = await this.hasTable(tenantDb, 'operating_rooms');
+    const patientSelect = hasPatients
+      ? `p.first_name as patient_first_name,
+        p.last_name as patient_last_name,
+        p.date_of_birth as patient_dob,
+        p.medical_record_number as patient_mrn,`
+      : `NULL as patient_first_name,
+        NULL as patient_last_name,
+        NULL as patient_dob,
+        NULL as patient_mrn,`;
+    const surgeonSelect = hasUsers
+      ? `surgeon.first_name as surgeon_first_name,
+        surgeon.last_name as surgeon_last_name,
+        anesthesiologist.first_name as anesthesiologist_first_name,
+        anesthesiologist.last_name as anesthesiologist_last_name,`
+      : `NULL as surgeon_first_name,
+        NULL as surgeon_last_name,
+        NULL as anesthesiologist_first_name,
+        NULL as anesthesiologist_last_name,`;
+    const orSelect = hasOperatingRooms
+      ? `or_room.room_number,
+        or_room.room_name`
+      : `NULL as room_number,
+        NULL as room_name`;
+    const patientJoin = hasPatients ? `LEFT JOIN patients p ON sc.patient_id = p.id` : '';
+    const surgeonJoin = hasUsers
+      ? `LEFT JOIN users surgeon ON sc.primary_surgeon_id = surgeon.id
+      LEFT JOIN users anesthesiologist ON sc.anesthesiologist_id = anesthesiologist.id`
+      : '';
+    const orJoin = hasOperatingRooms ? `LEFT JOIN operating_rooms or_room ON sc.operating_room_id = or_room.id` : '';
+
     const query = `
       SELECT 
         sc.*,
-        p.first_name as patient_first_name,
-        p.last_name as patient_last_name,
-        p.date_of_birth as patient_dob,
-        p.medical_record_number as patient_mrn,
-        surgeon.first_name as surgeon_first_name,
-        surgeon.last_name as surgeon_last_name,
-        anesthesiologist.first_name as anesthesiologist_first_name,
-        anesthesiologist.last_name as anesthesiologist_last_name,
-        or_room.room_number,
-        or_room.room_name
+        ${patientSelect}
+        ${surgeonSelect}
+        ${orSelect}
       FROM surgical_cases sc
-      LEFT JOIN patients p ON sc.patient_id = p.id
-      LEFT JOIN users surgeon ON sc.primary_surgeon_id = surgeon.id
-      LEFT JOIN users anesthesiologist ON sc.anesthesiologist_id = anesthesiologist.id
-      LEFT JOIN operating_rooms or_room ON sc.operating_room_id = or_room.id
+      ${patientJoin}
+      ${surgeonJoin}
+      ${orJoin}
       WHERE sc.id = $1
     `;
 
@@ -179,6 +284,8 @@ export class OperatingRoomService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<SurgicalCase> {
+    await this.ensureTableForWrite(tenantDb, 'surgical_cases', 'Operating Room case status updates');
+
     const repository = tenantDb.getRepository(SurgicalCase);
     const surgicalCase = await repository.findOne({ where: { id: caseId } });
 
@@ -213,6 +320,8 @@ export class OperatingRoomService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<SurgicalCase> {
+    await this.ensureTableForWrite(tenantDb, 'surgical_cases', 'Operating Room case documentation');
+
     const repository = tenantDb.getRepository(SurgicalCase);
     const surgicalCase = await repository.findOne({ where: { id: caseId } });
 
@@ -233,6 +342,8 @@ export class OperatingRoomService {
   }
 
   async trackImplant(implantData: any, userId: string, tenantDb: DataSource): Promise<any> {
+    await this.ensureTableForWrite(tenantDb, 'surgical_implants', 'Operating Room implant tracking');
+
     const repository = tenantDb.getRepository(SurgicalImplant);
 
     const implant = repository.create({
@@ -262,6 +373,10 @@ export class OperatingRoomService {
   }
 
   async getCaseImplants(caseId: string, tenantDb: DataSource): Promise<SurgicalImplant[]> {
+    if (!(await this.hasTable(tenantDb, 'surgical_implants'))) {
+      return [];
+    }
+
     const repository = tenantDb.getRepository(SurgicalImplant);
     return await repository.find({
       where: { surgicalCaseId: caseId },
@@ -270,8 +385,22 @@ export class OperatingRoomService {
   }
 
   async getSurgicalCasesByDate(date: Date, tenantDb: DataSource): Promise<any[]> {
+    if (!(await this.hasTable(tenantDb, 'surgical_cases'))) {
+      return [];
+    }
+
     const dateStr = date.toISOString().split('T')[0];
-    
+    const hasPatients = await this.hasTable(tenantDb, 'patients');
+    const hasUsers = await this.hasTable(tenantDb, 'users');
+    const hasOperatingRooms = await this.hasTable(tenantDb, 'operating_rooms');
+    const patientNameExpr = hasPatients ? `p.first_name || ' ' || p.last_name` : `NULL`;
+    const surgeonNameExpr = hasUsers ? `surgeon.first_name || ' ' || surgeon.last_name` : `NULL`;
+    const roomNumberExpr = hasOperatingRooms ? `or_room.room_number` : `NULL`;
+    const roomNameExpr = hasOperatingRooms ? `or_room.room_name` : `NULL`;
+    const patientJoin = hasPatients ? `LEFT JOIN patients p ON sc.patient_id = p.id` : '';
+    const surgeonJoin = hasUsers ? `LEFT JOIN users surgeon ON sc.primary_surgeon_id = surgeon.id` : '';
+    const orJoin = hasOperatingRooms ? `LEFT JOIN operating_rooms or_room ON sc.operating_room_id = or_room.id` : '';
+
     const query = `
       SELECT 
         sc.id,
@@ -281,14 +410,14 @@ export class OperatingRoomService {
         sc.scheduled_end_time,
         sc.status,
         sc.case_priority,
-        p.first_name || ' ' || p.last_name as patient_name,
-        surgeon.first_name || ' ' || surgeon.last_name as surgeon_name,
-        or_room.room_number,
-        or_room.room_name
+        ${patientNameExpr} as patient_name,
+        ${surgeonNameExpr} as surgeon_name,
+        ${roomNumberExpr} as room_number,
+        ${roomNameExpr} as room_name
       FROM surgical_cases sc
-      LEFT JOIN patients p ON sc.patient_id = p.id
-      LEFT JOIN users surgeon ON sc.primary_surgeon_id = surgeon.id
-      LEFT JOIN operating_rooms or_room ON sc.operating_room_id = or_room.id
+      ${patientJoin}
+      ${surgeonJoin}
+      ${orJoin}
       WHERE sc.scheduled_date = $1
       ORDER BY sc.scheduled_start_time
     `;
@@ -297,6 +426,11 @@ export class OperatingRoomService {
   }
 
   async getORMetrics(startDate: Date, endDate: Date, tenantDb: DataSource): Promise<any> {
+    if (!(await this.hasTable(tenantDb, 'surgical_cases'))) {
+      this.logger.warn('OR metrics requested but surgical_cases table is missing. Returning empty metrics.');
+      return this.getEmptyMetrics();
+    }
+
     const startStr = startDate.toISOString().split('T')[0];
     const endStr = endDate.toISOString().split('T')[0];
     
@@ -319,12 +453,16 @@ export class OperatingRoomService {
   }
 
   async updateORStatus(orId: string, status: string, tenantDb: DataSource): Promise<void> {
+    await this.ensureTableForWrite(tenantDb, 'operating_rooms', 'Operating Room status updates');
+
     const repository = tenantDb.getRepository(OperatingRoom);
     await repository.update(orId, { status });
     this.logger.log(`OR ${orId} status updated to: ${status}`);
   }
 
   private async generateCaseNumber(tenantDb: DataSource): Promise<string> {
+    await this.ensureTableForWrite(tenantDb, 'surgical_cases', 'Operating Room case number generation');
+
     const [result] = await tenantDb.query(
       `SELECT COUNT(*) as count FROM surgical_cases WHERE case_number LIKE 'SUR-%'`,
     );
@@ -339,6 +477,10 @@ export class OperatingRoomService {
     endTime: string,
     tenantDb: DataSource,
   ): Promise<boolean> {
+    if (!(await this.hasTable(tenantDb, 'surgical_cases'))) {
+      return true;
+    }
+
     const dateStr = date.toISOString ? date.toISOString().split('T')[0] : date;
     
     const query = `
@@ -362,6 +504,8 @@ export class OperatingRoomService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<SurgicalCase> {
+    await this.ensureTableForWrite(tenantDb, 'surgical_cases', 'Operating Room case cancellation');
+
     const repository = tenantDb.getRepository(SurgicalCase);
     const surgicalCase = await repository.findOne({ where: { id: caseId } });
 
@@ -567,16 +711,26 @@ export class OperatingRoomService {
 
   // --- Preference cards ---
   async getPreferenceCards(tenantDb: DataSource): Promise<SurgicalPreferenceCard[]> {
+    if (!(await this.hasTable(tenantDb, 'surgical_preference_cards'))) {
+      return [];
+    }
+
     const repo = tenantDb.getRepository(SurgicalPreferenceCard);
     return repo.find({ where: { isActive: true }, order: { procedureName: 'ASC' } });
   }
 
   async getPreferenceCardsBySurgeon(surgeonId: string, tenantDb: DataSource): Promise<SurgicalPreferenceCard[]> {
+    if (!(await this.hasTable(tenantDb, 'surgical_preference_cards'))) {
+      return [];
+    }
+
     const repo = tenantDb.getRepository(SurgicalPreferenceCard);
     return repo.find({ where: { surgeonId, isActive: true }, order: { procedureName: 'ASC' } });
   }
 
   async createPreferenceCard(body: any, userId: string, tenantDb: DataSource): Promise<SurgicalPreferenceCard> {
+    await this.ensureTableForWrite(tenantDb, 'surgical_preference_cards', 'Operating Room preference cards');
+
     const repo = tenantDb.getRepository(SurgicalPreferenceCard);
     const card = repo.create({
       surgeonId: body.surgeonId,
@@ -597,6 +751,8 @@ export class OperatingRoomService {
   }
 
   async updatePreferenceCard(id: string, body: any, tenantDb: DataSource): Promise<SurgicalPreferenceCard> {
+    await this.ensureTableForWrite(tenantDb, 'surgical_preference_cards', 'Operating Room preference cards');
+
     const repo = tenantDb.getRepository(SurgicalPreferenceCard);
     const card = await repo.findOne({ where: { id } });
     if (!card) throw new NotFoundException(`Preference card not found: ${id}`);
@@ -616,4 +772,3 @@ export class OperatingRoomService {
     return repo.save(card);
   }
 }
-

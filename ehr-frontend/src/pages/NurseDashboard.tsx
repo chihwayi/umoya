@@ -38,7 +38,12 @@ import LabResultsViewer from '../components/LabResultsViewer';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 import { GuidelineResult } from '../types/guidelines';
-import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
+import {
+  cacheTenantBranding,
+  formatTenantDisplayName,
+  getBrandInitials,
+  readCachedTenantBranding,
+} from '../utils/tenantBranding';
 import {
   hasModuleAccess,
   notifyTenantSubscriptionStatus,
@@ -207,12 +212,14 @@ const buildFinanceDetails = (appointment: Appointment) => {
 
 const NurseDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const brandLogoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
   const navigate = useNavigate();
   const location = useLocation();
   const { showSuccess, showError, showWarning } = useNotification();
 
-  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [tenantInfo, setTenantInfo] = useState<any>(() => {
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    return cachedBranding ? { clinicName: cachedBranding.clinicName, logoUrl: cachedBranding.logoUrl } : null;
+  });
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'monthly-return' | 'who-workflow' | 'maternity' | 'triage' | 'vitals'>('dashboard');
   const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
@@ -1279,11 +1286,27 @@ const NurseDashboard: React.FC = () => {
 
   // Fetch tenant info
   useEffect(() => {
+    if (!tenantSlug) return;
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    if (cachedBranding) {
+      setTenantInfo((prev: any) => ({
+        ...(prev || {}),
+        clinicName: prev?.clinicName || cachedBranding.clinicName,
+        logoUrl: prev?.logoUrl || cachedBranding.logoUrl,
+      }));
+    }
+  }, [tenantSlug]);
+
+  useEffect(() => {
     const fetchTenantInfo = async () => {
         try {
           const response = await tenantApi.getTenantBySlug(tenantSlug!);
           if (response.data) {
             setTenantInfo(response.data);
+            cacheTenantBranding(tenantSlug!, {
+              clinicName: response.data.clinicName,
+              logoUrl: response.data.logoUrl,
+            });
           }
         } catch {
         }
@@ -1584,6 +1607,19 @@ const NurseDashboard: React.FC = () => {
   ];
   const billingSummary = tenantInfo?.billingSummary;
   const billingTone = getBillingToneClasses(billingSummary);
+  const tenantDisplayName = formatTenantDisplayName(tenantSlug, tenantInfo?.clinicName);
+  const tenantInitials = getBrandInitials(tenantDisplayName);
+  const subscriptionMiniLabel = (() => {
+    if (!billingSummary) return null;
+    const days = billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining;
+    const ends = billingSummary.accessEndsAt
+      ? new Date(billingSummary.accessEndsAt).toLocaleDateString('en-GB')
+      : null;
+    if (days !== null && days !== undefined && ends) return `${days}d · ends ${ends}`;
+    if (days !== null && days !== undefined) return `${days}d remaining`;
+    if (ends) return `ends ${ends}`;
+    return null;
+  })();
 
   useEffect(() => {
     notifyTenantSubscriptionStatus(tenantInfo, { showWarning, showError });
@@ -3141,18 +3177,18 @@ const NurseDashboard: React.FC = () => {
       <aside className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white z-50 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 shadow-2xl flex flex-col`}>
         {/* Logo Section */}
         <div className="p-6 border-b border-slate-700/50 relative">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {tenantInfo?.logoUrl ? (
-              <div className="h-10 w-10 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden">
-                <img src={tenantInfo.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center overflow-hidden">
+                <img src={tenantInfo.logoUrl} alt={`${tenantDisplayName} logo`} className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="h-10 bg-white px-1 rounded-lg flex items-center justify-center overflow-hidden">
-                <img src={brandLogoSrc} alt="MediCore logo" className="h-8 w-auto object-contain" />
+              <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center overflow-hidden">
+                <span className="text-xs font-bold tracking-wide text-white">{tenantInitials}</span>
               </div>
             )}
-            <div>
-              <h1 className="font-bold text-lg leading-tight">{tenantInfo?.clinicName || 'Medicore'}</h1>
+            <div className="min-w-0">
+              <h1 className="font-bold text-lg leading-tight truncate">{tenantDisplayName}</h1>
               <p className="text-xs text-slate-400">Nurse Portal</p>
               {billingSummary && (
                 <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${billingTone.pill}`}>
@@ -3240,9 +3276,6 @@ const NurseDashboard: React.FC = () => {
 
       {/* Main Content Wrapper */}
       <div className="lg:pl-64 transition-all duration-300 flex flex-col min-h-screen">
-      <div className="px-4 pt-4 lg:px-6">
-        <TenantSubscriptionBanner tenantInfo={tenantInfo} />
-      </div>
       {/* Slim Top Bar: system title + notifications + user */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">
         <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
@@ -3256,9 +3289,14 @@ const NurseDashboard: React.FC = () => {
                 <Menu className="w-6 h-6" />
               </button>
               <div className="hidden sm:block">
-                <h1 className="text-lg font-bold text-slate-900">
-                  Nurse Dashboard
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold text-slate-900">Nurse Dashboard</h1>
+                  {subscriptionMiniLabel && (
+                    <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${billingTone.pill}`}>
+                      {subscriptionMiniLabel}
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-600">Patient Care Management</p>
               </div>
             </div>

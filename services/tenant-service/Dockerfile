@@ -2,8 +2,8 @@ FROM node:18-slim
 
 WORKDIR /app
 
-# Install build dependencies for native modules
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+# Install build dependencies + PostgreSQL client tools for backup/restore jobs
+RUN apt-get update && apt-get install -y python3 make g++ postgresql-client gzip && rm -rf /var/lib/apt/lists/*
 
 # Copy root workspace files
 COPY package.json package-lock.json ./

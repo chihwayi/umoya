@@ -38,6 +38,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         return statements.map((s) => s
             .replace(/CREATE TABLE\s+([^(]+)/gi, (m) => m.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS'))
             .replace(/CREATE INDEX\s+/gi, 'CREATE INDEX IF NOT EXISTS ')
+            .replace(/ADD COLUMN\s+/gi, 'ADD COLUMN IF NOT EXISTS ')
             .replace(/CREATE EXTENSION\s+/gi, 'CREATE EXTENSION IF NOT EXISTS ')
             .replace(/IF NOT EXISTS\s+IF NOT EXISTS/gi, 'IF NOT EXISTS'));
     }
@@ -253,6 +254,13 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 statements: () => this.getSprint20ProviderMessagingSchemaStatements(),
             },
             {
+                id: 'sprint21_econsent',
+                label: 'Sprint 21 - E-Consent Management',
+                version: '2026.03.12',
+                description: 'Consent templates, patient consents, signatures, reminders, and audit trail foundation',
+                statements: () => this.getSprint21EConsentSchemaStatements(),
+            },
+            {
                 id: 'sprint31_revenue_cycle',
                 label: 'Sprint 31 - Revenue Cycle & Charge Capture',
                 version: '2025.12.05',
@@ -269,14 +277,14 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             {
                 id: 'sprint26_operating_room',
                 label: 'Sprint 26 - Operating Room Management',
-                version: '2025.12.05',
+                version: '2026.03.12',
                 description: 'OR scheduling, surgical cases, preference cards, block time, implant tracking, supply usage, and turnover',
                 statements: () => this.getSprint26OperatingRoomSchemaStatements(),
             },
             {
                 id: 'sprint27_anesthesia',
                 label: 'Sprint 27 - Anesthesia Module',
-                version: '2025.12.05',
+                version: '2026.03.12',
                 description: 'Pre-anesthesia assessments, anesthesia records, vitals charting, PACU records, and ASA billing',
                 statements: () => this.getSprint27AnesthesiaSchemaStatements(),
             },
@@ -521,7 +529,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             {
                 id: 'sprint_f1_or_surgical_safety',
                 label: 'Sprint F1 OR Surgical Safety + Counts + Specimens',
-                version: '2026.03.08',
+                version: '2026.03.12',
                 description: 'WHO checklist, count sheets, specimen tracking tables',
                 statements: () => this.getSprintF1ORSurgicalSafetyStatements(),
             },
@@ -2699,65 +2707,155 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             const selectedBundles = options?.bundles?.length
                 ? bundles.filter((bundle) => options.bundles.includes(bundle.id))
                 : bundles;
-            for (const bundle of selectedBundles) {
-                const alreadyApplied = await this.hasBundleVersion(tenantDataSource, bundle.id, bundle.version);
-                if (alreadyApplied) {
-                    this.emitProvisioningEvent('bundle.apply.skip', {
+            let pendingBundles = [...selectedBundles];
+            const maxPasses = Math.max(1, options?.maxPasses ?? Math.max(2, selectedBundles.length));
+            const failedBundleSummary = new Map();
+            for (let pass = 1; pass <= maxPasses && pendingBundles.length > 0; pass += 1) {
+                this.emitProvisioningEvent('schema.apply.pass.start', {
+                    pass,
+                    maxPasses,
+                    pendingCount: pendingBundles.length,
+                });
+                const stillPending = [];
+                let appliedInPass = 0;
+                for (const bundle of pendingBundles) {
+                    const alreadyApplied = await this.hasBundleVersion(tenantDataSource, bundle.id, bundle.version);
+                    if (alreadyApplied) {
+                        this.emitProvisioningEvent('bundle.apply.skip', {
+                            bundleId: bundle.id,
+                            version: bundle.version,
+                            reason: 'already_applied',
+                        });
+                        failedBundleSummary.delete(bundle.id);
+                        continue;
+                    }
+                    this.emitProvisioningEvent('bundle.apply.start', {
                         bundleId: bundle.id,
                         version: bundle.version,
-                        reason: 'already_applied',
+                        pass,
+                        connection: connectionString.replace(/:\/\/.*@/, '://***@'),
                     });
-                    continue;
-                }
-                this.emitProvisioningEvent('bundle.apply.start', {
-                    bundleId: bundle.id,
-                    version: bundle.version,
-                    connection: connectionString.replace(/:\/\/.*@/, '://***@'),
-                });
-                const statements = bundle.statements ? this.normalizeStatements(bundle.statements()) : [];
-                for (const statement of statements) {
-                    if (!statement.trim())
-                        continue;
-                    try {
-                        await tenantDataSource.query(statement);
-                    }
-                    catch (e) {
-                        this.emitProvisioningEvent('bundle.statement.error', {
-                            bundleId: bundle.id,
-                            message: e instanceof Error ? e.message : String(e),
-                            sqlPreview: statement.substring(0, 200),
-                        });
-                    }
-                }
-                if (bundle.triggers) {
-                    const triggerStatements = bundle.triggers();
-                    for (const statement of triggerStatements) {
+                    const bundleErrors = [];
+                    const statements = bundle.statements ? this.normalizeStatements(bundle.statements()) : [];
+                    for (const statement of statements) {
                         if (!statement.trim())
                             continue;
                         try {
                             await tenantDataSource.query(statement);
                         }
                         catch (e) {
-                            this.emitProvisioningEvent('bundle.trigger.error', {
+                            const message = e instanceof Error ? e.message : String(e);
+                            this.emitProvisioningEvent('bundle.statement.error', {
                                 bundleId: bundle.id,
-                                message: e instanceof Error ? e.message : String(e),
+                                message,
+                                sqlPreview: statement.substring(0, 200),
+                            });
+                            bundleErrors.push({
+                                phase: 'statement',
+                                message,
                                 sqlPreview: statement.substring(0, 200),
                             });
                         }
                     }
-                }
-                if (bundle.tasks?.length) {
-                    for (const task of bundle.tasks) {
-                        await task(tenantDataSource);
+                    if (bundle.triggers) {
+                        const triggerStatements = bundle.triggers();
+                        for (const statement of triggerStatements) {
+                            if (!statement.trim())
+                                continue;
+                            try {
+                                await tenantDataSource.query(statement);
+                            }
+                            catch (e) {
+                                const message = e instanceof Error ? e.message : String(e);
+                                this.emitProvisioningEvent('bundle.trigger.error', {
+                                    bundleId: bundle.id,
+                                    message,
+                                    sqlPreview: statement.substring(0, 200),
+                                });
+                                bundleErrors.push({
+                                    phase: 'trigger',
+                                    message,
+                                    sqlPreview: statement.substring(0, 200),
+                                });
+                            }
+                        }
                     }
+                    if (bundle.tasks?.length) {
+                        for (const task of bundle.tasks) {
+                            try {
+                                await task(tenantDataSource);
+                            }
+                            catch (e) {
+                                const message = e instanceof Error ? e.message : String(e);
+                                this.emitProvisioningEvent('bundle.task.error', {
+                                    bundleId: bundle.id,
+                                    message,
+                                });
+                                bundleErrors.push({
+                                    phase: 'task',
+                                    message,
+                                });
+                            }
+                        }
+                    }
+                    if (bundleErrors.length > 0) {
+                        const firstError = bundleErrors[0]?.message || 'Unknown error';
+                        const previous = failedBundleSummary.get(bundle.id);
+                        failedBundleSummary.set(bundle.id, {
+                            attempts: (previous?.attempts || 0) + 1,
+                            lastError: firstError,
+                        });
+                        this.emitProvisioningEvent('bundle.apply.failed', {
+                            bundleId: bundle.id,
+                            version: bundle.version,
+                            pass,
+                            errorCount: bundleErrors.length,
+                            firstError,
+                        });
+                        stillPending.push(bundle);
+                        continue;
+                    }
+                    await this.recordBundleVersion(tenantDataSource, bundle.id, bundle.version, options?.appliedBy ?? 'provisioning_service');
+                    appliedInPass += 1;
+                    failedBundleSummary.delete(bundle.id);
+                    this.emitProvisioningEvent('bundle.apply.success', {
+                        bundleId: bundle.id,
+                        version: bundle.version,
+                        pass,
+                    });
                 }
-                await this.recordBundleVersion(tenantDataSource, bundle.id, bundle.version, options?.appliedBy ?? 'provisioning_service');
-                this.emitProvisioningEvent('bundle.apply.success', {
-                    bundleId: bundle.id,
-                    version: bundle.version,
+                this.emitProvisioningEvent('schema.apply.pass.complete', {
+                    pass,
+                    appliedInPass,
+                    stillPending: stillPending.length,
                 });
+                pendingBundles = stillPending;
+                if (pendingBundles.length === 0) {
+                    break;
+                }
+                if (appliedInPass === 0) {
+                    break;
+                }
             }
-            this.logger.log('Schema migration completed');
+            if (pendingBundles.length > 0) {
+                const unresolved = pendingBundles.map((bundle) => {
+                    const summary = failedBundleSummary.get(bundle.id);
+                    return {
+                        bundleId: bundle.id,
+                        version: bundle.version,
+                        attempts: summary?.attempts || 0,
+                        lastError: summary?.lastError || 'Unknown error',
+                    };
+                });
+                this.emitProvisioningEvent('schema.apply.incomplete', {
+                    pendingCount: unresolved.length,
+                    unresolved,
+                });
+                if (options?.strict !== false) {
+                    throw new Error(`Schema provisioning incomplete: ${unresolved.map((u) => `${u.bundleId} (${u.lastError})`).join('; ')}`);
+                }
+            }
+            this.logger.log(`Schema migration completed${pendingBundles.length > 0 ? ` with ${pendingBundles.length} unresolved bundle(s)` : ''}`);
         }
         finally {
             await tenantDataSource.destroy();
@@ -9700,6 +9798,233 @@ RECOMMENDATIONS:
         statements.push(`CREATE INDEX IF NOT EXISTS idx_message_tasks_due_date ON message_tasks(due_date)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_message_templates_category ON message_templates(category)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_message_templates_is_active ON message_templates(is_active)`);
+        return statements;
+    }
+    getSprint21EConsentSchemaStatements() {
+        const statements = [];
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS consent_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        template_name VARCHAR(255) NOT NULL,
+        template_code VARCHAR(100) NOT NULL UNIQUE,
+        consent_type VARCHAR(50) NOT NULL CHECK (consent_type IN (
+          'treatment', 'surgery', 'procedure', 'research', 'hipaa', 'photography',
+          'release_of_information', 'financial', 'telehealth', 'vaccine',
+          'anesthesia', 'blood_transfusion', 'general'
+        )),
+        version VARCHAR(20) NOT NULL,
+        language_code VARCHAR(10) DEFAULT 'en',
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        required_fields JSONB DEFAULT '[]'::jsonb,
+        signature_requirements JSONB NOT NULL DEFAULT '{"patient": true, "guardian": false, "witness": false, "provider": true}'::jsonb,
+        validity_period_days INTEGER,
+        is_active BOOLEAN DEFAULT true,
+        is_default BOOLEAN DEFAULT false,
+        specialty VARCHAR(100),
+        procedure_codes JSONB DEFAULT '[]'::jsonb,
+        procedure_snomed_codes JSONB DEFAULT '[]'::jsonb,
+        procedure_cpt_codes JSONB DEFAULT '[]'::jsonb,
+        notes TEXT,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        effective_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        expiration_date DATE
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_consents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        consent_number VARCHAR(50) UNIQUE NOT NULL,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        template_id UUID REFERENCES consent_templates(id),
+        template_version VARCHAR(20) NOT NULL,
+        consent_type VARCHAR(50) NOT NULL,
+        appointment_id UUID REFERENCES appointments(id),
+        procedure_id UUID,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        filled_fields JSONB DEFAULT '{}'::jsonb,
+        status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN (
+          'pending', 'signed', 'declined', 'expired', 'revoked', 'superseded'
+        )),
+        language_code VARCHAR(10) DEFAULT 'en',
+        consent_date TIMESTAMP WITH TIME ZONE,
+        valid_from TIMESTAMP WITH TIME ZONE,
+        valid_until TIMESTAMP WITH TIME ZONE,
+        location VARCHAR(255),
+        ip_address INET,
+        user_agent TEXT,
+        presented_by UUID REFERENCES users(id),
+        presented_at TIMESTAMP WITH TIME ZONE,
+        signed_at TIMESTAMP WITH TIME ZONE,
+        declined_at TIMESTAMP WITH TIME ZONE,
+        decline_reason TEXT,
+        revoked_at TIMESTAMP WITH TIME ZONE,
+        revocation_reason TEXT,
+        revoked_by UUID REFERENCES users(id),
+        superseded_by UUID REFERENCES patient_consents(id),
+        notes TEXT,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        procedure_snomed_code VARCHAR(20),
+        procedure_snomed_term TEXT,
+        procedure_cpt_code VARCHAR(10),
+        diagnosis_icd10 VARCHAR(10),
+        diagnosis_snomed VARCHAR(20),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS consent_signatures (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        consent_id UUID NOT NULL REFERENCES patient_consents(id) ON DELETE CASCADE,
+        signer_role VARCHAR(50) NOT NULL CHECK (signer_role IN (
+          'patient', 'guardian', 'witness', 'provider', 'legal_representative'
+        )),
+        signer_id UUID REFERENCES users(id),
+        signer_name VARCHAR(255) NOT NULL,
+        signer_relationship VARCHAR(100),
+        signature_type VARCHAR(50) NOT NULL CHECK (signature_type IN (
+          'electronic', 'digital', 'biometric', 'typed'
+        )),
+        signature_data TEXT NOT NULL,
+        signature_method VARCHAR(100),
+        signed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        ip_address INET,
+        geolocation JSONB,
+        user_agent TEXT,
+        device_info JSONB,
+        verification_code VARCHAR(100),
+        verified_at TIMESTAMP WITH TIME ZONE,
+        is_valid BOOLEAN DEFAULT true,
+        invalidated_reason TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS consent_audit_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        consent_id UUID NOT NULL REFERENCES patient_consents(id) ON DELETE CASCADE,
+        action VARCHAR(100) NOT NULL CHECK (action IN (
+          'created', 'presented', 'viewed', 'signed', 'declined', 'revoked',
+          'expired', 'superseded', 'exported', 'printed', 'emailed', 'modified'
+        )),
+        performed_by UUID REFERENCES users(id),
+        performed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        ip_address INET,
+        user_agent TEXT,
+        details JSONB DEFAULT '{}'::jsonb,
+        previous_state JSONB,
+        new_state JSONB
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS consent_reminders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        consent_type VARCHAR(50) NOT NULL,
+        template_id UUID REFERENCES consent_templates(id),
+        due_date DATE NOT NULL,
+        reminder_reason VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'completed', 'cancelled')),
+        sent_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        completed_consent_id UUID REFERENCES patient_consents(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`ALTER TABLE consent_templates ADD COLUMN IF NOT EXISTS procedure_snomed_codes JSONB DEFAULT '[]'::jsonb`);
+        statements.push(`ALTER TABLE consent_templates ADD COLUMN IF NOT EXISTS procedure_cpt_codes JSONB DEFAULT '[]'::jsonb`);
+        statements.push(`ALTER TABLE patient_consents ADD COLUMN IF NOT EXISTS procedure_snomed_code VARCHAR(20)`);
+        statements.push(`ALTER TABLE patient_consents ADD COLUMN IF NOT EXISTS procedure_snomed_term TEXT`);
+        statements.push(`ALTER TABLE patient_consents ADD COLUMN IF NOT EXISTS procedure_cpt_code VARCHAR(10)`);
+        statements.push(`ALTER TABLE patient_consents ADD COLUMN IF NOT EXISTS diagnosis_icd10 VARCHAR(10)`);
+        statements.push(`ALTER TABLE patient_consents ADD COLUMN IF NOT EXISTS diagnosis_snomed VARCHAR(20)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_templates_type ON consent_templates(consent_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_templates_code ON consent_templates(template_code)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_templates_active ON consent_templates(is_active)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_templates_language ON consent_templates(language_code)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_templates_specialty ON consent_templates(specialty)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_patient ON patient_consents(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_status ON patient_consents(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_type ON patient_consents(consent_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_date ON patient_consents(consent_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_appointment ON patient_consents(appointment_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_number ON patient_consents(consent_number)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_valid_until ON patient_consents(valid_until)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_procedure_snomed ON patient_consents(procedure_snomed_code)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_consents_diagnosis_icd10 ON patient_consents(diagnosis_icd10)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_signatures_consent ON consent_signatures(consent_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_signatures_role ON consent_signatures(signer_role)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_signatures_date ON consent_signatures(signed_at)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_signatures_signer ON consent_signatures(signer_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_audit_consent ON consent_audit_log(consent_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_audit_action ON consent_audit_log(action)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_audit_date ON consent_audit_log(performed_at)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_audit_user ON consent_audit_log(performed_by)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_reminders_patient ON consent_reminders(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_reminders_due_date ON consent_reminders(due_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_reminders_status ON consent_reminders(status)`);
+        statements.push(`DROP TRIGGER IF EXISTS update_consent_templates_updated_at ON consent_templates`);
+        statements.push(`CREATE TRIGGER update_consent_templates_updated_at BEFORE UPDATE ON consent_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_patient_consents_updated_at ON patient_consents`);
+        statements.push(`CREATE TRIGGER update_patient_consents_updated_at BEFORE UPDATE ON patient_consents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`
+      INSERT INTO consent_templates (
+        template_name, template_code, consent_type, version, language_code, title, content,
+        signature_requirements, validity_period_days, is_active, is_default, effective_date
+      ) VALUES
+      (
+        'General Treatment Consent',
+        'GENERAL_TREATMENT_V1',
+        'treatment',
+        '1.0',
+        'en',
+        'Consent for Medical Treatment',
+        '<p>I consent to receive medical treatment at {{facility_name}}.</p>',
+        '{"patient": true, "guardian": false, "witness": false, "provider": true}'::jsonb,
+        365,
+        true,
+        true,
+        CURRENT_DATE
+      ),
+      (
+        'HIPAA Privacy Acknowledgment',
+        'HIPAA_PRIVACY_V1',
+        'hipaa',
+        '1.0',
+        'en',
+        'Acknowledgment of Privacy Practices',
+        '<p>I acknowledge receipt of privacy practices at {{facility_name}}.</p>',
+        '{"patient": true, "guardian": false, "witness": false, "provider": false}'::jsonb,
+        NULL,
+        true,
+        true,
+        CURRENT_DATE
+      ),
+      (
+        'Telehealth Consent',
+        'TELEHEALTH_V1',
+        'telehealth',
+        '1.0',
+        'en',
+        'Consent for Telehealth Services',
+        '<p>I consent to telehealth services and understand privacy and technical limitations.</p>',
+        '{"patient": true, "guardian": false, "witness": false, "provider": true}'::jsonb,
+        180,
+        true,
+        true,
+        CURRENT_DATE
+      )
+      ON CONFLICT (template_code) DO NOTHING
+    `);
+        statements.push(`COMMENT ON TABLE consent_templates IS 'Consent form templates with version control'`);
+        statements.push(`COMMENT ON TABLE patient_consents IS 'Patient consent records with signatures'`);
+        statements.push(`COMMENT ON TABLE consent_signatures IS 'Electronic signatures for consents'`);
+        statements.push(`COMMENT ON TABLE consent_audit_log IS 'Complete audit trail for consent actions'`);
+        statements.push(`COMMENT ON TABLE consent_reminders IS 'Reminders for pending or expiring consents'`);
         return statements;
     }
     getSprint31RevenueCycleSchemaStatements() {

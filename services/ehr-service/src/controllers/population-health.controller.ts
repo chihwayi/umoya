@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
@@ -68,6 +68,48 @@ export class PopulationHealthController {
     return this.populationHealthService.getPreventiveCareReminders(req.tenantDb, patientId);
   }
 
+  @Get('worklist')
+  @ApiOperation({ summary: 'Doctor population health worklist with risk, SLA and care-gap prioritization' })
+  @ApiResponse({ status: 200, description: 'Worklist retrieved' })
+  async getDoctorWorklist(
+    @Query('includeResolved') includeResolved?: string,
+    @Query('limit') limit?: string,
+    @Query('focus') focus?: string,
+    @Query('conditionType') conditionType?: string,
+    @Query('riskLevel') riskLevel?: string,
+    @Req() req?: RequestWithTenant,
+  ) {
+    const parsedLimit = Number(limit);
+    return this.populationHealthService.getDoctorWorklist(req!.tenantDb, {
+      includeResolved: String(includeResolved || '').toLowerCase() === 'true',
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      focus,
+      conditionType,
+      riskLevel,
+    });
+  }
+
+  @Get('operational-brief')
+  @ApiOperation({ summary: 'Get population-health operational brief for doctor handoff' })
+  @ApiResponse({ status: 200, description: 'Operational brief retrieved' })
+  async getOperationalBrief(
+    @Query('includeResolved') includeResolved?: string,
+    @Query('limit') limit?: string,
+    @Query('focus') focus?: string,
+    @Query('conditionType') conditionType?: string,
+    @Query('riskLevel') riskLevel?: string,
+    @Req() req?: RequestWithTenant,
+  ) {
+    const parsedLimit = Number(limit);
+    return this.populationHealthService.getOperationalBrief(req!.tenantDb, {
+      includeResolved: String(includeResolved || '').toLowerCase() === 'true',
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      focus,
+      conditionType,
+      riskLevel,
+    });
+  }
+
   @Post('preventive-care/generate')
   @ApiOperation({ summary: 'Generate preventive care reminders (optional patientId for single patient)' })
   @ApiResponse({ status: 200, description: 'Generated count' })
@@ -79,6 +121,36 @@ export class PopulationHealthController {
       req.tenantDb,
       body?.patientId,
     );
+  }
+
+  @Put('preventive-care/:id/status')
+  @ApiOperation({ summary: 'Update preventive care reminder status' })
+  @ApiResponse({ status: 200, description: 'Reminder updated' })
+  async updatePreventiveReminderStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string; notes?: string; completionDate?: string },
+    @Req() req: RequestWithTenant,
+  ) {
+    return this.populationHealthService.updatePreventiveReminderStatus(req.tenantDb, id, body);
+  }
+
+  @Put('registry/:id/review')
+  @ApiOperation({ summary: 'Record chronic disease registry review and optionally update status/risk/next review' })
+  @ApiResponse({ status: 200, description: 'Registry review recorded' })
+  async reviewRegistryEntry(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      status?: string;
+      riskLevel?: string;
+      nextReviewDate?: string;
+      reviewIntervalDays?: number;
+      managementPlan?: string;
+      reviewNote?: string;
+    },
+    @Req() req: RequestWithTenant,
+  ) {
+    return this.populationHealthService.recordRegistryReview(req.tenantDb, id, body ?? {});
   }
 
   @Post('recall-lists')

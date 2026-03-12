@@ -5,6 +5,44 @@ import { DataSource } from 'typeorm';
 export class LabCriticalAlertService {
   private readonly logger = new Logger(LabCriticalAlertService.name);
 
+  private isMissingSchemaError(error: any): boolean {
+    const code = String(error?.code || '').toUpperCase();
+    const message = String(error?.message || '').toLowerCase();
+    return code === '42P01' || code === '42703' || message.includes('does not exist');
+  }
+
+  private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
+    try {
+      const result = await tenantDb.query(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = $1
+        ) AS exists
+        `,
+        [tableName],
+      );
+      return !!result[0]?.exists;
+    } catch (error: any) {
+      this.logger.warn(`Failed table existence check for ${tableName}: ${error.message}`);
+      return false;
+    }
+  }
+
+  private getDefaultAlertStats() {
+    return {
+      pending_count: 0,
+      acknowledged_count: 0,
+      escalated_count: 0,
+      critical_count: 0,
+      panic_count: 0,
+      overdue_count: 0,
+      avg_acknowledgment_time_minutes: 0,
+    };
+  }
+
   async getAllAlerts(tenantDb: DataSource, filters: { status?: string; severity?: string } = {}) {
     const query = `
       SELECT 
@@ -315,22 +353,36 @@ export class LabCriticalAlertService {
   }
 
   async getAlertStats(tenantDb: DataSource) {
-    const stats = await tenantDb.query(
-      `
-      SELECT 
-        COUNT(*) FILTER (WHERE alert_status = 'pending') as pending_count,
-        COUNT(*) FILTER (WHERE alert_status = 'acknowledged') as acknowledged_count,
-        COUNT(*) FILTER (WHERE alert_status = 'escalated') as escalated_count,
-        COUNT(*) FILTER (WHERE severity = 'critical') as critical_count,
-        COUNT(*) FILTER (WHERE severity = 'panic') as panic_count,
-        COUNT(*) FILTER (WHERE alert_status = 'pending' AND alerted_at < NOW() - INTERVAL '30 minutes') as overdue_count,
-        AVG(EXTRACT(EPOCH FROM (acknowledged_at - alerted_at))/60) FILTER (WHERE acknowledged_at IS NOT NULL) as avg_acknowledgment_time_minutes
-      FROM lab_critical_alerts
-      WHERE created_at > NOW() - INTERVAL '7 days'
-      `,
-    );
+    const hasAlertsTable = await this.hasTable(tenantDb, 'lab_critical_alerts');
+    if (!hasAlertsTable) {
+      this.logger.warn('lab_critical_alerts table missing; returning default lab critical stats');
+      return this.getDefaultAlertStats();
+    }
 
-    return stats[0];
+    try {
+      const stats = await tenantDb.query(
+        `
+        SELECT 
+          COUNT(*) FILTER (WHERE alert_status = 'pending') as pending_count,
+          COUNT(*) FILTER (WHERE alert_status = 'acknowledged') as acknowledged_count,
+          COUNT(*) FILTER (WHERE alert_status = 'escalated') as escalated_count,
+          COUNT(*) FILTER (WHERE severity = 'critical') as critical_count,
+          COUNT(*) FILTER (WHERE severity = 'panic') as panic_count,
+          COUNT(*) FILTER (WHERE alert_status = 'pending' AND alerted_at < NOW() - INTERVAL '30 minutes') as overdue_count,
+          AVG(EXTRACT(EPOCH FROM (acknowledged_at - alerted_at))/60) FILTER (WHERE acknowledged_at IS NOT NULL) as avg_acknowledgment_time_minutes
+        FROM lab_critical_alerts
+        WHERE created_at > NOW() - INTERVAL '7 days'
+        `,
+      );
+
+      return stats[0] || this.getDefaultAlertStats();
+    } catch (error: any) {
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn(`Lab critical stats fallback due to missing schema: ${error.message}`);
+        return this.getDefaultAlertStats();
+      }
+      throw error;
+    }
   }
 
   // Background task to auto-escalate unacknowledged alerts
@@ -366,4 +418,3 @@ export class LabCriticalAlertService {
     return { escalated: escalatedCount };
   }
 }
-

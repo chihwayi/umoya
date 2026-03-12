@@ -94,9 +94,9 @@ const ClaimsDashboard: React.FC = () => {
   const [selectedClaim, setSelectedClaim] = useState<any>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [preAuthorizations, setPreAuthorizations] = useState<any[]>([]);
+  const [apiConfigurations, setApiConfigurations] = useState<any[]>([]);
   const [selectedClaims, setSelectedClaims] = useState<Set<string>>(new Set());
   const [tenantInfo, setTenantInfo] = useState<any>(null);
-  // const [apiConfigurations, setApiConfigurations] = useState<any[]>([]);
   // const [showApiConfigModal, setShowApiConfigModal] = useState(false);
   // const [showPreAuthModal, setShowPreAuthModal] = useState(false);
 
@@ -183,27 +183,13 @@ const ClaimsDashboard: React.FC = () => {
 
       if (activeTab === 'preauth') {
         const preAuthResponse = await claimsApi.getPreAuthorizations(tenantSlug, token);
-        setPreAuthorizations(preAuthResponse.data || []);
-      }
-
-      /* 
-      if (activeTab === 'api-config') {
-        const configResponse = await claimsApi.getApiConfigurations(tenantSlug, token);
-        setApiConfigurations(configResponse.data || []);
-      }
-      */
-
-      if (activeTab === 'preauth') {
-        const preAuthResponse = await claimsApi.getPreAuthorizations(tenantSlug, token);
         setPreAuthorizations(Array.isArray(preAuthResponse.data) ? preAuthResponse.data : []);
       }
 
-      /*
       if (activeTab === 'api-config') {
         const configResponse = await claimsApi.getApiConfigurations(tenantSlug, token);
         setApiConfigurations(Array.isArray(configResponse.data) ? configResponse.data : []);
       }
-      */
     } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
       showError(error.response?.data?.message || 'Failed to load dashboard data', 'error');
@@ -354,11 +340,11 @@ const ClaimsDashboard: React.FC = () => {
                 <ArrowLeft className="w-5 h-5 text-white" />
               </button>
               {tenantInfo?.logoUrl && (
-                <div className="h-12 w-12 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden">
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center overflow-hidden border border-white/20 bg-white/5">
                   <img 
                     src={tenantInfo.logoUrl} 
                     alt={`${tenantInfo.clinicName} Logo`} 
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-cover"
                   />
                 </div>
               )}
@@ -973,6 +959,36 @@ const ClaimsDashboard: React.FC = () => {
             onLoad={loadDashboardData}
           />
         )}
+
+        {activeTab === 'preauth' && (
+          <PreAuthorizationTab
+            tenantSlug={tenantSlug!}
+            token={token}
+            preAuthorizations={preAuthorizations}
+            onRefresh={loadDashboardData}
+          />
+        )}
+
+        {activeTab === 'bulk' && (
+          <BulkOperationsTab
+            claims={claims}
+            selectedClaims={selectedClaims}
+            toggleClaimSelection={toggleClaimSelection}
+            toggleSelectAll={toggleSelectAll}
+            onBulkSubmit={handleBulkSubmit}
+            onBulkCheckStatus={handleBulkCheckStatus}
+            claimReadinessById={claimReadinessById}
+          />
+        )}
+
+        {activeTab === 'api-config' && (
+          <ApiConfigurationTab
+            tenantSlug={tenantSlug!}
+            token={token}
+            configurations={apiConfigurations}
+            onRefresh={loadDashboardData}
+          />
+        )}
       </div>
 
       {/* Claim Detail Modal */}
@@ -1317,6 +1333,584 @@ const CreateClaimTab: React.FC<{
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+const PreAuthorizationTab: React.FC<{
+  tenantSlug: string;
+  token: string;
+  preAuthorizations: any[];
+  onRefresh: () => void;
+}> = ({ tenantSlug, token, preAuthorizations, onRefresh }) => {
+  const { showError, showSuccess } = useNotification();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    patientId: '',
+    billingId: '',
+    appointmentId: '',
+    medicalAidName: 'cimas',
+    memberNumber: '',
+    requestType: 'consultation',
+    requestedAmount: '',
+    primaryDiagnosisCode: '',
+    clinicalNotes: '',
+  });
+
+  const submitPreAuth = async () => {
+    if (!formData.medicalAidName || !formData.memberNumber || !formData.requestedAmount) {
+      showError('Medical aid, member number, and requested amount are required.', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await claimsApi.createPreAuthorization(tenantSlug, token, {
+        ...formData,
+        requestedAmount: Number(formData.requestedAmount),
+      });
+      showSuccess('Pre-authorization created.', 'success');
+      onRefresh();
+      setFormData((prev) => ({
+        ...prev,
+        patientId: '',
+        billingId: '',
+        appointmentId: '',
+        memberNumber: '',
+        requestedAmount: '',
+        primaryDiagnosisCode: '',
+        clinicalNotes: '',
+      }));
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to create pre-authorization', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitToPayer = async (id: string) => {
+    try {
+      await claimsApi.submitPreAuthorization(tenantSlug, token, id);
+      showSuccess('Pre-authorization submitted to payer.', 'success');
+      onRefresh();
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to submit pre-authorization', 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+        <h3 className="text-xl font-bold text-white mb-4">Create Pre-Authorization</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Medical Aid</label>
+            <select
+              value={formData.medicalAidName}
+              onChange={(e) => setFormData({ ...formData, medicalAidName: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            >
+              <option value="cimas">CIMAS</option>
+              <option value="premier">Premier</option>
+              <option value="econet_health">Econet Health</option>
+              <option value="psmas">PSMAS</option>
+              <option value="first_mutual">First Mutual</option>
+              <option value="demo_aid">Demo Aid</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Member Number</label>
+            <input
+              value={formData.memberNumber}
+              onChange={(e) => setFormData({ ...formData, memberNumber: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Patient ID (optional)</label>
+            <input
+              value={formData.patientId}
+              onChange={(e) => setFormData({ ...formData, patientId: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Requested Amount</label>
+            <input
+              type="number"
+              value={formData.requestedAmount}
+              onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Request Type</label>
+            <input
+              value={formData.requestType}
+              onChange={(e) => setFormData({ ...formData, requestType: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Primary Diagnosis</label>
+            <input
+              value={formData.primaryDiagnosisCode}
+              onChange={(e) => setFormData({ ...formData, primaryDiagnosisCode: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+        </div>
+        <div className="mt-4">
+          <label className="block text-white/60 text-sm mb-2">Clinical Notes</label>
+          <textarea
+            value={formData.clinicalNotes}
+            onChange={(e) => setFormData({ ...formData, clinicalNotes: e.target.value })}
+            className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white min-h-[96px]"
+          />
+        </div>
+        <button
+          onClick={submitPreAuth}
+          disabled={loading}
+          className="mt-4 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white disabled:opacity-50"
+        >
+          {loading ? 'Creating...' : 'Create Pre-Authorization'}
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+        <h3 className="text-xl font-bold text-white mb-4">Pre-Authorization Worklist</h3>
+        <div className="space-y-3">
+          {preAuthorizations.map((item: any) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <p className="text-white font-semibold">{item.medical_aid_name || item.medicalAidName}</p>
+                  <p className="text-white/60 text-sm">
+                    Member: {item.member_number || item.memberNumber} • Requested: {formatCurrency(item.requested_amount || item.requestedAmount || 0)}
+                  </p>
+                  <p className="text-white/60 text-xs mt-1">
+                    Status: {item.status} {item.external_preauth_id ? `• External: ${item.external_preauth_id}` : ''}
+                  </p>
+                </div>
+                {item.status === 'pending' && (
+                  <button
+                    onClick={() => handleSubmitToPayer(item.id)}
+                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Submit to Payer
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {preAuthorizations.length === 0 && (
+            <p className="text-white/60 text-center py-8">No pre-authorizations available.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BulkOperationsTab: React.FC<{
+  claims: any[];
+  selectedClaims: Set<string>;
+  toggleClaimSelection: (claimId: string) => void;
+  toggleSelectAll: () => void;
+  onBulkSubmit: (method?: 'api' | 'edi') => void;
+  onBulkCheckStatus: () => void;
+  claimReadinessById: Record<string, any>;
+}> = ({ claims, selectedClaims, toggleClaimSelection, toggleSelectAll, onBulkSubmit, onBulkCheckStatus, claimReadinessById }) => {
+  const selectedCount = selectedClaims.size;
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 backdrop-blur p-6">
+        <h3 className="text-xl font-bold text-white mb-2">Bulk Claim Operations</h3>
+        <p className="text-white/70 text-sm mb-4">
+          Select multiple claims and submit/check status in one action.
+        </p>
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            onClick={toggleSelectAll}
+            className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+          >
+            {selectedCount === claims.length && claims.length > 0 ? 'Clear All' : 'Select All'}
+          </button>
+          <button
+            onClick={() => onBulkSubmit('api')}
+            disabled={selectedCount === 0}
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+          >
+            Submit Selected (API)
+          </button>
+          <button
+            onClick={() => onBulkSubmit('edi')}
+            disabled={selectedCount === 0}
+            className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+          >
+            Submit Selected (EDI)
+          </button>
+          <button
+            onClick={onBulkCheckStatus}
+            disabled={selectedCount === 0}
+            className="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-50"
+          >
+            Check Status
+          </button>
+          <span className="text-white/70 text-sm">{selectedCount} selected</span>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+        <div className="space-y-2">
+          {claims.map((claim: any) => {
+            const readiness = claimReadinessById[claim.id];
+            return (
+              <label
+                key={claim.id}
+                className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer ${
+                  selectedClaims.has(claim.id)
+                    ? 'border-purple-500 bg-purple-500/15'
+                    : 'border-white/10 bg-white/5 hover:bg-white/10'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedClaims.has(claim.id)}
+                    onChange={() => toggleClaimSelection(claim.id)}
+                    className="w-4 h-4"
+                  />
+                  <div>
+                    <p className="text-white font-medium">{claim.claimNumber}</p>
+                    <p className="text-white/60 text-xs">
+                      {claim.medicalAidProvider} • {formatCurrency(claim.claimAmount)} • {claim.status}
+                    </p>
+                  </div>
+                </div>
+                {readiness && (
+                  <p className="text-white/60 text-xs">
+                    Readiness: {readiness.status} ({readiness.readinessScore || 0})
+                  </p>
+                )}
+              </label>
+            );
+          })}
+          {claims.length === 0 && (
+            <p className="text-white/60 text-center py-8">No claims available.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ApiConfigurationTab: React.FC<{
+  tenantSlug: string;
+  token: string;
+  configurations: any[];
+  onRefresh: () => void;
+}> = ({ tenantSlug, token, configurations, onRefresh }) => {
+  const { showError, showSuccess } = useNotification();
+  const [loading, setLoading] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<any>(null);
+  const [verifyData, setVerifyData] = useState({
+    medicalAidName: 'cimas',
+    memberNumber: 'MED-1001',
+  });
+
+  const demoPortalUrl = (window as any)?.location?.origin
+    ? `${window.location.protocol}//${window.location.hostname}:3004`
+    : 'http://localhost:3004';
+
+  const [formData, setFormData] = useState({
+    medicalAidName: 'cimas',
+    providerType: 'cimas',
+    apiBaseUrl: process.env.REACT_APP_MEDICAL_AID_DEMO_URL || 'http://medical-aid-demo-service:3004',
+    apiKey: process.env.REACT_APP_MEDICAL_AID_DEMO_API_KEY || 'demo-medical-aid-key',
+    authenticationType: 'api_key',
+    claimSubmissionEndpoint: '/api/claims',
+    statusCheckEndpoint: '/api/claims',
+    preauthEndpoint: '/api/preauth',
+    memberVerificationEndpoint: '/api/members/verify',
+    requestTimeout: 20000,
+    retryCount: 2,
+    retryDelay: 500,
+    isActive: true,
+    testMode: false,
+  });
+
+  const resolveProviderType = (provider: string) => (
+    provider === 'econet_health'
+      ? 'econet_health'
+      : provider === 'premier'
+        ? 'premier'
+        : provider === 'psmas'
+          ? 'psmas'
+          : provider === 'cimas'
+            ? 'cimas'
+            : 'other'
+  );
+
+  const buildDemoConfig = (provider: string) => ({
+    ...formData,
+    medicalAidName: provider,
+    providerType: resolveProviderType(provider),
+    apiBaseUrl: 'http://medical-aid-demo-service:3004',
+    authenticationType: 'api_key',
+    claimSubmissionEndpoint: '/api/claims',
+    statusCheckEndpoint: '/api/claims',
+    preauthEndpoint: '/api/preauth',
+    memberVerificationEndpoint: '/api/members/verify',
+    requestTimeout: 20000,
+    retryCount: 2,
+    retryDelay: 500,
+    isActive: true,
+    testMode: false,
+  });
+
+  const saveConfiguration = async () => {
+    setLoading(true);
+    try {
+      await claimsApi.saveApiConfiguration(tenantSlug, token, formData);
+      showSuccess('API configuration saved.', 'success');
+      onRefresh();
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to save API configuration', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyMember = async () => {
+    setLoading(true);
+    setVerifyResult(null);
+    try {
+      const response = await claimsApi.verifyMember(
+        tenantSlug,
+        token,
+        verifyData.medicalAidName,
+        verifyData.memberNumber,
+      );
+      setVerifyResult(response.data);
+      showSuccess('Member verification completed.', 'success');
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Member verification failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runDemoSetup = async () => {
+    const provider = (formData.medicalAidName || verifyData.medicalAidName || 'cimas').trim().toLowerCase();
+    const memberNumber = (verifyData.memberNumber || 'MED-1001').trim().toUpperCase();
+    const demoConfig = buildDemoConfig(provider);
+
+    setLoading(true);
+    setVerifyResult(null);
+    try {
+      await claimsApi.saveApiConfiguration(tenantSlug, token, demoConfig);
+      const response = await claimsApi.verifyMember(tenantSlug, token, provider, memberNumber);
+      setFormData(demoConfig);
+      setVerifyData({ medicalAidName: provider, memberNumber });
+      setVerifyResult(response.data);
+      onRefresh();
+
+      if (response.data?.valid) {
+        showSuccess(`Demo setup complete. ${memberNumber} verified for ${provider}.`, 'success');
+      } else {
+        showSuccess(
+          `Demo config saved for ${provider}. Verification returned: ${response.data?.error || 'not eligible'}.`,
+          'success',
+        );
+      }
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Demo setup failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyDemoTemplate = (provider: string) => {
+    setFormData(buildDemoConfig(provider));
+    setVerifyData((prev) => ({ ...prev, medicalAidName: provider }));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 backdrop-blur p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-white">Demo Medical Aid Provider</h3>
+            <p className="text-white/70 text-sm mt-1">
+              Use this panel to point claims submissions to the new demo provider service.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={runDemoSetup}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Demo Setup
+            </button>
+            <a
+              href={demoPortalUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open Demo Provider Portal
+            </a>
+          </div>
+        </div>
+        <p className="text-white/60 text-xs mt-3">
+          Demo Setup saves payer API config for the selected provider and runs member verification for <code>MED-1001</code>.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+        <div className="flex flex-wrap gap-2 mb-4">
+          {['cimas', 'premier', 'econet_health', 'psmas', 'first_mutual', 'demo_aid'].map((provider) => (
+            <button
+              key={provider}
+              onClick={() => applyDemoTemplate(provider)}
+              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm"
+            >
+              Use {provider}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Medical Aid Name</label>
+            <input
+              value={formData.medicalAidName}
+              onChange={(e) => setFormData({ ...formData, medicalAidName: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Provider Type</label>
+            <select
+              value={formData.providerType}
+              onChange={(e) => setFormData({ ...formData, providerType: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            >
+              <option value="cimas">cimas</option>
+              <option value="premier">premier</option>
+              <option value="econet_health">econet_health</option>
+              <option value="psmas">psmas</option>
+              <option value="other">other</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">API Base URL</label>
+            <input
+              value={formData.apiBaseUrl}
+              onChange={(e) => setFormData({ ...formData, apiBaseUrl: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">API Key</label>
+            <input
+              value={formData.apiKey}
+              onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Claim Endpoint</label>
+            <input
+              value={formData.claimSubmissionEndpoint}
+              onChange={(e) => setFormData({ ...formData, claimSubmissionEndpoint: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Status Endpoint</label>
+            <input
+              value={formData.statusCheckEndpoint}
+              onChange={(e) => setFormData({ ...formData, statusCheckEndpoint: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Preauth Endpoint</label>
+            <input
+              value={formData.preauthEndpoint}
+              onChange={(e) => setFormData({ ...formData, preauthEndpoint: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Member Verify Endpoint</label>
+            <input
+              value={formData.memberVerificationEndpoint}
+              onChange={(e) => setFormData({ ...formData, memberVerificationEndpoint: e.target.value })}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            />
+          </div>
+        </div>
+        <button
+          onClick={saveConfiguration}
+          disabled={loading}
+          className="mt-4 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white disabled:opacity-50"
+        >
+          Save API Configuration
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+        <h3 className="text-lg font-bold text-white mb-4">Member Verification Test</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <input
+            value={verifyData.medicalAidName}
+            onChange={(e) => setVerifyData({ ...verifyData, medicalAidName: e.target.value })}
+            className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            placeholder="medical aid name"
+          />
+          <input
+            value={verifyData.memberNumber}
+            onChange={(e) => setVerifyData({ ...verifyData, memberNumber: e.target.value })}
+            className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+            placeholder="member number"
+          />
+          <button
+            onClick={verifyMember}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+          >
+            Verify Member
+          </button>
+        </div>
+        {verifyResult && (
+          <pre className="mt-4 p-4 rounded-lg bg-black/30 border border-white/10 text-xs text-white/80 overflow-auto">
+            {JSON.stringify(verifyResult, null, 2)}
+          </pre>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+        <h3 className="text-lg font-bold text-white mb-4">Saved Configurations</h3>
+        <div className="space-y-3">
+          {configurations.map((config: any) => (
+            <div key={config.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="text-white font-medium">{config.medicalAidName}</p>
+              <p className="text-white/60 text-sm">
+                {config.providerType} • {config.apiBaseUrl} • {config.authenticationType}
+              </p>
+            </div>
+          ))}
+          {configurations.length === 0 && (
+            <p className="text-white/60">No saved configurations yet. You can still use environment fallback demo integration.</p>
+          )}
+        </div>
       </div>
     </div>
   );

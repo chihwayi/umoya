@@ -89,6 +89,11 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsDateString)(),
     __metadata("design:type", String)
+], CreateTenantDto.prototype, "demoExpiresAt", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsDateString)(),
+    __metadata("design:type", String)
 ], CreateTenantDto.prototype, "billingEndsAt", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),

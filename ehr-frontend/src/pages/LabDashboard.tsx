@@ -1631,11 +1631,11 @@ const LabDashboard: React.FC = () => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               {tenantInfo?.logoUrl ? (
-                <div className="h-12 w-12 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden border border-slate-200">
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center overflow-hidden border border-slate-200 bg-white/5">
                   <img 
                     src={tenantInfo.logoUrl} 
                     alt={`${tenantInfo.clinicName} Logo`} 
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-cover"
                   />
                 </div>
               ) : (
@@ -3146,4 +3146,3 @@ const LabDashboard: React.FC = () => {
 };
 
 export default LabDashboard;
-

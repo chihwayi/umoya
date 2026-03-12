@@ -7,7 +7,11 @@ import { ehrApi } from '../services/api';
 import { GuidelineResult } from '../types/guidelines';
 import ModalPortal from '../components/ModalPortal';
 
-const MaternityDoctorDashboard: React.FC = () => {
+interface MaternityDoctorDashboardProps {
+  embedded?: boolean;
+}
+
+const MaternityDoctorDashboard: React.FC<MaternityDoctorDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -63,8 +67,8 @@ const MaternityDoctorDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-rose-50">
-      {/* Header */}
+    <div className={`${embedded ? '' : 'min-h-screen '}bg-gradient-to-br from-pink-50 via-white to-rose-50`}>
+      {!embedded && (
       <div className="bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -112,6 +116,7 @@ const MaternityDoctorDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* AI Guideline Search Modal */}
       {showGuidelineSearch && (

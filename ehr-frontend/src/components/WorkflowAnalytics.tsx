@@ -73,23 +73,27 @@ const WorkflowAnalytics: React.FC<WorkflowAnalyticsProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-gradient-to-br from-white via-slate-50 to-indigo-50 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200/80">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white p-6 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-slate-100 via-indigo-100 to-violet-100 p-6 flex items-center justify-between border-b border-indigo-200/70">
           <div>
-            <h2 className="text-2xl font-bold flex items-center gap-3">
-              <BarChart3 className="w-6 h-6" />
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <BarChart3 className="w-6 h-6 text-indigo-600" />
               {workflowId ? 'Workflow Analytics' : 'Overall Workflow Analytics'}
             </h2>
-            <p className="text-purple-100 text-sm mt-1">
+            <p className="text-slate-600 text-sm mt-1">
               {workflowId
                 ? 'Performance metrics and insights for this workflow'
                 : 'System-wide workflow performance and usage statistics'}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
-            <X className="w-5 h-5" />
+          <button
+            onClick={onClose}
+            className="p-2 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Close analytics"
+          >
+            <X className="w-5 h-5 text-slate-700" />
           </button>
         </div>
 
@@ -97,7 +101,7 @@ const WorkflowAnalytics: React.FC<WorkflowAnalyticsProps> = ({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
             </div>
           ) : analytics ? (
             <div className="space-y-6">
@@ -283,4 +287,3 @@ const WorkflowAnalytics: React.FC<WorkflowAnalyticsProps> = ({
 };
 
 export default WorkflowAnalytics;
-

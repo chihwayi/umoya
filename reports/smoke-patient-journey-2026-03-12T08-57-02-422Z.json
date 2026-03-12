@@ -1,0 +1,373 @@
+{
+  "startedAt": "2026-03-12T08:57:02.422Z",
+  "environment": {
+    "EHR_BASE_URL": "http://localhost:3013",
+    "EHR_API_BASE": "http://localhost:3013/api",
+    "DEMO_BASE_URL": "http://localhost:3004",
+    "TENANT_ID": "kids-clinic",
+    "MEDICAL_AID_NAME": "cimas"
+  },
+  "actors": {
+    "doctorEmail": "mumu@gmail.com",
+    "adminEmail": "gina@gmail.com"
+  },
+  "artifacts": {
+    "doctorUserId": "021d5b24-678e-44cc-acca-d6734b9002a9",
+    "demoMember": {
+      "id": "member-1003",
+      "memberNumber": "MED-05822427"
+    },
+    "patient": {
+      "id": "78eed544-7c61-4a7c-a9c4-cd7462cb63d3",
+      "patientNumber": "KID822656494",
+      "name": "Demo0582 Journey2427"
+    },
+    "vitals": {
+      "id": "0e9db703-b53c-4bc0-9eec-a83a2d1d9716",
+      "cdssInsightsPresent": true
+    },
+    "diabetesRegistryId": "de70b271-1d38-4623-89af-6abd6cd95803",
+    "financeTransaction": {
+      "id": "ba6846af-3183-4408-a7d0-888c3955dcb1",
+      "paymentStatus": "pending"
+    },
+    "memberVerification": {
+      "valid": true,
+      "status": "active"
+    },
+    "claimFromBill": {
+      "skipped": true,
+      "detail": "Billing record unavailable in this run"
+    },
+    "claim": {
+      "id": "5fceac48-af44-4393-8c40-29fa48417ae3",
+      "claimNumber": "CLM00000001",
+      "status": "draft"
+    },
+    "claimSubmit": {
+      "status": "submitted",
+      "submissionDate": "2026-03-12T08:57:02.820Z"
+    },
+    "claimStatusAfterPoll": {
+      "status": "submitted",
+      "approvedAmount": null,
+      "historyCount": 1
+    },
+    "externalClaimId": "DMA-CLM-000006",
+    "claimStatusTransitions": {
+      "suspendedMappedStatus": "submitted",
+      "paidMappedStatus": "submitted",
+      "paidAmount": null
+    },
+    "moduleChecks": {
+      "mar": {
+        "ok": false,
+        "statusCode": 500,
+        "message": "relation \"medication_administration_records\" does not exist"
+      },
+      "bloodBank": {
+        "ok": true,
+        "statusCode": 200,
+        "hasSummary": false
+      },
+      "sepsis": {
+        "ok": true,
+        "statusCode": 200,
+        "hasSummary": true
+      },
+      "infectionControl": {
+        "ok": true,
+        "statusCode": 200,
+        "hasSummary": true
+      },
+      "cdi": {
+        "ok": true,
+        "statusCode": 200,
+        "hasSummary": true
+      },
+      "revenueCycle": {
+        "ok": true,
+        "statusCode": 200,
+        "hasSummary": true
+      },
+      "populationHealth": {
+        "ok": true,
+        "statusCode": 200,
+        "hasSummary": true
+      }
+    }
+  },
+  "steps": [
+    {
+      "label": "Doctor login",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/auth/login",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMjFkNWIyNC02NzhlLTQ0Y2MtYWNjYS1kNjczNGI5MDAyYTkiLCJlbWFpbCI6Im11bXVAZ21haWwuY29tIiwicm9sZSI6ImRvY3RvciIsImZpcnN0TmFtZSI6Ik11bXUiLCJsYXN0TmFtZSI6Ik11bXUiLCJpYXQiOjE3NzMzMDU4MjIsImV4cCI6MTc3MzMzNDYyMn0.8b29U9qEWPYfDjlkQgrlLsrF6hF15M-4pxWERP_skBY\",\"mustChangePassword\":false,\"user\":{\"id\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"email\":\"mumu@gmail.com\",\"firstName\":\"Mumu\",\"lastName\":\"Mumu\",\"role\":\"doctor\",\"specialization\":\"\",\"mustChangePassword..."
+    },
+    {
+      "label": "Admin login",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/auth/login",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYzhjODRkNS1lMjg5LTQ1NTItYjk4ZC02YzYyOTYzNTc4ZTgiLCJlbWFpbCI6ImdpbmFAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIiwiZmlyc3ROYW1lIjoiR2luYSIsImxhc3ROYW1lIjoiQ2hpaHdheWkiLCJpYXQiOjE3NzMzMDU4MjIsImV4cCI6MTc3MzMzNDYyMn0.nX_XY-46bYk2217McPxSfVT9XWbi1-SNXS9UX_83Q9c\",\"mustChangePassword\":false,\"user\":{\"id\":\"bc8c84d5-e289-4552-b98d-6c62963578e8\",\"email\":\"gina@gmail.com\",\"firstName\":\"Gina\",\"lastName\":\"Chihwayi\",\"role\":\"admin\",\"specialization\":null,\"mustChang..."
+    },
+    {
+      "label": "Demo plans list",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3004/api/plans",
+      "status": 200,
+      "error": null,
+      "responsePreview": "[{\"id\":\"plan-0102\",\"code\":\"PREMIUM-95\",\"name\":\"Premium 95\",\"status\":\"active\",\"currency\":\"USD\",\"annualLimit\":9000,\"outpatientLimit\":6500,\"inpatientLimit\":12000,\"perClaimLimit\":2000,\"coveragePercent\":95,\"copayPercent\":5,\"requiresPreauthAbove\":1200,\"createdAt\":\"2026-03-11T07:09:28.170Z\",\"updatedAt\":\"2026-03-11T07:09:28.170Z\"},{\"id\":\"plan-0101\",\"code\":\"STANDARD-80\",\"name\":\"Standard 80\",\"status\":\"active\",\"currency\":\"USD\",\"annualLimit\":2500,\"outpatientLimit\":1800,\"inpatientLimit\":4000,\"perClaimLimit\":..."
+    },
+    {
+      "label": "Demo create member",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3004/api/members",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"member-1003\",\"memberNumber\":\"MED-05822427\",\"policyNumber\":\"POL-758696\",\"firstName\":\"Demo0582\",\"lastName\":\"Journey2427\",\"dateOfBirth\":\"\",\"gender\":\"\",\"phone\":\"\",\"email\":\"\",\"relationship\":\"self\",\"status\":\"active\",\"planId\":\"plan-0102\",\"planName\":\"Premium 95\",\"notes\":\"\",\"limits\":{\"annualLimit\":1500,\"annualUsed\":0,\"outpatientLimit\":1000,\"outpatientUsed\":0,\"inpatientLimit\":1200,\"inpatientUsed\":0,\"perClaimLimit\":700},\"createdAt\":\"2026-03-12T08:57:02.642Z\",\"updatedAt\":\"2026-03-12T08:57:02.642Z\"}"
+    },
+    {
+      "label": "Create patient",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/patients",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"firstName\":\"Demo0582\",\"lastName\":\"Journey2427\",\"dateOfBirth\":\"1990-05-15\",\"gender\":\"female\",\"nationalId\":\"63-05822427-A-12\",\"phone\":\"+2637705822427\",\"email\":\"demo.05822427@example.com\",\"address\":\"12 Demo Street\",\"city\":\"Bulawayo\",\"emergencyContactName\":\"Demo Contact\",\"emergencyContactPhone\":\"+2637805822427\",\"medicalAidProvider\":\"cimas\",\"medicalAidNumber\":\"MED-05822427\",\"bloodType\":\"O+\",\"allergies\":\"None\",\"medicalHistory\":\"Type 2 diabetes follow-up\",\"patientNumber\":\"KID822656494\",\"portalPasswor..."
+    },
+    {
+      "label": "Record vitals",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/vitals",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"success\":true,\"vitals\":{\"patientId\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"bloodPressure\":\"152/94\",\"heartRate\":97,\"temperature\":37.1,\"oxygenSaturation\":96,\"respiratoryRate\":20,\"weight\":79.4,\"height\":1.69,\"bmi\":27.8,\"painLevel\":1,\"bloodGlucose\":13.2,\"notes\":\"Initial triage vitals for chronic-care smoke journey\",\"recordedBy\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"id\":\"0e9db703-b53c-4bc0-9eec-a83a2d1d9716\",\"recordedAt\":\"2026-03-12T08:57:02.673Z\",\"createdAt\":\"2026-03-12T08:57:02.673Z\",\"updatedAt..."
+    },
+    {
+      "label": "Create diabetes registry",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/diabetes/registry",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"de70b271-1d38-4623-89af-6abd6cd95803\",\"patient_id\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"diabetes_type\":\"type2\",\"diabetes_type_snomed_code\":null,\"diabetes_type_snomed_term\":null,\"diagnosis_date\":\"2024-01-15T00:00:00.000Z\",\"age_at_diagnosis\":34,\"status\":\"active\",\"family_history\":true,\"primary_care_provider_id\":null,\"endocrinologist_id\":null,\"diabetes_educator_id\":null,\"care_plan\":\"Lifestyle + metformin; quarterly HbA1c review\",\"notes\":\"Smoke journey enrollment\",\"created_at\":\"2026-03-12T0..."
+    },
+    {
+      "label": "Create care bundle entry",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/diabetes/registry/de70b271-1d38-4623-89af-6abd6cd95803/care-bundle",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"42213ef0-3981-4318-9f5c-e8a2465273ba\",\"diabetes_registry_id\":\"de70b271-1d38-4623-89af-6abd6cd95803\",\"patient_id\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"bundle_date\":\"2026-03-12T00:00:00.000Z\",\"hba1c_checked\":true,\"hba1c_value\":\"9.40\",\"hba1c_date\":\"2026-03-12T00:00:00.000Z\",\"blood_pressure_checked\":true,\"systolic_bp\":152,\"diastolic_bp\":94,\"bp_date\":null,\"lipid_profile_checked\":false,\"lipid_profile_date\":null,\"foot_exam_checked\":true,\"foot_exam_date\":null,\"foot_exam_result\":\"mild neuropath..."
+    },
+    {
+      "label": "Record glucose fasting",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/diabetes/registry/de70b271-1d38-4623-89af-6abd6cd95803/glucose",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"2fcbc23a-d743-404a-b340-8193fabd63f3\",\"diabetes_registry_id\":\"de70b271-1d38-4623-89af-6abd6cd95803\",\"patient_id\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"monitoring_type\":\"self_monitoring\",\"device_type\":null,\"device_id\":null,\"glucose_value\":\"12.80\",\"glucose_unit\":\"mmol/L\",\"reading_type\":\"fasting\",\"meal_context\":null,\"insulin_dose\":null,\"insulin_type\":null,\"carbohydrates_grams\":null,\"exercise_minutes\":null,\"stress_level\":null,\"notes\":\"Morning fasting\",\"recorded_at\":\"2026-03-12T08:57:02.723Z..."
+    },
+    {
+      "label": "Record glucose post meal",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/diabetes/registry/de70b271-1d38-4623-89af-6abd6cd95803/glucose",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"665c1987-365f-490c-9f40-731d5b6c617d\",\"diabetes_registry_id\":\"de70b271-1d38-4623-89af-6abd6cd95803\",\"patient_id\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"monitoring_type\":\"self_monitoring\",\"device_type\":null,\"device_id\":null,\"glucose_value\":\"14.10\",\"glucose_unit\":\"mmol/L\",\"reading_type\":\"post_meal\",\"meal_context\":\"Lunch\",\"insulin_dose\":null,\"insulin_type\":null,\"carbohydrates_grams\":null,\"exercise_minutes\":null,\"stress_level\":null,\"notes\":\"Post-prandial check\",\"recorded_at\":\"2026-03-12T08:5..."
+    },
+    {
+      "label": "Create bill",
+      "ok": false,
+      "method": "POST",
+      "url": "http://localhost:3013/api/billing/bills",
+      "status": 500,
+      "error": "HTTP 500 for POST http://localhost:3013/api/billing/bills",
+      "responsePreview": "{\"code\":\"INTERNAL_ERROR\",\"message\":\"column \\\"diagnosis_codes\\\" of relation \\\"billing\\\" does not exist\",\"details\":null,\"requestId\":\"3e36c00e-e001-4b65-b165-b9f7b86c64f7\",\"timestamp\":\"2026-03-12T08:57:02.740Z\"}"
+    },
+    {
+      "label": "Billing - create bill (exception)",
+      "ok": false,
+      "method": "N/A",
+      "url": "N/A",
+      "status": null,
+      "error": "Create bill failed: column \"diagnosis_codes\" of relation \"billing\" does not exist",
+      "responsePreview": "",
+      "critical": false
+    },
+    {
+      "label": "Create finance transaction",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/finance/transactions",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"ba6846af-3183-4408-a7d0-888c3955dcb1\",\"patient_id\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"payer_type\":\"medical_aid\",\"source_module\":\"billing\",\"source_reference_id\":null,\"amount\":\"60.00\",\"balance\":\"60.00\",\"currency\":\"USD\",\"payment_status\":\"pending\",\"due_date\":null,\"notes\":\"Finance posting for diabetes episode\",\"metadata\":{},\"created_by\":\"bc8c84d5-e289-4552-b98d-6c62963578e8\",\"created_at\":\"2026-03-12T08:57:02.745Z\",\"updated_at\":\"2026-03-12T08:57:02.745Z\"}"
+    },
+    {
+      "label": "Verify member",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/medical-aid-api/verify-member",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"valid\":true,\"memberDetails\":{\"valid\":true,\"status\":\"active\",\"memberDetails\":{\"memberNumber\":\"MED-05822427\",\"name\":\"Demo0582 Journey2427\",\"policyNumber\":\"POL-758696\",\"status\":\"active\",\"plan\":\"Premium 95\",\"coveragePercent\":95,\"copayPercent\":5,\"limits\":{\"annualLimit\":1500,\"annualUsed\":0,\"outpatientLimit\":1000,\"outpatientUsed\":0,\"inpatientLimit\":1200,\"inpatientUsed\":0,\"perClaimLimit\":700,\"annualRemaining\":1500,\"outpatientRemaining\":1000,\"inpatientRemaining\":1200}}}}"
+    },
+    {
+      "label": "Create claim",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/claims",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"claimNumber\":\"CLM00000001\",\"patientId\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"medicalAidProvider\":\"cimas\",\"memberNumber\":\"MED-05822427\",\"claimAmount\":60,\"status\":\"draft\",\"diagnosisCodes\":[\"E11.9\",\"R73.9\"],\"primaryDiagnosisCode\":\"E11.9\",\"primaryDiagnosisDescription\":\"Type 2 diabetes mellitus without complications\",\"claimData\":{\"encounterType\":\"outpatient\",\"clinicalNotes\":\"Structured note: diabetes review, counseling done, plan updated\",\"serviceCodes\":[\"CONS-001\",\"LAB-HBA1C\"],\"procedureCodes\":[..."
+    },
+    {
+      "label": "Submit enhanced claim",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/claims/5fceac48-af44-4393-8c40-29fa48417ae3/submit-enhanced?method=api",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"5fceac48-af44-4393-8c40-29fa48417ae3\",\"claimNumber\":\"CLM00000001\",\"patientId\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"billId\":null,\"medicalAidProvider\":\"cimas\",\"memberNumber\":\"MED-05822427\",\"claimAmount\":\"60.00\",\"approvedAmount\":null,\"status\":\"submitted\",\"submissionDate\":\"2026-03-12T08:57:02.820Z\",\"responseDate\":null,\"rejectionReason\":null,\"diagnosisCodes\":[\"E11.9\",\"R73.9\"],\"primaryDiagnosisCode\":\"E11.9\",\"primaryDiagnosisDescription\":\"Type 2 diabetes mellitus without complications\",\"claim..."
+    },
+    {
+      "label": "Status enhanced poll",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/claims/5fceac48-af44-4393-8c40-29fa48417ae3/status-enhanced",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"claim\":{\"id\":\"5fceac48-af44-4393-8c40-29fa48417ae3\",\"claimNumber\":\"CLM00000001\",\"patientId\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"billId\":null,\"medicalAidProvider\":\"cimas\",\"memberNumber\":\"MED-05822427\",\"claimAmount\":\"60.00\",\"approvedAmount\":null,\"status\":\"submitted\",\"submissionDate\":\"2026-03-12T08:57:02.820Z\",\"responseDate\":null,\"rejectionReason\":null,\"claimData\":{\"serviceCodes\":[\"CONS-001\",\"LAB-HBA1C\"],\"clinicalNotes\":\"Structured note: diabetes review, counseling done, plan updated\",\"encoun..."
+    },
+    {
+      "label": "Demo list claims by member",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3004/api/claims?memberNumber=MED-05822427",
+      "status": 200,
+      "error": null,
+      "responsePreview": "[{\"id\":\"claim-000006\",\"externalClaimId\":\"DMA-CLM-000006\",\"referenceNumber\":\"DMA-CLM-000006\",\"source\":\"ehr-api\",\"memberId\":\"member-1003\",\"memberNumber\":\"MED-05822427\",\"memberName\":\"Demo0582 Journey2427\",\"planId\":\"plan-0102\",\"planName\":\"Premium 95\",\"claimType\":\"outpatient\",\"status\":\"approved\",\"claimAmount\":60,\"approvedAmount\":54,\"copayAmount\":3,\"payableAmount\":54,\"rejectionReason\":null,\"decisionReasons\":[\"coverage:95\",\"copay:5\"],\"diagnosisCodes\":[\"E11.9\",\"R73.9\"],\"primaryDiagnosisCode\":\"E11.9\",\"pr..."
+    },
+    {
+      "label": "Demo set claim suspended",
+      "ok": true,
+      "method": "PUT",
+      "url": "http://localhost:3004/api/claims/DMA-CLM-000006/status",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"status\":\"suspended\",\"approvedAmount\":54,\"rejectionReason\":null,\"details\":{\"id\":\"claim-000006\",\"externalClaimId\":\"DMA-CLM-000006\",\"referenceNumber\":\"DMA-CLM-000006\",\"source\":\"ehr-api\",\"memberId\":\"member-1003\",\"memberNumber\":\"MED-05822427\",\"memberName\":\"Demo0582 Journey2427\",\"planId\":\"plan-0102\",\"planName\":\"Premium 95\",\"claimType\":\"outpatient\",\"status\":\"suspended\",\"claimAmount\":60,\"approvedAmount\":54,\"copayAmount\":6,\"payableAmount\":54,\"rejectionReason\":null,\"decisionReasons\":[\"coverage:95\",\"copa..."
+    },
+    {
+      "label": "Poll after suspended",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/claims/5fceac48-af44-4393-8c40-29fa48417ae3/status-enhanced",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"claim\":{\"id\":\"5fceac48-af44-4393-8c40-29fa48417ae3\",\"claimNumber\":\"CLM00000001\",\"patientId\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"billId\":null,\"medicalAidProvider\":\"cimas\",\"memberNumber\":\"MED-05822427\",\"claimAmount\":\"60.00\",\"approvedAmount\":null,\"status\":\"submitted\",\"submissionDate\":\"2026-03-12T08:57:02.820Z\",\"responseDate\":null,\"rejectionReason\":null,\"claimData\":{\"serviceCodes\":[\"CONS-001\",\"LAB-HBA1C\"],\"clinicalNotes\":\"Structured note: diabetes review, counseling done, plan updated\",\"encoun..."
+    },
+    {
+      "label": "Demo set claim paid",
+      "ok": true,
+      "method": "PUT",
+      "url": "http://localhost:3004/api/claims/DMA-CLM-000006/status",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"status\":\"paid\",\"approvedAmount\":58,\"rejectionReason\":null,\"details\":{\"id\":\"claim-000006\",\"externalClaimId\":\"DMA-CLM-000006\",\"referenceNumber\":\"DMA-CLM-000006\",\"source\":\"ehr-api\",\"memberId\":\"member-1003\",\"memberNumber\":\"MED-05822427\",\"memberName\":\"Demo0582 Journey2427\",\"planId\":\"plan-0102\",\"planName\":\"Premium 95\",\"claimType\":\"outpatient\",\"status\":\"paid\",\"claimAmount\":60,\"approvedAmount\":58,\"copayAmount\":2,\"payableAmount\":58,\"rejectionReason\":null,\"decisionReasons\":[\"coverage:95\",\"copay:5\"],\"dia..."
+    },
+    {
+      "label": "Poll after paid",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/claims/5fceac48-af44-4393-8c40-29fa48417ae3/status-enhanced",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"claim\":{\"id\":\"5fceac48-af44-4393-8c40-29fa48417ae3\",\"claimNumber\":\"CLM00000001\",\"patientId\":\"78eed544-7c61-4a7c-a9c4-cd7462cb63d3\",\"billId\":null,\"medicalAidProvider\":\"cimas\",\"memberNumber\":\"MED-05822427\",\"claimAmount\":\"60.00\",\"approvedAmount\":null,\"status\":\"submitted\",\"submissionDate\":\"2026-03-12T08:57:02.820Z\",\"responseDate\":null,\"rejectionReason\":null,\"claimData\":{\"serviceCodes\":[\"CONS-001\",\"LAB-HBA1C\"],\"clinicalNotes\":\"Structured note: diabetes review, counseling done, plan updated\",\"encoun..."
+    },
+    {
+      "label": "Operational brief mar",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/bcma/mar/operational-brief",
+      "status": 500,
+      "error": null,
+      "responsePreview": "{\"code\":\"INTERNAL_ERROR\",\"message\":\"relation \\\"medication_administration_records\\\" does not exist\",\"details\":null,\"requestId\":\"5e8dfeb8-fb21-402b-84ed-0bb6143849ec\",\"timestamp\":\"2026-03-12T08:57:02.882Z\"}"
+    },
+    {
+      "label": "Operational brief bloodBank",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/blood-bank/operational-brief",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"generatedAt\":\"2026-03-12T08:57:02.920Z\",\"inventorySummary\":{\"totalAvailable\":0,\"usableUnits\":0,\"nearExpiryUnits\":0,\"expiredUnits\":0,\"componentSummaries\":[],\"bloodTypeSummaries\":[],\"criticalShortages\":[{\"key\":\"rbc_o_negative\",\"componentType\":\"packed_rbc\",\"bloodType\":\"O-\",\"availableUnits\":0,\"threshold\":2,\"recommendation\":\"Prioritize O- donor mobilization and reserve O- units for life-threatening emergencies.\"},{\"key\":\"rbc_o_positive\",\"componentType\":\"packed_rbc\",\"bloodType\":\"O+\",\"availableUnits\"..."
+    },
+    {
+      "label": "Operational brief sepsis",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/sepsis/operational-brief",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"generatedAt\":\"2026-03-12T08:57:02.978Z\",\"period\":{\"startDate\":\"2026-02-26T08:57:02.978Z\",\"endDate\":\"2026-03-12T08:57:02.978Z\"},\"summary\":{\"totalAlerts24h\":0,\"alertsWithoutBundle\":0,\"openBundles\":0,\"criticalRisk\":0,\"highRisk\":0,\"severeSignals\":0,\"overdueThreeHour\":0,\"antibioticsDelayOver60\":0,\"culturesAfterAntibiotics\":0,\"repeatLactateOverdue\":0,\"severeWithoutHemodynamicPlan\":0,\"missingBundleNotes\":0,\"missingOnsetTime\":0,\"cdssCoveragePercent\":100,\"avgThreeHourRemainingMinutes\":0},\"compliance\":{..."
+    },
+    {
+      "label": "Operational brief infectionControl",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/infection-control/operational-brief",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"generatedAt\":\"2026-03-12T08:57:03.053Z\",\"period\":{\"startDate\":\"2026-02-10T08:57:03.031Z\",\"endDate\":\"2026-03-12T08:57:03.031Z\"},\"summary\":{\"totalHAI\":0,\"deviceAssociated\":0,\"unresolvedInfections\":0,\"highRiskInfections\":0,\"mdroSignals\":0,\"isolationGaps\":0,\"overdueInfectionReviews\":0,\"diagnosticWorkupGaps\":0,\"infectionCodingGaps\":0,\"rootCauseGaps\":0,\"stewardshipReviewPending\":0,\"stewardshipOverdue\":0,\"stewardshipHighRisk\":0,\"prolongedEmpiricWithoutCulture\":0,\"stewardshipCodingGaps\":0,\"pendingStew..."
+    },
+    {
+      "label": "Operational brief cdi",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/cdi/queries/brief/021d5b24-678e-44cc-acca-d6734b9002a9",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"generatedAt\":\"2026-03-12T08:57:03.061Z\",\"summary\":{\"total\":0,\"open\":0,\"overdue\":0,\"dueSoon\":0,\"highRisk\":0,\"responseRatePercent\":0,\"stat\":0,\"urgent\":0,\"missingClinicalIndicators\":0,\"missingPotentialDrgContext\":0,\"missingFinancialImpact\":0,\"documentationGaps\":0,\"answeredMissingResponseNarrative\":0,\"cdssCoveragePercent\":100,\"financialAtRisk\":0},\"highPriorityQueue\":[],\"recommendations\":[\"Maintain diagnosis specificity and timely query turnaround to preserve CDI quality.\"]}"
+    },
+    {
+      "label": "Operational brief revenueCycle",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/revenue-cycle/operational-brief?doctorId=021d5b24-678e-44cc-acca-d6734b9002a9",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"generatedAt\":\"2026-03-12T08:57:03.082Z\",\"summary\":{\"total\":0,\"open\":0,\"overdue\":0,\"dueSoon\":0,\"highRisk\":0,\"moderateRisk\":0,\"missingCodingCount\":0,\"highValueOpenCount\":0,\"captureLagOver24h\":0,\"sourceContextGaps\":0,\"reviewedPendingFinalization\":0,\"cdssCoveragePercent\":0,\"potentialLeakageAmount\":0,\"unreadNotifications\":0,\"accountsSyncPending\":0},\"highPriorityQueue\":[],\"recommendations\":[\"Improve structured charge documentation completeness to increase CDSS decision coverage.\"]}"
+    },
+    {
+      "label": "Operational brief populationHealth",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/population-health/operational-brief",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"generatedAt\":\"2026-03-12T08:57:03.089Z\",\"summary\":{\"totalRegistry\":0,\"overdueReviews\":0,\"uncontrolledCount\":0,\"highPriorityCount\":0,\"patientsWithCareGaps\":0,\"patientsWithOverdueCareGaps\":0,\"missingNextReviewCount\":0,\"missingManagementPlanCount\":0,\"uncontrolledNoRecentReviewCount\":0,\"overdueOutreachNotSentCount\":0,\"cdssCoveragePercent\":0,\"avgRiskScore\":0,\"avgCareGaps\":0},\"distribution\":{\"byCondition\":{},\"byRisk\":{}},\"highPriorityQueue\":[],\"recommendations\":[\"Improve structured registry document..."
+    }
+  ],
+  "summary": {
+    "total": 29,
+    "passed": 27,
+    "failed": 2,
+    "criticalFailed": 0,
+    "apiSteps": 28,
+    "exceptionSteps": 1
+  },
+  "finishedAt": "2026-03-12T08:57:03.092Z"
+}

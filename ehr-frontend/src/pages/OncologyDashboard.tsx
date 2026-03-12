@@ -119,7 +119,11 @@ const STATUS_BADGE: Record<string, string> = {
   transferred_out: 'bg-purple-100 text-purple-700',
 };
 
-const OncologyDashboard: React.FC = () => {
+interface OncologyDashboardProps {
+  embedded?: boolean;
+}
+
+const OncologyDashboard: React.FC<OncologyDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess, showInfo } = useNotification();
@@ -1239,7 +1243,8 @@ const OncologyDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={`${embedded ? '' : 'min-h-screen '}bg-slate-50`}>
+      {!embedded && (
       <header className="bg-gradient-to-r from-purple-700 via-fuchsia-600 to-rose-500 border-b border-fuchsia-400 shadow">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between text-white">
           <div className="flex items-start gap-3">
@@ -1279,6 +1284,7 @@ const OncologyDashboard: React.FC = () => {
           </div>
         </div>
       </header>
+      )}
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* AI Guideline Search - Oncology Context */}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Eye, EyeOff, Shield, CheckCircle } from 'lucide-react';
+import { Lock, Eye, EyeOff, Shield, CheckCircle, Sparkles } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -77,80 +77,85 @@ const ChangePassword: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8">
-          {/* Header */}
+    <div className="min-h-screen overflow-hidden bg-[#080E1A] px-4 py-8 text-[#E8F0FF]">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute inset-x-0 top-[-10rem] mx-auto h-[30rem] w-[30rem] rounded-full bg-[#00C896]/18 blur-3xl" />
+        <div className="absolute right-[-8rem] top-[16rem] h-[22rem] w-[22rem] rounded-full bg-[#2B7FFF]/16 blur-3xl" />
+        <div className="absolute bottom-[-8rem] left-[-6rem] h-[20rem] w-[20rem] rounded-full bg-[#FF7A40]/10 blur-3xl" />
+      </div>
+
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center">
+        <div className="w-full rounded-[36px] border border-[#253A58] bg-[linear-gradient(180deg,rgba(14,24,41,0.98),rgba(8,14,26,0.99))] p-8 shadow-[0_35px_120px_rgba(0,0,0,0.45)] backdrop-blur-xl">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl mb-4">
-              <Shield className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#00C896]/30 bg-[#00C896]/12 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#7DE8CA]">
+              <Sparkles className="h-4 w-4" />
+              Security update
             </div>
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">
+            <div className="mt-5 inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(0,200,150,0.14),rgba(43,127,255,0.14))]">
+              <Shield className="h-8 w-8 text-[#BCEAD8]" />
+            </div>
+            <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-4 text-3xl text-white">
               Update Password
             </h1>
-            <p className="text-slate-600">Set a secure password for your account</p>
+            <p className="mt-2 text-sm text-[#AFC1DF]">Set a secure password for your account</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Current Password */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="mb-2 block text-sm font-semibold text-[#D8E5F8]">
                 Current Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#5D789B]" />
                 <input
                   type={showPasswords.current ? 'text' : 'password'}
                   required
                   value={formData.currentPassword}
                   onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
-                  className="w-full pl-10 pr-12 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
                   placeholder="Enter current password"
                 />
                 <button
                   type="button"
                   onClick={() => togglePasswordVisibility('current')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6886AC] hover:text-[#C9D9F3] transition-colors"
                 >
                   {showPasswords.current ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            {/* New Password */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="mb-2 block text-sm font-semibold text-[#D8E5F8]">
                 New Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#5D789B]" />
                 <input
                   type={showPasswords.new ? 'text' : 'password'}
                   required
                   value={formData.newPassword}
                   onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                  className="w-full pl-10 pr-12 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
                   placeholder="Enter new password"
                 />
                 <button
                   type="button"
                   onClick={() => togglePasswordVisibility('new')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6886AC] hover:text-[#C9D9F3] transition-colors"
                 >
                   {showPasswords.new ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            {/* Password Requirements */}
             {formData.newPassword && (
-              <div className="bg-slate-50/50 rounded-xl p-4 space-y-2">
-                <h4 className="text-sm font-semibold text-slate-700 mb-2">Password Requirements:</h4>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-2">
+                <h4 className="mb-2 text-sm font-semibold text-[#D8E5F8]">Password Requirements</h4>
                 {passwordRequirements.map((req, index) => (
                   <div key={index} className="flex items-center gap-2">
-                    <CheckCircle className={`w-4 h-4 ${req.met ? 'text-emerald-500' : 'text-slate-300'}`} />
-                    <span className={`text-sm ${req.met ? 'text-emerald-600' : 'text-slate-500'}`}>
+                    <CheckCircle className={`h-4 w-4 ${req.met ? 'text-[#2ED9A4]' : 'text-[#4A6080]'}`} />
+                    <span className={`text-sm ${req.met ? 'text-[#A3EFD8]' : 'text-[#8AA2C5]'}`}>
                       {req.text}
                     </span>
                   </div>
@@ -158,47 +163,45 @@ const ChangePassword: React.FC = () => {
               </div>
             )}
 
-            {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="mb-2 block text-sm font-semibold text-[#D8E5F8]">
                 Confirm New Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#5D789B]" />
                 <input
                   type={showPasswords.confirm ? 'text' : 'password'}
                   required
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className={`w-full pl-10 pr-12 py-3 bg-slate-50/50 border rounded-xl focus:outline-none focus:ring-2 transition-all ${
+                  className={`w-full rounded-2xl py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:ring-2 ${
                     formData.confirmPassword && !passwordsMatch
-                      ? 'border-red-300 focus:ring-red-500/20 focus:border-red-500'
-                      : 'border-slate-200 focus:ring-amber-500/20 focus:border-amber-500'
+                      ? 'border border-red-400 bg-[#200F1A] focus:border-red-400 focus:ring-red-400/20'
+                      : 'border border-[#253A58] bg-[#091320] focus:border-[#2B7FFF] focus:ring-[#2B7FFF]/20'
                   }`}
                   placeholder="Confirm new password"
                 />
                 <button
                   type="button"
                   onClick={() => togglePasswordVisibility('confirm')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6886AC] hover:text-[#C9D9F3] transition-colors"
                 >
                   {showPasswords.confirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
               {formData.confirmPassword && !passwordsMatch && (
-                <p className="text-red-500 text-sm mt-1">Passwords do not match</p>
+                <p className="mt-1 text-sm text-red-300">Passwords do not match</p>
               )}
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading || !isPasswordValid || !passwordsMatch}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-amber-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-2xl bg-gradient-to-r from-[#00C896] to-[#0BBE8A] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_12px_35px_rgba(0,200,150,0.3)] transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-[#00C896]/35 disabled:cursor-not-allowed disabled:opacity-55"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   <span>Updating...</span>
                 </div>
               ) : (

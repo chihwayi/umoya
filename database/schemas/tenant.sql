@@ -174,6 +174,49 @@ CREATE TABLE IF NOT EXISTS admin_users (
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Backup scheduler configuration (single global row for super-admin backup automation)
+CREATE TABLE IF NOT EXISTS backup_schedules (
+    scope_key VARCHAR(32) PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    frequency VARCHAR(20) NOT NULL DEFAULT 'daily' CHECK (frequency IN ('daily')),
+    run_time VARCHAR(5) NOT NULL DEFAULT '02:00',
+    timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
+    retention_days INTEGER NOT NULL DEFAULT 30 CHECK (retention_days >= 1 AND retention_days <= 3650),
+    last_run_at TIMESTAMP WITH TIME ZONE,
+    last_run_status VARCHAR(20) NOT NULL DEFAULT 'never' CHECK (last_run_status IN ('never', 'success', 'failed')),
+    last_error TEXT,
+    next_run_at TIMESTAMP WITH TIME ZONE,
+    updated_by UUID REFERENCES admin_users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO backup_schedules (scope_key, enabled, frequency, run_time, timezone, retention_days)
+VALUES ('global', false, 'daily', '02:00', 'UTC', 30)
+ON CONFLICT (scope_key) DO NOTHING;
+
+-- Runtime endpoint overrides for platform monitor + AI runtime tests
+CREATE TABLE IF NOT EXISTS runtime_endpoint_configs (
+    scope_key VARCHAR(32) PRIMARY KEY,
+    tenant_service_url TEXT,
+    ehr_service_url TEXT,
+    cdss_service_url TEXT,
+    medical_aid_demo_url TEXT,
+    super_admin_web_url TEXT,
+    ehr_frontend_url TEXT,
+    ollama_base_url TEXT,
+    whisper_path TEXT,
+    ocr_path TEXT,
+    ollama_tags_path TEXT,
+    updated_by UUID REFERENCES admin_users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO runtime_endpoint_configs (scope_key)
+VALUES ('global')
+ON CONFLICT (scope_key) DO NOTHING;
+
 -- Audit logs table
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -203,6 +246,8 @@ CREATE INDEX IF NOT EXISTS idx_tenant_users_tenant_id ON tenant_users("tenantId"
 CREATE INDEX IF NOT EXISTS idx_tenant_users_email ON tenant_users(email);
 CREATE INDEX IF NOT EXISTS idx_tenant_analytics_tenant_id ON tenant_analytics("tenantId");
 CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
+CREATE INDEX IF NOT EXISTS idx_backup_schedules_next_run_at ON backup_schedules(next_run_at);
+CREATE INDEX IF NOT EXISTS idx_runtime_endpoint_configs_updated_at ON runtime_endpoint_configs(updated_at);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs("userId");
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs("createdAt");
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   AlertCircle, AlertTriangle, Clock, User, Users,
   ArrowLeft, RefreshCw, TrendingUp, Ambulance, X,
@@ -31,8 +31,10 @@ interface EDMetrics {
 const EDDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showError, showSuccess } = useNotification();
   const { confirm, Dialog } = useConfirmation();
+  const isEmbedded = location.pathname.includes('/doctor/emergency');
   
   const [user, setUser] = useState<any>(null);
   const [metrics, setMetrics] = useState<EDMetrics | null>(null);
@@ -242,47 +244,66 @@ const EDDashboard: React.FC = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={isEmbedded ? 'bg-transparent' : 'min-h-screen bg-slate-50'}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 to-orange-700 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/${user.role === 'doctor' ? 'doctor' : user.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                  <AlertCircle className="w-8 h-8" />
-                  Emergency Department
-                </h1>
-                <p className="text-red-100 mt-1">Real-time ED tracking, triage, and patient flow management</p>
+      {!isEmbedded && (
+        <div className="bg-gradient-to-r from-red-600 to-orange-700 text-white shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/${user.role === 'doctor' ? 'doctor' : user.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h1 className="text-3xl font-bold flex items-center gap-3">
+                    <AlertCircle className="w-8 h-8" />
+                    Emergency Department
+                  </h1>
+                  <p className="text-red-100 mt-1">Real-time ED tracking, triage, and patient flow management</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowRegisterModal(true)}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
-              >
-                <User className="w-4 h-4" />
-                Register Patient
-              </button>
-              <button
-                onClick={handleRefresh}
-                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowRegisterModal(true)}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  Register Patient
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Statistics Cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
+        {isEmbedded && (
+          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+            <button
+              onClick={() => setShowRegisterModal(true)}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-orange-600 text-white text-sm font-medium shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+            >
+              <User className="w-4 h-4" />
+              Register Patient
+            </button>
+            <button
+              onClick={handleRefresh}
+              className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">

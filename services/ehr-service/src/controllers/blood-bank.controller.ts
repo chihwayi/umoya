@@ -143,6 +143,64 @@ export class BloodBankController {
     return this.bloodBankService.getActiveTransfusions(tenantDb);
   }
 
+  @Get('transfusions/worklist')
+  @ApiOperation({ summary: 'Get transfusion worklist by status' })
+  @ApiResponse({ status: 200, description: 'Transfusion worklist retrieved' })
+  async getTransfusionWorklist(
+    @Query('statuses') statuses: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const parsedStatuses = statuses
+      ? statuses
+          .split(',')
+          .map((status) => status.trim())
+          .filter(Boolean)
+      : undefined;
+    return this.bloodBankService.getTransfusionWorklist(tenantDb, parsedStatuses);
+  }
+
+  @Get('transfusions/worklist-enhanced')
+  @ApiOperation({ summary: 'Get enhanced transfusion worklist with risk and SLA scoring' })
+  @ApiResponse({ status: 200, description: 'Enhanced transfusion worklist retrieved' })
+  async getTransfusionWorklistEnhanced(
+    @Query('statuses') statuses: string,
+    @Query('includeCompleted') includeCompleted: string,
+    @Query('focus') focus: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const parsedStatuses = statuses
+      ? statuses
+          .split(',')
+          .map((status) => status.trim())
+          .filter(Boolean)
+      : undefined;
+    const parsedLimit = Number(limit);
+    return this.bloodBankService.getTransfusionWorklistEnhanced(tenantDb, parsedStatuses, {
+      includeCompleted: String(includeCompleted || '').toLowerCase() === 'true',
+      focus,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
+  @Get('operational-brief')
+  @ApiOperation({ summary: 'Get blood bank operational safety brief' })
+  @ApiResponse({ status: 200, description: 'Operational blood bank brief retrieved' })
+  async getOperationalBrief(
+    @Query('includeCompleted') includeCompleted: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const parsedLimit = Number(limit);
+    return this.bloodBankService.getOperationalBrief(tenantDb, {
+      includeCompleted: String(includeCompleted || '').toLowerCase() === 'true',
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
   @Post('type-and-screen')
   @ApiOperation({ summary: 'Type and screen for patient' })
   async typeAndScreen(@Body() body: { patientId: string; bloodGroup: string; rhFactor: string; antibodyScreen?: string }, @Req() req: RequestWithTenant) {
@@ -198,4 +256,3 @@ export class BloodBankController {
     return this.bloodBankService.getUtilizationReport(tenantDb, start, end);
   }
 }
-

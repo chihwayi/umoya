@@ -66,10 +66,31 @@ services:
       - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
       - AWS_ENDPOINT=${SERVICE_MINIO_URL}
       - JWT_SECRET=${JWT_SECRET}
+      - SERVICE_TENANT_URL=${SERVICE_TENANT_URL}
+      - SERVICE_EHR_URL=${SERVICE_EHR_URL}
+      - SERVICE_CDSS_URL=${SERVICE_CDSS_URL}
+      - SUPER_ADMIN_WEB_URL=http://web-app:3011
+      - EHR_FRONTEND_URL=http://ehr-frontend:3000
+      - MEDICAL_AID_DEMO_BASE_URL=${MEDICAL_AID_DEMO_BASE_URL:-http://medical-aid-demo-service:3004}
+      - CDSS_SERVICE_TOKEN=${CDSS_SERVICE_TOKEN:-dev_cdss_service_token_change_in_production}
+      - LLM_API_URL=${LLM_API_URL:-http://host.docker.internal:11434}
+      - SUPER_ADMIN_TEST_TENANT_ID=${SUPER_ADMIN_TEST_TENANT_ID:-kids-clinic}
+      - DOCKER_SOCKET_PATH=/var/run/docker.sock
     volumes:
       - ./services/tenant-service:/app/services/tenant-service
       - /app/services/tenant-service/node_modules
-    command: npm run dev
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: sh -lc "npm run build && npm start"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"const http=require('http');const req=http.get('http://localhost:3001/api/auth/profile',res=>process.exit(res.statusCode>=500?1:0));req.on('error',()=>process.exit(1));req.setTimeout(3000,()=>{req.destroy();process.exit(1);});\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     depends_on:
       - postgres-master
       - redis
@@ -206,6 +227,28 @@ services:
     networks:
       - medicore-network
 
+  medical-aid-demo-service:
+    build:
+      context: .
+      dockerfile: services/medical-aid-demo-service/Dockerfile
+    container_name: medicore-medical-aid-demo-service
+    ports:
+      - "${PORT_MEDICAL_AID_DEMO_SERVICE:-3004}:3004"
+    environment:
+      - NODE_ENV=${ENVIRONMENT}
+      - PORT=3004
+      - DEMO_DATA_DIR=/app/services/medical-aid-demo-service/data
+      - DEMO_PROVIDER_NAME=${MEDICAL_AID_DEMO_PROVIDER_NAME:-MediCore Demo Medical Aid}
+      - DEMO_PROVIDER_CODE=${MEDICAL_AID_DEMO_PROVIDER_CODE:-demo_aid}
+      - DEMO_API_KEY=${MEDICAL_AID_DEMO_API_KEY:-demo-medical-aid-key}
+      - DEMO_REQUIRE_API_KEY=${MEDICAL_AID_DEMO_REQUIRE_API_KEY:-false}
+    volumes:
+      - ./services/medical-aid-demo-service:/app/services/medical-aid-demo-service
+      - /app/services/medical-aid-demo-service/node_modules
+    command: node --watch services/medical-aid-demo-service/src/server.js
+    networks:
+      - medicore-network
+
   ehr-service:
     build:
       context: .
@@ -260,6 +303,11 @@ services:
       - DHIS2_ALERT_ERROR_THRESHOLD=${DHIS2_ALERT_ERROR_THRESHOLD:-10}
       - DHIS2_ALERT_WEBHOOK_URL=${DHIS2_ALERT_WEBHOOK_URL:-}
       - DHIS2_PAGERDUTY_ROUTING_KEY=${DHIS2_PAGERDUTY_ROUTING_KEY:-}
+      - MEDICAL_AID_DEMO_ENABLED=${MEDICAL_AID_DEMO_ENABLED:-true}
+      - MEDICAL_AID_DEMO_FORCE=${MEDICAL_AID_DEMO_FORCE:-false}
+      - MEDICAL_AID_DEMO_BASE_URL=${MEDICAL_AID_DEMO_BASE_URL:-http://medical-aid-demo-service:3004}
+      - MEDICAL_AID_DEMO_API_KEY=${MEDICAL_AID_DEMO_API_KEY:-demo-medical-aid-key}
+      - MEDICAL_AID_DEMO_PROVIDER_NAMES=${MEDICAL_AID_DEMO_PROVIDER_NAMES:-cimas,premier,econet_health,psmas,first_mutual,demo_aid}
     command: npm run dev
     volumes:
       - ./services/ehr-service/src:/app/services/ehr-service/src
@@ -270,6 +318,7 @@ services:
       - postgres-master
       - cdss-service
       - minio
+      - medical-aid-demo-service
     networks:
       - medicore-network
 
@@ -302,8 +351,10 @@ services:
     volumes:
       - ./web-app/src:/app/src
       - ./web-app/public:/app/public
+    command: sh -lc "npm run build && node scripts/serve-build.js"
     depends_on:
-      - tenant-service
+      tenant-service:
+        condition: service_healthy
     networks:
       - medicore-network
 

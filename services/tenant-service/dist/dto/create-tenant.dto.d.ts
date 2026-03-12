@@ -13,6 +13,7 @@ export declare class CreateTenantDto {
     packageName?: string;
     enabledModules?: string[];
     demoDurationDays?: number;
+    demoExpiresAt?: string;
     billingEndsAt?: string;
     gracePeriodDays?: number;
     suspensionWarningDays?: number;

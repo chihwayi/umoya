@@ -14,8 +14,15 @@ export const formatDateForInput = (date: Date | string): string => {
 };
 
 export const formatDateForAPI = (dateString: string): string => {
+  const normalizedDateString = (dateString || '').trim();
+
+  // Accept ISO input from native date controls without re-parsing
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedDateString)) {
+    return normalizedDateString;
+  }
+
   // Convert dd/mm/yyyy to yyyy-mm-dd for API
-  const date = parseDDMMYYYYToDate(dateString);
+  const date = parseDDMMYYYYToDate(normalizedDateString);
   if (!date) {
     console.warn('Invalid date string provided to formatDateForAPI:', dateString);
     return '';

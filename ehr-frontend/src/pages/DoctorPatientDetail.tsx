@@ -51,7 +51,11 @@ interface Appointment {
   };
 }
 
-const DoctorPatientDetail: React.FC = () => {
+interface DoctorPatientDetailProps {
+  embedded?: boolean;
+}
+
+const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = false }) => {
   const { tenantSlug, patientId } = useParams<{ tenantSlug: string; patientId: string }>();
   const navigate = useNavigate();
   const { showError } = useNotification();
@@ -390,7 +394,13 @@ const DoctorPatientDetail: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+      <div
+        className={
+          embedded
+            ? 'flex items-center justify-center rounded-2xl border border-slate-200/60 bg-white/80 py-16'
+            : 'min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center'
+        }
+      >
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-slate-600">Loading patient details...</p>
@@ -401,16 +411,22 @@ const DoctorPatientDetail: React.FC = () => {
 
   if (!patient) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+      <div
+        className={
+          embedded
+            ? 'flex items-center justify-center rounded-2xl border border-slate-200/60 bg-white/80 py-16'
+            : 'min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center'
+        }
+      >
         <div className="text-center">
           <User className="w-16 h-16 text-slate-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-slate-900 mb-2">Patient Not Found</h2>
           <p className="text-slate-600 mb-4">The patient you're looking for doesn't exist or you don't have access.</p>
           <button
-            onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
+            onClick={() => navigate(`/ehr/${tenantSlug}/doctor/patients`)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Back to Dashboard
+            Back to Patients
           </button>
         </div>
       </div>
@@ -418,18 +434,26 @@ const DoctorPatientDetail: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className={embedded ? '' : 'min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'}>
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-slate-200/50 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
+      <div
+        className={
+          embedded
+            ? 'mb-5 rounded-2xl border border-slate-200/70 bg-gradient-to-r from-white via-slate-50 to-blue-50 p-5 shadow-sm'
+            : 'bg-white/80 backdrop-blur-sm shadow-lg border-b border-slate-200/50 sticky top-0 z-10'
+        }
+      >
+        <div className={embedded ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'}>
+          <div className={`flex items-center justify-between ${embedded ? 'min-h-0' : 'h-20'}`}>
             <div className="flex items-center gap-6">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-                className="p-3 hover:bg-slate-100 rounded-xl transition-all duration-200 group"
-              >
-                <ArrowLeft className="w-5 h-5 text-slate-600 group-hover:text-slate-900 transition-colors" />
-              </button>
+              {!embedded && (
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/patients`)}
+                  className="p-3 hover:bg-slate-100 rounded-xl transition-all duration-200 group"
+                >
+                  <ArrowLeft className="w-5 h-5 text-slate-600 group-hover:text-slate-900 transition-colors" />
+                </button>
+              )}
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
                   <User className="w-7 h-7 text-white" />
@@ -467,7 +491,7 @@ const DoctorPatientDetail: React.FC = () => {
 
       {/* Navigation Tabs */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={embedded ? 'px-4' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'}>
           <nav className="flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
@@ -507,7 +531,7 @@ const DoctorPatientDetail: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={embedded ? 'px-4 py-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Patient Information */}

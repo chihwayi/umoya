@@ -17,7 +17,11 @@ interface Appointment {
   notes: string;
 }
 
-export default function DoctorTreatmentHistoryDetail() {
+interface DoctorTreatmentHistoryDetailProps {
+  embedded?: boolean;
+}
+
+export default function DoctorTreatmentHistoryDetail({ embedded = false }: DoctorTreatmentHistoryDetailProps) {
   const { tenantSlug, patientId } = useParams();
   const navigate = useNavigate();
 
@@ -122,12 +126,14 @@ export default function DoctorTreatmentHistoryDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className={embedded ? '' : 'min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'}>
+      <div className={embedded ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'}>
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-slate-100"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
+              {!embedded && (
+                <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-slate-100"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
+              )}
               <div>
                 <h1 className="text-xl font-bold text-slate-900">Treatment Timeline</h1>
                 <p className="text-sm text-slate-600">{patientInfo.name} • ID: {patientInfo.number}</p>
@@ -176,5 +182,4 @@ export default function DoctorTreatmentHistoryDetail() {
     </div>
   );
 }
-
 

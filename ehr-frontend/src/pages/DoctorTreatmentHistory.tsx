@@ -16,7 +16,11 @@ interface Appointment {
   notes: string;
 }
 
-const DoctorTreatmentHistory: React.FC = () => {
+interface DoctorTreatmentHistoryProps {
+  embedded?: boolean;
+}
+
+const DoctorTreatmentHistory: React.FC<DoctorTreatmentHistoryProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -61,16 +65,18 @@ const DoctorTreatmentHistory: React.FC = () => {
   }, [appointments, search]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className={embedded ? '' : 'min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'}>
+      <div className={embedded ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'}>
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-slate-100"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl"><FileText className="w-6 h-6 text-white" /></div>
+              {!embedded && (
+                <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-slate-100"><ArrowLeft className="w-5 h-5 text-slate-600" /></button>
+              )}
+              {!embedded && <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl"><FileText className="w-6 h-6 text-white" /></div>}
               <div>
-                <h1 className="text-xl font-bold text-slate-900">Treatment History</h1>
-                <p className="text-sm text-slate-600">All patients you have treated</p>
+                {!embedded && <h1 className="text-xl font-bold text-slate-900">Treatment History</h1>}
+                {!embedded && <p className="text-sm text-slate-600">All patients you have treated</p>}
               </div>
             </div>
             <div className="relative w-64">
@@ -129,5 +135,4 @@ const DoctorTreatmentHistory: React.FC = () => {
 };
 
 export default DoctorTreatmentHistory;
-
 

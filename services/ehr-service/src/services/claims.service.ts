@@ -1300,6 +1300,8 @@ export class ClaimsService {
       throw new BadRequestException('Claim has not been submitted yet');
     }
 
+    let latestClaim = claim;
+
     // If API service available and external claim ID exists, check via API
     if (this.medicalAidApiService && (claim as any).externalClaimId) {
       try {
@@ -1309,11 +1311,41 @@ export class ClaimsService {
           tenantDb,
         );
 
+        const normalizedExternalStatus = String(statusResult.status || '').trim().toLowerCase();
+        const paidStatuses = new Set(['paid', 'settled', 'payment_confirmed', 'reimbursed']);
+        const approvedStatuses = new Set(['approved', 'successful', 'success', 'accepted', 'authorised', 'authorized']);
+        const rejectedStatuses = new Set(['rejected', 'declined', 'denied', 'failed', 'void']);
+        const processingStatuses = new Set([
+          'processing',
+          'pending',
+          'queued',
+          'submitted',
+          'in_review',
+          'under_review',
+          'on_hold',
+          'suspended',
+        ]);
+
         // Update claim with status from API
-        await this.processClaimResponse(id, {
+        latestClaim = await this.processClaimResponse(id, {
           status: statusResult.status,
-          approved: statusResult.status === 'approved' || statusResult.status === 'paid',
-          rejected: statusResult.status === 'rejected',
+          externalClaimId:
+            (statusResult as any)?.details?.claimId ||
+            (statusResult as any)?.details?.referenceNumber ||
+            (claim as any).externalClaimId,
+          referenceNumber:
+            (statusResult as any)?.details?.referenceNumber ||
+            (statusResult as any)?.details?.claimId ||
+            (claim as any).externalClaimId,
+          approved: approvedStatuses.has(normalizedExternalStatus),
+          rejected: rejectedStatuses.has(normalizedExternalStatus),
+          processing: processingStatuses.has(normalizedExternalStatus),
+          paid: paidStatuses.has(normalizedExternalStatus),
+          reason:
+            normalizedExternalStatus === 'suspended'
+              ? 'Claim/member suspended by medical aid provider.'
+              : undefined,
+          paidAmount: paidStatuses.has(normalizedExternalStatus) ? statusResult.approvedAmount : undefined,
           approvedAmount: statusResult.approvedAmount,
           rejectionReason: statusResult.rejectionReason,
           details: statusResult.details,
@@ -1324,9 +1356,9 @@ export class ClaimsService {
     }
 
     // Update last check time
-    (claim as any).lastStatusCheckAt = new Date();
-    (claim as any).nextStatusCheckAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await claimRepository.save(claim);
+    (latestClaim as any).lastStatusCheckAt = new Date();
+    (latestClaim as any).nextStatusCheckAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await claimRepository.save(latestClaim);
 
     // Get status history
     const history = await this.getClaimStatusHistory(id, tenantDb);
@@ -1334,8 +1366,8 @@ export class ClaimsService {
     return {
       claim: await this.getClaimById(id, tenantDb),
       statusHistory: history,
-      lastChecked: (claim as any).lastStatusCheckAt,
-      nextCheck: (claim as any).nextStatusCheckAt,
+      lastChecked: (latestClaim as any).lastStatusCheckAt,
+      nextCheck: (latestClaim as any).nextStatusCheckAt,
     };
   }
 
@@ -1351,26 +1383,62 @@ export class ClaimsService {
     }
 
     const previousStatus = claim.status;
+    const externalStatus = String(responseData.status || responseData.claimStatus || '')
+      .trim()
+      .toLowerCase();
+
+    const paidStatuses = new Set(['paid', 'settled', 'payment_confirmed', 'reimbursed']);
+    const approvedStatuses = new Set(['approved', 'successful', 'success', 'accepted', 'authorised', 'authorized']);
+    const rejectedStatuses = new Set(['rejected', 'declined', 'denied', 'failed', 'void']);
+    const processingStatuses = new Set([
+      'processing',
+      'pending',
+      'queued',
+      'submitted',
+      'in_review',
+      'under_review',
+      'on_hold',
+      'suspended',
+    ]);
+
+    const isPaid = responseData.paid === true || paidStatuses.has(externalStatus);
+    const isApproved =
+      responseData.approved === true || (approvedStatuses.has(externalStatus) && !isPaid);
+    const isRejected = responseData.rejected === true || rejectedStatuses.has(externalStatus);
+    const isProcessing = responseData.processing === true || processingStatuses.has(externalStatus);
 
     // Update claim based on response
-    if (responseData.approved) {
+    if (isPaid) {
+      claim.status = ClaimStatus.PAID;
+      claim.approvedAmount =
+        responseData.paidAmount || responseData.approvedAmount || claim.approvedAmount || claim.claimAmount;
+      claim.rejectionReason = null;
+    } else if (isApproved) {
       claim.status = ClaimStatus.APPROVED;
       claim.approvedAmount = responseData.approvedAmount || claim.claimAmount;
-    } else if (responseData.rejected) {
+      claim.rejectionReason = null;
+    } else if (isRejected) {
       claim.status = ClaimStatus.REJECTED;
       claim.rejectionReason = responseData.rejectionReason || responseData.reason;
-    } else if (responseData.processing) {
+    } else if (isProcessing) {
       claim.status = ClaimStatus.PROCESSING;
-    } else if (responseData.paid) {
-      claim.status = ClaimStatus.PAID;
-      claim.approvedAmount = responseData.paidAmount || claim.approvedAmount;
     }
 
     claim.responseDate = new Date();
-    (claim as any).externalClaimId = responseData.externalClaimId || responseData.referenceNumber;
+    (claim as any).externalClaimId =
+      responseData.externalClaimId ||
+      responseData.referenceNumber ||
+      (claim as any).externalClaimId ||
+      null;
     (claim as any).apiResponseData = responseData;
+    (claim as any).externalStatus = externalStatus || null;
 
     const savedClaim = await claimRepository.save(claim);
+
+    const statusChangeReason =
+      responseData.rejectionReason ||
+      responseData.reason ||
+      (externalStatus ? `Status updated from medical aid: ${externalStatus}` : 'Status updated from medical aid');
 
     // Log status change
     await this.logClaimStatusChange(
@@ -1379,21 +1447,31 @@ export class ClaimsService {
       savedClaim.status,
       previousStatus,
       null,
-      responseData.rejectionReason || 'Status updated from medical aid',
+      statusChangeReason,
       responseData
     );
 
     // Update submission record if exists
     await tenantDb.query(
-      `UPDATE claim_submissions 
-       SET response_payload = $1, responded_at = NOW(), submission_status = $2
-       WHERE claim_id = $3 AND responded_at IS NULL
-       ORDER BY submitted_at DESC LIMIT 1`,
+      `WITH latest_submission AS (
+         SELECT id
+         FROM claim_submissions
+         WHERE claim_id = $3
+           AND responded_at IS NULL
+         ORDER BY submitted_at DESC
+         LIMIT 1
+       )
+       UPDATE claim_submissions cs
+       SET response_payload = $1,
+           responded_at = NOW(),
+           submission_status = $2
+       FROM latest_submission
+       WHERE cs.id = latest_submission.id`,
       [
         JSON.stringify(responseData),
-        responseData.approved || responseData.paid ? 'success' : responseData.rejected ? 'failed' : 'pending',
+        isApproved || isPaid ? 'success' : isRejected ? 'failed' : 'pending',
         claim.id,
-      ]
+      ],
     );
 
     return savedClaim;

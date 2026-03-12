@@ -80,13 +80,13 @@ export const TerminologyImport: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-slate-900">
       {/* System Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider">SNOMED CT Concepts</h3>
-            <p className="text-3xl font-bold text-slate-800 mt-2">{stats.snomedConcepts.toLocaleString()}</p>
+            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">SNOMED CT Concepts</h3>
+            <p className="text-3xl font-bold text-slate-900 mt-2">{stats.snomedConcepts.toLocaleString()}</p>
           </div>
           <div className="p-3 bg-blue-100 rounded-full">
             <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,8 +96,8 @@ export const TerminologyImport: React.FC = () => {
         </div>
         <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider">ICD-10 Codes</h3>
-            <p className="text-3xl font-bold text-slate-800 mt-2">{stats.icd10Codes.toLocaleString()}</p>
+            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">ICD-10 Codes</h3>
+            <p className="text-3xl font-bold text-slate-900 mt-2">{stats.icd10Codes.toLocaleString()}</p>
           </div>
           <div className="p-3 bg-green-100 rounded-full">
             <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,7 +128,7 @@ export const TerminologyImport: React.FC = () => {
               type="file"
               accept=".zip,.txt"
               onChange={handleFileChange}
-              className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              className="w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-slate-300 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200"
             />
           </div>
         </div>
@@ -162,9 +162,9 @@ export const TerminologyImport: React.FC = () => {
             <tbody className="bg-white divide-y divide-slate-200">
               {jobs.map((job) => (
                 <tr key={job.jobId}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-500">{job.jobId}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-700">{job.jobId}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 uppercase">{job.type}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{job.fileName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{job.fileName}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       job.status === 'completed' ? 'bg-green-100 text-green-800' :
@@ -175,13 +175,13 @@ export const TerminologyImport: React.FC = () => {
                       {job.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
                     <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
                       <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${job.progress}%` }}></div>
                     </div>
-                    <span className="text-xs mt-1 block">{job.message}</span>
+                    <span className="text-xs text-slate-600 mt-1 block">{job.message}</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
                     {new Date(job.startTime).toLocaleString()}
                   </td>
                 </tr>

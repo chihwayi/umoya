@@ -1,4 +1,11 @@
-import { Injectable, ConflictException, NotFoundException, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  InternalServerErrorException,
+  NotFoundException,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -187,9 +194,13 @@ export class TenantService implements OnModuleInit {
       await this.provisionTenantDatabase(savedTenant);
     } catch (error) {
       this.logger.error(`Database provisioning failed for tenant ${savedTenant.id}:`, error);
-      // Update tenant status to suspended on failure
+      // Keep tenant suspended for forensic/admin repair visibility, but fail create request.
       savedTenant.status = TenantStatus.SUSPENDED;
       await this.tenantRepository.save(savedTenant);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new InternalServerErrorException(
+        `Tenant provisioning failed for ${savedTenant.subdomain}. Tenant has been suspended pending repair. ${message}`,
+      );
     }
 
     return savedTenant;

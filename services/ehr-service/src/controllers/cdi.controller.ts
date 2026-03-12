@@ -48,6 +48,50 @@ export class CdiController {
     return this.cdiService.getOpenQueries(physicianId, tenantDb);
   }
 
+  @Get('queries/worklist/:physicianId')
+  @ApiOperation({ summary: 'Get physician CDI query worklist with SLA and risk scoring' })
+  @ApiResponse({ status: 200, description: 'CDI worklist retrieved' })
+  async getPhysicianWorklist(
+    @Param('physicianId') physicianId: string,
+    @Query('includeAnswered') includeAnswered: string,
+    @Query('focus') focus: string,
+    @Query('limit') limit: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const parsedLimit = Number(limit);
+    return this.cdiService.getPhysicianWorklist(physicianId, tenantDb, {
+      includeAnswered: String(includeAnswered || '').toLowerCase() === 'true',
+      focus,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    });
+  }
+
+  @Get('queries/brief/:physicianId')
+  @ApiOperation({ summary: 'Get physician CDI operational brief' })
+  @ApiResponse({ status: 200, description: 'CDI operational brief retrieved' })
+  async getPhysicianOperationalBrief(
+    @Param('physicianId') physicianId: string,
+    @Query('includeAnswered') includeAnswered: string,
+    @Query('limit') limit: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const parsedLimit = Number(limit);
+    return this.cdiService.getPhysicianOperationalBrief(physicianId, tenantDb, {
+      includeAnswered: String(includeAnswered || '').toLowerCase() === 'true',
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    });
+  }
+
   @Put('queries/:id/answer')
   @ApiOperation({ summary: 'Answer physician query' })
   @ApiResponse({ status: 200, description: 'Query answered' })
@@ -74,7 +118,4 @@ export class CdiController {
     return this.cdiService.getCdiMetrics(start, end, tenantDb);
   }
 }
-
-
-
 

@@ -19,6 +19,7 @@ import {
 interface TenantDetailsModalProps {
   tenant: Tenant | null;
   isOpen: boolean;
+  focusSection?: 'default' | 'dhis2';
   onClose: () => void;
   onUpdate: () => void;
 }
@@ -127,6 +128,7 @@ const buildPackageForm = (tenant: Tenant): UpdateTenantRequest => ({
 export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   tenant,
   isOpen,
+  focusSection = 'default',
   onClose,
   onUpdate
 }) => {
@@ -163,6 +165,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [packageForm, setPackageForm] = useState<UpdateTenantRequest | null>(null);
   const [packageSaving, setPackageSaving] = useState(false);
   const [showDeleteDhis2ConfigConfirm, setShowDeleteDhis2ConfigConfirm] = useState(false);
+  const dhis2SectionRef = React.useRef<HTMLDivElement>(null);
 
   const loadUsers = useCallback(async () => {
     if (!tenant) return;
@@ -241,6 +244,16 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setPackageForm(null);
     }
   }, [isOpen, loadDhis2Config, loadUsers, tenant]);
+
+  useEffect(() => {
+    if (!isOpen || focusSection !== 'dhis2') {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      dhis2SectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [focusSection, isOpen, tenant?.id]);
 
   const handlePackageFieldChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -666,6 +679,18 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
                 <span>{tenant.subdomain}.medicore.app</span>
               </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => dhis2SectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  className="inline-flex items-center gap-2 mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16h6M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                  </svg>
+                  DHIS2 Settings
+                </button>
+              </div>
             </div>
           </div>
 
@@ -864,7 +889,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
           </div>
 
           {/* DHIS2 Integration Section */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div ref={dhis2SectionRef} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-50/50">
               <div>
                 <h4 className="font-bold text-slate-800">DHIS2 Integration</h4>

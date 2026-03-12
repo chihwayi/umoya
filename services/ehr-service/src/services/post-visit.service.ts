@@ -307,6 +307,9 @@ interface PostVisitMobileEvent {
 
 @Injectable()
 export class PostVisitService {
+  private readonly postVisitSchemaReady = new WeakSet<DataSource>();
+  private readonly postVisitSchemaInFlight = new WeakMap<DataSource, Promise<void>>();
+
   constructor(
     private readonly transcriptionService: TranscriptionService,
     private readonly patientService: PatientService,
@@ -319,6 +322,28 @@ export class PostVisitService {
   ) {}
 
   private async ensurePostVisitSchema(tenantDb: DataSource) {
+    if (this.postVisitSchemaReady.has(tenantDb)) {
+      return;
+    }
+
+    const inFlight = this.postVisitSchemaInFlight.get(tenantDb);
+    if (inFlight) {
+      await inFlight;
+      return;
+    }
+
+    const initPromise = this.ensurePostVisitSchemaInternal(tenantDb);
+    this.postVisitSchemaInFlight.set(tenantDb, initPromise);
+
+    try {
+      await initPromise;
+      this.postVisitSchemaReady.add(tenantDb);
+    } finally {
+      this.postVisitSchemaInFlight.delete(tenantDb);
+    }
+  }
+
+  private async ensurePostVisitSchemaInternal(tenantDb: DataSource) {
     await tenantDb.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
 
     await tenantDb.query(`
@@ -11267,7 +11292,9 @@ export class PostVisitService {
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
-    if (!audioFile?.buffer || !Buffer.isBuffer(audioFile.buffer) || audioFile.buffer.length === 0) {
+    const hasBuffer = !!(audioFile?.buffer && Buffer.isBuffer(audioFile.buffer) && audioFile.buffer.length > 0);
+    const hasPath = typeof (audioFile as any)?.path === 'string' && String((audioFile as any).path).trim().length > 0;
+    if (!hasBuffer && !hasPath) {
       throw new BadRequestException('Audio chunk file is required');
     }
 

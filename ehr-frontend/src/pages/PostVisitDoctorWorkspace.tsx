@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -457,6 +457,7 @@ const formatSlaCountdown = (dueAt: string | null | undefined, nowEpochMs: number
 
 const PostVisitDoctorWorkspace: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
 
@@ -1080,6 +1081,21 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const patientId = String(params.get('patientId') || '').trim();
+    const appointmentId = String(params.get('appointmentId') || '').trim();
+    const consultationId = String(params.get('consultationId') || '').trim();
+    const sourceType = String(params.get('sourceType') || '').trim().toLowerCase();
+
+    if (patientId && !newPatientId) setNewPatientId(patientId);
+    if (appointmentId && !newAppointmentId) setNewAppointmentId(appointmentId);
+    if (consultationId && !newConsultationId) setNewConsultationId(consultationId);
+    if (sourceType === 'in_person' || sourceType === 'telemedicine' || sourceType === 'hybrid') {
+      setNewSourceType(sourceType);
+    }
+  }, [location.search, newAppointmentId, newConsultationId, newPatientId]);
 
   useEffect(() => {
     loadTrialMemoryAnalytics(30);

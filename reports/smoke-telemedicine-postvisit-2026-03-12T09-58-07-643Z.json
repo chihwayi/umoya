@@ -1,0 +1,39 @@
+{
+  "startedAt": "2026-03-12T09:58:07.643Z",
+  "environment": {
+    "EHR_BASE_URL": "http://localhost:3013",
+    "EHR_API_BASE": "http://localhost:3013/api",
+    "TENANT_ID": "kids-clinic",
+    "doctorEmail": "mumu@gmail.com"
+  },
+  "artifacts": {},
+  "steps": [
+    {
+      "label": "Doctor login",
+      "ok": false,
+      "method": "POST",
+      "url": "http://localhost:3013/api/auth/login",
+      "status": null,
+      "error": "fetch failed",
+      "responsePreview": ""
+    },
+    {
+      "label": "Login doctor (exception)",
+      "ok": false,
+      "method": "N/A",
+      "url": "N/A",
+      "status": null,
+      "error": "Doctor login failed: fetch failed",
+      "responsePreview": "",
+      "critical": true
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "criticalFailed": 1
+  },
+  "completedAt": "2026-03-12T09:58:07.759Z",
+  "failure": "Doctor login failed: fetch failed"
+}

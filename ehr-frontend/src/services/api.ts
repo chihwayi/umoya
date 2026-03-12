@@ -3,6 +3,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { handleAutoLogout } from '../utils/autoLogout';
 import { runtimeUrls } from '../config/runtime';
 
+type RetriableAxiosConfig = {
+  __retryCount?: number;
+};
+
 const TENANT_API_URL = runtimeUrls.tenantApi;
 const EHR_API_URL = runtimeUrls.ehrApi;
 
@@ -13,6 +17,10 @@ if (!TENANT_API_URL || !EHR_API_URL) {
 // Create axios instance with response interceptor
 const createAxiosInstance = (baseURL: string) => {
   const instance = axios.create({ baseURL });
+  const RETRYABLE_CODES = new Set(['ECONNABORTED', 'ETIMEDOUT', 'ERR_NETWORK']);
+  const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
+  const MAX_RETRIES = 2;
+  const RETRY_BASE_DELAY_MS = 300;
   
   // Request interceptor to add session ID and X-Request-ID
   instance.interceptors.request.use(
@@ -37,7 +45,25 @@ const createAxiosInstance = (baseURL: string) => {
   // Response interceptor to handle 401 errors
   instance.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
+      const config = (error?.config || {}) as RetriableAxiosConfig & {
+        method?: string;
+      };
+      const method = String(config.method || 'get').toLowerCase();
+      const retryCount = config.__retryCount || 0;
+      const statusCode = Number(error?.response?.status || 0);
+      const shouldRetry =
+        method === 'get' &&
+        (RETRYABLE_CODES.has(String(error?.code || '')) || RETRYABLE_STATUS_CODES.has(statusCode)) &&
+        retryCount < MAX_RETRIES;
+
+      if (shouldRetry) {
+        config.__retryCount = retryCount + 1;
+        const delayMs = RETRY_BASE_DELAY_MS * config.__retryCount;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        return instance.request(config);
+      }
+
       try {
         const rid = error?.response?.headers?.['x-request-id'] || error?.response?.headers?.['X-Request-ID'];
         if (rid) {
@@ -5569,8 +5595,23 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  endTelemedicineConsultation: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/telemedicine/consultations/${id}/end`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getTelemedicineMeetingUrl: async (id: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/telemedicine/consultations/${id}/meeting-url`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getTelemedicineMonitoringAlerts: async (token: string, tenantSlug: string, patientId?: string) => {
+    const response = await ehrAxios.get('/telemedicine/monitoring/alerts', {
+      params: patientId ? { patientId } : {},
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
@@ -7527,6 +7568,69 @@ export const populationHealthApi = {
   },
   generatePreventiveCare: async (token: string, tenantSlug: string, body?: { patientId?: string }) => {
     const response = await ehrAxios.post('/population-health/preventive-care/generate', body ?? {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getDoctorWorklist: async (
+    token: string,
+    tenantSlug: string,
+    params?: {
+      includeResolved?: boolean;
+      limit?: number;
+      focus?: 'all' | 'high-risk' | 'uncontrolled' | 'overdue-review' | 'care-gaps';
+      conditionType?: string;
+      riskLevel?: string;
+    },
+  ) => {
+    const response = await ehrAxios.get('/population-health/worklist', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return { data: response.data };
+  },
+  getOperationalBrief: async (
+    token: string,
+    tenantSlug: string,
+    params?: {
+      includeResolved?: boolean;
+      limit?: number;
+      focus?: 'all' | 'high-risk' | 'uncontrolled' | 'overdue-review' | 'care-gaps';
+      conditionType?: string;
+      riskLevel?: string;
+    },
+  ) => {
+    const response = await ehrAxios.get('/population-health/operational-brief', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return { data: response.data };
+  },
+  updatePreventiveReminderStatus: async (
+    reminderId: string,
+    body: { status: 'due' | 'overdue' | 'completed' | 'deferred' | 'not_applicable'; notes?: string; completionDate?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.put(`/population-health/preventive-care/${reminderId}/status`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  reviewRegistryEntry: async (
+    registryId: string,
+    body: {
+      status?: string;
+      riskLevel?: string;
+      nextReviewDate?: string;
+      reviewIntervalDays?: number;
+      managementPlan?: string;
+      reviewNote?: string;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.put(`/population-health/registry/${registryId}/review`, body, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };

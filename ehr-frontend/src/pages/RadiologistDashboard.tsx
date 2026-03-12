@@ -1,15 +1,15 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Camera, LogOut, User, Brain, BookOpen, Search, RefreshCw } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Camera, Brain, BookOpen, Search, RefreshCw, Settings, LayoutDashboard } from 'lucide-react';
 import RadiologistWorklist from '../components/RadiologistWorklist';
 import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
 import MedicalVisionPanel from '../components/MedicalVision/MedicalVisionPanel';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import AdminNavigationShell from '../components/AdminNavigationShell';
 
 const RadiologistDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const navigate = useNavigate();
   const { showError } = useNotification();
 
   const [currentUser, setCurrentUser] = React.useState<any>(null);
@@ -32,12 +32,6 @@ const RadiologistDashboard: React.FC = () => {
       setCurrentUser(JSON.parse(userData));
     }
   }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('ehr_token');
-    localStorage.removeItem('ehr_user');
-    navigate(`/ehr/${tenantSlug}`);
-  };
 
   const token = React.useMemo(() => localStorage.getItem('ehr_token') || '', []);
 
@@ -110,64 +104,59 @@ const RadiologistDashboard: React.FC = () => {
     }
   };
 
+  if (!tenantSlug) return null;
+
+  const tenantBasePath = `/ehr/${tenantSlug}`;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-white/20 rounded-xl">
-                <Camera className="w-8 h-8" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold">Radiology & Imaging</h1>
-                <p className="text-purple-100 mt-1">Radiologist Worklist & Reporting</p>
-              </div>
+    <AdminNavigationShell
+      title="Radiology & Imaging"
+      subtitle="Radiologist worklist, reporting, and AI-assisted interpretation support"
+      portalLabel="Radiology workspace"
+      headerTone="radiology"
+      navigationItems={[
+        { key: 'dashboard', label: 'Dashboard', path: `${tenantBasePath}/dashboard`, icon: LayoutDashboard, exact: true },
+        { key: 'radiology', label: 'Radiology', path: `${tenantBasePath}/radiologist`, icon: Camera, exact: true },
+        { key: 'settings', label: 'Profile Settings', path: `${tenantBasePath}/settings`, icon: Settings, exact: true },
+      ]}
+    >
+      <div className="max-w-7xl mx-auto space-y-6">
+        <section className="rounded-2xl border border-violet-200/70 bg-gradient-to-r from-violet-50 via-indigo-50 to-blue-50 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-violet-700 font-semibold">Imaging Command</p>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">Radiologist Worklist & Reporting</h2>
+              <p className="text-sm text-slate-600 mt-1">
+                AI-assisted review supports faster turnaround while preserving clinician validation.
+              </p>
             </div>
-
-            {/* User Menu */}
-            {currentUser && (
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
-                  className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${
-                    showGuidelineSearch ? 'bg-white text-purple-700 shadow-sm' : 'bg-white/20 hover:bg-white/30 text-white'
-                  }`}
-                  title="Toggle Guideline Search"
-                >
-                  <Brain className="w-5 h-5" />
-                  <span className="hidden sm:inline text-sm font-medium">ACR Guidelines</span>
-                </button>
-
-                <button
-                  onClick={() => setShowVisionPanel(true)}
-                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-white"
-                  title="Open Medical Vision AI"
-                >
-                  <Camera className="w-5 h-5" />
-                  <span className="hidden sm:inline text-sm font-medium">AI Analysis</span>
-                </button>
-                <div className="text-right">
-                  <p className="font-semibold">{currentUser.firstName} {currentUser.lastName}</p>
-                  <p className="text-sm text-purple-200">{currentUser.role}</p>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowGuidelineSearch((prev) => !prev)}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  showGuidelineSearch ? 'bg-violet-600 text-white' : 'bg-white text-violet-700 border border-violet-200 hover:bg-violet-50'
+                }`}
+                title="Toggle Guideline Search"
+              >
+                <Brain className="w-4 h-4" />
+                ACR Guidelines
+              </button>
+              <button
+                onClick={() => setShowVisionPanel(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 transition"
+                title="Open Medical Vision AI"
+              >
+                <Camera className="w-4 h-4" />
+                AI Analysis
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
 
       {/* Guideline Search Panel */}
       {showGuidelineSearch && (
-        <div className="bg-white border-b border-purple-200 shadow-inner animate-in slide-in-from-top-2 duration-200">
-          <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="bg-white border border-violet-200 rounded-2xl shadow-sm animate-in slide-in-from-top-2 duration-200">
+          <div className="px-4 py-4">
             <div className="flex gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
@@ -217,9 +206,9 @@ const RadiologistDashboard: React.FC = () => {
       )}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
         <RadiologistWorklist
-          tenantSlug={tenantSlug!}
+          tenantSlug={tenantSlug}
           token={localStorage.getItem('ehr_token') || ''}
           userId={currentUser?.id}
           onOpenStudy={handleOpenStudy}
@@ -231,7 +220,7 @@ const RadiologistDashboard: React.FC = () => {
           isOpen={viewerOpen}
           onClose={handleCloseViewer}
           study={loadingStudy ? null : studyDetails}
-          tenantSlug={tenantSlug!}
+          tenantSlug={tenantSlug}
           token={token}
           onRefresh={handleRefreshStudy}
           isLoading={loadingStudy}
@@ -242,14 +231,14 @@ const RadiologistDashboard: React.FC = () => {
 
       {showVisionPanel && (
         <MedicalVisionPanel
-          tenantSlug={tenantSlug!}
+          tenantSlug={tenantSlug}
           token={token}
           onClose={() => setShowVisionPanel(false)}
         />
       )}
-    </div>
+      </div>
+    </AdminNavigationShell>
   );
 };
 
 export default RadiologistDashboard;
-

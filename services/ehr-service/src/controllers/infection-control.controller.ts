@@ -56,6 +56,81 @@ export class InfectionControlController {
     return this.infectionControlService.getHAIMetrics(start, end, tenantDb);
   }
 
+  @Get('outbreak-signals')
+  @ApiOperation({ summary: 'Get outbreak cluster signals' })
+  async getOutbreakSignals(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
+    const end = endDate ? new Date(endDate) : new Date();
+    const parsedLimit = Number(limit);
+    return this.infectionControlService.getOutbreakSignals(
+      start,
+      end,
+      tenantDb,
+      Number.isFinite(parsedLimit) ? parsedLimit : 8,
+    );
+  }
+
+  @Get('worklist')
+  @ApiOperation({ summary: 'Get infection-control doctor worklist' })
+  async getClinicalWorklist(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
+    const end = endDate ? new Date(endDate) : new Date();
+    const parsedLimit = Number(limit);
+    return this.infectionControlService.getClinicalWorklist(
+      start,
+      end,
+      tenantDb,
+      Number.isFinite(parsedLimit) ? parsedLimit : 25,
+    );
+  }
+
+  @Get('operational-brief')
+  @ApiOperation({ summary: 'Get infection-control operational brief for clinician handoff' })
+  async getOperationalBrief(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('includeResolved') includeResolved: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
+    const end = endDate ? new Date(endDate) : new Date();
+    const parsedLimit = Number(limit);
+    return this.infectionControlService.getOperationalBrief(start, end, tenantDb, {
+      includeResolved: String(includeResolved || '').toLowerCase() === 'true',
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
+  @Put('infections/:id/review')
+  @ApiOperation({ summary: 'Document infection case review and escalation outcome' })
+  async reviewInfection(
+    @Param('id') id: string,
+    @Body() reviewData: any,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.infectionControlService.reviewInfection(
+      id,
+      reviewData,
+      req.user?.userId ?? (req.user as any)?.id,
+      tenantDb,
+    );
+  }
+
   // ==================== ISOLATION PRECAUTIONS ====================
 
   @Post('isolation')
@@ -116,6 +191,26 @@ export class InfectionControlController {
     const start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
     const end = endDate ? new Date(endDate) : new Date();
     return this.infectionControlService.getAntibioticUsageReport(start, end, tenantDb);
+  }
+
+  @Get('stewardship/worklist')
+  @ApiOperation({ summary: 'Get antimicrobial stewardship CDSS worklist' })
+  async getStewardshipWorklist(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
+    const end = endDate ? new Date(endDate) : new Date();
+    const parsedLimit = Number(limit);
+    return this.infectionControlService.getStewardshipWorklist(
+      start,
+      end,
+      tenantDb,
+      Number.isFinite(parsedLimit) ? parsedLimit : 25,
+    );
   }
 
   @Put('antimicrobial/:id/review')
@@ -180,7 +275,4 @@ export class InfectionControlController {
     return this.infectionControlService.getDeviceDayRates(start, end, tenantDb);
   }
 }
-
-
-
 

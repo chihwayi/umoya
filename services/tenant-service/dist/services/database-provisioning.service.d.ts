@@ -8,6 +8,8 @@ interface ProvisioningBundleManifest {
 interface ApplySchemaOptions {
     bundles?: string[];
     appliedBy?: string;
+    strict?: boolean;
+    maxPasses?: number;
 }
 export declare class DatabaseProvisioningService {
     private dataSource;
@@ -98,6 +100,7 @@ export declare class DatabaseProvisioningService {
     private getSprint18ReferralManagementSchemaStatements;
     private getSprint19DocumentManagementSchemaStatements;
     private getSprint20ProviderMessagingSchemaStatements;
+    private getSprint21EConsentSchemaStatements;
     private getSprint31RevenueCycleSchemaStatements;
     private getSprint23BedManagementSchemaStatements;
     private getSprint26OperatingRoomSchemaStatements;

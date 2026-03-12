@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   Package,
   ShoppingCart,
@@ -8,32 +8,25 @@ import {
   AlertTriangle,
   TrendingDown,
   TrendingUp,
-  Plus,
   Search,
-  Filter,
   RefreshCw,
-  LogOut,
-  ArrowLeft,
-  CheckCircle,
-  XCircle,
-  Clock,
-  DollarSign,
   Users,
-  FileText,
   Settings,
   BarChart3,
   FolderOpen,
-  X,
+  Brain,
+  BookOpen,
+  Sparkles,
 } from 'lucide-react';
-import { pharmacyApi, ehrApi, tenantApi } from '../services/api';
+import { pharmacyApi, ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
-import ModalPortal from '../components/ModalPortal';
 import PharmacyDispensing from '../components/PharmacyDispensing';
 import PharmacyInventory from '../components/PharmacyInventory';
 import PharmacyPurchaseOrders from '../components/PharmacyPurchaseOrders';
 import PharmacyReceipts from '../components/PharmacyReceipts';
 import PharmacySuppliers from '../components/PharmacySuppliers';
 import SharedDocumentsList from '../components/SharedDocumentsList';
+import AdminNavigationShell from '../components/AdminNavigationShell';
 
 const StatCard: React.FC<{
   title: string;
@@ -70,8 +63,7 @@ const StatCard: React.FC<{
 
 const PharmacyDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const navigate = useNavigate();
-  const { showError, showSuccess, showInfo } = useNotification();
+  const { showError } = useNotification();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -80,11 +72,13 @@ const PharmacyDashboard: React.FC = () => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [pendingPrescriptions, setPendingPrescriptions] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'orders' | 'receipts' | 'suppliers' | 'alerts' | 'dispensing' | 'shared-documents'>('overview');
-  const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
-  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [showCopilot, setShowCopilot] = useState(false);
+  const [copilotQuery, setCopilotQuery] = useState('');
+  const [copilotLoading, setCopilotLoading] = useState(false);
+  const [copilotResults, setCopilotResults] = useState<any[]>([]);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
@@ -98,23 +92,6 @@ const PharmacyDashboard: React.FC = () => {
       }
     }
   }, []);
-
-  useEffect(() => {
-    const fetchTenantInfo = async () => {
-      try {
-        const response = await tenantApi.getTenantBySlug(tenantSlug!);
-        if (response.data) {
-          setTenantInfo(response.data);
-        }
-      } catch (error) {
-        console.error('Error fetching tenant info:', error);
-      }
-    };
-
-    if (tenantSlug) {
-      fetchTenantInfo();
-    }
-  }, [tenantSlug]);
 
   // Load shared documents count
   useEffect(() => {
@@ -152,6 +129,7 @@ const PharmacyDashboard: React.FC = () => {
         loadSuppliers(),
         loadPurchaseOrders(),
         loadAlerts(),
+        loadPendingPrescriptions(),
       ]);
     } catch (error) {
       console.error('Failed to load dashboard data', error);
@@ -206,20 +184,42 @@ const PharmacyDashboard: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('ehr_token');
-    localStorage.removeItem('ehr_user');
-    navigate(`/ehr/${tenantSlug}`);
+  const loadPendingPrescriptions = async () => {
+    try {
+      const response = await pharmacyApi.getPendingPrescriptions(token, tenantSlug!, { limit: 25 });
+      setPendingPrescriptions(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Failed to load pending prescriptions', error);
+    }
   };
 
-  const totalInventoryValue = inventory.reduce((sum, item) => {
-    return sum + (parseFloat(item.quantity_on_hand || 0) * parseFloat(item.cost_per_unit || 0));
-  }, 0);
+  const runCopilot = async () => {
+    if (!copilotQuery.trim()) return;
+    if (!tenantSlug || !token) return;
+    setCopilotLoading(true);
+    try {
+      const context = 'Pharmacy operations, antimicrobial stewardship, medication safety, stock management, formulary governance';
+      const response = await cdssApi.searchGuidelines(`${context}: ${copilotQuery}`, token, tenantSlug, 5);
+      setCopilotResults(response?.data?.citations || []);
+    } catch (error) {
+      console.error('Failed to run pharmacy copilot search', error);
+      showError('Copilot', 'Unable to retrieve pharmacy guidance right now.');
+    } finally {
+      setCopilotLoading(false);
+    }
+  };
 
   const totalItems = inventory.length;
   const lowStockCount = lowStockItems.length;
   const activeSuppliers = suppliers.filter(s => s.status === 'active').length;
   const pendingOrders = purchaseOrders.filter(po => po.status === 'draft' || po.status === 'pending').length;
+  const pendingPrescriptionCount = pendingPrescriptions.length;
+  const pendingRxWithStock = pendingPrescriptions.filter((rx) => !!rx.stockAvailability?.available).length;
+  const linkedPatientsCount = new Set(
+    pendingPrescriptions
+      .map((rx) => rx.patient_id || rx.patient_number)
+      .filter(Boolean),
+  ).size;
 
   if (loading) {
     return (
@@ -232,56 +232,110 @@ const PharmacyDashboard: React.FC = () => {
     );
   }
 
+  const tenantBasePath = `/ehr/${tenantSlug || ''}`;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/dashboard`)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"
-              >
-                <ArrowLeft className="w-5 h-5 text-slate-600" />
-              </button>
-              {tenantInfo?.logoUrl && (
-                <div className="h-12 w-12 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden border border-slate-200">
-                  <img 
-                    src={tenantInfo.logoUrl} 
-                    alt={`${tenantInfo.clinicName} Logo`} 
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-              )}
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
-                  Pharmacy Management
-                </h1>
-                <p className="text-sm text-slate-500">Inventory, orders, and dispensing</p>
-              </div>
+    <AdminNavigationShell
+      title="Pharmacy Management"
+      subtitle="Inventory, dispensing, formulary, and clinical safety controls"
+      portalLabel="Pharmacy workspace"
+      headerTone="pharmacy"
+      navigationItems={[
+        { key: 'dashboard', label: 'Dashboard', path: `${tenantBasePath}/dashboard`, icon: BarChart3, exact: true },
+        { key: 'pharmacy', label: 'Pharmacy', path: `${tenantBasePath}/pharmacy`, icon: Pill, exact: true },
+        { key: 'settings', label: 'Profile Settings', path: `${tenantBasePath}/settings`, icon: Settings, exact: true },
+      ]}
+    >
+      <div className="max-w-7xl mx-auto space-y-6">
+        <section className="rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Pharmacy Command</p>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">Clinical Dispensing + Supply Intelligence</h2>
+              <p className="text-sm text-slate-600 mt-1">
+                Connected to shared patient records and prescription pipelines to keep medication flow accurate.
+              </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowCopilot((prev) => !prev)}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                  showCopilot ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
+                }`}
+              >
+                <Brain className="w-4 h-4" />
+                Copilot
+              </button>
               <button
                 onClick={loadDashboardData}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"
-                title="Refresh"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition"
               >
-                <RefreshCw className="w-5 h-5 text-slate-600" />
-              </button>
-              <button
-                onClick={handleLogout}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"
-                title="Logout"
-              >
-                <LogOut className="w-5 h-5 text-slate-600" />
+                <RefreshCw className="w-4 h-4" />
+                Refresh
               </button>
             </div>
           </div>
-        </div>
-      </div>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-white/70 bg-white/80 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Pending Prescriptions</p>
+              <p className="text-xl font-semibold text-slate-900">{pendingPrescriptionCount}</p>
+            </div>
+            <div className="rounded-xl border border-white/70 bg-white/80 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Ready To Dispense</p>
+              <p className="text-xl font-semibold text-emerald-700">{pendingRxWithStock}</p>
+            </div>
+            <div className="rounded-xl border border-white/70 bg-white/80 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Patient Links (No Dupes)</p>
+              <p className="text-xl font-semibold text-slate-900">{linkedPatientsCount}</p>
+            </div>
+          </div>
+        </section>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {showCopilot && (
+          <section className="rounded-2xl border border-emerald-200 bg-white p-5">
+            <div className="flex flex-col gap-3 md:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={copilotQuery}
+                  onChange={(e) => setCopilotQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && runCopilot()}
+                  placeholder="Ask for dispensing safety, stewardship, stock policy, or formulary guidance..."
+                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+              <button
+                onClick={runCopilot}
+                disabled={copilotLoading || !copilotQuery.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60"
+              >
+                {copilotLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+                Run
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {copilotResults.length === 0 ? (
+                <p className="text-sm text-slate-500">Copilot results will appear here with references.</p>
+              ) : (
+                copilotResults.slice(0, 4).map((result: any, index: number) => (
+                  <div key={`ph-copilot-${index}`} className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-600 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                          {result.source || 'Guidance'}
+                        </p>
+                        <p className="text-sm text-slate-700 mt-1">{result.text || result.content || 'No content.'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-slate-200">
           {[
@@ -301,7 +355,7 @@ const PharmacyDashboard: React.FC = () => {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex items-center gap-2 px-4 py-3 font-medium transition relative ${
                   activeTab === tab.id
-                    ? 'text-indigo-600 border-b-2 border-indigo-600'
+                    ? 'text-emerald-700 border-b-2 border-emerald-600'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -466,119 +520,6 @@ const PharmacyDashboard: React.FC = () => {
         {activeTab === 'inventory' && (
           <PharmacyInventory />
         )}
-        {/* Old Inventory Tab - keeping for reference but replaced above */}
-        {false && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 max-w-md">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search inventory..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
-                <Plus className="w-4 h-4" />
-                Add Item
-              </button>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Item
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        SKU
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Quantity
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Cost
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {inventory
-                      .filter((item) =>
-                        searchTerm
-                          ? item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            item.sku?.toLowerCase().includes(searchTerm.toLowerCase())
-                          : true
-                      )
-                      .map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <p className="font-medium text-slate-900">{item.name}</p>
-                              {item.generic_name && (
-                                <p className="text-sm text-slate-500">{item.generic_name}</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                            {item.sku || '—'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <p className="text-sm font-medium text-slate-900">
-                                {item.quantity_on_hand} {item.unit_of_measure || 'units'}
-                              </p>
-                              {item.quantity_on_hand <= item.reorder_level && (
-                                <p className="text-xs text-amber-600">Low stock</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                            ${parseFloat(item.cost_per_unit || 0).toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                item.status === 'active'
-                                  ? 'bg-green-100 text-green-700'
-                                  : item.status === 'expired'
-                                  ? 'bg-red-100 text-red-700'
-                                  : 'bg-slate-100 text-slate-700'
-                              }`}
-                            >
-                              {item.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                            <button className="text-indigo-600 hover:text-indigo-700 font-medium">
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-                {inventory.length === 0 && (
-                  <div className="text-center py-12">
-                    <Package className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                    <p className="text-slate-500">No inventory items found</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Dispensing Tab */}
         {activeTab === 'dispensing' && (
@@ -617,9 +558,8 @@ const PharmacyDashboard: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </AdminNavigationShell>
   );
 };
 
 export default PharmacyDashboard;
-

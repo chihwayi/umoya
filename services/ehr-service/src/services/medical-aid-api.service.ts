@@ -57,6 +57,81 @@ export class MedicalAidApiService {
   private apiClients = new Map<string, AxiosInstance>();
   private authTokens = new Map<string, { token: string; expiresAt: Date }>();
 
+  private normalizeProviderName(value: string): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  private mapProviderTypeFromName(name: string): MedicalAidApiConfig['providerType'] {
+    const normalized = this.normalizeProviderName(name);
+    if (normalized === 'cimas') return 'cimas';
+    if (normalized === 'premier') return 'premier';
+    if (normalized === 'econet_health' || normalized === 'econet-health' || normalized === 'econet health') {
+      return 'econet_health';
+    }
+    if (normalized === 'psmas') return 'psmas';
+    return 'other';
+  }
+
+  private getDemoProviderNames(): string[] {
+    const configured = String(
+      process.env.MEDICAL_AID_DEMO_PROVIDER_NAMES || 'cimas,premier,econet_health,psmas,first_mutual,demo_aid',
+    );
+    return configured
+      .split(',')
+      .map((item) => this.normalizeProviderName(item))
+      .filter(Boolean);
+  }
+
+  private getDemoAuthType(): MedicalAidApiConfig['authenticationType'] {
+    const configured = this.normalizeProviderName(process.env.MEDICAL_AID_DEMO_AUTH_TYPE || 'api_key');
+    if (configured === 'api_key') return 'api_key';
+    if (configured === 'bearer') return 'bearer';
+    if (configured === 'basic') return 'basic';
+    if (configured === 'oauth2') return 'oauth2';
+    if (configured === 'custom') return 'custom';
+    return 'api_key';
+  }
+
+  private getDemoFallbackConfiguration(medicalAidName: string): MedicalAidApiConfig | null {
+    const enabled = this.normalizeProviderName(process.env.MEDICAL_AID_DEMO_ENABLED || 'true') !== 'false';
+    if (!enabled) {
+      return null;
+    }
+
+    const normalizedName = this.normalizeProviderName(medicalAidName);
+    const allowedNames = this.getDemoProviderNames();
+    if (!allowedNames.includes(normalizedName)) {
+      return null;
+    }
+
+    const baseUrl = String(process.env.MEDICAL_AID_DEMO_BASE_URL || 'http://medical-aid-demo-service:3004').trim();
+    const apiKey = process.env.MEDICAL_AID_DEMO_API_KEY || 'demo-medical-aid-key';
+
+    if (!baseUrl) {
+      return null;
+    }
+
+    return {
+      medicalAidName,
+      providerType: this.mapProviderTypeFromName(medicalAidName),
+      apiBaseUrl: baseUrl,
+      authenticationType: this.getDemoAuthType(),
+      apiKey,
+      claimSubmissionEndpoint: '/api/claims',
+      statusCheckEndpoint: '/api/claims',
+      preauthEndpoint: '/api/preauth',
+      memberVerificationEndpoint: '/api/members/verify',
+      requestTimeout: Number(process.env.MEDICAL_AID_DEMO_TIMEOUT_MS || 20000),
+      retryCount: 2,
+      retryDelay: 500,
+      isActive: true,
+      testMode: false,
+      configurationData: {
+        source: 'env-demo-fallback',
+      },
+    };
+  }
+
   /**
    * Get API configuration for a medical aid provider
    */
@@ -64,6 +139,15 @@ export class MedicalAidApiService {
     medicalAidName: string,
     tenantDb: DataSource,
   ): Promise<MedicalAidApiConfig | null> {
+    const forceDemo = this.normalizeProviderName(process.env.MEDICAL_AID_DEMO_FORCE || 'false') === 'true';
+    if (forceDemo) {
+      const forcedFallback = this.getDemoFallbackConfiguration(medicalAidName);
+      if (forcedFallback) {
+        this.logger.log(`Using forced demo medical aid configuration for "${medicalAidName}".`);
+        return forcedFallback;
+      }
+    }
+
     const [config] = await tenantDb.query(
       `SELECT * FROM medical_aid_api_configurations 
        WHERE medical_aid_name = $1 AND is_active = true`,
@@ -71,7 +155,13 @@ export class MedicalAidApiService {
     );
 
     if (!config) {
-      return null;
+      const fallbackConfig = this.getDemoFallbackConfiguration(medicalAidName);
+      if (fallbackConfig) {
+        this.logger.log(
+          `Using demo medical aid fallback configuration for "${medicalAidName}" at ${fallbackConfig.apiBaseUrl}`,
+        );
+      }
+      return fallbackConfig;
     }
 
     return {
@@ -249,7 +339,9 @@ export class MedicalAidApiService {
   ): Promise<void> {
     switch (config.authenticationType) {
       case 'api_key':
-        client.defaults.headers.common['X-API-Key'] = config.apiKey;
+        if (config.apiKey) {
+          client.defaults.headers.common['X-API-Key'] = config.apiKey;
+        }
         if (config.apiSecret) {
           client.defaults.headers.common['X-API-Secret'] = config.apiSecret;
         }
@@ -659,4 +751,3 @@ export class MedicalAidApiService {
     };
   }
 }
-

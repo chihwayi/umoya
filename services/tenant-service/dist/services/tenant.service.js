@@ -121,6 +121,8 @@ let TenantService = TenantService_1 = class TenantService {
             this.logger.error(`Database provisioning failed for tenant ${savedTenant.id}:`, error);
             savedTenant.status = tenant_entity_1.TenantStatus.SUSPENDED;
             await this.tenantRepository.save(savedTenant);
+            const message = error instanceof Error ? error.message : String(error);
+            throw new common_1.InternalServerErrorException(`Tenant provisioning failed for ${savedTenant.subdomain}. Tenant has been suspended pending repair. ${message}`);
         }
         return savedTenant;
     }
@@ -520,6 +522,12 @@ let TenantService = TenantService_1 = class TenantService {
         if (requestedPreset === 'claims_only' && (input.subscriptionMode || existing?.subscriptionMode || 'paid') === 'paid') {
             return 'claims_only';
         }
+        if ((input.subscriptionMode || existing?.subscriptionMode || 'paid') === 'paid') {
+            const moduleKeys = new Set((input.enabledModules || existing?.enabledModules || []).map((item) => String(item || '').trim().toLowerCase()));
+            if (moduleKeys.size > 0 && Array.from(moduleKeys).every((key) => key === 'claims')) {
+                return 'claims_only';
+            }
+        }
         return 'full_ehr';
     }
     normalizeEnabledModules(input, packagePreset = 'full_ehr') {
@@ -551,9 +559,11 @@ let TenantService = TenantService_1 = class TenantService {
         const gracePeriodDays = Number(input.gracePeriodDays ?? this.inferGracePeriodDays(existing) ?? 5);
         if (subscriptionMode === 'demo') {
             const demoDurationDays = Number(input.demoDurationDays || 14);
-            const demoExpiresAt = input.demoDurationDays !== undefined
-                ? new Date(now.getTime() + demoDurationDays * ONE_DAY_MS)
-                : existing?.demoExpiresAt || new Date(now.getTime() + demoDurationDays * ONE_DAY_MS);
+            const demoExpiresAt = input.demoExpiresAt !== undefined
+                ? new Date(input.demoExpiresAt)
+                : input.demoDurationDays !== undefined
+                    ? new Date(now.getTime() + demoDurationDays * ONE_DAY_MS)
+                    : existing?.demoExpiresAt || new Date(now.getTime() + demoDurationDays * ONE_DAY_MS);
             const autoDeleteAt = new Date(demoExpiresAt.getTime());
             const temp = {
                 subscriptionMode,

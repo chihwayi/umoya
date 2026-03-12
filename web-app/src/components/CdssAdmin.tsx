@@ -114,6 +114,8 @@ export const CdssAdmin: React.FC = () => {
   const [auditDateTo, setAuditDateTo] = useState<string>(() => {
     try { return localStorage.getItem('cdssAdmin.auditDateTo') || ''; } catch { return ''; }
   });
+  const [ingestionHistory, setIngestionHistory] = useState<any[]>([]);
+  const [ingestionSearch, setIngestionSearch] = useState<string>('');
   const [auditSortKey, setAuditSortKey] = useState<'time' | 'actor' | 'action'>(() => {
     try { return (localStorage.getItem('cdssAdmin.auditSortKey') as any) || 'time'; } catch { return 'time'; }
   });
@@ -125,7 +127,7 @@ export const CdssAdmin: React.FC = () => {
     setLoading(true);
     setMessage('');
     try {
-      const [st, se, meResp, au, jobs] = await Promise.all([
+      const [st, se, meResp, au, jobs, history] = await Promise.all([
         cdssAdminAPI.getStatus(),
         cdssAdminAPI.getSettings(),
         cdssAdminAPI.getMetrics(),
@@ -138,6 +140,7 @@ export const CdssAdmin: React.FC = () => {
           sortDir: auditSortDir,
         }),
         cdssAdminAPI.getAdminJobs(50),
+        cdssAdminAPI.getIngestionHistory(200),
       ]);
       setStatus(st);
       setSettings(se?.settings || se);
@@ -145,6 +148,7 @@ export const CdssAdmin: React.FC = () => {
       if (meResp.rateLimit) setRateLimit(meResp.rateLimit);
       setAudit({ logs: au?.logs || [], limit: auditLimit, offset: auditOffset });
       setIngestJobs(jobs?.jobs || []);
+      setIngestionHistory(history?.records || []);
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to load CDSS admin data');
     } finally {
@@ -305,8 +309,12 @@ export const CdssAdmin: React.FC = () => {
       setMessage(jobId ? `Ingestion started • Job ${jobId}` : 'Ingestion started');
       setAutoRefresh(true);
       try {
-        const jobs = await cdssAdminAPI.getAdminJobs(50);
+        const [jobs, history] = await Promise.all([
+          cdssAdminAPI.getAdminJobs(50),
+          cdssAdminAPI.getIngestionHistory(200),
+        ]);
         setIngestJobs(jobs?.jobs || []);
+        setIngestionHistory(history?.records || []);
       } catch {}
     } catch (e: any) {
       const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
@@ -636,6 +644,20 @@ export const CdssAdmin: React.FC = () => {
   }, []);
 
   const auditRows = audit?.logs || [];
+  const filteredIngestionHistory = (ingestionHistory || []).filter((item: any) => {
+    const q = ingestionSearch.trim().toLowerCase();
+    if (!q) return true;
+    const haystack = [
+      item?.fileName,
+      item?.versionLabel,
+      item?.fileSha256,
+      item?.owner,
+      item?.jobId,
+      item?.status,
+      item?.sourceMode,
+    ].map((v) => String(v || '').toLowerCase()).join(' ');
+    return haystack.includes(q);
+  });
 
   const toggleAuditSort = (key: 'time' | 'actor' | 'action') => {
     if (auditSortKey === key) {
@@ -710,7 +732,7 @@ export const CdssAdmin: React.FC = () => {
   }, [auditLimit]);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+    <div className="space-y-6 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 text-slate-900">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">🧠 CDSS Administration</h2>
@@ -724,7 +746,7 @@ export const CdssAdmin: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-4 border-t-4 border-indigo-500">
+        <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-4 border-t-4 border-indigo-500">
           <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">LLM</div>
           <div className="mt-2 text-sm space-y-1 text-slate-800">
             <div>Enabled: {String(status?.llm?.enabled ?? '')}</div>
@@ -732,7 +754,7 @@ export const CdssAdmin: React.FC = () => {
             <div>API URL: {status?.llm?.api_url || '-'}</div>
           </div>
         </div>
-        <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-4 border-t-4 border-amber-500">
+        <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-4 border-t-4 border-amber-500">
           <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">RAG</div>
           <div className="mt-2 text-sm space-y-1 text-slate-800">
             <div>Enabled: {String(status?.rag?.enabled ?? '')}</div>
@@ -740,7 +762,7 @@ export const CdssAdmin: React.FC = () => {
             <div>Cache: {status?.rag?.cache_enabled ? 'Enabled' : 'Disabled'}</div>
           </div>
         </div>
-        <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-4 border-t-4 border-emerald-500">
+        <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-4 border-t-4 border-emerald-500">
           <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Metrics</div>
           <div className="mt-2 text-sm space-y-1 text-slate-800">
             <div>Doc count: {metrics?.documents ?? '-'}</div>
@@ -766,7 +788,7 @@ export const CdssAdmin: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-5 space-y-5">
+      <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-5 space-y-5">
         <div className="flex items-baseline justify-between">
           <div>
             <div className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Configuration</div>
@@ -823,7 +845,7 @@ export const CdssAdmin: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-5 space-y-5">
+      <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-5 space-y-5">
         <div className="flex items-baseline justify-between">
           <div>
             <div className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Pipelines</div>
@@ -832,7 +854,7 @@ export const CdssAdmin: React.FC = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <input
-            className="text-sm w-full sm:w-auto"
+            className="text-sm w-full sm:w-auto text-slate-900 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-800 hover:file:bg-slate-200"
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
           />
@@ -1050,7 +1072,91 @@ export const CdssAdmin: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-4 space-y-4 shadow-sm">
+      <div className="bg-white border border-slate-300 rounded-2xl p-4 space-y-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-700">🗂 Ingestion History</div>
+            <div className="text-xs text-slate-500 mt-1">
+              Track ingested document versions, hashes, and duplicate uploads.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+              placeholder="Search file/version/hash"
+              value={ingestionSearch}
+              onChange={(e) => setIngestionSearch(e.target.value)}
+            />
+            <button
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const history = await cdssAdminAPI.getIngestionHistory(200, ingestionSearch.trim() || undefined);
+                  setIngestionHistory(history?.records || []);
+                } catch {
+                  setMessage('Failed to refresh ingestion history');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white hover:bg-slate-800 transition"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200 text-left text-slate-600 uppercase text-xs">
+              <tr>
+                <th className="py-2 px-3">Document</th>
+                <th className="py-2 px-3">Version</th>
+                <th className="py-2 px-3">SHA-256</th>
+                <th className="py-2 px-3">Chunks</th>
+                <th className="py-2 px-3">Status</th>
+                <th className="py-2 px-3">Ingested</th>
+                <th className="py-2 px-3">Owner</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredIngestionHistory.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-4 px-3 text-xs text-slate-500">
+                    No ingestion records yet.
+                  </td>
+                </tr>
+              )}
+              {filteredIngestionHistory.map((row: any, idx: number) => (
+                <tr key={`${row?.jobId || 'job'}-${idx}`} className="border-t border-slate-100 hover:bg-slate-50/70">
+                  <td className="py-2 px-3">
+                    <div className="font-medium text-slate-800">{row?.fileName || 'Unknown'}</div>
+                    <div className="text-[11px] text-slate-500">Job {row?.jobId || '-'}</div>
+                  </td>
+                  <td className="py-2 px-3 text-xs text-slate-700">{row?.versionLabel || 'n/a'}</td>
+                  <td className="py-2 px-3 text-xs font-mono text-slate-600">
+                    {row?.fileSha256 ? `${String(row.fileSha256).slice(0, 12)}…` : 'n/a'}
+                    {row?.duplicate ? (
+                      <span className="ml-2 inline-block rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold">
+                        duplicate
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="py-2 px-3 text-xs text-slate-700">{row?.chunkCount ?? '-'}</td>
+                  <td className="py-2 px-3">
+                    <span className={statusChip(String(row?.status || 'unknown'))}>{String(row?.status || 'unknown')}</span>
+                  </td>
+                  <td className="py-2 px-3 text-xs text-slate-600" title={row?.ingestedAt || ''}>
+                    {row?.ingestedAt ? relTime(row.ingestedAt) : '-'}
+                  </td>
+                  <td className="py-2 px-3 text-xs text-slate-700">{row?.owner || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-300 rounded-2xl p-4 space-y-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-semibold text-slate-700">🧾 Audit Logs</div>
           <div className="flex flex-wrap items-center gap-2">

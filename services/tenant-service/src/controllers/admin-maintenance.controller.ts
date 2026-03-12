@@ -1,9 +1,24 @@
-import { Controller, Post, Param, UseGuards, Get } from '@nestjs/common';
+import {
+  Body,
+  BadRequestException,
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Post,
+  Put,
+  Req,
+  ServiceUnavailableException,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { DatabaseProvisioningService } from '../services/database-provisioning.service';
 import { TenantService } from '../services/tenant.service';
 import { HealthMonitorService } from '../services/health-monitor.service';
+import { AdminRole } from '../entities/admin-user.entity';
+import { PlatformServiceMonitorService } from '../services/platform-service-monitor.service';
+import { RuntimeEndpointConfigService } from '../services/runtime-endpoint-config.service';
 
 @ApiTags('admin-maintenance')
 @ApiBearerAuth()
@@ -14,7 +29,27 @@ export class AdminMaintenanceController {
     private readonly tenantService: TenantService,
     private readonly provisioning: DatabaseProvisioningService,
     private readonly healthMonitor: HealthMonitorService,
+    private readonly platformMonitor: PlatformServiceMonitorService,
+    private readonly runtimeEndpointConfig: RuntimeEndpointConfigService,
   ) {}
+
+  private assertRole(req: any, allowed: AdminRole[]) {
+    const roleRaw = String(req?.user?.role || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
+    const role =
+      roleRaw === 'superadmin'
+        ? AdminRole.SUPER_ADMIN
+        : roleRaw === 'admin'
+          ? AdminRole.ADMIN
+          : roleRaw === 'support'
+            ? AdminRole.SUPPORT
+            : (roleRaw as AdminRole);
+    if (!role || !allowed.includes(role)) {
+      throw new ForbiddenException('Insufficient privileges for this operation');
+    }
+  }
 
   private buildTenantConnection(databaseName: string, existing?: string | null): string {
     if (existing && existing.trim().length > 0) {
@@ -90,5 +125,61 @@ export class AdminMaintenanceController {
     const system = await this.healthMonitor.getSystemHealth();
     const tenants = this.healthMonitor.getAllHealthStatuses();
     return { message: 'Health checks completed', system, tenants };
+  }
+
+  @Get('platform-services')
+  async getPlatformServices(@Req() req: any): Promise<any> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN, AdminRole.SUPPORT]);
+    return this.platformMonitor.getPlatformServicesOverview();
+  }
+
+  @Post('platform-services/:serviceId/restart')
+  async restartPlatformService(@Req() req: any, @Param('serviceId') serviceId: string): Promise<any> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN]);
+    try {
+      return await this.platformMonitor.restartService(serviceId);
+    } catch (error: any) {
+      const message = error?.message || 'Failed to restart service';
+      if (String(message).toLowerCase().includes('docker control unavailable')) {
+        throw new ServiceUnavailableException(message);
+      }
+      throw new BadRequestException(message);
+    }
+  }
+
+  @Post('platform-services/tests/:testId')
+  async runPlatformRuntimeTest(@Req() req: any, @Param('testId') testId: string): Promise<any> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN, AdminRole.SUPPORT]);
+    const normalized = String(testId || '').trim().toLowerCase();
+    if (!['whisper', 'ocr', 'ollama'].includes(normalized)) {
+      throw new BadRequestException(`Unsupported runtime test: ${testId}`);
+    }
+    return this.platformMonitor.runRuntimeTest(normalized as 'whisper' | 'ocr' | 'ollama');
+  }
+
+  @Get('runtime-config')
+  async getRuntimeConfig(@Req() req: any): Promise<any> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN, AdminRole.SUPPORT]);
+    return this.runtimeEndpointConfig.getConfig();
+  }
+
+  @Put('runtime-config')
+  async updateRuntimeConfig(@Req() req: any, @Body() body: any): Promise<any> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN]);
+    return this.runtimeEndpointConfig.updateConfig(
+      {
+        tenantServiceUrl: body?.tenantServiceUrl,
+        ehrServiceUrl: body?.ehrServiceUrl,
+        cdssServiceUrl: body?.cdssServiceUrl,
+        medicalAidDemoUrl: body?.medicalAidDemoUrl,
+        superAdminWebUrl: body?.superAdminWebUrl,
+        ehrFrontendUrl: body?.ehrFrontendUrl,
+        ollamaBaseUrl: body?.ollamaBaseUrl,
+        whisperPath: body?.whisperPath,
+        ocrPath: body?.ocrPath,
+        ollamaTagsPath: body?.ollamaTagsPath,
+      },
+      req?.user?.id,
+    );
   }
 }

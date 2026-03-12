@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Bed, Activity, TrendingUp, Clock, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
@@ -9,9 +9,11 @@ import { useConfirmation } from '../hooks/useConfirmation';
 const PACUDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showError } = useNotification();
   const { confirm, Dialog } = useConfirmation();
   const token = localStorage.getItem('ehr_token') || '';
+  const isEmbedded = location.pathname.includes('/doctor/pacu');
 
   const [user, setUser] = useState<any>(null);
   const [pacuPatients, setPacuPatients] = useState<any[]>([]);
@@ -90,7 +92,7 @@ const PACUDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className={`flex items-center justify-center ${isEmbedded ? 'min-h-[320px]' : 'min-h-screen'}`}>
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-purple-600 mx-auto mb-4" />
           <p className="text-slate-600">Loading PACU...</p>
@@ -102,37 +104,45 @@ const PACUDashboard: React.FC = () => {
   return (
     <>
     {Dialog}
-    <div className="min-h-screen bg-slate-50">
+    <div className={isEmbedded ? 'bg-transparent' : 'min-h-screen bg-slate-50'}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-violet-700 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                  <Bed className="w-8 h-8" />
-                  PACU Dashboard
-                </h1>
-                <p className="text-purple-100 mt-1">Post-Anesthesia Care Unit monitoring</p>
+      {!isEmbedded && (
+        <div className="bg-gradient-to-r from-purple-600 to-violet-700 text-white shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h1 className="text-3xl font-bold flex items-center gap-3">
+                    <Bed className="w-8 h-8" />
+                    PACU Dashboard
+                  </h1>
+                  <p className="text-purple-100 mt-1">Post-Anesthesia Care Unit monitoring</p>
+                </div>
               </div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-6 py-3">
-              <div className="text-center">
-                <p className="text-2xl font-bold">{pacuPatients.length}</p>
-                <p className="text-sm text-purple-100">Active Patients</p>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl px-6 py-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{pacuPatients.length}</p>
+                  <p className="text-sm text-purple-100">Active Patients</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
+        {isEmbedded && (
+          <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-purple-200 bg-white px-4 py-2 text-sm font-semibold text-purple-700 shadow-sm">
+            <Bed className="w-4 h-4" />
+            <span>{pacuPatients.length} Active PACU Patients</span>
+          </div>
+        )}
         {/* PACU Beds */}
         {pacuPatients.length === 0 ? (
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 p-12 text-center shadow-sm">

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Shield, LogOut, Activity, Camera, CalendarDays, BookOpen, Search, X, Loader2 } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Activity, Camera, CalendarDays, BookOpen, Search, X, Loader2, Settings, LayoutDashboard, Brain } from 'lucide-react';
 import { GuidelineResult } from '../types/guidelines';
 import { cdssApi } from '../services/api';
 import TechnologistImagingWorklist from '../components/TechnologistImagingWorklist';
+import AdminNavigationShell from '../components/AdminNavigationShell';
 
 const TechnologistImagingDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const navigate = useNavigate();
   const [currentUser, setCurrentUser] = React.useState<any | null>(null);
 
   // AI Protocol Search State
@@ -28,12 +28,6 @@ const TechnologistImagingDashboard: React.FC = () => {
   }, []);
 
   const token = React.useMemo(() => localStorage.getItem('ehr_token') || '', []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('ehr_token');
-    localStorage.removeItem('ehr_user');
-    navigate(`/ehr/${tenantSlug}`);
-  };
 
   const handleGuidelineSearch = async () => {
     if (!guidelineQuery.trim()) return;
@@ -62,46 +56,40 @@ const TechnologistImagingDashboard: React.FC = () => {
     return null;
   }
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-900">
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-900 to-sky-900" />
-        <div className="absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.25),_transparent_60%)]" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-white flex flex-col gap-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur">
-                <Shield className="w-8 h-8" />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-white/70">Technologist Control</p>
-                <h1 className="text-3xl font-semibold tracking-tight mt-2">Imaging Workflow Studio</h1>
-                <p className="text-sm text-white/80 max-w-2xl mt-2">
-                  Glide through scheduling, acquisition, and handoffs with a cockpit built for fast-moving imaging teams.
-                </p>
-              </div>
-            </div>
+  const tenantBasePath = `/ehr/${tenantSlug}`;
 
-            {currentUser && (
-              <div className="flex items-center gap-4 bg-white/10 rounded-2xl px-4 py-3 backdrop-blur">
-                <div className="text-sm">
-                  <p className="text-white/80">Signed in as</p>
-                  <p className="font-semibold">
-                    {currentUser.firstName} {currentUser.lastName}
-                  </p>
-                  <p className="text-xs uppercase tracking-wide text-white/60">{currentUser.role}</p>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
-              </div>
-            )}
+  return (
+    <AdminNavigationShell
+      title="Technologist Imaging"
+      subtitle="Scheduling, acquisition, and handoff queue for imaging operations"
+      portalLabel="Imaging technologist workspace"
+      headerTone="imaging"
+      navigationItems={[
+        { key: 'dashboard', label: 'Dashboard', path: `${tenantBasePath}/dashboard`, icon: LayoutDashboard, exact: true },
+        { key: 'imaging-tech', label: 'Imaging Queue', path: `${tenantBasePath}/technologist/imaging`, icon: Camera, exact: true },
+        { key: 'settings', label: 'Profile Settings', path: `${tenantBasePath}/settings`, icon: Settings, exact: true },
+      ]}
+    >
+      <div className="max-w-7xl mx-auto space-y-6">
+        <section className="rounded-2xl border border-sky-200/70 bg-gradient-to-r from-cyan-50 via-sky-50 to-indigo-50 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-sky-700 font-semibold">Technologist Control</p>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">Imaging Workflow Studio</h2>
+              <p className="text-sm text-slate-600 mt-1">
+                Fast queue execution with AI protocol lookup and clean handoffs to radiologist interpretation.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowGuidelineSearch(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-sky-200 bg-white text-sky-700 hover:bg-sky-50 transition"
+            >
+              <Brain className="w-4 h-4" />
+              Imaging Guidelines
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               {
                 label: 'Queue Pulse',
@@ -113,37 +101,35 @@ const TechnologistImagingDashboard: React.FC = () => {
                 label: 'Modalities Active',
                 description: 'Track studies per scanner',
                 icon: Camera,
-                accent: 'from-pink-400/20 to-purple-500/10',
+                accent: 'from-sky-400/20 to-blue-500/10',
               },
               {
                 label: 'Schedule Density',
                 description: 'Today’s time blocks',
                 icon: CalendarDays,
-                accent: 'from-sky-400/20 to-blue-500/10',
+                accent: 'from-indigo-400/20 to-violet-500/10',
               },
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-lg shadow-lg"
+                className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${stat.accent}`} />
                 <div className="relative flex items-center gap-4 p-4">
-                  <div className="p-3 rounded-2xl bg-black/10">
+                  <div className="p-3 rounded-2xl bg-white/80 text-slate-700">
                     <stat.icon className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/70">{stat.label}</p>
-                    <p className="text-white font-medium">{stat.description}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{stat.label}</p>
+                    <p className="text-slate-800 font-medium">{stat.description}</p>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="relative -mt-10 rounded-t-3xl bg-gradient-to-b from-white to-slate-100 shadow-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
           <TechnologistImagingWorklist tenantSlug={tenantSlug} token={token} currentUser={currentUser} />
         </div>
       </div>
@@ -272,10 +258,8 @@ const TechnologistImagingDashboard: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </AdminNavigationShell>
   );
 };
 
 export default TechnologistImagingDashboard;
-
-

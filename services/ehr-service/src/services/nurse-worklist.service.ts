@@ -61,6 +61,17 @@ export class NurseWorklistService {
     }
   }
 
+  private async safeGetHivEnrollments(tenantDb: DataSource) {
+    try {
+      return await this.hivService.getEnrollments({ status: 'active' }, tenantDb);
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+      return { enrollments: [] };
+    }
+  }
+
   private getWorkflowRank(status?: string | null) {
     switch (String(status || '').toLowerCase()) {
       case 'completed':
@@ -3886,7 +3897,8 @@ export class NurseWorklistService {
         ORDER BY facility_name ASC
         `,
       ),
-      tenantDb.query(
+      this.safeQuery(
+        tenantDb,
         `
         SELECT
           t.id,
@@ -3944,7 +3956,7 @@ export class NurseWorklistService {
         LIMIT 50
         `,
       ),
-      this.hivService.getEnrollments({ status: 'active' }, tenantDb),
+      this.safeGetHivEnrollments(tenantDb),
       tenantDb.query(
         `
         SELECT

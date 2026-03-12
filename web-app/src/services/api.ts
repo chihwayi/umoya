@@ -277,6 +277,49 @@ export const demoAccessRequestAPI = {
 };
 
 // Backup API
+export interface BackupSchedule {
+  enabled: boolean;
+  frequency: 'daily';
+  runTime: string;
+  timezone: string;
+  retentionDays: number;
+  lastRunAt: string | null;
+  lastRunStatus: 'never' | 'success' | 'failed';
+  lastError: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuntimeEndpointConfig {
+  tenantServiceUrl: string;
+  ehrServiceUrl: string;
+  cdssServiceUrl: string;
+  medicalAidDemoUrl: string;
+  superAdminWebUrl: string;
+  ehrFrontendUrl: string;
+  ollamaBaseUrl: string;
+  whisperPath: string;
+  ocrPath: string;
+  ollamaTagsPath: string;
+  hasOverrides: boolean;
+  sources: Record<string, 'override' | 'env'>;
+  updatedAt: string;
+}
+
+export interface RuntimeEndpointConfigPayload {
+  tenantServiceUrl?: string | null;
+  ehrServiceUrl?: string | null;
+  cdssServiceUrl?: string | null;
+  medicalAidDemoUrl?: string | null;
+  superAdminWebUrl?: string | null;
+  ehrFrontendUrl?: string | null;
+  ollamaBaseUrl?: string | null;
+  whisperPath?: string | null;
+  ocrPath?: string | null;
+  ollamaTagsPath?: string | null;
+}
+
 export const backupAPI = {
   listBackups: async (): Promise<any[]> => {
     const response = await api.get('/admin/backups');
@@ -296,7 +339,27 @@ export const backupAPI = {
   restoreBackup: async (key: string): Promise<{ message: string }> => {
     const response = await api.post(`/admin/backups/${encodeURIComponent(key)}/restore`);
     return response.data;
-  }
+  },
+
+  getSchedule: async (): Promise<BackupSchedule> => {
+    const response = await api.get('/admin/backups/schedule');
+    return response.data;
+  },
+
+  updateSchedule: async (payload: {
+    enabled?: boolean;
+    runTime?: string;
+    timezone?: string;
+    retentionDays?: number;
+  }): Promise<BackupSchedule> => {
+    const response = await api.put('/admin/backups/schedule', payload);
+    return response.data;
+  },
+
+  runScheduledBackupNow: async (): Promise<{ message: string; backupId: string; nextRunAt: string | null }> => {
+    const response = await api.post('/admin/backups/schedule/run-now');
+    return response.data;
+  },
 };
 
 export const healthAPI = {
@@ -306,6 +369,26 @@ export const healthAPI = {
   },
   refreshSystemHealth: async () => {
     const response = await api.post('/admin/system-health/refresh');
+    return response.data;
+  },
+  getPlatformServices: async () => {
+    const response = await api.get('/admin/platform-services');
+    return response.data;
+  },
+  restartPlatformService: async (serviceId: string) => {
+    const response = await api.post(`/admin/platform-services/${encodeURIComponent(serviceId)}/restart`);
+    return response.data;
+  },
+  runRuntimeTest: async (testId: 'whisper' | 'ocr' | 'ollama') => {
+    const response = await api.post(`/admin/platform-services/tests/${encodeURIComponent(testId)}`);
+    return response.data;
+  },
+  getRuntimeConfig: async (): Promise<RuntimeEndpointConfig> => {
+    const response = await api.get('/admin/runtime-config');
+    return response.data;
+  },
+  updateRuntimeConfig: async (payload: RuntimeEndpointConfigPayload): Promise<RuntimeEndpointConfig> => {
+    const response = await api.put('/admin/runtime-config', payload);
     return response.data;
   },
 };
@@ -416,6 +499,12 @@ export const cdssAdminAPI = {
   },
   getIngestJobs: async (limit = 20): Promise<any> => {
     const response = await api.get(`/cdss-admin/admin/ingest/jobs?limit=${limit}`, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  getIngestionHistory: async (limit = 120, query?: string): Promise<any> => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (query && query.trim()) params.set('query', query.trim());
+    const response = await api.get(`/cdss-admin/admin/ingest/history?${params.toString()}`, { headers: { ...getOwnerHeaders() } });
     return response.data;
   },
   getAdminJobs: async (limit = 50, type?: string, status?: string): Promise<any> => {

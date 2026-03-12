@@ -9,7 +9,6 @@ import * as FormData from 'form-data';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { config } from '@medicore/config';
 
 export interface TranscriptionOptions {
@@ -83,9 +82,9 @@ export class TranscriptionService {
         try {
           return await this.transcribeWithLocalWhisper(audioFile, { language, temperature, prompt }, requestContext);
         } catch (localError: any) {
-          if (this.WHISPER_API_KEY) {
+          if (this.WHISPER_API_KEY && this.WHISPER_API_URL) {
             this.logger.warn(
-              `Local Whisper failed at ${this.resolveLocalWhisperUrl()}, falling back to OpenAI Whisper: ${localError?.message || localError}`,
+              `Local Whisper failed at ${this.describeLocalWhisperEndpointForLogs()}, falling back to OpenAI Whisper: ${localError?.message || localError}`,
             );
             return await this.transcribeWithOpenAI(audioFile, { language, temperature, prompt });
           }
@@ -112,13 +111,15 @@ export class TranscriptionService {
     }
 
     try {
+      const audioPayload = await this.resolveAudioPayload(audioFile);
+
       // Create form data
       const formData = new FormData();
       
       // Create a readable stream from the buffer
-      formData.append('file', audioFile.buffer, {
-        filename: audioFile.originalname || 'recording.wav',
-        contentType: audioFile.mimetype || 'audio/wav',
+      formData.append('file', audioPayload.buffer, {
+        filename: audioPayload.filename,
+        contentType: audioPayload.contentType,
       });
 
       formData.append('model', 'whisper-1');
@@ -169,72 +170,112 @@ export class TranscriptionService {
     options: TranscriptionOptions,
     requestContext: TranscriptionRequestContext = {},
   ): Promise<TranscriptionResult> {
-    try {
-      const targetUrl = this.resolveLocalWhisperUrl();
-      const isWhisperCpp = this.isWhisperCppInferenceUrl(targetUrl);
-      const formData = new FormData();
-      // Both whisper.cpp and internal CDSS local server expect multipart "file"
-      formData.append('file', audioFile.buffer, {
-        filename: audioFile.originalname || 'recording.wav',
-        contentType: audioFile.mimetype || 'audio/wav',
-      });
-
-      if (isWhisperCpp) {
-        // whisper.cpp contract
-        formData.append('response_format', 'verbose_json');
-        if (options.temperature !== undefined) {
-          formData.append('temperature', options.temperature.toString());
-        }
-        if (options.language && options.language !== 'auto') {
-          formData.append('language', options.language);
-        }
-        if (options.prompt) {
-          formData.append('prompt', options.prompt);
-        }
-      } else {
-        // Existing CDSS-local whisper contract
-        formData.append('generate_soap', 'true');
-
-        if (options.language && options.language !== 'auto') {
-          formData.append('language', options.language);
-        }
-
-        if (options.temperature !== undefined) {
-          formData.append('temperature', options.temperature.toString());
-        }
-      }
-
-      this.logger.log(`Sending transcription request to ${targetUrl}`);
-
-      const headers: Record<string, string> = {
-        ...(formData.getHeaders() as Record<string, string>),
-      };
-      if (requestContext.tenantId) {
-        headers['X-Tenant-ID'] = requestContext.tenantId;
-      }
-      if (requestContext.authorization) {
-        headers['Authorization'] = requestContext.authorization;
-      }
-
-      const response = await axios.post(targetUrl, formData, {
-        headers,
-        timeout: 300000, // 5 minute timeout for local processing
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-      });
-
-      return this.parseLocalWhisperResponse(response.data, options.language || 'en');
-    } catch (error: any) {
-      this.logger.error(`Local Whisper API error: ${error.message}`, error.response?.data);
-      throw new Error(`Local Whisper API error: ${error.message}`);
+    const candidates = this.resolveLocalWhisperCandidates();
+    if (!candidates.length) {
+      throw new Error(
+        'LOCAL_WHISPER_URL is not configured and no fallback local transcription endpoints were discovered.',
+      );
     }
+
+    let lastError: any = null;
+    for (const targetUrl of candidates) {
+      try {
+        return await this.transcribeWithLocalWhisperAtUrl(
+          targetUrl,
+          audioFile,
+          options,
+          requestContext,
+        );
+      } catch (error: any) {
+        lastError = error;
+        this.logger.warn(
+          `Local Whisper candidate failed at ${targetUrl}: ${error?.message || error}`,
+        );
+      }
+    }
+
+    this.logger.error(
+      `Local Whisper API error: ${lastError?.message || 'No reachable local transcription endpoint'}`,
+      lastError?.response?.data,
+    );
+    throw new Error(`Local Whisper API error: ${lastError?.message || 'No reachable local transcription endpoint'}`);
+  }
+
+  private async transcribeWithLocalWhisperAtUrl(
+    targetUrl: string,
+    audioFile: Express.Multer.File,
+    options: TranscriptionOptions,
+    requestContext: TranscriptionRequestContext = {},
+  ): Promise<TranscriptionResult> {
+    const isWhisperCpp = this.isWhisperCppInferenceUrl(targetUrl);
+    const audioPayload = await this.resolveAudioPayload(audioFile);
+    const formData = new FormData();
+    // Both whisper.cpp and internal CDSS local server expect multipart "file"
+    formData.append('file', audioPayload.buffer, {
+      filename: audioPayload.filename,
+      contentType: audioPayload.contentType,
+    });
+
+    if (isWhisperCpp) {
+      // whisper.cpp contract
+      formData.append('response_format', 'verbose_json');
+      if (options.temperature !== undefined) {
+        formData.append('temperature', options.temperature.toString());
+      }
+      if (options.language && options.language !== 'auto') {
+        formData.append('language', options.language);
+      }
+      if (options.prompt) {
+        formData.append('prompt', options.prompt);
+      }
+    } else {
+      // Existing CDSS-local whisper contract
+      formData.append('generate_soap', 'true');
+
+      if (options.language && options.language !== 'auto') {
+        formData.append('language', options.language);
+      }
+
+      if (options.temperature !== undefined) {
+        formData.append('temperature', options.temperature.toString());
+      }
+    }
+
+    this.logger.log(`Sending transcription request to ${targetUrl}`);
+
+    const headers: Record<string, string> = {
+      ...(formData.getHeaders() as Record<string, string>),
+    };
+    if (requestContext.tenantId) {
+      headers['X-Tenant-ID'] = requestContext.tenantId;
+    }
+    if (requestContext.authorization) {
+      headers['Authorization'] = requestContext.authorization;
+    }
+    const cdssServiceToken = String(process.env.CDSS_SERVICE_TOKEN || '').trim();
+    if (cdssServiceToken) {
+      headers['X-Service-Token'] = cdssServiceToken;
+    }
+
+    const response = await axios.post(targetUrl, formData, {
+      headers,
+      timeout: 300000, // 5 minute timeout for local processing
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    });
+
+    return this.parseLocalWhisperResponse(response.data, options.language || 'en');
   }
 
   private parseLocalWhisperResponse(responseData: any, fallbackLanguage: string): TranscriptionResult {
+    if (typeof responseData?.error === 'string' && responseData.error.trim().length > 0) {
+      throw new Error(`Local Whisper service error: ${responseData.error.trim()}`);
+    }
+
     // Text-only contract
     if (typeof responseData === 'string' && responseData.trim().length > 0) {
       return {
-        text: this.requireNonEmptyString(responseData, 'text'),
+        text: this.normalizeTranscriptText(responseData),
         language: this.normalizeLanguage(fallbackLanguage, fallbackLanguage),
         segments: [],
       };
@@ -243,9 +284,8 @@ export class TranscriptionService {
     // Preferred CDSS contract
     const nested = responseData?.transcription;
     if (nested && typeof nested === 'object') {
-      const text = this.requireNonEmptyString(nested.text, 'transcription.text');
       return {
-        text,
+        text: this.normalizeTranscriptText(nested.text),
         language: this.normalizeLanguage(nested.language, fallbackLanguage),
         segments: this.normalizeSegments(nested.segments),
         confidence: this.normalizeConfidence(nested.language_probability ?? nested.confidence),
@@ -255,9 +295,9 @@ export class TranscriptionService {
     }
 
     // Legacy flat contract
-    if (typeof responseData?.text === 'string') {
+    if (responseData && typeof responseData === 'object' && Object.prototype.hasOwnProperty.call(responseData, 'text')) {
       return {
-        text: this.requireNonEmptyString(responseData.text, 'text'),
+        text: this.normalizeTranscriptText(responseData.text),
         language: this.normalizeLanguage(responseData?.language, fallbackLanguage),
         segments: this.normalizeSegments(responseData?.segments),
         confidence: this.normalizeConfidence(responseData?.confidence),
@@ -269,7 +309,7 @@ export class TranscriptionService {
     // whisper-asr-webservice style
     if (typeof responseData?.data?.text === 'string') {
       return {
-        text: this.requireNonEmptyString(responseData.data.text, 'data.text'),
+        text: this.normalizeTranscriptText(responseData.data.text),
         language: this.normalizeLanguage(responseData?.data?.language, fallbackLanguage),
         segments: this.normalizeSegments(responseData?.data?.segments),
         confidence: this.normalizeConfidence(responseData?.data?.confidence),
@@ -277,6 +317,50 @@ export class TranscriptionService {
     }
 
     throw new Error('Invalid transcription response contract from local Whisper service');
+  }
+
+  private async resolveAudioPayload(audioFile: Express.Multer.File): Promise<{
+    buffer: Buffer;
+    filename: string;
+    contentType: string;
+  }> {
+    const filename = String(audioFile?.originalname || 'recording.wav').trim() || 'recording.wav';
+    const contentTypeFromFile = String(audioFile?.mimetype || '').trim().toLowerCase();
+
+    if (audioFile?.buffer && Buffer.isBuffer(audioFile.buffer) && audioFile.buffer.length > 0) {
+      return {
+        buffer: audioFile.buffer,
+        filename,
+        contentType: contentTypeFromFile || this.inferMimeTypeFromFilename(filename),
+      };
+    }
+
+    const diskPath = String((audioFile as any)?.path || '').trim();
+    if (diskPath && fs.existsSync(diskPath)) {
+      const diskBuffer = await fs.promises.readFile(diskPath);
+      if (diskBuffer.length === 0) {
+        throw new Error('Audio upload is empty');
+      }
+      return {
+        buffer: diskBuffer,
+        filename,
+        contentType: contentTypeFromFile || this.inferMimeTypeFromFilename(filename),
+      };
+    }
+
+    throw new Error('Audio upload payload is missing (expected multer buffer or file path)');
+  }
+
+  private inferMimeTypeFromFilename(filename: string): string {
+    const ext = path.extname(String(filename || '').trim().toLowerCase());
+    const byExt: Record<string, string> = {
+      '.wav': 'audio/wav',
+      '.mp3': 'audio/mpeg',
+      '.m4a': 'audio/m4a',
+      '.webm': 'audio/webm',
+      '.ogg': 'audio/ogg',
+    };
+    return byExt[ext] || 'audio/wav';
   }
 
   private resolveLocalWhisperUrl(): string {
@@ -300,6 +384,116 @@ export class TranscriptionService {
       }
       return `${normalized}/inference`;
     }
+  }
+
+  private resolveLocalWhisperCandidates(): string[] {
+    const candidates: string[] = [];
+    const addCandidate = (value?: string | null) => {
+      const normalized = String(value || '').trim().replace(/\/+$/, '');
+      if (!normalized) return;
+      if (!candidates.includes(normalized)) {
+        candidates.push(normalized);
+      }
+    };
+
+    const configuredRaw = String(this.LOCAL_WHISPER_URL || '').trim();
+    if (configuredRaw) {
+      const primary = this.resolveLocalWhisperUrl();
+      addCandidate(primary);
+      this.deriveLocalWhisperAlternates(primary).forEach(addCandidate);
+      this.mapLoopbackCandidatesForContainer([primary, ...this.deriveLocalWhisperAlternates(primary)]).forEach(addCandidate);
+    }
+
+    const cdssBase = String(process.env.CDSS_SERVICE_URL || process.env.SERVICE_CDSS_URL || '')
+      .trim()
+      .replace(/\/+$/, '');
+    if (cdssBase) {
+      addCandidate(`${cdssBase}/transcribe`);
+      addCandidate(`${cdssBase}/transcribe/basic`);
+    }
+
+    return candidates;
+  }
+
+  private describeLocalWhisperEndpointForLogs(): string {
+    const local = String(this.LOCAL_WHISPER_URL || '').trim();
+    if (local) return local;
+    const cdss = String(process.env.CDSS_SERVICE_URL || process.env.SERVICE_CDSS_URL || '').trim();
+    if (cdss) return `${cdss.replace(/\/+$/, '')}/transcribe`;
+    return 'local-transcription-candidates';
+  }
+
+  private deriveLocalWhisperAlternates(url: string): string[] {
+    const alternates: string[] = [];
+    const normalized = String(url || '').trim().replace(/\/+$/, '');
+    if (!normalized) return alternates;
+
+    try {
+      const parsed = new URL(normalized);
+      const pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+      const makeUrl = (pathName: string) => {
+        const next = new URL(parsed.toString());
+        next.pathname = pathName;
+        return next.toString().replace(/\/+$/, '');
+      };
+      if (/\/inference$/i.test(pathname)) {
+        alternates.push(makeUrl('/transcribe'));
+        alternates.push(makeUrl('/transcribe/basic'));
+      } else if (/\/transcribe\/basic$/i.test(pathname)) {
+        alternates.push(makeUrl('/transcribe'));
+        alternates.push(makeUrl('/inference'));
+      } else if (/\/transcribe$/i.test(pathname)) {
+        alternates.push(makeUrl('/transcribe/basic'));
+        alternates.push(makeUrl('/inference'));
+      } else {
+        alternates.push(makeUrl('/transcribe'));
+        alternates.push(makeUrl('/inference'));
+      }
+      return alternates;
+    } catch {
+      if (/\/inference$/i.test(normalized)) {
+        alternates.push(normalized.replace(/\/inference$/i, '/transcribe'));
+        alternates.push(normalized.replace(/\/inference$/i, '/transcribe/basic'));
+      } else if (/\/transcribe\/basic$/i.test(normalized)) {
+        alternates.push(normalized.replace(/\/transcribe\/basic$/i, '/transcribe'));
+        alternates.push(normalized.replace(/\/transcribe\/basic$/i, '/inference'));
+      } else if (/\/transcribe$/i.test(normalized)) {
+        alternates.push(normalized.replace(/\/transcribe$/i, '/transcribe/basic'));
+        alternates.push(normalized.replace(/\/transcribe$/i, '/inference'));
+      }
+      return alternates;
+    }
+  }
+
+  private mapLoopbackCandidatesForContainer(urls: string[]): string[] {
+    if (!this.isRunningInContainer()) {
+      return [];
+    }
+    const dockerHost = String(process.env.LOCAL_WHISPER_DOCKER_HOST || 'host.docker.internal').trim();
+    if (!dockerHost) return [];
+
+    const mapped: string[] = [];
+    for (const raw of urls) {
+      const normalized = String(raw || '').trim();
+      if (!normalized) continue;
+      try {
+        const parsed = new URL(normalized);
+        if (!['127.0.0.1', 'localhost', '::1'].includes(parsed.hostname)) {
+          continue;
+        }
+        parsed.hostname = dockerHost;
+        mapped.push(parsed.toString().replace(/\/+$/, ''));
+      } catch {
+        if (/127\.0\.0\.1|localhost/.test(normalized)) {
+          mapped.push(normalized.replace('127.0.0.1', dockerHost).replace('localhost', dockerHost));
+        }
+      }
+    }
+    return mapped;
+  }
+
+  private isRunningInContainer(): boolean {
+    return fs.existsSync('/.dockerenv');
   }
 
   private isWhisperCppInferenceUrl(url: string): boolean {
@@ -328,6 +522,13 @@ export class TranscriptionService {
     }
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private normalizeTranscriptText(value: any): string {
+    if (typeof value !== 'string') {
+      return '';
+    }
+    return value.trim();
   }
 
   private normalizeConfidence(value: any): number | undefined {
@@ -415,13 +616,6 @@ export class TranscriptionService {
       });
     }
     return segments;
-  }
-
-  private requireNonEmptyString(value: any, fieldName: string): string {
-    if (typeof value !== 'string' || value.trim().length === 0) {
-      throw new Error(`Invalid transcription response contract: ${fieldName} must be a non-empty string`);
-    }
-    return value.trim();
   }
 
   /**

@@ -35,6 +35,7 @@ MediCore already goes far beyond a basic clinic EMR. The current codebase includ
 | --- | --- |
 | EHR frontend | `3000` |
 | Tenant service | `3001` |
+| Medical aid demo provider | `3004` |
 | Web admin portal | `3011` |
 | Grafana | `3012` |
 | EHR API | `3013` |
@@ -62,7 +63,7 @@ npm install
 3. Start the full stack.
 
 ```bash
-docker compose up -d postgres-master redis minio tenant-service cdss-service cdss-worker ehr-service web-app ehr-frontend patient-portal prometheus grafana
+docker compose up -d postgres-master redis minio tenant-service cdss-service cdss-worker medical-aid-demo-service ehr-service web-app ehr-frontend patient-portal prometheus grafana
 ```
 
 4. Open the main surfaces.
@@ -70,6 +71,7 @@ docker compose up -d postgres-master redis minio tenant-service cdss-service cds
 - Admin portal: [http://localhost:3011](http://localhost:3011)
 - Staff EHR: [http://localhost:3000](http://localhost:3000)
 - Patient portal: [http://localhost:3015](http://localhost:3015)
+- Medical aid demo provider UI: [http://localhost:3004](http://localhost:3004)
 - Tenant Swagger: [http://localhost:3001/api/docs](http://localhost:3001/api/docs)
 - EHR Swagger: [http://localhost:3013/api/docs](http://localhost:3013/api/docs)
 - CDSS Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
@@ -89,6 +91,7 @@ Useful optional scripts:
 npm run seed:sample-imaging
 npm run seed:thandeka
 npm run dhis2:bootstrap
+./scripts/smoke-medical-aid-demo.sh
 ```
 
 ## Source of truth

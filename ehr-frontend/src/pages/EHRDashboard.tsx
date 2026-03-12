@@ -15,6 +15,12 @@ import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, tenantApi } from '../services/api';
 import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
 import {
+  cacheTenantBranding,
+  formatTenantDisplayName,
+  getBrandInitials,
+  readCachedTenantBranding,
+} from '../utils/tenantBranding';
+import {
   getBillingToneClasses,
   isTenantRouteAvailable,
   notifyTenantSubscriptionStatus,
@@ -66,10 +72,12 @@ interface PostVisitTrialSlaAccountabilitySnapshot {
 const EHRDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const brandLogoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
   const { showSuccess, showInfo, showError, showWarning } = useNotification();
   const [user, setUser] = useState<User | null>(null);
-  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [tenantInfo, setTenantInfo] = useState<any>(() => {
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    return cachedBranding ? { clinicName: cachedBranding.clinicName, logoUrl: cachedBranding.logoUrl } : null;
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -276,11 +284,27 @@ const EHRDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!tenantSlug) return;
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    if (cachedBranding) {
+      setTenantInfo((prev: any) => ({
+        ...(prev || {}),
+        clinicName: prev?.clinicName || cachedBranding.clinicName,
+        logoUrl: prev?.logoUrl || cachedBranding.logoUrl,
+      }));
+    }
+  }, [tenantSlug]);
+
+  useEffect(() => {
     const fetchTenantInfo = async () => {
       try {
         const response = await tenantApi.getTenantBySlug(tenantSlug!);
         if (response.data) {
           setTenantInfo(response.data);
+          cacheTenantBranding(tenantSlug!, {
+            clinicName: response.data.clinicName,
+            logoUrl: response.data.logoUrl,
+          });
         }
       } catch (error) {
         console.error('Error fetching tenant info:', error);
@@ -448,6 +472,8 @@ const EHRDashboard: React.FC = () => {
   if (!user) return null;
   const billingSummary = tenantInfo?.billingSummary;
   const billingTone = getBillingToneClasses(billingSummary);
+  const tenantDisplayName = formatTenantDisplayName(tenantSlug, tenantInfo?.clinicName);
+  const tenantInitials = getBrandInitials(tenantDisplayName);
   const visibleRoleActions = getRoleActions(user.role).filter((action: any) =>
     isTenantRouteAvailable(tenantInfo, action.route),
   );
@@ -463,28 +489,20 @@ const EHRDashboard: React.FC = () => {
       <div className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-800 via-slate-900 to-gray-900 border-r border-slate-700/50 z-50 transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              {tenantInfo?.logoUrl ? (
-                <div className="h-10 w-10 bg-white p-1 rounded-xl flex items-center justify-center overflow-hidden">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 overflow-hidden flex items-center justify-center">
+                {tenantInfo?.logoUrl ? (
                   <img 
                     src={tenantInfo.logoUrl} 
-                    alt={`${tenantInfo.clinicName} Logo`} 
-                    className="w-full h-full object-contain"
+                    alt={`${tenantDisplayName} logo`} 
+                    className="h-full w-full object-cover"
                   />
-                </div>
-              ) : (
-                <div className="h-10 bg-white px-1 rounded-xl flex items-center justify-center overflow-hidden">
-                  <img
-                    src={brandLogoSrc}
-                    alt="MediCore logo"
-                    className="h-8 w-auto object-contain"
-                  />
-                </div>
-              )}
-              <div>
-                <h2 className="font-bold text-white">
-                  {tenantInfo?.clinicName ? tenantInfo.clinicName : 'MediCore'}
-                </h2>
+                ) : (
+                  <span className="text-xs font-bold tracking-wide text-white">{tenantInitials}</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-bold text-white truncate">{tenantDisplayName}</h2>
                 <p className="text-xs text-slate-300">EHR System</p>
               </div>
             </div>

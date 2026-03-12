@@ -69,8 +69,11 @@ export class Bill {
   @Column({ type: 'varchar', default: BillStatus.DRAFT })
   status: BillStatus;
 
-  @Column({ name: 'invoice_date', type: 'date' })
+  @Column({ name: 'billing_date', type: 'date' })
   billDate: Date;
+
+  @Column({ name: 'invoice_date', type: 'date', nullable: true })
+  invoiceDate?: Date;
 
   @Column({ name: 'due_date', type: 'date', nullable: true })
   dueDate: Date;

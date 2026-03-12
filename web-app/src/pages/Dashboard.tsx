@@ -27,6 +27,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [error, setError] = useState('');
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [detailsFocusSection, setDetailsFocusSection] = useState<'default' | 'dhis2'>('default');
   const [currentView, setCurrentView] = useState<'overview' | 'tenants' | 'requests' | 'health' | 'audit' | 'security' | 'backups' | 'terminology' | 'cdss'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -103,6 +104,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleManageUsers = (tenant: Tenant) => {
     setSelectedTenant(tenant);
+    setDetailsFocusSection('default');
+    setDetailsModalOpen(true);
+  };
+
+  const handleConfigureDhis2 = (tenant: Tenant) => {
+    setSelectedTenant(tenant);
+    setDetailsFocusSection('dhis2');
     setDetailsModalOpen(true);
   };
 
@@ -195,7 +203,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-800 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
           <p className="mt-4 text-slate-600 font-medium">Loading MediCore Dashboard...</p>
         </div>
       </div>
@@ -212,41 +220,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       )}
 
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+      <header className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-900 border-b border-emerald-500/30 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <button 
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                className="lg:hidden p-2 rounded-md text-emerald-100 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
               <div className="flex items-center space-x-3">
-                <div className="rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
+                <div className="rounded-xl border border-white/25 bg-white/10 p-1.5 shadow-sm">
                   <img src="/medicore.png" alt="MediCore logo" className="h-8 w-auto rounded-lg" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-slate-800 tracking-tight">
+                  <h1 className="text-lg font-bold text-white tracking-tight">
                     MediCore
                   </h1>
                 </div>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="hidden sm:flex items-center space-x-3 px-3 py-1 bg-slate-100 rounded-md">
-                <div className="w-6 h-6 bg-slate-300 rounded-full flex items-center justify-center">
-                  <span className="text-slate-600 text-xs font-bold">SA</span>
+              <div className="hidden sm:flex items-center space-x-3 px-3 py-1 bg-white/10 rounded-md border border-white/20">
+                <div className="w-6 h-6 bg-emerald-400/25 rounded-full flex items-center justify-center">
+                  <span className="text-emerald-100 text-xs font-bold">SA</span>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium text-slate-700">Super Admin</p>
+                  <p className="text-sm font-medium text-white">Super Admin</p>
                 </div>
               </div>
               <button 
                 onClick={handleLogout}
-                className="text-slate-500 hover:text-slate-700 p-2 rounded-md hover:bg-slate-100 transition-colors"
+                className="text-emerald-100 hover:text-white p-2 rounded-md hover:bg-white/10 transition-colors"
                 title="Logout"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,7 +285,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   }}
                   className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md font-medium text-sm transition-colors ${
                     currentView === tab.id
-                      ? 'bg-slate-800 text-white border-l-4 border-blue-500'
+                      ? 'bg-slate-800 text-white border-l-4 border-emerald-400'
                       : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
@@ -306,7 +314,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 lg:ml-0 bg-slate-50 min-h-[calc(100vh-4rem)]">
+        <main className="flex-1 min-w-0 lg:ml-0 bg-slate-50 min-h-[calc(100vh-4rem)] text-slate-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {currentView === 'overview' && <SystemOverview />}
             {currentView === 'health' && <HealthMonitor />}
@@ -377,8 +385,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                           {tenants.filter(t => t.subscriptionTier === 'enterprise').length}
                         </p>
                       </div>
-                      <div className="p-3 bg-purple-50 rounded-md">
-                        <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="p-3 bg-teal-50 rounded-md">
+                        <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
                       </div>
@@ -391,7 +399,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   <h2 className="text-xl font-bold text-slate-800">Tenant Management</h2>
                   <button
                     onClick={() => setCreateModalOpen(true)}
-                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-sm flex items-center space-x-2"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-sm flex items-center space-x-2"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -421,6 +429,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       onStatusChange={handleStatusChange}
                       onDelete={handleDeleteTenant}
                       onManageUsers={handleManageUsers}
+                      onConfigureDhis2={handleConfigureDhis2}
                     />
                   ))}
                 </div>
@@ -436,7 +445,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     <p className="text-slate-500 mb-6">Create your first tenant to get started with MediCore.</p>
                     <button
                       onClick={() => setCreateModalOpen(true)}
-                      className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-sm inline-flex items-center space-x-2"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-sm inline-flex items-center space-x-2"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -463,9 +472,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       <TenantDetailsModal
         tenant={selectedTenant}
         isOpen={detailsModalOpen}
+        focusSection={detailsFocusSection}
         onClose={() => {
           setDetailsModalOpen(false);
           setSelectedTenant(null);
+          setDetailsFocusSection('default');
         }}
         onUpdate={loadTenants}
       />

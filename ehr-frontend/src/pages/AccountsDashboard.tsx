@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   CreditCard,
   Shield,
   TrendingUp,
@@ -17,10 +16,14 @@ import {
   X,
   Settings,
   Plus,
+  Brain,
+  Sparkles,
+  BookOpen,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { cdssApi, ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
+import AdminNavigationShell from '../components/AdminNavigationShell';
 
 type FinanceSummary = {
   totals: {
@@ -200,6 +203,10 @@ const AccountsDashboard: React.FC = () => {
   const [templateForm, setTemplateForm] = useState<InvoiceTemplateFormState>(defaultTemplateFormState);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateSubmitting, setTemplateSubmitting] = useState(false);
+  const [showCopilot, setShowCopilot] = useState(false);
+  const [copilotQuery, setCopilotQuery] = useState('');
+  const [copilotLoading, setCopilotLoading] = useState(false);
+  const [copilotResults, setCopilotResults] = useState<any[]>([]);
 
   const [filters, setFilters] = useState({
     status: searchParams.get('status') || '',
@@ -499,6 +506,23 @@ const AccountsDashboard: React.FC = () => {
     });
   };
 
+  const runCopilot = async () => {
+    if (!tenantSlug || !copilotQuery.trim()) return;
+    try {
+      setCopilotLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+      const context = 'Revenue cycle optimization, claims denial prevention, coding quality, payment reconciliation';
+      const response = await cdssApi.searchGuidelines(`${context}: ${copilotQuery}`, token, tenantSlug, 5);
+      setCopilotResults(response?.data?.citations || []);
+    } catch (error: any) {
+      console.error('Failed to run accounts copilot', error);
+      showError('Copilot', error.response?.data?.message || 'Failed to retrieve finance copilot guidance');
+    } finally {
+      setCopilotLoading(false);
+    }
+  };
+
   const openPaymentModal = () => {
     if (!transactionDetail) return;
     setPaymentForm({
@@ -595,27 +619,122 @@ const AccountsDashboard: React.FC = () => {
     );
   };
 
+  const syncCoverage = useMemo(() => {
+    const withPatientContext = transactions.filter((tx) => !!tx.patient_id).length;
+    const withModuleSource = transactions.filter((tx) => !!tx.source_module).length;
+    const withClaimsLink = transactions.filter((tx) => (tx.claims_summary?.count || 0) > 0).length;
+    return {
+      withPatientContext,
+      withModuleSource,
+      withClaimsLink,
+    };
+  }, [transactions]);
+
+  if (!userChecked || !accessGranted) {
+    return null;
+  }
+
+  const tenantBasePath = `/ehr/${tenantSlug || ''}`;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-slate-50 to-indigo-50">
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => navigate(`/ehr/${tenantSlug}/dashboard`)}
-            className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm font-medium">Back to Dashboard</span>
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={loadSummary}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50 transition"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
-            </button>
-          </div>
-        </div>
+    <>
+      <AdminNavigationShell
+        title="Accounts & Finance"
+        subtitle="Revenue cycle, claims, payments, and reconciliation controls"
+        portalLabel="Accounts workspace"
+        headerTone="finance"
+        navigationItems={[
+          { key: 'dashboard', label: 'Dashboard', path: `${tenantBasePath}/dashboard`, icon: TrendingUp, exact: true },
+          { key: 'accounts', label: 'Accounts', path: `${tenantBasePath}/accounts`, icon: CreditCard, exact: true },
+          { key: 'accounts-analytics', label: 'Analytics', path: `${tenantBasePath}/accounts/analytics`, icon: Sparkles, exact: true },
+          { key: 'claims', label: 'Claims', path: `${tenantBasePath}/claims`, icon: Shield, exact: true, roles: ['accounts', 'admin'] },
+          { key: 'settings', label: 'Profile Settings', path: `${tenantBasePath}/settings`, icon: Settings, exact: true },
+        ]}
+      >
+        <div className="max-w-7xl mx-auto px-2 py-2 space-y-8">
+          <section className="rounded-2xl border border-amber-200/70 bg-gradient-to-r from-amber-50 via-orange-50 to-indigo-50 p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-amber-700 font-semibold">Finance Command</p>
+                <h2 className="text-xl font-bold text-slate-900 mt-1">Collections, Claims, and Reconciliation Integrity</h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  Live linkage across patient registrations, clinical modules, and medical aid claim status.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowCopilot((prev) => !prev)}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                    showCopilot ? 'bg-amber-600 text-white' : 'bg-white text-amber-700 border border-amber-200 hover:bg-amber-50'
+                  }`}
+                >
+                  <Brain className="w-4 h-4" />
+                  Copilot
+                </button>
+                <button
+                  onClick={loadSummary}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50 transition"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </button>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-xl border border-white/80 bg-white/80 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Transactions With Patient Context</p>
+                <p className="text-xl font-semibold text-slate-900">{syncCoverage.withPatientContext}</p>
+              </div>
+              <div className="rounded-xl border border-white/80 bg-white/80 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Transactions Linked To Modules</p>
+                <p className="text-xl font-semibold text-slate-900">{syncCoverage.withModuleSource}</p>
+              </div>
+              <div className="rounded-xl border border-white/80 bg-white/80 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Transactions With Claims</p>
+                <p className="text-xl font-semibold text-indigo-700">{syncCoverage.withClaimsLink}</p>
+              </div>
+            </div>
+          </section>
+
+          {showCopilot && (
+            <section className="rounded-2xl border border-amber-200 bg-white p-5">
+              <div className="flex flex-col gap-3 md:flex-row">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={copilotQuery}
+                    onChange={(e) => setCopilotQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && runCopilot()}
+                    placeholder="Ask about denial prevention, payer reconciliation, coding/capture quality..."
+                    className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                </div>
+                <button
+                  onClick={runCopilot}
+                  disabled={copilotLoading || !copilotQuery.trim()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 disabled:opacity-60"
+                >
+                  {copilotLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BookOpen className="w-4 h-4" />}
+                  Run
+                </button>
+              </div>
+              <div className="mt-4 space-y-2">
+                {copilotResults.length === 0 ? (
+                  <p className="text-sm text-slate-500">Copilot guidance appears here with references.</p>
+                ) : (
+                  copilotResults.slice(0, 4).map((result: any, index: number) => (
+                    <div key={`accounts-copilot-${index}`} className="rounded-lg border border-amber-100 bg-amber-50/40 p-3">
+                      <p className="text-xs uppercase tracking-wide font-semibold text-amber-700">
+                        {result.source || 'Guidance'}
+                      </p>
+                      <p className="text-sm text-slate-700 mt-1">{result.text || result.content || 'No content.'}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+          )}
 
         {/* Summary Cards */}
         <section>
@@ -1123,6 +1242,7 @@ const AccountsDashboard: React.FC = () => {
           </div>
         </section>
       </div>
+      </AdminNavigationShell>
 
       {/* Record Payment Modal */}
       {showPaymentModal && transactionDetail && (
@@ -1446,7 +1566,7 @@ const AccountsDashboard: React.FC = () => {
           </div>
         </ModalPortal>
       )}
-    </div>
+    </>
   );
 };
 

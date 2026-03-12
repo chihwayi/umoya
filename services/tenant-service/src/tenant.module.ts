@@ -15,7 +15,10 @@ import { AuthService } from './services/auth.service';
 import { AuditService } from './services/audit.service';
 import { EmailService } from './services/email.service';
 import { HealthMonitorService } from './services/health-monitor.service';
+import { PlatformServiceMonitorService } from './services/platform-service-monitor.service';
+import { RuntimeEndpointConfigService } from './services/runtime-endpoint-config.service';
 import { BackupService } from './services/backup.service';
+import { BackupScheduleService } from './services/backup-schedule.service';
 import { StorageService } from './services/storage.service';
 import { AuthController } from './controllers/auth.controller';
 import { BackupController } from './controllers/backup.controller';
@@ -68,7 +71,10 @@ function resolveJwtSecret(): string {
     AuditService,
     EmailService,
     HealthMonitorService,
+    RuntimeEndpointConfigService,
+    PlatformServiceMonitorService,
     BackupService,
+    BackupScheduleService,
     StorageService,
     DemoAccessRequestService,
     JwtStrategy

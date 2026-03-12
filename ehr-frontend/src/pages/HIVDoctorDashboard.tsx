@@ -110,7 +110,11 @@ const HIV_ACTION_LABELS: Record<string, string> = {
   book_clinical_review: 'Book clinical review',
 };
 
-const HIVDoctorDashboard: React.FC = () => {
+interface HIVDoctorDashboardProps {
+  embedded?: boolean;
+}
+
+const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
@@ -290,41 +294,19 @@ const HIVDoctorDashboard: React.FC = () => {
 
       // Load enrollments
       const statusToLoad = statusFilter === 'all' ? 'all' : statusFilter;
-      console.log('Loading HIV enrollments with status:', statusToLoad);
-      
       const enrollmentsRes = await ehrApi.getHivEnrollments(statusToLoad, token, tenantSlug!);
-      console.log('Full API Response Object:', enrollmentsRes);
-      console.log('Full API Response (stringified):', JSON.stringify(enrollmentsRes, null, 2));
-      console.log('enrollmentsRes.data:', enrollmentsRes.data);
-      console.log('enrollmentsRes.data?.enrollments:', enrollmentsRes.data?.enrollments);
       
       // Try different possible response structures
       let enrollmentsList = [];
       if (enrollmentsRes.data?.enrollments) {
         enrollmentsList = enrollmentsRes.data.enrollments;
-        console.log('Using enrollmentsRes.data.enrollments');
       } else if (enrollmentsRes.data?.data?.enrollments) {
         enrollmentsList = enrollmentsRes.data.data.enrollments;
-        console.log('Using enrollmentsRes.data.data.enrollments');
       } else if (Array.isArray(enrollmentsRes.data)) {
         enrollmentsList = enrollmentsRes.data;
-        console.log('Using enrollmentsRes.data as array');
       } else if (enrollmentsRes.data && typeof enrollmentsRes.data === 'object') {
         // Check if it's the direct response object
         enrollmentsList = enrollmentsRes.data.enrollments || [];
-        console.log('Using enrollmentsRes.data with enrollments property');
-      }
-      
-      console.log('Loaded enrollments count:', enrollmentsList.length);
-      console.log('Enrollments data:', enrollmentsList);
-      
-      if (enrollmentsList.length === 0) {
-        console.warn('No enrollments returned from API. Full response:', enrollmentsRes);
-        console.warn('Status filter:', statusToLoad);
-        console.warn('Response structure keys:', Object.keys(enrollmentsRes));
-        if (enrollmentsRes.data) {
-          console.warn('enrollmentsRes.data keys:', Object.keys(enrollmentsRes.data));
-        }
       }
       
       setEnrollments(enrollmentsList);
@@ -722,8 +704,8 @@ const HIVDoctorDashboard: React.FC = () => {
   const combinedRegimenBlocker = regimenChangeCdssBlocker || regimenMatrixBlocker;
 
   return (
-    <div className="min-h-screen bg-slate-50 overflow-x-hidden">
-      {/* Header */}
+    <div className={`${embedded ? '' : 'min-h-screen '}bg-slate-50 overflow-x-hidden`}>
+      {!embedded && (
       <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -761,6 +743,7 @@ const HIVDoctorDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Guideline Search Panel */}
       {showGuidelineSearch && (
@@ -815,7 +798,7 @@ const HIVDoctorDashboard: React.FC = () => {
       )}
 
       {/* Statistics Cards */}
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 -mt-4 sm:-mt-6">
+      <div className={`max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 ${embedded ? 'pt-2' : '-mt-4 sm:-mt-6'}`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-6">
           <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-2 sm:p-4 border-l-4 border-blue-500">
             <div className="flex items-center justify-between gap-1 sm:gap-2">
@@ -1280,11 +1263,7 @@ const HIVDoctorDashboard: React.FC = () => {
                                       // Get full enrollment details
                                       const enrollmentRes = await ehrApi.getHivEnrollmentById(enrollment.id, token, tenantSlug!);
                                       const fullEnrollment = enrollmentRes.data.enrollment || enrollmentRes.data || enrollment;
-                                      
-                                      console.log('Latest visit:', latestVisit);
-                                      console.log('Current regimen from visit:', latestVisit?.arv_regimen_name);
-                                      console.log('Current regimen code from visit:', latestVisit?.arv_regimen_code);
-                                      
+
                                       const mergedEnrollment = {
                                         ...enrollment,
                                         ...(fullEnrollment || {}),
@@ -1563,11 +1542,7 @@ const HIVDoctorDashboard: React.FC = () => {
                                       // Get full enrollment details
                                       const enrollmentRes = await ehrApi.getHivEnrollmentById(item.enrollment.id, token, tenantSlug!);
                                       const fullEnrollment = enrollmentRes.data.enrollment || enrollmentRes.data || item.enrollment;
-                                      
-                                      console.log('Latest visit:', latestVisit);
-                                      console.log('Current regimen from visit:', latestVisit?.arv_regimen_name);
-                                      console.log('Current regimen code from visit:', latestVisit?.arv_regimen_code);
-                                      
+
                                       await openRegimenChangeModalWithContext({ 
                                         ...item.enrollment, // Base enrollment data
                                         ...fullEnrollment, // Override with full details

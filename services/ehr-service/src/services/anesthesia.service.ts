@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PreAnesthesiaAssessment } from '../entities/pre-anesthesia-assessment.entity';
 import { AnesthesiaRecord } from '../entities/anesthesia-record.entity';
@@ -11,6 +11,22 @@ export class AnesthesiaService {
   private readonly logger = new Logger(AnesthesiaService.name);
 
   constructor() {}
+
+  private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
+    const [row] = await tenantDb.query(`SELECT to_regclass($1) as table_name`, [`public.${tableName}`]);
+    return Boolean(row?.table_name);
+  }
+
+  private async ensureTableForWrite(
+    tenantDb: DataSource,
+    tableName: string,
+    featureDescription: string,
+  ): Promise<void> {
+    if (await this.hasTable(tenantDb, tableName)) return;
+    throw new BadRequestException(
+      `${featureDescription} is not initialized for this tenant. Missing table: ${tableName}.`,
+    );
+  }
 
   // ==================== PRE-ANESTHESIA ASSESSMENT ====================
 
@@ -215,6 +231,8 @@ export class AnesthesiaService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<PacuRecord> {
+    await this.ensureTableForWrite(tenantDb, 'pacu_records', 'PACU admissions');
+
     const repository = tenantDb.getRepository(PacuRecord);
 
     const pacuRecord = repository.create({
@@ -230,12 +248,23 @@ export class AnesthesiaService {
     id: string,
     tenantDb: DataSource,
   ): Promise<PacuRecord> {
+    if (!(await this.hasTable(tenantDb, 'pacu_records'))) {
+      throw new BadRequestException(
+        'PACU is not initialized for this tenant. Missing table: pacu_records.',
+      );
+    }
+
     const repository = tenantDb.getRepository(PacuRecord);
 
-    const record = await repository.findOne({
-      where: { id },
-      relations: ['pacuNurse', 'dischargeApprovedBy'],
-    });
+    let record: PacuRecord | null = null;
+    try {
+      record = await repository.findOne({
+        where: { id },
+        relations: ['pacuNurse', 'dischargeApprovedBy'],
+      });
+    } catch {
+      record = await repository.findOne({ where: { id } });
+    }
 
     if (!record) {
       throw new NotFoundException(`PACU record ${id} not found`);
@@ -249,6 +278,8 @@ export class AnesthesiaService {
     scoreData: any,
     tenantDb: DataSource,
   ): Promise<PacuRecord> {
+    await this.ensureTableForWrite(tenantDb, 'pacu_records', 'PACU Aldrete scoring');
+
     const repository = tenantDb.getRepository(PacuRecord);
 
     const record = await repository.findOne({ where: { id } });
@@ -272,6 +303,8 @@ export class AnesthesiaService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<PacuRecord> {
+    await this.ensureTableForWrite(tenantDb, 'pacu_records', 'PACU discharge');
+
     const repository = tenantDb.getRepository(PacuRecord);
 
     const record = await repository.findOne({ where: { id } });
@@ -293,6 +326,11 @@ export class AnesthesiaService {
   async getActivePACUPatients(
     tenantDb: DataSource,
   ): Promise<PacuRecord[]> {
+    if (!(await this.hasTable(tenantDb, 'pacu_records'))) {
+      this.logger.warn('PACU active list requested but pacu_records table is missing. Returning empty list.');
+      return [];
+    }
+
     const repository = tenantDb.getRepository(PacuRecord);
 
     try {
@@ -301,12 +339,22 @@ export class AnesthesiaService {
         relations: ['patient', 'pacuNurse', 'surgicalCase'],
         order: { arrivalTime: 'ASC' },
       });
-    } catch (error) {
-      // Fallback: try without relations if there's an issue
-      return await repository.find({
-        where: { dischargeTime: null },
-        order: { arrivalTime: 'ASC' },
-      });
+    } catch (relationError: any) {
+      this.logger.warn(
+        `PACU active list relation query failed. Falling back to base query. ${relationError?.message ?? relationError}`,
+      );
+
+      try {
+        return await repository.find({
+          where: { dischargeTime: null },
+          order: { arrivalTime: 'ASC' },
+        });
+      } catch (baseQueryError: any) {
+        this.logger.warn(
+          `PACU active list base query failed; returning empty list for compatibility. ${baseQueryError?.message ?? baseQueryError}`,
+        );
+        return [];
+      }
     }
   }
 
@@ -389,4 +437,3 @@ export class AnesthesiaService {
     return await repository.save(billing);
   }
 }
-

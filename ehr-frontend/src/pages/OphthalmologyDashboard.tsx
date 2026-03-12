@@ -97,7 +97,11 @@ const ENCOUNTER_TYPE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-const OphthalmologyDashboard: React.FC = () => {
+interface OphthalmologyDashboardProps {
+  embedded?: boolean;
+}
+
+const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess, showInfo } = useNotification();
@@ -1050,7 +1054,8 @@ const OphthalmologyDashboard: React.FC = () => {
     null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={`${embedded ? '' : 'min-h-screen '}bg-slate-50`}>
+      {!embedded && (
       <header className="bg-gradient-to-r from-sky-600 via-indigo-600 to-blue-600 border-b border-sky-400 shadow">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4 text-white">
           <div className="flex items-start gap-3">
@@ -1090,6 +1095,7 @@ const OphthalmologyDashboard: React.FC = () => {
           </div>
         </div>
       </header>
+      )}
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
 

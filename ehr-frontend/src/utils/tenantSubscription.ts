@@ -27,6 +27,29 @@ export interface TenantSubscriptionInfo {
   billingSummary?: TenantBillingSummary;
 }
 
+const FULL_EHR_BASE_MODULES = new Set(['finance', 'nurse_general']);
+
+const isLegacyFullEhrModuleSubscription = (tenantInfo: TenantSubscriptionInfo | null | undefined) => {
+  if (!tenantInfo) return false;
+  const packagePreset = tenantInfo.packagePreset || tenantInfo.billingSummary?.packagePreset;
+  if (packagePreset === 'claims_only') return false;
+
+  const packageName =
+    (tenantInfo.packageName || tenantInfo.billingSummary?.packageName || '').trim().toLowerCase();
+  if (packageName !== 'module subscription') return false;
+
+  const configuredModules = new Set(
+    (tenantInfo.enabledModules || tenantInfo.billingSummary?.enabledModules || [])
+      .map((moduleKey) => String(moduleKey || '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (configuredModules.size === 0) return false;
+
+  // Backward compatibility:
+  // some full-EHR tenants only store base modules even though access should not be module-gated.
+  return Array.from(configuredModules).every((moduleKey) => FULL_EHR_BASE_MODULES.has(moduleKey));
+};
+
 const ROUTE_MODULE_MAP: Record<string, string> = {
   telemedicine: 'telemedicine',
   claims: 'claims',
@@ -35,6 +58,8 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   'doctor/oncology': 'oncology',
   'doctor/cardiology': 'cardiology',
   'doctor/ophthalmology': 'ophthalmology',
+  'doctor/emergency': 'emergency',
+  'doctor/operating-room': 'operating_room',
   'nurse/maternity': 'maternity',
   'population-health': 'population_health',
   'blood-bank': 'blood_bank',
@@ -62,6 +87,7 @@ export const getEnabledModules = (tenantInfo?: TenantSubscriptionInfo | null) =>
 
 export const hasModuleAccess = (tenantInfo: TenantSubscriptionInfo | null | undefined, moduleKey?: string | null) => {
   if (!moduleKey) return true;
+  if (isLegacyFullEhrModuleSubscription(tenantInfo)) return true;
   return getEnabledModules(tenantInfo).has(moduleKey);
 };
 

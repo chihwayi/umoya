@@ -7,6 +7,48 @@ import { EDVisit } from '../entities/ed-visit.entity';
 export class EDService {
   private readonly logger = new Logger(EDService.name);
 
+  private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
+    const [row] = await tenantDb.query(`SELECT to_regclass($1) as table_name`, [`public.${tableName}`]);
+    return Boolean(row?.table_name);
+  }
+
+  private async ensureEDVisitsTableForWrite(tenantDb: DataSource): Promise<void> {
+    if (await this.hasTable(tenantDb, 'ed_visits')) {
+      return;
+    }
+
+    throw new BadRequestException(
+      'Emergency Department schema is not initialized for this tenant. Please run tenant ED setup before creating ED visits.',
+    );
+  }
+
+  private async ensureEDTriageTableForWrite(tenantDb: DataSource): Promise<void> {
+    if (await this.hasTable(tenantDb, 'ed_triage_assessments')) {
+      return;
+    }
+
+    throw new BadRequestException(
+      'Emergency Department triage schema is not initialized for this tenant. Please run tenant ED setup before triage actions.',
+    );
+  }
+
+  private getEmptyMetrics() {
+    return {
+      total_visits_today: 0,
+      current_census: 0,
+      average_wait_time_minutes: 0,
+      average_door_to_provider_minutes: 0,
+      lwbs_count: 0,
+      lwbs_rate: 0,
+      admission_rate: 0,
+      esi_level_1: 0,
+      esi_level_2: 0,
+      esi_level_3: 0,
+      esi_level_4: 0,
+      esi_level_5: 0,
+    };
+  }
+
   private async generateEDVisitNumber(tenantDb: DataSource): Promise<string> {
     const [result] = await tenantDb.query(
       `SELECT COUNT(*) as count FROM ed_visits WHERE ed_visit_number LIKE 'ED-%'`,
@@ -29,6 +71,8 @@ export class EDService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<EDVisit> {
+    await this.ensureEDVisitsTableForWrite(tenantDb);
+
     const repository = tenantDb.getRepository(EDVisit);
 
     const edVisitNumber = await this.generateEDVisitNumber(tenantDb);
@@ -60,6 +104,9 @@ export class EDService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<EDVisit> {
+    await this.ensureEDVisitsTableForWrite(tenantDb);
+    await this.ensureEDTriageTableForWrite(tenantDb);
+
     const repository = tenantDb.getRepository(EDVisit);
     const visit = await repository.findOne({ where: { id: visitId } });
 
@@ -134,6 +181,11 @@ export class EDService {
   ];
 
   async getEDTrackingBoard(tenantDb: DataSource): Promise<EDVisit[]> {
+    if (!(await this.hasTable(tenantDb, 'ed_visits'))) {
+      this.logger.warn('ED tracking requested but ed_visits table is missing for this tenant. Returning empty board.');
+      return [];
+    }
+
     const repository = tenantDb.getRepository(EDVisit);
     return await repository.find({
       where: {
@@ -150,6 +202,8 @@ export class EDService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<EDVisit> {
+    await this.ensureEDVisitsTableForWrite(tenantDb);
+
     const repository = tenantDb.getRepository(EDVisit);
     const visit = await repository.findOne({ where: { id: visitId } });
 
@@ -191,6 +245,8 @@ export class EDService {
     },
     userId?: string,
   ): Promise<EDVisit> {
+    await this.ensureEDVisitsTableForWrite(tenantDb);
+
     const repository = tenantDb.getRepository(EDVisit);
     const visit = await repository.findOne({ where: { id: visitId }, relations: ['patient'] });
     if (!visit) {
@@ -241,6 +297,11 @@ export class EDService {
   }
 
   async getEDMetrics(date: Date, tenantDb: DataSource): Promise<any> {
+    if (!(await this.hasTable(tenantDb, 'ed_visits'))) {
+      this.logger.warn('ED metrics requested but ed_visits table is missing for this tenant. Returning empty metrics.');
+      return this.getEmptyMetrics();
+    }
+
     const [dayRow] = await tenantDb.query(
       `
       SELECT 
@@ -289,4 +350,3 @@ export class EDService {
     };
   }
 }
-

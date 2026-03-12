@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { NotificationProvider } from './components/GlobalNotification';
 import { AutoLogoutProvider } from './components/AutoLogoutProvider';
 import { tenantApi } from './services/api';
@@ -16,11 +16,6 @@ const PatientDetail = lazy(() => import('./pages/PatientDetail'));
 const AppointmentManagement = lazy(() => import('./pages/AppointmentManagement'));
 const DoctorDashboard = lazy(() => import('./pages/DoctorDashboard'));
 const DoctorSyncExecutionHub = lazy(() => import('./pages/DoctorSyncExecutionHub'));
-const DoctorPatientDetail = lazy(() => import('./pages/DoctorPatientDetail'));
-const DoctorAppointmentManagement = lazy(() => import('./pages/DoctorAppointmentManagement'));
-const DoctorPatientsList = lazy(() => import('./pages/DoctorPatientsList'));
-const DoctorTreatmentHistory = lazy(() => import('./pages/DoctorTreatmentHistory'));
-const DoctorTreatmentHistoryDetail = lazy(() => import('./pages/DoctorTreatmentHistoryDetail'));
 const HIVDoctorDashboard = lazy(() => import('./pages/HIVDoctorDashboard'));
 const MaternityDoctorDashboard = lazy(() => import('./pages/MaternityDoctorDashboard'));
 const RadiologistDashboard = lazy(() => import('./pages/RadiologistDashboard'));
@@ -250,6 +245,22 @@ const RouteLoader: React.FC = () => (
   </div>
 );
 
+const RouteThemeManager: React.FC = () => {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const isEhrRoute = location.pathname.startsWith('/ehr/');
+    document.body.classList.toggle('ehr-theme', isEhrRoute);
+
+    return () => {
+      document.body.classList.remove('ehr-theme');
+    };
+  }, [location.pathname]);
+
+  return null;
+};
+
 function App() {
   const TenantRedirect: React.FC = () => {
     const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -263,6 +274,7 @@ function App() {
     <NotificationProvider>
       <AutoLogoutProvider>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <RouteThemeManager />
           <Suspense fallback={<RouteLoader />}>
             <Routes>
               <Route path="/" element={<LandingPage />} />
@@ -323,6 +335,22 @@ function App() {
               }
             />
             <Route
+              path="/ehr/:tenantSlug/doctor/modules"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/coordination"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="/ehr/:tenantSlug/doctor/sync/:moduleKey"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
@@ -334,7 +362,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/patients"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
-                  <DoctorPatientsList />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -342,7 +370,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/patients/:patientId"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
-                  <DoctorPatientDetail />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -350,7 +378,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/appointments"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
-                  <DoctorAppointmentManagement />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -358,7 +386,95 @@ function App() {
               path="/ehr/:tenantSlug/doctor/treatments"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
-                  <DoctorTreatmentHistory />
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/emergency"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="emergency">
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/operating-room"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="operating_room">
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/pacu"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/bed-management"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/mar"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/blood-bank"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="blood_bank">
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/sepsis"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="emergency">
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/infection-control"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="infection_control">
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/revenue-cycle"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="revenue_cycle">
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/cdi"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/population-health"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="population_health">
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -366,7 +482,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/treatments/:patientId"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
-                  <DoctorTreatmentHistoryDetail />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -374,7 +490,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/hiv"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="hiv">
-                  <HIVDoctorDashboard />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -382,7 +498,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/maternity"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="maternity">
-                  <MaternityDoctorDashboard />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -390,7 +506,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/cardiology"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="cardiology">
-                  <CardiologyDashboard />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -406,7 +522,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/oncology"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="oncology">
-                  <OncologyDashboard />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -414,7 +530,7 @@ function App() {
               path="/ehr/:tenantSlug/doctor/ophthalmology"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']} moduleKey="ophthalmology">
-                  <OphthalmologyDashboard />
+                  <DoctorDashboard />
                 </RoleProtectedRoute>
               }
             />
