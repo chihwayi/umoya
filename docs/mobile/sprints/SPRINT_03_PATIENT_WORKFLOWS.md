@@ -126,6 +126,43 @@ Primary APIs:
 - `POST /ehr-service/api/patient-portal/goals`
 - `GET /ehr-service/api/patient-portal/care-plans`
 
+### Care continuity and patient control modules
+
+Required behavior:
+
+- questionnaires and PRO follow-ups are visible and submittable
+- patient can manage consents and view pathway progress
+- immunization records and due forecast are visible
+- current admission and ED visit status can be reviewed
+- family/caregiver access can be granted/revoked
+- patient can export records in supported formats
+
+Primary APIs:
+
+- `GET /ehr-service/api/patient-portal/questionnaires/available`
+- `GET /ehr-service/api/patient-portal/questionnaires/pending`
+- `GET /ehr-service/api/patient-portal/questionnaires/history`
+- `GET /ehr-service/api/patient-portal/questionnaires/schedules`
+- `GET /ehr-service/api/patient-portal/questionnaires/:questionnaireId`
+- `POST /ehr-service/api/patient-portal/questionnaires/:questionnaireId/submit`
+- `GET /ehr-service/api/patient-portal/consents`
+- `POST /ehr-service/api/patient-portal/consents/:id/sign`
+- `POST /ehr-service/api/patient-portal/consents/:id/decline`
+- `GET /ehr-service/api/patient-portal/pathways`
+- `GET /ehr-service/api/patient-portal/pathways/:enrollmentId/progress`
+- `GET /ehr-service/api/patient-portal/immunizations`
+- `GET /ehr-service/api/patient-portal/immunizations/forecast`
+- `GET /ehr-service/api/patient-portal/admission/current`
+- `GET /ehr-service/api/patient-portal/admission/history`
+- `GET /ehr-service/api/patient-portal/ed-visits`
+- `GET /ehr-service/api/patient-portal/family-access`
+- `POST /ehr-service/api/patient-portal/family-access`
+- `DELETE /ehr-service/api/patient-portal/family-access/:id`
+- `POST /ehr-service/api/patient-portal/export/pdf`
+- `GET /ehr-service/api/patient-portal/export/fhir`
+- `GET /ehr-service/api/patient-portal/export/json`
+- `GET /ehr-service/api/patient-portal/export/csv`
+
 ### Messaging and notifications
 
 Required behavior:
@@ -160,6 +197,9 @@ Must ship with these categories:
 - lab result ready
 - doctor message
 - post-visit AI update
+- questionnaire due
+- consent action required
+- care pathway milestone due
 
 Delivery behavior:
 
@@ -191,6 +231,11 @@ Backend note:
 - bill payment flow completes or fails with clear feedback
 - notification deep-links route correctly
 - patient messaging send/read works
+- questionnaire completion updates pending count
+- consent sign or decline action is persisted
+- immunization forecast loads and empty state is meaningful
+- admission or ED status view loads safely when there is no active encounter
+- export request returns file payload and audit trail entry
 
 ## Acceptance criteria
 
@@ -199,6 +244,7 @@ Backend note:
 - payment flow is real for enabled methods
 - notifications drive daily engagement
 - post-visit AI companion is fully integrated
+- care continuity modules (questionnaires, consents, pathways, immunizations, admission/ED, family access, export) are operational
 
 ## Definition of done
 

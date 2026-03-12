@@ -7,6 +7,8 @@ This mobile plan is anchored on the selected design prototypes:
 - `docs/mobile/design/medicore-mobile-v3.jsx`
 - `docs/mobile/design/medicore-mobile-app.jsx`
 - `docs/mobile/design/v3 update description`
+- `docs/mobile/sprints/MOBILE_ROLE_FEATURE_TRACEABILITY.md`
+- `docs/mobile/MOBILE_TECH_STACK_AND_ENGINEERING_CONTRACT.md`
 
 The build must match that design direction, not reinterpret it into a generic mobile app.
 
@@ -185,43 +187,129 @@ Backend gap to close during mobile delivery:
 - add push preference management
 - add provider push event fanout for escalation, message, handoff, and critical-result categories
 
-## 8. Mobile modules by role
+## 8. Role capability baseline (must ship for v1)
 
-Doctor:
+Doctor mobile baseline:
 
-- ward rounds
-- post-visit signoff
-- escalation inbox
-- secure messaging
-- AI assist / CDSS
-- dictation
+- ward rounds list with urgency and patient vitals snapshot
+- escalation inbox with SLA timer, acknowledgement, resolution, and source context
+- post-visit signoff queue with summary review and publish actions
+- post-visit audio session support (playback, transcript review, mobile contract/events consumption)
+- secure messaging (threads, unread counts, reply, task conversion)
+- telemedicine consultation list, join, meeting URL retrieval, end consultation
+- AI/CDSS assist panel (advisory-only recommendations with guideline citation source)
+- dictation entry for rapid documentation capture
+- module launchpad cards for doctor-critical modules with mobile-first actions and deep-link fallback:
+  - emergency
+  - operating room
+  - PACU
+  - MAR
+  - blood bank
+  - sepsis
+  - infection control
+  - CDI
+  - revenue cycle
+  - population health
+  - HIV
+  - oncology
+  - maternity
 
-Nurse:
+Nurse mobile baseline:
 
-- shift dashboard
-- vitals capture
-- escalation send flow
-- secure messaging
-- handoff/task closure
+- shift dashboard from live nurse worklist state
+- vitals capture and AI interpretation support
+- escalation send flow (severity, doctor target, clinical finding, context payload)
+- task completion and alert acknowledgement
+- handoff finalize/review/share workflow
+- secure messaging with patient and team context
+- cross-module recommendation execution actions from nurse queue:
+  - HIV
+  - oncology
+  - cardiology
+  - ED
+  - sepsis
+  - blood bank
+  - ophthalmology
+  - telemedicine
+  - lab
+  - imaging
+  - pharmacy
 
-Patient:
+Patient mobile baseline:
 
-- home
-- post-visit AI companion
-- medications and adherence
-- bills and mobile payment
-- my health
-- notifications
+- home summary and quick actions
+- appointment booking, cancellation, and telemedicine join
+- post-visit AI companion (summary, grounded Q&A, acknowledgements, thread history)
+- prescriptions, reminders, adherence tracking, refill requests
+- bills and payment with real integration status handling
+- my health: labs, vitals, diabetes, cardiology, goals, care plans
+- messaging and notifications with deep links
+- patient control extensions required for operational completeness:
+  - questionnaires and PRO schedules
+  - consents
+  - pathways
+  - immunizations and forecast
+  - admission status and ED visits
+  - family access
+  - records export (PDF/FHIR/JSON/CSV)
+  - symptom checker
 
-## 9. Sprint sequence
+## 9. Scope boundaries (v1 vs v1.1)
+
+v1 must include all role baselines above.
+
+v1.1 can extend with richer analytics and specialty drilldowns that are not blocker workflows on mobile.
+
+Boundary rule:
+
+- when a feature is read-heavy and complex, mobile may open a scoped detail or read-only view and defer deep configuration to web
+- no critical action may be deferred if it is required for immediate clinical safety or patient adherence
+
+## 10. Cross-role end-to-end flows (required for signoff)
+
+1. Nurse escalation to doctor closure:
+   - nurse escalates from worklist
+   - doctor receives inbox/push and acknowledges
+   - doctor resolves with note/action
+   - nurse sees updated status
+2. Telemedicine to post-visit continuum:
+   - consultation starts and ends
+   - recording and post-visit session processed
+   - doctor signs off and publishes
+   - patient receives summary notification and companion follow-up
+3. Medication adherence to financial continuity:
+   - patient receives reminder
+   - marks medication taken
+   - submits refill request
+   - receives bill/payment update and receipt state
+4. Chronic care continuity:
+   - patient updates vitals or PRO response
+   - provider queue reflects follow-up signal
+   - provider executes task and patient gets notification
+
+## 11. AI/CDSS completeness contract
+
+AI/CDSS is mandatory but advisory:
+
+- no autonomous diagnosis or treatment execution without human confirmation
+- every AI suggestion must show source context and confidence/traceability metadata where available
+- every AI action entry must produce an auditable event (who accepted/overrode and when)
+
+Role-level AI minimum:
+
+- doctor: escalation support, post-visit drafting/signoff assist, guideline-assisted decisions, dictation assist
+- nurse: triage/vitals interpretation assist, escalation recommendation assist, handoff assist
+- patient: post-visit grounded Q&A, adherence coaching summaries, preventive reminder nudges
+
+## 12. Sprint sequence
 
 1. Sprint 00: foundation, architecture, API contract, notification backbone
 2. Sprint 01: tenant bootstrap, auth, shell navigation, persistent clinic selection
-3. Sprint 02: provider mobile workflows
-4. Sprint 03: patient mobile workflows and heavy reminders
+3. Sprint 02: provider mobile workflows (doctor + nurse) including module launchpad
+4. Sprint 03: patient mobile workflows and engagement-heavy reminders
 5. Sprint 04: offline rules, performance, E2E, release hardening, store readiness
 
-## 10. Mandatory delivery gate for every sprint
+## 13. Mandatory delivery gate for every sprint
 
 Every sprint must end in this exact order:
 
@@ -246,7 +334,7 @@ git commit -m "mobile: <sprint scope>"
 
 No sprint is complete if any of those checks are red.
 
-## 11. Non-negotiable release rules
+## 14. Non-negotiable release rules
 
 - English only for v1
 - iOS and Android from the same TypeScript codebase
@@ -256,3 +344,15 @@ No sprint is complete if any of those checks are red.
 - No PHI stored outside approved secure or encrypted local storage
 - No critical workflow ships without notification handling
 - No sprint closes without updated QA notes and API contract references
+- No backend schema change ships without a provisioning migration and tenant-safe repair path
+
+## 15. Evidence pack required for sprint signoff
+
+Each sprint must produce an evidence bundle in `reports/mobile/` (or equivalent) containing:
+
+- role-based smoke checklist (doctor, nurse, patient)
+- API contract verification list with endpoint responses
+- mobile screenshots/video clips matching V3 design direction
+- AI/CDSS safety checks (assistive behavior + audit trail)
+- offline and reconnect behavior notes for impacted screens
+- known limitations and defer list (explicitly marked for next sprint)

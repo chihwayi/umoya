@@ -61,6 +61,18 @@ Track mobile-specific metrics:
 - crash-free sessions
 - API error rate by screen
 
+### Design conformance
+
+Design conformance must be verified against `docs/mobile/design/medicore-mobile-v3.jsx` and `docs/mobile/design/v3 update description`.
+
+Required checks:
+
+- token usage only from mobile design tokens (no hardcoded random colors in feature screens)
+- readable text contrast on dark surfaces for all cards, labels, badges, and form controls
+- urgency visuals (critical, warning, routine) are visually distinct and pass accessibility checks
+- role tabs and notification badges match the approved V3 interaction patterns
+- all loading, empty, and error states preserve the same visual language
+
 ## Backend work required
 
 If still missing after previous sprints, finish these here:
@@ -70,6 +82,13 @@ If still missing after previous sprints, finish these here:
 - minimum supported version endpoint
 - provider mobile dashboard aggregate endpoint if still needed
 - patient-safe payment status endpoint if bill payload is insufficient
+
+Non-negotiable backend governance:
+
+- if any new mobile backend feature requires schema changes, ship:
+  - migration script
+  - tenant provisioning update script
+  - tenant repair script/path for pre-existing tenants
 
 ## End-to-end release checklist
 
@@ -81,6 +100,8 @@ If still missing after previous sprints, finish these here:
 - secure message send and read
 - HIV queue -> open patient -> action completes
 - telemedicine consultation join
+- post-visit draft review -> publish -> patient companion visibility update
+- cross-module nurse recommendation execution reflected in doctor sync feed
 
 ### Patient E2E flows
 
@@ -91,6 +112,9 @@ If still missing after previous sprints, finish these here:
 - request refill
 - open bill -> pay
 - open notification -> deep-link succeeds
+- complete questionnaire and observe pending count decrease
+- sign or decline a consent and verify status update
+- open admission/ED status and confirm safe no-data behavior
 
 ### Negative flows
 
@@ -100,6 +124,16 @@ If still missing after previous sprints, finish these here:
 - no network during payment
 - push permission denied
 - unsupported payment method
+
+## Evidence package
+
+Release signoff requires an auditable evidence package with:
+
+- doctor, nurse, and patient smoke test transcripts
+- screenshots or short recordings for each main role flow
+- API contract check logs for critical routes
+- AI/CDSS behavior checks confirming advisory-only behavior and audit traces
+- offline/reconnect test outputs for supported offline screens
 
 ## App store readiness
 
@@ -121,6 +155,8 @@ The mobile app is ready only when:
 - tenant selection behaves exactly once per installed app data lifecycle
 - push notifications work for provider critical items and patient reminders
 - all build, lint, type, unit, and E2E gates are green
+- design conformance checks are green for all role shells
+- evidence package is stored under `reports/mobile/` for review
 
 ## Definition of done
 

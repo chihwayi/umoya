@@ -20,6 +20,20 @@ Doctor:
 - Secure Messages
 - AI Assist
 - Dictation entry point
+- Provider module launchpad for doctor-critical modules:
+  - Emergency Department
+  - Operating Room
+  - PACU
+  - MAR
+  - Blood Bank
+  - Sepsis
+  - Infection Control
+  - CDI
+  - Revenue Cycle
+  - Population Health
+  - HIV
+  - Oncology
+  - Maternity
 
 Nurse:
 
@@ -28,6 +42,8 @@ Nurse:
 - escalation send sheet
 - secure messages
 - task and alert acknowledgement
+- handoff review/finalize/share
+- cross-module recommendation execution queue
 
 ## Priority workflow groups
 
@@ -74,6 +90,27 @@ Where HIV queue actions are involved:
 
 - `GET /ehr-service/api/hiv/cohort-worklist`
 - `POST /ehr-service/api/nurse-worklist/cross-module/hiv-recommendation-action`
+
+### Nurse cross-module execution coverage
+
+Required behavior:
+
+- nurse can execute specialist recommendations without leaving nurse shell
+- each execution captures actor, module, patient context, and destination routing
+- action status reflects immediately in doctor sync feed
+
+Primary APIs:
+
+- `POST /ehr-service/api/nurse-worklist/cross-module/oncology-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/cardiology-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/ed-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/sepsis-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/blood-bank-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/ophthalmology-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/telemedicine-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/lab-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/imaging-recommendation-action`
+- `POST /ehr-service/api/nurse-worklist/cross-module/pharmacy-recommendation-action`
 
 ### Secure messaging
 
@@ -133,12 +170,21 @@ Doctor workflows should include:
 
 Primary APIs:
 
-- existing post-visit routes already used on web and available in EHR service
+- `GET /ehr-service/api/post-visit/sessions`
+- `GET /ehr-service/api/post-visit/sessions/:id`
+- `GET /ehr-service/api/post-visit/sessions/:id/mobile-contract`
+- `GET /ehr-service/api/post-visit/sessions/:id/mobile-events`
+- `GET /ehr-service/api/post-visit/sessions/:id/recording-url`
+- `GET /ehr-service/api/post-visit/sessions/:id/draft`
+- `POST /ehr-service/api/post-visit/sessions/:id/transcribe`
+- `POST /ehr-service/api/post-visit/sessions/:id/review`
+- `POST /ehr-service/api/post-visit/sessions/:id/publish`
 - `GET /ehr-service/api/telemedicine/consultations`
 - `GET /ehr-service/api/telemedicine/consultations/:id`
 - `POST /ehr-service/api/telemedicine/consultations/:id/join`
 - `GET /ehr-service/api/telemedicine/consultations/:id/meeting-url`
 - `POST /ehr-service/api/telemedicine/consultations/:id/end`
+- `GET /ehr-service/api/telemedicine/monitoring/alerts`
 
 ## Backend work required in this sprint
 
@@ -148,6 +194,7 @@ If these are missing or not optimized enough, add them now:
 - mobile-friendly aggregate ward dashboard endpoint
 - compact patient summary payload for ward cards
 - push unread counters for message inbox and escalation inbox
+- provider shell endpoint for module launchpad cards (counts + urgency) if current endpoints are too fragmented
 
 ## UI constraints
 
@@ -156,6 +203,7 @@ If these are missing or not optimized enough, add them now:
 - no provider screen should require three or more nested taps to reach action
 - AI suggestions must be visually distinct and clearly advisory
 - dictation and AI assist should be reachable from doctor context, not buried in settings
+- critical module launchpad cards must show badge counts and route to focused mobile actions
 
 ## Test cases
 
@@ -166,6 +214,9 @@ If these are missing or not optimized enough, add them now:
 - HIV cohort worklist loads and filters correctly
 - ARV approval flow works
 - telemedicine join flow opens meeting metadata
+- nurse executes cross-module recommendation action and doctor sees update
+- doctor completes post-visit review and publish from mobile without web fallback
+- module launchpad cards show live counts for at least ED, sepsis, blood bank, and population health
 
 ## Acceptance criteria
 
@@ -174,6 +225,9 @@ If these are missing or not optimized enough, add them now:
 - secure messaging is functional, not mocked
 - HIV worklist is visible on mobile and actionable
 - push notification categories exist for provider critical events
+- nurse cross-module execution actions are operational for all listed module categories
+- post-visit mobile contract/events are consumed for session cards and queue updates
+- module launchpad exists and routes into mobile-first provider workflows
 
 ## Definition of done
 

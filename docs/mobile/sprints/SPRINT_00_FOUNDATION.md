@@ -4,6 +4,10 @@
 
 Stand up the mobile project correctly before feature work starts. This sprint exists to prevent drift, rework, and backend/frontend mismatch.
 
+Engineering implementation must follow:
+
+- `docs/mobile/MOBILE_TECH_STACK_AND_ENGINEERING_CONTRACT.md`
+
 ## Duration
 
 1 sprint
