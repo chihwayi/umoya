@@ -17,6 +17,7 @@
 
 ## iOS preview rollout
 - [x] EAS project linked (`@devoopzw/medicore-mobile`)
+- [ ] Apple ID has active paid Developer Team membership
 - [ ] Internal distribution credentials configured for non-interactive mode
 - [ ] Preview build queued from CI mode
 - [ ] TestFlight internal tester validation
@@ -25,6 +26,7 @@
 ## Go / No-Go decision
 - Current state: **Conditional Go**
 - Conditions to clear:
-  1. Configure iOS internal distribution credentials in EAS (interactive once).
-  2. Add production/staging env secrets on EAS dashboard.
-  3. Execute strict readiness check and capture outputs.
+  1. Add `ignatiouschihwayi@gmail.com` to a paid Apple Developer Team (or use another team-linked Apple ID).
+  2. Configure iOS internal distribution credentials in EAS after team membership is active.
+  3. Replace Sentry DSN placeholder with real DSN.
+  4. Execute strict readiness check and capture outputs.

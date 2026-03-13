@@ -19,6 +19,7 @@ Branch: `codex/mobile-sprint-05-store-ready-builds`
 - Android preview CI-mode command succeeded in queueing build.
   - Build URL: https://expo.dev/accounts/devoopzw/projects/medicore-mobile/builds/e65ce228-3b97-4797-ac41-c80a9329d4f4
 - iOS preview CI-mode command blocked by missing non-interactive internal-distribution credentials.
+- iOS interactive credential setup attempt reached Apple login + 2FA, then failed due no Apple Developer Team associated with account.
 
 ## Validation
 ```bash
@@ -33,3 +34,15 @@ cd mobile-app && npx expo config --type public
 ```
 
 All above checks passed.
+
+## Additional strict readiness
+Strict rollout check executed successfully with required env values supplied:
+
+```bash
+EXPO_PUBLIC_RELEASE_CHANNEL=preview \
+EXPO_PUBLIC_RELEASE_ENV=staging \
+EXPO_PUBLIC_SENTRY_DSN=<dsn> \
+EXPO_PUBLIC_SUPPORT_EMAIL=support@medicore.africa \
+EXPO_PUBLIC_SUPPORT_PHONE=+263000000000 \
+npm --prefix ./mobile-app run beta:check:strict
+```

@@ -1,12 +1,13 @@
 # Sprint 05 Known Issues (2026-03-13)
 
-1. iOS preview CI build cannot run fully non-interactive until internal distribution credentials are provisioned in EAS.
-- Impact: iOS preview build submission from CI-mode command fails.
-- Mitigation: run one-time interactive credential setup (`eas build -p ios --profile preview`) and store credentials in Expo.
+1. iOS preview build is blocked by Apple account team membership.
+- Impact: both non-interactive and interactive credential setup cannot complete iOS preview build.
+- Evidence: Apple login + 2FA succeeded, then EAS returned: "You have no team associated with your Apple account."
+- Mitigation: enroll the Apple ID into a paid Apple Developer Program team (or use a team-linked Apple ID), then rerun `eas build -p ios --profile preview`.
 
-2. EAS dashboard env variables are not yet configured for preview/production secrets.
-- Impact: beta strict readiness check would fail in strict mode.
-- Mitigation: set `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_SUPPORT_EMAIL`, `EXPO_PUBLIC_SUPPORT_PHONE`, and release env/channel values in EAS env.
+2. EAS preview/production env variables now configured, but DSN is placeholder.
+- Impact: crash events route may be invalid until real DSN value is set.
+- Mitigation: replace `EXPO_PUBLIC_SENTRY_DSN` placeholder with actual Sentry DSN for preview/production.
 
 3. Sentry Expo plugin shows warning when org/project env is not set locally.
 - Impact: non-blocking warning in local doctor/config output.

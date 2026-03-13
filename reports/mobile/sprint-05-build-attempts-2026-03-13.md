@@ -18,6 +18,16 @@ Result:
 - Error summary:
   - "EAS CLI couldn't find any credentials suitable for internal distribution. Run this command again in interactive mode."
 
+## iOS preview (interactive credential setup attempt)
+Command:
+`npx -y eas-cli build --platform ios --profile preview`
+
+Result:
+- Apple login and 2FA succeeded.
+- Credential setup still failed due Apple account lacking a developer team association.
+- Error summary:
+  - "You have no team associated with your Apple account, cannot proceed. (Do you have a paid Apple Developer account?)"
+
 ## Conclusion
 - Android preview build path is operational.
-- iOS preview requires one-time interactive credential provisioning before CI-style non-interactive command can succeed.
+- iOS preview remains blocked until the Apple ID is added to a paid Apple Developer Program team.
