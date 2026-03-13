@@ -33,6 +33,9 @@ const bundleIdentifier = process.env.MEDICORE_BUNDLE_ID || 'com.medicore.mobile'
 const androidPackage = process.env.MEDICORE_ANDROID_PACKAGE || 'com.medicore.mobile';
 const releaseChannel = process.env.EXPO_PUBLIC_RELEASE_CHANNEL || 'development';
 const releaseEnvironment = process.env.EXPO_PUBLIC_RELEASE_ENV || process.env.NODE_ENV || 'development';
+const supportEmail = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'support@medicore.africa';
+const supportPhone = process.env.EXPO_PUBLIC_SUPPORT_PHONE || '+263000000000';
+const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '3593d35c-2442-4af9-b109-bb4437510697';
 
 const config: ExpoConfig = {
   name: 'MediCore Mobile',
@@ -49,6 +52,9 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier,
     buildNumber: iosBuildNumber,
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false
+    },
     supportsTablet: true
   },
   android: {
@@ -61,6 +67,9 @@ const config: ExpoConfig = {
   },
   runtimeVersion: {
     policy: 'appVersion'
+  },
+  updates: {
+    url: `https://u.expo.dev/${easProjectId}`
   },
   plugins: [
     'expo-router',
@@ -80,7 +89,12 @@ const config: ExpoConfig = {
   extra: {
     serviceBaseUrl,
     releaseChannel,
-    releaseEnvironment
+    releaseEnvironment,
+    supportEmail,
+    supportPhone,
+    eas: {
+      projectId: easProjectId
+    }
   }
 };
 

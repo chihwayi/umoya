@@ -12,5 +12,8 @@ declare namespace NodeJS {
     EXPO_PUBLIC_SENTRY_TRACE_RATE?: string;
     EXPO_PUBLIC_RELEASE_ENV?: string;
     EXPO_PUBLIC_RELEASE_CHANNEL?: string;
+    EXPO_PUBLIC_SUPPORT_EMAIL?: string;
+    EXPO_PUBLIC_SUPPORT_PHONE?: string;
+    EXPO_PUBLIC_EAS_PROJECT_ID?: string;
   }
 }

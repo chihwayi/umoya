@@ -31,6 +31,8 @@ type DiagnosticsSnapshot = {
   cache: string;
   pushPermission: string;
   crashReporting: string;
+  supportEmail: string;
+  supportPhone: string;
   services: ServiceCheck[];
   updatedAt: string;
 };
@@ -133,6 +135,8 @@ export default function DiagnosticsScreen() {
         cache,
         pushPermission,
         crashReporting: process.env.EXPO_PUBLIC_SENTRY_DSN ? 'configured' : 'not configured',
+        supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'support@medicore.africa',
+        supportPhone: process.env.EXPO_PUBLIC_SUPPORT_PHONE || '+263000000000',
         services,
         updatedAt: new Date().toISOString()
       };
@@ -171,7 +175,7 @@ export default function DiagnosticsScreen() {
         <Card>
           <Text style={styles.title}>Mobile Diagnostics</Text>
           <Text style={styles.subtitle}>
-            Sprint 04 operational checks for tenant bootstrap, security posture, connectivity, and API reachability.
+            Sprint 05 operational checks for tenant bootstrap, security posture, rollout readiness, and API reachability.
           </Text>
           {error ? <StatePanel state="error" title="Diagnostics failed" message={error} /> : null}
           {loading && !snapshot ? (
@@ -196,6 +200,14 @@ export default function DiagnosticsScreen() {
           <View style={styles.row}>
             <Text style={styles.label}>Session timeout</Text>
             <Text style={styles.value}>{Math.round(runtime.sessionInactivityTimeoutMs / 60_000)} min</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Release channel</Text>
+            <Text style={styles.value}>{process.env.EXPO_PUBLIC_RELEASE_CHANNEL || 'development'}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Release environment</Text>
+            <Text style={styles.value}>{process.env.EXPO_PUBLIC_RELEASE_ENV || 'development'}</Text>
           </View>
         </Card>
 
@@ -243,6 +255,22 @@ export default function DiagnosticsScreen() {
           <View style={styles.row}>
             <Text style={styles.label}>Crash reporting</Text>
             <Text style={styles.value}>{snapshot?.crashReporting || 'checking'}</Text>
+          </View>
+        </Card>
+
+        <Card>
+          <Text style={styles.sectionTitle}>Support Escalation</Text>
+          <View style={styles.row}>
+            <Text style={styles.label}>Support email</Text>
+            <Text style={styles.value}>{snapshot?.supportEmail || 'support@medicore.africa'}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Support phone</Text>
+            <Text style={styles.value}>{snapshot?.supportPhone || '+263000000000'}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Release notes contact</Text>
+            <Text style={styles.value}>Include the same support contact in TestFlight/Play release notes.</Text>
           </View>
         </Card>
 

@@ -13,8 +13,14 @@
     "test:e2e": "node ./scripts/e2e-smoke.mjs",
     "doctor": "npx expo-doctor",
     "release:check": "node ./scripts/release-version-check.mjs",
-    "build:android:preview": "npx eas build --platform android --profile preview",
-    "build:ios:preview": "npx eas build --platform ios --profile preview"
+    "beta:check": "node ./scripts/beta-rollout-check.mjs",
+    "beta:check:strict": "node ./scripts/beta-rollout-check.mjs --strict",
+    "build:manifest:android:preview": "node ./scripts/generate-build-manifest.mjs --platform=android --profile=preview",
+    "build:manifest:ios:preview": "node ./scripts/generate-build-manifest.mjs --platform=ios --profile=preview",
+    "build:android:preview": "npx -y eas-cli build --platform android --profile preview",
+    "build:ios:preview": "npx -y eas-cli build --platform ios --profile preview",
+    "build:android:preview:ci": "npx -y eas-cli build --platform android --profile preview --non-interactive --no-wait",
+    "build:ios:preview:ci": "npx -y eas-cli build --platform ios --profile preview --non-interactive --no-wait"
   },
   "dependencies": {
     "@sentry/react-native": "~7.11.0",
@@ -33,6 +39,7 @@
     "expo-router": "55.0.5",
     "expo-screen-capture": "^55.0.8",
     "expo-secure-store": "55.0.8",
+    "expo-updates": "^55.0.13",
     "react": "19.2.0",
     "react-hook-form": "^7.62.0",
     "react-native": "0.83.2",

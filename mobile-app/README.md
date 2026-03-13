@@ -37,6 +37,7 @@
 
 ```bash
 npm run release:check
+npm run beta:check
 ```
 
 - Preview build commands:
@@ -44,6 +45,8 @@ npm run release:check
 ```bash
 npm run build:android:preview
 npm run build:ios:preview
+npm run build:manifest:android:preview
+npm run build:manifest:ios:preview
 ```
 
 ## Sprint 05 crash reporting baseline
@@ -54,6 +57,8 @@ npm run build:ios:preview
   - `EXPO_PUBLIC_RELEASE_CHANNEL`
   - `EXPO_PUBLIC_RELEASE_ENV`
   - `EXPO_PUBLIC_SENTRY_TRACE_RATE`
+  - `EXPO_PUBLIC_SUPPORT_EMAIL`
+  - `EXPO_PUBLIC_SUPPORT_PHONE`
 - Crash reporting initializes in root layout and only sends sanitized metadata (no PHI payloads).
 
 ## Branding baseline

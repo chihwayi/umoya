@@ -69,12 +69,24 @@ function runReleaseHardeningSmoke() {
   ]);
 }
 
+function runStoreReadinessSmoke() {
+  assertFilesExist('store-readiness', [
+    'app.config.ts',
+    'eas.json',
+    'scripts/release-version-check.mjs',
+    'scripts/beta-rollout-check.mjs',
+    'scripts/generate-build-manifest.mjs',
+    'src/lib/observability/crash-reporting.ts'
+  ]);
+}
+
 try {
   if (scenario === 'all') {
     runTenantAndAuthSmoke();
     runProviderSmoke();
     runPatientSmoke();
     runReleaseHardeningSmoke();
+    runStoreReadinessSmoke();
   } else if (scenario === 'tenant-auth') {
     runTenantAndAuthSmoke();
   } else if (scenario === 'provider-workflows') {
@@ -83,6 +95,8 @@ try {
     runPatientSmoke();
   } else if (scenario === 'release-hardening') {
     runReleaseHardeningSmoke();
+  } else if (scenario === 'store-readiness') {
+    runStoreReadinessSmoke();
   } else {
     throw new Error(`Unknown scenario \"${scenario}\".`);
   }

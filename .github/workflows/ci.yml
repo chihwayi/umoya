@@ -141,6 +141,14 @@ jobs:
       working-directory: mobile-app
       run: npm run lint
 
+    - name: Mobile Release Version Check
+      working-directory: mobile-app
+      run: npm run release:check
+
+    - name: Mobile Beta Readiness Check
+      working-directory: mobile-app
+      run: npm run beta:check
+
     - name: Mobile Typecheck
       working-directory: mobile-app
       run: npm run typecheck

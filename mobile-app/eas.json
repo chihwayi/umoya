@@ -19,7 +19,6 @@
       "distribution": "internal",
       "channel": "preview",
       "environment": "preview",
-      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_RELEASE_CHANNEL": "preview",
         "EXPO_PUBLIC_RELEASE_ENV": "staging",
@@ -29,7 +28,6 @@
     "production": {
       "channel": "production",
       "environment": "production",
-      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_RELEASE_CHANNEL": "production",
         "EXPO_PUBLIC_RELEASE_ENV": "production",
