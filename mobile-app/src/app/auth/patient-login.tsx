@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../../features/shared/ui/Screen';
@@ -9,12 +9,30 @@ import { patientLogin } from '../../services/api/ehr';
 import { saveSession } from '../../lib/auth/auth-service';
 import { registerDevicePushToken } from '../../lib/notifications/push-service';
 import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
+import { getBiometricSupport, setBiometricLoginPreference } from '../../lib/security/biometric-login';
 
 export default function PatientLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState('Biometric');
+  const [useBiometric, setUseBiometric] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      const support = await getBiometricSupport();
+      if (!mounted) return;
+      setBiometricSupported(support.supported);
+      setBiometricLabel(support.label);
+      setUseBiometric(support.supported);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function onLogin() {
     try {
@@ -36,6 +54,19 @@ export default function PatientLoginScreen() {
         accessToken: response.token,
         userId: response.patient.id,
         email: response.patient.email
+      });
+      await setBiometricLoginPreference(
+        {
+          role: 'patient',
+          accessToken: response.token,
+          userId: response.patient.id,
+          email: response.patient.email
+        },
+        biometricSupported && useBiometric
+      );
+      trackMobileEvent('auth.biometric.preference_set', {
+        role: 'patient',
+        enabled: biometricSupported && useBiometric
       });
       trackMobileEvent('auth.login.success', { role: 'patient' });
       await registerDevicePushToken(response.token).catch(() => {
@@ -80,6 +111,13 @@ export default function PatientLoginScreen() {
           onChangeText={setPassword}
         />
 
+        {biometricSupported ? (
+          <Pressable style={styles.toggleRow} onPress={() => setUseBiometric((prev) => !prev)}>
+            <View style={[styles.checkbox, useBiometric && styles.checkboxOn]} />
+            <Text style={styles.toggleText}>Use {biometricLabel} for faster sign in on this device</Text>
+          </Pressable>
+        ) : null}
+
         {error ? <StatePanel state="error" title="Login failed" message={error} /> : null}
 
         <Pressable style={styles.button} disabled={loading} onPress={onLogin}>
@@ -117,6 +155,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
     marginBottom: theme.spacing.md
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.sm
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface
+  },
+  checkboxOn: {
+    backgroundColor: theme.colors.accentTeal,
+    borderColor: theme.colors.accentTeal
+  },
+  toggleText: {
+    flex: 1,
+    color: theme.colors.textSecondary,
+    fontSize: 12
   },
   button: {
     backgroundColor: theme.colors.accentTeal,

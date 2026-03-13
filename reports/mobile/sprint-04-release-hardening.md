@@ -10,6 +10,10 @@ Date: 2026-03-13
   - app background duration is tracked and active sessions are logged out after timeout.
   - timeout controlled by `EXPO_PUBLIC_SESSION_TIMEOUT_MINUTES` (default 15).
 - Added biometric re-entry guard for returning active sessions where device biometrics are enrolled.
+- Added biometric sign-in flow for provider and patient users:
+  - opt-in biometric preference at credential login.
+  - boot-time biometric gate for saved sessions.
+  - auth landing biometric quick-continue for saved provider/patient sessions.
 - Added PHI screenshot policy by route:
   - auth/clinic public flows allow capture.
   - role routes enforce screen capture blocking.
@@ -55,12 +59,16 @@ Date: 2026-03-13
 - `mobile-app/src/lib/observability/mobile-metrics.ts`
 - `mobile-app/src/app/_layout.tsx`
 - `mobile-app/src/lib/security/device-security.ts`
+- `mobile-app/src/lib/security/biometric-login.ts`
 - `mobile-app/src/lib/network/online-policy.ts`
 - `mobile-app/src/lib/network/connectivity.ts`
 - `mobile-app/src/lib/cache/query-cache-storage.ts`
 - `mobile-app/src/lib/performance/preload.ts`
 - `mobile-app/src/features/shared/providers/AppProviders.tsx`
 - `mobile-app/src/app/index.tsx`
+- `mobile-app/src/app/auth/index.tsx`
+- `mobile-app/src/app/auth/provider-login.tsx`
+- `mobile-app/src/app/auth/patient-login.tsx`
 - `mobile-app/src/app/notifications.tsx`
 - `mobile-app/src/app/patient/medications.tsx`
 - `mobile-app/src/app/doctor/rounds.tsx`

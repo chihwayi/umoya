@@ -58,6 +58,7 @@ function runReleaseHardeningSmoke() {
     'src/lib/network/connectivity.ts',
     'src/lib/network/online-policy.ts',
     'src/lib/performance/preload.ts',
+    'src/lib/security/biometric-login.ts',
     'src/lib/security/device-security.ts',
     'src/lib/observability/mobile-metrics.ts',
     'src/features/shared/ui/LogoutButton.tsx'

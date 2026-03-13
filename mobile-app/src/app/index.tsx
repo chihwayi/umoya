@@ -11,6 +11,12 @@ import { getSession } from '../lib/auth/auth-service';
 import { routeForRole } from '../lib/auth/routing';
 import { mobileVersionMetadata } from '../services/api/ehr';
 import { trackMobileEvent } from '../lib/observability/mobile-metrics';
+import {
+  authenticateBiometricLogin,
+  getBiometricLoginProfile,
+  getBiometricSupport,
+  isBiometricLoginEnabledForSession
+} from '../lib/security/biometric-login';
 
 function isVersionLower(current: string, minimum: string): boolean {
   const currentParts = current.split('.').map((item) => Number(item || 0));
@@ -75,6 +81,24 @@ export default function BootResolverScreen() {
         if (!session) {
           router.replace('/auth');
           return;
+        }
+
+        const profile = await getBiometricLoginProfile();
+        const biometricSupport = await getBiometricSupport();
+        const requireBiometric =
+          biometricSupport.supported &&
+          Boolean(profile?.enabled) &&
+          (await isBiometricLoginEnabledForSession(session));
+
+        if (requireBiometric) {
+          setStatus(`Confirm ${biometricSupport.label}...`);
+          const unlocked = await authenticateBiometricLogin(`Use ${biometricSupport.label} to continue`);
+          if (!unlocked) {
+            trackMobileEvent('auth.biometric.login_failed', { role: session.role });
+            router.replace('/auth');
+            return;
+          }
+          trackMobileEvent('auth.biometric.login_success', { role: session.role, method: biometricSupport.label });
         }
 
         trackMobileEvent('app.boot.session_resolved', { role: session.role });
