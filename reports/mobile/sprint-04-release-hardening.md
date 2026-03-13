@@ -17,6 +17,16 @@ Date: 2026-03-13
   - patient bill payments and appointment-with-payment requests are blocked when offline.
   - telemedicine join/end mutations are blocked when offline.
   - blocked requests now surface explicit reconnect guidance in provider and patient flows.
+- Added guarded write policy for all API mutations:
+  - all POST/PUT/PATCH/DELETE requests are checked against live connectivity before dispatch.
+  - blocked writes now carry policy reason metadata (`mutation` or `online_only`) for UX and telemetry.
+- Added offline-safe cached read boundaries:
+  - successful query snapshots are persisted locally with a TTL.
+  - hydration is applied on app boot for safe query key families.
+  - persisted snapshots exclude mutations and non-whitelisted query families.
+- Added a performance preload pass:
+  - role-aware prefetch warms key dashboard/inbox queries after boot and on reconnect.
+  - query online manager is now wired to network state updates.
 - Added logout control in all role tab headers:
   - doctor, nurse, patient shells now have a consistent `Logout` action.
 - Added push registration integration on login and unregister integration on logout:
@@ -46,6 +56,10 @@ Date: 2026-03-13
 - `mobile-app/src/app/_layout.tsx`
 - `mobile-app/src/lib/security/device-security.ts`
 - `mobile-app/src/lib/network/online-policy.ts`
+- `mobile-app/src/lib/network/connectivity.ts`
+- `mobile-app/src/lib/cache/query-cache-storage.ts`
+- `mobile-app/src/lib/performance/preload.ts`
+- `mobile-app/src/features/shared/providers/AppProviders.tsx`
 - `mobile-app/src/app/index.tsx`
 - `mobile-app/src/app/notifications.tsx`
 - `mobile-app/src/app/patient/medications.tsx`

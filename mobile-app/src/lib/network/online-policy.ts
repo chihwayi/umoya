@@ -38,11 +38,13 @@ function isOnlineOnlyPath(path: string): boolean {
 export class OnlinePolicyError extends Error {
   readonly code = 'OFFLINE_POLICY_BLOCKED';
   readonly route: string;
+  readonly reason: 'mutation' | 'online_only';
 
-  constructor(route: string) {
+  constructor(route: string, reason: 'mutation' | 'online_only') {
     super('This action requires an internet connection.');
     this.name = 'OnlinePolicyError';
     this.route = route;
+    this.reason = reason;
   }
 }
 
@@ -52,7 +54,10 @@ export function isOnlinePolicyError(error: unknown): error is OnlinePolicyError 
 
 export function getOnlinePolicyMessage(error: unknown): string {
   if (isOnlinePolicyError(error)) {
-    return 'This action is online-only. Reconnect to continue.';
+    if (error.reason === 'online_only') {
+      return 'This action is online-only. Reconnect to continue.';
+    }
+    return 'You are offline. Reconnect before submitting updates.';
   }
   return 'Connection issue detected. Please retry once online.';
 }
@@ -62,13 +67,16 @@ export async function ensureOnlineForPolicy(method?: string, url?: string): Prom
   if (!isMutationMethod(normalizedMethod)) return;
 
   const path = normalizePath(url);
-  if (!path || !isOnlineOnlyPath(path)) return;
+  if (!path) return;
 
   const networkState = await Network.getNetworkStateAsync();
   const isConnected = Boolean(networkState.isConnected);
   const internetReachable = networkState.isInternetReachable !== false;
+  if (isConnected && internetReachable) return;
 
-  if (!isConnected || !internetReachable) {
-    throw new OnlinePolicyError(path);
+  if (isOnlineOnlyPath(path)) {
+    throw new OnlinePolicyError(path, 'online_only');
   }
+
+  throw new OnlinePolicyError(path, 'mutation');
 }

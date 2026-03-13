@@ -26,7 +26,7 @@ ehrClient.interceptors.request.use(async (config) => {
     await ensureOnlineForPolicy(method, url);
   } catch (error) {
     if (isOnlinePolicyError(error)) {
-      trackMobileEvent('api.offline_policy_blocked', { method, url });
+      trackMobileEvent('api.offline_policy_blocked', { method, url, reason: error.reason });
     }
     throw error;
   }

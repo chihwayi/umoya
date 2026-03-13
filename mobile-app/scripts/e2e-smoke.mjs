@@ -52,8 +52,12 @@ function runReleaseHardeningSmoke() {
   assertFilesExist('release-hardening', [
     'src/app/notifications.tsx',
     'src/app/_layout.tsx',
+    'src/features/shared/providers/AppProviders.tsx',
     'src/lib/auth/invalidation.ts',
+    'src/lib/cache/query-cache-storage.ts',
+    'src/lib/network/connectivity.ts',
     'src/lib/network/online-policy.ts',
+    'src/lib/performance/preload.ts',
     'src/lib/security/device-security.ts',
     'src/lib/observability/mobile-metrics.ts',
     'src/features/shared/ui/LogoutButton.tsx'

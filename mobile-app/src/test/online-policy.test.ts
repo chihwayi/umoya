@@ -22,9 +22,15 @@ describe('online policy', () => {
     expect(mockedGetNetworkStateAsync).not.toHaveBeenCalled();
   });
 
-  it('does not check network for non-online-only mutations', async () => {
+  it('checks network for mutation requests', async () => {
+    mockedGetNetworkStateAsync.mockResolvedValue({
+      type: 'wifi' as Network.NetworkStateType,
+      isConnected: true,
+      isInternetReachable: true
+    });
+
     await ensureOnlineForPolicy('POST', '/patient-portal/vitals/submit');
-    expect(mockedGetNetworkStateAsync).not.toHaveBeenCalled();
+    expect(mockedGetNetworkStateAsync).toHaveBeenCalledTimes(1);
   });
 
   it('blocks payment mutation when offline', async () => {
@@ -49,6 +55,19 @@ describe('online policy', () => {
     ).rejects.toBeInstanceOf(OnlinePolicyError);
   });
 
+  it('blocks generic mutation writes when offline', async () => {
+    mockedGetNetworkStateAsync.mockResolvedValue({
+      type: 'none' as Network.NetworkStateType,
+      isConnected: false,
+      isInternetReachable: false
+    });
+
+    await expect(ensureOnlineForPolicy('POST', '/patient-portal/vitals/submit')).rejects.toMatchObject({
+      code: 'OFFLINE_POLICY_BLOCKED',
+      reason: 'mutation'
+    });
+  });
+
   it('allows online-only mutation when connected', async () => {
     mockedGetNetworkStateAsync.mockResolvedValue({
       type: 'wifi' as Network.NetworkStateType,
@@ -61,8 +80,13 @@ describe('online policy', () => {
   });
 
   it('maps policy errors to a user-safe message', () => {
-    const error = new OnlinePolicyError('/patient-portal/payments');
+    const error = new OnlinePolicyError('/patient-portal/payments', 'online_only');
     expect(isOnlinePolicyError(error)).toBe(true);
     expect(getOnlinePolicyMessage(error)).toContain('online-only');
+  });
+
+  it('maps generic write block errors to reconnect message', () => {
+    const error = new OnlinePolicyError('/patient-portal/vitals/submit', 'mutation');
+    expect(getOnlinePolicyMessage(error)).toContain('offline');
   });
 });
