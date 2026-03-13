@@ -43,5 +43,26 @@ export declare class TenantController {
     clearTenantDhis2Config(id: string): Promise<{
         message: string;
     }>;
+    getSubscriptionPaymentProviders(id: string): Promise<{
+        key: string;
+        label: string;
+        enabled: boolean;
+        mode: "gateway" | "manual";
+    }[]>;
+    getSubscriptionPayments(id: string, limit?: string): Promise<any[]>;
+    createSubscriptionPaymentSession(id: string, body: {
+        provider: string;
+        amount?: number;
+        currency?: string;
+        monthsToExtend?: number;
+        successUrl?: string;
+        cancelUrl?: string;
+        metadata?: Record<string, any>;
+    }): Promise<any>;
+    confirmSubscriptionPayment(id: string, paymentId: string, body: {
+        status: 'successful' | 'failed' | 'cancelled';
+        externalPaymentId?: string;
+        note?: string;
+    }): Promise<any>;
 }
 export {};

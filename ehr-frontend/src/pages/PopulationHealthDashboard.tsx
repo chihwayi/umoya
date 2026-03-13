@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, populationHealthApi } from '../services/api';
+import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 
 interface PopulationHealthDashboardProps {
   embedded?: boolean;
@@ -360,6 +361,16 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
       )}
 
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${embedded ? 'pb-4' : 'pt-8 pb-8'}`}>
+        <div className="mb-6">
+          <ModuleGeneralReportCard
+            moduleKey="population_health"
+            title="Population Health"
+            tenantSlug={tenantSlug || ''}
+            token={token}
+            accentClass="from-cyan-50 via-white to-teal-50"
+          />
+        </div>
+
         {isDoctor && (
           <div className="rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 via-teal-50 to-cyan-100/80 p-4 mb-6">
             <div className="flex flex-wrap items-center gap-2">

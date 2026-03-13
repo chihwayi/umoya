@@ -18,6 +18,7 @@ import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
 import AddChargeModal from '../components/AddChargeModal';
 import ChargeReviewModal from '../components/ChargeReviewModal';
+import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 
 interface RevenueCycleDashboardProps {
   embedded?: boolean;
@@ -284,6 +285,16 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
       )}
 
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${embedded ? 'pb-4' : 'pt-8 pb-8'}`}>
+        <div className="mb-6">
+          <ModuleGeneralReportCard
+            moduleKey="revenue_cycle"
+            title="Revenue Cycle"
+            tenantSlug={tenantSlug || ''}
+            token={token}
+            accentClass="from-emerald-50 via-white to-teal-50"
+          />
+        </div>
+
         {/* Tabs */}
         {user?.role === 'doctor' && (
           <div className="flex items-center gap-2 mb-6 bg-white/80 backdrop-blur-sm rounded-xl p-2 border border-slate-200">

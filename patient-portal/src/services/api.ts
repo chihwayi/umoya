@@ -107,6 +107,7 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     params.append('doctorId', doctorId);
     params.append('date', date);
+    params.append('includeStates', 'true');
 
     const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/available-slots?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     _ensureOk(response, 'Failed to fetch available time slots');

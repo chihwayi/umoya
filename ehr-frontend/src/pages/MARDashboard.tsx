@@ -4,6 +4,7 @@ import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Scan, Loader2, Arro
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
 import MedicationScannerModal from '../components/MedicationScannerModal';
+import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 
 interface MARDashboardProps {
   embedded?: boolean;
@@ -375,6 +376,16 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
       )}
 
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${embedded ? 'pb-4' : 'pt-8 pb-8'}`}>
+        <div className="mb-6">
+          <ModuleGeneralReportCard
+            moduleKey="mar"
+            title="Medication Administration"
+            tenantSlug={tenantSlug || ''}
+            token={token}
+            accentClass="from-cyan-50 via-white to-blue-50"
+          />
+        </div>
+
         {isDoctor && (
           <div className="mb-6 rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 via-blue-50 to-cyan-100/80 p-4">
             <div className="flex flex-wrap items-center gap-2">

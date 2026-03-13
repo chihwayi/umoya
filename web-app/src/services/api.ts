@@ -10,6 +10,8 @@ import {
   TenantReport,
   TenantDhis2ConfigView,
   TenantDhis2ConfigPayload,
+  TenantSubscriptionPayment,
+  TenantSubscriptionPaymentProvider,
   DemoAccessRequest,
   DemoAccessRequestStatus,
 } from '../types';
@@ -205,6 +207,57 @@ export const tenantAPI = {
 
   clearTenantDhis2Config: async (tenantId: string): Promise<{ message: string }> => {
     const response = await api.delete(`/tenants/${tenantId}/dhis2-config`);
+    return response.data;
+  },
+
+  getSubscriptionPaymentProviders: async (tenantId: string): Promise<TenantSubscriptionPaymentProvider[]> => {
+    const response = await api.get(`/tenants/${tenantId}/subscription-payments/providers`);
+    return response.data;
+  },
+
+  getSubscriptionPayments: async (tenantId: string, limit = 20): Promise<TenantSubscriptionPayment[]> => {
+    const response = await api.get(`/tenants/${tenantId}/subscription-payments`, {
+      params: { limit },
+    });
+    return response.data;
+  },
+
+  createSubscriptionPaymentSession: async (
+    tenantId: string,
+    payload: {
+      provider: string;
+      amount?: number;
+      currency?: string;
+      monthsToExtend?: number;
+      successUrl?: string;
+      cancelUrl?: string;
+      metadata?: Record<string, any>;
+    },
+  ): Promise<TenantSubscriptionPayment> => {
+    const response = await api.post(`/tenants/${tenantId}/subscription-payments/session`, payload);
+    return response.data;
+  },
+
+  confirmSubscriptionPayment: async (
+    tenantId: string,
+    paymentId: string,
+    payload: {
+      status: 'successful' | 'failed' | 'cancelled';
+      externalPaymentId?: string;
+      note?: string;
+    },
+  ): Promise<{
+    payment: TenantSubscriptionPayment;
+    tenant: {
+      id: string;
+      subscriptionState: string;
+      status: string;
+      billingEndsAt?: string | null;
+      graceEndsAt?: string | null;
+    };
+    billingSummary: any;
+  }> => {
+    const response = await api.post(`/tenants/${tenantId}/subscription-payments/${paymentId}/confirm`, payload);
     return response.data;
   },
 

@@ -308,7 +308,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
     return () => clearTimeout(timeoutId);
   }, [items.map(rx => rx.drugId).join(',')]);
 
-  const handleSave = async () => {
+  const handleSave = async (printAfterSave = false) => {
     try {
       setLoading(true);
       // Create as an order (medication) to match tenant schema reliably
@@ -345,6 +345,8 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
         // Allow override but show warning
       }
       if (valid.length === 0) throw new Error('Enter at least one prescription with name, dosage, and frequency');
+      const prescriptionIds: string[] = [];
+
       for (const rx of valid) {
         // Create order
         const created = await ehrApi.createOrder({
@@ -365,7 +367,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
 
         // Also create prescription record with SNOMED
         try {
-          await ehrApi.createPrescription({
+          const prescriptionResponse = await ehrApi.createPrescription({
             patientId: appointment.patient.id,
             prescriberId: currentUser.id,
             medicationName: rx.name,
@@ -381,6 +383,10 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
             indication: '',
             status: 'active'
           }, token, tenantSlug);
+          const createdPrescriptionId = prescriptionResponse?.data?.id || prescriptionResponse?.data?.prescription?.id;
+          if (createdPrescriptionId) {
+            prescriptionIds.push(createdPrescriptionId);
+          }
         } catch (prescriptionError) {
           console.warn('Failed to create prescription record:', prescriptionError);
           // Don't fail the whole operation if prescription creation fails
@@ -395,6 +401,10 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
         payload.prescriptions.push({ ...rx, at: new Date().toISOString() });
       });
       await ehrApi.updateAppointment(appointment.id, { notes: JSON.stringify(payload) }, token, tenantSlug);
+
+      if (printAfterSave && prescriptionIds.length > 0) {
+        await ehrApi.downloadPrescriptionPdf(prescriptionIds[0], token, tenantSlug);
+      }
 
       showSuccess('Saved', 'Prescription created');
       onSaved();
@@ -990,13 +1000,22 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
               {awaitingPayment ? 'Close' : 'Cancel'}
             </button>
             {!awaitingPayment && (
-              <button
-                onClick={handleSave}
-                disabled={loading}
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Saving...' : 'Save Prescription'}
-              </button>
+              <>
+                <button
+                  onClick={() => handleSave(false)}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg border border-fuchsia-300 text-fuchsia-700 hover:bg-fuchsia-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => handleSave(true)}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Saving...' : 'Save & Print'}
+                </button>
+              </>
             )}
           </div>
         </div>

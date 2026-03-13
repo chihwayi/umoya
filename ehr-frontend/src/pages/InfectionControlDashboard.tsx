@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
+import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 
 interface InfectionControlDashboardProps {
   embedded?: boolean;
@@ -377,6 +378,16 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
             />
           </div>
         </div>
+
+      <div className="mb-6">
+        <ModuleGeneralReportCard
+          moduleKey="infection_control"
+          title="Infection Control"
+          tenantSlug={tenantSlug || ''}
+          token={token}
+          accentClass="from-emerald-50 via-white to-teal-50"
+        />
+      </div>
 
         {/* HAI Metrics */}
       {metrics && (

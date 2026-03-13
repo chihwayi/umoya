@@ -6,6 +6,8 @@ import {
   UpdateTenantRequest,
   TenantDhis2ConfigPayload,
   TenantDhis2ConfigView,
+  TenantSubscriptionPayment,
+  TenantSubscriptionPaymentProvider,
 } from '../types';
 import { tenantAPI } from '../services/api';
 import { ConfirmModal, Modal } from './Modal';
@@ -165,6 +167,14 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [packageForm, setPackageForm] = useState<UpdateTenantRequest | null>(null);
   const [packageSaving, setPackageSaving] = useState(false);
   const [showDeleteDhis2ConfigConfirm, setShowDeleteDhis2ConfigConfirm] = useState(false);
+  const [subscriptionPaymentProviders, setSubscriptionPaymentProviders] = useState<TenantSubscriptionPaymentProvider[]>([]);
+  const [subscriptionPayments, setSubscriptionPayments] = useState<TenantSubscriptionPayment[]>([]);
+  const [subscriptionPaymentsLoading, setSubscriptionPaymentsLoading] = useState(false);
+  const [paymentSessionLoading, setPaymentSessionLoading] = useState(false);
+  const [paymentConfirmLoading, setPaymentConfirmLoading] = useState(false);
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState('zimswitch');
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentMonthsToExtend, setPaymentMonthsToExtend] = useState<number>(1);
   const dhis2SectionRef = React.useRef<HTMLDivElement>(null);
 
   const loadUsers = useCallback(async () => {
@@ -230,10 +240,44 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     }
   }, [tenant]);
 
+  const loadSubscriptionPayments = useCallback(async () => {
+    if (!tenant) return;
+    setSubscriptionPaymentsLoading(true);
+    try {
+      const [providers, payments] = await Promise.all([
+        tenantAPI.getSubscriptionPaymentProviders(tenant.id),
+        tenantAPI.getSubscriptionPayments(tenant.id, 10),
+      ]);
+      setSubscriptionPaymentProviders(Array.isArray(providers) ? providers : []);
+      setSubscriptionPayments(Array.isArray(payments) ? payments : []);
+
+      const defaultProvider =
+        (Array.isArray(providers) ? providers : []).find((provider) => provider.enabled && provider.key !== 'manual')?.key ||
+        (Array.isArray(providers) ? providers : []).find((provider) => provider.enabled)?.key ||
+        'zimswitch';
+      setSelectedPaymentProvider(defaultProvider);
+      const estimatedAmount =
+        tenant.subscriptionTier === 'enterprise'
+          ? 199
+          : tenant.subscriptionTier === 'professional'
+            ? 99
+            : 49;
+      setPaymentAmount(estimatedAmount);
+      setPaymentMonthsToExtend(1);
+    } catch (error) {
+      console.error('Failed to load subscription payments:', error);
+      setSubscriptionPaymentProviders([]);
+      setSubscriptionPayments([]);
+    } finally {
+      setSubscriptionPaymentsLoading(false);
+    }
+  }, [tenant]);
+
   useEffect(() => {
     if (tenant && isOpen) {
       loadUsers();
       loadDhis2Config();
+      loadSubscriptionPayments();
       setPackageForm(buildPackageForm(tenant));
     } else {
       setUsers([]); // Clear users when closed or tenant cleared
@@ -242,8 +286,10 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setDhis2PatMasked(null);
       setDhis2Form(createDefaultDhis2Form());
       setPackageForm(null);
+      setSubscriptionPaymentProviders([]);
+      setSubscriptionPayments([]);
     }
-  }, [isOpen, loadDhis2Config, loadUsers, tenant]);
+  }, [isOpen, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
 
   useEffect(() => {
     if (!isOpen || focusSection !== 'dhis2') {
@@ -334,6 +380,74 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to update tenant package');
     } finally {
       setPackageSaving(false);
+    }
+  };
+
+  const handleCreateSubscriptionPaymentSession = async () => {
+    if (!tenant) return;
+    if (!selectedPaymentProvider) {
+      showError('Please select a payment provider');
+      return;
+    }
+    if (!Number.isFinite(Number(paymentAmount)) || Number(paymentAmount) <= 0) {
+      showError('Payment amount must be greater than zero');
+      return;
+    }
+    if (!Number.isFinite(Number(paymentMonthsToExtend)) || Number(paymentMonthsToExtend) <= 0) {
+      showError('Months to extend must be at least 1');
+      return;
+    }
+
+    setPaymentSessionLoading(true);
+    try {
+      const session = await tenantAPI.createSubscriptionPaymentSession(tenant.id, {
+        provider: selectedPaymentProvider,
+        amount: Number(paymentAmount),
+        monthsToExtend: Number(paymentMonthsToExtend),
+        currency: 'USD',
+        metadata: {
+          initiatedFrom: 'super_admin_portal',
+          tenantSubdomain: tenant.subdomain,
+        },
+      });
+      await loadSubscriptionPayments();
+      if (session?.checkoutUrl) {
+        window.open(session.checkoutUrl, '_blank', 'noopener,noreferrer');
+      }
+      showSuccess(`Payment session created (${session.reference}). Continue checkout in the opened tab/window.`);
+    } catch (error: any) {
+      console.error('Failed to create subscription payment session:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to create subscription payment session');
+    } finally {
+      setPaymentSessionLoading(false);
+    }
+  };
+
+  const handleConfirmSubscriptionPayment = async (payment: TenantSubscriptionPayment) => {
+    if (!tenant) return;
+    const externalPaymentId = window.prompt(
+      `Confirm payment ${payment.reference}. Enter gateway transaction/reference ID:`,
+      payment.externalPaymentId || '',
+    );
+    if (externalPaymentId === null) return;
+
+    setPaymentConfirmLoading(true);
+    try {
+      await tenantAPI.confirmSubscriptionPayment(tenant.id, payment.id, {
+        status: 'successful',
+        externalPaymentId: externalPaymentId.trim() || undefined,
+        note: 'Confirmed from super admin portal',
+      });
+      await loadSubscriptionPayments();
+      onUpdate();
+      showSuccess('Subscription payment confirmed and tenant billing extended');
+    } catch (error: any) {
+      console.error('Failed to confirm subscription payment:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to confirm payment');
+    } finally {
+      setPaymentConfirmLoading(false);
     }
   };
 
@@ -885,6 +999,131 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                   </button>
                 </div>
               </form>
+
+              {!isDemoMode && (
+                <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h5 className="text-sm font-semibold text-slate-900">Online subscription payments</h5>
+                      <p className="text-xs text-slate-500">
+                        Create a gateway checkout session and confirm payment to extend tenant billing instantly.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={loadSubscriptionPayments}
+                      disabled={subscriptionPaymentsLoading || paymentSessionLoading || paymentConfirmLoading}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      {subscriptionPaymentsLoading ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Gateway</label>
+                      <select
+                        value={selectedPaymentProvider}
+                        onChange={(e) => setSelectedPaymentProvider(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                      >
+                        {(subscriptionPaymentProviders.length ? subscriptionPaymentProviders : [{ key: 'zimswitch', label: 'Zimswitch', enabled: true, mode: 'gateway' }])
+                          .filter((provider) => provider.enabled)
+                          .map((provider) => (
+                            <option key={provider.key} value={provider.key}>
+                              {provider.label}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Amount (USD)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        step="0.01"
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Months to extend</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={paymentMonthsToExtend}
+                        onChange={(e) => setPaymentMonthsToExtend(Number(e.target.value))}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={handleCreateSubscriptionPaymentSession}
+                        disabled={paymentSessionLoading || paymentConfirmLoading}
+                        className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {paymentSessionLoading ? 'Creating session...' : 'Create Checkout Session'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {(subscriptionPayments || []).length === 0 ? (
+                      <p className="text-xs text-slate-500">No recent subscription payment sessions.</p>
+                    ) : (
+                      subscriptionPayments.slice(0, 5).map((payment) => (
+                        <div key={payment.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">
+                                {payment.reference} · {String(payment.provider || '').toUpperCase()} · ${Number(payment.amount || 0).toFixed(2)} {payment.currency}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Created {new Date(payment.createdAt).toLocaleString()} · {payment.monthsToExtend} month(s)
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                                  payment.status === 'successful'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    : payment.status === 'pending'
+                                      ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                      : 'border-slate-300 bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                {payment.status}
+                              </span>
+                              {payment.checkoutUrl && payment.status === 'pending' && (
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(payment.checkoutUrl || '', '_blank', 'noopener,noreferrer')}
+                                  className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                >
+                                  Open Checkout
+                                </button>
+                              )}
+                              {payment.status === 'pending' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleConfirmSubscriptionPayment(payment)}
+                                  disabled={paymentConfirmLoading}
+                                  className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                  {paymentConfirmLoading ? 'Confirming...' : 'Confirm Paid'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

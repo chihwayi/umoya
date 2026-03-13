@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Activity, Clock, TrendingUp, Loader2, ArrowLeft, Brain, BookOpen, Search, CheckCircle, ClipboardList } from 'lucide-react';
 import { cdssApi, ehrAxios } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 
 interface SepsisDashboardProps {
   embedded?: boolean;
@@ -238,6 +239,15 @@ const SepsisDashboard: React.FC<SepsisDashboardProps> = ({ embedded = false }) =
       )}
 
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${embedded ? 'pb-4' : 'pt-8 pb-8'}`}>
+      <div className="mb-6">
+        <ModuleGeneralReportCard
+          moduleKey="sepsis"
+          title="Sepsis"
+          tenantSlug={tenantSlug || ''}
+          token={token}
+          accentClass="from-orange-50 via-white to-red-50"
+        />
+      </div>
       {compliance && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white/80 backdrop-blur-sm rounded-xl p-5 border border-slate-200">

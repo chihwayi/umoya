@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantBillingSummary, TenantService } from '../services/tenant.service';
@@ -183,5 +183,62 @@ export class TenantController {
   async clearTenantDhis2Config(@Param('id') id: string): Promise<{ message: string }> {
     await this.tenantService.clearTenantDhis2Config(id);
     return { message: 'Tenant DHIS2 config deleted' };
+  }
+
+  @Get(':id/subscription-payments/providers')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get supported tenant subscription payment providers' })
+  async getSubscriptionPaymentProviders(@Param('id') id: string) {
+    await this.tenantService.findById(id);
+    return this.tenantService.getSubscriptionPaymentProviders();
+  }
+
+  @Get(':id/subscription-payments')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get tenant subscription payment history' })
+  async getSubscriptionPayments(
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = Number(limit);
+    return this.tenantService.listSubscriptionPayments(id, Number.isFinite(parsedLimit) ? parsedLimit : undefined);
+  }
+
+  @Post(':id/subscription-payments/session')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Create online subscription payment session for tenant' })
+  async createSubscriptionPaymentSession(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      provider: string;
+      amount?: number;
+      currency?: string;
+      monthsToExtend?: number;
+      successUrl?: string;
+      cancelUrl?: string;
+      metadata?: Record<string, any>;
+    },
+  ) {
+    if (!body || !String(body.provider || '').trim()) {
+      throw new BadRequestException('provider is required');
+    }
+    return this.tenantService.createSubscriptionPaymentSession(id, body);
+  }
+
+  @Post(':id/subscription-payments/:paymentId/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Confirm/update tenant subscription payment status' })
+  async confirmSubscriptionPayment(
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+    @Body()
+    body: {
+      status: 'successful' | 'failed' | 'cancelled';
+      externalPaymentId?: string;
+      note?: string;
+    },
+  ) {
+    return this.tenantService.confirmSubscriptionPayment(id, paymentId, body || { status: 'failed' });
   }
 }

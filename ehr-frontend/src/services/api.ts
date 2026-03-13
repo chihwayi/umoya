@@ -2782,6 +2782,25 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  downloadPrescriptionPdf: async (prescriptionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/prescriptions/${prescriptionId}/download`, {
+      responseType: 'blob',
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `prescription-${prescriptionId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
   assessMedicationSafety: async (
     payload: {
       patientId: string;
@@ -3838,6 +3857,45 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+
+  sendDhis2AggregateReport: async (
+    payload: {
+      profile: string;
+      period?: string;
+      periodStart?: string;
+      periodEnd?: string;
+      orgUnit?: string;
+      dataSet?: string;
+      dataElements?: Record<string, string>;
+      dataValues?: Array<{ dataElement: string; value: string | number; orgUnit?: string; period?: string }>;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/dhis2/reports/aggregate', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getModuleGeneralReport: async (
+    moduleKey: string,
+    token: string,
+    tenantSlug: string,
+    days = 30,
+  ) => {
+    const response = await ehrAxios.get(`/reports/modules/${encodeURIComponent(moduleKey)}/general`, {
+      params: { days },
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
     });
     return { data: response.data };
   },

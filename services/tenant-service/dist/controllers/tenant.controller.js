@@ -111,6 +111,23 @@ let TenantController = class TenantController {
         await this.tenantService.clearTenantDhis2Config(id);
         return { message: 'Tenant DHIS2 config deleted' };
     }
+    async getSubscriptionPaymentProviders(id) {
+        await this.tenantService.findById(id);
+        return this.tenantService.getSubscriptionPaymentProviders();
+    }
+    async getSubscriptionPayments(id, limit) {
+        const parsedLimit = Number(limit);
+        return this.tenantService.listSubscriptionPayments(id, Number.isFinite(parsedLimit) ? parsedLimit : undefined);
+    }
+    async createSubscriptionPaymentSession(id, body) {
+        if (!body || !String(body.provider || '').trim()) {
+            throw new common_1.BadRequestException('provider is required');
+        }
+        return this.tenantService.createSubscriptionPaymentSession(id, body);
+    }
+    async confirmSubscriptionPayment(id, paymentId, body) {
+        return this.tenantService.confirmSubscriptionPayment(id, paymentId, body || { status: 'failed' });
+    }
 };
 exports.TenantController = TenantController;
 __decorate([
@@ -242,6 +259,46 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "clearTenantDhis2Config", null);
+__decorate([
+    (0, common_1.Get)(':id/subscription-payments/providers'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiOperation)({ summary: 'Get supported tenant subscription payment providers' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "getSubscriptionPaymentProviders", null);
+__decorate([
+    (0, common_1.Get)(':id/subscription-payments'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiOperation)({ summary: 'Get tenant subscription payment history' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "getSubscriptionPayments", null);
+__decorate([
+    (0, common_1.Post)(':id/subscription-payments/session'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiOperation)({ summary: 'Create online subscription payment session for tenant' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "createSubscriptionPaymentSession", null);
+__decorate([
+    (0, common_1.Post)(':id/subscription-payments/:paymentId/confirm'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiOperation)({ summary: 'Confirm/update tenant subscription payment status' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('paymentId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "confirmSubscriptionPayment", null);
 exports.TenantController = TenantController = __decorate([
     (0, swagger_1.ApiTags)('tenants'),
     (0, swagger_1.ApiBearerAuth)(),

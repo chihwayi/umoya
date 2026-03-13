@@ -175,6 +175,34 @@ export interface TenantDhis2ConfigPayload {
   alertWebhookUrl?: string | null;
 }
 
+export interface TenantSubscriptionPaymentProvider {
+  key: string;
+  label: string;
+  enabled: boolean;
+  mode: 'gateway' | 'manual';
+}
+
+export interface TenantSubscriptionPayment {
+  id: string;
+  tenantId: string;
+  provider: string;
+  reference: string;
+  sessionId: string;
+  externalPaymentId?: string | null;
+  amount: number;
+  currency: string;
+  monthsToExtend: number;
+  status: 'pending' | 'successful' | 'failed' | 'cancelled' | string;
+  checkoutUrl?: string | null;
+  successUrl?: string | null;
+  cancelUrl?: string | null;
+  metadata?: Record<string, any>;
+  paidAt?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface User {
   id: string;
   email: string;

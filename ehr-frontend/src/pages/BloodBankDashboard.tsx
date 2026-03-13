@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Droplet, Activity, AlertTriangle, TrendingUp, Loader2, ArrowLeft, FlaskConical, Crosshair, AlertCircle, Zap, CheckCircle, Brain, Search, BookOpen, ClipboardList } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrApi, ehrAxios } from '../services/api';
+import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 
 interface BloodBankDashboardProps {
   embedded?: boolean;
@@ -556,6 +557,16 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
       )}
 
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${embedded ? 'pb-4' : 'pt-8 pb-8'}`}>
+        <div className="mb-6">
+          <ModuleGeneralReportCard
+            moduleKey="blood_bank"
+            title="Blood Bank"
+            tenantSlug={tenantSlug || ''}
+            token={token}
+            accentClass="from-rose-50 via-white to-red-50"
+          />
+        </div>
+
         {/* Utilization summary */}
         {utilization && (
           <div className="mb-4 p-3 bg-white rounded-xl border border-slate-200 flex gap-4 text-sm">

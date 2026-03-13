@@ -30,7 +30,7 @@ import { MaternityWithSmartForms } from '../components/Maternity';
 import CervicalCancerScreeningComponent from '../components/CervicalCancerScreeningComponent';
 import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
 import HIVStockManagement from '../components/HIVStockManagement';
-import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
+import HivReportsPanel from '../components/HivReportsPanel';
 import MaternityDashboard from '../components/MaternityDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
@@ -221,7 +221,7 @@ const NurseDashboard: React.FC = () => {
     return cachedBranding ? { clinicName: cachedBranding.clinicName, logoUrl: cachedBranding.logoUrl } : null;
   });
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'monthly-return' | 'who-workflow' | 'maternity' | 'triage' | 'vitals'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals'>('dashboard');
   const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -979,7 +979,7 @@ const NurseDashboard: React.FC = () => {
           { label: 'Quality Metrics', tab: 'quality-metrics', icon: BarChart3 },
           { label: 'Stock Management', tab: 'stock-management', icon: Package },
           { label: 'LTFU Management', tab: 'ltfu', icon: Clock },
-          { label: 'Monthly Return', tab: 'monthly-return', icon: FileText },
+          { label: 'Reports & DHIS2', tab: 'hiv-reports', icon: FileText },
           { label: 'Guided WHO Workflow', tab: 'who-workflow', icon: Activity },
         ]
       },
@@ -1346,7 +1346,7 @@ const NurseDashboard: React.FC = () => {
 
   // Load Quality Metrics and LTFU when in HIV section
   useEffect(() => {
-    if (activeSection === 'hiv' && (activeTab === 'quality-metrics' || activeTab === 'ltfu' || activeTab === 'monthly-return')) {
+    if (activeSection === 'hiv' && (activeTab === 'quality-metrics' || activeTab === 'ltfu' || activeTab === 'hiv-reports')) {
       const token = localStorage.getItem('ehr_token');
       if (!token || !tenantSlug) return;
 
@@ -4824,8 +4824,8 @@ const NurseDashboard: React.FC = () => {
             )}
           </div>
         )}
-        {activeSection === 'hiv' && activeTab === 'monthly-return' && (
-          <HIVMonthlyReturnForm tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
+        {activeSection === 'hiv' && activeTab === 'hiv-reports' && (
+          <HivReportsPanel tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
         )}
         {activeSection === 'hiv' && activeTab === 'who-workflow' && (
           <div className="bg-white rounded-xl shadow-lg p-6">

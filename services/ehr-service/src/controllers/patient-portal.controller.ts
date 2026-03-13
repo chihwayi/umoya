@@ -145,12 +145,16 @@ export class PatientPortalController {
   @ApiOperation({ summary: 'Get available time slots', description: 'Get available time slots for a doctor on a specific date' })
   @ApiQuery({ name: 'doctorId', required: true, description: 'Doctor ID' })
   @ApiQuery({ name: 'date', required: true, description: 'Date in YYYY-MM-DD format' })
+  @ApiQuery({ name: 'includeStates', required: false, description: 'Include full slot state payload (available/booked/unavailable/past)' })
   async getAvailableTimeSlots(
     @Query('doctorId') doctorId: string,
     @Query('date') date: string,
+    @Query('includeStates') includeStates: string,
     @Req() req: RequestWithTenant & { user: any },
   ) {
-    return this.patientPortalAppointmentService.getAvailableTimeSlots(doctorId, date, req.tenantId);
+    const payload = await this.patientPortalAppointmentService.getAvailableTimeSlots(doctorId, date, req.tenantId);
+    const withStates = String(includeStates || '').toLowerCase() === 'true';
+    return withStates ? payload : payload.availableSlots;
   }
 
   @Get('appointments')

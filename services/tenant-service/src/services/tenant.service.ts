@@ -3,12 +3,14 @@ import {
   ConflictException,
   InternalServerErrorException,
   NotFoundException,
+  BadRequestException,
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { randomUUID } from 'crypto';
 import { Tenant, TenantStatus, SubscriptionTier, SubscriptionMode, SubscriptionState, PackagePreset } from '../entities/tenant.entity';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
@@ -69,6 +71,27 @@ export interface TenantBillingSummary {
   message: string;
   enabledModules: string[];
   coreModules: string[];
+}
+
+interface TenantSubscriptionPaymentRow {
+  id: string;
+  tenant_id: string;
+  provider: string;
+  reference: string;
+  session_id: string;
+  external_payment_id: string | null;
+  amount: string | number;
+  currency: string;
+  months_to_extend: number;
+  status: string;
+  checkout_url: string | null;
+  success_url: string | null;
+  cancel_url: string | null;
+  metadata: any;
+  paid_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const FULL_EHR_CORE_MODULES = ['finance', 'nurse_general'] as const;
@@ -590,6 +613,316 @@ export class TenantService implements OnModuleInit {
     };
   }
 
+  getSubscriptionPaymentProviders(): Array<{
+    key: string;
+    label: string;
+    enabled: boolean;
+    mode: 'gateway' | 'manual';
+  }> {
+    const providers = ['zimswitch', 'stripe', 'paynow', 'manual'];
+    return providers.map((provider) => {
+      const key = provider.toUpperCase();
+      const enabledEnv = process.env[`TENANT_PAYMENT_PROVIDER_${key}_ENABLED`];
+      const enabled =
+        provider === 'manual'
+          ? true
+          : enabledEnv
+            ? String(enabledEnv).toLowerCase() === 'true'
+            : true;
+      return {
+        key: provider,
+        label: provider === 'paynow' ? 'Paynow' : provider.charAt(0).toUpperCase() + provider.slice(1),
+        enabled,
+        mode: provider === 'manual' ? 'manual' : 'gateway',
+      };
+    });
+  }
+
+  async listSubscriptionPayments(tenantId: string, limit = 20): Promise<any[]> {
+    await this.ensureSubscriptionSchema();
+    await this.findById(tenantId);
+    const normalizedLimit = Number.isFinite(Number(limit))
+      ? Math.min(Math.max(Number(limit), 1), 200)
+      : 20;
+    const rows: TenantSubscriptionPaymentRow[] = await this.tenantRepository.query(
+      `
+      SELECT
+        id,
+        tenant_id,
+        provider,
+        reference,
+        session_id,
+        external_payment_id,
+        amount,
+        currency,
+        months_to_extend,
+        status,
+        checkout_url,
+        success_url,
+        cancel_url,
+        metadata,
+        paid_at,
+        expires_at,
+        created_at,
+        updated_at
+      FROM tenant_subscription_payments
+      WHERE tenant_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2
+      `,
+      [tenantId, normalizedLimit],
+    );
+    return (rows || []).map((row) => this.toSubscriptionPaymentView(row));
+  }
+
+  async createSubscriptionPaymentSession(
+    tenantId: string,
+    payload: {
+      provider: string;
+      amount?: number;
+      currency?: string;
+      monthsToExtend?: number;
+      successUrl?: string;
+      cancelUrl?: string;
+      metadata?: Record<string, any>;
+    },
+  ): Promise<any> {
+    await this.ensureSubscriptionSchema();
+    const tenant = await this.findById(tenantId);
+    const provider = String(payload.provider || '').trim().toLowerCase();
+    const providerConfig = this.getSubscriptionPaymentProviders().find((item) => item.key === provider);
+    if (!providerConfig) {
+      throw new BadRequestException(`Unsupported payment provider "${payload.provider}"`);
+    }
+    if (!providerConfig.enabled) {
+      throw new BadRequestException(`${providerConfig.label} is currently disabled for tenant subscription payments`);
+    }
+
+    const monthsToExtend = Number.isFinite(Number(payload.monthsToExtend))
+      ? Math.min(Math.max(Math.round(Number(payload.monthsToExtend)), 1), 24)
+      : 1;
+
+    const amount =
+      Number.isFinite(Number(payload.amount)) && Number(payload.amount) > 0
+        ? Number(payload.amount)
+        : this.estimateSubscriptionAmount(tenant.subscriptionTier, monthsToExtend);
+    const currency = String(payload.currency || process.env.TENANT_PAYMENT_DEFAULT_CURRENCY || 'USD')
+      .trim()
+      .toUpperCase();
+
+    const sessionId = `sess_${randomUUID().replace(/-/g, '')}`;
+    const reference = `SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const successUrl = payload.successUrl || process.env.TENANT_PAYMENT_SUCCESS_URL || '';
+    const cancelUrl = payload.cancelUrl || process.env.TENANT_PAYMENT_CANCEL_URL || '';
+    const checkoutUrl = this.resolveCheckoutUrl(provider, {
+      sessionId,
+      reference,
+      amount,
+      currency,
+      tenantId,
+      successUrl,
+      cancelUrl,
+    });
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const paymentId = randomUUID();
+
+    const [created]: TenantSubscriptionPaymentRow[] = await this.tenantRepository.query(
+      `
+      INSERT INTO tenant_subscription_payments (
+        id,
+        tenant_id,
+        provider,
+        reference,
+        session_id,
+        amount,
+        currency,
+        months_to_extend,
+        status,
+        checkout_url,
+        success_url,
+        cancel_url,
+        metadata,
+        expires_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12::jsonb, $13)
+      RETURNING *
+      `,
+      [
+        paymentId,
+        tenantId,
+        provider,
+        reference,
+        sessionId,
+        amount.toFixed(2),
+        currency,
+        monthsToExtend,
+        checkoutUrl,
+        successUrl || null,
+        cancelUrl || null,
+        JSON.stringify(payload.metadata || {}),
+        expiresAt,
+      ],
+    );
+
+    return this.toSubscriptionPaymentView(created);
+  }
+
+  async confirmSubscriptionPayment(
+    tenantId: string,
+    paymentId: string,
+    body: { status: 'successful' | 'failed' | 'cancelled'; externalPaymentId?: string; note?: string },
+  ): Promise<any> {
+    await this.ensureSubscriptionSchema();
+    const tenant = await this.findById(tenantId);
+    const targetStatus = String(body.status || '').toLowerCase();
+    if (!['successful', 'failed', 'cancelled'].includes(targetStatus)) {
+      throw new BadRequestException('Invalid payment status. Use successful, failed, or cancelled.');
+    }
+
+    const payments: TenantSubscriptionPaymentRow[] = await this.tenantRepository.query(
+      `
+      SELECT *
+      FROM tenant_subscription_payments
+      WHERE id = $1 AND tenant_id = $2
+      LIMIT 1
+      `,
+      [paymentId, tenantId],
+    );
+    const payment = payments?.[0];
+    if (!payment) {
+      throw new NotFoundException('Subscription payment session not found');
+    }
+
+    const existingMetadata = payment.metadata && typeof payment.metadata === 'object' ? payment.metadata : {};
+    const mergedMetadata = {
+      ...existingMetadata,
+      note: body.note || existingMetadata?.note || null,
+      lastConfirmedAt: new Date().toISOString(),
+    };
+
+    let updatedBillingEndsAt = tenant.billingEndsAt;
+    let updatedGraceEndsAt = tenant.graceEndsAt;
+    let updatedState = tenant.subscriptionState;
+    let updatedTenantStatus = tenant.status;
+
+    if (targetStatus === 'successful') {
+      const baseDate = tenant.billingEndsAt && tenant.billingEndsAt.getTime() > Date.now()
+        ? new Date(tenant.billingEndsAt)
+        : new Date();
+      const monthsToExtend = Number(payment.months_to_extend || 1);
+      const billingEndsAt = new Date(baseDate);
+      billingEndsAt.setMonth(billingEndsAt.getMonth() + monthsToExtend);
+      const graceEndsAt = new Date(billingEndsAt);
+      graceEndsAt.setDate(graceEndsAt.getDate() + 5);
+
+      tenant.subscriptionMode = 'paid';
+      tenant.subscriptionState = 'active';
+      tenant.billingEndsAt = billingEndsAt;
+      tenant.graceEndsAt = graceEndsAt;
+      tenant.autoDeleteAt = null;
+      tenant.status = TenantStatus.ACTIVE;
+      await this.tenantRepository.save(tenant);
+
+      updatedBillingEndsAt = billingEndsAt;
+      updatedGraceEndsAt = graceEndsAt;
+      updatedState = 'active';
+      updatedTenantStatus = TenantStatus.ACTIVE;
+    }
+
+    const [updated]: TenantSubscriptionPaymentRow[] = await this.tenantRepository.query(
+      `
+      UPDATE tenant_subscription_payments
+      SET
+        status = $1,
+        external_payment_id = COALESCE($2, external_payment_id),
+        paid_at = CASE WHEN $1 = 'successful' THEN NOW() ELSE paid_at END,
+        metadata = $3::jsonb,
+        updated_at = NOW()
+      WHERE id = $4
+      RETURNING *
+      `,
+      [targetStatus, body.externalPaymentId || null, JSON.stringify(mergedMetadata), paymentId],
+    );
+
+    return {
+      payment: this.toSubscriptionPaymentView(updated),
+      tenant: {
+        id: tenant.id,
+        subscriptionState: updatedState,
+        status: updatedTenantStatus,
+        billingEndsAt: updatedBillingEndsAt ? updatedBillingEndsAt.toISOString() : null,
+        graceEndsAt: updatedGraceEndsAt ? updatedGraceEndsAt.toISOString() : null,
+      },
+      billingSummary: this.getBillingSummary(tenant),
+    };
+  }
+
+  private estimateSubscriptionAmount(tier: SubscriptionTier, monthsToExtend: number): number {
+    const baseMonthlyRates: Record<SubscriptionTier, number> = {
+      [SubscriptionTier.BASIC]: Number(process.env.TENANT_PAYMENT_RATE_BASIC || 49),
+      [SubscriptionTier.PROFESSIONAL]: Number(process.env.TENANT_PAYMENT_RATE_PROFESSIONAL || 99),
+      [SubscriptionTier.ENTERPRISE]: Number(process.env.TENANT_PAYMENT_RATE_ENTERPRISE || 199),
+    };
+    const monthly = baseMonthlyRates[tier] || 49;
+    return Number((monthly * monthsToExtend).toFixed(2));
+  }
+
+  private resolveCheckoutUrl(
+    provider: string,
+    payload: {
+      sessionId: string;
+      reference: string;
+      amount: number;
+      currency: string;
+      tenantId: string;
+      successUrl?: string;
+      cancelUrl?: string;
+    },
+  ): string {
+    const providerKey = provider.toUpperCase();
+    const configuredBaseUrl = process.env[`TENANT_PAYMENT_PROVIDER_${providerKey}_URL`];
+    if (!configuredBaseUrl) {
+      return `/payments/mock/${provider}?sessionId=${encodeURIComponent(payload.sessionId)}&ref=${encodeURIComponent(payload.reference)}&amount=${encodeURIComponent(payload.amount)}&currency=${encodeURIComponent(payload.currency)}`;
+    }
+    const separator = configuredBaseUrl.includes('?') ? '&' : '?';
+    const query = [
+      `sessionId=${encodeURIComponent(payload.sessionId)}`,
+      `reference=${encodeURIComponent(payload.reference)}`,
+      `amount=${encodeURIComponent(payload.amount)}`,
+      `currency=${encodeURIComponent(payload.currency)}`,
+      `tenantId=${encodeURIComponent(payload.tenantId)}`,
+      payload.successUrl ? `successUrl=${encodeURIComponent(payload.successUrl)}` : '',
+      payload.cancelUrl ? `cancelUrl=${encodeURIComponent(payload.cancelUrl)}` : '',
+    ]
+      .filter(Boolean)
+      .join('&');
+    return `${configuredBaseUrl}${separator}${query}`;
+  }
+
+  private toSubscriptionPaymentView(row: TenantSubscriptionPaymentRow | undefined | null): any {
+    if (!row) return null;
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      provider: row.provider,
+      reference: row.reference,
+      sessionId: row.session_id,
+      externalPaymentId: row.external_payment_id,
+      amount: Number(row.amount || 0),
+      currency: row.currency,
+      monthsToExtend: Number(row.months_to_extend || 1),
+      status: row.status,
+      checkoutUrl: row.checkout_url,
+      successUrl: row.success_url,
+      cancelUrl: row.cancel_url,
+      metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
+      paidAt: row.paid_at,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   private async provisionTenantDatabase(tenant: Tenant): Promise<void> {
     try {
       this.logger.log(`Starting database provisioning for tenant: ${tenant.id}`);
@@ -955,6 +1288,39 @@ export class TenantService implements OnModuleInit {
       SET "packagePreset" = 'claims_only',
           "enabledModules" = '["claims"]'::jsonb
       WHERE "packagePreset" = 'claims_only'
+    `);
+
+    await this.tenantRepository.query(`
+      CREATE TABLE IF NOT EXISTS tenant_subscription_payments (
+        id UUID PRIMARY KEY,
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        provider VARCHAR(40) NOT NULL,
+        reference VARCHAR(100) NOT NULL UNIQUE,
+        session_id VARCHAR(120) NOT NULL UNIQUE,
+        external_payment_id VARCHAR(160),
+        amount NUMERIC(12,2) NOT NULL,
+        currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+        months_to_extend INTEGER NOT NULL DEFAULT 1,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        checkout_url TEXT,
+        success_url TEXT,
+        cancel_url TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        paid_at TIMESTAMPTZ,
+        expires_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await this.tenantRepository.query(`
+      CREATE INDEX IF NOT EXISTS idx_tenant_subscription_payments_tenant_id
+      ON tenant_subscription_payments (tenant_id)
+    `);
+
+    await this.tenantRepository.query(`
+      CREATE INDEX IF NOT EXISTS idx_tenant_subscription_payments_status
+      ON tenant_subscription_payments (status)
     `);
   }
 }

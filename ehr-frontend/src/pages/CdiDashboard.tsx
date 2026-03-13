@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
+import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 
 interface CdiDashboardProps {
   embedded?: boolean;
@@ -259,6 +260,16 @@ const CdiDashboard: React.FC<CdiDashboardProps> = ({ embedded = false }) => {
       )}
 
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${embedded ? 'pb-4' : 'pt-8 pb-8'}`}>
+        <div className="mb-6">
+          <ModuleGeneralReportCard
+            moduleKey="cdi"
+            title="CDI"
+            tenantSlug={tenantSlug || ''}
+            token={token}
+            accentClass="from-indigo-50 via-white to-blue-50"
+          />
+        </div>
+
         {metrics && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white/80 backdrop-blur-sm rounded-xl p-5 border border-slate-200 shadow-sm">

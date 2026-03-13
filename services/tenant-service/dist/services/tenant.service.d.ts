@@ -77,6 +77,30 @@ export declare class TenantService implements OnModuleInit {
     upsertTenantDhis2Config(tenantId: string, payload: TenantDhis2ConfigPayload): Promise<TenantDhis2ConfigView>;
     clearTenantDhis2Config(tenantId: string): Promise<void>;
     getBillingSummary(tenant: Tenant): TenantBillingSummary;
+    getSubscriptionPaymentProviders(): Array<{
+        key: string;
+        label: string;
+        enabled: boolean;
+        mode: 'gateway' | 'manual';
+    }>;
+    listSubscriptionPayments(tenantId: string, limit?: number): Promise<any[]>;
+    createSubscriptionPaymentSession(tenantId: string, payload: {
+        provider: string;
+        amount?: number;
+        currency?: string;
+        monthsToExtend?: number;
+        successUrl?: string;
+        cancelUrl?: string;
+        metadata?: Record<string, any>;
+    }): Promise<any>;
+    confirmSubscriptionPayment(tenantId: string, paymentId: string, body: {
+        status: 'successful' | 'failed' | 'cancelled';
+        externalPaymentId?: string;
+        note?: string;
+    }): Promise<any>;
+    private estimateSubscriptionAmount;
+    private resolveCheckoutUrl;
+    private toSubscriptionPaymentView;
     private provisionTenantDatabase;
     private getCoreModulesForPreset;
     private getDefaultFeatureFlags;

@@ -246,7 +246,17 @@ export class PatientPortalAppointmentService {
     doctorId: string,
     date: string,
     tenantId: string,
-  ): Promise<string[]> {
+  ): Promise<{
+    date: string;
+    slotDurationMinutes: number;
+    availableSlots: string[];
+    slots: Array<{
+      iso: string;
+      time: string;
+      status: 'available' | 'booked' | 'unavailable' | 'past';
+      reason: string | null;
+    }>;
+  }> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
     if (!connection) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
@@ -304,25 +314,32 @@ export class PatientPortalAppointmentService {
       [doctorId, date],
     );
 
-    // Generate available time slots
+    // Generate slot states
     const availableSlots: string[] = [];
+    const slots: Array<{
+      iso: string;
+      time: string;
+      status: 'available' | 'booked' | 'unavailable' | 'past';
+      reason: string | null;
+    }> = [];
     const selectedDate = new Date(date);
+    const now = new Date();
     
     for (let hour = startHour; hour < endHour; hour++) {
       for (let minute = 0; minute < 60; minute += slotDuration) {
         const slotTime = new Date(selectedDate);
         slotTime.setHours(hour, minute, 0, 0);
+        const slotEnd = new Date(slotTime.getTime() + slotDuration * 60000);
+        const iso = slotTime.toISOString();
+        const time = `${String(slotTime.getHours()).padStart(2, '0')}:${String(slotTime.getMinutes()).padStart(2, '0')}`;
 
-        // Skip if slot is in the past
-        if (slotTime < new Date()) {
-          continue;
-        }
+        let status: 'available' | 'booked' | 'unavailable' | 'past' = 'available';
+        let reason: string | null = null;
 
         // Check if slot conflicts with existing appointments
         const conflicts = existingAppointments.some((apt: any) => {
           const aptStart = new Date(apt.appointment_date);
           const aptEnd = new Date(aptStart.getTime() + (apt.duration_minutes || 30) * 60000);
-          const slotEnd = new Date(slotTime.getTime() + slotDuration * 60000);
           // Check if slots overlap (slot starts before apt ends AND slot ends after apt starts)
           return (slotTime < aptEnd && slotEnd > aptStart);
         });
@@ -331,18 +348,34 @@ export class PatientPortalAppointmentService {
         const isUnavailable = unavailablePeriods.some((period: any) => {
           const periodStart = new Date(period.start_time);
           const periodEnd = new Date(period.end_time);
-          const slotEnd = new Date(slotTime.getTime() + slotDuration * 60000);
           // Check if slot overlaps with unavailable period
           return (slotTime < periodEnd && slotEnd > periodStart);
         });
 
-        if (!conflicts && !isUnavailable) {
-          availableSlots.push(slotTime.toISOString());
+        if (slotTime < now) {
+          status = 'past';
+          reason = 'Time has already passed';
+        } else if (isUnavailable) {
+          status = 'unavailable';
+          reason = 'Doctor unavailable';
+        } else if (conflicts) {
+          status = 'booked';
+          reason = 'Already allocated to another patient';
+        } else {
+          status = 'available';
+          reason = null;
+          availableSlots.push(iso);
         }
+
+        slots.push({ iso, time, status, reason });
       }
     }
 
-    return availableSlots;
+    return {
+      date,
+      slotDurationMinutes: slotDuration,
+      availableSlots,
+      slots,
+    };
   }
 }
-

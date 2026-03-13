@@ -15,7 +15,7 @@ import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
 import { exportQualityMetricsToPDF } from '../utils/pdfExport';
 import HIVCohortAnalysis from '../components/HIVCohortAnalysis';
 import HIVComparisonReports from '../components/HIVComparisonReports';
-import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
+import HivReportsPanel from '../components/HivReportsPanel';
 
 interface HIVEnrollment {
   id: string;
@@ -120,7 +120,7 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
   const { showSuccess, showError } = useNotification();
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'operations' | 'patients' | 'regimen-changes' | 'eac-programs' | 'alerts' | 'quality' | 'cohort' | 'comparison' | 'ltfu' | 'monthly-return'>('operations');
+  const [activeTab, setActiveTab] = useState<'operations' | 'patients' | 'regimen-changes' | 'eac-programs' | 'alerts' | 'quality' | 'cohort' | 'comparison' | 'ltfu' | 'reports'>('operations');
   const [enrollments, setEnrollments] = useState<HIVEnrollment[]>([]);
   const [filteredEnrollments, setFilteredEnrollments] = useState<HIVEnrollment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -873,7 +873,7 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
                 { id: 'cohort', label: 'Cohort Analysis', shortLabel: 'Cohort', icon: TrendingUp, badge: null },
                 { id: 'comparison', label: 'Comparison Reports', shortLabel: 'Compare', icon: BarChart3, badge: null },
                 { id: 'ltfu', label: 'LTFU Management', shortLabel: 'LTFU', icon: Clock, badge: ltfuPatients.length },
-                { id: 'monthly-return', label: 'Monthly Return', shortLabel: 'Monthly', icon: FileText, badge: null }
+                { id: 'reports', label: 'Reports & DHIS2', shortLabel: 'Reports', icon: FileText, badge: null }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1984,8 +1984,8 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
           <HIVComparisonReports tenantSlug={tenantSlug!} />
         )}
 
-        {activeTab === 'monthly-return' && (
-          <HIVMonthlyReturnForm tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
+        {activeTab === 'reports' && (
+          <HivReportsPanel tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
         )}
 
         {activeTab === 'ltfu' && (
