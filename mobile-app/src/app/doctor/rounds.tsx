@@ -11,6 +11,7 @@ import { useTelemedicineConsultations, useTelemedicineMutations } from '../../fe
 import { formatRelative, formatStatusLabel, safeArray } from '../../features/provider/utils/format';
 import { getHivCohortWorklist } from '../../services/api/provider';
 import type { TelemedicineConsultation } from '../../services/api/provider';
+import { getOnlinePolicyMessage } from '../../lib/network/online-policy';
 
 function consultationTone(status?: string) {
   const normalized = String(status || '').toLowerCase();
@@ -56,6 +57,8 @@ export default function DoctorRoundsScreen() {
       const meeting = await teleMutations.getMeetingUrl.mutateAsync(entry.id);
       const url = String(meeting?.meetingUrl || meeting?.url || '').trim();
       setMeetingHint(url ? `Meeting URL ready: ${url}` : 'Joined consultation. Meeting metadata loaded.');
+    } catch (error) {
+      setMeetingHint(getOnlinePolicyMessage(error));
     } finally {
       setWorkingId(null);
     }
@@ -65,6 +68,9 @@ export default function DoctorRoundsScreen() {
     try {
       setWorkingId(entry.id);
       await teleMutations.endConsultation.mutateAsync(entry.id);
+      setMeetingHint('Consultation ended and synced.');
+    } catch (error) {
+      setMeetingHint(getOnlinePolicyMessage(error));
     } finally {
       setWorkingId(null);
     }

@@ -13,6 +13,10 @@ Date: 2026-03-13
 - Added PHI screenshot policy by route:
   - auth/clinic public flows allow capture.
   - role routes enforce screen capture blocking.
+- Added online-only guardrails for high-risk workflows:
+  - patient bill payments and appointment-with-payment requests are blocked when offline.
+  - telemedicine join/end mutations are blocked when offline.
+  - blocked requests now surface explicit reconnect guidance in provider and patient flows.
 - Added logout control in all role tab headers:
   - doctor, nurse, patient shells now have a consistent `Logout` action.
 - Added push registration integration on login and unregister integration on logout:
@@ -37,8 +41,11 @@ Date: 2026-03-13
 - `mobile-app/src/lib/observability/mobile-metrics.ts`
 - `mobile-app/src/app/_layout.tsx`
 - `mobile-app/src/lib/security/device-security.ts`
+- `mobile-app/src/lib/network/online-policy.ts`
 - `mobile-app/src/app/index.tsx`
 - `mobile-app/src/app/notifications.tsx`
+- `mobile-app/src/app/doctor/rounds.tsx`
+- `mobile-app/src/app/patient/bills.tsx`
 - `mobile-app/src/features/shared/ui/LogoutButton.tsx`
 - `mobile-app/src/app/doctor/_layout.tsx`
 - `mobile-app/src/app/nurse/_layout.tsx`
@@ -49,6 +56,7 @@ Date: 2026-03-13
 - `mobile-app/src/app/clinic/confirm.tsx`
 - `mobile-app/scripts/e2e-smoke.mjs`
 - `mobile-app/app.json`
+- `mobile-app/src/test/online-policy.test.ts`
 
 ## Validation gates
 

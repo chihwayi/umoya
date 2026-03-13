@@ -4,6 +4,7 @@ import { getStoredTenant } from '../../lib/tenant/tenant-storage';
 import { getStoredSession } from '../../lib/auth/session-storage';
 import { triggerAuthInvalidation } from '../../lib/auth/invalidation';
 import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
+import { ensureOnlineForPolicy, isOnlinePolicyError } from '../../lib/network/online-policy';
 
 const runtime = getRuntimeConfig();
 
@@ -18,6 +19,18 @@ export const ehrClient = axios.create({
 });
 
 ehrClient.interceptors.request.use(async (config) => {
+  const method = String(config.method || 'get').toUpperCase();
+  const url = String(config.url || '');
+
+  try {
+    await ensureOnlineForPolicy(method, url);
+  } catch (error) {
+    if (isOnlinePolicyError(error)) {
+      trackMobileEvent('api.offline_policy_blocked', { method, url });
+    }
+    throw error;
+  }
+
   const session = await getStoredSession();
   const tenant = getStoredTenant();
 

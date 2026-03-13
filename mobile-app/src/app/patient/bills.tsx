@@ -10,6 +10,7 @@ import { PatientStatusPill } from '../../features/patient/ui/StatusPill';
 import { usePatientBillingMutations, usePatientBills } from '../../features/patient/hooks/usePatientBilling';
 import { formatCurrency, formatDate, formatStatusLabel, safeArray, safeNumber } from '../../features/patient/utils/format';
 import type { PatientBill } from '../../services/api/patient';
+import { getOnlinePolicyMessage, isOnlinePolicyError } from '../../lib/network/online-policy';
 
 function billTone(status?: string | null) {
   const normalized = String(status || '').toLowerCase();
@@ -82,16 +83,21 @@ export default function PatientBillsScreen() {
     const amount = safeNumber(paymentAmount);
     if (amount <= 0) return;
 
-    const response = await mutations.createPayment.mutateAsync({
-      billId: selectedBill.id,
-      amount,
-      paymentMethod,
-      paymentReference: paymentReference.trim() || undefined
-    });
+    try {
+      setPaymentFeedback(null);
+      const response = await mutations.createPayment.mutateAsync({
+        billId: selectedBill.id,
+        amount,
+        paymentMethod,
+        paymentReference: paymentReference.trim() || undefined
+      });
 
-    const status = String(response.status || response.paymentStatus || 'submitted');
-    const receipt = String(response.receiptNumber || response.transactionId || response.paymentReference || '').trim();
-    setPaymentFeedback(receipt ? `Payment ${status}. Ref: ${receipt}` : `Payment ${status}.`);
+      const status = String(response.status || response.paymentStatus || 'submitted');
+      const receipt = String(response.receiptNumber || response.transactionId || response.paymentReference || '').trim();
+      setPaymentFeedback(receipt ? `Payment ${status}. Ref: ${receipt}` : `Payment ${status}.`);
+    } catch (error) {
+      setPaymentFeedback(getOnlinePolicyMessage(error));
+    }
   }
 
   return (
@@ -197,7 +203,15 @@ export default function PatientBillsScreen() {
 
           {paymentFeedback ? <StatePanel state="empty" title="Payment response" message={paymentFeedback} /> : null}
           {mutations.createPayment.isError ? (
-            <StatePanel state="error" title="Payment failed" message="Payment request did not complete. Verify method and retry." />
+            <StatePanel
+              state={isOnlinePolicyError(mutations.createPayment.error) ? 'offline' : 'error'}
+              title={isOnlinePolicyError(mutations.createPayment.error) ? 'Offline payment blocked' : 'Payment failed'}
+              message={
+                isOnlinePolicyError(mutations.createPayment.error)
+                  ? 'Payments are online-only. Reconnect and retry.'
+                  : 'Payment request did not complete. Verify method and retry.'
+              }
+            />
           ) : null}
         </Card>
       </ScrollView>

@@ -53,6 +53,7 @@ function runReleaseHardeningSmoke() {
     'src/app/notifications.tsx',
     'src/app/_layout.tsx',
     'src/lib/auth/invalidation.ts',
+    'src/lib/network/online-policy.ts',
     'src/lib/security/device-security.ts',
     'src/lib/observability/mobile-metrics.ts',
     'src/features/shared/ui/LogoutButton.tsx'
