@@ -51,8 +51,10 @@ function runPatientSmoke() {
 function runReleaseHardeningSmoke() {
   assertFilesExist('release-hardening', [
     'src/app/notifications.tsx',
+    'src/app/diagnostics.tsx',
     'src/app/_layout.tsx',
     'src/features/shared/providers/AppProviders.tsx',
+    'src/features/shared/ui/HeaderActions.tsx',
     'src/lib/auth/invalidation.ts',
     'src/lib/cache/query-cache-storage.ts',
     'src/lib/network/connectivity.ts',

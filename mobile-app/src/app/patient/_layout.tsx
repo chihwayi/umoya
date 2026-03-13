@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { theme } from '../../design/theme';
-import { LogoutButton } from '../../features/shared/ui/LogoutButton';
+import { HeaderActions } from '../../features/shared/ui/HeaderActions';
 
 export default function PatientTabsLayout() {
   return (
@@ -9,7 +9,7 @@ export default function PatientTabsLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.background },
         headerTintColor: theme.colors.textPrimary,
-        headerRight: () => <LogoutButton />,
+        headerRight: () => <HeaderActions />,
         tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
         tabBarActiveTintColor: theme.colors.accentTeal,
         tabBarInactiveTintColor: theme.colors.textMuted

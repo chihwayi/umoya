@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../../features/shared/ui/Screen';
 import { Card } from '../../features/shared/ui/Card';
@@ -102,6 +102,12 @@ export default function AuthLandingScreen() {
           <Text style={styles.patientText}>Patient Login</Text>
         </Pressable>
 
+        <View style={styles.linkRow}>
+          <Text style={styles.link} onPress={() => router.push('/diagnostics')}>
+            Open diagnostics
+          </Text>
+        </View>
+
         {error ? <StatePanel state="error" title="Biometric sign in failed" message={error} /> : null}
       </Card>
     </Screen>
@@ -162,5 +168,13 @@ const styles = StyleSheet.create({
     color: '#022018',
     fontWeight: '700',
     textAlign: 'center'
+  },
+  linkRow: {
+    marginTop: theme.spacing.md,
+    alignItems: 'center'
+  },
+  link: {
+    color: theme.colors.accentBlue,
+    fontSize: 13
   }
 });
