@@ -51,7 +51,9 @@ function runPatientSmoke() {
 function runReleaseHardeningSmoke() {
   assertFilesExist('release-hardening', [
     'src/app/notifications.tsx',
+    'src/app/_layout.tsx',
     'src/lib/auth/invalidation.ts',
+    'src/lib/security/device-security.ts',
     'src/lib/observability/mobile-metrics.ts',
     'src/features/shared/ui/LogoutButton.tsx'
   ]);

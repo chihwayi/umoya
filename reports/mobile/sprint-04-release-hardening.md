@@ -9,6 +9,10 @@ Date: 2026-03-13
 - Added inactivity timeout protection in root layout:
   - app background duration is tracked and active sessions are logged out after timeout.
   - timeout controlled by `EXPO_PUBLIC_SESSION_TIMEOUT_MINUTES` (default 15).
+- Added biometric re-entry guard for returning active sessions where device biometrics are enrolled.
+- Added PHI screenshot policy by route:
+  - auth/clinic public flows allow capture.
+  - role routes enforce screen capture blocking.
 - Added logout control in all role tab headers:
   - doctor, nurse, patient shells now have a consistent `Logout` action.
 - Added push registration integration on login and unregister integration on logout:
@@ -32,6 +36,7 @@ Date: 2026-03-13
 - `mobile-app/src/lib/config/runtime.ts`
 - `mobile-app/src/lib/observability/mobile-metrics.ts`
 - `mobile-app/src/app/_layout.tsx`
+- `mobile-app/src/lib/security/device-security.ts`
 - `mobile-app/src/app/index.tsx`
 - `mobile-app/src/app/notifications.tsx`
 - `mobile-app/src/features/shared/ui/LogoutButton.tsx`
@@ -43,6 +48,7 @@ Date: 2026-03-13
 - `mobile-app/src/app/clinic/select.tsx`
 - `mobile-app/src/app/clinic/confirm.tsx`
 - `mobile-app/scripts/e2e-smoke.mjs`
+- `mobile-app/app.json`
 
 ## Validation gates
 

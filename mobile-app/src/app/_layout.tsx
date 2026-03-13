@@ -7,6 +7,7 @@ import { setAuthInvalidationHandler } from '../lib/auth/invalidation';
 import { logout } from '../lib/auth/logout';
 import { getRuntimeConfig } from '../lib/config/runtime';
 import { trackMobileEvent } from '../lib/observability/mobile-metrics';
+import { enforcePhiScreenProtection, promptBiometricUnlock } from '../lib/security/device-security';
 
 const runtime = getRuntimeConfig();
 
@@ -42,29 +43,47 @@ export default function RootLayout() {
       if (!backgroundAt) return;
 
       const elapsed = Date.now() - backgroundAt;
-      if (elapsed < runtime.sessionInactivityTimeoutMs) return;
 
       void (async () => {
         const session = await getSession();
         if (!session) return;
 
-        trackMobileEvent('session.inactivity_timeout', {
-          elapsedMs: elapsed,
-          route: pathname
-        });
+        if (elapsed >= runtime.sessionInactivityTimeoutMs) {
+          trackMobileEvent('session.inactivity_timeout', {
+            elapsedMs: elapsed,
+            route: pathname
+          });
 
+          await logout(session.accessToken).catch(() => {
+            // Non-blocking; session invalidation still proceeds.
+          });
+
+          router.replace('/auth');
+          return;
+        }
+
+        if (isPublicRoute(pathname)) return;
+
+        const unlocked = await promptBiometricUnlock().catch(() => false);
+        if (unlocked) return;
+
+        trackMobileEvent('session.biometric_failed', { route: pathname });
         await logout(session.accessToken).catch(() => {
           // Non-blocking; session invalidation still proceeds.
         });
-
-        if (!isPublicRoute(pathname)) {
-          router.replace('/auth');
-        }
+        router.replace('/auth');
       })();
     });
 
     return () => sub.remove();
   }, [pathname, router]);
+
+  useEffect(() => {
+    const shouldProtect = !isPublicRoute(pathname);
+    void enforcePhiScreenProtection(shouldProtect).catch(() => {
+      trackMobileEvent('security.screen_capture_policy_failed', { route: pathname, shouldProtect });
+    });
+  }, [pathname]);
 
   return (
     <AppProviders>
