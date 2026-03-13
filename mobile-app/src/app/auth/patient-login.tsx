@@ -7,6 +7,8 @@ import { StatePanel } from '../../features/shared/ui/StatePanel';
 import { theme } from '../../design/theme';
 import { patientLogin } from '../../services/api/ehr';
 import { saveSession } from '../../lib/auth/auth-service';
+import { registerDevicePushToken } from '../../lib/notifications/push-service';
+import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
 
 export default function PatientLoginScreen() {
   const [email, setEmail] = useState('');
@@ -35,9 +37,18 @@ export default function PatientLoginScreen() {
         userId: response.patient.id,
         email: response.patient.email
       });
+      trackMobileEvent('auth.login.success', { role: 'patient' });
+      await registerDevicePushToken(response.token).catch(() => {
+        trackMobileEvent('push.register.failed', { role: 'patient' });
+      });
 
       router.replace('/patient');
     } catch (err: any) {
+      trackMobileEvent('auth.login.failed', {
+        role: 'patient',
+        code: err?.code || 'unknown',
+        status: err?.response?.status || 0
+      });
       setError(err?.response?.data?.message || err?.message || 'Patient login failed');
     } finally {
       setLoading(false);

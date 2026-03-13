@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 import { Screen } from '../features/shared/ui/Screen';
 import { Card } from '../features/shared/ui/Card';
 import { StatePanel } from '../features/shared/ui/StatePanel';
@@ -8,9 +9,28 @@ import { theme } from '../design/theme';
 import { getTenantBootstrap } from '../lib/tenant/tenant-resolver';
 import { getSession } from '../lib/auth/auth-service';
 import { routeForRole } from '../lib/auth/routing';
+import { mobileVersionMetadata } from '../services/api/ehr';
+import { trackMobileEvent } from '../lib/observability/mobile-metrics';
+
+function isVersionLower(current: string, minimum: string): boolean {
+  const currentParts = current.split('.').map((item) => Number(item || 0));
+  const minimumParts = minimum.split('.').map((item) => Number(item || 0));
+  const maxLength = Math.max(currentParts.length, minimumParts.length);
+
+  for (let i = 0; i < maxLength; i += 1) {
+    const currentValue = Number.isFinite(currentParts[i]) ? currentParts[i] : 0;
+    const minimumValue = Number.isFinite(minimumParts[i]) ? minimumParts[i] : 0;
+
+    if (currentValue < minimumValue) return true;
+    if (currentValue > minimumValue) return false;
+  }
+
+  return false;
+}
 
 export default function BootResolverScreen() {
   const [status, setStatus] = useState('Checking tenant and session...');
+  const [versionBlockedMessage, setVersionBlockedMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -29,11 +49,35 @@ export default function BootResolverScreen() {
         setStatus('Resolving user session...');
         const session = await getSession();
 
+        if (!mounted) return;
+        setStatus('Checking app version policy...');
+        try {
+          const metadata = await mobileVersionMetadata();
+          const minVersion = String(
+            metadata?.minimumSupportedVersion ||
+              metadata?.minimum_supported_version ||
+              metadata?.minVersion ||
+              ''
+          ).trim();
+          const appVersion = String(Constants.expoConfig?.version || '1.0.0');
+
+          if (minVersion && isVersionLower(appVersion, minVersion)) {
+            trackMobileEvent('app.version.blocked', { appVersion, minVersion });
+            setVersionBlockedMessage(
+              `Update required. Current app ${appVersion} is below minimum supported ${minVersion}.`
+            );
+            return;
+          }
+        } catch {
+          // Endpoint is optional in non-production environments.
+        }
+
         if (!session) {
           router.replace('/auth');
           return;
         }
 
+        trackMobileEvent('app.boot.session_resolved', { role: session.role });
         router.replace(routeForRole(session.role));
       } catch {
         router.replace('/auth');
@@ -53,7 +97,11 @@ export default function BootResolverScreen() {
           <Image source={require('../../assets/medicore.png')} style={styles.logo} resizeMode="contain" />
           <Text style={styles.title}>MediCore Mobile</Text>
         </View>
-        <StatePanel state="loading" title="Booting" message={status} />
+        {versionBlockedMessage ? (
+          <StatePanel state="error" title="Update Required" message={versionBlockedMessage} />
+        ) : (
+          <StatePanel state="loading" title="Booting" message={status} />
+        )}
       </Card>
     </Screen>
   );

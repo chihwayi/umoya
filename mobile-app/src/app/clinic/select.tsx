@@ -7,6 +7,7 @@ import { StatePanel } from '../../features/shared/ui/StatePanel';
 import { theme } from '../../design/theme';
 import type { ActiveTenant } from '../../lib/tenant/types';
 import { fetchActiveTenants, resolveTenantBySubdomain } from '../../lib/tenant/tenant-resolver';
+import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
 
 export default function ClinicSelectScreen() {
   const [loading, setLoading] = useState(false);
@@ -25,8 +26,13 @@ export default function ClinicSelectScreen() {
         const rows = await fetchActiveTenants();
         if (!mounted) return;
         setTenants(Array.isArray(rows) ? rows : []);
+        trackMobileEvent('tenant.bootstrap.list_loaded', { count: Array.isArray(rows) ? rows.length : 0 });
       } catch (err: any) {
         if (!mounted) return;
+        trackMobileEvent('tenant.bootstrap.list_failed', {
+          code: err?.code || 'unknown',
+          status: err?.response?.status || 0
+        });
         setError(err?.response?.data?.message || err?.message || 'Failed to load clinics.');
       } finally {
         if (mounted) setLoading(false);
@@ -54,8 +60,14 @@ export default function ClinicSelectScreen() {
       setBootstrapping(true);
       setError(null);
       await resolveTenantBySubdomain(subdomain);
+      trackMobileEvent('tenant.bootstrap.selected', { subdomain });
       router.replace('/clinic/confirm');
     } catch (err: any) {
+      trackMobileEvent('tenant.bootstrap.select_failed', {
+        subdomain,
+        code: err?.code || 'unknown',
+        status: err?.response?.status || 0
+      });
       setError(err?.response?.data?.message || err?.message || 'Unable to bootstrap selected clinic.');
     } finally {
       setBootstrapping(false);

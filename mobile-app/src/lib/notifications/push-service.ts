@@ -1,11 +1,18 @@
 import * as Notifications from 'expo-notifications';
 import { ehrClient } from '../../services/api/http';
+import { trackMobileEvent } from '../observability/mobile-metrics';
 
 export async function requestPushPermissions(): Promise<boolean> {
   const settings = await Notifications.getPermissionsAsync();
-  if (settings.granted) return true;
+  if (settings.granted) {
+    trackMobileEvent('push.permission', { status: 'granted_existing' });
+    return true;
+  }
 
   const requested = await Notifications.requestPermissionsAsync();
+  trackMobileEvent('push.permission', {
+    status: requested.granted ? 'granted' : 'denied'
+  });
   return requested.granted;
 }
 
@@ -28,6 +35,7 @@ export async function registerDevicePushToken(authToken: string): Promise<string
       }
     }
   );
+  trackMobileEvent('push.register.success', { platform: 'expo' });
 
   return value;
 }
@@ -42,6 +50,7 @@ export async function unregisterDevicePushToken(authToken: string): Promise<void
       }
     }
   );
+  trackMobileEvent('push.unregister.success');
 }
 
 export async function getNotificationPreferences(authToken: string): Promise<unknown> {

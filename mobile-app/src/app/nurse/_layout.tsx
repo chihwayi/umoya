@@ -1,6 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { theme } from '../../design/theme';
+import { LogoutButton } from '../../features/shared/ui/LogoutButton';
 
 export default function NurseTabsLayout() {
   return (
@@ -8,6 +9,7 @@ export default function NurseTabsLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.background },
         headerTintColor: theme.colors.textPrimary,
+        headerRight: () => <LogoutButton />,
         tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
         tabBarActiveTintColor: theme.colors.accentTeal,
         tabBarInactiveTintColor: theme.colors.textMuted

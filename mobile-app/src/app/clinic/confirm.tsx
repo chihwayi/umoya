@@ -5,9 +5,17 @@ import { Screen } from '../../features/shared/ui/Screen';
 import { Card } from '../../features/shared/ui/Card';
 import { theme } from '../../design/theme';
 import { getTenantBootstrap } from '../../lib/tenant/tenant-resolver';
+import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
 
 export default function ClinicConfirmScreen() {
   const tenant = getTenantBootstrap();
+
+  React.useEffect(() => {
+    trackMobileEvent('tenant.bootstrap.confirmed', {
+      tenantId: tenant?.tenantId || 'unknown',
+      subdomain: tenant?.subdomain || 'unknown'
+    });
+  }, [tenant?.subdomain, tenant?.tenantId]);
 
   return (
     <Screen>
@@ -20,7 +28,13 @@ export default function ClinicConfirmScreen() {
           <Text style={styles.value}>{tenant?.subdomain || '-'}</Text>
         </View>
 
-        <Pressable style={styles.button} onPress={() => router.replace('/auth')}>
+        <Pressable
+          style={styles.button}
+          onPress={() => {
+            trackMobileEvent('tenant.bootstrap.completed', { subdomain: tenant?.subdomain || 'unknown' });
+            router.replace('/auth');
+          }}
+        >
           <Text style={styles.buttonText}>Continue to Login</Text>
         </Pressable>
       </Card>

@@ -9,6 +9,8 @@ import { providerLogin } from '../../services/api/ehr';
 import { saveSession } from '../../lib/auth/auth-service';
 import { routeForRole } from '../../lib/auth/routing';
 import type { AuthSession } from '../../lib/auth/types';
+import { registerDevicePushToken } from '../../lib/notifications/push-service';
+import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
 
 export default function ProviderLoginScreen() {
   const [email, setEmail] = useState('');
@@ -45,9 +47,18 @@ export default function ProviderLoginScreen() {
         userId: response.user.id,
         email: response.user.email
       });
+      trackMobileEvent('auth.login.success', { role, tenant: response.user?.tenant_id || 'unknown' });
+      await registerDevicePushToken(response.token).catch(() => {
+        trackMobileEvent('push.register.failed', { role });
+      });
 
       router.replace(routeForRole(role));
     } catch (err: any) {
+      trackMobileEvent('auth.login.failed', {
+        role: 'provider',
+        code: err?.code || 'unknown',
+        status: err?.response?.status || 0
+      });
       setError(err?.response?.data?.message || err?.message || 'Provider login failed');
     } finally {
       setLoading(false);
