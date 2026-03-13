@@ -31,6 +31,8 @@ const androidVersionCode = requirePositiveInt(process.env.MEDICORE_ANDROID_VERSI
 const serviceBaseUrl = process.env.EXPO_PUBLIC_SERVICE_BASE_URL || 'http://localhost:3000';
 const bundleIdentifier = process.env.MEDICORE_BUNDLE_ID || 'com.medicore.mobile';
 const androidPackage = process.env.MEDICORE_ANDROID_PACKAGE || 'com.medicore.mobile';
+const releaseChannel = process.env.EXPO_PUBLIC_RELEASE_CHANNEL || 'development';
+const releaseEnvironment = process.env.EXPO_PUBLIC_RELEASE_ENV || process.env.NODE_ENV || 'development';
 
 const config: ExpoConfig = {
   name: 'MediCore Mobile',
@@ -69,13 +71,16 @@ const config: ExpoConfig = {
       {
         faceIDPermission: 'Use Face ID to unlock MediCore clinical data.'
       }
-    ]
+    ],
+    '@sentry/react-native/expo'
   ],
   experiments: {
     typedRoutes: true
   },
   extra: {
-    serviceBaseUrl
+    serviceBaseUrl,
+    releaseChannel,
+    releaseEnvironment
   }
 };
 

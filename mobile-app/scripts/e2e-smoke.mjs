@@ -55,6 +55,7 @@ function runReleaseHardeningSmoke() {
     'src/app/_layout.tsx',
     'src/features/shared/providers/AppProviders.tsx',
     'src/features/shared/ui/HeaderActions.tsx',
+    'src/features/shared/ui/TenantLogoSlot.tsx',
     'src/lib/auth/invalidation.ts',
     'src/lib/cache/query-cache-storage.ts',
     'src/lib/network/connectivity.ts',
@@ -62,6 +63,7 @@ function runReleaseHardeningSmoke() {
     'src/lib/performance/preload.ts',
     'src/lib/security/biometric-login.ts',
     'src/lib/security/device-security.ts',
+    'src/lib/observability/crash-reporting.ts',
     'src/lib/observability/mobile-metrics.ts',
     'src/features/shared/ui/LogoutButton.tsx'
   ]);

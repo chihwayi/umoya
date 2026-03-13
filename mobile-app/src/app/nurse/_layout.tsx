@@ -2,6 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { theme } from '../../design/theme';
 import { HeaderActions } from '../../features/shared/ui/HeaderActions';
+import { TenantLogoSlot } from '../../features/shared/ui/TenantLogoSlot';
 
 export default function NurseTabsLayout() {
   return (
@@ -9,6 +10,7 @@ export default function NurseTabsLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.background },
         headerTintColor: theme.colors.textPrimary,
+        headerLeft: () => <TenantLogoSlot />,
         headerRight: () => <HeaderActions />,
         tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
         tabBarActiveTintColor: theme.colors.accentTeal,

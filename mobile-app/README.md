@@ -45,3 +45,18 @@ npm run release:check
 npm run build:android:preview
 npm run build:ios:preview
 ```
+
+## Sprint 05 crash reporting baseline
+
+- Dependency: `@sentry/react-native`
+- Runtime env keys:
+  - `EXPO_PUBLIC_SENTRY_DSN`
+  - `EXPO_PUBLIC_RELEASE_CHANNEL`
+  - `EXPO_PUBLIC_RELEASE_ENV`
+  - `EXPO_PUBLIC_SENTRY_TRACE_RATE`
+- Crash reporting initializes in root layout and only sends sanitized metadata (no PHI payloads).
+
+## Branding baseline
+
+- App icon and splash icon come from MediCore branding assets under `mobile-app/assets/`.
+- Tenant logo slot is available in auth screens and role top bars (falls back to MediCore logo when tenant logo is missing).

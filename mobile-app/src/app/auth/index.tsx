@@ -5,6 +5,7 @@ import { Screen } from '../../features/shared/ui/Screen';
 import { Card } from '../../features/shared/ui/Card';
 import { StatePanel } from '../../features/shared/ui/StatePanel';
 import { theme } from '../../design/theme';
+import { TenantLogoSlot } from '../../features/shared/ui/TenantLogoSlot';
 import { getSession } from '../../lib/auth/auth-service';
 import { routeForRole } from '../../lib/auth/routing';
 import {
@@ -80,6 +81,9 @@ export default function AuthLandingScreen() {
   return (
     <Screen>
       <Card>
+        <View style={styles.brandRow}>
+          <TenantLogoSlot size={44} showName />
+        </View>
         <Text style={styles.title}>Sign In</Text>
         <Text style={styles.subtitle}>Choose the access route for this device session.</Text>
 
@@ -115,6 +119,9 @@ export default function AuthLandingScreen() {
 }
 
 const styles = StyleSheet.create({
+  brandRow: {
+    marginBottom: theme.spacing.md
+  },
   title: {
     color: theme.colors.textPrimary,
     fontSize: 24,

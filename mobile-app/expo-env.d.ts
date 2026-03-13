@@ -6,5 +6,11 @@ declare namespace NodeJS {
     MEDICORE_ANDROID_VERSION_CODE?: string;
     MEDICORE_BUNDLE_ID?: string;
     MEDICORE_ANDROID_PACKAGE?: string;
+    EXPO_PUBLIC_SENTRY_DSN?: string;
+    EXPO_PUBLIC_SENTRY_ORG?: string;
+    EXPO_PUBLIC_SENTRY_PROJECT?: string;
+    EXPO_PUBLIC_SENTRY_TRACE_RATE?: string;
+    EXPO_PUBLIC_RELEASE_ENV?: string;
+    EXPO_PUBLIC_RELEASE_CHANNEL?: string;
   }
 }

@@ -30,6 +30,7 @@ type DiagnosticsSnapshot = {
   biometric: string;
   cache: string;
   pushPermission: string;
+  crashReporting: string;
   services: ServiceCheck[];
   updatedAt: string;
 };
@@ -131,6 +132,7 @@ export default function DiagnosticsScreen() {
         biometric,
         cache,
         pushPermission,
+        crashReporting: process.env.EXPO_PUBLIC_SENTRY_DSN ? 'configured' : 'not configured',
         services,
         updatedAt: new Date().toISOString()
       };
@@ -237,6 +239,10 @@ export default function DiagnosticsScreen() {
           <View style={styles.row}>
             <Text style={styles.label}>Query cache</Text>
             <Text style={styles.value}>{snapshot?.cache || 'checking'}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Crash reporting</Text>
+            <Text style={styles.value}>{snapshot?.crashReporting || 'checking'}</Text>
           </View>
         </Card>
 

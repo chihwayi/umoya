@@ -1,3 +1,5 @@
+import { addCrashBreadcrumb } from './crash-reporting';
+
 type MobileMetricEvent = {
   name: string;
   at: string;
@@ -18,6 +20,8 @@ export function trackMobileEvent(name: string, payload?: Record<string, unknown>
   if (events.length > MAX_EVENTS) {
     events.length = MAX_EVENTS;
   }
+
+  addCrashBreadcrumb(name, payload);
 
   // Keep local observability visible during release hardening.
   console.info(`[mobile-metric] ${name}`, payload || {});

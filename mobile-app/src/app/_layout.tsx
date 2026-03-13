@@ -7,7 +7,9 @@ import { setAuthInvalidationHandler } from '../lib/auth/invalidation';
 import { logout } from '../lib/auth/logout';
 import { getRuntimeConfig } from '../lib/config/runtime';
 import { trackMobileEvent } from '../lib/observability/mobile-metrics';
+import { captureCrashException, initCrashReporting, setCrashContext } from '../lib/observability/crash-reporting';
 import { enforcePhiScreenProtection, promptBiometricUnlock } from '../lib/security/device-security';
+import { getStoredTenant } from '../lib/tenant/tenant-storage';
 
 const runtime = getRuntimeConfig();
 
@@ -19,6 +21,26 @@ export default function RootLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const backgroundAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    initCrashReporting();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const session = await getSession();
+        const tenant = getStoredTenant();
+        setCrashContext({
+          role: session?.role,
+          tenant: tenant?.subdomain,
+          route: pathname
+        });
+      } catch (error) {
+        captureCrashException(error, { event: 'crash_context_update', route: pathname });
+      }
+    })();
+  }, [pathname]);
 
   useEffect(() => {
     const unset = setAuthInvalidationHandler((reason) => {
@@ -45,33 +67,38 @@ export default function RootLayout() {
       const elapsed = Date.now() - backgroundAt;
 
       void (async () => {
-        const session = await getSession();
-        if (!session) return;
+        try {
+          const session = await getSession();
+          if (!session) return;
 
-        if (elapsed >= runtime.sessionInactivityTimeoutMs) {
-          trackMobileEvent('session.inactivity_timeout', {
-            elapsedMs: elapsed,
-            route: pathname
-          });
+          if (elapsed >= runtime.sessionInactivityTimeoutMs) {
+            trackMobileEvent('session.inactivity_timeout', {
+              elapsedMs: elapsed,
+              route: pathname
+            });
 
+            await logout(session.accessToken).catch(() => {
+              // Non-blocking; session invalidation still proceeds.
+            });
+
+            router.replace('/auth');
+            return;
+          }
+
+          if (isPublicRoute(pathname)) return;
+
+          const unlocked = await promptBiometricUnlock().catch(() => false);
+          if (unlocked) return;
+
+          trackMobileEvent('session.biometric_failed', { route: pathname });
           await logout(session.accessToken).catch(() => {
             // Non-blocking; session invalidation still proceeds.
           });
-
           router.replace('/auth');
-          return;
+        } catch (error) {
+          captureCrashException(error, { event: 'app_state_guard', route: pathname });
+          router.replace('/auth');
         }
-
-        if (isPublicRoute(pathname)) return;
-
-        const unlocked = await promptBiometricUnlock().catch(() => false);
-        if (unlocked) return;
-
-        trackMobileEvent('session.biometric_failed', { route: pathname });
-        await logout(session.accessToken).catch(() => {
-          // Non-blocking; session invalidation still proceeds.
-        });
-        router.replace('/auth');
       })();
     });
 

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { Screen } from '../features/shared/ui/Screen';
 import { Card } from '../features/shared/ui/Card';
 import { StatePanel } from '../features/shared/ui/StatePanel';
+import { TenantLogoSlot } from '../features/shared/ui/TenantLogoSlot';
 import { theme } from '../design/theme';
 import { getTenantBootstrap } from '../lib/tenant/tenant-resolver';
 import { getSession } from '../lib/auth/auth-service';
@@ -118,7 +119,7 @@ export default function BootResolverScreen() {
     <Screen>
       <Card>
         <View style={styles.brandRow}>
-          <Image source={require('../../assets/medicore.png')} style={styles.logo} resizeMode="contain" />
+          <TenantLogoSlot size={64} />
           <Text style={styles.title}>MediCore Mobile</Text>
         </View>
         {versionBlockedMessage ? (
@@ -137,10 +138,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.md,
     marginBottom: theme.spacing.lg
-  },
-  logo: {
-    width: 64,
-    height: 64
   },
   title: {
     color: theme.colors.textPrimary,

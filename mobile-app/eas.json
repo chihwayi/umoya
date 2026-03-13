@@ -8,18 +8,33 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "environment": "development"
+      "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "development",
+        "EXPO_PUBLIC_RELEASE_ENV": "development",
+        "EXPO_PUBLIC_SENTRY_TRACE_RATE": "0.05"
+      }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "environment": "preview",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "preview",
+        "EXPO_PUBLIC_RELEASE_ENV": "staging",
+        "EXPO_PUBLIC_SENTRY_TRACE_RATE": "0.1"
+      }
     },
     "production": {
       "channel": "production",
       "environment": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "production",
+        "EXPO_PUBLIC_RELEASE_ENV": "production",
+        "EXPO_PUBLIC_SENTRY_TRACE_RATE": "0.1"
+      }
     }
   },
   "submit": {

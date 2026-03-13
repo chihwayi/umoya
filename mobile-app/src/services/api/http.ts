@@ -4,6 +4,7 @@ import { getStoredTenant } from '../../lib/tenant/tenant-storage';
 import { getStoredSession } from '../../lib/auth/session-storage';
 import { triggerAuthInvalidation } from '../../lib/auth/invalidation';
 import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
+import { captureApiFailure } from '../../lib/observability/crash-reporting';
 import { ensureOnlineForPolicy, isOnlinePolicyError } from '../../lib/network/online-policy';
 
 const runtime = getRuntimeConfig();
@@ -57,6 +58,15 @@ ehrClient.interceptors.response.use(
         status,
         method,
         url
+      });
+    }
+
+    if (status >= 500 || error?.code === 'ERR_NETWORK') {
+      captureApiFailure({
+        status,
+        method,
+        url,
+        code: String(error?.code || 'unknown')
       });
     }
 

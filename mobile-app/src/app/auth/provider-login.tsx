@@ -5,6 +5,7 @@ import { Screen } from '../../features/shared/ui/Screen';
 import { Card } from '../../features/shared/ui/Card';
 import { StatePanel } from '../../features/shared/ui/StatePanel';
 import { theme } from '../../design/theme';
+import { TenantLogoSlot } from '../../features/shared/ui/TenantLogoSlot';
 import { providerLogin } from '../../services/api/ehr';
 import { saveSession } from '../../lib/auth/auth-service';
 import { routeForRole } from '../../lib/auth/routing';
@@ -99,6 +100,9 @@ export default function ProviderLoginScreen() {
   return (
     <Screen>
       <Card>
+        <View style={styles.brandRow}>
+          <TenantLogoSlot size={44} showName />
+        </View>
         <Text style={styles.title}>Provider Login</Text>
         <Text style={styles.subtitle}>Doctor and nurse access for the selected clinic.</Text>
 
@@ -145,6 +149,9 @@ export default function ProviderLoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  brandRow: {
+    marginBottom: theme.spacing.md
+  },
   title: {
     color: theme.colors.textPrimary,
     fontSize: 24,
