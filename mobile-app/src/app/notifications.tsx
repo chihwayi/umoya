@@ -15,6 +15,7 @@ import {
 } from '../services/api/patient';
 import { getProviderMessageInbox, getProviderUnreadCount } from '../services/api/provider';
 import { formatRelative, formatStatusLabel } from '../features/patient/utils/format';
+import { trackMobileEvent } from '../lib/observability/mobile-metrics';
 
 export default function NotificationsShellScreen() {
   const queryClient = useQueryClient();
@@ -68,7 +69,8 @@ export default function NotificationsShellScreen() {
 
   const markReadMutation = useMutation({
     mutationFn: (notificationId: string) => markPatientNotificationRead(notificationId),
-    onSuccess: async () => {
+    onSuccess: async (_, notificationId) => {
+      trackMobileEvent('notifications.patient.mark_read', { notificationId });
       await queryClient.invalidateQueries({ queryKey: ['notifications', 'patient'] });
     }
   });
@@ -76,6 +78,7 @@ export default function NotificationsShellScreen() {
   const markAllReadMutation = useMutation({
     mutationFn: () => markAllPatientNotificationsRead(),
     onSuccess: async () => {
+      trackMobileEvent('notifications.patient.mark_all_read', { unreadBefore: patientUnread });
       await queryClient.invalidateQueries({ queryKey: ['notifications', 'patient'] });
     }
   });
@@ -91,6 +94,14 @@ export default function NotificationsShellScreen() {
     const list = patientMessagesQuery.data?.messages || [];
     return list.filter((entry) => !String(entry.read_at || '').trim()).length;
   }, [patientMessagesQuery.data?.messages]);
+
+  useEffect(() => {
+    if (!isProvider || !providerInboxQuery.isSuccess) return;
+    trackMobileEvent('notifications.provider.inbox_loaded', {
+      count: providerInboxQuery.data?.messages?.length || 0,
+      unread: providerUnreadQuery.data?.count || 0
+    });
+  }, [isProvider, providerInboxQuery.data?.messages?.length, providerInboxQuery.isSuccess, providerUnreadQuery.data?.count]);
 
   if (sessionLoading) {
     return (

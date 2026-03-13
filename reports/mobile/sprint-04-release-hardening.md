@@ -23,6 +23,10 @@ Date: 2026-03-13
   - provider and patient logins attempt device push registration.
   - logout revokes push token best-effort.
 - Added mobile observability event buffer/logging for hardening metrics.
+- Added additional release metrics instrumentation:
+  - patient notification mark-read and mark-all-read action events.
+  - provider inbox load metrics.
+  - medication reminder create/update failures, adherence logs, and refill request events.
 - Replaced notifications placeholder with role-aware notification center:
   - patient notifications + mark read/all read actions.
   - provider inbox/unread visibility.
@@ -44,6 +48,7 @@ Date: 2026-03-13
 - `mobile-app/src/lib/network/online-policy.ts`
 - `mobile-app/src/app/index.tsx`
 - `mobile-app/src/app/notifications.tsx`
+- `mobile-app/src/app/patient/medications.tsx`
 - `mobile-app/src/app/doctor/rounds.tsx`
 - `mobile-app/src/app/patient/bills.tsx`
 - `mobile-app/src/features/shared/ui/LogoutButton.tsx`

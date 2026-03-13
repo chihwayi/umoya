@@ -17,6 +17,7 @@ import {
 } from '../../features/patient/hooks/usePatientMedications';
 import { formatDateTime, formatStatusLabel, safeArray, safeNumber } from '../../features/patient/utils/format';
 import type { MedicationReminder, PatientPrescription, RefillRequest } from '../../services/api/patient';
+import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
 
 function prescriptionTone(status?: string | null) {
   const normalized = String(status || '').toLowerCase();
@@ -97,13 +98,18 @@ export default function PatientMedicationsScreen() {
       const reminder = reminderForPrescription(reminders, prescription);
 
       if (reminder?.id) {
+        const nextIsActive = !Boolean(reminder.is_active ?? reminder.isActive ?? true);
         await mutations.updateReminder.mutateAsync({
           reminderId: reminder.id,
           payload: {
-            isActive: !Boolean(reminder.is_active ?? reminder.isActive ?? true),
+            isActive: nextIsActive,
             reminderTime,
             reminderDays: safeArray<number>(reminder.reminder_days || reminder.reminderDays || [1, 2, 3, 4, 5])
           }
+        });
+        trackMobileEvent('medication.reminder.updated', {
+          prescriptionId: prescription.id,
+          isActive: nextIsActive
         });
         return;
       }
@@ -117,6 +123,13 @@ export default function PatientMedicationsScreen() {
           timezone: 'Africa/Harare'
         }
       });
+      trackMobileEvent('medication.reminder.created', { prescriptionId: prescription.id });
+    } catch (error) {
+      trackMobileEvent('medication.reminder.failed', {
+        prescriptionId: prescription.id,
+        reason: String((error as { message?: string })?.message || 'unknown')
+      });
+      throw error;
     } finally {
       setWorkingPrescriptionId(null);
     }
@@ -132,7 +145,14 @@ export default function PatientMedicationsScreen() {
           urgency: 'normal'
         }
       });
+      trackMobileEvent('medication.refill.requested', { prescriptionId: prescription.id });
       setRefillReason('');
+    } catch (error) {
+      trackMobileEvent('medication.refill.failed', {
+        prescriptionId: prescription.id,
+        reason: String((error as { message?: string })?.message || 'unknown')
+      });
+      throw error;
     } finally {
       setWorkingPrescriptionId(null);
     }
@@ -151,6 +171,13 @@ export default function PatientMedicationsScreen() {
           notes: 'Logged from patient mobile medications.'
         }
       });
+      trackMobileEvent('medication.adherence.logged', { prescriptionId: prescription.id, taken: true });
+    } catch (error) {
+      trackMobileEvent('medication.adherence.failed', {
+        prescriptionId: prescription.id,
+        reason: String((error as { message?: string })?.message || 'unknown')
+      });
+      throw error;
     } finally {
       setWorkingPrescriptionId(null);
     }
