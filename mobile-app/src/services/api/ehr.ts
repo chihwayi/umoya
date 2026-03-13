@@ -15,8 +15,21 @@ export async function changeProviderPassword(payload: { currentPassword: string;
   return data;
 }
 
-export async function completeProvider2FA(payload: { code: string; temporaryToken: string }) {
+export async function completeProvider2FA(payload: { code: string; tempToken: string }) {
   const { data } = await ehrClient.post('/auth/2fa/complete-login', payload);
+  return data;
+}
+
+export async function forceProviderPasswordChange(payload: { newPassword: string; temporaryToken: string }) {
+  const { data } = await ehrClient.post(
+    '/auth/force-password-change',
+    { newPassword: payload.newPassword },
+    {
+      headers: {
+        Authorization: `Bearer ${payload.temporaryToken}`
+      }
+    }
+  );
   return data;
 }
 
