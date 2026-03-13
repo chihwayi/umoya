@@ -1,6 +1,6 @@
 {
   "name": "mobile-app",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand",
     "test:e2e": "node ./scripts/e2e-smoke.mjs",
-    "doctor": "npx expo-doctor"
+    "doctor": "npx expo-doctor",
+    "release:check": "node ./scripts/release-version-check.mjs",
+    "build:android:preview": "npx eas build --platform android --profile preview",
+    "build:ios:preview": "npx eas build --platform ios --profile preview"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.2",

@@ -21,3 +21,27 @@
 - All tenant-scoped requests must include `X-Tenant-ID`.
 - All sensitive tokens stay in SecureStore.
 - All non-secret local state may use MMKV.
+
+## Sprint 05 build profiles and release versioning
+
+- EAS profiles are defined in `eas.json`:
+  - `development`: internal dev client
+  - `preview`: internal beta build track
+  - `production`: store release track
+- Versioning strategy:
+  - app semantic version comes from `mobile-app/package.json` by default
+  - optional override via `MEDICORE_APP_VERSION`
+  - iOS build number via `MEDICORE_IOS_BUILD_NUMBER` (integer string)
+  - Android version code via `MEDICORE_ANDROID_VERSION_CODE` (integer)
+- Validate release inputs before build:
+
+```bash
+npm run release:check
+```
+
+- Preview build commands:
+
+```bash
+npm run build:android:preview
+npm run build:ios:preview
+```
