@@ -259,3 +259,4 @@ Use sprint plans for execution details:
 - `docs/mobile/sprints/SPRINT_02_PROVIDER_WORKFLOWS.md`
 - `docs/mobile/sprints/SPRINT_03_PATIENT_WORKFLOWS.md`
 - `docs/mobile/sprints/SPRINT_04_HARDENING_AND_RELEASE.md`
+- `docs/mobile/sprints/SPRINT_05_STORE_READY_BUILDS_AND_BETA.md`

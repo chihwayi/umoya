@@ -307,7 +307,8 @@ Role-level AI minimum:
 2. Sprint 01: tenant bootstrap, auth, shell navigation, persistent clinic selection
 3. Sprint 02: provider mobile workflows (doctor + nurse) including module launchpad
 4. Sprint 03: patient mobile workflows and engagement-heavy reminders
-5. Sprint 04: offline rules, performance, E2E, release hardening, store readiness
+5. Sprint 04: offline rules, performance, E2E, release hardening, signoff stabilization
+6. Sprint 05: store-ready builds, crash reporting, release operations, and beta rollout
 
 ## 13. Mandatory delivery gate for every sprint
 
