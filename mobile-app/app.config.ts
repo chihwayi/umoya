@@ -65,9 +65,8 @@ const config: ExpoConfig = {
       backgroundColor: '#080E1A'
     }
   },
-  runtimeVersion: {
-    policy: 'appVersion'
-  },
+  // Bare workflow requires a literal runtime version (no policy).
+  runtimeVersion: appVersion,
   updates: {
     url: `https://u.expo.dev/${easProjectId}`
   },

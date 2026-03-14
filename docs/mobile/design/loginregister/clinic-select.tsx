@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -11,76 +11,61 @@ import { router } from 'expo-router';
 import { Screen } from '../../features/shared/ui/Screen';
 import { StatePanel } from '../../features/shared/ui/StatePanel';
 import { theme } from '../../design/theme';
-import type { ActiveTenant } from '../../lib/tenant/types';
-import { fetchActiveTenants, resolveTenantBySubdomain } from '../../lib/tenant/tenant-resolver';
+import { searchTenants, confirmTenant } from '../../lib/tenant/tenant-resolver';
 import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
+
+// Adjust this type to match your actual tenant model
+interface TenantResult {
+  id: string;
+  name: string;
+  subdomain: string;
+}
 
 export default function ClinicSelectScreen() {
   const [query, setQuery] = useState('');
-  const [tenants, setTenants] = useState<ActiveTenant[]>([]);
+  const [results, setResults] = useState<TenantResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [bootstrapping, setBootstrapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Debounced search
   useEffect(() => {
-    let mounted = true;
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-        const rows = await fetchActiveTenants();
-        if (!mounted) return;
-        setTenants(Array.isArray(rows) ? rows : []);
-        trackMobileEvent('tenant.bootstrap.list_loaded', {
-          count: Array.isArray(rows) ? rows.length : 0,
-        });
-      } catch (err: any) {
-        if (!mounted) return;
-        trackMobileEvent('tenant.bootstrap.list_failed', {
-          code: err?.code || 'unknown',
-          status: err?.response?.status || 0,
-        });
-        setError(err?.response?.data?.message || err?.message || 'Failed to load clinics.');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const filteredTenants = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return tenants;
-    return tenants.filter(
-      (t) =>
-        t.clinicName.toLowerCase().includes(term) ||
-        t.subdomain.toLowerCase().includes(term)
-    );
-  }, [query, tenants]);
-
-  async function handleSelect(tenant: ActiveTenant) {
-    try {
-      setBootstrapping(true);
+    if (!query.trim()) {
+      setResults([]);
       setError(null);
-      await resolveTenantBySubdomain(tenant.subdomain);
-      trackMobileEvent('tenant.bootstrap.selected', { subdomain: tenant.subdomain });
-      router.replace('/clinic/confirm');
+      return;
+    }
+    const timer = setTimeout(() => {
+      void doSearch(query.trim());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  async function doSearch(q: string) {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await searchTenants(q);
+      setResults(data ?? []);
     } catch (err: any) {
-      trackMobileEvent('tenant.bootstrap.select_failed', {
-        subdomain: tenant.subdomain,
-        code: err?.code || 'unknown',
-        status: err?.response?.status || 0,
-      });
-      setError(err?.response?.data?.message || err?.message || 'Could not select clinic');
+      setError(err?.message || 'Search failed');
+      setResults([]);
     } finally {
-      setBootstrapping(false);
+      setLoading(false);
     }
   }
 
-  const displayList = filteredTenants;
+  async function handleSelect(tenant: TenantResult) {
+    try {
+      await confirmTenant(tenant.subdomain);
+      trackMobileEvent('clinic.selected', { subdomain: tenant.subdomain });
+      router.replace('/clinic/confirmed');
+    } catch (err: any) {
+      setError(err?.message || 'Could not select clinic');
+    }
+  }
+
+  // Initial/default clinics shown before a search is typed
+  const displayList = results;
 
   return (
     <Screen>
@@ -91,6 +76,9 @@ export default function ClinicSelectScreen() {
             <Text style={styles.headline}>Select Clinic</Text>
             <Text style={styles.note}>Shown once per app install</Text>
           </View>
+          <Pressable style={styles.gearButton} onPress={() => router.push('/settings')}>
+            <Text style={styles.gearIcon}>⚙</Text>
+          </Pressable>
         </View>
 
         {/* ── Search bar ── */}
@@ -114,6 +102,7 @@ export default function ClinicSelectScreen() {
             state="error"
             title="Search failed"
             message={error}
+            style={styles.errorPanel}
           />
         ) : null}
 
@@ -127,44 +116,32 @@ export default function ClinicSelectScreen() {
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               renderItem={({ item }) => (
-                <ClinicCard
-                  tenant={item}
-                  onSelect={handleSelect}
-                  disabled={bootstrapping}
-                />
+                <ClinicCard tenant={item} onSelect={handleSelect} />
               )}
             />
           </>
-        ) : !loading && query.length === 0 && tenants.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconRing}>
-              <Text style={styles.emptyIcon}>🏥</Text>
+        ) : (
+          !loading && query.length === 0 && (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconRing}>
+                <Text style={styles.emptyIcon}>🏥</Text>
+              </View>
+              <Text style={styles.emptyTitle}>Find your clinic</Text>
+              <Text style={styles.emptyBody}>
+                Type your clinic name or subdomain{'\n'}to get started.
+              </Text>
             </View>
-            <Text style={styles.emptyTitle}>Find your clinic</Text>
-            <Text style={styles.emptyBody}>
-              Type your clinic name or subdomain{'\n'}to get started.
-            </Text>
-          </View>
-        ) : !loading && query.length > 0 && displayList.length === 0 && !error ? (
+          )
+        )}
+
+        {/* ── Hint card for no results ── */}
+        {!loading && query.length > 0 && displayList.length === 0 && !error ? (
           <View style={styles.hintCard}>
             <Text style={styles.hintTitle}>No clinics found</Text>
             <Text style={styles.hintBody}>
               Try searching by the exact subdomain, e.g.{' '}
               <Text style={styles.hintMono}>kids-clinic</Text>
             </Text>
-          </View>
-        ) : null}
-
-        {/* ── Not your clinic? (dashed card) ── */}
-        {displayList.length > 0 ? (
-          <View style={styles.notYourClinicCard}>
-            <Text style={styles.notYourClinicIcon}>🕐</Text>
-            <View style={styles.notYourClinicTextBlock}>
-              <Text style={styles.notYourClinicTitle}>Not your clinic?</Text>
-              <Text style={styles.notYourClinicBody}>
-                Enter subdomain above to search.
-              </Text>
-            </View>
           </View>
         ) : null}
       </View>
@@ -175,33 +152,28 @@ export default function ClinicSelectScreen() {
 function ClinicCard({
   tenant,
   onSelect,
-  disabled,
 }: {
-  tenant: ActiveTenant;
-  onSelect: (t: ActiveTenant) => void;
-  disabled?: boolean;
+  tenant: TenantResult;
+  onSelect: (t: TenantResult) => void;
 }) {
-  const initial = tenant.clinicName?.[0]?.toUpperCase() ?? '?';
+  const initial = tenant.name?.[0]?.toUpperCase() ?? '?';
 
   return (
-    <Pressable
-      style={styles.card}
-      onPress={() => onSelect(tenant)}
-      disabled={disabled}
-    >
+    <Pressable style={styles.card} onPress={() => onSelect(tenant)}>
+      {/* Icon */}
       <View style={styles.cardIcon}>
         <Text style={styles.cardInitial}>{initial}</Text>
       </View>
 
+      {/* Info */}
       <View style={styles.cardInfo}>
-        <Text style={styles.cardName}>{tenant.clinicName}</Text>
+        <Text style={styles.cardName}>{tenant.name}</Text>
         <Text style={styles.cardSub}>{tenant.subdomain}.medicore.app</Text>
       </View>
 
+      {/* CTA */}
       <View style={styles.selectBadge}>
-        <Text style={styles.selectBadgeText}>
-          {disabled ? '…' : 'SELECT'}
-        </Text>
+        <Text style={styles.selectBadgeText}>SELECT</Text>
       </View>
     </Pressable>
   );
@@ -232,6 +204,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 3,
   },
+  gearButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gearIcon: {
+    fontSize: 15,
+    color: theme.colors.textSecondary,
+  },
+
   /* Search */
   searchRow: {
     flexDirection: 'row',
@@ -319,47 +305,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   selectBadge: {
-    backgroundColor: theme.colors.accentTeal,
+    backgroundColor: 'rgba(0, 200, 150, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 200, 150, 0.25)',
     borderRadius: theme.radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 6,
     flexShrink: 0,
   },
   selectBadgeText: {
-    color: '#022018',
+    color: theme.colors.accentTeal,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
-  },
-
-  /* Not your clinic? dashed card */
-  notYourClinicCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    padding: 14,
-    gap: 12,
-    marginTop: theme.spacing.lg,
-  },
-  notYourClinicIcon: {
-    fontSize: 18,
-  },
-  notYourClinicTextBlock: {
-    flex: 1,
-  },
-  notYourClinicTitle: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  notYourClinicBody: {
-    color: theme.colors.textMuted,
-    fontSize: 12,
-    marginTop: 2,
   },
 
   /* Empty state */
@@ -420,4 +378,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
 
+  errorPanel: {
+    marginBottom: theme.spacing.md,
+  },
 });

@@ -5,8 +5,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand",
@@ -27,7 +27,6 @@
     "@tanstack/react-query": "^5.90.2",
     "axios": "^1.12.2",
     "expo": "~55.0.6",
-    "expo-av": "16.0.8",
     "expo-camera": "55.0.9",
     "expo-constants": "55.0.7",
     "expo-document-picker": "55.0.8",
@@ -71,13 +70,6 @@
       "exclude": [
         "react"
       ]
-    },
-    "doctor": {
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "expo-av"
-        ]
-      }
     }
   }
 }

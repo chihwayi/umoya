@@ -1,6 +1,7 @@
 import { MMKV } from 'react-native-mmkv';
 import type { TenantBootstrap } from './types';
 
+/** Persisted tenant selection (survives app close). Used on boot to skip clinic select when set. */
 const TENANT_BOOTSTRAP_KEY = 'tenant_bootstrap';
 
 const memoryStore = new Map<string, string>();

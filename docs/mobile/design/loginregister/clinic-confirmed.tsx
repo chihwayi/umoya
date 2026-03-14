@@ -10,11 +10,11 @@ import { router } from 'expo-router';
 import { Screen } from '../../features/shared/ui/Screen';
 import { theme } from '../../design/theme';
 import { getTenantBootstrap } from '../../lib/tenant/tenant-resolver';
-import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
 
-export default function ClinicConfirmScreen() {
+export default function ClinicConfirmedScreen() {
   const tenant = getTenantBootstrap();
 
+  // Subtle entrance animations
   const ringScale = useRef(new Animated.Value(0.6)).current;
   const ringOpacity = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
@@ -25,11 +25,6 @@ export default function ClinicConfirmScreen() {
       router.replace('/clinic/select');
       return;
     }
-
-    trackMobileEvent('tenant.bootstrap.confirmed', {
-      tenantId: tenant.tenantId,
-      subdomain: tenant.subdomain,
-    });
 
     Animated.sequence([
       Animated.parallel([
@@ -58,12 +53,9 @@ export default function ClinicConfirmScreen() {
         }),
       ]),
     ]).start();
-  }, [tenant?.tenantId, tenant?.subdomain]);
+  }, []);
 
   function handleContinue() {
-    trackMobileEvent('tenant.bootstrap.completed', {
-      subdomain: tenant?.subdomain || 'unknown',
-    });
     router.replace('/auth/patient-login');
   }
 
@@ -71,17 +63,19 @@ export default function ClinicConfirmScreen() {
     router.replace('/clinic/select');
   }
 
-  if (!tenant) {
-    return null;
-  }
-
   return (
     <Screen>
       <View style={styles.container}>
         {/* ── Settings gear (top-right) ── */}
+        <View style={styles.topBar}>
+          <Pressable style={styles.gearButton} onPress={() => router.push('/settings')}>
+            <Text style={styles.gearIcon}>⚙</Text>
+          </Pressable>
+        </View>
 
         {/* ── Centred content ── */}
         <View style={styles.body}>
+          {/* Check ring */}
           <Animated.View
             style={[
               styles.outerRing,
@@ -95,9 +89,10 @@ export default function ClinicConfirmScreen() {
 
           <Text style={styles.title}>Clinic Confirmed</Text>
           <Text style={styles.subtitle}>
-            You&apos;re connected to{'\n'}your healthcare provider.
+            You're connected to{'\n'}your healthcare provider.
           </Text>
 
+          {/* Info card */}
           <Animated.View
             style={[
               styles.card,
@@ -106,14 +101,14 @@ export default function ClinicConfirmScreen() {
           >
             <View style={styles.cardRow}>
               <Text style={styles.rowLabel}>CLINIC</Text>
-              <Text style={styles.rowValue}>{tenant.name ?? '—'}</Text>
+              <Text style={styles.rowValue}>{tenant?.name ?? '—'}</Text>
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.cardRow}>
               <Text style={styles.rowLabel}>SUBDOMAIN</Text>
-              <Text style={styles.rowValueMono}>{tenant.subdomain ?? '—'}</Text>
+              <Text style={styles.rowValueMono}>{tenant?.subdomain ?? '—'}</Text>
             </View>
 
             <View style={styles.divider} />
@@ -126,13 +121,16 @@ export default function ClinicConfirmScreen() {
             </View>
           </Animated.View>
 
+          {/* CTA */}
           <Pressable style={styles.button} onPress={handleContinue}>
             <Text style={styles.buttonText}>Continue to Login</Text>
           </Pressable>
 
+          {/* Change clinic */}
           <Pressable onPress={handleChangeClinic} style={styles.changeRow}>
             <Text style={styles.changeText}>
-              Wrong clinic? Tap settings to change.
+              Wrong clinic?{' '}
+              <Text style={styles.changeLink}>Change clinic</Text>
             </Text>
           </Pressable>
         </View>
@@ -147,6 +145,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
   },
+
+  /* Top bar */
+  topBar: {
+    alignItems: 'flex-end',
+    marginBottom: theme.spacing.sm,
+  },
+  gearButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gearIcon: {
+    fontSize: 15,
+    color: theme.colors.textSecondary,
+  },
+
+  /* Body */
   body: {
     flex: 1,
     alignItems: 'center',
@@ -154,6 +173,7 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
 
+  /* Check ring */
   outerRing: {
     width: 76,
     height: 76,
@@ -179,6 +199,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  /* Text */
   title: {
     color: theme.colors.textPrimary,
     fontSize: 24,
@@ -195,6 +216,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
 
+  /* Info card */
   card: {
     width: '100%',
     backgroundColor: theme.colors.card,
@@ -245,6 +267,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  /* CTA */
   button: {
     width: '100%',
     backgroundColor: theme.colors.accentTeal,
@@ -259,6 +282,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
+  /* Change clinic */
   changeRow: {
     marginTop: 16,
   },
@@ -266,5 +290,9 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
+  },
+  changeLink: {
+    color: theme.colors.accentBlue,
+    fontWeight: '600',
   },
 });

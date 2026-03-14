@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { Stack, usePathname, useRouter } from 'expo-router';
+import { ErrorBoundary } from '../features/shared/ErrorBoundary';
 import { AppProviders } from '../features/shared/providers/AppProviders';
 import { getSession } from '../lib/auth/auth-service';
 import { setAuthInvalidationHandler } from '../lib/auth/invalidation';
@@ -113,12 +114,14 @@ export default function RootLayout() {
   }, [pathname]);
 
   return (
-    <AppProviders>
-      <Stack
-        screenOptions={{
-          headerShown: false
-        }}
-      />
-    </AppProviders>
+    <ErrorBoundary>
+      <AppProviders>
+        <Stack
+          screenOptions={{
+            headerShown: false
+          }}
+        />
+      </AppProviders>
+    </ErrorBoundary>
   );
 }

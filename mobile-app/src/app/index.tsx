@@ -44,6 +44,7 @@ export default function BootResolverScreen() {
 
     async function resolveRoute() {
       try {
+        // Tenant is persisted (MMKV); returning users skip clinic select and go to auth or home.
         setStatus('Resolving tenant bootstrap...');
         const tenant = getTenantBootstrap();
 

@@ -115,7 +115,7 @@ export default function PatientLoginScreen() {
         contentContainerStyle={styles.scrollBody}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Top bar: MediCore brand (prominent) ── */}
+        {/* ── Top bar: MediCore brand + settings ── */}
         <View style={styles.topBar}>
           <View style={styles.brandRow}>
             <View style={styles.systemLogoSlot}>
@@ -125,22 +125,29 @@ export default function PatientLoginScreen() {
                 resizeMode="cover"
               />
             </View>
-            <Text style={styles.systemName}>MediCore</Text>
+            <Text style={styles.systemName}>MEDICORE</Text>
           </View>
+          <Pressable style={styles.gearButton} onPress={() => router.push('/settings')}>
+            {/* Replace with your icon library if available */}
+            <Text style={styles.gearIcon}>⚙</Text>
+          </Pressable>
         </View>
 
-        {/* ── Tenant logo (original hero style) ── */}
-        <View style={styles.tenantHero}>
-          <TenantLogoSlot size={84} showName stacked showSystemMark={false} />
-        </View>
-
-        {/* ── Section title (centered) ── */}
-        <View style={styles.headlineBlock}>
-          <Text style={styles.headline}>Patient login</Text>
-          <Text style={styles.subtitle}>
-            Sign in to access your health records, appointments &amp; more.
+        {/* ── Tenant chip ── */}
+        <View style={styles.tenantChip}>
+          <View style={styles.tenantChipAvatar}>
+            <TenantLogoSlot size={22} showName={false} showSystemMark={false} />
+          </View>
+          <Text style={styles.tenantChipLabel}>
+            {tenant?.name?.toUpperCase() ?? 'CLINIC'}
           </Text>
         </View>
+
+        {/* ── Hero headline ── */}
+        <Text style={styles.headline}>Welcome{'\n'}back.</Text>
+        <Text style={styles.subtitle}>
+          Sign in to access your health{'\n'}records, appointments &amp; more.
+        </Text>
 
         {/* ── Feature chips ── */}
         <View style={styles.chipsRow}>
@@ -196,7 +203,7 @@ export default function PatientLoginScreen() {
 
           <Pressable
             style={styles.forgotRow}
-            onPress={() => router.push('/auth/forgot-password' as never)}
+            onPress={() => router.push('/auth/forgot-password')}
           >
             <Text style={styles.forgotText}>Forgot password?</Text>
           </Pressable>
@@ -263,8 +270,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   systemLogoSlot: {
-    width: 32,
-    height: 32,
+    width: 22,
+    height: 22,
     borderRadius: theme.radius.sm,
     overflow: 'hidden',
     borderWidth: 1,
@@ -275,38 +282,70 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   systemName: {
-    color: theme.colors.textPrimary,
-    fontSize: 18,
+    color: theme.colors.textSecondary,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 2,
+  },
+  gearButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gearIcon: {
+    fontSize: 15,
+    color: theme.colors.textSecondary,
   },
 
-  /* Tenant logo hero (original style) */
-  tenantHero: {
+  /* Tenant chip */
+  tenantChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: theme.spacing.md,
-  },
-
-  /* Section title (centered) */
-  headlineBlock: {
-    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0, 200, 150, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 200, 150, 0.22)',
+    borderRadius: theme.radius.pill,
+    paddingRight: 12,
+    paddingLeft: 4,
+    paddingVertical: 4,
+    gap: 7,
     marginBottom: 14,
   },
+  tenantChipAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tenantChipLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.accentTeal,
+    letterSpacing: 1,
+  },
+
+  /* Hero */
   headline: {
     color: theme.colors.textPrimary,
-    fontSize: 26,
+    fontSize: 38,
     fontWeight: '700',
-    lineHeight: 32,
-    letterSpacing: -0.3,
-    marginBottom: 6,
-    textAlign: 'center',
+    lineHeight: 42,
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
   subtitle: {
     color: theme.colors.textSecondary,
     fontSize: 14,
     lineHeight: 21,
-    textAlign: 'center',
-    marginBottom: 0,
+    marginBottom: 14,
   },
 
   /* Feature chips */
