@@ -33,15 +33,15 @@ const styles = StyleSheet.create({
   button: {
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.surface,
     paddingVertical: 6,
-    paddingHorizontal: 10
+    paddingHorizontal: 14,
   },
   text: {
-    color: theme.colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700'
+    color: theme.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   disabled: {
     opacity: 0.55

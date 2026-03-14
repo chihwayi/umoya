@@ -480,16 +480,28 @@ export async function listTelemedicineConsultations(filters?: {
   page?: number;
   limit?: number;
 }): Promise<TelemedicineListResponse> {
-  const { data } = await ehrClient.get<TelemedicineListResponse>('/telemedicine/consultations', {
-    params: filters || {}
-  });
-
-  return {
-    consultations: Array.isArray(data?.consultations) ? data.consultations : [],
-    total: Number(data?.total || 0),
-    page: Number(data?.page || filters?.page || 1),
-    limit: Number(data?.limit || filters?.limit || 20)
-  };
+  try {
+    const { data } = await ehrClient.get<TelemedicineListResponse>('/telemedicine/consultations', {
+      params: filters || {}
+    });
+    return {
+      consultations: Array.isArray(data?.consultations) ? data.consultations : [],
+      total: Number(data?.total || 0),
+      page: Number(data?.page || filters?.page || 1),
+      limit: Number(data?.limit || filters?.limit || 20)
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return {
+        consultations: [],
+        total: 0,
+        page: filters?.page ?? 1,
+        limit: filters?.limit ?? 20
+      };
+    }
+    throw err;
+  }
 }
 
 export async function joinTelemedicineConsultation(
@@ -524,8 +536,14 @@ export async function getHivCohortWorklist(filters?: {
   limit?: number;
   offset?: number;
 }): Promise<Record<string, unknown>> {
-  const { data } = await ehrClient.get('/hiv/cohort-worklist', {
-    params: filters || {}
-  });
-  return data || {};
+  try {
+    const { data } = await ehrClient.get('/hiv/cohort-worklist', {
+      params: filters || {}
+    });
+    return data || {};
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return { items: [], total: 0 };
+    throw err;
+  }
 }

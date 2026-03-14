@@ -48,7 +48,13 @@ export async function patientProfile() {
   return data;
 }
 
-export async function mobileVersionMetadata() {
-  const { data } = await ehrClient.get('/mobile/version');
-  return data;
+export async function mobileVersionMetadata(): Promise<Record<string, unknown> | null> {
+  try {
+    const { data } = await ehrClient.get('/mobile/version');
+    return data ?? null;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return null;
+    throw err;
+  }
 }

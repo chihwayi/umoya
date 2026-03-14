@@ -9,16 +9,16 @@ export function ProviderHero({
   children
 }: PropsWithChildren<{ title: string; subtitle: string }>) {
   return (
-    <Card>
+    <Card style={styles.card}>
       <View style={styles.banner}>
         <View style={styles.row}>
           <View style={styles.dot} />
-          <Text style={styles.kicker}>Clinical Live</Text>
+          <Text style={styles.kicker}>CLINICAL LIVE</Text>
         </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
       </View>
-      {children}
+      {children ? <View style={styles.metricsWrap}>{children}</View> : null}
     </Card>
   );
 }
@@ -54,47 +54,47 @@ export function MetricGrid({
 }
 
 const styles = StyleSheet.create({
+  card: {
+    marginBottom: 0,
+  },
   banner: {
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: 'rgba(43,127,255,0.25)',
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    gap: 4,
-    backgroundColor: 'rgba(12, 28, 49, 0.9)'
+    gap: 6,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm
+    gap: theme.spacing.sm,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 99,
-    backgroundColor: theme.colors.accentTeal
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: theme.colors.accentTeal,
   },
   kicker: {
     color: theme.colors.accentTeal,
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.25,
-    textTransform: 'uppercase'
+    letterSpacing: 0.1,
   },
   title: {
     color: theme.colors.textPrimary,
-    fontSize: 22,
-    fontWeight: '800'
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   subtitle: {
     color: theme.colors.textSecondary,
     fontSize: 13,
-    lineHeight: 18
+    lineHeight: 18,
+  },
+  metricsWrap: {
+    marginTop: theme.spacing.md,
   },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.sm
+    gap: theme.spacing.sm,
   },
   metricCard: {
     minWidth: 98,
@@ -104,15 +104,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm
+    paddingVertical: theme.spacing.sm,
   },
   metricLabel: {
     color: theme.colors.textMuted,
     fontSize: 11,
-    marginBottom: 2
+    marginBottom: 2,
   },
   metricValue: {
     fontSize: 18,
-    fontWeight: '800'
-  }
+    fontWeight: '800',
+  },
 });

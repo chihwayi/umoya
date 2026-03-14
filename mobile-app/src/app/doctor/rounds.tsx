@@ -89,7 +89,7 @@ export default function DoctorRoundsScreen() {
         {meetingHint ? <StatePanel state="empty" title="Telemedicine" message={meetingHint} /> : null}
 
         <Card>
-          <Text style={styles.sectionTitle}>Telemedicine Consultations</Text>
+          <Text style={styles.sectionTitle}>TELEMEDICINE CONSULTATIONS</Text>
           {teleQuery.isLoading ? <StatePanel state="loading" title="Loading consultations" message="Syncing telemedicine board..." /> : null}
           {teleQuery.isError ? <StatePanel state="error" title="Telemedicine unavailable" message="Could not load consultation list." /> : null}
 
@@ -133,7 +133,7 @@ export default function DoctorRoundsScreen() {
         </Card>
 
         <Card>
-          <Text style={styles.sectionTitle}>HIV Cohort Snapshot</Text>
+          <Text style={styles.sectionTitle}>HIV COHORT SNAPSHOT</Text>
           {hivQuery.isLoading ? <StatePanel state="loading" title="Loading HIV queue" message="Fetching cohort worklist..." /> : null}
           {hivQuery.isError ? <StatePanel state="error" title="HIV queue unavailable" message="Could not load HIV cohort worklist." /> : null}
 
@@ -163,10 +163,11 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.xxl
   },
   sectionTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
+    color: theme.colors.textMuted,
+    fontSize: 11,
     fontWeight: '700',
-    marginBottom: theme.spacing.sm
+    letterSpacing: 0.1,
+    marginBottom: theme.spacing.sm,
   },
   consultationCard: {
     borderWidth: 1,
