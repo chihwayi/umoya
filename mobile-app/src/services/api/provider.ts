@@ -265,36 +265,53 @@ export type TelemedicineListResponse = {
 };
 
 export async function getNurseWorklistState(): Promise<NurseWorklistState> {
-  const { data } = await ehrClient.get<NurseWorklistState>('/nurse-worklist/state');
-  return {
-    completedTaskIds: Array.isArray(data?.completedTaskIds) ? data.completedTaskIds : [],
-    acknowledgedAlertIds: Array.isArray(data?.acknowledgedAlertIds) ? data.acknowledgedAlertIds : []
-  };
+  try {
+    const { data } = await ehrClient.get<NurseWorklistState>('/nurse-worklist/state');
+    return {
+      completedTaskIds: Array.isArray(data?.completedTaskIds) ? data.completedTaskIds : [],
+      acknowledgedAlertIds: Array.isArray(data?.acknowledgedAlertIds) ? data.acknowledgedAlertIds : []
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return { completedTaskIds: [], acknowledgedAlertIds: [] };
+    throw err;
+  }
 }
 
 export async function getNurseCrossModuleFeed(): Promise<NurseCrossModuleFeedResponse> {
-  const { data } = await ehrClient.get<NurseCrossModuleFeedResponse>('/nurse-worklist/cross-module-feed');
-  return {
-    items: Array.isArray(data?.items) ? data.items : [],
-    summary: data?.summary,
-    generatedAt: data?.generatedAt
-  };
+  try {
+    const { data } = await ehrClient.get<NurseCrossModuleFeedResponse>('/nurse-worklist/cross-module-feed');
+    return {
+      items: Array.isArray(data?.items) ? data.items : [],
+      summary: data?.summary,
+      generatedAt: data?.generatedAt
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return { items: [], summary: undefined, generatedAt: undefined };
+    throw err;
+  }
 }
 
 export async function getDoctorSyncFeed(params?: {
   focus?: string;
   includeAcknowledged?: boolean;
 }): Promise<NurseCrossModuleFeedResponse> {
-  const { data } = await ehrClient.get<NurseCrossModuleFeedResponse>('/nurse-worklist/doctor-sync-feed', {
-    params
-  });
-
-  return {
-    items: Array.isArray(data?.items) ? data.items : [],
-    summary: data?.summary,
-    filters: data?.filters,
-    generatedAt: data?.generatedAt
-  };
+  try {
+    const { data } = await ehrClient.get<NurseCrossModuleFeedResponse>('/nurse-worklist/doctor-sync-feed', {
+      params
+    });
+    return {
+      items: Array.isArray(data?.items) ? data.items : [],
+      summary: data?.summary,
+      filters: data?.filters,
+      generatedAt: data?.generatedAt
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return { items: [], summary: undefined, filters: undefined, generatedAt: undefined };
+    throw err;
+  }
 }
 
 export async function updateNurseCrossModuleWorkflow(payload: UpdateWorkflowPayload): Promise<{
@@ -353,23 +370,43 @@ export async function getProviderMessageInbox(params?: {
   limit?: number;
   offset?: number;
 }): Promise<ProviderInboxResponse> {
-  const { data } = await ehrClient.get<ProviderInboxResponse>('/messages/inbox', { params });
-  return {
-    messages: Array.isArray(data?.messages) ? data.messages : [],
-    total: Number(data?.total || 0),
-    limit: Number(data?.limit || params?.limit || 50),
-    offset: Number(data?.offset || params?.offset || 0)
-  };
+  try {
+    const { data } = await ehrClient.get<ProviderInboxResponse>('/messages/inbox', { params });
+    return {
+      messages: Array.isArray(data?.messages) ? data.messages : [],
+      total: Number(data?.total || 0),
+      limit: Number(data?.limit || params?.limit || 50),
+      offset: Number(data?.offset || params?.offset || 0)
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return { messages: [], total: 0, limit: params?.limit ?? 50, offset: params?.offset ?? 0 };
+    }
+    throw err;
+  }
 }
 
 export async function getProviderUnreadCount(): Promise<{ count: number }> {
-  const { data } = await ehrClient.get<{ count: number }>('/messages/unread-count');
-  return { count: Number(data?.count || 0) };
+  try {
+    const { data } = await ehrClient.get<{ count: number }>('/messages/unread-count');
+    return { count: Number(data?.count || 0) };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return { count: 0 };
+    throw err;
+  }
 }
 
 export async function getProviderThreads(): Promise<ProviderThreadSummary[]> {
-  const { data } = await ehrClient.get<ProviderThreadSummary[]>('/messages/threads');
-  return Array.isArray(data) ? data : [];
+  try {
+    const { data } = await ehrClient.get<ProviderThreadSummary[]>('/messages/threads');
+    return Array.isArray(data) ? data : [];
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return [];
+    throw err;
+  }
 }
 
 export async function getProviderThread(threadId: string): Promise<ProviderThreadDetail> {
@@ -409,38 +446,81 @@ export async function listPostVisitSessions(filters?: {
   limit?: number;
   offset?: number;
 }): Promise<PostVisitSessionsResponse> {
-  const { data } = await ehrClient.get<PostVisitSessionsResponse>('/post-visit/sessions', { params: filters || {} });
-  return {
-    sessions: Array.isArray(data?.sessions) ? data.sessions : [],
-    paging: {
-      limit: Number(data?.paging?.limit || filters?.limit || 25),
-      offset: Number(data?.paging?.offset || filters?.offset || 0),
-      total: Number(data?.paging?.total || 0)
+  try {
+    const { data } = await ehrClient.get<PostVisitSessionsResponse>('/post-visit/sessions', { params: filters || {} });
+    return {
+      sessions: Array.isArray(data?.sessions) ? data.sessions : [],
+      paging: {
+        limit: Number(data?.paging?.limit || filters?.limit || 25),
+        offset: Number(data?.paging?.offset || filters?.offset || 0),
+        total: Number(data?.paging?.total || 0)
+      }
+    };
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return {
+        sessions: [],
+        paging: { limit: filters?.limit ?? 25, offset: filters?.offset ?? 0, total: 0 }
+      };
     }
-  };
+    throw err;
+  }
 }
 
 export async function getPostVisitMobileContract(sessionId: string, version = 'v1'): Promise<PostVisitMobileContract> {
-  const { data } = await ehrClient.get<PostVisitMobileContract>(
-    `/post-visit/sessions/${encodeURIComponent(sessionId)}/mobile-contract`,
-    {
-      params: { version }
+  try {
+    const { data } = await ehrClient.get<PostVisitMobileContract>(
+      `/post-visit/sessions/${encodeURIComponent(sessionId)}/mobile-contract`,
+      { params: { version } }
+    );
+    return data as PostVisitMobileContract;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return {
+        contractVersion: 'post-visit-mobile.v1',
+        generatedAt: new Date().toISOString(),
+        session: {
+          id: sessionId,
+          status: 'unknown',
+          language: 'en',
+          sourceType: 'in_person',
+          publishedAt: null,
+          reviewedAt: null,
+          updatedAt: new Date().toISOString()
+        },
+        cards: [],
+        checklist: [],
+        actions: { canPublish: false, canExecuteRecommendations: false, canAccessCompanion: false }
+      } as PostVisitMobileContract;
     }
-  );
-  return data;
+    throw err;
+  }
 }
 
 export async function getPostVisitMobileEvents(
   sessionId: string,
   filters?: { version?: string; limit?: number; offset?: number }
 ): Promise<PostVisitMobileEventsResponse> {
-  const { data } = await ehrClient.get<PostVisitMobileEventsResponse>(
-    `/post-visit/sessions/${encodeURIComponent(sessionId)}/mobile-events`,
-    {
-      params: filters || { version: 'v1' }
+  try {
+    const { data } = await ehrClient.get<PostVisitMobileEventsResponse>(
+      `/post-visit/sessions/${encodeURIComponent(sessionId)}/mobile-events`,
+      { params: filters || { version: 'v1' } }
+    );
+    return data as PostVisitMobileEventsResponse;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return {
+        contractVersion: 'post-visit-mobile-events.v1',
+        sessionId,
+        events: [],
+        paging: { total: 0, limit: filters?.limit ?? 30, offset: filters?.offset ?? 0 }
+      } as PostVisitMobileEventsResponse;
     }
-  );
-  return data;
+    throw err;
+  }
 }
 
 export async function reviewPostVisitArtifact(
@@ -453,8 +533,16 @@ export async function reviewPostVisitArtifact(
     reviewMetadata?: Record<string, unknown>;
   }
 ): Promise<Record<string, unknown>> {
-  const { data } = await ehrClient.post(`/post-visit/sessions/${encodeURIComponent(sessionId)}/review`, payload);
-  return data;
+  try {
+    const { data } = await ehrClient.post(`/post-visit/sessions/${encodeURIComponent(sessionId)}/review`, payload);
+    return data ?? {};
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return { ok: false, _notImplemented: true, message: 'Post-visit review endpoint is not available.' };
+    }
+    throw err;
+  }
 }
 
 export async function publishPostVisitSession(
@@ -466,8 +554,16 @@ export async function publishPostVisitSession(
     acknowledgedMedicationHighRisk?: boolean;
   }
 ): Promise<Record<string, unknown>> {
-  const { data } = await ehrClient.post(`/post-visit/sessions/${encodeURIComponent(sessionId)}/publish`, payload || {});
-  return data;
+  try {
+    const { data } = await ehrClient.post(`/post-visit/sessions/${encodeURIComponent(sessionId)}/publish`, payload || {});
+    return data ?? {};
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return { ok: false, _notImplemented: true, message: 'Post-visit publish endpoint is not available.' };
+    }
+    throw err;
+  }
 }
 
 export async function listTelemedicineConsultations(filters?: {

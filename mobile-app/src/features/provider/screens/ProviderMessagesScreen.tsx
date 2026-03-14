@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../../shared/ui/Screen';
 import { Card } from '../../shared/ui/Card';
 import { StatePanel } from '../../shared/ui/StatePanel';
@@ -31,6 +31,13 @@ export function ProviderMessagesScreen({
 
   const messages = inboxQuery.data?.messages || [];
   const unreadCount = unreadQuery.data?.count || 0;
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([inboxQuery.refetch(), unreadQuery.refetch(), threadQuery.refetch()]);
+    setRefreshing(false);
+  }, [inboxQuery, unreadQuery, threadQuery]);
 
   const selectedThreadMessages = threadQuery.data?.messages || [];
   const replyTargetMessageId = useMemo(() => {
@@ -75,7 +82,12 @@ export function ProviderMessagesScreen({
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accentTeal} />
+        }
+      >
         <ProviderHero title={title} subtitle="Secure clinical messaging with live unread counters and thread history.">
           <MetricGrid
             items={[

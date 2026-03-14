@@ -158,6 +158,9 @@ export default function PatientLoginScreen() {
               key={role}
               style={[styles.roleTab, activeRole === role && styles.roleTabActive]}
               onPress={() => handleRoleSwitch(role)}
+              accessibilityRole="tab"
+              accessibilityLabel={role === 'patient' ? 'Patient login' : 'Provider login'}
+              accessibilityState={{ selected: activeRole === role }}
             >
               <Text
                 style={[
@@ -182,6 +185,8 @@ export default function PatientLoginScreen() {
             placeholderTextColor={theme.colors.textMuted}
             value={email}
             onChangeText={setEmail}
+            accessibilityLabel="Email address"
+            accessibilityHint="Enter your email to sign in"
           />
 
           <Text style={styles.inputLabel}>PASSWORD</Text>
@@ -192,11 +197,16 @@ export default function PatientLoginScreen() {
             placeholderTextColor={theme.colors.textMuted}
             value={password}
             onChangeText={setPassword}
+            accessibilityLabel="Password"
+            accessibilityHint="Enter your password"
           />
 
           <Pressable
             style={styles.forgotRow}
             onPress={() => router.push('/auth/forgot-password' as never)}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot password"
+            accessibilityHint="Opens password recovery"
           >
             <Text style={styles.forgotText}>Forgot password?</Text>
           </Pressable>
@@ -205,6 +215,9 @@ export default function PatientLoginScreen() {
             <Pressable
               style={styles.toggleRow}
               onPress={() => setUseBiometric((prev) => !prev)}
+              accessibilityRole="checkbox"
+              accessibilityLabel={`Use ${biometricLabel} for faster sign in`}
+              accessibilityState={{ checked: useBiometric }}
             >
               <View style={[styles.checkbox, useBiometric && styles.checkboxOn]} />
               <Text style={styles.toggleText}>
@@ -221,6 +234,9 @@ export default function PatientLoginScreen() {
             style={[styles.button, loading && styles.buttonDisabled]}
             disabled={loading}
             onPress={onLogin}
+            accessibilityRole="button"
+            accessibilityLabel={loading ? 'Signing in' : 'Sign in'}
+            accessibilityHint="Double tap to sign in with email and password"
           >
             <Text style={styles.buttonText}>
               {loading ? 'Signing in...' : 'Sign In'}
@@ -232,6 +248,9 @@ export default function PatientLoginScreen() {
             <Text
               style={styles.link}
               onPress={() => router.push('/auth/patient-register')}
+              accessibilityRole="button"
+              accessibilityLabel="Sign up"
+              accessibilityHint="Create a new patient account"
             >
               Sign up
             </Text>

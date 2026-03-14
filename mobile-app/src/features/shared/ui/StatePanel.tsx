@@ -5,12 +5,12 @@ import { theme } from '../../../design/theme';
 type StatePanelProps = {
   title: string;
   message?: string;
-  state: 'loading' | 'empty' | 'error' | 'offline';
+  state: 'loading' | 'empty' | 'error' | 'offline' | 'info';
 };
 
 export function StatePanel({ title, message, state }: StatePanelProps) {
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, state === 'info' && styles.wrapperInfo]}>
       {state === 'loading' ? <ActivityIndicator color={theme.colors.accentTeal} /> : null}
       <Text style={styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -26,6 +26,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     padding: theme.spacing.lg,
     gap: theme.spacing.sm
+  },
+  wrapperInfo: {
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.accentTeal
   },
   title: {
     color: theme.colors.textPrimary,

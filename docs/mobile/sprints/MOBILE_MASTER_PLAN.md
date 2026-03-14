@@ -309,6 +309,9 @@ Role-level AI minimum:
 4. Sprint 03: patient mobile workflows and engagement-heavy reminders
 5. Sprint 04: offline rules, performance, E2E, release hardening, signoff stabilization
 6. Sprint 05: store-ready builds, crash reporting, release operations, and beta rollout
+7. **Sprint 06:** high-impact UX — pull-to-refresh, Quick Actions, tab badges, accessibility ([POLISH_AND_UX_SPRINTS.md](POLISH_AND_UX_SPRINTS.md))
+8. **Sprint 07:** polish & consistency — typography tokens, empty-state CTAs, press feedback, StatePanel info
+9. **Sprint 08:** delight & refinement — haptics, skeleton loaders, input focus, error-boundary copy
 
 ## 13. Mandatory delivery gate for every sprint
 

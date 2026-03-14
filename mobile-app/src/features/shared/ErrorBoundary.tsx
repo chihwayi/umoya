@@ -2,6 +2,7 @@ import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { theme } from '../../design/theme';
+import { loginRouteAfterLogout } from '../../lib/auth/routing';
 
 type Props = { children: ReactNode };
 
@@ -51,7 +52,7 @@ export class ErrorBoundary extends Component<Props, State> {
               style={({ pressed }) => [styles.buttonSecondary, pressed && styles.buttonPressed]}
               onPress={() => {
                 this.setState({ error: null, errorInfo: null });
-                router.replace('/auth');
+                router.replace(loginRouteAfterLogout(null));
               }}
             >
               <Text style={styles.buttonSecondaryText}>Go to start</Text>

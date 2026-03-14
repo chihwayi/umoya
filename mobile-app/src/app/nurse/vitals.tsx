@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../../features/shared/ui/Screen';
 import { Card } from '../../features/shared/ui/Card';
 import { StatePanel } from '../../features/shared/ui/StatePanel';
@@ -17,6 +17,13 @@ export default function NurseVitalsScreen() {
 
   const completedTaskIds = stateQuery.data?.completedTaskIds || [];
   const acknowledgedAlertIds = stateQuery.data?.acknowledgedAlertIds || [];
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await stateQuery.refetch();
+    setRefreshing(false);
+  }, [stateQuery]);
 
   const metrics = useMemo(
     () => [
@@ -69,7 +76,12 @@ export default function NurseVitalsScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accentTeal} />
+        }
+      >
         <ProviderHero
           title="Nurse Vitals & Actions"
           subtitle="Capture and close task/alert actions with auditable nurse workflow state."

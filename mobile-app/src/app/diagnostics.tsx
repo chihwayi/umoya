@@ -9,6 +9,7 @@ import { theme } from '../design/theme';
 import { getRuntimeConfig } from '../lib/config/runtime';
 import { getTenantBootstrap } from '../lib/tenant/tenant-resolver';
 import { getSession } from '../lib/auth/auth-service';
+import { loginRouteAfterLogout } from '../lib/auth/routing';
 import { loadPersistedQueryCache } from '../lib/cache/query-cache-storage';
 import { getConnectivitySnapshot, subscribeConnectivity, type ConnectivitySnapshot } from '../lib/network/connectivity';
 import { getBiometricLoginProfile, getBiometricSupport } from '../lib/security/biometric-login';
@@ -189,7 +190,8 @@ export default function DiagnosticsScreen() {
   async function exitDiagnostics() {
     try {
       setExiting(true);
-      router.replace('/auth');
+      const session = await getSession();
+      router.replace(loginRouteAfterLogout(session?.role));
     } finally {
       setExiting(false);
     }

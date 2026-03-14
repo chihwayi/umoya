@@ -32,7 +32,8 @@ export default function TwoFactorScreen() {
       }
 
       const roleValue = String(response.user.role || '').toLowerCase();
-      const role: AuthSession['role'] = roleValue === 'nurse' ? 'nurse' : 'doctor';
+      const role: AuthSession['role'] =
+        roleValue === 'nurse' || roleValue === 'nurse_accounts' ? 'nurse' : 'doctor';
 
       await saveSession({
         role,

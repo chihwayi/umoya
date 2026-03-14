@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Screen } from '../../features/shared/ui/Screen';
 import { Card } from '../../features/shared/ui/Card';
 import { StatePanel } from '../../features/shared/ui/StatePanel';
@@ -82,18 +83,45 @@ export default function PatientHomeScreen() {
     [appointments.length, summary, unreadMessages, unreadNotifications]
   );
 
-  const quickActions = [
-    'Book Appointment',
-    'Join Telemedicine',
-    'View Bills',
-    'Medication Reminders',
-    'Message Clinic',
-    'PostVisit Companion'
+  const quickActionConfig: Array<{ label: string; href?: string; comingSoon?: boolean }> = [
+    { label: 'Book Appointment', comingSoon: true },
+    { label: 'Join Telemedicine', comingSoon: true },
+    { label: 'View Bills', href: '/patient/bills' },
+    { label: 'Medication Reminders', href: '/patient/medications' },
+    { label: 'Message Clinic', comingSoon: true },
+    { label: 'PostVisit Companion', href: '/patient/postvisit' }
   ];
+
+  const [refreshing, setRefreshing] = useState(false);
+  const router = useRouter();
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      summaryQuery.refetch(),
+      appointmentsQuery.refetch(),
+      notificationsQuery.refetch(),
+      messagesQuery.refetch()
+    ]);
+    setRefreshing(false);
+  }, [summaryQuery, appointmentsQuery, notificationsQuery, messagesQuery]);
+
+  function handleQuickAction(item: (typeof quickActionConfig)[0]) {
+    if (item.href) {
+      router.push(item.href as any);
+    } else if (item.comingSoon) {
+      Alert.alert('Coming soon', 'This feature is not available yet.');
+    }
+  }
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accentTeal} />
+        }
+      >
         <PatientHero
           title="Patient Home"
           subtitle="Appointments, reminders, post-visit guidance, and payment actions in one place."
@@ -115,10 +143,17 @@ export default function PatientHomeScreen() {
             subtitle="Main patient tasks optimized for daily use"
           />
           <View style={styles.quickActionGrid}>
-            {quickActions.map((action) => (
-              <View key={action} style={styles.quickActionCard}>
-                <Text style={styles.quickActionText}>{action}</Text>
-              </View>
+            {quickActionConfig.map((item) => (
+              <Pressable
+                key={item.label}
+                style={({ pressed }) => [styles.quickActionCard, pressed && styles.quickActionCardPressed]}
+                onPress={() => handleQuickAction(item)}
+                accessibilityLabel={item.label}
+                accessibilityRole="button"
+                accessibilityHint={item.href ? 'Opens ' + item.label : 'Feature coming soon'}
+              >
+                <Text style={styles.quickActionText}>{item.label}</Text>
+              </Pressable>
             ))}
           </View>
         </Card>
@@ -234,6 +269,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm
+  },
+  quickActionCardPressed: {
+    opacity: 0.85
   },
   quickActionText: {
     color: theme.colors.textPrimary,

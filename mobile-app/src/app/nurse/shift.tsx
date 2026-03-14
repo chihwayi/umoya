@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet } from 'react-native';
 import { Screen } from '../../features/shared/ui/Screen';
 import { StatePanel } from '../../features/shared/ui/StatePanel';
 import { theme } from '../../design/theme';
@@ -15,6 +15,13 @@ export default function NurseShiftScreen() {
   const { updateWorkflow } = useWorkflowMutations();
 
   const items = feedQuery.data?.items || [];
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await feedQuery.refetch();
+    setRefreshing(false);
+  }, [feedQuery]);
 
   const metrics = useMemo(() => {
     const critical = items.filter((item) => item.severity === 'critical').length;
@@ -60,7 +67,12 @@ export default function NurseShiftScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accentTeal} />
+        }
+      >
         <ProviderHero
           title="Nurse Shift Dashboard"
           subtitle="Cross-module tasks and escalation bundles aligned to current shift workflow."

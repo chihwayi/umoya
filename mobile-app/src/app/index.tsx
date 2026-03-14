@@ -9,7 +9,7 @@ import { TenantLogoSlot } from '../features/shared/ui/TenantLogoSlot';
 import { theme } from '../design/theme';
 import { getTenantBootstrap } from '../lib/tenant/tenant-resolver';
 import { getSession } from '../lib/auth/auth-service';
-import { routeForRole } from '../lib/auth/routing';
+import { loginRouteAfterLogout, routeForRole } from '../lib/auth/routing';
 import { mobileVersionMetadata } from '../services/api/ehr';
 import { trackMobileEvent } from '../lib/observability/mobile-metrics';
 import {
@@ -81,7 +81,7 @@ export default function BootResolverScreen() {
         }
 
         if (!session) {
-          router.replace('/auth');
+          router.replace(loginRouteAfterLogout(null));
           return;
         }
 
@@ -97,7 +97,7 @@ export default function BootResolverScreen() {
           const unlocked = await authenticateBiometricLogin(`Use ${biometricSupport.label} to continue`);
           if (!unlocked) {
             trackMobileEvent('auth.biometric.login_failed', { role: session.role });
-            router.replace('/auth');
+            router.replace(loginRouteAfterLogout(session.role));
             return;
           }
           trackMobileEvent('auth.biometric.login_success', { role: session.role, method: biometricSupport.label });
@@ -106,7 +106,7 @@ export default function BootResolverScreen() {
         trackMobileEvent('app.boot.session_resolved', { role: session.role });
         router.replace(routeForRole(session.role));
       } catch {
-        router.replace('/auth');
+        router.replace(loginRouteAfterLogout(null));
       }
     }
 

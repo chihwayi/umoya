@@ -99,9 +99,39 @@ export default function AuthLandingScreen() {
             <Text style={styles.subtitle}>Choose the right login flow for this device session.</Text>
 
             <View style={styles.chipsRow}>
-              <Text style={styles.chip}>CLINICAL</Text>
-              <Text style={styles.chip}>PATIENT</Text>
-              <Text style={styles.chip}>BIOMETRIC</Text>
+              <Pressable
+                style={styles.chip}
+                onPress={() => router.push('/auth/provider-login')}
+                accessibilityRole="button"
+                accessibilityLabel="Clinical login"
+                accessibilityHint="Sign in as doctor or nurse"
+              >
+                <Text style={styles.chipText}>CLINICAL</Text>
+              </Pressable>
+              <Pressable
+                style={styles.chip}
+                onPress={() => router.push('/auth/patient-login')}
+                accessibilityRole="button"
+                accessibilityLabel="Patient login"
+                accessibilityHint="Sign in as patient"
+              >
+                <Text style={styles.chipText}>PATIENT</Text>
+              </Pressable>
+              {biometricCta.enabled ? (
+                <Pressable
+                  style={[styles.chip, styles.chipHighlight]}
+                  onPress={onBiometricSignIn}
+                  disabled={loadingBiometric}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Continue with ${biometricCta.label}`}
+                >
+                  <Text style={styles.chipTextHighlight}>BIOMETRIC</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>BIOMETRIC</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.tenantHero}>
@@ -109,32 +139,21 @@ export default function AuthLandingScreen() {
             </View>
           </View>
 
-          <View style={styles.formCard}>
-            {biometricCta.enabled ? (
-              <Pressable style={styles.biometricButton} onPress={onBiometricSignIn} disabled={loadingBiometric}>
-                <Text style={styles.biometricText}>
-                  {loadingBiometric
-                    ? `Checking ${biometricCta.label}...`
-                    : `Continue with ${biometricCta.label}${biometricCta.role ? ` (${biometricCta.role})` : ''}`}
-                </Text>
-                {biometricCta.email ? <Text style={styles.biometricSub}>{biometricCta.email}</Text> : null}
-              </Pressable>
-            ) : null}
-
-            <Pressable style={styles.providerButton} onPress={() => router.push('/auth/provider-login')}>
-              <Text style={styles.providerText}>Provider Login (Doctor / Nurse)</Text>
-            </Pressable>
-
-            <Pressable style={styles.patientButton} onPress={() => router.push('/auth/patient-login')}>
-              <Text style={styles.patientText}>Patient Login</Text>
-            </Pressable>
-
-            <Pressable style={styles.diagnosticsGhost} onPress={() => router.push('/diagnostics')}>
-              <Text style={styles.diagnosticsGhostText}>Open diagnostics</Text>
-            </Pressable>
-
-            {error ? <StatePanel state="error" title="Biometric sign in failed" message={error} /> : null}
-          </View>
+          {(biometricCta.enabled || error) ? (
+            <View style={styles.formCard}>
+              {biometricCta.enabled ? (
+                <Pressable style={styles.biometricButton} onPress={onBiometricSignIn} disabled={loadingBiometric}>
+                  <Text style={styles.biometricText}>
+                    {loadingBiometric
+                      ? `Checking ${biometricCta.label}...`
+                      : `Continue with ${biometricCta.label}${biometricCta.role ? ` (${biometricCta.role})` : ''}`}
+                  </Text>
+                  {biometricCta.email ? <Text style={styles.biometricSub}>{biometricCta.email}</Text> : null}
+                </Pressable>
+              ) : null}
+              {error ? <StatePanel state="error" title="Biometric sign in failed" message={error} /> : null}
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </Screen>
@@ -205,11 +224,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.pill,
-    color: '#9FB4D8',
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 8
+  },
+  chipHighlight: {
+    borderColor: theme.colors.accentTeal,
+    backgroundColor: `${theme.colors.accentTeal}18`
+  },
+  chipText: {
+    color: '#9FB4D8',
     fontSize: 11,
-    letterSpacing: 1.1
+    letterSpacing: 1.1,
+    fontWeight: '600'
+  },
+  chipTextHighlight: {
+    color: theme.colors.accentTeal,
+    fontSize: 11,
+    letterSpacing: 1.1,
+    fontWeight: '700'
   },
   tenantHero: {
     marginTop: theme.spacing.sm,
@@ -241,45 +273,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     fontSize: 11
-  },
-  providerButton: {
-    backgroundColor: theme.colors.accentBlue,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md
-  },
-  providerText: {
-    color: '#EAF1FF',
-    fontWeight: '700',
-    textAlign: 'center',
-    fontSize: 16
-  },
-  patientButton: {
-    backgroundColor: theme.colors.accentTeal,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.sm
-  },
-  patientText: {
-    color: '#022018',
-    fontWeight: '700',
-    textAlign: 'center',
-    fontSize: 16
-  },
-  diagnosticsGhost: {
-    marginTop: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surface,
-    paddingVertical: theme.spacing.md
-  },
-  diagnosticsGhostText: {
-    color: theme.colors.accentBlue,
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center'
   }
 });

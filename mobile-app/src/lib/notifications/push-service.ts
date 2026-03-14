@@ -117,21 +117,31 @@ export async function unregisterDevicePushToken(authToken: string): Promise<void
 }
 
 export async function getNotificationPreferences(authToken: string): Promise<unknown> {
-  const { data } = await ehrClient.get('/mobile/preferences/notifications', {
-    headers: {
-      Authorization: `Bearer ${authToken}`
-    }
-  });
-
-  return data;
+  try {
+    const { data } = await ehrClient.get('/mobile/preferences/notifications', {
+      headers: {
+        Authorization: `Bearer ${authToken}`
+      }
+    });
+    return data;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return null;
+    throw err;
+  }
 }
 
 export async function updateNotificationPreferences(authToken: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { data } = await ehrClient.put('/mobile/preferences/notifications', payload, {
-    headers: {
-      Authorization: `Bearer ${authToken}`
-    }
-  });
-
-  return data;
+  try {
+    const { data } = await ehrClient.put('/mobile/preferences/notifications', payload, {
+      headers: {
+        Authorization: `Bearer ${authToken}`
+      }
+    });
+    return data;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return null;
+    throw err;
+  }
 }

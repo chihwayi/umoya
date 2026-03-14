@@ -85,7 +85,8 @@ export default function ProviderLoginScreen() {
       }
 
       const roleValue = String(response.user.role || '').toLowerCase();
-      const role: AuthSession['role'] = roleValue === 'nurse' ? 'nurse' : roleValue === 'doctor' ? 'doctor' : 'doctor';
+      const role: AuthSession['role'] =
+        roleValue === 'nurse' || roleValue === 'nurse_accounts' ? 'nurse' : roleValue === 'doctor' ? 'doctor' : 'doctor';
       const session = {
         role,
         accessToken: response.token,

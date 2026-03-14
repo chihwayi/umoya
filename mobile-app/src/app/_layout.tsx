@@ -6,6 +6,7 @@ import { AppProviders } from '../features/shared/providers/AppProviders';
 import { getSession } from '../lib/auth/auth-service';
 import { setAuthInvalidationHandler } from '../lib/auth/invalidation';
 import { logout } from '../lib/auth/logout';
+import { loginRouteAfterLogout } from '../lib/auth/routing';
 import { getRuntimeConfig } from '../lib/config/runtime';
 import { trackMobileEvent } from '../lib/observability/mobile-metrics';
 import { captureCrashException, initCrashReporting, setCrashContext } from '../lib/observability/crash-reporting';
@@ -47,7 +48,7 @@ export default function RootLayout() {
     const unset = setAuthInvalidationHandler((reason) => {
       trackMobileEvent('session.redirect_to_auth', { reason, pathname });
       if (!pathname.startsWith('/auth')) {
-        router.replace('/auth');
+        router.replace(loginRouteAfterLogout(null));
       }
     });
 
@@ -78,11 +79,12 @@ export default function RootLayout() {
               route: pathname
             });
 
+            const role = session.role;
             await logout(session.accessToken).catch(() => {
               // Non-blocking; session invalidation still proceeds.
             });
 
-            router.replace('/auth');
+            router.replace(loginRouteAfterLogout(role));
             return;
           }
 
@@ -92,13 +94,15 @@ export default function RootLayout() {
           if (unlocked) return;
 
           trackMobileEvent('session.biometric_failed', { route: pathname });
+          const role = session.role;
           await logout(session.accessToken).catch(() => {
             // Non-blocking; session invalidation still proceeds.
           });
-          router.replace('/auth');
+          router.replace(loginRouteAfterLogout(role));
         } catch (error) {
           captureCrashException(error, { event: 'app_state_guard', route: pathname });
-          router.replace('/auth');
+          const session = await getSession();
+          router.replace(loginRouteAfterLogout(session?.role));
         }
       })();
     });

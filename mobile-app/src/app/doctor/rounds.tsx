@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '../../features/shared/ui/Screen';
 import { Card } from '../../features/shared/ui/Card';
@@ -36,6 +36,13 @@ export default function DoctorRoundsScreen() {
 
   const consultations = teleQuery.data?.consultations || [];
   const hivItems = useMemo(() => safeArray<Record<string, unknown>>((hivQuery.data as Record<string, unknown>)?.items), [hivQuery.data]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([teleQuery.refetch(), hivQuery.refetch()]);
+    setRefreshing(false);
+  }, [teleQuery, hivQuery]);
 
   const metrics = useMemo(() => {
     const live = consultations.filter((item) => String(item.status || '').toLowerCase() === 'in_progress').length;
@@ -78,7 +85,12 @@ export default function DoctorRoundsScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accentTeal} />
+        }
+      >
         <ProviderHero
           title="Doctor Rounds"
           subtitle="Telemedicine queue, care coordination, and HIV cohort handoff visibility."

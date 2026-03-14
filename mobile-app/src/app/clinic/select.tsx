@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -19,37 +20,39 @@ export default function ClinicSelectScreen() {
   const [query, setQuery] = useState('');
   const [tenants, setTenants] = useState<ActiveTenant[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-        const rows = await fetchActiveTenants();
-        if (!mounted) return;
-        setTenants(Array.isArray(rows) ? rows : []);
-        trackMobileEvent('tenant.bootstrap.list_loaded', {
-          count: Array.isArray(rows) ? rows.length : 0,
-        });
-      } catch (err: any) {
-        if (!mounted) return;
-        trackMobileEvent('tenant.bootstrap.list_failed', {
-          code: err?.code || 'unknown',
-          status: err?.response?.status || 0,
-        });
-        setError(err?.response?.data?.message || err?.message || 'Failed to load clinics.');
-      } finally {
-        if (mounted) setLoading(false);
-      }
+  const loadTenants = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const rows = await fetchActiveTenants();
+      setTenants(Array.isArray(rows) ? rows : []);
+      trackMobileEvent('tenant.bootstrap.list_loaded', {
+        count: Array.isArray(rows) ? rows.length : 0,
+      });
+    } catch (err: any) {
+      trackMobileEvent('tenant.bootstrap.list_failed', {
+        code: err?.code || 'unknown',
+        status: err?.response?.status || 0,
+      });
+      setError(err?.response?.data?.message || err?.message || 'Failed to load clinics.');
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => {
-      mounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    loadTenants();
+  }, [loadTenants]);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await loadTenants();
+    setRefreshing(false);
+  }
 
   const filteredTenants = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -105,6 +108,8 @@ export default function ClinicSelectScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
+            accessibilityLabel="Search clinic or subdomain"
+            accessibilityHint="Type to filter available clinics"
           />
           {loading ? <Text style={styles.loadingDot}>···</Text> : null}
         </View>
@@ -126,6 +131,13 @@ export default function ClinicSelectScreen() {
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={theme.colors.accentTeal}
+                />
+              }
               renderItem={({ item }) => (
                 <ClinicCard
                   tenant={item}
@@ -188,6 +200,9 @@ function ClinicCard({
       style={styles.card}
       onPress={() => onSelect(tenant)}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={`Select clinic ${tenant.clinicName}`}
+      accessibilityHint="Double tap to choose this clinic"
     >
       <View style={styles.cardIcon}>
         <Text style={styles.cardInitial}>{initial}</Text>

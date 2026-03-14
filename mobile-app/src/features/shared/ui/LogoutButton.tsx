@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getSession } from '../../../lib/auth/auth-service';
 import { logout } from '../../../lib/auth/logout';
+import { loginRouteAfterLogout } from '../../../lib/auth/routing';
 import { theme } from '../../../design/theme';
 import { trackMobileEvent } from '../../../lib/observability/mobile-metrics';
 
@@ -14,9 +15,10 @@ export function LogoutButton() {
     try {
       setBusy(true);
       const session = await getSession();
+      const role = session?.role;
       await logout(session?.accessToken);
-      trackMobileEvent('auth.logout', { role: session?.role || 'unknown' });
-      router.replace('/auth');
+      trackMobileEvent('auth.logout', { role: role || 'unknown' });
+      router.replace(loginRouteAfterLogout(role));
     } finally {
       setBusy(false);
     }
