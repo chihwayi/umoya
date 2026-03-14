@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException, NotFoundException, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { TenantBillingSummary, TenantService } from '../services/tenant.service';
 import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
@@ -108,6 +109,20 @@ export class TenantController {
   async getTenantBySubdomain(@Param('subdomain') subdomain: string): Promise<PublicTenant> {
     const tenant = await this.tenantService.findBySubdomain(subdomain);
     return this.toPublicTenant(tenant);
+  }
+
+  @Get(':id/logo')
+  @ApiOperation({ summary: 'Stream tenant logo for mobile/web consumers' })
+  async getTenantLogo(@Param('id') id: string, @Res() res: Response): Promise<void> {
+    const tenant = await this.tenantService.findById(id);
+    if (!tenant.logoUrl) {
+      throw new NotFoundException('Tenant logo not configured');
+    }
+
+    const file = await this.storageService.getObjectByPublicUrl(tenant.logoUrl);
+    res.setHeader('Content-Type', file.contentType || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.status(200).send(file.body);
   }
 
   @Get(':id')

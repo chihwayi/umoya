@@ -5,12 +5,15 @@ import type { ActiveTenant, TenantBootstrap } from './types';
 
 function toBootstrap(tenant: ActiveTenant): TenantBootstrap {
   const runtime = getRuntimeConfig();
+  const logoUrl = tenant.logoUrl
+    ? `${runtime.tenantServiceBaseUrl}/tenants/${encodeURIComponent(tenant.id)}/logo`
+    : null;
 
   return {
     tenantId: tenant.id,
     subdomain: tenant.subdomain,
     name: tenant.clinicName,
-    logoUrl: tenant.logoUrl || null,
+    logoUrl,
     ehrApiBaseUrl: runtime.ehrServiceBaseUrl,
     tenantApiBaseUrl: runtime.tenantServiceBaseUrl,
     selectedAt: new Date().toISOString()
@@ -29,5 +32,16 @@ export async function resolveTenantBySubdomain(subdomain: string): Promise<Tenan
 }
 
 export function getTenantBootstrap(): TenantBootstrap | null {
-  return getStoredTenant();
+  const tenant = getStoredTenant();
+  if (!tenant) return null;
+
+  const runtime = getRuntimeConfig();
+  const canonicalLogoUrl = `${runtime.tenantServiceBaseUrl}/tenants/${encodeURIComponent(tenant.tenantId)}/logo`;
+  if (tenant.logoUrl !== canonicalLogoUrl) {
+    const migrated = { ...tenant, logoUrl: canonicalLogoUrl };
+    setStoredTenant(migrated);
+    return migrated;
+  }
+
+  return tenant;
 }

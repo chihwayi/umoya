@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand, PutBucketPolicyCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand, PutBucketPolicyCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -98,5 +98,60 @@ export class StorageService {
       this.logger.error(`Failed to upload logo: ${error}`);
       throw error;
     }
+  }
+
+  async getObjectByPublicUrl(publicUrl: string): Promise<{ body: Buffer; contentType: string }> {
+    const { bucket, key } = this.parseBucketAndKey(publicUrl);
+
+    const result = await this.s3Client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      }),
+    );
+
+    const chunks: Buffer[] = [];
+    const bodyStream = result.Body as AsyncIterable<Uint8Array> | null | undefined;
+    if (!bodyStream) {
+      return {
+        body: Buffer.alloc(0),
+        contentType: result.ContentType || 'application/octet-stream',
+      };
+    }
+
+    for await (const chunk of bodyStream) {
+      chunks.push(Buffer.from(chunk));
+    }
+
+    return {
+      body: Buffer.concat(chunks),
+      contentType: result.ContentType || 'application/octet-stream',
+    };
+  }
+
+  private parseBucketAndKey(publicUrl: string): { bucket: string; key: string } {
+    try {
+      const parsed = new URL(publicUrl);
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      if (segments.length >= 2) {
+        return {
+          bucket: segments[0],
+          key: segments.slice(1).join('/'),
+        };
+      }
+    } catch {
+      // fallback below
+    }
+
+    const raw = publicUrl.replace(/^https?:\/\/[^/]+\/?/, '');
+    const parts = raw.split('/').filter(Boolean);
+    if (parts.length >= 2) {
+      return {
+        bucket: parts[0],
+        key: parts.slice(1).join('/'),
+      };
+    }
+
+    throw new Error(`Invalid logo URL format: ${publicUrl}`);
   }
 }

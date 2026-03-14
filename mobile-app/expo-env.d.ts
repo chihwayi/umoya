@@ -1,19 +1,3 @@
-declare namespace NodeJS {
-  interface ProcessEnv {
-    EXPO_PUBLIC_SERVICE_BASE_URL?: string;
-    MEDICORE_APP_VERSION?: string;
-    MEDICORE_IOS_BUILD_NUMBER?: string;
-    MEDICORE_ANDROID_VERSION_CODE?: string;
-    MEDICORE_BUNDLE_ID?: string;
-    MEDICORE_ANDROID_PACKAGE?: string;
-    EXPO_PUBLIC_SENTRY_DSN?: string;
-    EXPO_PUBLIC_SENTRY_ORG?: string;
-    EXPO_PUBLIC_SENTRY_PROJECT?: string;
-    EXPO_PUBLIC_SENTRY_TRACE_RATE?: string;
-    EXPO_PUBLIC_RELEASE_ENV?: string;
-    EXPO_PUBLIC_RELEASE_CHANNEL?: string;
-    EXPO_PUBLIC_SUPPORT_EMAIL?: string;
-    EXPO_PUBLIC_SUPPORT_PHONE?: string;
-    EXPO_PUBLIC_EAS_PROJECT_ID?: string;
-  }
-}
+/// <reference types="expo/types" />
+
+// NOTE: This file should not be edited and should be in your git ignore

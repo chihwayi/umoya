@@ -1,3 +1,4 @@
+import type { Response } from 'express';
 import { TenantBillingSummary, TenantService } from '../services/tenant.service';
 import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
@@ -26,6 +27,7 @@ export declare class TenantController {
     getAllTenants(): Promise<SafeTenant[]>;
     getActiveTenants(): Promise<PublicTenant[]>;
     getTenantBySubdomain(subdomain: string): Promise<PublicTenant>;
+    getTenantLogo(id: string, res: Response): Promise<void>;
     getTenantById(id: string): Promise<SafeTenant>;
     updateTenant(id: string, updateTenantDto: UpdateTenantDto): Promise<SafeTenant>;
     updateTenantStatus(id: string, status: TenantStatus): Promise<SafeTenant>;

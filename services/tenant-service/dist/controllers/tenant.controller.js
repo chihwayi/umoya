@@ -74,6 +74,16 @@ let TenantController = class TenantController {
         const tenant = await this.tenantService.findBySubdomain(subdomain);
         return this.toPublicTenant(tenant);
     }
+    async getTenantLogo(id, res) {
+        const tenant = await this.tenantService.findById(id);
+        if (!tenant.logoUrl) {
+            throw new common_1.NotFoundException('Tenant logo not configured');
+        }
+        const file = await this.storageService.getObjectByPublicUrl(tenant.logoUrl);
+        res.setHeader('Content-Type', file.contentType || 'application/octet-stream');
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.status(200).send(file.body);
+    }
     async getTenantById(id) {
         const tenant = await this.tenantService.findById(id);
         return this.toSafeTenant(tenant);
@@ -187,6 +197,15 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "getTenantBySubdomain", null);
+__decorate([
+    (0, common_1.Get)(':id/logo'),
+    (0, swagger_1.ApiOperation)({ summary: 'Stream tenant logo for mobile/web consumers' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "getTenantLogo", null);
 __decorate([
     (0, common_1.Get)(':id'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Screen } from '../features/shared/ui/Screen';
 import { Card } from '../features/shared/ui/Card';
@@ -15,6 +15,7 @@ import { getBiometricLoginProfile, getBiometricSupport } from '../lib/security/b
 import { trackMobileEvent } from '../lib/observability/mobile-metrics';
 import { listActiveTenants } from '../services/api/tenant';
 import { mobileVersionMetadata } from '../services/api/ehr';
+import { TenantLogoSlot } from '../features/shared/ui/TenantLogoSlot';
 
 type CheckState = 'pass' | 'warn' | 'fail';
 
@@ -39,6 +40,30 @@ type DiagnosticsSnapshot = {
 
 const runtime = getRuntimeConfig();
 
+type PushPermissionSnapshot = {
+  granted: boolean;
+  canAskAgain: boolean;
+};
+
+async function getPushPermissionSnapshot(): Promise<PushPermissionSnapshot> {
+  const inExpoGo =
+    Constants.executionEnvironment === 'storeClient' || (Constants as { appOwnership?: string }).appOwnership === 'expo';
+  if (Platform.OS === 'android' && inExpoGo) {
+    return { granted: false, canAskAgain: false };
+  }
+
+  try {
+    const Notifications = await import('expo-notifications');
+    const settings = await Notifications.getPermissionsAsync();
+    return {
+      granted: Boolean(settings.granted),
+      canAskAgain: Boolean(settings.canAskAgain)
+    };
+  } catch {
+    return { granted: false, canAskAgain: false };
+  }
+}
+
 function toCheckStyle(state: CheckState) {
   if (state === 'pass') return { color: theme.colors.accentTeal, text: 'PASS' };
   if (state === 'warn') return { color: theme.colors.accentAmber, text: 'WARN' };
@@ -51,6 +76,7 @@ function formatTimestamp(iso: string) {
 
 export default function DiagnosticsScreen() {
   const [loading, setLoading] = useState(true);
+  const [exiting, setExiting] = useState(false);
   const [connectivity, setConnectivity] = useState<ConnectivitySnapshot | null>(null);
   const [snapshot, setSnapshot] = useState<DiagnosticsSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +92,7 @@ export default function DiagnosticsScreen() {
         getSession(),
         getBiometricSupport(),
         getBiometricLoginProfile(),
-        Notifications.getPermissionsAsync(),
+        getPushPermissionSnapshot(),
         Promise.resolve(loadPersistedQueryCache()),
         getConnectivitySnapshot()
       ]);
@@ -160,11 +186,20 @@ export default function DiagnosticsScreen() {
     return unsubscribe;
   }, []);
 
+  async function exitDiagnostics() {
+    try {
+      setExiting(true);
+      router.replace('/auth');
+    } finally {
+      setExiting(false);
+    }
+  }
+
   return (
     <Screen>
       <View style={styles.headerRow}>
-        <Pressable style={styles.ghostButton} onPress={() => router.back()}>
-          <Text style={styles.ghostButtonText}>Back</Text>
+        <Pressable style={styles.ghostButton} onPress={exitDiagnostics} disabled={exiting}>
+          <Text style={styles.ghostButtonText}>{exiting ? 'Leaving...' : 'Exit'}</Text>
         </Pressable>
         <Pressable style={styles.primaryButton} onPress={runDiagnostics} disabled={loading}>
           <Text style={styles.primaryButtonText}>{loading ? 'Checking...' : 'Run Checks'}</Text>
@@ -173,10 +208,14 @@ export default function DiagnosticsScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollBody}>
         <Card>
+          <View style={styles.diagnosticsBrand}>
+            <TenantLogoSlot size={58} showName stacked showSystemMark />
+          </View>
           <Text style={styles.title}>Mobile Diagnostics</Text>
-          <Text style={styles.subtitle}>
-            Sprint 05 operational checks for tenant bootstrap, security posture, rollout readiness, and API reachability.
-          </Text>
+          <Text style={styles.subtitle}>Operational checks for connectivity, security, tenant setup, and API reachability.</Text>
+          <Pressable style={styles.inlineExitButton} onPress={exitDiagnostics} disabled={exiting}>
+            <Text style={styles.inlineExitButtonText}>{exiting ? 'Leaving...' : 'Return to Sign In'}</Text>
+          </Pressable>
           {error ? <StatePanel state="error" title="Diagnostics failed" message={error} /> : null}
           {loading && !snapshot ? (
             <StatePanel state="loading" title="Running checks" message="Collecting app diagnostics..." />
@@ -229,6 +268,11 @@ export default function DiagnosticsScreen() {
             <Text style={styles.label}>Session user</Text>
             <Text style={styles.value}>{snapshot?.sessionEmail || 'unknown'}</Text>
           </View>
+          {!tenant ? (
+            <Pressable style={styles.selectClinicButton} onPress={() => router.replace('/clinic/select')}>
+              <Text style={styles.selectClinicButtonText}>Select Clinic</Text>
+            </Pressable>
+          ) : null}
         </Card>
 
         <Card>
@@ -294,6 +338,12 @@ export default function DiagnosticsScreen() {
             <Text style={styles.updatedAt}>Last updated: {formatTimestamp(snapshot.updatedAt)}</Text>
           ) : null}
         </Card>
+
+        <Card>
+          <Pressable style={styles.exitButton} onPress={exitDiagnostics} disabled={exiting}>
+            <Text style={styles.exitButtonText}>{exiting ? 'Leaving diagnostics...' : 'Return to Sign In'}</Text>
+          </Pressable>
+        </Card>
       </ScrollView>
     </Screen>
   );
@@ -304,7 +354,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: theme.spacing.md
+    gap: theme.spacing.md,
+    paddingTop: theme.spacing.xs,
+    paddingRight: 72
   },
   scrollBody: {
     paddingBottom: theme.spacing.xxl,
@@ -315,10 +367,28 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700'
   },
+  diagnosticsBrand: {
+    marginBottom: theme.spacing.md,
+    alignItems: 'center'
+  },
   subtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 13,
+    fontSize: 14,
     marginTop: theme.spacing.sm
+  },
+  inlineExitButton: {
+    marginTop: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingVertical: theme.spacing.sm,
+    alignItems: 'center'
+  },
+  inlineExitButtonText: {
+    color: theme.colors.accentBlue,
+    fontSize: 13,
+    fontWeight: '700'
   },
   sectionTitle: {
     color: theme.colors.textPrimary,
@@ -397,6 +467,33 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#022018',
     fontSize: 12,
+    fontWeight: '700'
+  },
+  exitButton: {
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingVertical: theme.spacing.md,
+    alignItems: 'center'
+  },
+  exitButtonText: {
+    color: theme.colors.accentBlue,
+    fontSize: 14,
+    fontWeight: '700'
+  },
+  selectClinicButton: {
+    marginTop: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingVertical: theme.spacing.sm,
+    alignItems: 'center'
+  },
+  selectClinicButtonText: {
+    color: theme.colors.accentBlue,
+    fontSize: 13,
     fontWeight: '700'
   }
 });

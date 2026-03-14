@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../../features/shared/ui/Screen';
-import { Card } from '../../features/shared/ui/Card';
 import { StatePanel } from '../../features/shared/ui/StatePanel';
 import { theme } from '../../design/theme';
 import { TenantLogoSlot } from '../../features/shared/ui/TenantLogoSlot';
 import { patientLogin } from '../../services/api/ehr';
 import { saveSession } from '../../lib/auth/auth-service';
+import { routeForRole } from '../../lib/auth/routing';
 import { registerDevicePushToken } from '../../lib/notifications/push-service';
 import { trackMobileEvent } from '../../lib/observability/mobile-metrics';
 import { getBiometricSupport, setBiometricLoginPreference } from '../../lib/security/biometric-login';
+import { getTenantBootstrap } from '../../lib/tenant/tenant-resolver';
 
 export default function PatientLoginScreen() {
   const [email, setEmail] = useState('');
@@ -22,6 +23,11 @@ export default function PatientLoginScreen() {
   const [useBiometric, setUseBiometric] = useState(true);
 
   useEffect(() => {
+    if (!getTenantBootstrap()) {
+      router.replace('/clinic/select');
+      return;
+    }
+
     let mounted = true;
     void (async () => {
       const support = await getBiometricSupport();
@@ -74,7 +80,7 @@ export default function PatientLoginScreen() {
         trackMobileEvent('push.register.failed', { role: 'patient' });
       });
 
-      router.replace('/patient');
+      router.replace(routeForRole('patient'));
     } catch (err: any) {
       trackMobileEvent('auth.login.failed', {
         role: 'patient',
@@ -89,69 +95,164 @@ export default function PatientLoginScreen() {
 
   return (
     <Screen>
-      <Card>
-        <View style={styles.brandRow}>
-          <TenantLogoSlot size={44} showName />
+      <ScrollView contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
+        <View style={styles.panel}>
+          <View style={styles.topSection}>
+            <Text style={styles.kicker}>PATIENT ACCESS</Text>
+            <View style={styles.systemRow}>
+              <View style={styles.systemLogoSlot}>
+                <Image source={require('../../../assets/medicore.png')} style={styles.systemLogo} resizeMode="cover" />
+              </View>
+              <Text style={styles.systemName}>MediCore System</Text>
+            </View>
+            <Text style={styles.title}>Patient Login</Text>
+            <Text style={styles.subtitle}>Access appointments, medications, labs, and bills.</Text>
+
+            <View style={styles.chipsRow}>
+              <Text style={styles.chip}>APPOINTMENTS</Text>
+              <Text style={styles.chip}>PRESCRIPTIONS</Text>
+              <Text style={styles.chip}>BILLING</Text>
+            </View>
+
+            <View style={styles.tenantHero}>
+              <TenantLogoSlot size={84} showName stacked showSystemMark={false} />
+            </View>
+          </View>
+
+          <View style={styles.formCard}>
+            <Text style={styles.inputLabel}>Email Address</Text>
+            <TextInput
+              style={styles.input}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholder="name@example.com"
+              placeholderTextColor={theme.colors.textMuted}
+              value={email}
+              onChangeText={setEmail}
+            />
+
+            <Text style={styles.inputLabel}>Password</Text>
+            <TextInput
+              style={styles.input}
+              secureTextEntry
+              placeholder="Enter your password"
+              placeholderTextColor={theme.colors.textMuted}
+              value={password}
+              onChangeText={setPassword}
+            />
+
+            {biometricSupported ? (
+              <Pressable style={styles.toggleRow} onPress={() => setUseBiometric((prev) => !prev)}>
+                <View style={[styles.checkbox, useBiometric && styles.checkboxOn]} />
+                <Text style={styles.toggleText}>Use {biometricLabel} for faster sign in on this device</Text>
+              </Pressable>
+            ) : null}
+
+            {error ? <StatePanel state="error" title="Login failed" message={error} /> : null}
+
+            <Pressable style={styles.button} disabled={loading} onPress={onLogin}>
+              <Text style={styles.buttonText}>{loading ? 'Signing in...' : 'Sign In'}</Text>
+            </Pressable>
+
+            <View style={styles.linkRow}>
+              <Text style={styles.link} onPress={() => router.push('/auth/provider-login')}>
+                Switch to provider login
+              </Text>
+            </View>
+          </View>
         </View>
-        <Text style={styles.title}>Patient Login</Text>
-        <Text style={styles.subtitle}>Access appointments, medications, and bills.</Text>
-
-        <TextInput
-          style={styles.input}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="Email"
-          placeholderTextColor={theme.colors.textMuted}
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <TextInput
-          style={styles.input}
-          secureTextEntry
-          placeholder="Password"
-          placeholderTextColor={theme.colors.textMuted}
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        {biometricSupported ? (
-          <Pressable style={styles.toggleRow} onPress={() => setUseBiometric((prev) => !prev)}>
-            <View style={[styles.checkbox, useBiometric && styles.checkboxOn]} />
-            <Text style={styles.toggleText}>Use {biometricLabel} for faster sign in on this device</Text>
-          </Pressable>
-        ) : null}
-
-        {error ? <StatePanel state="error" title="Login failed" message={error} /> : null}
-
-        <Pressable style={styles.button} disabled={loading} onPress={onLogin}>
-          <Text style={styles.buttonText}>{loading ? 'Signing in...' : 'Sign In'}</Text>
-        </Pressable>
-
-        <View style={styles.linkRow}>
-          <Text style={styles.link} onPress={() => router.push('/auth/provider-login')}>
-            Switch to provider login
-          </Text>
-        </View>
-      </Card>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  brandRow: {
-    marginBottom: theme.spacing.md
+  scrollBody: {
+    flexGrow: 1,
+    paddingBottom: theme.spacing.lg
+  },
+  panel: {
+    flex: 1,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.lg
+  },
+  topSection: {
+    gap: theme.spacing.sm
+  },
+  kicker: {
+    color: theme.colors.textSecondary,
+    letterSpacing: 3,
+    fontSize: 11
+  },
+  systemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.xs
+  },
+  systemLogoSlot: {
+    width: 24,
+    height: 24,
+    borderRadius: theme.radius.sm,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: theme.colors.border
+  },
+  systemLogo: {
+    width: '100%',
+    height: '100%'
+  },
+  systemName: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600'
   },
   title: {
     color: theme.colors.textPrimary,
-    fontSize: 24,
+    fontSize: 54,
     fontWeight: '700'
   },
   subtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 13,
+    fontSize: 16,
+    lineHeight: 24
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.pill,
+    color: '#9FB4D8',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontSize: 11,
+    letterSpacing: 1.1
+  },
+  tenantHero: {
     marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.md
+    marginBottom: theme.spacing.sm,
+    alignItems: 'center'
+  },
+  formCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    backgroundColor: '#0D1A2D',
+    padding: theme.spacing.md
+  },
+  inputLabel: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: theme.spacing.xs
   },
   input: {
     borderWidth: 1,
@@ -161,7 +262,8 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
-    marginBottom: theme.spacing.md
+    marginBottom: theme.spacing.md,
+    fontSize: 16
   },
   toggleRow: {
     flexDirection: 'row',
@@ -195,7 +297,8 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#022018',
-    fontWeight: '700'
+    fontWeight: '700',
+    fontSize: 34
   },
   linkRow: {
     marginTop: theme.spacing.md,
@@ -203,6 +306,6 @@ const styles = StyleSheet.create({
   },
   link: {
     color: theme.colors.accentBlue,
-    fontSize: 13
+    fontSize: 17
   }
 });

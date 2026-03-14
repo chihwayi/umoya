@@ -19,6 +19,27 @@ export const ehrClient = axios.create({
   timeout: 20_000
 });
 
+tenantClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const method = String(error?.config?.method || 'get').toUpperCase();
+    const baseURL = String(error?.config?.baseURL || runtime.tenantServiceBaseUrl);
+    const url = String(error?.config?.url || '');
+    const code = String(error?.code || 'unknown');
+    const status = Number(error?.response?.status || 0);
+
+    trackMobileEvent('tenant.api.error', {
+      method,
+      baseURL,
+      url,
+      code,
+      status
+    });
+
+    return Promise.reject(error);
+  }
+);
+
 ehrClient.interceptors.request.use(async (config) => {
   const method = String(config.method || 'get').toUpperCase();
   const url = String(config.url || '');

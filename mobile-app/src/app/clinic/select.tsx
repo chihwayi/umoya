@@ -76,7 +76,7 @@ export default function ClinicSelectScreen() {
 
   return (
     <Screen>
-      <Card>
+      <Card style={styles.card}>
         <Text style={styles.heading}>Select Your Clinic</Text>
         <Text style={styles.subheading}>This is shown only once per installed app data lifecycle.</Text>
 
@@ -132,6 +132,9 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.md
   },
+  card: {
+    flex: 1
+  },
   input: {
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -143,10 +146,12 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md
   },
   list: {
-    maxHeight: 420
+    flex: 1,
+    minHeight: 0
   },
   listContent: {
-    gap: theme.spacing.sm
+    gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.md
   },
   row: {
     borderWidth: 1,
