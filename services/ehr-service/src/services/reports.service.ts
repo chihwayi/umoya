@@ -219,25 +219,56 @@ export class ReportsService {
 
   async getLabResultsReport(query: any, tenantDb: DataSource) {
     const labRepo = tenantDb.getRepository(LabOrder);
-    
+
     const labOrders = await labRepo.find({
       relations: ['patient'],
-      order: { createdAt: 'DESC' }
+      order: { createdAt: 'DESC' },
     });
+
+    const completed = labOrders.filter((l) => l.status === LabOrderStatus.COMPLETED);
+    const turnaroundsMs: number[] = [];
+    for (const order of completed) {
+      const orderTime = order.createdAt ? new Date(order.createdAt).getTime() : 0;
+      let resultTime: number | null = null;
+      if (order.reviewedAt) {
+        resultTime = new Date(order.reviewedAt).getTime();
+      } else if (order.results?.length) {
+        const dates = order.results
+          .map((r: any) => r.resultDate)
+          .filter(Boolean)
+          .map((d: any) => new Date(d).getTime());
+        if (dates.length) resultTime = Math.max(...dates);
+      }
+      if (!resultTime && order.updatedAt) resultTime = new Date(order.updatedAt).getTime();
+      if (orderTime && resultTime && resultTime >= orderTime) {
+        turnaroundsMs.push(resultTime - orderTime);
+      }
+    }
+
+    const formatTurnaround = (ms: number) => {
+      const hours = ms / (1000 * 60 * 60);
+      if (hours < 1) return `${Math.round((ms / (1000 * 60)) * 10) / 10} minutes`;
+      if (hours < 24) return `${Math.round(hours * 10) / 10} hours`;
+      return `${Math.round((hours / 24) * 10) / 10} days`;
+    };
+    const avgMs = turnaroundsMs.length ? turnaroundsMs.reduce((a, b) => a + b, 0) / turnaroundsMs.length : 0;
+    const minMs = turnaroundsMs.length ? Math.min(...turnaroundsMs) : 0;
+    const maxMs = turnaroundsMs.length ? Math.max(...turnaroundsMs) : 0;
 
     return {
       total: labOrders.length,
       byStatus: {
         pending: labOrders.filter((l) => l.status === LabOrderStatus.ORDERED).length,
-        completed: labOrders.filter((l) => l.status === LabOrderStatus.COMPLETED).length,
+        completed: completed.length,
         cancelled: labOrders.filter((l) => l.status === LabOrderStatus.CANCELLED).length,
       },
       turnaroundTime: {
-        average: '2.5 days',
-        fastest: '4 hours',
-        slowest: '7 days'
+        average: turnaroundsMs.length ? formatTurnaround(avgMs) : 'N/A',
+        fastest: turnaroundsMs.length ? formatTurnaround(minMs) : 'N/A',
+        slowest: turnaroundsMs.length ? formatTurnaround(maxMs) : 'N/A',
+        sampleSize: turnaroundsMs.length,
       },
-      labOrders: labOrders.slice(0, 50)
+      labOrders: labOrders.slice(0, 50),
     };
   }
 
@@ -828,6 +859,78 @@ export class ReportsService {
       stats: [],
       highlights: [],
       recommendations: [],
+    };
+  }
+
+  /**
+   * Mortality / sentinel event report from clinical_outcomes (outcome_type = 'mortality').
+   * Returns empty summary if table or data does not exist.
+   */
+  async getMortalityReport(
+    tenantDb: DataSource,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<{
+    available: boolean;
+    period: { startDate: string | null; endDate: string | null };
+    total: number;
+    byCondition: Array<{ condition: string; count: number }>;
+    events: Array<{ id: string; patientId: string; outcomeDate: string; condition: string | null }>;
+    generatedAt: string;
+  }> {
+    const hasTable = await this.tableExists(tenantDb, 'clinical_outcomes');
+    if (!hasTable) {
+      return {
+        available: false,
+        period: { startDate: startDate ?? null, endDate: endDate ?? null },
+        total: 0,
+        byCondition: [],
+        events: [],
+        generatedAt: new Date().toISOString(),
+      };
+    }
+    const params: any[] = ['mortality'];
+    const conditions: string[] = ["outcome_type = $1"];
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`outcome_date >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`outcome_date <= $${params.length}`);
+    }
+    const whereClause = conditions.join(' AND ');
+    const [countRow, byConditionRows, eventsRows] = await Promise.all([
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS total FROM clinical_outcomes WHERE ${whereClause}`,
+        params,
+      ),
+      tenantDb.query(
+        `SELECT COALESCE(condition, 'Unspecified') AS condition, COUNT(*)::int AS count
+         FROM clinical_outcomes WHERE ${whereClause}
+         GROUP BY condition ORDER BY count DESC`,
+        params,
+      ),
+      tenantDb.query(
+        `SELECT id, patient_id AS "patientId", outcome_date AS "outcomeDate", condition
+         FROM clinical_outcomes WHERE ${whereClause}
+         ORDER BY outcome_date DESC NULLS LAST LIMIT 100`,
+        params,
+      ),
+    ]);
+    const total = this.toNumber(countRow?.[0]?.total);
+    return {
+      available: true,
+      period: { startDate: startDate ?? null, endDate: endDate ?? null },
+      total,
+      byCondition: (byConditionRows || []).map((r: any) => ({ condition: r.condition, count: r.count })),
+      events: (eventsRows || []).map((r: any) => ({
+        id: r.id,
+        patientId: r.patientId,
+        outcomeDate: r.outcomeDate ? new Date(r.outcomeDate).toISOString().slice(0, 10) : null,
+        condition: r.condition,
+      })),
+      generatedAt: new Date().toISOString(),
     };
   }
 }

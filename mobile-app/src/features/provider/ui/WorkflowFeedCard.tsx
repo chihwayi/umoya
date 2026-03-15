@@ -51,14 +51,14 @@ export function WorkflowFeedCard({
       <View style={styles.actions}>
         <Pressable
           disabled={busy || !onAcknowledge}
-          style={[styles.secondaryButton, (busy || !onAcknowledge) && styles.disabled]}
+          style={({ pressed }) => [styles.secondaryButton, (busy || !onAcknowledge) && styles.disabled, pressed && !busy && onAcknowledge && styles.buttonPressed]}
           onPress={() => onAcknowledge?.(item)}
         >
           <Text style={styles.secondaryText}>{busy ? 'Working...' : 'Acknowledge'}</Text>
         </Pressable>
         <Pressable
           disabled={busy || !onComplete}
-          style={[styles.primaryButton, (busy || !onComplete) && styles.disabled]}
+          style={({ pressed }) => [styles.primaryButton, (busy || !onComplete) && styles.disabled, pressed && !busy && onComplete && styles.buttonPressed]}
           onPress={() => onComplete?.(item)}
         >
           <Text style={styles.primaryText}>{busy ? 'Working...' : 'Complete'}</Text>
@@ -122,6 +122,9 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: theme.spacing.sm
+  },
+  buttonPressed: {
+    opacity: 0.85
   },
   primaryButton: {
     flex: 1,

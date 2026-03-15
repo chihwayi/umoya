@@ -197,7 +197,7 @@ function ClinicCard({
 
   return (
     <Pressable
-      style={styles.card}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       onPress={() => onSelect(tenant)}
       disabled={disabled}
       accessibilityRole="button"
@@ -302,6 +302,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
     padding: 14,
     gap: 12,
+  },
+  cardPressed: {
+    opacity: 0.85,
   },
   cardIcon: {
     width: 42,

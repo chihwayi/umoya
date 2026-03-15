@@ -152,7 +152,13 @@ export function ProviderMessagesScreen({
         ))}
 
         {!inboxQuery.isLoading && messages.length === 0 ? (
-          <StatePanel state="empty" title="No messages" message="Your clinical inbox is clear." />
+          <StatePanel
+            state="empty"
+            title="No messages"
+            message="Your clinical inbox is clear."
+            actionLabel="Refresh"
+            onAction={onRefresh}
+          />
         ) : null}
 
         {selectedThreadId ? (

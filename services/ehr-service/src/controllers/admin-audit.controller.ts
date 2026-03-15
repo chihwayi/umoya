@@ -1,4 +1,5 @@
-import { BadRequestException, Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, Request, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -27,12 +28,15 @@ export class AdminAuditController {
   @ApiQuery({ name: 'patientId', required: true, description: 'Patient ID' })
   @ApiQuery({ name: 'from', required: false, description: 'Start date (ISO 8601)' })
   @ApiQuery({ name: 'to', required: false, description: 'End date (ISO 8601)' })
+  @ApiQuery({ name: 'format', required: false, enum: ['json', 'csv'], description: 'Response format (default: json)' })
   @ApiResponse({ status: 200, description: 'Disclosure report generated' })
   async getDisclosureReport(
     @Request() req: RequestWithTenant,
+    @Res({ passthrough: true }) res: Response,
     @Query('patientId') patientId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('format') format?: string,
   ) {
     const normalizedPatientId = String(patientId || '').trim();
     if (!normalizedPatientId) {
@@ -49,12 +53,51 @@ export class AdminAuditController {
       throw new BadRequestException('Invalid "to" date');
     }
 
-    return this.hipaaAuditService.getDisclosureReport(
+    const report = await this.hipaaAuditService.getDisclosureReport(
       req.tenantDb,
       normalizedPatientId,
       startDate,
       endDate,
     );
+
+    if (format === 'csv') {
+      const csv = this.disclosureReportToCsv(report);
+      const filename = `hipaa-disclosure-${normalizedPatientId}-${new Date().toISOString().slice(0, 10)}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csv);
+      return undefined as any;
+    }
+
+    return report;
+  }
+
+  private disclosureReportToCsv(report: any): string {
+    const headers = [
+      'Timestamp',
+      'Operation',
+      'Action',
+      'Resource Type',
+      'Resource ID',
+      'Actor Name',
+      'Actor Role',
+      'Outcome',
+      'Reason',
+    ];
+    const rows = (report.events || []).map((e: any) => [
+      e.timestamp ? new Date(e.timestamp).toISOString() : '',
+      e.operation || '',
+      e.action || '',
+      e.resourceType || '',
+      e.resourceId || '',
+      e.actor?.name || '',
+      e.actor?.role || '',
+      e.outcome || '',
+      (e.reason || '').replace(/"/g, '""'),
+    ]);
+    const escape = (val: string) => (val.includes(',') || val.includes('"') || val.includes('\n') ? `"${val}"` : val);
+    const lines = [headers.map(escape).join(','), ...rows.map((r: any[]) => r.map((c: any) => escape(String(c ?? ''))).join(','))];
+    return lines.join('\r\n');
   }
 }
 

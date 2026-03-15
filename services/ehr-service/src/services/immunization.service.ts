@@ -283,5 +283,94 @@ export class ImmunizationService {
 
     this.logger.log(`Adverse event recorded for immunization: ${immunizationId}`);
   }
+
+  /**
+   * Coverage report: doses by antigen (vaccine), optional period and age group.
+   * For internal QA and DHIS2 alignment.
+   */
+  async getCoverageReport(
+    tenantDb: DataSource,
+    options: { periodStart?: string; periodEnd?: string; antigen?: string; ageGroup?: string },
+  ): Promise<{
+    period: { start: string | null; end: string | null };
+    totalDoses: number;
+    byAntigen: Array<{ vaccineCode: string; vaccineName: string; doses: number; uniquePatients: number }>;
+    byAgeGroup?: Array<{ ageGroup: string; doses: number }>;
+    generatedAt: string;
+  }> {
+    const params: any[] = [];
+    let paramIndex = 1;
+    const conditions: string[] = [];
+    if (options.periodStart) {
+      conditions.push(`i.administration_date >= $${paramIndex++}`);
+      params.push(options.periodStart);
+    }
+    if (options.periodEnd) {
+      conditions.push(`i.administration_date <= $${paramIndex++}`);
+      params.push(options.periodEnd);
+    }
+    if (options.antigen) {
+      conditions.push(`i.vaccine_code = $${paramIndex++}`);
+      params.push(options.antigen);
+    }
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const [totalRow, byAntigenRows] = await Promise.all([
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS total FROM immunizations i ${whereClause}`,
+        params,
+      ),
+      tenantDb.query(
+        `SELECT i.vaccine_code AS "vaccineCode", i.vaccine_name AS "vaccineName",
+                COUNT(*)::int AS doses,
+                COUNT(DISTINCT i.patient_id)::int AS "uniquePatients"
+         FROM immunizations i
+         ${whereClause}
+         GROUP BY i.vaccine_code, i.vaccine_name
+         ORDER BY doses DESC`,
+        params,
+      ),
+    ]);
+
+    let byAgeGroup: Array<{ ageGroup: string; doses: number }> | undefined;
+    if (options.ageGroup !== 'none') {
+      const ageConditions = [...conditions];
+      const ageParams = [...params];
+      const ageWhere = ageConditions.length ? `WHERE ${ageConditions.join(' AND ')}` : '';
+      const ageSelect = `
+        SELECT
+          CASE
+            WHEN EXTRACT(YEAR FROM AGE(i.administration_date::timestamp, p.date_of_birth::timestamp)) < 1 THEN '0-11m'
+            WHEN EXTRACT(YEAR FROM AGE(i.administration_date::timestamp, p.date_of_birth::timestamp)) < 5 THEN '1-4y'
+            WHEN EXTRACT(YEAR FROM AGE(i.administration_date::timestamp, p.date_of_birth::timestamp)) < 15 THEN '5-14y'
+            ELSE '15+'
+          END AS "ageGroup",
+          COUNT(*)::int AS doses
+        FROM immunizations i
+        JOIN patients p ON p.id = i.patient_id AND p.date_of_birth IS NOT NULL
+        ${ageWhere}
+        GROUP BY 1
+        ORDER BY 1`;
+      try {
+        const ageRows = await tenantDb.query(ageSelect, ageParams);
+        byAgeGroup = ageRows.map((r: any) => ({ ageGroup: r.ageGroup, doses: r.doses }));
+      } catch {
+        byAgeGroup = [];
+      }
+    }
+
+    return {
+      period: { start: options.periodStart ?? null, end: options.periodEnd ?? null },
+      totalDoses: Number(totalRow[0]?.total ?? 0),
+      byAntigen: (byAntigenRows || []).map((r: any) => ({
+        vaccineCode: r.vaccineCode,
+        vaccineName: r.vaccineName,
+        doses: r.doses,
+        uniquePatients: r.uniquePatients,
+      })),
+      byAgeGroup,
+      generatedAt: new Date().toISOString(),
+    };
+  }
 }
 

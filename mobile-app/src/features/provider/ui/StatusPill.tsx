@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start'
   },
   text: {
-    fontSize: 11,
+    ...theme.typography.textStyles.caption,
     fontWeight: '700',
     letterSpacing: 0.2,
     textTransform: 'uppercase'

@@ -363,6 +363,42 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getDisclosureReport: async (
+    token: string,
+    tenantSlug: string,
+    patientId: string,
+    from?: string,
+    to?: string,
+  ) => {
+    const response = await ehrAxios.get('/admin/audit/disclosure-report', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: { patientId, from, to },
+    });
+    return { data: response.data };
+  },
+
+  getDisclosureReportExport: async (
+    token: string,
+    tenantSlug: string,
+    patientId: string,
+    from?: string,
+    to?: string,
+    format: 'csv' = 'csv',
+  ) => {
+    const response = await ehrAxios.get('/admin/audit/disclosure-report', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: { patientId, from, to, format },
+      responseType: 'blob',
+    });
+    return response;
+  },
+
   getStepExecutions: async (executionId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/workflows/executions/${executionId}/steps`, {
       headers: {

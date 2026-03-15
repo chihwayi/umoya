@@ -32,4 +32,17 @@ export class MetricsController {
   getWorkflowHealthSnapshot(@Request() req: RequestWithTenant) {
     return this.metricsService.getWorkflowHealthSnapshot(req.tenantDb);
   }
+
+  @Get('health-report')
+  @ApiOperation({ summary: 'Minimal platform health/SLA report for ops or tenant reporting' })
+  @ApiResponse({ status: 200, description: 'Health report with status and metrics hint' })
+  getHealthReport() {
+    return {
+      service: 'ehr-service',
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      metrics: 'Prometheus scrape at GET /metrics for uptime and error rates',
+      workflowHealth: 'Authenticated GET /metrics/workflow-health for tenant workflow baselines',
+    };
+  }
 }

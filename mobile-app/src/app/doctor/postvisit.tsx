@@ -145,7 +145,7 @@ export default function DoctorPostVisitScreen() {
               </Text>
               <View style={styles.rowActions}>
                 <Pressable
-                  style={styles.buttonSecondary}
+                  style={({ pressed }) => [styles.buttonSecondary, pressed && styles.buttonPressed]}
                   onPress={() => setSelectedSessionId(session.id)}
                   accessibilityRole="button"
                   accessibilityLabel={`Open contract for ${patientName}`}
@@ -155,7 +155,7 @@ export default function DoctorPostVisitScreen() {
                 </Pressable>
                 <Pressable
                   disabled={reviewArtifact.isPending}
-                  style={[styles.buttonPrimary, reviewArtifact.isPending && styles.disabled]}
+                  style={({ pressed }) => [styles.buttonPrimary, reviewArtifact.isPending && styles.disabled, pressed && !reviewArtifact.isPending && styles.buttonPressed]}
                   onPress={() => quickReview(session.id)}
                   accessibilityRole="button"
                   accessibilityLabel={reviewArtifact.isPending ? 'Reviewing' : 'Quick Review'}
@@ -169,7 +169,13 @@ export default function DoctorPostVisitScreen() {
         })}
 
         {!sessionsQuery.isLoading && sessions.length === 0 ? (
-          <StatePanel state="empty" title="No post-visit sessions" message="No clinician sessions are currently queued." />
+          <StatePanel
+            state="empty"
+            title="No post-visit sessions"
+            message="No clinician sessions are currently queued."
+            actionLabel="Refresh"
+            onAction={onRefresh}
+          />
         ) : null}
       </ScrollView>
 
@@ -320,6 +326,9 @@ const styles = StyleSheet.create({
     color: '#032018',
     fontWeight: '700',
     fontSize: 13
+  },
+  buttonPressed: {
+    opacity: 0.85
   },
   buttonSecondary: {
     flex: 1,

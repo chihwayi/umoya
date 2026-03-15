@@ -17,13 +17,12 @@ async function main() {
     const prov = new DatabaseProvisioningService(master);
 
     for (const t of tenants) {
-      const host = process.env.DB_HOST || 'postgres-master';
+      const host = process.env.DB_HOST || 'localhost';
       const port = process.env.DB_PORT || '5432';
-      const user = encodeURIComponent(process.env.DB_USERNAME || process.env.POSTGRES_USER || 'medicore');
-      const pass = encodeURIComponent(process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || 'medicore_password');
-      const conn =
-        t.connectionString ||
-        `postgresql://${user}:${pass}@${host}:${port}/${t.databaseName}`;
+      const user = encodeURIComponent(process.env.DB_USERNAME || process.env.POSTGRES_USER || 'postgres');
+      const pass = encodeURIComponent(process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || 'postgres');
+      // Always build from env so repair works from host (DB_HOST=localhost) or in-docker (DB_HOST=postgres-master)
+      const conn = `postgresql://${user}:${pass}@${host}:${port}/${t.databaseName}`;
       console.log(`Applying clinic schema to tenant ${t.id} (${t.databaseName})`);
       await prov.applyClinicSchema(conn);
     }

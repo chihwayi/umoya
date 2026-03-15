@@ -72,20 +72,17 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: theme.colors.accentPurple,
-    fontSize: 11,
-    fontWeight: '700',
+    ...theme.typography.textStyles.caption,
     textTransform: 'uppercase',
     letterSpacing: 0.25
   },
   title: {
     color: theme.colors.textPrimary,
-    fontSize: 22,
-    fontWeight: '800'
+    ...theme.typography.textStyles.headlineLarge
   },
   subtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 18
+    ...theme.typography.textStyles.body
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -104,11 +101,11 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     color: theme.colors.textMuted,
-    fontSize: 11,
+    ...theme.typography.textStyles.caption,
     marginBottom: 2
   },
   metricValue: {
     fontSize: 18,
-    fontWeight: '800'
+    fontWeight: theme.typography.fontWeight.extraBold
   }
 });

@@ -29,7 +29,7 @@ export function MessageCard({
 
   return (
     <Card>
-      <Pressable onPress={() => onOpen?.(message)}>
+      <Pressable style={({ pressed }) => [pressed && styles.cardPressed]} onPress={() => onOpen?.(message)}>
         <View style={styles.topRow}>
           <StatusPill label={formatStatusLabel(message.priority || 'normal')} tone={toneFromPriority(message.priority)} />
           <Text style={styles.meta}>{formatRelative(message.sent_at)}</Text>
@@ -56,6 +56,9 @@ export function MessageCard({
 }
 
 const styles = StyleSheet.create({
+  cardPressed: {
+    opacity: 0.85
+  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

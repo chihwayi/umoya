@@ -438,5 +438,128 @@ export class ReportBuilderService {
       totalPages: Math.ceil(total / limit),
     };
   }
+
+  /**
+   * Seed default report templates for the tenant (idempotent).
+   * Call once per tenant to give users ready-made reports.
+   */
+  async seedDefaultTemplates(tenantDb: DataSource, userId?: string): Promise<{ created: number; skipped: number }> {
+    this.ensureTenantDb(tenantDb);
+
+    const existing = await tenantDb.query(
+      `SELECT id FROM report_templates WHERE is_default = true LIMIT 1`,
+    );
+    if (existing.length > 0) {
+      return { created: 0, skipped: 5 };
+    }
+
+    const defaults = [
+      {
+        name: 'Monthly Revenue Summary',
+        description: 'Billing and revenue for the selected period',
+        report_type: 'financial',
+        category: 'Finance',
+        config: { dateRangeDefault: 'lastMonth' },
+        query_config: {
+          table: 'billing',
+          columns: ['id', 'invoice_number', 'billing_date', 'total_amount', 'status', 'created_at'],
+        },
+        visualization_config: { chartType: 'table' },
+        is_public: true,
+        is_default: true,
+      },
+      {
+        name: 'AR Aging Overview',
+        description: 'Bills by status for receivables overview',
+        report_type: 'financial',
+        category: 'Finance',
+        config: { dateRangeDefault: 'lastMonth' },
+        query_config: {
+          table: 'billing',
+          columns: ['id', 'invoice_number', 'billing_date', 'total_amount', 'status', 'due_date', 'created_at'],
+        },
+        visualization_config: { chartType: 'table' },
+        is_public: true,
+        is_default: true,
+      },
+      {
+        name: 'Appointments by Status',
+        description: 'Appointments in the selected period by status',
+        report_type: 'operational',
+        category: 'Operations',
+        config: { dateRangeDefault: 'lastMonth' },
+        query_config: {
+          table: 'appointments',
+          columns: ['id', 'appointment_date', 'status', 'patient_id', 'created_at'],
+        },
+        visualization_config: { chartType: 'table' },
+        is_public: true,
+        is_default: true,
+      },
+      {
+        name: 'Lab Orders Summary',
+        description: 'Lab orders by status in the selected period',
+        report_type: 'operational',
+        category: 'Operations',
+        config: { dateRangeDefault: 'lastMonth' },
+        query_config: {
+          table: 'lab_orders',
+          columns: ['id', 'order_number', 'status', 'priority', 'created_at'],
+        },
+        visualization_config: { chartType: 'table' },
+        is_public: true,
+        is_default: true,
+      },
+      {
+        name: 'HIPAA Audit Summary',
+        description: 'PHI access events for compliance (date range filter)',
+        report_type: 'operational',
+        category: 'Compliance',
+        config: { dateRangeDefault: 'last30Days' },
+        query_config: {
+          table: 'hipaa_audit_logs',
+          columns: ['id', 'created_at', 'action', 'resource_type', 'operation', 'outcome'],
+        },
+        visualization_config: { chartType: 'table' },
+        is_public: false,
+        is_default: true,
+      },
+    ];
+
+    let created = 0;
+    for (const t of defaults) {
+      const exists = await tenantDb.query(
+        `SELECT 1 FROM report_templates WHERE name = $1 LIMIT 1`,
+        [t.name],
+      );
+      if (exists.length > 0) continue;
+      try {
+        await tenantDb.query(
+          `INSERT INTO report_templates (
+            name, description, report_type, category, config, query_config,
+            visualization_config, is_public, is_default, created_by,
+            shared_with_roles, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11::text[], NOW(), NOW())`,
+          [
+            t.name,
+            t.description,
+            t.report_type,
+            t.category,
+            JSON.stringify(t.config),
+            JSON.stringify(t.query_config),
+            JSON.stringify(t.visualization_config),
+            t.is_public,
+            t.is_default,
+            userId ?? null,
+            ['admin', 'doctor'],
+          ],
+        );
+        created++;
+      } catch (e) {
+        this.logger.warn(`Seed template "${t.name}" failed (table may not exist): ${(e as Error).message}`);
+      }
+    }
+    return { created, skipped: defaults.length - created };
+  }
 }
 

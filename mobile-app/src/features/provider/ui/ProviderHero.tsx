@@ -73,20 +73,17 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: theme.colors.accentTeal,
-    fontSize: 11,
-    fontWeight: '700',
+    ...theme.typography.textStyles.caption,
     letterSpacing: 0.1,
   },
   title: {
     color: theme.colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '800',
+    ...theme.typography.textStyles.headline,
     letterSpacing: -0.3,
   },
   subtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
+    ...theme.typography.textStyles.body,
   },
   metricsWrap: {
     marginTop: theme.spacing.md,
@@ -108,11 +105,11 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     color: theme.colors.textMuted,
-    fontSize: 11,
+    ...theme.typography.textStyles.caption,
     marginBottom: 2,
   },
   metricValue: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: theme.typography.fontWeight.extraBold,
   },
 });

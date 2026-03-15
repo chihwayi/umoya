@@ -2812,6 +2812,7 @@ export class DatabaseProvisioningService {
   // Make schema application callable and idempotent
   public async applyClinicSchema(connectionString: string, options?: ApplySchemaOptions): Promise<void> {
     const tenantDataSource = new DataSource({
+      name: `tenant_${Date.now()}`,
       type: 'postgres',
       url: connectionString,
     });
@@ -2999,7 +3000,9 @@ export class DatabaseProvisioningService {
       );
 
     } finally {
-      await tenantDataSource.destroy();
+      if (tenantDataSource.isInitialized) {
+        await tenantDataSource.destroy();
+      }
     }
   }
 
@@ -3601,6 +3604,19 @@ export class DatabaseProvisioningService {
       CREATE INDEX IF NOT EXISTS idx_hipaa_audit_session_id ON hipaa_audit_logs(session_id);
       CREATE INDEX IF NOT EXISTS idx_hipaa_audit_user_patient ON hipaa_audit_logs(user_id, patient_id);
       CREATE INDEX IF NOT EXISTS idx_hipaa_audit_date_range ON hipaa_audit_logs(created_at, patient_id);
+      
+      -- HIPAA audit columns used by EHR and SOC2 evidence script (provision once)
+      ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS event_type VARCHAR(80);
+      ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS operation VARCHAR(20);
+      ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS data_classification VARCHAR(20);
+      ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS request_id VARCHAR(120);
+      ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS ip_address_hash TEXT;
+      ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS changes_delta JSONB;
+      ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS immutable BOOLEAN NOT NULL DEFAULT TRUE;
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_event_type ON hipaa_audit_logs(event_type);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_operation ON hipaa_audit_logs(operation);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_data_classification ON hipaa_audit_logs(data_classification);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_request_id ON hipaa_audit_logs(request_id);
       
       -- Quality Measures Results Table
       CREATE TABLE IF NOT EXISTS quality_measure_results (

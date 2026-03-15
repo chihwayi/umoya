@@ -86,6 +86,24 @@ export class TaxManagementController {
 
     return this.taxManagementService.getPAYEReport(req.tenantDb, taxPeriod);
   }
+
+  @Get('report')
+  @ApiOperation({ summary: 'Get combined tax report (VAT + optional PAYE) for period' })
+  @ApiQuery({ name: 'startDate', required: true, description: 'Start date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: true, description: 'End date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'payeTaxPeriod', required: false, description: 'PAYE period (YYYY-MM) to include withholding' })
+  @ApiResponse({ status: 200, description: 'Tax report with taxable revenue, VAT, and optional PAYE' })
+  async getTaxReport(
+    @Request() req: RequestWithTenant,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('payeTaxPeriod') payeTaxPeriod?: string,
+  ) {
+    if (!startDate || !endDate) {
+      throw new Error('startDate and endDate are required');
+    }
+    return this.taxManagementService.getTaxReport(req.tenantDb, startDate, endDate, payeTaxPeriod);
+  }
 }
 
 

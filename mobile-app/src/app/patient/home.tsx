@@ -182,6 +182,8 @@ export default function PatientHomeScreen() {
               state="empty"
               title="No upcoming appointments"
               message="Book your next review to keep your care plan on track."
+              actionLabel="Book appointment"
+              onAction={() => Alert.alert('Coming soon', 'Online booking is not available yet. Please contact your clinic.')}
             />
           ) : null}
         </Card>

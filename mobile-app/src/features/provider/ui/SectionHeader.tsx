@@ -18,12 +18,11 @@ const styles = StyleSheet.create({
   },
   title: {
     color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700'
+    ...theme.typography.textStyles.title
   },
   subtitle: {
     color: theme.colors.textMuted,
-    fontSize: 12,
+    ...theme.typography.textStyles.caption,
     marginTop: 2
   }
 });

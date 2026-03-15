@@ -36,3 +36,43 @@ export const urgency = {
   warning: colors.accentAmber,
   routine: colors.accentTeal
 } as const;
+
+/** Type scale: caption 11, body 13, bodyLarge 14, title 16, titleLarge 18, headline 20–22 */
+export const fontSize = {
+  caption: 11,
+  body: 13,
+  bodyLarge: 14,
+  title: 16,
+  titleLarge: 18,
+  headline: 20,
+  headlineLarge: 22
+} as const;
+
+export const fontWeight = {
+  regular: '400' as const,
+  medium: '500' as const,
+  semibold: '600' as const,
+  bold: '700' as const,
+  extraBold: '800' as const
+};
+
+export const lineHeight = {
+  caption: 14,
+  body: 18,
+  bodyLarge: 20,
+  title: 22,
+  titleLarge: 24,
+  headline: 26,
+  headlineLarge: 28
+} as const;
+
+/** Precomputed text styles keyed by token (color not included; use theme.colors in component). */
+export const textStyles = {
+  caption: { fontSize: fontSize.caption, fontWeight: fontWeight.semibold, lineHeight: lineHeight.caption },
+  body: { fontSize: fontSize.body, fontWeight: fontWeight.regular, lineHeight: lineHeight.body },
+  bodyLarge: { fontSize: fontSize.bodyLarge, fontWeight: fontWeight.medium, lineHeight: lineHeight.bodyLarge },
+  title: { fontSize: fontSize.title, fontWeight: fontWeight.bold, lineHeight: lineHeight.title },
+  titleLarge: { fontSize: fontSize.titleLarge, fontWeight: fontWeight.bold, lineHeight: lineHeight.titleLarge },
+  headline: { fontSize: fontSize.headline, fontWeight: fontWeight.extraBold, lineHeight: lineHeight.headline },
+  headlineLarge: { fontSize: fontSize.headlineLarge, fontWeight: fontWeight.extraBold, lineHeight: lineHeight.headlineLarge }
+} as const;

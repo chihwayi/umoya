@@ -61,6 +61,22 @@ export class ReferralController {
     return this.referralService.getReferrals(filters, req.tenantDb);
   }
 
+  @Get('report')
+  @ApiOperation({ summary: 'Get referral report: counts by status, type, and specialty' })
+  @ApiQuery({ name: 'dateFrom', required: false, description: 'Start date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'dateTo', required: false, description: 'End date (YYYY-MM-DD)' })
+  @ApiResponse({ status: 200, description: 'Referral report with summary and breakdowns' })
+  async getReferralReport(
+    @Query('dateFrom') dateFrom: string,
+    @Query('dateTo') dateTo: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    return this.referralService.getReferralAnalytics(
+      { startDate: dateFrom, endDate: dateTo },
+      req.tenantDb,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get referral by ID' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
