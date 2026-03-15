@@ -4183,6 +4183,63 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  // ===== REPORTS (viewable / exportable) =====
+  getLabResultsReport: async (
+    tenantSlug: string,
+    token: string,
+    params?: { startDate?: string; endDate?: string; limit?: number },
+  ) => {
+    const response = await ehrAxios.get('/reports/lab-results', {
+      params: params || {},
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getReferralReport: async (
+    tenantSlug: string,
+    token: string,
+    params?: { dateFrom?: string; dateTo?: string },
+  ) => {
+    const response = await ehrAxios.get('/referrals/report', {
+      params: { dateFrom: params?.dateFrom, dateTo: params?.dateTo },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getImmunizationCoverageReport: async (
+    tenantSlug: string,
+    token: string,
+    params?: { periodStart?: string; periodEnd?: string; antigen?: string; ageGroup?: string },
+  ) => {
+    const response = await ehrAxios.get('/immunizations/report/coverage', {
+      params: params || {},
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getMortalityReport: async (
+    tenantSlug: string,
+    token: string,
+    params?: { startDate?: string; endDate?: string },
+  ) => {
+    const response = await ehrAxios.get('/reports/quality/mortality', {
+      params: params || {},
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getTaxReport: async (
+    tenantSlug: string,
+    token: string,
+    params: { startDate: string; endDate: string; payeTaxPeriod?: string },
+  ) => {
+    const response = await ehrAxios.get('/tax/report', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   // ===== ENHANCED LIS - CRITICAL ALERTS =====
   getCriticalAlertStats: async (tenantSlug: string, token: string) => {
     const response = await ehrAxios.get('/lab/critical-alerts/stats/summary', {

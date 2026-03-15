@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import { exportReportToPDF } from '../utils/reportExport';
 
 const HIPAAComplianceDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -408,6 +409,32 @@ const HIPAAComplianceDashboard: React.FC = () => {
     } finally {
       setDisclosureExporting(false);
     }
+  };
+
+  const exportDisclosurePdf = () => {
+    if (!disclosureReport?.events?.length) {
+      showError('No data', 'Generate the disclosure report first.');
+      return;
+    }
+    const rows = disclosureReport.events.map((e: any) => ({
+      timestamp: e.timestamp ? new Date(e.timestamp).toLocaleString() : '',
+      operation: e.operation || '',
+      action: e.action || '',
+      resourceType: e.resourceType || '',
+      actor: e.actor?.name || '',
+      outcome: e.outcome || '',
+    }));
+    const columns = [
+      { key: 'timestamp', label: 'Timestamp' },
+      { key: 'operation', label: 'Operation' },
+      { key: 'action', label: 'Action' },
+      { key: 'resourceType', label: 'Resource' },
+      { key: 'actor', label: 'Actor' },
+      { key: 'outcome', label: 'Outcome' },
+    ];
+    const subtitle = `Patient: ${disclosureReport.patient?.firstName ?? ''} ${disclosureReport.patient?.lastName ?? ''} | Period: ${disclosureReport.period?.startDate ?? 'Any'} – ${disclosureReport.period?.endDate ?? 'Any'}`;
+    exportReportToPDF('HIPAA Accounting of Disclosures', subtitle, rows, columns, `hipaa-disclosure-${disclosurePatientId.trim()}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    showSuccess('Export complete', 'Disclosure report downloaded as PDF.');
   };
 
   return (
@@ -1066,14 +1093,23 @@ const HIPAAComplianceDashboard: React.FC = () => {
                   )}
                 </button>
                 {disclosureReport && (
-                  <button
-                    onClick={exportDisclosureCsv}
-                    disabled={disclosureExporting}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 font-medium"
-                  >
-                    {disclosureExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    Export CSV
-                  </button>
+                  <>
+                    <button
+                      onClick={exportDisclosureCsv}
+                      disabled={disclosureExporting}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 font-medium"
+                    >
+                      {disclosureExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Export CSV
+                    </button>
+                    <button
+                      onClick={exportDisclosurePdf}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 font-medium"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export PDF
+                    </button>
+                  </>
                 )}
               </div>
 

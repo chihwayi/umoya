@@ -148,7 +148,8 @@ const EHRDashboard: React.FC = () => {
           { icon: FileText, label: 'Medical Records', desc: 'Patient history & notes', color: 'from-purple-500 to-indigo-500' },
           { icon: Pill, label: 'Prescriptions', desc: 'Medication management', color: 'from-orange-500 to-red-500' },
           { icon: TestTube, label: 'Lab Orders', desc: 'Request & review tests', color: 'from-pink-500 to-rose-500' },
-          { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-violet-500 to-purple-500' },
+          { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-violet-500 to-purple-500', route: 'analytics' },
+          { icon: FileText, label: 'Reports', desc: 'View and export reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
           { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board, ESI triage & metrics', color: 'from-red-600 to-orange-600', route: 'emergency' },
           { icon: Bed, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', route: 'bed-management' },
           { icon: Activity, label: 'Operating Room', desc: 'OR scheduling, surgical cases & implant tracking', color: 'from-indigo-600 to-purple-600', route: 'operating-room' },
@@ -181,6 +182,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
           { icon: Baby, label: 'Maternity', desc: 'Obstetric care & deliveries', color: 'from-pink-500 to-rose-500', route: 'nurse/maternity' },
           { icon: FileText, label: 'Care Plans', desc: 'Nursing care plans', color: 'from-green-500 to-emerald-500', route: 'nurse/care-plans' },
+          { icon: FileText, label: 'Reports', desc: 'Lab & immunization reports (view/export)', color: 'from-violet-500 to-purple-500', route: 'reports' },
         ];
       case 'radiologist':
         return [
@@ -190,7 +192,6 @@ const EHRDashboard: React.FC = () => {
       case 'receptionist':
         return [
           ...baseActions,
-          { icon: CreditCard, label: 'Billing', desc: 'Payments & invoices', color: 'from-yellow-500 to-orange-500' },
           { icon: Bell, label: 'Notifications', desc: 'Patient alerts', color: 'from-indigo-500 to-blue-500' },
         ];
       case 'pharmacist':
@@ -214,6 +215,7 @@ const EHRDashboard: React.FC = () => {
         return [
           { icon: CreditCard, label: 'Accounts Dashboard', desc: 'Financial overview & KPIs', color: 'from-amber-500 to-orange-500', route: 'accounts' },
           { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial overview', color: 'from-purple-500 to-pink-500', route: 'billing' },
+          { icon: FileText, label: 'Reports', desc: 'View and export all reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
           { icon: FileText, label: 'Medical Aid Claims', desc: 'File, track & manage claims', color: 'from-emerald-500 to-teal-500', route: 'claims' },
           { icon: BarChart3, label: 'Revenue Analytics', desc: 'Track income by service line', color: 'from-purple-500 to-pink-500', route: 'accounts/analytics' },
           { icon: FileText, label: 'Billing Queue', desc: 'Manage outstanding invoices', color: 'from-indigo-500 to-slate-500', route: 'accounts?status=pending' },
@@ -221,6 +223,8 @@ const EHRDashboard: React.FC = () => {
       case 'admin':
         return [
           { icon: Users, label: 'User Management', desc: 'Manage staff accounts, roles & permissions', color: 'from-slate-500 to-gray-500', route: 'users' },
+          { icon: FileText, label: 'Reports', desc: 'View and export all reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
+          { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial reports', color: 'from-purple-500 to-pink-500', route: 'billing' },
           { icon: Shield, label: 'HIPAA Compliance', desc: 'Audit logs, breach detection & compliance', color: 'from-indigo-500 to-blue-500', route: 'hipaa-compliance' },
           { icon: Eye, label: 'Audit Logs', desc: 'System activity & access logs', color: 'from-purple-500 to-violet-500', route: 'hipaa-compliance' },
           { icon: Database, label: 'Data Management', desc: 'Backup, restore & data migration', color: 'from-blue-500 to-cyan-500', route: 'data' },

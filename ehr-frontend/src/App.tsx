@@ -49,6 +49,7 @@ const CdiDashboard = lazy(() => import('./pages/CdiDashboard'));
 const CaseManagementDashboard = lazy(() => import('./pages/CaseManagementDashboard'));
 const SepsisDashboard = lazy(() => import('./pages/SepsisDashboard'));
 const HIPAAComplianceDashboard = lazy(() => import('./pages/HIPAAComplianceDashboard'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const PopulationHealthDashboard = lazy(() => import('./pages/PopulationHealthDashboard'));
 const PracticeManagementDashboard = lazy(() => import('./pages/PracticeManagementDashboard'));
 const PriorAuthorizationDashboard = lazy(() => import('./pages/PriorAuthorizationDashboard'));
@@ -306,6 +307,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin']}>
                   <HIPAAComplianceDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/reports"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor', 'nurse', 'nurse_accounts', 'accounts']}>
+                  <ReportsPage />
                 </RoleProtectedRoute>
               }
             />
@@ -814,7 +823,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/billing"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'receptionist', 'doctor']} moduleKey="finance">
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts']} moduleKey="finance">
                   <BillingDashboard />
                 </RoleProtectedRoute>
               }

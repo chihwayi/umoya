@@ -29,6 +29,7 @@ import { ehrApi, billingApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import { formatDateForAPI } from '../utils/dateUtils';
+import { exportReportToCSV, exportReportToPDF } from '../utils/reportExport';
 
 const formatCurrency = (amount: number | string): string => {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -1143,7 +1144,45 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
           {loading && <div className="text-white text-center py-8">Loading...</div>}
           {taxSummary && !loading && (
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
-              <h3 className="text-xl font-bold text-white mb-4">Tax Summary</h3>
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <h3 className="text-xl font-bold text-white">Tax Summary</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const rows = [
+                        { metric: 'Total Revenue', value: formatCurrency(taxSummary.totalRevenue) },
+                        { metric: 'Total Tax (VAT)', value: formatCurrency(taxSummary.totalTax) },
+                        ...(taxSummary.taxBreakdown || []).map((item: any) => ({
+                          metric: new Date(item.period).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+                          value: `${formatCurrency(item.revenue_amount)} revenue, ${formatCurrency(item.tax_amount)} tax`,
+                        })),
+                      ];
+                      exportReportToCSV('Tax Summary', rows, [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Value' }], `tax-summary-${dateFrom || ''}-${dateTo || ''}.csv`);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      const rows = [
+                        { metric: 'Total Revenue', value: formatCurrency(taxSummary.totalRevenue) },
+                        { metric: 'Total Tax (VAT)', value: formatCurrency(taxSummary.totalTax) },
+                        ...(taxSummary.taxBreakdown || []).map((item: any) => ({
+                          metric: new Date(item.period).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+                          value: `${formatCurrency(item.revenue_amount)} revenue, ${formatCurrency(item.tax_amount)} tax`,
+                        })),
+                      ];
+                      exportReportToPDF('Tax Summary', dateFrom && dateTo ? `Period: ${dateFrom} – ${dateTo}` : undefined, rows, [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Value' }], `tax-summary-${dateFrom || ''}-${dateTo || ''}.pdf`);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export PDF
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-4 rounded-lg bg-white/5">
                   <p className="text-white/60 text-sm">Total Revenue</p>
@@ -1221,7 +1260,67 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
           {loading && <div className="text-white text-center py-8">Loading...</div>}
           {reconciliationReport && !loading && (
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
-              <h3 className="text-xl font-bold text-white mb-4">Reconciliation Report</h3>
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <h3 className="text-xl font-bold text-white">Reconciliation Report</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const rows = (reconciliationReport.reconciled || []).map((item: any) => ({
+                        transaction_number: item.transaction_number,
+                        name: `${item.first_name || ''} ${item.last_name || ''}`.trim(),
+                        date: item.reconciliation_date ? new Date(item.reconciliation_date).toLocaleDateString() : '',
+                        amount: formatCurrency(item.reconciled_amount),
+                        bank_reference: item.bank_reference || '',
+                      }));
+                      if (rows.length === 0) {
+                        rows.push({ transaction_number: '—', name: '—', date: '—', amount: formatCurrency(reconciliationReport.summary?.total_amount || 0), bank_reference: '—' });
+                      }
+                      exportReportToCSV('Reconciliation Report', rows, [
+                        { key: 'transaction_number', label: 'Transaction' },
+                        { key: 'name', label: 'Name' },
+                        { key: 'date', label: 'Date' },
+                        { key: 'amount', label: 'Amount' },
+                        { key: 'bank_reference', label: 'Bank Ref' },
+                      ], `reconciliation-${dateFrom || ''}-${dateTo || ''}.csv`);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      const rows = (reconciliationReport.reconciled || []).map((item: any) => ({
+                        transaction_number: item.transaction_number,
+                        name: `${item.first_name || ''} ${item.last_name || ''}`.trim(),
+                        date: item.reconciliation_date ? new Date(item.reconciliation_date).toLocaleDateString() : '',
+                        amount: formatCurrency(item.reconciled_amount),
+                        bank_reference: item.bank_reference || '',
+                      }));
+                      if (rows.length === 0) {
+                        rows.push({ transaction_number: '—', name: '—', date: '—', amount: formatCurrency(reconciliationReport.summary?.total_amount || 0), bank_reference: '—' });
+                      }
+                      exportReportToPDF(
+                        'Reconciliation Report',
+                        dateFrom && dateTo ? `Period: ${dateFrom} – ${dateTo}` : undefined,
+                        rows,
+                        [
+                          { key: 'transaction_number', label: 'Transaction' },
+                          { key: 'name', label: 'Name' },
+                          { key: 'date', label: 'Date' },
+                          { key: 'amount', label: 'Amount' },
+                          { key: 'bank_reference', label: 'Bank Ref' },
+                        ],
+                        `reconciliation-${dateFrom || ''}-${dateTo || ''}.pdf`,
+                      );
+                    }}
+                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export PDF
+                  </button>
+                </div>
+              </div>
               {reconciliationReport.summary && (
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="p-4 rounded-lg bg-white/5">
