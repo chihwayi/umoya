@@ -5685,6 +5685,477 @@ async def prescribe_oxygen(req: OxygenPrescribeRequest):
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SPRINT 73 — NEPHROLOGY CDSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CkdStageRequest(BaseModel):
+    egfr: Optional[float] = None
+    acr: Optional[float] = None          # albumin:creatinine ratio mg/mmol
+    serum_potassium: Optional[float] = None
+    serum_phosphate: Optional[float] = None
+    serum_bicarbonate: Optional[float] = None
+    haemoglobin: Optional[float] = None
+    bp_systolic: Optional[int] = None
+    on_ras_blockade: bool = False
+    diabetes: bool = False
+    prior_egfr: Optional[float] = None   # previous eGFR for slope calculation
+    months_between: Optional[float] = None
+
+def _ckd_g_stage(egfr: float) -> str:
+    if egfr >= 90: return "G1"
+    if egfr >= 60: return "G2"
+    if egfr >= 45: return "G3a"
+    if egfr >= 30: return "G3b"
+    if egfr >= 15: return "G4"
+    return "G5"
+
+def _acr_category(acr: float) -> str:
+    if acr < 3: return "A1"
+    if acr < 30: return "A2"
+    return "A3"
+
+KDIGO_RISK = {
+    # (G_stage, A_category) → risk
+    ("G1","A1"): "low", ("G1","A2"): "moderate", ("G1","A3"): "high",
+    ("G2","A1"): "low", ("G2","A2"): "moderate", ("G2","A3"): "high",
+    ("G3a","A1"): "moderate", ("G3a","A2"): "high", ("G3a","A3"): "very_high",
+    ("G3b","A1"): "high", ("G3b","A2"): "very_high", ("G3b","A3"): "very_high",
+    ("G4","A1"): "very_high", ("G4","A2"): "very_high", ("G4","A3"): "very_high",
+    ("G5","A1"): "very_high", ("G5","A2"): "very_high", ("G5","A3"): "very_high",
+}
+
+@app.post("/nephrology/ckd/stage")
+async def stage_ckd(req: CkdStageRequest):
+    """KDIGO CKD staging, progression risk, metabolic complication alerts, RAS dosing."""
+
+    g_stage = _ckd_g_stage(req.egfr) if req.egfr is not None else None
+    a_cat = _acr_category(req.acr) if req.acr is not None else None
+    risk = KDIGO_RISK.get((g_stage, a_cat)) if g_stage and a_cat else None
+
+    # GFR slope
+    slope = None
+    rapid_progresser = False
+    if req.prior_egfr and req.months_between and req.egfr is not None and req.months_between > 0:
+        slope = (req.egfr - req.prior_egfr) / req.months_between
+        if slope < -5:  # >5 ml/min/1.73m² per year loss
+            rapid_progresser = True
+
+    alerts = []
+    recommendations = []
+
+    # Metabolic complications
+    if req.serum_potassium and req.serum_potassium > 5.5:
+        alerts.append(f"Hyperkalaemia (K {req.serum_potassium} mmol/L) — restrict dietary K, review RAS/NSAIDs/TMP-SMX.")
+    if req.serum_phosphate and req.serum_phosphate > 1.5:
+        alerts.append(f"Hyperphosphataemia ({req.serum_phosphate} mmol/L) — phosphate binders, dietary restriction.")
+    if req.serum_bicarbonate and req.serum_bicarbonate < 22:
+        alerts.append(f"Metabolic acidosis (HCO3 {req.serum_bicarbonate}) — sodium bicarbonate supplementation; target ≥22 mmol/L.")
+    if req.haemoglobin and req.haemoglobin < 10:
+        alerts.append(f"Anaemia of CKD (Hb {req.haemoglobin}) — check iron stores; consider ESA if Hb <10 and symptomatic.")
+    if req.bp_systolic and req.bp_systolic > 130:
+        alerts.append(f"BP {req.bp_systolic} mmHg exceeds target (<130/80 in CKD). Optimise RAS blockade.")
+    if rapid_progresser:
+        alerts.append(f"Rapid CKD progression: eGFR slope {slope:.1f} ml/min/1.73m²/month — urgent nephrology referral.")
+
+    # Stage-specific recommendations
+    if g_stage in ("G4", "G5"):
+        recommendations.append("Nephrology referral for RRT planning (haemodialysis, peritoneal dialysis, transplantation).")
+        recommendations.append("Vaccinate: Hepatitis B, Pneumococcal, Influenza.")
+        recommendations.append("Avoid nephrotoxins: NSAIDs, contrast media, aminoglycosides.")
+    if g_stage in ("G3a", "G3b", "G4", "G5"):
+        recommendations.append("Avoid SGLT2 inhibitors below eGFR 45 (check product-specific threshold).")
+        recommendations.append("Dose-adjust metformin: reduce at eGFR <45, stop at <30.")
+        recommendations.append("Dietary protein restriction 0.6-0.8 g/kg/day.")
+    if not req.on_ras_blockade and req.acr and req.acr >= 3:
+        recommendations.append("ACE inhibitor or ARB indicated: albuminuria A2/A3 — target ACR reduction ≥30%.")
+    recommendations.append("BP target <130/80 mmHg in all CKD patients.")
+    recommendations.append("Optimise CVD risk: statin, aspirin as indicated, smoking cessation.")
+
+    return {
+        "g_stage": g_stage,
+        "a_category": a_cat,
+        "kdigo_risk": risk,
+        "egfr_slope_per_month": round(slope, 3) if slope is not None else None,
+        "rapid_progresser": rapid_progresser,
+        "alerts": alerts,
+        "recommendations": recommendations,
+    }
+
+
+class DialysisAdequacyRequest(BaseModel):
+    dialysis_type: str = "haemodialysis"   # haemodialysis | peritoneal
+    ktv: Optional[float] = None            # for HD
+    pre_bun: Optional[float] = None        # mg/dL — for URR
+    post_bun: Optional[float] = None
+    session_duration_min: Optional[int] = None
+    blood_flow_rate: Optional[int] = None  # ml/min
+    ultrafiltration_vol_ml: Optional[int] = None
+    pre_weight_kg: Optional[float] = None
+    post_weight_kg: Optional[float] = None
+    weekly_kt_v: Optional[float] = None    # for PD
+
+@app.post("/nephrology/dialysis/adequacy")
+async def dialysis_adequacy(req: DialysisAdequacyRequest):
+    """KDOQI Kt/V and URR adequacy assessment with recommendations."""
+
+    adequate = None
+    urr = None
+    uf_rate = None
+    recommendations = []
+    alerts = []
+
+    if req.dialysis_type == "haemodialysis":
+        # URR
+        if req.pre_bun and req.post_bun and req.pre_bun > 0:
+            urr = round((1 - req.post_bun / req.pre_bun) * 100, 1)
+
+        # Adequacy assessment
+        if req.ktv is not None:
+            if req.ktv >= 1.4:
+                adequate = True
+            else:
+                adequate = False
+                alerts.append(f"Kt/V {req.ktv} < 1.4 (KDOQI minimum). Inadequate dialysis dose.")
+                if req.session_duration_min and req.session_duration_min < 240:
+                    recommendations.append("Extend session duration to ≥4 hours.")
+                if req.blood_flow_rate and req.blood_flow_rate < 350:
+                    recommendations.append(f"Increase blood flow rate (current {req.blood_flow_rate} ml/min; target 350-450 ml/min).")
+                recommendations.append("Check access recirculation. Consider higher-flux dialyser.")
+
+        if urr is not None and urr < 65:
+            alerts.append(f"URR {urr}% < 65% (KDOQI target ≥65%).")
+
+        # Ultrafiltration rate
+        if req.ultrafiltration_vol_ml and req.session_duration_min and req.pre_weight_kg:
+            uf_rate = round((req.ultrafiltration_vol_ml / req.pre_weight_kg) / (req.session_duration_min / 60), 1)
+            if uf_rate > 13:
+                alerts.append(f"High UF rate {uf_rate} ml/kg/h > 13 ml/kg/h — associated with increased mortality. Extend session or reduce interdialytic weight gain.")
+
+        weight_loss = None
+        if req.pre_weight_kg and req.post_weight_kg:
+            weight_loss = round(req.pre_weight_kg - req.post_weight_kg, 2)
+
+        return {
+            "dialysis_type": "haemodialysis",
+            "ktv": req.ktv,
+            "urr_percent": urr,
+            "uf_rate_ml_kg_h": uf_rate,
+            "weight_loss_kg": weight_loss,
+            "adequate": adequate,
+            "alerts": alerts,
+            "recommendations": recommendations,
+        }
+
+    else:  # peritoneal
+        weekly_ktv = req.weekly_kt_v
+        pd_adequate = weekly_ktv >= 1.7 if weekly_ktv is not None else None
+        if weekly_ktv is not None and not pd_adequate:
+            alerts.append(f"Weekly Kt/V {weekly_ktv} < 1.7 (KDOQI PD target). Increase exchanges or volume.")
+        return {
+            "dialysis_type": "peritoneal",
+            "weekly_ktv": weekly_ktv,
+            "adequate": pd_adequate,
+            "alerts": alerts,
+            "recommendations": ["Consider increasing number of exchanges or dwell volume.", "Assess residual renal function contribution."] if not pd_adequate else [],
+        }
+
+
+# Renal drug dose adjustment — common medications
+RENAL_DOSING: Dict[str, Dict] = {
+    "metformin": {
+        "normal": "500-1000mg BD",
+        "G3a_45_60": "Use with caution; reduce dose",
+        "G3b_30_45": "Halve dose; monitor lactate",
+        "below_30": "CONTRAINDICATED",
+        "dialysis": "CONTRAINDICATED",
+    },
+    "atenolol": {
+        "normal": "50-100mg daily",
+        "G3b_30_45": "50mg daily",
+        "below_30": "25mg daily",
+        "dialysis": "25mg post-dialysis (dialysable)",
+    },
+    "ramipril": {
+        "normal": "Up to 10mg daily",
+        "below_30": "Start 1.25mg daily, titrate carefully; monitor K+",
+        "dialysis": "1.25mg daily; monitor BP and K+",
+    },
+    "digoxin": {
+        "normal": "125-250mcg daily",
+        "G3b_30_45": "62.5-125mcg daily; monitor levels",
+        "below_30": "62.5mcg on alternate days",
+        "dialysis": "62.5mcg on non-dialysis days",
+    },
+    "gabapentin": {
+        "normal": "300-1200mg TDS",
+        "G3a_45_60": "300-600mg BD",
+        "G3b_30_45": "300mg BD",
+        "below_30": "300mg daily",
+        "dialysis": "200-300mg post-dialysis",
+    },
+    "amoxicillin": {
+        "normal": "250-500mg TDS",
+        "below_30": "250-500mg BD",
+        "dialysis": "250-500mg; give dose post-dialysis",
+    },
+    "ciprofloxacin": {
+        "normal": "250-750mg BD",
+        "G3b_30_45": "250-500mg BD",
+        "below_30": "250-500mg daily",
+        "dialysis": "250-500mg post-dialysis",
+    },
+    "trimethoprim": {
+        "normal": "200mg BD",
+        "G3b_30_45": "200mg daily",
+        "below_30": "AVOID (hyperkalaemia risk)",
+        "dialysis": "AVOID",
+    },
+    "allopurinol": {
+        "normal": "100-300mg daily",
+        "G3b_30_45": "100mg daily",
+        "below_30": "50mg daily or on alternate days",
+        "dialysis": "100mg post-dialysis",
+    },
+    "spironolactone": {
+        "normal": "25-100mg daily",
+        "below_30": "AVOID (hyperkalaemia risk)",
+        "dialysis": "AVOID",
+    },
+}
+
+def _egfr_band(egfr: float) -> str:
+    if egfr >= 60: return "normal"
+    if egfr >= 45: return "G3a_45_60"
+    if egfr >= 30: return "G3b_30_45"
+    return "below_30"
+
+class RenalDrugRequest(BaseModel):
+    drug_name: str
+    egfr: Optional[float] = None
+    on_dialysis: bool = False
+    dialysis_type: Optional[str] = None  # haemodialysis | peritoneal
+
+@app.post("/nephrology/drug-dosing/renal-adjust")
+async def renal_drug_dosing(req: RenalDrugRequest):
+    """Renal dose adjustment for common medications based on eGFR / dialysis status."""
+
+    drug = req.drug_name.lower().strip()
+    dosing = RENAL_DOSING.get(drug)
+
+    if not dosing:
+        return {
+            "drug": req.drug_name,
+            "found": False,
+            "message": f"No specific renal dosing guidance found for '{req.drug_name}'. Consult BNF/Renal Drug Handbook.",
+            "recommended_dose": None,
+            "alerts": [],
+        }
+
+    alerts = []
+    if req.on_dialysis:
+        band = "dialysis"
+    elif req.egfr is not None:
+        band = _egfr_band(req.egfr)
+    else:
+        band = "normal"
+
+    recommended = dosing.get(band) or dosing.get("normal", "Standard dose — no specific adjustment found")
+
+    if "CONTRAINDICATED" in recommended or "AVOID" in recommended:
+        alerts.append(f"{req.drug_name} should be avoided at eGFR {req.egfr} ml/min.")
+
+    return {
+        "drug": req.drug_name,
+        "found": True,
+        "egfr": req.egfr,
+        "on_dialysis": req.on_dialysis,
+        "egfr_band": band,
+        "recommended_dose": recommended,
+        "normal_dose": dosing.get("normal"),
+        "alerts": alerts,
+        "source": "Renal Drug Handbook / BNF 2023",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SPRINT 74 — DERMATOLOGY CDSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class LesionClassifyRequest(BaseModel):
+    morphology: Optional[str] = None        # macule | papule | nodule | plaque | vesicle | pustule | ulcer etc.
+    colour: Optional[str] = None
+    borders: Optional[str] = None           # well_defined | ill_defined | irregular | scalloped
+    diameter_mm: Optional[float] = None
+    evolution: Optional[str] = None         # static | growing | changing_colour | ulcerating
+    location: Optional[str] = None          # sun_exposed | covered | acral | mucosal
+    patient_age: Optional[int] = None
+    duration_months: Optional[float] = None
+    itching: bool = False
+    bleeding: bool = False
+    personal_hx_melanoma: bool = False
+    family_hx_melanoma: bool = False
+    immunosuppressed: bool = False
+
+# ABCDE criteria helpers
+def _abcde_score(req: LesionClassifyRequest) -> int:
+    score = 0
+    if req.borders in ('irregular', 'scalloped', 'ill_defined'): score += 1
+    if req.colour and any(w in req.colour.lower() for w in ['multiple', 'varied', 'different', 'uneven']): score += 1
+    if req.diameter_mm and req.diameter_mm > 6: score += 1
+    if req.evolution and req.evolution in ('growing', 'changing_colour', 'ulcerating'): score += 1
+    return score
+
+@app.post("/dermatology/lesion/classify")
+async def classify_lesion(req: LesionClassifyRequest):
+    """Rule-based dermoscopic ABCDE risk stratification for skin lesions."""
+
+    red_flags = []
+    differentials = []
+    urgency = "routine"
+    biopsy_recommended = False
+
+    abcde = _abcde_score(req)
+
+    # Red flags
+    if req.bleeding: red_flags.append("Bleeding lesion — urgent referral.")
+    if req.evolution in ('growing', 'ulcerating', 'changing_colour'): red_flags.append("Changing/evolving lesion.")
+    if req.personal_hx_melanoma: red_flags.append("Personal history of melanoma.")
+    if req.family_hx_melanoma: red_flags.append("Family history of melanoma.")
+    if req.immunosuppressed: red_flags.append("Immunosuppression increases malignancy risk.")
+
+    # Morphology-based classification
+    morph = (req.morphology or '').lower()
+    loc = (req.location or '').lower()
+
+    if morph in ('nodule', 'plaque') and req.borders == 'irregular':
+        differentials.append("Squamous cell carcinoma (SCC)")
+        differentials.append("Basal cell carcinoma (BCC) — nodular")
+        biopsy_recommended = True
+        urgency = "urgent"
+
+    if abcde >= 3:
+        differentials.insert(0, "Melanoma — high ABCDE score")
+        urgency = "urgent"
+        biopsy_recommended = True
+        red_flags.append(f"ABCDE score {abcde}/4 — suspicious for malignancy.")
+
+    if morph == 'macule' and 'sun_exposed' in loc:
+        differentials.append("Solar lentigo / lentigo maligna")
+        if req.patient_age and req.patient_age > 60:
+            differentials.append("Lentigo maligna melanoma (consider if growing)")
+
+    if morph in ('vesicle', 'pustule'):
+        differentials.append("Herpes zoster (dermatomal) / herpes simplex")
+        differentials.append("Bullous impetigo")
+        urgency = "semi_urgent"
+
+    if morph == 'papule' and req.itching:
+        differentials.append("Eczema / dermatitis")
+        differentials.append("Lichen planus")
+        differentials.append("Psoriasis")
+
+    if morph == 'ulcer':
+        differentials.append("Venous leg ulcer")
+        differentials.append("Arterial ulcer")
+        differentials.append("Squamous cell carcinoma (Marjolin's ulcer if chronic)")
+        biopsy_recommended = True
+        urgency = "semi_urgent"
+
+    if not differentials:
+        differentials = ["Benign skin lesion — correlate clinically"]
+
+    management = []
+    if biopsy_recommended:
+        management.append("Skin biopsy (punch or excisional) for histopathological diagnosis.")
+    if urgency == "urgent":
+        management.append("Refer to dermatology / plastic surgery within 2 weeks (2-week-wait pathway).")
+    elif urgency == "semi_urgent":
+        management.append("Dermatology review within 4 weeks.")
+    else:
+        management.append("Routine dermatology review. Patient education on sun protection and self-monitoring.")
+
+    management.append("Full skin examination (total body skin survey) recommended.")
+    if req.personal_hx_melanoma or req.family_hx_melanoma:
+        management.append("6–12 monthly surveillance dermatoscopy given melanoma risk factors.")
+
+    return {
+        "abcde_score": abcde,
+        "urgency": urgency,
+        "biopsy_recommended": biopsy_recommended,
+        "differentials": differentials,
+        "red_flags": red_flags,
+        "management": management,
+    }
+
+
+class BurnFluidRequest(BaseModel):
+    weight_kg: float
+    tbsa_percent: float                     # Total Body Surface Area burned (%)
+    age_years: Optional[int] = None
+    burn_depth: Optional[str] = None        # superficial | partial | full
+    inhalation_injury: bool = False
+    time_since_burn_hours: Optional[float] = None
+
+@app.post("/dermatology/burn/fluid")
+async def burn_fluid(req: BurnFluidRequest):
+    """Parkland formula burn fluid resuscitation + referral criteria."""
+
+    # Parkland: 4 mL × weight (kg) × TBSA%
+    parkland_total = 4 * req.weight_kg * req.tbsa_percent
+    first_8h = parkland_total / 2
+    next_16h = parkland_total / 2
+
+    # Adjust for time elapsed
+    time_remaining_first_8h = None
+    rate_first_8h = None
+    if req.time_since_burn_hours is not None and req.time_since_burn_hours < 8:
+        remaining = 8 - req.time_since_burn_hours
+        time_remaining_first_8h = round(remaining, 1)
+        rate_first_8h = round(first_8h / remaining, 0) if remaining > 0 else 0
+
+    alerts = []
+    referral_criteria = []
+
+    if req.tbsa_percent >= 15:
+        referral_criteria.append("TBSA ≥15% in adults — transfer to burns unit.")
+    if req.tbsa_percent >= 10 and req.age_years and (req.age_years < 10 or req.age_years > 50):
+        referral_criteria.append("TBSA ≥10% in children <10 or adults >50 — transfer to burns unit.")
+    if req.inhalation_injury:
+        referral_criteria.append("Inhalation injury — immediate anaesthesia/ICU involvement; early intubation.")
+        alerts.append("Inhalation injury detected — airway at risk. Prepare RSI.")
+    if req.burn_depth == 'full' and req.tbsa_percent >= 5:
+        referral_criteria.append("Full thickness burns ≥5% TBSA — burns unit.")
+    if req.tbsa_percent >= 30:
+        alerts.append(f"Massive burn ({req.tbsa_percent}% TBSA). Parkland formula is a guide — titrate to urine output 0.5–1 ml/kg/h.")
+
+    fluid_type = "Lactated Ringer's solution (preferred) or 0.9% Normal Saline"
+    monitoring = [
+        "Insert urinary catheter — target urine output 0.5 ml/kg/h (adult) or 1 ml/kg/h (child <30 kg).",
+        "Avoid over-resuscitation: adjust rate based on clinical response.",
+        "Colloid (albumin 5%) after 12h for burns >40% TBSA.",
+        "Wound care: cool with tepid water for 20 min, then cover with cling film.",
+        "Analgesia: IV morphine titrated to pain score.",
+        "Tetanus prophylaxis as indicated.",
+    ]
+
+    return {
+        "weight_kg": req.weight_kg,
+        "tbsa_percent": req.tbsa_percent,
+        "parkland_total_ml": round(parkland_total, 0),
+        "first_8h_from_injury_ml": round(first_8h, 0),
+        "next_16h_ml": round(next_16h, 0),
+        "rate_first_8h_ml_per_h": round(first_8h / 8, 0),
+        "rate_next_16h_ml_per_h": round(next_16h / 16, 0),
+        "time_remaining_first_8h": time_remaining_first_8h,
+        "adjusted_rate_ml_per_h": rate_first_8h,
+        "fluid_type": fluid_type,
+        "referral_criteria": referral_criteria,
+        "alerts": alerts,
+        "monitoring": monitoring,
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

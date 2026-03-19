@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
   Pill, Baby,
-  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind
+  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -23,6 +23,8 @@ import MalariaDashboard from '../components/MalariaDashboard';
 import GeriatricsDashboard from '../components/GeriatricsDashboard';
 import NeurologyDashboard from '../components/NeurologyDashboard';
 import PulmonologyDashboard from '../components/PulmonologyDashboard';
+import NephrologyDashboard from '../components/NephrologyDashboard';
+import DermatologyDashboard from '../components/DermatologyDashboard';
 
 interface Patient {
   id: string;
@@ -72,7 +74,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology' | 'nephrology' | 'dermatology'>('overview');
 
   // AI/RAG State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -623,6 +625,28 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               <Wind className="w-4 h-4 inline mr-2" />
               Pulmonology
             </button>
+            <button
+              onClick={() => setActiveTab('nephrology')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'nephrology'
+                  ? 'border-teal-500 text-teal-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Droplets className="w-4 h-4 inline mr-2" />
+              Nephrology
+            </button>
+            <button
+              onClick={() => setActiveTab('dermatology')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'dermatology'
+                  ? 'border-rose-500 text-rose-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Eye className="w-4 h-4 inline mr-2" />
+              Dermatology
+            </button>
           </nav>
         </div>
       </div>
@@ -1074,6 +1098,32 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               <Wind className="w-5 h-5" /> Pulmonology
             </h2>
             <PulmonologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'nephrology' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-teal-900 mb-4 flex items-center gap-2">
+              <Droplets className="w-5 h-5" /> Nephrology
+            </h2>
+            <NephrologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'dermatology' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-rose-900 mb-4 flex items-center gap-2">
+              <Eye className="w-5 h-5" /> Dermatology
+            </h2>
+            <DermatologyDashboard
               patientId={patientId}
               providerId={currentUser?.id || ''}
               tenantSubdomain={tenantSlug!}

@@ -10222,6 +10222,194 @@ export const cdssApi = {
     return res.data;
   },
 
+  // ── Dermatology ────────────────────────────────────────────────────────────
+
+  getDermatologyLesions: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/dermatology/patient/${patientId}/lesion`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addDermatologyLesion: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/dermatology/patient/${patientId}/lesion`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  getDermatologyWounds: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/dermatology/patient/${patientId}/wound`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addDermatologyWound: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/dermatology/patient/${patientId}/wound`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  getDermatologyBurns: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/dermatology/patient/${patientId}/burn`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addDermatologyBurn: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/dermatology/patient/${patientId}/burn`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  getDermatologyNotes: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/dermatology/patient/${patientId}/note`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addDermatologyNote: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/dermatology/patient/${patientId}/note`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  classifyDermatologyLesion: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post('/dermatology/cdss/lesion/classify', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  calculateBurnFluid: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post('/dermatology/cdss/burn/fluid', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  // ── Nephrology ─────────────────────────────────────────────────────────────
+
+  getNephrologyCkd: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/nephrology/patient/${patientId}/ckd`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addNephrologyCkd: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/nephrology/patient/${patientId}/ckd`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  getNephrologyDialysis: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/nephrology/patient/${patientId}/dialysis`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addNephrologyDialysis: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/nephrology/patient/${patientId}/dialysis`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  getNephrologyFluid: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/nephrology/patient/${patientId}/fluid`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addNephrologyFluid: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/nephrology/patient/${patientId}/fluid`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  getNephrologyBiopsies: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/nephrology/patient/${patientId}/biopsy`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addNephrologyBiopsy: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/nephrology/patient/${patientId}/biopsy`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  getNephrologyTransplants: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/nephrology/patient/${patientId}/transplant`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  addNephrologyTransplant: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post(`/nephrology/patient/${patientId}/transplant`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+    return res.data;
+  },
+
+  stageCkd: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post('/nephrology/cdss/ckd/stage', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  assessDialysisAdequacy: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post('/nephrology/cdss/dialysis/adequacy', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  renalDrugDosing: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post('/nephrology/cdss/drug-dosing/renal-adjust', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
   // ── Pulmonology ────────────────────────────────────────────────────────────
 
   getPulmonologySpirometry: async (patientId: string, tenantSubdomain: string) => {

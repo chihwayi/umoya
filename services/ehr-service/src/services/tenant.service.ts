@@ -182,6 +182,15 @@ import { CopdAssessment } from '../entities/copd-assessment.entity';
 import { AsthmaRecord } from '../entities/asthma-record.entity';
 import { PeakFlowDiary } from '../entities/peak-flow-diary.entity';
 import { OxygenTherapyRecord } from '../entities/oxygen-therapy-record.entity';
+import { CkdAssessment } from '../entities/ckd-assessment.entity';
+import { DialysisRecord } from '../entities/dialysis-record.entity';
+import { FluidBalanceRecord } from '../entities/fluid-balance-record.entity';
+import { RenalBiopsy } from '../entities/renal-biopsy.entity';
+import { TransplantRecord } from '../entities/transplant-record.entity';
+import { SkinLesion } from '../entities/skin-lesion.entity';
+import { WoundAssessment } from '../entities/wound-assessment.entity';
+import { BurnAssessment } from '../entities/burn-assessment.entity';
+import { DermatologyNote } from '../entities/dermatology-note.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface TenantDhis2Config {
@@ -536,6 +545,15 @@ export class TenantService {
         AsthmaRecord,
         PeakFlowDiary,
         OxygenTherapyRecord,
+        CkdAssessment,
+        DialysisRecord,
+        FluidBalanceRecord,
+        RenalBiopsy,
+        TransplantRecord,
+        SkinLesion,
+        WoundAssessment,
+        BurnAssessment,
+        DermatologyNote,
         MalariaCase,
         MalariaTest,
         MalariaTreatment,
