@@ -133,6 +133,13 @@ import { StreamingDiagnosisController } from './controllers/streaming-diagnosis.
 import { SmartSchedulingController } from './controllers/smart-scheduling.controller';
 import { SmartDefaultsController } from './controllers/smart-defaults.controller';
 import { FormularyOptimizationController } from './controllers/formulary-optimization.controller';
+import { PredictiveRiskController } from './controllers/predictive-risk.controller';
+import { FederatedLearningController } from './controllers/federated-learning.controller';
+import { HimisReportingController } from './controllers/himis-reporting.controller';
+import { FhirInboundController } from './controllers/fhir-inbound.controller';
+import { MultilingualEducationController } from './controllers/multilingual-education.controller';
+import { OfflineSyncController } from './controllers/offline-sync.controller';
+import { IotController } from './controllers/iot.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -316,6 +323,13 @@ import { StreamingDiagnosisService } from './services/streaming-diagnosis.servic
 import { SmartSchedulingService } from './services/smart-scheduling.service';
 import { SmartDefaultsService } from './services/smart-defaults.service';
 import { FormularyOptimizationService } from './services/formulary-optimization.service';
+import { PredictiveRiskService } from './services/predictive-risk.service';
+import { FederatedLearningService } from './services/federated-learning.service';
+import { HimisReportingService } from './services/himis-reporting.service';
+import { FhirInboundService } from './services/fhir-inbound.service';
+import { MultilingualEducationService } from './services/multilingual-education.service';
+import { OfflineSyncService } from './services/offline-sync.service';
+import { IotService } from './services/iot.service';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -469,6 +483,13 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     SmartSchedulingController,
     SmartDefaultsController,
     FormularyOptimizationController,
+    PredictiveRiskController,
+    FederatedLearningController,
+    HimisReportingController,
+    FhirInboundController,
+    MultilingualEducationController,
+    OfflineSyncController,
+    IotController,
   ],
   providers: [
     AuthService,
@@ -652,6 +673,13 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     SmartSchedulingService,
     SmartDefaultsService,
     FormularyOptimizationService,
+    PredictiveRiskService,
+    FederatedLearningService,
+    HimisReportingService,
+    FhirInboundService,
+    MultilingualEducationService,
+    OfflineSyncService,
+    IotService,
     VoiceTranscriptionGateway,
     RolesGuard,
     JwtStrategy,

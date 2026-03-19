@@ -898,6 +898,55 @@ export class DatabaseProvisioningService {
         description: 'formulary_ai_suggestions table; ALTER drugs add generic_name_canonical, formulary_tier, etc.',
         statements: () => this.getSprint88FormularyOptimizationStatements(),
       },
+      {
+        id: 'sprint89_predictive_risk',
+        label: 'Sprint 89 - Predictive Deterioration & Readmission',
+        version: '2026.03.19',
+        description: 'deterioration_predictions, readmission_predictions tables',
+        statements: () => this.getSprint89PredictiveRiskStatements(),
+      },
+      {
+        id: 'sprint90_federated_learning',
+        label: 'Sprint 90 - Federated Learning Infrastructure',
+        version: '2026.03.19',
+        description: 'fl_rounds, fl_participation_logs tables',
+        statements: () => this.getSprint90FederatedLearningStatements(),
+      },
+      {
+        id: 'sprint91_himis_reporting',
+        label: 'Sprint 91 - MOHCC HIMIS + OpenMRS Migration',
+        version: '2026.03.19',
+        description: 'mohcc_report_submissions, openmrs_migration_logs tables',
+        statements: () => this.getSprint91HimisReportingStatements(),
+      },
+      {
+        id: 'sprint92_fhir_inbound',
+        label: 'Sprint 92 - Bidirectional FHIR Inbound',
+        version: '2026.03.19',
+        description: 'fhir_ingestion_logs table',
+        statements: () => this.getSprint92FhirInboundStatements(),
+      },
+      {
+        id: 'sprint93_multilingual_education',
+        label: 'Sprint 93 - Multilingual Patient Education',
+        version: '2026.03.19',
+        description: 'patient_education_materials table',
+        statements: () => this.getSprint93MultilingualEducationStatements(),
+      },
+      {
+        id: 'sprint94_offline_sync',
+        label: 'Sprint 94 - Offline Sync PWA',
+        version: '2026.03.19',
+        description: 'sync_queue_logs table',
+        statements: () => this.getSprint94OfflineSyncStatements(),
+      },
+      {
+        id: 'sprint95_iot_wearables',
+        label: 'Sprint 95 - IoT / Wearables Integration',
+        version: '2026.03.19',
+        description: 'iot_device_registrations, iot_data_ingestions tables',
+        statements: () => this.getSprint95IotWearablesStatements(),
+      },
     ];
   }
 
@@ -14401,6 +14450,202 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint89PredictiveRiskStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS deterioration_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        admission_id UUID,
+        prediction_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deterioration_score NUMERIC(5,2) NOT NULL DEFAULT 0,
+        predicted_event_type VARCHAR(50),
+        predicted_timeframe_hours INTEGER,
+        feature_contributions JSONB NOT NULL DEFAULT '{}',
+        triggered_alert BOOLEAN NOT NULL DEFAULT FALSE,
+        model_used VARCHAR(50) DEFAULT 'MEWS',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_det_pred_patient ON deterioration_predictions(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_det_pred_alert ON deterioration_predictions(triggered_alert) WHERE triggered_alert = TRUE`,
+      `CREATE TABLE IF NOT EXISTS readmission_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        discharge_id UUID,
+        prediction_date DATE NOT NULL,
+        readmission_30day_risk NUMERIC(5,4) NOT NULL DEFAULT 0,
+        risk_category VARCHAR(20) NOT NULL DEFAULT 'low',
+        key_risk_factors JSONB NOT NULL DEFAULT '[]',
+        recommended_followup_interval INTEGER,
+        prediction_model VARCHAR(50) DEFAULT 'LACE+',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_readm_pred_patient ON readmission_predictions(patient_id)`,
+    ];
+  }
+
+  private getSprint90FederatedLearningStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS fl_rounds (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        round_number INTEGER NOT NULL,
+        global_model_version VARCHAR(100) NOT NULL,
+        model_type VARCHAR(50) NOT NULL,
+        participating_tenants JSONB NOT NULL DEFAULT '[]',
+        aggregated_metrics JSONB NOT NULL DEFAULT '{}',
+        model_weights_ref TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        initiated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_fl_rounds_type ON fl_rounds(model_type)`,
+      `CREATE TABLE IF NOT EXISTS fl_participation_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        round_id UUID NOT NULL,
+        tenant_subdomain VARCHAR(100) NOT NULL,
+        local_model_metrics JSONB NOT NULL DEFAULT '{}',
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        gradient_norm NUMERIC(10,6),
+        privacy_epsilon NUMERIC(10,6),
+        status VARCHAR(20) NOT NULL DEFAULT 'submitted',
+        submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_fl_logs_round ON fl_participation_logs(round_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_fl_logs_tenant ON fl_participation_logs(tenant_subdomain)`,
+    ];
+  }
+
+  private getSprint91HimisReportingStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS mohcc_report_submissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        report_type VARCHAR(50) NOT NULL,
+        period_label VARCHAR(20) NOT NULL,
+        facility_code VARCHAR(50),
+        payload JSONB NOT NULL DEFAULT '{}',
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        response_code VARCHAR(10),
+        response_message TEXT,
+        submitted_by VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        submitted_at TIMESTAMPTZ
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_mohcc_subs_period ON mohcc_report_submissions(period_label)`,
+      `CREATE INDEX IF NOT EXISTS idx_mohcc_subs_type ON mohcc_report_submissions(report_type)`,
+      `CREATE TABLE IF NOT EXISTS openmrs_migration_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        batch_id VARCHAR(100) NOT NULL,
+        resource_type VARCHAR(50) NOT NULL,
+        openmrs_uuid VARCHAR(100),
+        medicore_id UUID,
+        status VARCHAR(20) NOT NULL DEFAULT 'migrated',
+        error_details TEXT,
+        raw_record JSONB,
+        migrated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_openmrs_batch ON openmrs_migration_logs(batch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_openmrs_uuid ON openmrs_migration_logs(openmrs_uuid)`,
+    ];
+  }
+
+  private getSprint92FhirInboundStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS fhir_ingestion_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_system VARCHAR(100) NOT NULL,
+        bundle_id VARCHAR(200),
+        received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        resources_received INTEGER NOT NULL DEFAULT 0,
+        resources_imported INTEGER NOT NULL DEFAULT 0,
+        conflicts_detected INTEGER NOT NULL DEFAULT 0,
+        conflicts_resolved INTEGER NOT NULL DEFAULT 0,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        error_details JSONB
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_fhir_ingestion_source ON fhir_ingestion_logs(source_system)`,
+      `CREATE INDEX IF NOT EXISTS idx_fhir_ingestion_status ON fhir_ingestion_logs(status)`,
+    ];
+  }
+
+  private getSprint93MultilingualEducationStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS patient_education_materials (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        encounter_id UUID,
+        topic VARCHAR(200) NOT NULL,
+        language VARCHAR(10) NOT NULL DEFAULT 'en',
+        reading_level INTEGER NOT NULL DEFAULT 6,
+        content TEXT NOT NULL DEFAULT '',
+        content_html TEXT,
+        pdf_storage_key VARCHAR(500),
+        ai_generated BOOLEAN NOT NULL DEFAULT FALSE,
+        delivery_method VARCHAR(20),
+        delivered_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_edu_patient ON patient_education_materials(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_edu_language ON patient_education_materials(language)`,
+    ];
+  }
+
+  private getSprint94OfflineSyncStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS sync_queue_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id VARCHAR(100) NOT NULL,
+        operation_type VARCHAR(20) NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id UUID,
+        payload JSONB NOT NULL DEFAULT '{}',
+        client_timestamp TIMESTAMPTZ NOT NULL,
+        server_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        sync_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        conflict_details JSONB
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_sync_client ON sync_queue_logs(client_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sync_status ON sync_queue_logs(sync_status)`,
+      `CREATE INDEX IF NOT EXISTS idx_sync_entity ON sync_queue_logs(entity_type, entity_id)`,
+    ];
+  }
+
+  private getSprint95IotWearablesStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS iot_device_registrations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        device_type VARCHAR(50) NOT NULL,
+        device_name VARCHAR(100),
+        manufacturer VARCHAR(100),
+        model VARCHAR(100),
+        serial_number VARCHAR(100),
+        oauth_token_encrypted TEXT,
+        webhook_url TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        last_sync_at TIMESTAMPTZ,
+        registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_iot_device_patient ON iot_device_registrations(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_iot_device_status ON iot_device_registrations(status)`,
+      `CREATE TABLE IF NOT EXISTS iot_data_ingestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        device_id UUID NOT NULL,
+        measurement_type VARCHAR(100) NOT NULL,
+        value NUMERIC(12,4) NOT NULL,
+        unit VARCHAR(20),
+        measured_at TIMESTAMPTZ NOT NULL,
+        ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        fhir_observation_id VARCHAR(200),
+        ai_processed BOOLEAN NOT NULL DEFAULT FALSE,
+        alert_triggered BOOLEAN NOT NULL DEFAULT FALSE
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_iot_data_patient ON iot_data_ingestions(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_iot_data_device ON iot_data_ingestions(device_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_iot_data_type ON iot_data_ingestions(measurement_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_iot_data_alert ON iot_data_ingestions(alert_triggered) WHERE alert_triggered = TRUE`,
     ];
   }
 
