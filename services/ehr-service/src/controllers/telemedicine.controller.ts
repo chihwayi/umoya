@@ -84,7 +84,7 @@ export class TelemedicineController {
   }
 
   @Put('consultations/:id')
-  @ApiOperation({ summary: 'Update consultation' })
+  @ApiOperation({ summary: 'Update consultation fields (scheduled time, type, notes). Status changes are validated via state machine.' })
   @ApiParam({ name: 'id', description: 'Consultation ID' })
   @ApiResponse({ status: 200, description: 'Consultation updated successfully' })
   async updateConsultation(
@@ -93,12 +93,7 @@ export class TelemedicineController {
     @Req() req: RequestWithTenant,
   ) {
     const userId = (req.user as any)?.id || (req.user as any)?.userId;
-    // Update individual fields
-    if (dto.status) {
-      return this.telemedicineService.updateConsultationStatus(req.tenantDb, id, dto.status, userId);
-    }
-    // TODO: Implement full update method
-    return this.telemedicineService.getConsultation(req.tenantDb, id);
+    return this.telemedicineService.updateConsultation(req.tenantDb, id, dto, userId);
   }
 
   @Post('consultations/:id/join')
@@ -128,6 +123,28 @@ export class TelemedicineController {
   @ApiResponse({ status: 200, description: 'Meeting URL retrieved successfully' })
   async getMeetingUrl(@Param('id') id: string, @Req() req: RequestWithTenant) {
     return this.telemedicineService.getMeetingUrl(req.tenantDb, id);
+  }
+
+  @Get('consultations/:id/token')
+  @ApiOperation({ summary: 'Get a signed Daily.co meeting token for the requesting participant' })
+  @ApiParam({ name: 'id', description: 'Consultation ID' })
+  @ApiQuery({ name: 'role', enum: ['doctor', 'patient'], required: true })
+  @ApiResponse({ status: 200, description: 'Meeting token returned' })
+  async getMeetingToken(
+    @Param('id') id: string,
+    @Query('role') role: 'doctor' | 'patient',
+    @Req() req: RequestWithTenant,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.telemedicineService.getMeetingToken(req.tenantDb, id, userId, role);
+  }
+
+  @Get('consultations/:id/status')
+  @ApiOperation({ summary: 'Get live room status (participant count) from Daily.co' })
+  @ApiParam({ name: 'id', description: 'Consultation ID' })
+  @ApiResponse({ status: 200, description: 'Room status from video provider' })
+  async getRoomStatus(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.telemedicineService.getRoomStatus(req.tenantDb, id);
   }
 
   @Post('consultations/:id/technical-issue')

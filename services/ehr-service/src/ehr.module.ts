@@ -344,7 +344,9 @@ import { PatientAiService } from './services/patient-ai.service';
 import { ClinicalTrialMatchingService } from './services/clinical-trial-matching.service';
 import { SupplyChainAiService } from './services/supply-chain-ai.service';
 import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
+import { TelemedicineGateway } from './gateways/telemedicine.gateway';
 import { ModelRegistryService } from './services/model-registry.service';
+import { TelemedicinePostVisitBridgeService } from './services/telemedicine-postvisit-bridge.service';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -614,6 +616,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DoctorAvailabilityService,
     TelemedicineService,
     TelemedicineVideoService,
+    TelemedicineGateway,
+    TelemedicinePostVisitBridgeService,
     RemoteMonitoringService,
     TelemedicineConsentService,
     DigitalPrescriptionService,

@@ -1,8 +1,12 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
 import { TelemedicineVideoService } from './telemedicine-video.service';
 import { BillingService } from './billing.service';
 import { NotificationsService } from './notifications.service';
+import { TenantService } from './tenant.service';
+import { TelemedicineGateway } from '../gateways/telemedicine.gateway';
+import { TelemedicinePostVisitBridgeService } from './telemedicine-postvisit-bridge.service';
 import {
   CreateTelemedicineConsultationDto,
   UpdateTelemedicineConsultationDto,
@@ -10,6 +14,16 @@ import {
   RecordSatisfactionDto,
   TelemedicineConsultationQueryDto,
 } from '../dto/telemedicine.dto';
+
+// Valid status transitions — any other move throws BadRequestException
+const STATUS_TRANSITIONS: Record<string, string[]> = {
+  scheduled:       ['in_progress', 'cancelled'],
+  in_progress:     ['completed', 'technical_issue', 'cancelled'],
+  technical_issue: ['in_progress', 'cancelled'],
+  completed:       [],
+  cancelled:       [],
+  no_show:         [],
+};
 
 @Injectable()
 export class TelemedicineService {
@@ -19,7 +33,63 @@ export class TelemedicineService {
     private readonly videoService: TelemedicineVideoService,
     private readonly billingService: BillingService,
     private readonly notificationsService: NotificationsService,
+    @Optional() private readonly tenantService?: TenantService,
+    @Optional() private readonly teleGateway?: TelemedicineGateway,
+    @Optional() private readonly postVisitBridge?: TelemedicinePostVisitBridgeService,
   ) {}
+
+  // ── 15-minute reminder cron ──────────────────────────────────────────────────
+
+  /**
+   * Runs every 5 minutes. Finds consultations starting in 10–20 min
+   * that haven't had a reminder sent yet and fires an SMS to the patient.
+   */
+  @Cron('*/5 * * * *')
+  async sendUpcomingConsultationReminders() {
+    const tenants = await this.tenantService?.getAllActiveTenants?.().catch(() => []) ?? [];
+    for (const subdomain of tenants) {
+      const tenantDb = await this.tenantService?.getTenantDatabase(subdomain).catch(() => null);
+      if (!tenantDb) continue;
+      await this.sendRemindersForTenant(tenantDb).catch(e =>
+        this.logger.warn(`Reminder cron failed for ${subdomain}: ${e?.message}`),
+      );
+    }
+  }
+
+  private async sendRemindersForTenant(tenantDb: DataSource): Promise<void> {
+    const upcoming = await tenantDb.query(`
+      SELECT tc.id, tc.patient_id, tc.doctor_id, tc.scheduled_start_time,
+             p.phone_number, p.first_name,
+             u.first_name || ' ' || u.last_name AS doctor_name
+      FROM telemedicine_consultations tc
+      JOIN patients p ON p.id = tc.patient_id
+      LEFT JOIN users u ON u.id = tc.doctor_id
+      WHERE tc.status = 'scheduled'
+        AND tc.scheduled_start_time BETWEEN NOW() + INTERVAL '10 minutes'
+                                        AND NOW() + INTERVAL '20 minutes'
+        AND tc.reminder_sent_at IS NULL
+    `).catch(() => []);
+
+    for (const row of upcoming) {
+      if (!row.phone_number) continue;
+
+      const time = new Date(row.scheduled_start_time).toLocaleString('en-ZW', {
+        timeStyle: 'short', timeZone: 'Africa/Harare',
+      });
+
+      await this.notificationsService.sendSms({
+        phone: row.phone_number,
+        message:
+          `Reminder: Your telemedicine consultation with ${row.doctor_name ?? 'your doctor'} ` +
+          `starts at ${time} — in about 15 minutes. Log in to your patient portal now to join.`,
+      }).catch(e => this.logger.warn(`Reminder SMS failed for patient ${row.patient_id}: ${e?.message}`));
+
+      await tenantDb.query(
+        `UPDATE telemedicine_consultations SET reminder_sent_at = NOW() WHERE id = $1`,
+        [row.id],
+      ).catch(() => {});
+    }
+  }
 
   private ensureTenantDb(tenantDb: DataSource) {
     if (!tenantDb) {
@@ -70,9 +140,72 @@ export class TelemedicineService {
       ],
     );
 
-    // TODO: Send notification to patient about scheduled consultation
-    // Notification can be sent via SMS using notificationsService.sendSms()
+    // SMS: notify patient of scheduled consultation
+    const scheduledTime = new Date(dto.scheduledStartTime).toLocaleString('en-ZW', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Harare',
+    });
+    this.sendSmsToPatient(tenantDb, dto.patientId,
+      `Your telemedicine consultation has been scheduled for ${scheduledTime}. ` +
+      `You will receive a reminder 15 minutes before. Log in to your patient portal to join.`,
+    );
+
     this.logger.log(`Telemedicine consultation ${result[0].id} scheduled for ${dto.scheduledStartTime}`);
+
+    return result[0];
+  }
+
+  /**
+   * Full update of editable consultation fields (scheduled time, type, notes).
+   * Status changes must go through updateConsultationStatus to enforce the state machine.
+   */
+  async updateConsultation(
+    tenantDb: DataSource,
+    id: string,
+    dto: UpdateTelemedicineConsultationDto,
+    userId?: string,
+  ) {
+    this.ensureTenantDb(tenantDb);
+
+    const updates: string[] = ['updated_at = NOW()'];
+    const params: any[] = [];
+
+    if (dto.scheduledStartTime !== undefined) {
+      params.push(dto.scheduledStartTime);
+      updates.push(`scheduled_start_time = $${params.length}`);
+    }
+    if (dto.consultationType !== undefined) {
+      params.push(dto.consultationType);
+      updates.push(`consultation_type = $${params.length}`);
+    }
+    if (dto.notes !== undefined) {
+      params.push(dto.notes);
+      updates.push(`notes = $${params.length}`);
+    }
+    if (dto.recordingEnabled !== undefined) {
+      params.push(dto.recordingEnabled);
+      updates.push(`recording_enabled = $${params.length}`);
+    }
+    if (userId) {
+      params.push(userId);
+      updates.push(`updated_by = $${params.length}`);
+    }
+    // Status changes routed through state machine
+    if (dto.status !== undefined) {
+      return this.updateConsultationStatus(tenantDb, id, dto.status, userId);
+    }
+
+    params.push(id);
+    const result = await tenantDb.query(
+      `UPDATE telemedicine_consultations
+       SET ${updates.join(', ')}
+       WHERE id = $${params.length}
+       RETURNING *`,
+      params,
+    );
+
+    if (!result.length) {
+      throw new NotFoundException(`Telemedicine consultation ${id} not found`);
+    }
 
     return result[0];
   }
@@ -114,7 +247,7 @@ export class TelemedicineService {
   }
 
   /**
-   * Update consultation status
+   * Update consultation status — validates state machine transitions.
    */
   async updateConsultationStatus(
     tenantDb: DataSource,
@@ -124,20 +257,30 @@ export class TelemedicineService {
   ) {
     this.ensureTenantDb(tenantDb);
 
+    const consultation = await this.getConsultation(tenantDb, id);
+    const currentStatus: string = consultation.status;
+    const allowed = STATUS_TRANSITIONS[currentStatus] ?? [];
+
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(
+        `Invalid status transition: ${currentStatus} → ${status}. Allowed: ${allowed.join(', ') || 'none (terminal state)'}`,
+      );
+    }
+
     const updates: string[] = ['status = $1', 'updated_at = NOW()'];
     const params: any[] = [status];
 
     if (userId) {
-      updates.push('updated_by = $2');
+      updates.push(`updated_by = $${params.length + 1}`);
       params.push(userId);
     }
 
     params.push(id);
 
     const result = await tenantDb.query(
-      `UPDATE telemedicine_consultations 
-       SET ${updates.join(', ')} 
-       WHERE id = $${params.length} 
+      `UPDATE telemedicine_consultations
+       SET ${updates.join(', ')}
+       WHERE id = $${params.length}
        RETURNING *`,
       params,
     );
@@ -150,7 +293,7 @@ export class TelemedicineService {
   }
 
   /**
-   * Join consultation
+   * Join consultation — updates DB and broadcasts tele:participant_joined via WebSocket.
    */
   async joinConsultation(
     tenantDb: DataSource,
@@ -160,6 +303,10 @@ export class TelemedicineService {
     this.ensureTenantDb(tenantDb);
 
     const consultation = await this.getConsultation(tenantDb, consultationId);
+
+    if (consultation.status === 'completed' || consultation.status === 'cancelled') {
+      throw new BadRequestException(`Cannot join a ${consultation.status} consultation`);
+    }
 
     const updates: string[] = [];
     const params: any[] = [];
@@ -174,22 +321,27 @@ export class TelemedicineService {
       if (!consultation.actual_start_time) {
         updates.push('actual_start_time = NOW()', "status = 'in_progress'");
       }
-    }
-
-    if (updates.length === 0) {
-      throw new BadRequestException('Invalid role');
+    } else {
+      throw new BadRequestException('Invalid role — must be patient or doctor');
     }
 
     updates.push('updated_at = NOW()');
     params.push(consultationId);
 
     const result = await tenantDb.query(
-      `UPDATE telemedicine_consultations 
-       SET ${updates.join(', ')} 
-       WHERE id = $${params.length} 
+      `UPDATE telemedicine_consultations
+       SET ${updates.join(', ')}
+       WHERE id = $${params.length}
        RETURNING *`,
       params,
     );
+
+    // Broadcast join event — other participant sees this in real time
+    this.teleGateway?.broadcastToConsultation(consultationId, 'tele:participant_joined', {
+      userId: dto.userId,
+      role: dto.role,
+      timestamp: new Date().toISOString(),
+    });
 
     return result[0];
   }
@@ -240,9 +392,9 @@ export class TelemedicineService {
 
     // Create bill for completed consultation
     try {
-      const telehealthFee = process.env.TELEHEALTH_CONSULTATION_FEE 
-        ? parseFloat(process.env.TELEHEALTH_CONSULTATION_FEE) 
-        : 30.0; // Default telehealth fee
+      const telehealthFee = process.env.TELEHEALTH_CONSULTATION_FEE
+        ? parseFloat(process.env.TELEHEALTH_CONSULTATION_FEE)
+        : 30.0;
 
       const bill = await this.billingService.createBill(
         {
@@ -268,19 +420,59 @@ export class TelemedicineService {
         userId || consultation.doctor_id,
       );
 
-      // TODO: Send notification to patient about bill
-      // Notification can be sent via SMS using notificationsService.sendSms()
       this.logger.log(`Bill created for consultation ${id}: ${bill.id}`);
+
+      // SMS: notify patient a bill has been raised
+      this.sendSmsToPatient(tenantDb, consultation.patient_id,
+        `Your telemedicine consultation is complete (${durationMinutes} min). ` +
+        `A bill of $${telehealthFee.toFixed(2)} has been raised. View it in your patient portal.`,
+      );
     } catch (error) {
       this.logger.error(`Failed to create bill for consultation ${id}:`, error);
-      // Don't fail the consultation completion if billing fails
+      // Don't fail consultation completion if billing fails
     }
 
-    // TODO: Send completion notification
-    // Notification can be sent via SMS using notificationsService.sendSms()
-    this.logger.log(`Consultation ${id} completed successfully`);
+    // Broadcast consultation_ended to both participants via WebSocket
+    this.teleGateway?.broadcastToConsultation(id, 'tele:consultation_ended', {
+      consultationId: id,
+      endedAt: actualEndTime.toISOString(),
+      durationMinutes,
+    });
+
+    // SMS: completion confirmation to patient
+    this.sendSmsToPatient(tenantDb, consultation.patient_id,
+      `Your telemedicine consultation with ${consultation.doctor_name ?? 'your doctor'} has ended. ` +
+      `Duration: ${durationMinutes} minute(s). Your post-visit summary will be ready shortly.`,
+    );
+
+    // Bridge → auto-create post-visit session + attach recording (async, non-blocking)
+    this.postVisitBridge?.onConsultationEnded(tenantDb, {
+      ...result[0],
+      doctor_name: consultation.doctor_name,
+      patient_name: consultation.patient_name,
+    }).catch(e => this.logger.error(`Post-visit bridge error for ${id}: ${e?.message}`));
+
+    this.logger.log(`Consultation ${id} completed (${durationMinutes} min)`);
 
     return result[0];
+  }
+
+  /**
+   * Fire-and-forget SMS to patient — looks up phone number from patients table.
+   * Swallows errors so it never fails the parent operation.
+   */
+  private sendSmsToPatient(tenantDb: DataSource, patientId: string, message: string): void {
+    tenantDb.query(
+      `SELECT phone_number FROM patients WHERE id = $1`,
+      [patientId],
+    ).then(rows => {
+      const phone: string | undefined = rows[0]?.phone_number;
+      if (phone) {
+        this.notificationsService.sendSms({ phone, message }).catch(e =>
+          this.logger.warn(`SMS to patient ${patientId} failed: ${e?.message}`),
+        );
+      }
+    }).catch(() => {/* no-op */});
   }
 
   /**
@@ -462,6 +654,69 @@ export class TelemedicineService {
       meetingPassword: consultation.meeting_password,
       meetingRoomId: consultation.meeting_room_id,
     };
+  }
+
+  /**
+   * Get a signed Daily.co meeting token for a participant.
+   * Validates the user is the patient or doctor on this consultation before issuing.
+   */
+  async getMeetingToken(
+    tenantDb: DataSource,
+    consultationId: string,
+    userId: string,
+    role: 'doctor' | 'patient',
+  ) {
+    this.ensureTenantDb(tenantDb);
+
+    const consultation = await this.getConsultation(tenantDb, consultationId);
+
+    if (!consultation.meeting_room_id) {
+      throw new BadRequestException('Meeting room not created for this consultation');
+    }
+
+    if (consultation.status === 'completed' || consultation.status === 'cancelled') {
+      throw new BadRequestException(`Cannot join a ${consultation.status} consultation`);
+    }
+
+    // Authorisation: ensure the requesting user is the patient or doctor on record
+    if (role === 'doctor' && consultation.doctor_id !== userId) {
+      throw new BadRequestException('Requesting user is not the assigned doctor for this consultation');
+    }
+    if (role === 'patient' && consultation.patient_id !== userId) {
+      throw new BadRequestException('Requesting user is not the patient for this consultation');
+    }
+
+    const displayName = role === 'doctor' ? consultation.doctor_name : consultation.patient_name;
+    const token = await this.videoService.getMeetingToken(
+      consultation.meeting_room_id,
+      userId,
+      role,
+      displayName,
+    );
+
+    return {
+      token,
+      meetingUrl: consultation.meeting_url,
+      meetingRoomId: consultation.meeting_room_id,
+      role,
+      expiresInSeconds: 7200,
+    };
+  }
+
+  /**
+   * Get live room status from Daily.co (real participant count).
+   */
+  async getRoomStatus(tenantDb: DataSource, consultationId: string) {
+    this.ensureTenantDb(tenantDb);
+
+    const consultation = await this.getConsultation(tenantDb, consultationId);
+
+    if (!consultation.meeting_room_id) {
+      return { isActive: false, participants: 0, meetingRoomId: null };
+    }
+
+    const status = await this.videoService.getMeetingStatus(consultationId, consultation.meeting_room_id);
+    return { ...status, meetingRoomId: consultation.meeting_room_id };
   }
 }
 

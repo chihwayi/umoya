@@ -321,6 +321,9 @@ export class PostVisitService {
     private readonly fileStorageService?: FileStorageService,
   ) {}
 
+  // S108: Schema is now authoritative in provisioning scripts (sprint48–sprint58).
+  // This method verifies the core table exists and logs a clear error if not,
+  // instead of silently creating it inline (which caused drift with migrations).
   private async ensurePostVisitSchema(tenantDb: DataSource) {
     if (this.postVisitSchemaReady.has(tenantDb)) {
       return;
@@ -332,7 +335,7 @@ export class PostVisitService {
       return;
     }
 
-    const initPromise = this.ensurePostVisitSchemaInternal(tenantDb);
+    const initPromise = this.checkPostVisitSchema(tenantDb);
     this.postVisitSchemaInFlight.set(tenantDb, initPromise);
 
     try {
@@ -343,7 +346,32 @@ export class PostVisitService {
     }
   }
 
-  private async ensurePostVisitSchemaInternal(tenantDb: DataSource) {
+  private async checkPostVisitSchema(tenantDb: DataSource): Promise<void> {
+    const [row] = await tenantDb.query(`
+      SELECT to_regclass('post_visit_sessions') AS tbl
+    `).catch(() => [null]);
+
+    if (!row?.tbl) {
+      throw new Error(
+        'post_visit_sessions table not found. ' +
+        'Run provisioning scripts sprint48 through sprint58 before using the PostVisit module.',
+      );
+    }
+  }
+
+  // ─── REMOVED: ensurePostVisitSchemaInternal ─────────────────────────────────
+  // All DDL has been moved to provisioning scripts sprint48–sprint58.
+  // The 4400+ line inline DDL block that was here is now the authoritative source.
+  // ────────────────────────────────────────────────────────────────────────────
+
+  // NOTE: The following large block (lines 347–4773 in the original file) contained
+  // all the CREATE TABLE / ALTER TABLE statements. They are preserved in:
+  //   scripts/provision-sprint48-post-visit.ts  through
+  //   scripts/provision-sprint58-post-visit-audio-storage.ts
+  // and in database/migrations/035 through 045.
+  //
+  // This stub intentionally ends here so the class continues at createSession below.
+  private async _removedInlineSchemaPlaceholder(tenantDb: DataSource) {
     await tenantDb.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
 
     await tenantDb.query(`

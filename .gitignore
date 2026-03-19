@@ -88,6 +88,11 @@ jspm_packages/
 # IDE
 .vscode/
 .idea/
+.cursor/
+.claude/
+
+# Python virtual envs
+.venv-cli/
 *.swp
 *.swo
 *~
