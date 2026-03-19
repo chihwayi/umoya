@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TenantService } from './tenant.service';
 import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
 import { ModelFairnessReport } from '../entities/model-fairness-report.entity';
+import { FederatedLearningService } from './federated-learning.service';
 import axios from 'axios';
 
 @Injectable()
@@ -13,7 +14,11 @@ export class ModelMonitoringService {
   // AUC baselines — populated on first compute, used to detect drift
   private baselines: Record<string, number> = {};
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    @Inject(forwardRef(() => FederatedLearningService))
+    private readonly federatedLearning: FederatedLearningService,
+  ) {}
 
   // ── Manual / on-demand evaluation ─────────────────────────────────────────
 
@@ -60,6 +65,9 @@ export class ModelMonitoringService {
 
     if (driftDetected) {
       this.logger.warn(`Model drift detected for ${modelName} in ${subdomain}: AUC dropped from ${this.baselines[baselineKey].toFixed(3)} to ${metrics.auc_roc?.toFixed(3)}`);
+      // Auto-trigger retraining when drift is detected
+      this.federatedLearning.initiateRound(subdomain, modelName).catch(e =>
+        this.logger.error(`Drift-triggered retrain failed for ${modelName}: ${e?.message}`));
     }
 
     // Compute fairness

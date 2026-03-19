@@ -989,6 +989,13 @@ export class DatabaseProvisioningService {
         description: 'pharmacy_inventory, stockout_predictions, procurement_alerts tables',
         statements: () => this.getSprint101SupplyChainAiStatements(),
       },
+      {
+        id: 'sprint103_model_registry',
+        label: 'Sprint 103 - Autonomous Learning Loop / Model Registry',
+        version: '2026.03.19',
+        description: 'model_registry table with UNIQUE production constraint per model_name',
+        statements: () => this.getSprint103ModelRegistryStatements(),
+      },
     ];
   }
 
@@ -14492,6 +14499,31 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint103ModelRegistryStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS model_registry (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(50) NOT NULL,
+        version VARCHAR(20) NOT NULL,
+        round_id UUID,
+        status VARCHAR(20) NOT NULL DEFAULT 'staging',
+        minio_path TEXT NOT NULL,
+        auc_roc FLOAT,
+        brier_score FLOAT,
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        tenant_count INTEGER NOT NULL DEFAULT 0,
+        model_hash VARCHAR(64),
+        feature_names JSONB NOT NULL DEFAULT '[]',
+        framework VARCHAR(20) NOT NULL DEFAULT 'sklearn',
+        promoted_at TIMESTAMPTZ,
+        retired_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_model_reg_name_status ON model_registry(model_name, status)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_model_reg_production ON model_registry(model_name) WHERE status='production'`,
     ];
   }
 
