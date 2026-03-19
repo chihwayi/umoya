@@ -849,6 +849,34 @@ export class DatabaseProvisioningService {
         description: 'pmtct_enrollments, pmtct_infants, pepfar_mer_indicators, art_cohorts tables',
         statements: () => this.getSprint80AdvancedHivPmtctPepfarStatements(),
       },
+      {
+        id: 'sprint81_auto_coding',
+        label: 'Sprint 81 - Auto ICD-10/CPT Coding NLP Pipeline',
+        version: '2026.03.19',
+        description: 'auto_coding_suggestions table',
+        statements: () => this.getSprint81AutoCodingStatements(),
+      },
+      {
+        id: 'sprint82_pharmacogenomics',
+        label: 'Sprint 82 - Pharmacogenomics Module',
+        version: '2026.03.19',
+        description: 'pgx_profiles, pgx_alerts tables',
+        statements: () => this.getSprint82PharmacogenomicsStatements(),
+      },
+      {
+        id: 'sprint83_antibiogram',
+        label: 'Sprint 83 - Local Antibiogram AI',
+        version: '2026.03.19',
+        description: 'antibiogram_entries, antibiogram_summaries, culture_sensitivity_results tables',
+        statements: () => this.getSprint83AntibiogramStatements(),
+      },
+      {
+        id: 'sprint84_ai_explainability',
+        label: 'Sprint 84 - AI Explainability Layer',
+        version: '2026.03.19',
+        description: 'ai_recommendation_audits table',
+        statements: () => this.getSprint84AiExplainabilityStatements(),
+      },
     ];
   }
 
@@ -14352,6 +14380,146 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint84AiExplainabilityStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS ai_recommendation_audits (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        decision_log_id UUID,
+        recommendation_type TEXT NOT NULL,
+        patient_id UUID,
+        confidence NUMERIC,
+        reasoning TEXT,
+        evidence JSONB NOT NULL DEFAULT '[]',
+        alternatives JSONB NOT NULL DEFAULT '[]',
+        override_logged BOOLEAN NOT NULL DEFAULT FALSE,
+        override_reason TEXT,
+        override_by UUID,
+        displayed_to_user BOOLEAN NOT NULL DEFAULT FALSE,
+        user_read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ai_audit_patient ON ai_recommendation_audits (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ai_audit_type ON ai_recommendation_audits (recommendation_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_ai_audit_override ON ai_recommendation_audits (override_logged) WHERE override_logged = true`,
+    ];
+  }
+
+  private getSprint83AntibiogramStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS antibiogram_entries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        organism TEXT NOT NULL,
+        antibiotic TEXT NOT NULL,
+        year INT NOT NULL,
+        quarter SMALLINT,
+        susceptible_percent NUMERIC NOT NULL,
+        intermediate_percent NUMERIC NOT NULL DEFAULT 0,
+        resistant_percent NUMERIC NOT NULL,
+        total_isolates INT NOT NULL,
+        specimen_type TEXT NOT NULL,
+        ward TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_abio_organism ON antibiogram_entries (organism, antibiotic, year)`,
+      `CREATE INDEX IF NOT EXISTS idx_abio_specimen ON antibiogram_entries (specimen_type, year)`,
+      `CREATE TABLE IF NOT EXISTS antibiogram_summaries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        period_label TEXT NOT NULL,
+        specimen_type TEXT NOT NULL,
+        data JSONB NOT NULL,
+        top_resistant_organisms JSONB NOT NULL DEFAULT '[]',
+        recommended_empirical_choices JSONB NOT NULL DEFAULT '{}',
+        generated_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (period_label, specimen_type)
+      )`,
+      `CREATE TABLE IF NOT EXISTS culture_sensitivity_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        lab_order_id UUID,
+        specimen_type TEXT NOT NULL,
+        collection_date DATE NOT NULL,
+        organism_isolated TEXT,
+        no_growth BOOLEAN NOT NULL DEFAULT FALSE,
+        disk_diffusion_results JSONB NOT NULL DEFAULT '{}',
+        mic_values JSONB NOT NULL DEFAULT '{}',
+        clsi_breakpoints_used TEXT,
+        esbl_detected BOOLEAN,
+        carbapenem_resistant BOOLEAN,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_culture_patient ON culture_sensitivity_results (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_culture_organism ON culture_sensitivity_results (organism_isolated)`,
+    ];
+  }
+
+  private getSprint82PharmacogenomicsStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS pgx_profiles (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL UNIQUE,
+        genotype_source TEXT NOT NULL DEFAULT 'lab_test',
+        report_date DATE,
+        cyp2d6_phenotype TEXT,
+        cyp2c19_phenotype TEXT,
+        cyp2c9_phenotype TEXT,
+        vkorc1_variant TEXT,
+        tpmt_phenotype TEXT,
+        hla_b_5701 TEXT,
+        hla_b_1502 TEXT,
+        slco1b1_variant TEXT,
+        g6pd_status TEXT,
+        ugt1a1_phenotype TEXT,
+        raw_genotyping_data JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pgx_profile_patient ON pgx_profiles (patient_id)`,
+      `CREATE TABLE IF NOT EXISTS pgx_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        drug TEXT NOT NULL,
+        pgx_interaction TEXT NOT NULL,
+        clinical_implication TEXT NOT NULL,
+        alternative_recommended TEXT,
+        severity TEXT NOT NULL,
+        gene_involved TEXT,
+        acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
+        acknowledged_by UUID,
+        generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pgx_alert_patient ON pgx_alerts (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_pgx_alert_unacked ON pgx_alerts (patient_id, acknowledged)`,
+    ];
+  }
+
+  private getSprint81AutoCodingStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS auto_coding_suggestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        note_id UUID NOT NULL UNIQUE,
+        patient_id UUID NOT NULL,
+        encounter_id UUID,
+        suggested_icd10_codes JSONB NOT NULL DEFAULT '[]',
+        suggested_cpt_codes JSONB NOT NULL DEFAULT '[]',
+        review_status TEXT NOT NULL DEFAULT 'pending',
+        confirmed_codes JSONB,
+        reviewed_by UUID,
+        reviewed_at TIMESTAMPTZ,
+        coding_model TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_acs_patient ON auto_coding_suggestions (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_acs_status ON auto_coding_suggestions (review_status)`,
+      `CREATE INDEX IF NOT EXISTS idx_acs_note ON auto_coding_suggestions (note_id)`,
     ];
   }
 

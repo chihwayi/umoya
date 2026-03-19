@@ -125,6 +125,10 @@ import { MedicationSafetyController } from './controllers/medication-safety.cont
 import { EncounterCodingController } from './controllers/encounter-coding.controller';
 import { SchedulingIntelligenceController } from './controllers/scheduling-intelligence.controller';
 import { MlAdminController } from './controllers/ml-admin.controller';
+import { AutoCodingController } from './controllers/auto-coding.controller';
+import { PgxController } from './controllers/pgx.controller';
+import { AntibiogramController } from './controllers/antibiogram.controller';
+import { AiExplainabilityController } from './controllers/ai-explainability.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -300,6 +304,10 @@ import { MlFeedbackService } from './services/ml-feedback.service';
 import { MlModelsService } from './services/ml-models.service';
 import { MedicalNlpService } from './services/medical-nlp.service';
 import { TemplateFallbackService } from './services/template-fallback.service';
+import { AutoCodingService } from './services/auto-coding.service';
+import { PgxService } from './services/pgx.service';
+import { AntibiogramService } from './services/antibiogram.service';
+import { AiExplainabilityService } from './services/ai-explainability.service';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -445,6 +453,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EncounterCodingController,
     SchedulingIntelligenceController,
     MlAdminController,
+    AutoCodingController,
+    PgxController,
+    AntibiogramController,
+    AiExplainabilityController,
   ],
   providers: [
     AuthService,
@@ -620,6 +632,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MlModelsService,
     MedicalNlpService,
     TemplateFallbackService,
+    AutoCodingService,
+    PgxService,
+    AntibiogramService,
+    AiExplainabilityService,
     VoiceTranscriptionGateway,
     RolesGuard,
     JwtStrategy,
