@@ -307,6 +307,7 @@ import { QualityMeasuresService } from './services/quality-measures.service';
 import { NurseWorklistService } from './services/nurse-worklist.service';
 import { PostVisitService } from './services/post-visit.service';
 import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.service';
+import { PostVisitEscalationService } from './services/post-visit-escalation.service';
 import { PopulationHealthService } from './services/population-health.service';
 import { PracticeManagementService } from './services/practice-management.service';
 import { PriorAuthorizationService } from './services/prior-authorization.service';

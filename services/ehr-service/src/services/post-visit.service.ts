@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import 'multer';
 import axios from 'axios';
@@ -38,6 +38,7 @@ import {
   type PostVisitSoapSpecialty,
   type SpecialtySoapValidationSummary,
 } from './soap-template-registry';
+import { PostVisitEscalationService } from './post-visit-escalation.service';
 import { detectFromTranscript as realTimeAlertEngineDetect } from './real-time-alert-engine';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
 import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
@@ -319,6 +320,7 @@ export class PostVisitService {
     private readonly groundedLlmService?: PostVisitGroundedLlmService,
     private readonly hipaaAuditService?: HipaaAuditService,
     private readonly fileStorageService?: FileStorageService,
+    @Optional() private readonly escalationService?: PostVisitEscalationService,
   ) {}
 
   // S108: Schema is now authoritative in provisioning scripts (sprint48–sprint58).
@@ -11394,6 +11396,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitEscalationService.
   async listIntraVisitAlerts(
     tenantDb: DataSource,
     sessionId: string,
@@ -11403,6 +11406,7 @@ export class PostVisitService {
       offset?: number;
     } = {},
   ) {
+    if (this.escalationService) return this.escalationService.listIntraVisitAlerts(tenantDb, sessionId, filters);
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
@@ -11488,6 +11492,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitEscalationService.
   async acknowledgeIntraVisitAlert(
     tenantDb: DataSource,
     sessionId: string,
@@ -11495,6 +11500,7 @@ export class PostVisitService {
     payload: { note?: string } = {},
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.escalationService) return this.escalationService.acknowledgeIntraVisitAlert(tenantDb, sessionId, alertId, payload, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated user is required to acknowledge intra-visit alert');
@@ -11557,6 +11563,7 @@ export class PostVisitService {
     return this.mapIntraVisitAlertEvent(updatedRows[0]);
   }
 
+  // S108: Delegated to PostVisitEscalationService.
   async resolveIntraVisitAlert(
     tenantDb: DataSource,
     sessionId: string,
@@ -11564,6 +11571,7 @@ export class PostVisitService {
     payload: { status?: 'confirmed' | 'dismissed'; note?: string } = {},
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.escalationService) return this.escalationService.resolveIntraVisitAlert(tenantDb, sessionId, alertId, payload, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated user is required to resolve intra-visit alert');
@@ -12307,6 +12315,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitEscalationService — implementation lives there.
   async listEscalations(
     tenantDb: DataSource,
     filters: {
@@ -12322,6 +12331,7 @@ export class PostVisitService {
       offset?: number;
     } = {},
   ) {
+    if (this.escalationService) return this.escalationService.listEscalations(tenantDb, filters);
     await this.ensurePostVisitSchema(tenantDb);
     const conditions: string[] = [];
     const params: any[] = [];
@@ -12421,12 +12431,14 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitEscalationService.
   async resolveEscalation(
     tenantDb: DataSource,
     escalationId: string,
     payload: { status?: 'resolved' | 'dismissed'; resolutionNote?: string } = {},
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.escalationService) return this.escalationService.resolveEscalation(tenantDb, escalationId, payload, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated user is required to resolve escalation');
