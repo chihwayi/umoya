@@ -39,6 +39,7 @@ import {
   type SpecialtySoapValidationSummary,
 } from './soap-template-registry';
 import { PostVisitEscalationService } from './post-visit-escalation.service';
+import { PostVisitBillingIntelligenceService } from './post-visit-billing-intelligence.service';
 import { detectFromTranscript as realTimeAlertEngineDetect } from './real-time-alert-engine';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
 import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
@@ -321,6 +322,7 @@ export class PostVisitService {
     private readonly hipaaAuditService?: HipaaAuditService,
     private readonly fileStorageService?: FileStorageService,
     @Optional() private readonly escalationService?: PostVisitEscalationService,
+    @Optional() private readonly billingIntelligenceService?: PostVisitBillingIntelligenceService,
   ) {}
 
   // S108: Schema is now authoritative in provisioning scripts (sprint48–sprint58).
@@ -4173,6 +4175,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitBillingIntelligenceService.
   private async refreshSessionBillingIntelligence(
     tenantDb: DataSource,
     args: {
@@ -4184,6 +4187,9 @@ export class PostVisitService {
       source?: string;
     },
   ) {
+    if (this.billingIntelligenceService) {
+      return this.billingIntelligenceService.refreshSessionBillingIntelligence(tenantDb, args);
+    }
     if (!this.isBillingIntelligenceEnabled()) {
       return {
         featureEnabled: false,
@@ -5423,11 +5429,15 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitBillingIntelligenceService.
   async getSessionBillingIntelligence(
     tenantDb: DataSource,
     sessionId: string,
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.billingIntelligenceService) {
+      return this.billingIntelligenceService.getSessionBillingIntelligence(tenantDb, sessionId, options);
+    }
     await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
     const rows = await tenantDb.query(
@@ -5492,6 +5502,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitBillingIntelligenceService.
   async reviewBillingSuggestion(
     tenantDb: DataSource,
     sessionId: string,
@@ -5499,6 +5510,9 @@ export class PostVisitService {
     payload: ReviewPostVisitBillingSuggestionDto,
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.billingIntelligenceService) {
+      return this.billingIntelligenceService.reviewBillingSuggestion(tenantDb, sessionId, suggestionId, payload, options);
+    }
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated doctor user is required for billing suggestion review');

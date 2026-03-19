@@ -308,6 +308,7 @@ import { NurseWorklistService } from './services/nurse-worklist.service';
 import { PostVisitService } from './services/post-visit.service';
 import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.service';
 import { PostVisitEscalationService } from './services/post-visit-escalation.service';
+import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PopulationHealthService } from './services/population-health.service';
 import { PracticeManagementService } from './services/practice-management.service';
 import { PriorAuthorizationService } from './services/prior-authorization.service';
@@ -677,6 +678,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NurseWorklistService,
     PostVisitGroundedLlmService,
     PostVisitService,
+    PostVisitEscalationService,
+    PostVisitBillingIntelligenceService,
     PopulationHealthService,
     PracticeManagementService,
     PriorAuthorizationService,
