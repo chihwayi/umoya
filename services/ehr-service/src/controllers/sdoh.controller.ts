@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
 import { SdohService } from '../services/sdoh.service';
+import { SdohObservationMapper } from '../fhir/mappers/sdoh-observation.mapper';
 
 @Controller('sdoh')
 export class SdohController {
@@ -65,5 +66,21 @@ export class SdohController {
   @Post('cdss/resource/match')
   matchResources(@Body() dto: any) {
     return this.svc.matchResources(dto);
+  }
+
+  // ── FHIR Export ───────────────────────────────────────────────────────────
+
+  @Get('patient/:patientId/fhir')
+  async patientFhirBundle(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
+    const tenantId = this.tenant(h);
+    const [screenings, referrals] = await Promise.all([
+      this.svc.getScreeningLogs(tenantId, patientId),
+      this.svc.getReferrals(tenantId, patientId),
+    ]);
+    const entries = [
+      ...screenings.map(r => ({ resource: SdohObservationMapper.screeningLogToFhir(r, tenantId) })),
+      ...referrals.map(r => ({ resource: SdohObservationMapper.referralToFhirServiceRequest(r, tenantId) })),
+    ];
+    return { resourceType: 'Bundle', type: 'searchset', total: entries.length, entry: entries };
   }
 }

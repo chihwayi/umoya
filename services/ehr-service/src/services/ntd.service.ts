@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
+import { Dhis2Service } from './dhis2.service';
 import { NtdCase } from '../entities/ntd-case.entity';
 import { CholeraCase } from '../entities/cholera-case.entity';
 import { TyphoidCase } from '../entities/typhoid-case.entity';
@@ -8,7 +9,12 @@ import axios from 'axios';
 
 @Injectable()
 export class NtdService {
-  constructor(private readonly tenantService: TenantService) {}
+  private readonly logger = new Logger(NtdService.name);
+
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly dhis2Service: Dhis2Service,
+  ) {}
 
   private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
@@ -17,15 +23,15 @@ export class NtdService {
   async addNtdCase(subdomain: string, dto: any) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(NtdCase);
-    return repo.save(repo.create(dto));
+    const saved = await repo.save(repo.create(dto));
+    this.pushNtdEvent(subdomain, ds, saved, 'NTD_CASE').catch(e =>
+      this.logger.warn(`DHIS2 NTD event push failed: ${e?.message}`));
+    return saved;
   }
 
   async getNtdCases(subdomain: string, patientId: string) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return ds.getRepository(NtdCase).find({
-      where: { patientId },
-      order: { createdAt: 'DESC' },
-    });
+    return ds.getRepository(NtdCase).find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
 
   async updateNtdCase(subdomain: string, id: string, dto: any) {
@@ -40,15 +46,15 @@ export class NtdService {
   async addCholeraCase(subdomain: string, dto: any) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(CholeraCase);
-    return repo.save(repo.create(dto));
+    const saved = await repo.save(repo.create(dto));
+    this.pushNtdEvent(subdomain, ds, saved, 'CHOLERA_CASE').catch(e =>
+      this.logger.warn(`DHIS2 cholera event push failed: ${e?.message}`));
+    return saved;
   }
 
   async getCholeraCases(subdomain: string, patientId: string) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return ds.getRepository(CholeraCase).find({
-      where: { patientId },
-      order: { createdAt: 'DESC' },
-    });
+    return ds.getRepository(CholeraCase).find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
 
   async updateCholeraCase(subdomain: string, id: string, dto: any) {
@@ -63,15 +69,15 @@ export class NtdService {
   async addTyphoidCase(subdomain: string, dto: any) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(TyphoidCase);
-    return repo.save(repo.create(dto));
+    const saved = await repo.save(repo.create(dto));
+    this.pushNtdEvent(subdomain, ds, saved, 'TYPHOID_CASE').catch(e =>
+      this.logger.warn(`DHIS2 typhoid event push failed: ${e?.message}`));
+    return saved;
   }
 
   async getTyphoidCases(subdomain: string, patientId: string) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return ds.getRepository(TyphoidCase).find({
-      where: { patientId },
-      order: { createdAt: 'DESC' },
-    });
+    return ds.getRepository(TyphoidCase).find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
 
   async updateTyphoidCase(subdomain: string, id: string, dto: any) {
@@ -91,9 +97,19 @@ export class NtdService {
     });
     if (existing) {
       await repo.update(existing.id, dto);
-      return repo.findOneBy({ id: existing.id });
+    } else {
+      await repo.save(repo.create(dto));
     }
-    return repo.save(repo.create(dto));
+    const report = await repo.findOne({ where: { reportPeriod: dto.reportPeriod, periodType: dto.periodType } });
+    // Auto-push aggregate to DHIS2 (fire-and-forget)
+    if (report) {
+      const dhis2Period = dto.reportPeriod.replace('-W', 'W').replace('-', '');
+      this.dhis2Service.sendAggregateReport(
+        { profile: 'ntd_regional', period: dhis2Period },
+        ds, subdomain,
+      ).catch(e => this.logger.warn(`DHIS2 NTD aggregate push failed: ${e?.message}`));
+    }
+    return report;
   }
 
   async getReports(subdomain: string, periodType?: string) {
@@ -116,6 +132,24 @@ export class NtdService {
       [reportPeriod, this.periodStart(reportPeriod, periodType), this.periodEnd(reportPeriod, periodType)]
     );
     return raw[0];
+  }
+
+  // ── Internal ───────────────────────────────────────────────────────────────
+
+  private async pushNtdEvent(subdomain: string, ds: any, record: any, programStageCode: string) {
+    return this.dhis2Service.sendEvent(
+      {
+        patientId: record.patientId,
+        program: process.env.DHIS2_NTD_PROGRAM_ID || 'MC_NTD_TRACKER',
+        programStage: programStageCode,
+        eventDate: record.diagnosisDate || record.onset || record.onsetDate || new Date().toISOString().split('T')[0],
+        dataValues: [
+          { dataElement: 'MC_NTD_DISEASE', value: record.disease || 'cholera' },
+          { dataElement: 'MC_NTD_TREATMENT', value: record.treatment || '' },
+        ],
+      },
+      ds, subdomain,
+    );
   }
 
   private periodStart(period: string, type: string): string {

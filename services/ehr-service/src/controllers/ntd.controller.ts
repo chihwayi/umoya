@@ -1,5 +1,9 @@
 import { Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
 import { NtdService } from '../services/ntd.service';
+import { NtdConditionMapper } from '../fhir/mappers/ntd-condition.mapper';
+import { NtdCase } from '../entities/ntd-case.entity';
+import { CholeraCase } from '../entities/cholera-case.entity';
+import { TyphoidCase } from '../entities/typhoid-case.entity';
 
 @Controller('ntd')
 export class NtdController {
@@ -87,5 +91,23 @@ export class NtdController {
   @Post('cdss/cholera/risk')
   choleraRisk(@Body() dto: any) {
     return this.svc.choleraRisk(dto);
+  }
+
+  // ── FHIR Export ───────────────────────────────────────────────────────────
+
+  @Get('patient/:patientId/fhir')
+  async patientFhirBundle(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
+    const tenantId = this.tenant(h);
+    const [ntd, cholera, typhoid] = await Promise.all([
+      this.svc.getNtdCases(tenantId, patientId),
+      this.svc.getCholeraCases(tenantId, patientId),
+      this.svc.getTyphoidCases(tenantId, patientId),
+    ]);
+    const entries = [
+      ...ntd.map(r => ({ resource: NtdConditionMapper.ntdCaseToFhir(r, tenantId) })),
+      ...cholera.map(r => ({ resource: NtdConditionMapper.choleraCaseToFhir(r, tenantId) })),
+      ...typhoid.map(r => ({ resource: NtdConditionMapper.typhoidCaseToFhir(r, tenantId) })),
+    ];
+    return { resourceType: 'Bundle', type: 'searchset', total: entries.length, entry: entries };
   }
 }

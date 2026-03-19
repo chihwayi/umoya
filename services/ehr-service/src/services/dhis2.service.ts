@@ -70,7 +70,9 @@ type AggregateProfileKey =
   | 'maternal_newborn'
   | 'hiv_monthly'
   | 'immunization_monthly'
-  | 'pharmacy_stock';
+  | 'pharmacy_stock'
+  | 'ntd_regional'
+  | 'pmtct_monthly';
 
 interface AggregateProfileDefinition {
   dataSetCode: string;
@@ -157,6 +159,26 @@ export class Dhis2Service {
         stockOutItemCount: 'MC_DE_PHARMACY_STOCKOUT_ITEMS',
         dispensedUnits: 'MC_DE_PHARMACY_DISPENSED_UNITS',
         dispensingTransactions: 'MC_DE_PHARMACY_DISPENSING_TRANSACTIONS',
+      },
+    },
+    ntd_regional: {
+      dataSetCode: 'MC_DS_NTD_REGIONAL_MONTHLY',
+      metricCodes: {
+        choleraNew: 'MC_DE_NTD_CHOLERA_NEW',
+        choleraDeaths: 'MC_DE_NTD_CHOLERA_DEATHS',
+        typhoidNew: 'MC_DE_NTD_TYPHOID_NEW',
+        schistosomiasisNew: 'MC_DE_NTD_SCHISTOSOMIASIS_NEW',
+        ntdOtherNew: 'MC_DE_NTD_OTHER_NEW',
+      },
+    },
+    pmtct_monthly: {
+      dataSetCode: 'MC_DS_PMTCT_MONTHLY',
+      metricCodes: {
+        pmtctEnrolled: 'MC_DE_PMTCT_ENROLLED',
+        hivPositiveAtBooking: 'MC_DE_PMTCT_HIV_POSITIVE_BOOKING',
+        artStartedInPregnancy: 'MC_DE_PMTCT_ART_STARTED',
+        infantsTestedAt6Weeks: 'MC_DE_PMTCT_INFANT_TESTED_6W',
+        infantsHivPositive: 'MC_DE_PMTCT_INFANT_HIV_POSITIVE',
       },
     },
   };
@@ -1102,6 +1124,57 @@ export class Dhis2Service {
       dispensingTransactions,
     };
   }
+
+  // ── NTD / Regional profile ─────────────────────────────────────────────────
+    if (profile === 'ntd_regional') {
+      const [choleraNew, choleraDeaths, typhoidNew, schistosomiasisNew, ntdOtherNew] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'ntd_cholera_new',
+          `SELECT COUNT(*)::int AS total FROM cholera_cases WHERE created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ntd_cholera_deaths',
+          `SELECT COALESCE(SUM(cholera_deaths), 0)::int AS total FROM regional_disease_reports
+           WHERE report_period >= $1 AND report_period <= $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ntd_typhoid_new',
+          `SELECT COUNT(*)::int AS total FROM typhoid_cases WHERE created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ntd_schistosomiasis_new',
+          `SELECT COUNT(*)::int AS total FROM ntd_cases WHERE disease = 'schistosomiasis'
+           AND created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ntd_other_new',
+          `SELECT COUNT(*)::int AS total FROM ntd_cases WHERE disease != 'schistosomiasis'
+           AND created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+      ]);
+      return { choleraNew, choleraDeaths, typhoidNew, schistosomiasisNew, ntdOtherNew };
+    }
+
+    // ── PMTCT profile ──────────────────────────────────────────────────────────
+    if (profile === 'pmtct_monthly') {
+      const [pmtctEnrolled, hivPositiveAtBooking, artStartedInPregnancy, infantsTestedAt6Weeks, infantsHivPositive] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'pmtct_enrolled',
+          `SELECT COUNT(*)::int AS total FROM pmtct_enrollments WHERE enrollment_date >= $1 AND enrollment_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'pmtct_hiv_positive_booking',
+          `SELECT COUNT(*)::int AS total FROM pmtct_enrollments
+           WHERE enrollment_date >= $1 AND enrollment_date < $2 AND hiv_status_at_booking = 'positive'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'pmtct_art_started',
+          `SELECT COUNT(*)::int AS total FROM pmtct_enrollments
+           WHERE enrollment_date >= $1 AND enrollment_date < $2 AND art_started = true`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'pmtct_infant_tested_6w',
+          `SELECT COUNT(*)::int AS total FROM pmtct_infants
+           WHERE created_at >= $1 AND created_at < $2 AND hiv_test_at_6weeks = 'done'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'pmtct_infant_hiv_positive',
+          `SELECT COUNT(*)::int AS total FROM pmtct_infants
+           WHERE created_at >= $1 AND created_at < $2 AND dbs_result_6weeks = 'positive'`,
+          [startDate, endDate]),
+      ]);
+      return { pmtctEnrolled, hivPositiveAtBooking, artStartedInPregnancy, infantsTestedAt6Weeks, infantsHivPositive };
+    }
 
   private async getProgramType(context: Dhis2Context, programId: string): Promise<string | null> {
     if (!context.client) {
