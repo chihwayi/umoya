@@ -41,6 +41,8 @@ import {
 import { PostVisitEscalationService } from './post-visit-escalation.service';
 import { PostVisitBillingIntelligenceService } from './post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './post-visit-companion-memory.service';
+import { PostVisitSessionService } from './post-visit-session.service';
+import { PostVisitDraftService } from './post-visit-draft.service';
 import { detectFromTranscript as realTimeAlertEngineDetect } from './real-time-alert-engine';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
 import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
@@ -325,6 +327,8 @@ export class PostVisitService {
     @Optional() private readonly escalationService?: PostVisitEscalationService,
     @Optional() private readonly billingIntelligenceService?: PostVisitBillingIntelligenceService,
     @Optional() private readonly companionMemoryService?: PostVisitCompanionMemoryService,
+    @Optional() private readonly sessionService?: PostVisitSessionService,
+    @Optional() private readonly draftService?: PostVisitDraftService,
   ) {}
 
   // S108: Schema is now authoritative in provisioning scripts (sprint48–sprint58).
@@ -4810,11 +4814,13 @@ export class PostVisitService {
     }
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async createSession(
     tenantDb: DataSource,
     dto: CreatePostVisitSessionDto,
     requestContext: { tenantId?: string; actorUserId?: string | null } = {},
   ) {
+    if (this.sessionService) return this.sessionService.createSession(tenantDb, dto, requestContext);
     await this.ensurePostVisitSchema(tenantDb);
 
     const patientRows = await tenantDb.query(`SELECT id FROM patients WHERE id = $1 LIMIT 1`, [dto.patientId]);
@@ -4854,16 +4860,20 @@ export class PostVisitService {
     return this.mapSession(inserted[0]);
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getSession(tenantDb: DataSource, sessionId: string) {
+    if (this.sessionService) return this.sessionService.getSession(tenantDb, sessionId);
     await this.ensurePostVisitSchema(tenantDb);
     const row = await this.getSessionRow(tenantDb, sessionId);
     return this.mapSession(row);
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async listSessions(
     tenantDb: DataSource,
     options: ListPostVisitSessionsOptions = {},
   ) {
+    if (this.sessionService) return this.sessionService.listSessions(tenantDb, options);
     await this.ensurePostVisitSchema(tenantDb);
 
     const limit = Math.min(Math.max(Number(options.limit || 25), 1), 100);
@@ -4981,7 +4991,9 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitDraftService.
   async getSessionDraft(tenantDb: DataSource, sessionId: string) {
+    if (this.draftService) return this.draftService.getSessionDraft(tenantDb, sessionId);
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
@@ -5206,7 +5218,9 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitDraftService.
   async getAnnotatedDraft(sessionId: string, tenantDb: DataSource) {
+    if (this.draftService) return this.draftService.getAnnotatedDraft(sessionId, tenantDb);
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
@@ -5273,11 +5287,13 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitDraftService.
   async askAboutSection(
     sessionId: string,
     body: { question: string; sectionType: string; artifactType?: string },
     tenantDb: DataSource,
   ) {
+    if (this.draftService) return this.draftService.askAboutSection(sessionId, body, tenantDb);
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
@@ -9903,12 +9919,14 @@ export class PostVisitService {
     return fullName || null;
   }
 
+  // S108: Delegated to PostVisitDraftService.
   async reviewDraftArtifact(
     tenantDb: DataSource,
     sessionId: string,
     payload: ReviewPostVisitArtifactDto,
     options: { tenantId?: string; actorUserId?: string | null; source?: string } = {},
   ) {
+    if (this.draftService) return this.draftService.reviewDraftArtifact(tenantDb, sessionId, payload, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated reviewer is required');
@@ -10491,11 +10509,13 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async listPatientSessions(
     tenantDb: DataSource,
     patientId: string,
     options: { limit?: number; offset?: number } = {},
   ) {
+    if (this.sessionService) return this.sessionService.listPatientSessions(tenantDb, patientId, options);
     await this.ensurePostVisitSchema(tenantDb);
     const limit = Math.min(Math.max(Number(options.limit || 20), 1), 100);
     const offset = Math.max(Number(options.offset || 0), 0);
@@ -10559,11 +10579,13 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getPatientStoryLatest(
     tenantDb: DataSource,
     patientId: string,
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.sessionService) return this.sessionService.getPatientStoryLatest(tenantDb, patientId, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPatientStoryEnabled()) {
       return { featureEnabled: false, story: null, version: null };
@@ -10615,7 +10637,9 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getPatientStoryVersions(tenantDb: DataSource, patientId: string, limit = 20) {
+    if (this.sessionService) return this.sessionService.getPatientStoryVersions(tenantDb, patientId, limit);
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPatientStoryEnabled()) {
       return { featureEnabled: false, versions: [] };
@@ -10641,7 +10665,9 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getPatientStoryVersion(tenantDb: DataSource, patientId: string, version: number) {
+    if (this.sessionService) return this.sessionService.getPatientStoryVersion(tenantDb, patientId, version);
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPatientStoryEnabled()) {
       return { featureEnabled: false, story: null };
@@ -10671,12 +10697,14 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getPatientStoryDiff(
     tenantDb: DataSource,
     patientId: string,
     fromVersion: number,
     toVersion: number,
   ) {
+    if (this.sessionService) return this.sessionService.getPatientStoryDiff(tenantDb, patientId, fromVersion, toVersion);
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPatientStoryEnabled()) {
       return { featureEnabled: false, from: null, to: null, diff: null };
@@ -13400,10 +13428,12 @@ export class PostVisitService {
     return map[mime] || '.audio';
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getSessionRecordingUrl(
     sessionId: string,
     tenantDb: DataSource,
   ): Promise<{ url: string; mimeType: string; durationMs: number | null } | { url: null }> {
+    if (this.sessionService) return this.sessionService.getSessionRecordingUrl(sessionId, tenantDb);
     const repo = tenantDb.getRepository(PostVisitSession);
     const session = await repo.findOne({ where: { id: sessionId } });
     if (!session?.recordingStorageKey || !this.fileStorageService) {
@@ -13421,11 +13451,13 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getSessionForPatient(
     sessionId: string,
     patientId: string,
     tenantDb: DataSource,
   ): Promise<PostVisitSession | null> {
+    if (this.sessionService) return this.sessionService.getSessionForPatient(sessionId, patientId, tenantDb);
     const repo = tenantDb.getRepository(PostVisitSession);
     return repo.findOne({ where: { id: sessionId, patientId } });
   }

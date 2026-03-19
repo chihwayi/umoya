@@ -310,6 +310,8 @@ import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.
 import { PostVisitEscalationService } from './services/post-visit-escalation.service';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
+import { PostVisitSessionService } from './services/post-visit-session.service';
+import { PostVisitDraftService } from './services/post-visit-draft.service';
 import { PopulationHealthService } from './services/population-health.service';
 import { PracticeManagementService } from './services/practice-management.service';
 import { PriorAuthorizationService } from './services/prior-authorization.service';
@@ -682,6 +684,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PostVisitEscalationService,
     PostVisitBillingIntelligenceService,
     PostVisitCompanionMemoryService,
+    PostVisitSessionService,
+    PostVisitDraftService,
     PopulationHealthService,
     PracticeManagementService,
     PriorAuthorizationService,
