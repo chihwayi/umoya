@@ -828,6 +828,13 @@ export class DatabaseProvisioningService {
         description: 'icu_admissions, sofa_scores, ventilator_settings, sedation_records, central_line_records, vasopressor_records tables',
         statements: () => this.getSprint77IcuModuleStatements(),
       },
+      {
+        id: 'sprint78_sdoh_module',
+        label: 'Sprint 78 - SDOH Module (Structured Social Determinants)',
+        version: '2026.03.19',
+        description: 'community_resources, sdoh_referrals, sdoh_screening_logs tables',
+        statements: () => this.getSprint78SdohModuleStatements(),
+      },
     ];
   }
 
@@ -14331,6 +14338,58 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint78SdohModuleStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS community_resources (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT,
+        address TEXT,
+        phone TEXT,
+        website TEXT,
+        eligibility_criteria TEXT,
+        languages TEXT[],
+        availability TEXT,
+        tenant_specific BOOLEAN NOT NULL DEFAULT TRUE,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_comm_res_category ON community_resources (category)`,
+      `CREATE INDEX IF NOT EXISTS idx_comm_res_active ON community_resources (is_active)`,
+      `CREATE TABLE IF NOT EXISTS sdoh_referrals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        resource_id UUID NOT NULL,
+        referral_date DATE NOT NULL,
+        referral_reason TEXT NOT NULL,
+        referred_by UUID NOT NULL,
+        status TEXT NOT NULL DEFAULT 'sent',
+        outcome TEXT,
+        follow_up_date DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_sdoh_ref_patient ON sdoh_referrals (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sdoh_ref_status ON sdoh_referrals (status)`,
+      `CREATE TABLE IF NOT EXISTS sdoh_screening_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        screening_date DATE NOT NULL,
+        tool_used TEXT NOT NULL,
+        responses JSONB NOT NULL DEFAULT '{}',
+        positive_screens JSONB NOT NULL DEFAULT '[]',
+        z_codes TEXT[],
+        conducted_by UUID NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_sdoh_screen_patient ON sdoh_screening_logs (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sdoh_screen_date ON sdoh_screening_logs (screening_date)`,
     ];
   }
 }
