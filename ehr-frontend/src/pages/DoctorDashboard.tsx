@@ -61,6 +61,9 @@ import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptP
 import VoiceConsultationPanel from '../components/VoiceConsultation/VoiceConsultationPanel';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
+import PreChartPanel from '../components/PreChartPanel';
+import AmbientBar from '../components/ambient/AmbientBar';
+import SmartInbox from '../components/inbox/SmartInbox';
 import DoctorPatientsList from './DoctorPatientsList';
 import DoctorAppointmentManagement from './DoctorAppointmentManagement';
 import DoctorTreatmentHistory from './DoctorTreatmentHistory';
@@ -3247,6 +3250,22 @@ const DoctorDashboard: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Pre-Chart AI Panel (Sprint 64) */}
+                    <PreChartPanel
+                      appointmentId={currentAppointment.id}
+                      token={localStorage.getItem('ehr_token') || ''}
+                      tenantSlug={tenantSlug!}
+                    />
+
+                    {/* Ambient AI Bar (Sprint 63) */}
+                    <AmbientBar
+                      patientId={currentAppointment.patient.id}
+                      providerId={currentUser?.id || ''}
+                      appointmentId={currentAppointment.id}
+                      tenantSlug={tenantSlug!}
+                      token={localStorage.getItem('ehr_token') || ''}
+                    />
+
                     {/* Clinical Alerts - Compact */}
                     {(() => {
                       const latestVitals = vitalsData[currentAppointment.patient.id]?.[0];
@@ -4412,15 +4431,36 @@ const DoctorDashboard: React.FC = () => {
 
       {/* Inbox Modal */}
       {showInboxModal && tenantSlug && (
-        <Inbox
-          onClose={() => setShowInboxModal(false)}
-          onCompose={() => {
-            setShowInboxModal(false);
-            setShowMessageComposerModal(true);
-          }}
-          token={localStorage.getItem('ehr_token') || ''}
-          tenantSlug={tenantSlug}
-        />
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+              <h2 className="text-lg font-bold text-slate-900">Inbox</h2>
+              <button onClick={() => setShowInboxModal(false)} className="p-2 text-slate-400 hover:text-slate-700 rounded">✕</button>
+            </div>
+            {/* Two-panel layout: Smart Inbox left, Messages right */}
+            <div className="flex flex-1 overflow-hidden divide-x divide-slate-100">
+              <div className="w-2/5 overflow-hidden flex flex-col">
+                <SmartInbox
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug}
+                  userId={currentUser?.id || ''}
+                />
+              </div>
+              <div className="flex-1 overflow-auto">
+                <Inbox
+                  onClose={() => setShowInboxModal(false)}
+                  onCompose={() => {
+                    setShowInboxModal(false);
+                    setShowMessageComposerModal(true);
+                  }}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Message Composer Modal */}

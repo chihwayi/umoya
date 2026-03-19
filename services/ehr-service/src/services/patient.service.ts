@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, Logger, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
+import { PatientSdoh } from '../entities/patient-sdoh.entity';
 import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
 import { MedicalNlpService } from './medical-nlp.service';
 
@@ -948,19 +949,56 @@ export class PatientService {
 
   async getPatientStats(tenantDb: DataSource): Promise<any> {
     const patientRepository = tenantDb.getRepository(Patient);
-    
+
     const totalPatients = await patientRepository.count({ where: { isActive: true } });
     const newPatientsThisMonth = await patientRepository
       .createQueryBuilder('patient')
       .where('patient.isActive = :isActive', { isActive: true })
-      .andWhere('patient.createdAt >= :startOfMonth', { 
-        startOfMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1) 
+      .andWhere('patient.createdAt >= :startOfMonth', {
+        startOfMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
       })
       .getCount();
-    
+
     return {
       totalPatients,
       newPatientsThisMonth
     };
+  }
+
+  // ── SDOH ──────────────────────────────────────────────────────────────────
+
+  async getPatientSdoh(patientId: string, tenantDb: DataSource): Promise<PatientSdoh[]> {
+    // Verify patient exists
+    await this.getPatientById(patientId, tenantDb);
+
+    try {
+      const repo = tenantDb.getRepository(PatientSdoh);
+      return repo.find({
+        where: { patientId },
+        order: { assessmentDate: 'DESC' },
+        take: 10,
+      });
+    } catch (error) {
+      if (this.isMissingRelationError(error)) return [];
+      throw error;
+    }
+  }
+
+  async createPatientSdoh(
+    patientId: string,
+    data: Partial<PatientSdoh>,
+    assessedBy: string,
+    tenantDb: DataSource,
+  ): Promise<PatientSdoh> {
+    await this.getPatientById(patientId, tenantDb);
+
+    const repo   = tenantDb.getRepository(PatientSdoh);
+    const record = repo.create({
+      ...data,
+      patientId,
+      assessedBy,
+      assessmentDate: data.assessmentDate ?? new Date(),
+    });
+    return repo.save(record);
   }
 }

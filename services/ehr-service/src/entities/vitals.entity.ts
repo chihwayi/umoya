@@ -14,9 +14,20 @@ export class Vitals {
   @JoinColumn({ name: 'patient_id' })
   patient?: Patient;
 
+  // ── Blood Pressure ──────────────────────────────────────────────────────────
+  // Stored as separate INT columns so AI/queries can filter/trend numerically.
+  // The legacy bloodPressure VARCHAR is kept for backward compatibility.
+  @Column({ name: 'systolic_bp', type: 'int', nullable: true })
+  systolicBp?: number;
+
+  @Column({ name: 'diastolic_bp', type: 'int', nullable: true })
+  diastolicBp?: number;
+
+  /** Legacy string column — kept for backward compat, always derived from systolicBp/diastolicBp. */
   @Column({ name: 'blood_pressure', type: 'varchar', length: 20, nullable: true })
   bloodPressure?: string;
 
+  // ── Core vitals ─────────────────────────────────────────────────────────────
   @Column({ name: 'heart_rate', type: 'int', nullable: true })
   heartRate?: number;
 
@@ -38,12 +49,43 @@ export class Vitals {
   @Column({ name: 'bmi', type: 'decimal', precision: 4, scale: 2, nullable: true })
   bmi?: number;
 
-  @Column({ name: 'pain_level', type: 'int', nullable: true })
-  painLevel?: number;
-
   @Column({ name: 'blood_glucose', type: 'decimal', precision: 5, scale: 2, nullable: true })
   bloodGlucose?: number;
 
+  // ── Pain ────────────────────────────────────────────────────────────────────
+  @Column({ name: 'pain_level', type: 'int', nullable: true })
+  painLevel?: number;
+
+  @Column({ name: 'pain_location', type: 'varchar', length: 100, nullable: true })
+  painLocation?: string;
+
+  @Column({ name: 'pain_character', type: 'varchar', length: 100, nullable: true })
+  painCharacter?: string;
+
+  // ── Extended anthropometric ─────────────────────────────────────────────────
+  @Column({ name: 'waist_circumference', type: 'decimal', precision: 5, scale: 2, nullable: true })
+  waistCircumference?: number;
+
+  @Column({ name: 'head_circumference', type: 'decimal', precision: 5, scale: 2, nullable: true })
+  headCircumference?: number;
+
+  /** Mid-upper arm circumference (malnutrition screening) */
+  @Column({ name: 'muac', type: 'decimal', precision: 5, scale: 2, nullable: true })
+  muac?: number;
+
+  @Column({ name: 'peak_flow_rate', type: 'int', nullable: true })
+  peakFlowRate?: number;
+
+  // ── AI Clinical Scoring ─────────────────────────────────────────────────────
+  /** NEWS2 score — auto-calculated by VitalsService on every save. Never set manually. */
+  @Column({ name: 'news_score', type: 'int', nullable: true })
+  newsScore?: number;
+
+  // ── Provenance ──────────────────────────────────────────────────────────────
+  @Column({ name: 'vital_source', type: 'varchar', length: 30, default: 'manual' })
+  vitalSource: string = 'manual';
+
+  // ── Notes & metadata ────────────────────────────────────────────────────────
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
@@ -63,5 +105,3 @@ export class Vitals {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
-
-

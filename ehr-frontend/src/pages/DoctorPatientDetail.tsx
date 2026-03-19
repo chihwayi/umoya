@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
-  Pill,
-  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit
+  Pill, Baby,
+  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -14,6 +14,15 @@ import ModalPortal from '../components/ModalPortal';
 import ProblemListModal from '../components/ProblemListModal';
 import AllergiesModal from '../components/AllergiesModal';
 import VoiceInput from '../components/VoiceInput';
+import PatientSdohTab from '../components/PatientSdohTab';
+import CareGapPanel from '../components/CareGapPanel';
+import TbDashboard from '../components/TbDashboard';
+import PediatricsDashboard from '../components/PediatricsDashboard';
+import MentalHealthDashboard from '../components/MentalHealthDashboard';
+import MalariaDashboard from '../components/MalariaDashboard';
+import GeriatricsDashboard from '../components/GeriatricsDashboard';
+import NeurologyDashboard from '../components/NeurologyDashboard';
+import PulmonologyDashboard from '../components/PulmonologyDashboard';
 
 interface Patient {
   id: string;
@@ -63,7 +72,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology'>('overview');
 
   // AI/RAG State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -526,6 +535,94 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               <FileText className="w-4 h-4 inline mr-2" />
               Medical History
             </button>
+            <button
+              onClick={() => setActiveTab('sdoh')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'sdoh'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Brain className="w-4 h-4 inline mr-2" />
+              SDOH
+            </button>
+            <button
+              onClick={() => setActiveTab('tb')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'tb'
+                  ? 'border-red-500 text-red-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Activity className="w-4 h-4 inline mr-2" />
+              TB
+            </button>
+            <button
+              onClick={() => setActiveTab('pediatrics')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'pediatrics'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Baby className="w-4 h-4 inline mr-2" />
+              Pediatrics
+            </button>
+            <button
+              onClick={() => setActiveTab('mental-health')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'mental-health'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Brain className="w-4 h-4 inline mr-2" />
+              Mental Health
+            </button>
+            <button
+              onClick={() => setActiveTab('malaria')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'malaria'
+                  ? 'border-rose-500 text-rose-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Activity className="w-4 h-4 inline mr-2" />
+              Malaria
+            </button>
+            <button
+              onClick={() => setActiveTab('geriatrics')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'geriatrics'
+                  ? 'border-teal-500 text-teal-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <UserCheck className="w-4 h-4 inline mr-2" />
+              Geriatrics
+            </button>
+            <button
+              onClick={() => setActiveTab('neurology')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'neurology'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Zap className="w-4 h-4 inline mr-2" />
+              Neurology
+            </button>
+            <button
+              onClick={() => setActiveTab('pulmonology')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'pulmonology'
+                  ? 'border-sky-500 text-sky-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Wind className="w-4 h-4 inline mr-2" />
+              Pulmonology
+            </button>
           </nav>
         </div>
       </div>
@@ -707,6 +804,17 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                   </p>
                 )}
               </div>
+
+              {/* AI Care Gaps (Sprint 62) */}
+              {patientId && (
+                <div className="bg-gradient-to-br from-white to-indigo-50 rounded-2xl shadow-lg border border-indigo-200/50 p-6">
+                  <CareGapPanel
+                    patientId={patientId}
+                    tenantSlug={tenantSlug!}
+                    token={localStorage.getItem('ehr_token') || ''}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -873,6 +981,103 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'sdoh' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <PatientSdohTab
+              patientId={patientId}
+              tenantSlug={tenantSlug!}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
+          </div>
+        )}
+
+        {activeTab === 'tb' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <TbDashboard
+              patientId={patientId}
+              tenantSlug={tenantSlug!}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
+          </div>
+        )}
+
+        {activeTab === 'pediatrics' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <PediatricsDashboard
+              patientId={patientId}
+              patientDob={patient?.dateOfBirth}
+              patientGender={patient?.gender}
+              tenantSlug={tenantSlug!}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
+          </div>
+        )}
+
+        {activeTab === 'mental-health' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-purple-900 mb-4 flex items-center gap-2">
+              <Brain className="w-5 h-5" /> Mental Health
+            </h2>
+            <MentalHealthDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'malaria' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-rose-900 mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5" /> Malaria Case Management
+            </h2>
+            <MalariaDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'geriatrics' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-teal-900 mb-4 flex items-center gap-2">
+              <UserCheck className="w-5 h-5" /> Geriatrics & Frailty
+            </h2>
+            <GeriatricsDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'neurology' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
+              <Zap className="w-5 h-5" /> Neurology
+            </h2>
+            <NeurologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'pulmonology' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-sky-900 mb-4 flex items-center gap-2">
+              <Wind className="w-5 h-5" /> Pulmonology
+            </h2>
+            <PulmonologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
           </div>
         )}
       </div>

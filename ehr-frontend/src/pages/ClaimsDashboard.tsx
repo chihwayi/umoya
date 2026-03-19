@@ -1621,9 +1621,10 @@ const ApiConfigurationTab: React.FC<{
     memberNumber: 'MED-1001',
   });
 
-  const demoPortalUrl = (window as any)?.location?.origin
-    ? `${window.location.protocol}//${window.location.hostname}:3004`
-    : 'http://localhost:3004';
+  const demoPortalUrl = process.env.REACT_APP_MEDICAL_AID_DEMO_URL ||
+    (window?.location?.hostname
+      ? `${window.location.protocol}//${window.location.hostname}:3004`
+      : '');
 
   const [formData, setFormData] = useState({
     medicalAidName: 'cimas',
@@ -1658,7 +1659,7 @@ const ApiConfigurationTab: React.FC<{
     ...formData,
     medicalAidName: provider,
     providerType: resolveProviderType(provider),
-    apiBaseUrl: 'http://medical-aid-demo-service:3004',
+    apiBaseUrl: process.env.REACT_APP_MEDICAL_AID_DEMO_URL || 'http://medical-aid-demo-service:3004',
     authenticationType: 'api_key',
     claimSubmissionEndpoint: '/api/claims',
     statusCheckEndpoint: '/api/claims',

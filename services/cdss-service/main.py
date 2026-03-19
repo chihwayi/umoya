@@ -3595,6 +3595,2096 @@ async def transcribe_audio_basic(
             os.remove(temp_path)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 63 — Ambient AI transcription streaming endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AmbientChunkRequest(BaseModel):
+    audio: str = Field(..., description="Base64-encoded audio chunk")
+    session_id: str
+    context: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
+@app.post("/transcription/stream")
+async def transcription_stream(request: AmbientChunkRequest):
+    """
+    Process a single audio chunk from an ambient AI session.
+    Returns structured entities extracted from the transcribed text.
+
+    Entity types returned:
+      diagnoses, medications, allergies, orders, vitals, alerts
+    """
+    transcript_text = ""
+    entities = {
+        "diagnoses":   [],
+        "medications": [],
+        "allergies":   [],
+        "orders":      [],
+        "vitals":      [],
+        "alerts":      [],
+    }
+    draft_note = {"subjective": "", "objective": "", "assessment": "", "plan": ""}
+
+    # Transcribe the audio chunk via the existing Whisper voice scribe
+    try:
+        import base64, tempfile, os as _os
+        audio_bytes = base64.b64decode(request.audio)
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        try:
+            result = voice_scribe.transcribe_audio(tmp_path)
+            transcript_text = result.get("text", "") if isinstance(result, dict) else str(result)
+        finally:
+            if _os.path.exists(tmp_path):
+                _os.remove(tmp_path)
+    except Exception as e:
+        print(f"[AmbientStream] transcription error: {e}")
+        transcript_text = ""
+
+    # Run entity extraction if we got a transcript
+    if transcript_text.strip():
+        try:
+            # Use the diagnosis engine to extract clinical entities
+            diag_result = await run_in_threadpool(
+                diagnostic_assistant.suggest_diagnoses,
+                symptoms=transcript_text,
+                context=request.context or {},
+            )
+            raw_diagnoses = diag_result.get("diagnoses", []) if isinstance(diag_result, dict) else []
+            entities["diagnoses"] = [
+                {"text": d.get("name", ""), "icd": d.get("icd_code"), "confidence": d.get("confidence", 0.5)}
+                for d in raw_diagnoses[:5]
+            ]
+        except Exception as e:
+            print(f"[AmbientStream] entity extraction error: {e}")
+
+        # Simple keyword-based draft note update (production would use LLM)
+        lower = transcript_text.lower()
+        if any(w in lower for w in ["complain", "present", "feeling", "pain", "symptom"]):
+            draft_note["subjective"] = transcript_text.strip()
+        if any(w in lower for w in ["exam", "appears", "vital", "blood pressure", "temperature"]):
+            draft_note["objective"] = transcript_text.strip()
+        if any(w in lower for w in ["diagnosis", "assess", "impression", "likely", "consistent"]):
+            draft_note["assessment"] = transcript_text.strip()
+        if any(w in lower for w in ["prescribe", "order", "refer", "follow", "plan", "recommend"]):
+            draft_note["plan"] = transcript_text.strip()
+
+    return {
+        "transcript": transcript_text,
+        "entities":   entities,
+        "draftNote":  draft_note,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 61 — CDSS Outcome Feedback Loop
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FeedbackEntry(BaseModel):
+    logId: str
+    patientId: str
+    decisionType: str
+    topRecommendation: Optional[str] = None
+    confidenceScore: Optional[float] = None
+    clinicianAction: Optional[str] = None  # accepted | modified | overridden | ignored
+    overrideReason: Optional[str] = None
+    outcomeAt30Days: Optional[Dict[str, Any]] = None
+    outcomeAt90Days: Optional[Dict[str, Any]] = None
+    createdAt: Optional[str] = None
+
+
+class OutcomeFeedbackRequest(BaseModel):
+    entries: List[FeedbackEntry]
+
+
+@app.post("/feedback/outcome")
+async def receive_outcome_feedback(payload: OutcomeFeedbackRequest):
+    """
+    Receives batched outcome feedback from the EHR service (weekly cron job).
+    Each entry contains a CDSS recommendation that has been acted upon by a
+    clinician, plus any linked 30/90-day outcome data.
+
+    In production this feeds a retraining pipeline or writes to a feedback store.
+    Currently logs to stdout and persists to Redis if available so the data is not
+    lost while a full ML pipeline is wired in.
+    """
+    received_at = datetime.utcnow().isoformat()
+    accepted  = sum(1 for e in payload.entries if e.clinicianAction == "accepted")
+    modified  = sum(1 for e in payload.entries if e.clinicianAction == "modified")
+    overridden = sum(1 for e in payload.entries if e.clinicianAction == "overridden")
+    ignored   = sum(1 for e in payload.entries if e.clinicianAction == "ignored")
+    with_outcomes = sum(
+        1 for e in payload.entries
+        if e.outcomeAt30Days or e.outcomeAt90Days
+    )
+
+    # Persist to Redis feedback queue when available (non-blocking)
+    try:
+        import redis as _redis
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        r = _redis.from_url(redis_url, socket_connect_timeout=2)
+        for entry in payload.entries:
+            r.lpush(
+                "cdss:feedback:queue",
+                json.dumps({
+                    **entry.model_dump(),
+                    "receivedAt": received_at,
+                })
+            )
+    except Exception:
+        pass  # Redis unavailable — entries are logged below
+
+    print(
+        f"[CDSS Feedback] received_at={received_at} total={len(payload.entries)} "
+        f"accepted={accepted} modified={modified} overridden={overridden} "
+        f"ignored={ignored} with_outcomes={with_outcomes}"
+    )
+
+    return {
+        "status": "received",
+        "total": len(payload.entries),
+        "summary": {
+            "accepted": accepted,
+            "modified": modified,
+            "overridden": overridden,
+            "ignored": ignored,
+            "withOutcomes": with_outcomes,
+        },
+        "receivedAt": received_at,
+    }
+
+
+class PediatricDosingRequest(BaseModel):
+    drug_name: str
+    weight_kg: float
+    age_months: Optional[int] = None
+    dose_mg_per_kg: Optional[float] = None
+    indication: Optional[str] = None
+    route: Optional[str] = "oral"
+
+
+class GrowthAssessRequest(BaseModel):
+    patient_id: Optional[str] = None
+    age_months: Optional[float] = None
+    weight_kg: Optional[float] = None
+    height_cm: Optional[float] = None
+    head_circ_cm: Optional[float] = None
+    muac_cm: Optional[float] = None
+    gender: Optional[str] = None  # male | female
+
+
+class MilestoneAssessRequest(BaseModel):
+    patient_id: Optional[str] = None
+    age_months: int
+    milestones: List[Dict[str, Any]]  # [{domain, milestone, status}]
+
+
+# WHO weight-based dosing reference (mg/kg doses, max doses)
+_DOSING_REF: Dict[str, Dict[str, Any]] = {
+    "amoxicillin":       {"mg_per_kg": 25,  "max_mg": 500,  "frequency": "TDS", "route": "oral"},
+    "paracetamol":       {"mg_per_kg": 15,  "max_mg": 1000, "frequency": "QDS", "route": "oral"},
+    "ibuprofen":         {"mg_per_kg": 10,  "max_mg": 400,  "frequency": "TDS", "route": "oral"},
+    "cotrimoxazole":     {"mg_per_kg": 6,   "max_mg": 480,  "frequency": "BD",  "route": "oral", "note": "TMP component"},
+    "metronidazole":     {"mg_per_kg": 7.5, "max_mg": 400,  "frequency": "TDS", "route": "oral"},
+    "azithromycin":      {"mg_per_kg": 10,  "max_mg": 500,  "frequency": "OD",  "route": "oral"},
+    "artemether_lumefantrine": {"mg_per_kg": None, "note": "Use weight-band AL dosing table (WHO)"},
+}
+
+
+@app.post("/dosing/pediatric")
+async def pediatric_dosing(request: PediatricDosingRequest):
+    """Weight-based pediatric dosing calculator with safe-range validation."""
+    drug_key = request.drug_name.lower().replace(" ", "_").replace("-", "_")
+    ref = _DOSING_REF.get(drug_key)
+
+    warnings = []
+    if request.weight_kg < 3:
+        warnings.append("Weight <3 kg — use neonatal dosing protocols; consult specialist")
+    if request.weight_kg > 70:
+        warnings.append("Weight >70 kg — use adult dose ceiling")
+
+    if ref is None:
+        # Generic calculation using provided mg/kg
+        if request.dose_mg_per_kg:
+            calculated = round(request.dose_mg_per_kg * request.weight_kg, 1)
+            return {
+                "drug": request.drug_name,
+                "weight_kg": request.weight_kg,
+                "dose_mg_per_kg": request.dose_mg_per_kg,
+                "calculated_dose_mg": calculated,
+                "route": request.route,
+                "warnings": warnings,
+                "note": "Drug not in reference table — using provided mg/kg; verify against local formulary",
+            }
+        return {"error": f"Drug '{request.drug_name}' not in reference table and no mg/kg provided"}
+
+    if ref.get("mg_per_kg") is None:
+        return {"drug": request.drug_name, "note": ref.get("note"), "warnings": warnings}
+
+    calculated = round(ref["mg_per_kg"] * request.weight_kg, 1)
+    max_mg     = ref.get("max_mg")
+    capped     = min(calculated, max_mg) if max_mg else calculated
+    if max_mg and calculated > max_mg:
+        warnings.append(f"Calculated dose {calculated} mg exceeds maximum {max_mg} mg — capped at {max_mg} mg")
+
+    return {
+        "drug":               request.drug_name,
+        "weight_kg":          request.weight_kg,
+        "dose_mg_per_kg":     ref["mg_per_kg"],
+        "calculated_dose_mg": calculated,
+        "recommended_dose_mg": capped,
+        "maximum_dose_mg":    max_mg,
+        "frequency":          ref.get("frequency"),
+        "route":              ref.get("route", request.route),
+        "warnings":           warnings,
+        "note":               ref.get("note"),
+    }
+
+
+@app.post("/growth/assess")
+async def assess_growth(request: GrowthAssessRequest):
+    """
+    WHO 2006 growth standard Z-score assessment.
+    Returns nutritional status flags: stunting, wasting, underweight, overweight.
+    Full LMS tables not embedded — uses simplified boundary thresholds for demo;
+    replace with full WHO LMS lookup in production.
+    """
+    if request.age_months is None or (request.weight_kg is None and request.height_cm is None):
+        return {"error": "age_months and at least one measurement required"}
+
+    age = request.age_months
+    flags = []
+    nutritional_status = "normal"
+    weight_for_age_z = None
+    height_for_age_z = None
+    weight_for_height_z = None
+    bmi_for_age_z = None
+
+    # Simplified Z-score estimation (WHO median weight/height by age)
+    # These are rough medians — production should use full LMS tables
+    median_weight = 3.3 + (age * 0.25) if age <= 12 else 9 + (age - 12) * 0.15
+    median_height = 50 + (age * 2.5)   if age <= 12 else 80 + (age - 12) * 0.6
+    sd_weight = max(0.5, median_weight * 0.1)
+    sd_height = max(1.5, median_height * 0.05)
+
+    if request.weight_kg is not None:
+        weight_for_age_z = round((request.weight_kg - median_weight) / sd_weight, 2)
+        if weight_for_age_z < -3:
+            flags.append("Severely underweight (WAZ < -3)")
+            nutritional_status = "severely_underweight"
+        elif weight_for_age_z < -2:
+            flags.append("Underweight (WAZ < -2)")
+            if nutritional_status == "normal":
+                nutritional_status = "underweight"
+        elif weight_for_age_z > 2:
+            flags.append("Overweight (WAZ > +2)")
+            nutritional_status = "overweight"
+
+    if request.height_cm is not None:
+        height_for_age_z = round((request.height_cm - median_height) / sd_height, 2)
+        if height_for_age_z < -3:
+            flags.append("Severely stunted (HAZ < -3)")
+            if "severely" not in nutritional_status:
+                nutritional_status = "severely_stunted"
+        elif height_for_age_z < -2:
+            flags.append("Stunted (HAZ < -2)")
+            if nutritional_status == "normal":
+                nutritional_status = "stunted"
+
+    if request.muac_cm is not None:
+        if request.muac_cm < 11.5:
+            flags.append("SAM: MUAC <11.5 cm — severe acute malnutrition")
+            nutritional_status = "sam"
+        elif request.muac_cm < 12.5:
+            flags.append("MAM: MUAC 11.5–12.5 cm — moderate acute malnutrition")
+            if "sam" not in nutritional_status:
+                nutritional_status = "mam"
+
+    if request.weight_kg and request.height_cm:
+        bmi = request.weight_kg / ((request.height_cm / 100) ** 2)
+        # Very rough BMI-for-age Z
+        median_bmi = 15.5 + (age * 0.01)
+        bmi_for_age_z = round((bmi - median_bmi) / 1.5, 2)
+        if bmi_for_age_z > 2:
+            flags.append("Obese (BMI-for-age Z > +2)")
+            nutritional_status = "obese"
+
+    percentile = None
+    if weight_for_age_z is not None:
+        # Approximate percentile from Z-score (standard normal CDF approximation)
+        import math
+        z = weight_for_age_z
+        percentile = round(50 * (1 + math.erf(z / math.sqrt(2))), 1)
+
+    return {
+        "age_months":          age,
+        "weight_for_age_z":    weight_for_age_z,
+        "height_for_age_z":    height_for_age_z,
+        "weight_for_height_z": weight_for_height_z,
+        "bmi_for_age_z":       bmi_for_age_z,
+        "growth_chart_percentile": percentile,
+        "nutritional_status":  nutritional_status,
+        "flags":               flags,
+        "who_standard":        "WHO 2006 Child Growth Standards (simplified)",
+        "action_required":     len(flags) > 0,
+    }
+
+
+@app.post("/milestone/assess")
+async def assess_milestones(request: MilestoneAssessRequest):
+    """Flag developmental delays against WHO age norms."""
+    age = request.age_months
+    delayed = []
+    on_track = []
+    referrals = []
+
+    for m in request.milestones:
+        expected = m.get("expected_age_months")
+        status   = m.get("status", "pending")
+        domain   = m.get("domain", "")
+        name     = m.get("milestone", "")
+
+        if status == "achieved":
+            on_track.append({"domain": domain, "milestone": name})
+            continue
+
+        if expected and age > expected + 2:
+            delayed.append({"domain": domain, "milestone": name, "expected_months": expected, "current_age_months": age})
+            if age > expected + 4:
+                referrals.append(f"Refer for {domain} assessment: '{name}' expected by {expected} months")
+
+    overall_status = "normal"
+    if len(delayed) >= 3 or (len(delayed) >= 1 and any("language" in d["domain"] or "cognitive" in d["domain"] for d in delayed)):
+        overall_status = "global_delay_suspected"
+        referrals.append("Multiple domains delayed — refer for comprehensive developmental assessment")
+    elif len(delayed) >= 1:
+        overall_status = "delay_in_one_or_more_domains"
+
+    return {
+        "age_months":      age,
+        "on_track_count":  len(on_track),
+        "delayed_count":   len(delayed),
+        "delayed":         delayed,
+        "overall_status":  overall_status,
+        "referrals":       referrals,
+        "action_required": len(referrals) > 0,
+    }
+
+
+class TbRegimenRequest(BaseModel):
+    case_type: str  # pulmonary | extrapulmonary | mdr | xdr
+    treatment_category: str  # new | relapse | treatment_after_failure | ...
+    hiv_status: Optional[str] = "unknown"
+    dst_results: Optional[Dict[str, Any]] = None
+    patient_weight_kg: Optional[float] = None
+
+
+class TbContactRiskRequest(BaseModel):
+    index_case_type: str
+    index_genexpert_result: Optional[str] = None
+    contact_age: Optional[int] = None
+    contact_hiv_status: Optional[str] = "unknown"
+    exposure_duration_weeks: Optional[int] = None
+    shared_bedroom: Optional[bool] = False
+
+
+class TbAdherenceRequest(BaseModel):
+    tb_patient_id: str
+    dot_records: List[Dict[str, Any]]
+    episode_start_date: Optional[str] = None
+    expected_doses: Optional[int] = None
+
+
+@app.post("/tb/regimen/recommend")
+async def recommend_tb_regimen(request: TbRegimenRequest):
+    """Recommend a TB treatment regimen based on case type and DST results."""
+    dst = request.dst_results or {}
+    rifampicin_resistant = str(dst.get("rifampicin", "")).lower() == "resistant"
+    isoniazid_resistant  = str(dst.get("isoniazid", "")).lower() == "resistant"
+    fluoro_resistant     = str(dst.get("fluoroquinolone", "")).lower() == "resistant"
+
+    regimen_code  = "2HRZE/4HR"
+    regimen_label = "Standard first-line: 2 months HRZE + 4 months HR"
+    notes         = []
+    monitoring    = []
+
+    case = request.case_type.lower()
+    cat  = request.treatment_category.lower()
+
+    if case in ("mdr", "xdr") or rifampicin_resistant:
+        if fluoro_resistant or case == "xdr":
+            regimen_code  = "BPaL"
+            regimen_label = "Bedaquiline + Pretomanid + Linezolid (XDR/pre-XDR)"
+            notes.append("XDR/pre-XDR regimen — refer to specialist MDR-TB unit")
+            monitoring = ["Monthly ECG (QTc)", "Monthly LFTs", "CBC", "Audiometry"]
+        else:
+            regimen_code  = "6BdqLfxCfzCs/12LfxCfzCs"
+            regimen_label = "MDR-TB regimen: Bdq/Lfx/Cfz/Cs"
+            notes.append("MDR-TB regimen — refer to specialist unit; notify national TB programme")
+            monitoring = ["Monthly ECG (QTc for Bdq/Cfz)", "Monthly LFTs", "Weekly TSH (Cs)"]
+    elif isoniazid_resistant and not rifampicin_resistant:
+        regimen_code  = "6RZELfx"
+        regimen_label = "Isoniazid-resistant DS-TB: 6 months RZELfx"
+        notes.append("Isoniazid mono-resistance confirmed — do NOT use INH")
+    elif cat in ("relapse", "treatment_after_failure", "treatment_after_ltfu"):
+        regimen_code  = "2HRZES/1HRZE/5HRE"
+        regimen_label = "Re-treatment: 2 months HRZES + 1 month HRZE + 5 months HRE"
+        notes.append("Await DST results; switch to MDR regimen if rifampicin resistance found")
+
+    if request.hiv_status == "positive":
+        notes.append("HIV positive — ensure ART started; cotrimoxazole prophylaxis required")
+        monitoring.append("CD4 count and viral load monitoring")
+
+    weight_note = None
+    if request.patient_weight_kg:
+        weight_note = f"Dose banding for {request.patient_weight_kg}kg — use standard WHO weight band dosing tables"
+
+    return {
+        "regimen_code":  regimen_code,
+        "regimen_label": regimen_label,
+        "intensive_phase_months": 2 if "BPa" not in regimen_code else 6,
+        "continuation_phase_months": 4 if regimen_code == "2HRZE/4HR" else 12,
+        "dot_required": True,
+        "notes": notes,
+        "monitoring_required": monitoring,
+        "weight_banding_note": weight_note,
+    }
+
+
+@app.post("/tb/contact/risk")
+async def assess_tb_contact_risk(request: TbContactRiskRequest):
+    """Risk-stratify a TB household contact."""
+    score = 0
+    factors = []
+
+    if request.index_genexpert_result in ("mtb_detected", "mtb_detected_rif_resistant"):
+        score += 30
+        factors.append("Index case bacteriologically confirmed (GeneXpert positive)")
+
+    if request.index_case_type in ("pulmonary", "mdr", "xdr"):
+        score += 20
+        factors.append("Pulmonary TB index case (higher transmission risk)")
+
+    if request.shared_bedroom:
+        score += 20
+        factors.append("Shared sleeping space with index case")
+
+    exposure_weeks = request.exposure_duration_weeks or 0
+    if exposure_weeks >= 12:
+        score += 15
+        factors.append(f"Prolonged exposure ≥12 weeks ({exposure_weeks} weeks reported)")
+    elif exposure_weeks >= 4:
+        score += 8
+        factors.append(f"Moderate exposure {exposure_weeks} weeks")
+
+    age = request.contact_age or 99
+    if age < 5:
+        score += 25
+        factors.append("Age <5 years — very high risk of progression to disease")
+    elif age < 15:
+        score += 10
+        factors.append("Age <15 years — elevated risk")
+
+    if request.contact_hiv_status == "positive":
+        score += 25
+        factors.append("HIV positive contact — high risk of TB progression")
+
+    score = min(score, 100)
+    if score >= 70:
+        risk_level = "high"
+        recommendation = "Immediate TB evaluation (symptoms, CXR, sputum if productive cough); start TPT if TB disease excluded"
+    elif score >= 40:
+        risk_level = "moderate"
+        recommendation = "TB symptom screen + TST/IGRA; start TPT if LTBI confirmed and TB excluded"
+    else:
+        risk_level = "low"
+        recommendation = "TB symptom screen; TPT if age <5 regardless of TST"
+
+    return {
+        "risk_level": risk_level,
+        "risk_score": score,
+        "risk_factors": factors,
+        "recommendation": recommendation,
+        "tpt_indicated": score >= 40 or (age < 5) or request.contact_hiv_status == "positive",
+    }
+
+
+@app.post("/tb/dot/adherence")
+async def analyse_dot_adherence(request: TbAdherenceRequest):
+    """Analyse DOT adherence and predict default risk."""
+    records = request.dot_records or []
+    if not records:
+        return {"adherence_rate": None, "default_risk": "unknown", "message": "No DOT records provided"}
+
+    total     = len(records)
+    observed  = sum(1 for r in records if r.get("observed"))
+    missed    = total - observed
+    rate      = round(observed / total * 100, 1) if total else 0
+
+    # Consecutive misses
+    max_consecutive = 0
+    current_streak  = 0
+    recent_missed   = 0
+    for i, r in enumerate(records):
+        if not r.get("observed"):
+            current_streak += 1
+            max_consecutive = max(max_consecutive, current_streak)
+            if i >= len(records) - 7:
+                recent_missed += 1
+        else:
+            current_streak = 0
+
+    # Default risk
+    if rate < 80 or max_consecutive >= 7 or recent_missed >= 4:
+        default_risk = "high"
+        alert = "Patient at HIGH risk of treatment default — immediate follow-up required"
+    elif rate < 90 or max_consecutive >= 3 or recent_missed >= 2:
+        default_risk = "moderate"
+        alert = "Adherence suboptimal — enhanced support recommended"
+    else:
+        default_risk = "low"
+        alert = None
+
+    return {
+        "total_doses_expected": total,
+        "doses_observed": observed,
+        "doses_missed": missed,
+        "adherence_rate_percent": rate,
+        "max_consecutive_missed": max_consecutive,
+        "missed_last_7_records": recent_missed,
+        "default_risk": default_risk,
+        "alert": alert,
+        "who_threshold_met": rate >= 85,
+    }
+
+
+class InboxTriageRequest(BaseModel):
+    source_type: str  # lab_result | imaging_result | patient_message | critical_alert | task | referral_response
+    title: str
+    content: str
+    patient_id: Optional[str] = None
+
+
+@app.post("/inbox/triage")
+async def triage_inbox_item(request: InboxTriageRequest):
+    """
+    AI-triage an incoming inbox item and return a priority + reasoning.
+
+    Priority levels: critical | urgent | routine | informational
+    Triage score: 0–100 (higher = more urgent)
+
+    Rules applied:
+      - critical_alert source        → critical  (score 95)
+      - lab_result with critical/H/L  → urgent    (score 80)
+      - imaging_result with findings  → urgent    (score 75)
+      - patient_message               → routine   (score 40), draft_reply generated
+      - task / referral_response      → routine   (score 30)
+      - keyword detection supplements score
+    """
+    content_lower = (request.title + " " + request.content).lower()
+    source = request.source_type
+
+    # Base scoring
+    if source == "critical_alert":
+        priority, score = "critical", 95
+        reason = "Critical clinical alert requires immediate attention."
+    elif source == "lab_result":
+        critical_keywords = ["critical", "panic", "high", "low", " h ", " l ", "abnormal", "flagged"]
+        if any(kw in content_lower for kw in critical_keywords):
+            priority, score = "urgent", 80
+            reason = "Lab result contains abnormal or critical value flags."
+        else:
+            priority, score = "routine", 35
+            reason = "Lab result within expected parameters."
+    elif source == "imaging_result":
+        urgent_keywords = ["mass", "lesion", "fracture", "hemorrhage", "stroke", "embolism", "pneumothorax", "finding", "abnormal"]
+        if any(kw in content_lower for kw in urgent_keywords):
+            priority, score = "urgent", 75
+            reason = "Imaging result contains clinically significant findings."
+        else:
+            priority, score = "routine", 30
+            reason = "Imaging result appears unremarkable."
+    elif source == "patient_message":
+        emergency_keywords = ["chest pain", "can't breathe", "emergency", "severe", "bleeding", "unconscious", "stroke", "urgent"]
+        if any(kw in content_lower for kw in emergency_keywords):
+            priority, score = "urgent", 70
+            reason = "Patient message contains possible emergency keywords."
+        else:
+            priority, score = "routine", 40
+            reason = "Routine patient message."
+    elif source == "referral_response":
+        priority, score = "routine", 35
+        reason = "Referral response received — review when convenient."
+    else:
+        priority, score = "routine", 30
+        reason = "Standard inbox item."
+
+    # Boost score for high-risk keywords anywhere
+    boost_keywords = ["sepsis", "mi", "infarction", "anaphylaxis", "overdose", "suicide", "bp 180", "glucose 4", "k+ >6", "k+ <2"]
+    if any(kw in content_lower for kw in boost_keywords):
+        score = min(score + 20, 100)
+        if priority not in ("critical", "urgent"):
+            priority = "urgent"
+        reason += " High-risk clinical keyword detected."
+
+    # Draft reply for messages
+    draft_reply = None
+    if source == "patient_message":
+        draft_reply = (
+            "Thank you for your message. I have reviewed your concern and will follow up with you shortly. "
+            "If you are experiencing a medical emergency, please call emergency services immediately."
+        )
+
+    # Due-by suggestion (hours)
+    due_by_hours = None
+    if priority == "critical":
+        due_by_hours = 1
+    elif priority == "urgent":
+        due_by_hours = 4
+
+    return {
+        "priority":        priority,
+        "priority_reason": reason,
+        "triage_score":    score,
+        "triage_model":    "rules_v1",
+        "due_by_hours":    due_by_hours,
+        "draft_reply":     draft_reply,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 68 — Mental Health CDSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ScreeningRequest(BaseModel):
+    tool: str
+    responses: Dict[str, int]
+
+class SuicideRiskRequest(BaseModel):
+    ideation_type: Optional[str] = None          # passive / active_no_plan / active_with_plan / active_with_intent
+    lethality: Optional[str] = None              # low / medium / high
+    means_access: bool = False
+    prior_attempts: int = 0
+    protective_factors: List[str] = []
+    substance_use: bool = False
+    recent_loss: bool = False
+    hopelessness_score: Optional[int] = None     # 0-20 Beck
+    cssrs_score: Optional[int] = None
+
+class MedicationMonitorRequest(BaseModel):
+    drug_name: str
+    drug_class: str
+    dose_mg: Optional[float] = None
+    last_level_value: Optional[float] = None
+    last_level_unit: Optional[str] = None
+    last_level_date: Optional[str] = None
+    weight_kg: Optional[float] = None
+    renal_function: Optional[str] = None         # normal / mild / moderate / severe
+    hepatic_function: Optional[str] = None       # normal / mild / moderate / severe
+    adverse_effects: Optional[str] = None
+
+@app.post("/mental-health/screen")
+async def score_screening(req: ScreeningRequest):
+    tool = req.tool
+    r = req.responses
+
+    if tool == "PHQ-9":
+        score = sum(r.get(str(i), 0) for i in range(1, 10))
+        if score <= 4:   severity, action = "minimal",           "Monitor, routine follow-up"
+        elif score <= 9: severity, action = "mild",              "Watchful waiting, repeat PHQ-9 in 2–4 weeks"
+        elif score <= 14:severity, action = "moderate",          "Treatment plan, consider antidepressant or psychotherapy"
+        elif score <= 19:severity, action = "moderately_severe", "Active treatment, antidepressant + psychotherapy"
+        else:            severity, action = "severe",            "Immediate initiation of pharmacotherapy; consider psychiatric referral"
+        risk = "high" if r.get("9", 0) >= 1 else ("moderate" if score >= 15 else "low")
+
+    elif tool == "PHQ-2":
+        score = sum(r.get(str(i), 0) for i in range(1, 3))
+        severity = "minimal" if score < 3 else "moderate"
+        action = "No action needed" if score < 3 else "Administer PHQ-9 for full assessment"
+        risk = "low"
+
+    elif tool == "GAD-7":
+        score = sum(r.get(str(i), 0) for i in range(1, 8))
+        if score <= 4:   severity, action = "minimal",  "Monitor"
+        elif score <= 9: severity, action = "mild",     "Consider watchful waiting"
+        elif score <= 14:severity, action = "moderate", "Consider medication or psychotherapy"
+        else:            severity, action = "severe",   "Active treatment; consider psychiatric referral"
+        risk = "moderate" if score >= 15 else "low"
+
+    elif tool in ("AUDIT", "AUDIT-C"):
+        score = sum(r.get(str(i), 0) for i in range(1, len(r) + 1))
+        if tool == "AUDIT-C":
+            if score <= 2:   severity, action = "minimal", "No intervention needed"
+            elif score <= 4: severity, action = "mild",    "Brief advice on reducing intake"
+            else:            severity, action = "moderate","Full AUDIT assessment recommended"
+        else:
+            if score <= 7:   severity, action = "minimal",  "Low risk — health education"
+            elif score <= 15:severity, action = "mild",     "Simple advice at point of care"
+            elif score <= 19:severity, action = "moderate", "Brief counselling and monitoring"
+            else:            severity, action = "severe",   "Referral to specialist"
+        risk = "high" if score >= 20 else ("moderate" if score >= 8 else "low")
+
+    elif tool == "CSSRS":
+        score = sum(r.get(str(i), 0) for i in range(1, len(r) + 1))
+        if score == 0:   severity, action = "minimal", "No current ideation detected"
+        elif score <= 2: severity, action = "mild",    "Safety planning, outpatient monitoring"
+        elif score <= 4: severity, action = "moderate","Urgent psychiatric evaluation"
+        else:            severity, action = "severe",  "Emergency psychiatric evaluation"
+        risk = "imminent" if score >= 5 else ("high" if score >= 3 else ("moderate" if score >= 1 else "low"))
+
+    elif tool == "EPDS":
+        score = sum(r.get(str(i), 0) for i in range(1, 11))
+        if score <= 9:   severity, action = "minimal",  "Routine postnatal care"
+        elif score <= 12:severity, action = "mild",     "Supportive counselling"
+        elif score <= 14:severity, action = "moderate", "Further assessment; consider treatment"
+        else:            severity, action = "severe",   "Urgent psychiatric referral"
+        risk = "high" if r.get("10", 0) >= 1 else ("moderate" if score >= 13 else "low")
+
+    else:
+        score = sum(r.values())
+        severity, action, risk = "minimal", "Review with clinician", "low"
+
+    return {
+        "tool": tool,
+        "total_score": score,
+        "severity": severity,
+        "risk_level": risk,
+        "recommended_action": action,
+    }
+
+
+@app.post("/mental-health/risk")
+async def assess_suicide_risk(req: SuicideRiskRequest):
+    score = 0
+
+    ideation_weights = {
+        "passive": 10,
+        "active_no_plan": 25,
+        "active_with_plan": 50,
+        "active_with_intent": 70,
+    }
+    score += ideation_weights.get(req.ideation_type or "", 0)
+
+    lethality_weights = {"low": 5, "medium": 15, "high": 30}
+    score += lethality_weights.get(req.lethality or "", 0)
+
+    if req.means_access:   score += 20
+    if req.prior_attempts > 0: score += min(req.prior_attempts * 10, 30)
+    if req.substance_use:  score += 10
+    if req.recent_loss:    score += 8
+
+    if req.hopelessness_score is not None:
+        score += min(int(req.hopelessness_score / 20 * 15), 15)
+
+    protective_deduction = min(len(req.protective_factors) * 5, 20)
+    score = max(0, score - protective_deduction)
+    score = min(score, 100)
+
+    if score >= 70:
+        risk_level = "imminent"
+        disposition = "emergency"
+        actions = [
+            "Do not leave patient alone",
+            "Remove access to means immediately",
+            "Emergency psychiatric evaluation",
+            "Consider inpatient admission",
+            "Notify next of kin",
+        ]
+    elif score >= 45:
+        risk_level = "high"
+        disposition = "urgent_referral"
+        actions = [
+            "Safety planning (Stanley-Brown)",
+            "Means restriction counselling",
+            "Urgent psychiatric referral (24–48h)",
+            "Increase contact frequency",
+            "Crisis line numbers provided",
+        ]
+    elif score >= 20:
+        risk_level = "moderate"
+        disposition = "outpatient_monitoring"
+        actions = [
+            "Safety planning documented",
+            "Schedule follow-up within 1 week",
+            "Psychoeducation for patient and family",
+            "Review psychotropic medications",
+        ]
+    else:
+        risk_level = "low"
+        disposition = "routine_follow_up"
+        actions = [
+            "Routine monitoring",
+            "Psychoeducation on warning signs",
+            "Provide crisis line numbers",
+        ]
+
+    return {
+        "risk_score": score,
+        "risk_level": risk_level,
+        "disposition": disposition,
+        "recommended_actions": actions,
+        "safety_plan_indicated": score >= 20,
+        "inpatient_indicated": score >= 70,
+    }
+
+
+@app.post("/mental-health/medication/monitor")
+async def monitor_psychotropic(req: MedicationMonitorRequest):
+    alerts = []
+    monitoring_due = []
+
+    drug_lower = req.drug_name.lower()
+
+    # Clozapine monitoring
+    if "clozapin" in drug_lower:
+        monitoring_due.append("FBC (weekly for 18 weeks, then fortnightly)")
+        monitoring_due.append("Fasting glucose and lipids (baseline, 3, 6, 12 months)")
+        monitoring_due.append("ECG at baseline")
+        monitoring_due.append("Body weight monthly")
+        if req.last_level_value is not None:
+            if req.last_level_value < 350:
+                alerts.append({"severity": "warning", "message": f"Clozapine level {req.last_level_value} ng/mL is sub-therapeutic (target 350–600 ng/mL). Consider dose increase."})
+            elif req.last_level_value > 600:
+                alerts.append({"severity": "danger", "message": f"Clozapine level {req.last_level_value} ng/mL is above therapeutic range (target 350–600 ng/mL). Toxicity risk."})
+
+    # Lithium monitoring
+    elif "lithium" in drug_lower:
+        monitoring_due.append("Serum lithium (12h post-dose; every 3–6 months when stable)")
+        monitoring_due.append("Renal function (eGFR, urea, creatinine) every 6 months")
+        monitoring_due.append("Thyroid function (TSH) every 6 months")
+        monitoring_due.append("Calcium annually")
+        if req.last_level_value is not None:
+            if req.last_level_value < 0.6:
+                alerts.append({"severity": "warning", "message": f"Lithium level {req.last_level_value} mmol/L is sub-therapeutic (target 0.6–1.0 mmol/L acute; 0.4–0.8 mmol/L maintenance)."})
+            elif req.last_level_value > 1.2:
+                alerts.append({"severity": "danger", "message": f"Lithium level {req.last_level_value} mmol/L — TOXICITY THRESHOLD EXCEEDED. Symptoms: tremor, confusion, vomiting. Withhold dose and review urgently."})
+
+    # Valproate monitoring
+    elif "valproat" in drug_lower or "depakote" in drug_lower or "epival" in drug_lower:
+        monitoring_due.append("Valproate level (trough; target 50–125 mg/L)")
+        monitoring_due.append("LFTs and FBC at baseline and 6 months")
+        monitoring_due.append("Weight and BMI monthly")
+        monitoring_due.append("Pregnancy test if female of childbearing age (teratogen)")
+        if req.last_level_value is not None:
+            if req.last_level_value < 50:
+                alerts.append({"severity": "warning", "message": f"Valproate level {req.last_level_value} mg/L is sub-therapeutic (target 50–125 mg/L)."})
+            elif req.last_level_value > 125:
+                alerts.append({"severity": "danger", "message": f"Valproate level {req.last_level_value} mg/L exceeds therapeutic range. Hepatotoxicity and encephalopathy risk."})
+
+    # Carbamazepine
+    elif "carbamazep" in drug_lower:
+        monitoring_due.append("Carbamazepine level (target 4–12 mg/L)")
+        monitoring_due.append("FBC and LFTs at baseline then every 6 months")
+        monitoring_due.append("Na+ — SIADH risk")
+        if req.last_level_value and req.last_level_value > 12:
+            alerts.append({"severity": "danger", "message": f"Carbamazepine level {req.last_level_value} mg/L above therapeutic range (4–12 mg/L). Diplopia, ataxia risk."})
+
+    # Antipsychotics
+    elif req.drug_class == "antipsychotic":
+        monitoring_due.append("Fasting glucose and HbA1c (baseline, 3, 6, 12 months)")
+        monitoring_due.append("Fasting lipid profile annually")
+        monitoring_due.append("BMI and waist circumference monthly for 3 months, then quarterly")
+        monitoring_due.append("Blood pressure baseline and after dose changes")
+        monitoring_due.append("AIMS (Abnormal Involuntary Movement Scale) every 6 months")
+        monitoring_due.append("Prolactin if symptomatic")
+
+    # Antidepressants
+    elif req.drug_class == "antidepressant":
+        monitoring_due.append("Suicide risk assessment at every appointment for first 4 weeks")
+        monitoring_due.append("Monitor for activation syndrome (especially in youth)")
+        if "ssri" in drug_lower or any(x in drug_lower for x in ["fluoxetin","sertral","escitalopram","citalopram","paroxetin"]):
+            monitoring_due.append("Na+ if elderly (SIADH risk)")
+
+    # Renal adjustment alerts
+    if req.renal_function in ("moderate", "severe"):
+        renally_cleared = ["lithium", "gabapentin", "pregabalin", "topiramate", "amisulpride"]
+        if any(d in drug_lower for d in renally_cleared):
+            alerts.append({"severity": "warning", "message": f"Renal impairment ({req.renal_function}): dose adjustment required for {req.drug_name}. Review renal dosing guidelines."})
+
+    return {
+        "drug": req.drug_name,
+        "alerts": alerts,
+        "monitoring_due": monitoring_due,
+        "alert_count": len(alerts),
+        "has_critical_alert": any(a["severity"] == "danger" for a in alerts),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 69 — Malaria CDSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MalariaTreatmentRequest(BaseModel):
+    species: str                               # falciparum / vivax / malariae / ovale / mixed / unknown
+    case_type: str                             # uncomplicated / severe
+    age_years: Optional[float] = None
+    weight_kg: Optional[float] = None
+    pregnant: bool = False
+    trimester: Optional[int] = None            # 1 / 2 / 3
+    g6pd_deficient: Optional[bool] = None
+    prior_treatment_failure: bool = False
+    country: Optional[str] = None             # for CQ-resistant vivax regions
+
+class MalariaSeverityRequest(BaseModel):
+    # Clinical features
+    impaired_consciousness: bool = False       # GCS < 11
+    prostration: bool = False
+    multiple_convulsions: bool = False         # >2 in 24h
+    respiratory_distress: bool = False
+    abnormal_bleeding: bool = False
+    jaundice: bool = False
+    haemoglobinuria: bool = False
+    # Lab features
+    haemoglobin: Optional[float] = None        # g/dL
+    blood_glucose: Optional[float] = None      # mmol/L
+    creatinine: Optional[float] = None         # µmol/L
+    bilirubin: Optional[float] = None          # µmol/L
+    parasitaemia_percent: Optional[float] = None
+    # Context
+    age_years: Optional[float] = None
+    species: Optional[str] = None
+
+@app.post("/malaria/treatment")
+async def malaria_treatment_recommendation(req: MalariaTreatmentRequest):
+    regimen = None
+    regimen_label = None
+    notes = []
+    warnings = []
+    duration_days = 3
+    follow_up_days = [3, 7, 14, 28]
+
+    is_falciparum = req.species in ("falciparum", "mixed", "unknown")
+    is_vivax = req.species == "vivax"
+
+    # ── SEVERE MALARIA (any species) ───────────────────────────────────────
+    if req.case_type == "severe":
+        regimen = "IV_artesunate"
+        regimen_label = "IV Artesunate 2.4 mg/kg at 0, 12, 24h then daily"
+        duration_days = 7
+        notes.append("Switch to oral ACT once patient can tolerate oral medication (usually day 3).")
+        notes.append("Monitor for post-artesunate delayed haemolysis (PADH) up to 4 weeks.")
+        if req.pregnant and req.trimester == 1:
+            regimen = "quinine_IV"
+            regimen_label = "IV Quinine + Clindamycin (1st trimester: avoid artesunate)"
+            warnings.append("1st trimester: IV artesunate avoided — use IV Quinine + Clindamycin.")
+        return {
+            "regimen": regimen,
+            "regimen_label": regimen_label,
+            "duration_days": duration_days,
+            "follow_up_days": follow_up_days,
+            "notes": notes,
+            "warnings": warnings,
+        }
+
+    # ── UNCOMPLICATED FALCIPARUM ───────────────────────────────────────────
+    if is_falciparum:
+        if req.pregnant:
+            if req.trimester == 1:
+                regimen = "quinine_oral"
+                regimen_label = "Quinine + Clindamycin × 7 days (1st trimester)"
+                warnings.append("Avoid ACTs in 1st trimester — use Quinine + Clindamycin.")
+            else:
+                regimen = "AL"
+                regimen_label = "Artemether-Lumefantrine (AL) × 3 days (2nd/3rd trimester)"
+                notes.append("Weight-based dosing: use 4-tablet dose for adults.")
+        elif req.age_years is not None and req.age_years < 0.5:
+            regimen = "AL"
+            regimen_label = "Artemether-Lumefantrine (AL) — weight-based paediatric dose"
+            notes.append("Use paediatric dispersible tablet formulation.")
+        elif req.prior_treatment_failure:
+            regimen = "ASAQ"
+            regimen_label = "Artesunate-Amodiaquine (ASAQ) × 3 days (after AL failure)"
+            notes.append("Consider artemisinin partial resistance if day-3 parasitaemia persists.")
+        else:
+            regimen = "AL"
+            regimen_label = "Artemether-Lumefantrine (AL) × 3 days"
+            notes.append("Take with food or milk to maximise lumefantrine absorption.")
+            notes.append("Day-1 dose must be directly observed.")
+
+    # ── UNCOMPLICATED VIVAX / OVALE / MALARIAE ─────────────────────────────
+    elif is_vivax or req.species in ("ovale", "malariae"):
+        regimen = "AL"
+        regimen_label = "Artemether-Lumefantrine (AL) × 3 days"
+        duration_days = 3
+
+        # Primaquine radical cure for vivax/ovale (prevents relapse)
+        if req.species in ("vivax", "ovale"):
+            if req.g6pd_deficient:
+                notes.append("G6PD deficiency: use Primaquine 0.75 mg/kg once weekly × 8 weeks (supervised).")
+                warnings.append("Screen for G6PD before Primaquine. Haemolysis risk in deficiency.")
+            elif req.pregnant:
+                notes.append("Primaquine contraindicated in pregnancy. Give after delivery / breastfeeding cessation.")
+            else:
+                notes.append("Add Primaquine 0.25 mg/kg/day × 14 days for radical cure (relapse prevention).")
+
+        # CQ-resistant vivax regions
+        if is_vivax and req.country in ("Papua New Guinea", "Indonesia", "Solomon Islands", "Ethiopia"):
+            notes.append(f"Chloroquine-resistant P. vivax documented in {req.country}. AL preferred over CQ.")
+
+    else:
+        regimen = "AL"
+        regimen_label = "Artemether-Lumefantrine (AL) × 3 days (empirical)"
+
+    return {
+        "regimen": regimen,
+        "regimen_label": regimen_label,
+        "duration_days": duration_days,
+        "follow_up_days": follow_up_days,
+        "notes": notes,
+        "warnings": warnings,
+    }
+
+
+@app.post("/malaria/severity")
+async def malaria_severity_score(req: MalariaSeverityRequest):
+    criteria_met = []
+    score = 0
+
+    # WHO 2015 severe malaria criteria
+    if req.impaired_consciousness:
+        criteria_met.append("Impaired consciousness / cerebral malaria (GCS < 11)")
+        score += 3
+    if req.prostration:
+        criteria_met.append("Prostration / extreme weakness")
+        score += 2
+    if req.multiple_convulsions:
+        criteria_met.append("Multiple convulsions (>2 in 24h)")
+        score += 2
+    if req.respiratory_distress:
+        criteria_met.append("Respiratory distress / acidosis")
+        score += 3
+    if req.abnormal_bleeding:
+        criteria_met.append("Abnormal bleeding")
+        score += 2
+    if req.jaundice:
+        criteria_met.append("Jaundice (clinical)")
+        score += 1
+    if req.haemoglobinuria:
+        criteria_met.append("Haemoglobinuria (blackwater fever)")
+        score += 2
+
+    # Lab criteria
+    if req.haemoglobin is not None and req.haemoglobin < 7.0:
+        hb_label = "Severe anaemia (Hb < 7 g/dL)"
+        if req.age_years is not None and req.age_years < 12 and req.haemoglobin < 5.0:
+            hb_label = "Severe anaemia in child (Hb < 5 g/dL)"
+            score += 3
+        else:
+            score += 2
+        criteria_met.append(hb_label)
+
+    if req.blood_glucose is not None and req.blood_glucose < 2.2:
+        criteria_met.append(f"Hypoglycaemia (BG {req.blood_glucose:.1f} mmol/L < 2.2)")
+        score += 3
+
+    if req.creatinine is not None and req.creatinine > 265:
+        criteria_met.append(f"Acute kidney injury (Creatinine {req.creatinine:.0f} µmol/L > 265)")
+        score += 2
+
+    if req.bilirubin is not None and req.bilirubin > 50:
+        criteria_met.append(f"Hyperbilirubinaemia (Bilirubin {req.bilirubin:.0f} µmol/L > 50)")
+        score += 1
+
+    if req.parasitaemia_percent is not None and req.parasitaemia_percent > 5:
+        criteria_met.append(f"Hyperparasitaemia (parasitaemia {req.parasitaemia_percent:.1f}% > 5%)")
+        score += 2
+        if req.parasitaemia_percent > 10:
+            criteria_met.append("Extreme hyperparasitaemia (>10%) — exchange transfusion may be considered")
+            score += 1
+
+    is_severe = score >= 2 or len(criteria_met) >= 1
+    severity_class = "severe" if is_severe else "uncomplicated"
+
+    recommendations = []
+    if is_severe:
+        recommendations.append("Admit to hospital — IV therapy required")
+        recommendations.append("IV Artesunate 2.4 mg/kg at 0, 12, 24h then daily")
+        recommendations.append("Monitor blood glucose every 4h")
+        recommendations.append("Monitor renal function, fluid balance, consciousness level")
+        if req.blood_glucose and req.blood_glucose < 2.2:
+            recommendations.append("URGENT: IV Dextrose 50% — 50mL bolus now")
+        if req.haemoglobin and req.haemoglobin < 5:
+            recommendations.append("Consider blood transfusion (Hb < 5 g/dL)")
+    else:
+        recommendations.append("Oral ACT appropriate — see treatment protocol")
+        recommendations.append("Observe for clinical deterioration, review at 24h")
+
+    return {
+        "severity_class": severity_class,
+        "severity_score": score,
+        "criteria_met": criteria_met,
+        "criteria_count": len(criteria_met),
+        "recommendations": recommendations,
+        "inpatient_required": is_severe,
+        "icu_consider": score >= 6,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 70 — Geriatrics CDSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FrailtyRequest(BaseModel):
+    clinical_frailty_scale: int            # 1–9
+    barthel_index: Optional[int] = None    # 0–100
+    mmse_score: Optional[int] = None       # 0–30
+    moca_score: Optional[int] = None       # 0–30
+    age_years: Optional[int] = None
+
+class PolypharmacyRequest(BaseModel):
+    medications: List[Dict[str, Any]]      # [{name, drug_class, dose_mg, frequency}]
+    age_years: int
+    renal_function: Optional[str] = None   # normal/mild/moderate/severe
+    has_dementia: bool = False
+    has_falls_risk: bool = False
+    has_peptic_ulcer: bool = False
+    has_bleeding_risk: bool = False
+
+class FallRiskRequest(BaseModel):
+    fall_history_count: int = 0
+    secondary_diagnosis: bool = False
+    ambulatory_aid: str = "none"           # none/crutches/cane/walker/furniture
+    iv_therapy: bool = False
+    gait: str = "normal"                   # normal/weak/impaired
+    mental_status: str = "oriented"        # oriented/confused
+    tinnetti_gait: Optional[int] = None    # 0–12
+    tinnetti_balance: Optional[int] = None # 0–16
+    age_years: Optional[int] = None
+
+CFS_DESCRIPTIONS = {
+    1: ("Very Fit", "Robust, active, energetic. Exercises regularly. Among the fittest for their age."),
+    2: ("Well", "No active disease symptoms but less fit than CFS 1. Exercises occasionally."),
+    3: ("Managing Well", "Medical problems well controlled but not regularly active beyond walking."),
+    4: ("Living With Very Mild Frailty", "Not dependent, but symptoms limit activities. Often slows down or tires during the day."),
+    5: ("Living With Mild Frailty", "More evident slowing. Dependent on others for IADLs. Typically not dependent for personal care."),
+    6: ("Living With Moderate Frailty", "Needs help with all outside activities and housekeeping. Difficulty with stairs. May need help bathing; minimal assistance dressing."),
+    7: ("Living With Severe Frailty", "Completely dependent for personal care from any cause. Stable and not at high risk of dying within 6 months."),
+    8: ("Living With Very Severe Frailty", "Completely dependent, approaching end of life. Could survive a minor illness but not a major one."),
+    9: ("Terminally Ill", "Approaching end of life. This category applies even if otherwise living with moderate or severe frailty."),
+}
+
+@app.post("/geriatrics/frailty")
+async def assess_frailty(req: FrailtyRequest):
+    cfs = req.clinical_frailty_scale
+    label, description = CFS_DESCRIPTIONS.get(cfs, ("Unknown", ""))
+
+    care_implications = []
+    resuscitation_note = None
+
+    if cfs <= 3:
+        frailty_category = "non_frail"
+        care_implications = [
+            "Standard care pathway appropriate",
+            "Encourage physical activity and preventive health",
+            "Annual review recommended",
+        ]
+    elif cfs <= 5:
+        frailty_category = "mildly_frail"
+        care_implications = [
+            "Comprehensive geriatric assessment (CGA) recommended",
+            "Optimise management of chronic conditions",
+            "Assess and address modifiable frailty factors",
+            "Falls prevention programme",
+            "Nutritional assessment",
+            "Medication review for polypharmacy",
+        ]
+    elif cfs <= 7:
+        frailty_category = "moderately_to_severely_frail"
+        care_implications = [
+            "Urgent CGA and multidisciplinary team (MDT) involvement",
+            "Advance care planning discussion",
+            "Carer support assessment",
+            "Hospital admission carries high risk of deconditioning",
+            "Prefer community/home-based care when safe",
+            "High risk of adverse outcomes from surgery/procedures — discuss risk/benefit",
+            "Medication deprescribing review",
+        ]
+        resuscitation_note = "Consider DNACPR discussion given frailty level. Document patient wishes."
+    else:
+        frailty_category = "very_severely_frail_or_terminal"
+        care_implications = [
+            "Palliative/comfort-focused care discussion",
+            "DNACPR strongly recommended — document and communicate",
+            "Prioritise symptom control and dignity",
+            "Avoid burdensome investigations unless they change management",
+            "Involve family/health proxy in decision-making",
+        ]
+        resuscitation_note = "DNACPR recommended. Focus on comfort care and dignity."
+
+    cognitive_flag = None
+    if req.mmse_score is not None and req.mmse_score < 24:
+        sev = "mild" if req.mmse_score >= 18 else ("moderate" if req.mmse_score >= 10 else "severe")
+        cognitive_flag = f"MMSE {req.mmse_score}/30 — {sev} cognitive impairment. Consider formal dementia workup."
+    elif req.moca_score is not None and req.moca_score < 26:
+        cognitive_flag = f"MoCA {req.moca_score}/30 — below normal threshold (26). Consider memory clinic referral."
+
+    functional_flag = None
+    if req.barthel_index is not None:
+        if req.barthel_index < 20:
+            functional_flag = f"Barthel {req.barthel_index}/100 — total dependence. Full nursing care required."
+        elif req.barthel_index < 60:
+            functional_flag = f"Barthel {req.barthel_index}/100 — significant dependence. Rehabilitation input needed."
+        elif req.barthel_index < 85:
+            functional_flag = f"Barthel {req.barthel_index}/100 — moderate independence. OT/PT assessment recommended."
+
+    return {
+        "cfs": cfs,
+        "label": label,
+        "description": description,
+        "frailty_category": frailty_category,
+        "care_implications": care_implications,
+        "resuscitation_note": resuscitation_note,
+        "cognitive_flag": cognitive_flag,
+        "functional_flag": functional_flag,
+    }
+
+
+# Beers Criteria 2023 — selected high-risk drugs in elderly
+BEERS_FLAGS = [
+    # Anticholinergics
+    {"drugs": ["amitriptyline","nortriptyline","imipramine","clomipramine","doxepin"], "category": "Anticholinergic TCA", "concern": "High anticholinergic burden — confusion, constipation, urinary retention, falls", "severity": "high"},
+    {"drugs": ["diphenhydramine","promethazine","hydroxyzine","chlorphenamine"], "category": "Anticholinergic antihistamine", "concern": "Highly anticholinergic — sedation, delirium, urinary retention in elderly", "severity": "high"},
+    {"drugs": ["oxybutynin","tolterodine","solifenacin","darifenacin"], "category": "Anticholinergic bladder agents", "concern": "Anticholinergic burden — avoid in dementia patients; prefer mirabegron", "severity": "moderate"},
+    # CNS
+    {"drugs": ["diazepam","lorazepam","clonazepam","alprazolam","temazepam","nitrazepam"], "category": "Benzodiazepine", "concern": "Increased risk of falls, cognitive impairment, MVA in elderly. Avoid unless on stable regimen with documented rationale.", "severity": "high"},
+    {"drugs": ["zolpidem","zopiclone","zaleplon"], "category": "Z-drug hypnotic", "concern": "Falls and fracture risk. Short-term use only. Prefer sleep hygiene interventions.", "severity": "high"},
+    {"drugs": ["haloperidol","chlorpromazine","thioridazine"], "category": "First-generation antipsychotic", "concern": "EPS, sedation, falls. Use second-generation with lowest effective dose if required.", "severity": "high"},
+    {"drugs": ["meperidine","pethidine"], "category": "Opioid (meperidine)", "concern": "Neurotoxic metabolite — avoid entirely in elderly. Use alternative opioid.", "severity": "high"},
+    # Cardiovascular
+    {"drugs": ["digoxin"], "category": "Cardiac glycoside", "concern": "Narrow therapeutic index — renal excretion reduced in elderly. Max 0.125mg/day unless AF rate control needed.", "severity": "moderate"},
+    {"drugs": ["amiodarone"], "category": "Antiarrhythmic", "concern": "High toxicity (thyroid, pulmonary, hepatic, neuropathy). Avoid as first-line in elderly unless no alternative.", "severity": "moderate"},
+    {"drugs": ["nifedipine"], "category": "Short-acting CCB", "concern": "Hypotension and falls risk. Use long-acting formulations only.", "severity": "moderate"},
+    # NSAIDs
+    {"drugs": ["ibuprofen","naproxen","diclofenac","indomethacin","ketorolac","piroxicam","meloxicam"], "category": "NSAID", "concern": "GI bleeding, acute kidney injury, fluid retention, worsening heart failure. Avoid if possible; use paracetamol instead.", "severity": "high"},
+    {"drugs": ["aspirin"], "category": "Aspirin (high-dose)", "concern": "GI bleeding risk increases with age. Only for established CVD — doses >100mg rarely indicated.", "severity": "moderate"},
+    # Hypoglycaemics
+    {"drugs": ["glibenclamide","glyburide","chlorpropamide"], "category": "Long-acting sulphonylurea", "concern": "Prolonged hypoglycaemia — particularly dangerous in elderly. Use shorter-acting agents.", "severity": "high"},
+    {"drugs": ["glimepiride","glipizide"], "category": "Sulphonylurea", "concern": "Hypoglycaemia risk. Prefer agents with lower hypoglycaemia risk (DPP-4i, SGLT2i).", "severity": "moderate"},
+    # Muscle relaxants
+    {"drugs": ["baclofen","methocarbamol","carisoprodol","cyclobenzaprine"], "category": "Muscle relaxant", "concern": "Poorly tolerated in elderly — sedation, anticholinergic effects, falls. Questionable efficacy.", "severity": "moderate"},
+    # Proton pump inhibitors
+    {"drugs": ["omeprazole","lansoprazole","pantoprazole","esomeprazole","rabeprazole"], "category": "PPI (long-term)", "concern": "Long-term use (>8 weeks without indication) — risk of C. diff, Mg deficiency, fracture. Review indication.", "severity": "low"},
+]
+
+@app.post("/geriatrics/polypharmacy")
+async def check_polypharmacy(req: PolypharmacyRequest):
+    flags = []
+    deprescribing_recs = []
+    drug_names_lower = [m.get("name", "").lower() for m in req.medications]
+
+    for rule in BEERS_FLAGS:
+        for drug_lower in drug_names_lower:
+            if any(beers in drug_lower for beers in rule["drugs"]):
+                matched_med = next((m for m in req.medications if any(b in m.get("name","").lower() for b in rule["drugs"])), {})
+                flags.append({
+                    "drug": matched_med.get("name", drug_lower),
+                    "category": rule["category"],
+                    "concern": rule["concern"],
+                    "severity": rule["severity"],
+                    "source": "Beers Criteria 2023",
+                })
+                if rule["severity"] == "high":
+                    deprescribing_recs.append(f"Consider deprescribing {matched_med.get('name', drug_lower)} — {rule['concern'][:80]}")
+
+    # Additional context-based flags
+    nsaid_names = ["ibuprofen","naproxen","diclofenac","indomethacin","ketorolac","piroxicam","meloxicam","aspirin"]
+    has_nsaid = any(any(n in d for n in nsaid_names) for d in drug_names_lower)
+
+    if has_nsaid and req.has_peptic_ulcer:
+        flags.append({"drug": "NSAID", "category": "DDI/Contraindication", "concern": "NSAID contraindicated with peptic ulcer history", "severity": "high", "source": "Clinical guidelines"})
+    if has_nsaid and req.has_bleeding_risk:
+        flags.append({"drug": "NSAID", "category": "DDI/Contraindication", "concern": "NSAID increases bleeding risk", "severity": "high", "source": "Clinical guidelines"})
+    if req.has_dementia:
+        anticholinergic_in_list = [m for m in req.medications if any(a in m.get("name","").lower() for a in ["amitriptyline","nortriptyline","oxybutynin","diphenhydramine","promethazine","haloperidol"])]
+        for m in anticholinergic_in_list:
+            deprescribing_recs.append(f"URGENT: {m.get('name')} is anticholinergic — worsens dementia and cognition. Deprescribe.")
+
+    total = len(req.medications)
+    polypharmacy_flag = total >= 5
+    excessive_flag = total >= 10
+
+    return {
+        "total_medications": total,
+        "polypharmacy": polypharmacy_flag,
+        "excessive_polypharmacy": excessive_flag,
+        "beers_flags": flags,
+        "high_severity_count": sum(1 for f in flags if f["severity"] == "high"),
+        "deprescribing_recommendations": deprescribing_recs,
+        "review_recommended": len(flags) > 0 or polypharmacy_flag,
+    }
+
+
+@app.post("/geriatrics/fall-risk")
+async def assess_fall_risk(req: FallRiskRequest):
+    # Morse Fall Scale
+    morse = 0
+    morse += 25 if req.fall_history_count > 0 else 0
+    morse += 15 if req.secondary_diagnosis else 0
+    aid_scores = {"none": 0, "crutches": 15, "cane": 15, "walker": 15, "furniture": 30}
+    morse += aid_scores.get(req.ambulatory_aid, 0)
+    morse += 20 if req.iv_therapy else 0
+    gait_scores = {"normal": 0, "weak": 10, "impaired": 20}
+    morse += gait_scores.get(req.gait, 0)
+    morse += 15 if req.mental_status == "confused" else 0
+
+    if morse < 25:
+        morse_risk = "low"
+    elif morse < 45:
+        morse_risk = "medium"
+    else:
+        morse_risk = "high"
+
+    # Tinetti score (lower = higher risk)
+    tinnetti_total = None
+    tinnetti_risk = None
+    if req.tinnetti_gait is not None and req.tinnetti_balance is not None:
+        tinnetti_total = req.tinnetti_gait + req.tinnetti_balance
+        if tinnetti_total < 19:
+            tinnetti_risk = "high"
+        elif tinnetti_total < 24:
+            tinnetti_risk = "medium"
+        else:
+            tinnetti_risk = "low"
+
+    # Combined
+    risk_levels = [morse_risk]
+    if tinnetti_risk:
+        risk_levels.append(tinnetti_risk)
+    overall_risk = "high" if "high" in risk_levels else ("medium" if "medium" in risk_levels else "low")
+
+    prevention_plan = []
+    if overall_risk == "high":
+        prevention_plan = [
+            "Bed/chair alarm activated",
+            "Non-slip footwear at all times",
+            "Hourly rounding by nursing staff",
+            "Bed in lowest position, brakes locked",
+            "Clear call bell within reach",
+            "Physiotherapy assessment for gait/strength",
+            "Occupational therapy — home hazard assessment",
+            "Medication review — withhold sedatives/hypotensives where possible",
+            "Vitamin D supplementation if deficient",
+            "Hip protectors if appropriate",
+        ]
+    elif overall_risk == "medium":
+        prevention_plan = [
+            "Non-slip footwear",
+            "2-hourly rounding",
+            "Ensure bed in lowest position",
+            "Call bell within reach",
+            "Exercise programme to improve balance and strength",
+            "Review medications for contributors to falls",
+            "Vitamin D supplementation",
+        ]
+    else:
+        prevention_plan = [
+            "Standard falls education provided",
+            "Encourage regular physical activity",
+            "Annual review of fall risk",
+        ]
+
+    return {
+        "morse_score": morse,
+        "morse_risk": morse_risk,
+        "tinnetti_total": tinnetti_total,
+        "tinnetti_risk": tinnetti_risk,
+        "overall_risk": overall_risk,
+        "prevention_plan": prevention_plan,
+        "physiotherapy_referral": overall_risk in ("medium", "high"),
+        "occupational_therapy_referral": overall_risk == "high",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 71 — Neurology CDSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class StrokeTriageRequest(BaseModel):
+    stroke_type: str                          # ischemic / hemorrhagic / TIA / unknown
+    onset_time: Optional[str] = None          # ISO datetime
+    last_known_well: Optional[str] = None     # ISO datetime
+    nihss_score: Optional[int] = None
+    age_years: Optional[int] = None
+    weight_kg: Optional[float] = None
+    prior_stroke: bool = False
+    prior_tia: bool = False
+    anticoagulant_use: bool = False
+    anticoagulant_name: Optional[str] = None
+    recent_surgery_days: Optional[int] = None
+    recent_bleed: bool = False
+    bp_systolic: Optional[int] = None
+    platelet_count: Optional[int] = None
+    inr: Optional[float] = None
+    blood_glucose: Optional[float] = None
+    ct_findings: Optional[str] = None        # normal / hemorrhage / early_ischemia / unknown
+
+class SeizureClassifyRequest(BaseModel):
+    seizure_type: str                         # focal_aware / focal_impaired / focal_to_bilateral / generalised_tonic_clonic / absence / myoclonic / atonic / unknown
+    age_years: Optional[int] = None
+    first_seizure: bool = False
+    cluster_event: bool = False
+    status_epilepticus: bool = False
+    current_aed: List[str] = []
+    eeg_findings: Optional[str] = None       # normal / focal / generalised / not_done
+    mri_findings: Optional[str] = None       # normal / structural / not_done
+    trigger_identified: bool = False
+    pregnancy: bool = False
+    renal_impairment: bool = False
+    hepatic_impairment: bool = False
+
+class HeadacheDiagnoseRequest(BaseModel):
+    duration_hours: Optional[float] = None
+    severity_vas: Optional[int] = None        # 0-10
+    location: Optional[str] = None            # unilateral / bilateral / occipital / frontal
+    quality: Optional[str] = None             # throbbing / pressing / stabbing / burning
+    aura_present: bool = False
+    aura_features: List[str] = []             # visual / sensory / motor / speech / brainstem / retinal
+    nausea_vomiting: bool = False
+    photo_phonophobia: bool = False
+    worse_with_activity: bool = False
+    autonomic_features: bool = False          # lacrimation, rhinorrhoea, ptosis, miosis
+    timing: Optional[str] = None             # episodic / daily / nocturnal
+    triggers: List[str] = []
+    frequency_per_month: Optional[int] = None
+    medication_use_days_per_month: Optional[int] = None
+    thunderclap: bool = False
+    fever_present: bool = False
+    neck_stiffness: bool = False
+    papilloedema: bool = False
+    new_onset_over_50: bool = False
+    progressive_worsening: bool = False
+
+@app.post("/neurology/stroke/triage")
+async def stroke_triage(req: StrokeTriageRequest):
+    alerts = []
+    actions = []
+    tpa_eligible = False
+    tpa_contraindications = []
+    door_to_needle_target = None
+
+    # Parse times
+    minutes_from_onset = None
+    reference_time = req.onset_time or req.last_known_well
+    if reference_time:
+        try:
+            from datetime import timezone
+            onset_dt = datetime.fromisoformat(reference_time.replace('Z', '+00:00'))
+            now_dt = datetime.now(timezone.utc)
+            minutes_from_onset = int((now_dt - onset_dt).total_seconds() / 60)
+        except Exception:
+            pass
+
+    # ── tPA eligibility (ischemic only) ──────────────────────────────────────
+    if req.stroke_type == "ischemic":
+        door_to_needle_target = 60  # minutes
+
+        # Time window
+        if minutes_from_onset is not None:
+            if minutes_from_onset <= 270:  # 4.5h
+                tpa_eligible = True
+                alerts.append(f"ALERT: {minutes_from_onset} minutes from onset — within 4.5h tPA window.")
+                actions.append("Activate stroke team immediately")
+                actions.append("Urgent non-contrast CT head")
+                actions.append(f"Door-to-needle target: {door_to_needle_target} minutes")
+            elif minutes_from_onset <= 360 and req.nihss_score and req.nihss_score >= 6:
+                tpa_eligible = False
+                alerts.append(f"Outside standard 4.5h window ({minutes_from_onset} min). Consider thrombectomy if large vessel occlusion confirmed.")
+                actions.append("Urgent CTA/MRA to assess vessel patency")
+            else:
+                alerts.append(f"Beyond treatment window ({minutes_from_onset} min). Focus on secondary prevention.")
+        else:
+            alerts.append("Onset time unknown — use last-known-well time. Consider MR diffusion/perfusion mismatch for late window.")
+
+        # tPA contraindications
+        if req.ct_findings == "hemorrhage":
+            tpa_eligible = False
+            tpa_contraindications.append("Haemorrhage on CT — absolute contraindication to tPA")
+        if req.anticoagulant_use:
+            tpa_eligible = False
+            tpa_contraindications.append(f"Anticoagulant use ({req.anticoagulant_name or 'unknown'}) — contraindication; check levels")
+        if req.inr and req.inr > 1.7:
+            tpa_eligible = False
+            tpa_contraindications.append(f"INR {req.inr} > 1.7 — contraindication")
+        if req.platelet_count and req.platelet_count < 100000:
+            tpa_eligible = False
+            tpa_contraindications.append(f"Platelet count {req.platelet_count} < 100,000 — contraindication")
+        if req.bp_systolic and req.bp_systolic > 185:
+            tpa_contraindications.append(f"BP {req.bp_systolic} systolic > 185 — lower BP before tPA (labetalol/nicardipine)")
+            actions.append("Lower BP to <185/110 before tPA administration")
+        if req.recent_surgery_days and req.recent_surgery_days < 14:
+            tpa_eligible = False
+            tpa_contraindications.append(f"Recent surgery {req.recent_surgery_days} days ago — contraindication")
+        if req.recent_bleed:
+            tpa_eligible = False
+            tpa_contraindications.append("Recent major bleeding — contraindication")
+        if req.blood_glucose and (req.blood_glucose < 2.7 or req.blood_glucose > 22.2):
+            tpa_contraindications.append(f"Blood glucose {req.blood_glucose} mmol/L out of range — correct before tPA")
+
+        if tpa_eligible and not tpa_contraindications:
+            actions.append("Prepare tPA (alteplase 0.9 mg/kg, max 90 mg; 10% IV bolus, 90% over 60 min)")
+            actions.append("Neurosurgery on standby")
+        elif not tpa_eligible and minutes_from_onset and minutes_from_onset <= 360:
+            actions.append("Assess for mechanical thrombectomy (large vessel occlusion, ASPECTS ≥6)")
+
+        # NIHSS severity
+        if req.nihss_score is not None:
+            if req.nihss_score >= 21:
+                actions.append(f"NIHSS {req.nihss_score} — severe stroke. ICU admission.")
+            elif req.nihss_score >= 5:
+                actions.append(f"NIHSS {req.nihss_score} — moderate stroke. Stroke unit admission.")
+            else:
+                actions.append(f"NIHSS {req.nihss_score} — mild stroke. Monitor for deterioration.")
+
+    elif req.stroke_type == "TIA":
+        abcd2 = 0
+        if req.age_years and req.age_years >= 60: abcd2 += 1
+        if req.bp_systolic and req.bp_systolic >= 140: abcd2 += 1
+        if req.nihss_score and req.nihss_score >= 1: abcd2 += 2
+        actions = [
+            f"ABCD2 score estimated (limited data): {abcd2}/7",
+            "Start aspirin 300mg immediately if not on anticoagulant",
+            "Urgent brain imaging (MRI DWI preferred)",
+            "Carotid imaging within 24h if anterior circulation TIA",
+            "Cardiac monitoring (12-lead ECG, Holter if paroxysmal AF suspected)",
+            "Fasting lipids, glucose, FBC, coagulation",
+            "Neurology review within 24h (high-risk TIA) or 7 days (low-risk)",
+        ]
+        alerts.append("TIA: 2-day stroke risk up to 10% — treat as emergency.")
+
+    elif req.stroke_type == "hemorrhagic":
+        actions = [
+            "Urgent neurosurgery consult",
+            "Reverse anticoagulation immediately if applicable",
+            "Blood pressure control (target SBP <140 if lobar; individualise for deep)",
+            "CT angiography to exclude underlying vascular malformation",
+            "Avoid antiplatelets and anticoagulants acutely",
+            "ICP monitoring if GCS ≤8",
+        ]
+        alerts.append("Haemorrhagic stroke — tPA absolutely contraindicated.")
+
+    # Universal actions
+    actions += [
+        "NPO until formal swallow screen",
+        "Supplemental O2 if SpO2 <94%",
+        "Avoid hyperthermia — treat fever aggressively",
+        "Avoid hyperglycaemia — target BG 6–10 mmol/L",
+        "DVT prophylaxis (compression stockings acutely)",
+    ]
+
+    return {
+        "stroke_type": req.stroke_type,
+        "minutes_from_onset": minutes_from_onset,
+        "tpa_eligible": tpa_eligible,
+        "tpa_contraindications": tpa_contraindications,
+        "door_to_needle_target_minutes": door_to_needle_target,
+        "alerts": alerts,
+        "actions": actions,
+        "thrombectomy_window": req.stroke_type == "ischemic" and (minutes_from_onset or 0) <= 360,
+    }
+
+
+@app.post("/neurology/seizure/classify")
+async def classify_seizure(req: SeizureClassifyRequest):
+    # Status epilepticus is always a medical emergency
+    if req.status_epilepticus:
+        return {
+            "classification": "Status Epilepticus",
+            "emergency": True,
+            "immediate_actions": [
+                "ABCDE assessment",
+                "IV access x2 — draw bloods (glucose, electrolytes, AED levels, FBC, LFTs, CRP, cultures)",
+                "IV Lorazepam 0.1 mg/kg (max 4 mg) — repeat after 5 min if seizure continues",
+                "If no IV access: IM Midazolam 10 mg (adult) or buccal midazolam",
+                "After 10 min without response: IV Levetiracetam 60 mg/kg (max 4500 mg) OR IV Valproate 40 mg/kg",
+                "After 20 min without response: Anaesthetic induction — Propofol / Thiopental",
+                "Urgent CT head and LP (when safe)",
+                "Treat underlying cause (hypoglycaemia, meningitis, toxin)",
+            ],
+            "aed_recommendations": [],
+            "monitoring": ["EEG monitoring if intubated", "ICU admission"],
+        }
+
+    # Classification
+    classification = req.seizure_type.replace('_', ' ').title()
+    aed_first_line = []
+    aed_second_line = []
+    monitoring = []
+    notes = []
+
+    is_generalised = req.seizure_type in ("generalised_tonic_clonic", "absence", "myoclonic", "atonic")
+    is_focal = req.seizure_type.startswith("focal")
+
+    if req.first_seizure:
+        notes.append("Single unprovoked seizure: discuss risk/benefit of AED initiation. Many clinicians defer unless structural cause or high recurrence risk.")
+
+    if req.cluster_event:
+        notes.append("Cluster seizures: consider rescue medication (buccal midazolam or rectal diazepam) for home use.")
+
+    # AED selection
+    if is_generalised:
+        if req.pregnancy:
+            aed_first_line = ["Lamotrigine (lowest teratogenic risk for generalised epilepsy)", "Levetiracetam (consider with folate supplementation)"]
+            notes.append("AVOID Valproate in women of childbearing age — highly teratogenic (SANAD II / MHRA).")
+        elif req.seizure_type == "absence":
+            aed_first_line = ["Ethosuximide (absence seizures only)", "Valproate (if not female of childbearing age)", "Lamotrigine"]
+        elif req.seizure_type == "myoclonic":
+            aed_first_line = ["Valproate (if male or post-menopausal)", "Levetiracetam", "Clonazepam"]
+            notes.append("Avoid Carbamazepine, Oxcarbazepine, Phenytoin — may worsen myoclonic epilepsy.")
+        else:
+            aed_first_line = ["Valproate (males/post-menopausal women)", "Lamotrigine", "Levetiracetam"]
+            aed_second_line = ["Topiramate", "Clobazam (adjunct)", "Perampanel (adjunct)"]
+
+    elif is_focal:
+        if req.pregnancy:
+            aed_first_line = ["Lamotrigine", "Levetiracetam"]
+        else:
+            aed_first_line = ["Lamotrigine", "Levetiracetam", "Carbamazepine (controlled release)"]
+            aed_second_line = ["Oxcarbazepine", "Zonisamide", "Lacosamide", "Eslicarbazepine"]
+
+    if req.renal_impairment:
+        notes.append("Renal impairment: reduce Levetiracetam dose. Avoid Gabapentin/Pregabalin accumulation. Oxcarbazepine may cause hyponatraemia.")
+    if req.hepatic_impairment:
+        notes.append("Hepatic impairment: avoid Valproate. Use Lamotrigine with caution (slower titration).")
+
+    # Current AED breakthrough
+    if req.current_aed:
+        notes.append(f"Breakthrough seizure on: {', '.join(req.current_aed)}. Check compliance and drug levels before adding second AED.")
+
+    monitoring = [
+        "EEG (ideally within 24h for first seizure, or inter-ictal)",
+        "MRI brain (unless known epilepsy with no change in semiology)",
+        "Bloods: glucose, electrolytes, calcium, magnesium, FBC, renal/hepatic function, AED levels",
+        "ECG (exclude cardiac arrhythmia masquerading as seizure)",
+    ]
+
+    driving_advice = "Patient must not drive — notify appropriate authority. Seizure-free period required (varies by jurisdiction: typically 1 year for group 1, longer for commercial)."
+
+    return {
+        "classification": classification,
+        "emergency": False,
+        "aed_first_line": aed_first_line,
+        "aed_second_line": aed_second_line,
+        "monitoring": monitoring,
+        "notes": notes,
+        "driving_advice": driving_advice,
+        "neurology_referral": True,
+    }
+
+
+@app.post("/neurology/headache/diagnose")
+async def diagnose_headache(req: HeadacheDiagnoseRequest):
+    # Red flags — always check first
+    red_flags = []
+    if req.thunderclap:
+        red_flags.append("THUNDERCLAP ONSET — exclude subarachnoid haemorrhage (non-contrast CT then LP if CT negative)")
+    if req.fever_present and req.neck_stiffness:
+        red_flags.append("Fever + neck stiffness — exclude meningitis (LP urgently)")
+    if req.papilloedema:
+        red_flags.append("Papilloedema — raised ICP. Urgent neuroimaging.")
+    if req.new_onset_over_50:
+        red_flags.append("New onset headache >50 years — exclude giant cell arteritis (ESR/CRP/temporal artery biopsy) and space-occupying lesion")
+    if req.progressive_worsening:
+        red_flags.append("Progressive worsening pattern — exclude space-occupying lesion or chronic subdural haematoma")
+
+    if red_flags:
+        return {
+            "diagnosis": "Red Flag Headache — urgent investigation required",
+            "red_flags": red_flags,
+            "ichd3_code": None,
+            "treatment": [],
+            "preventive": [],
+            "notes": ["Do not diagnose primary headache disorder until secondary causes excluded."],
+        }
+
+    # ICHD-3 classification
+    diagnosis = "Unclassified headache"
+    ichd3_code = None
+    treatment = []
+    preventive = []
+    notes = []
+
+    # Cluster headache
+    if req.autonomic_features and req.duration_hours and req.duration_hours < 3 and req.severity_vas and req.severity_vas >= 7:
+        diagnosis = "Cluster Headache"
+        ichd3_code = "3.1"
+        treatment = [
+            "100% O2 via non-rebreather mask 12–15 L/min × 15–20 min (abort attack)",
+            "SC Sumatriptan 6mg (fastest onset) or nasal Zolmitriptan 5mg",
+            "Avoid oral triptans — too slow for cluster",
+        ]
+        preventive = [
+            "Verapamil 240–960 mg/day (first-line preventive)",
+            "Short course oral prednisolone as bridge",
+            "Lithium (refractory cases)",
+        ]
+        notes.append("Episodic cluster: bouts last 6–12 weeks. Chronic: >1 year without remission.")
+
+    # Migraine with aura
+    elif req.aura_present and req.nausea_vomiting:
+        diagnosis = "Migraine with Aura"
+        ichd3_code = "1.2"
+        treatment = [
+            "Triptan (e.g. Sumatriptan 50–100 mg oral / 6 mg SC) + NSAID/paracetamol at onset",
+            "Domperidone 10 mg or Metoclopramide for nausea",
+            "Avoid opioids — increase chronification risk",
+        ]
+        if req.frequency_per_month and req.frequency_per_month >= 4:
+            preventive = [
+                "Topiramate 50–200 mg/day",
+                "Propranolol 80–240 mg/day",
+                "Amitriptyline 10–75 mg nocte",
+                "CGRP monoclonal antibodies (Erenumab/Fremanezumab) — if 4+ migraine days/month and 2+ preventives failed",
+            ]
+
+    # Migraine without aura
+    elif req.nausea_vomiting and req.worse_with_activity and req.photo_phonophobia and not req.autonomic_features:
+        diagnosis = "Migraine without Aura"
+        ichd3_code = "1.1"
+        treatment = [
+            "Triptan + NSAID combination at headache onset (not during aura)",
+            "Naproxen 500 mg or Ibuprofen 400 mg ± antiemetic",
+        ]
+        if req.frequency_per_month and req.frequency_per_month >= 4:
+            preventive = [
+                "Topiramate 50–200 mg/day",
+                "Propranolol 80–240 mg/day",
+                "Candesartan 16 mg/day",
+                "CGRP antagonists if refractory",
+            ]
+
+    # Tension type
+    elif not req.nausea_vomiting and not req.photo_phonophobia and not req.worse_with_activity:
+        quality_match = req.quality == "pressing"
+        bilateral_match = req.location == "bilateral"
+        if quality_match or bilateral_match:
+            diagnosis = "Tension-Type Headache"
+            ichd3_code = "2.2" if (req.frequency_per_month and req.frequency_per_month >= 15) else "2.1"
+            treatment = [
+                "Simple analgesia: Paracetamol 1g or Ibuprofen 400 mg at onset",
+                "Avoid opioids and combination analgesics (overuse risk)",
+                "Relaxation techniques, CBT for chronic TTH",
+            ]
+            if req.frequency_per_month and req.frequency_per_month >= 15:
+                preventive = ["Amitriptyline 25–75 mg nocte (first-line for chronic TTH)"]
+                notes.append("Chronic TTH (≥15 days/month): exclude medication overuse headache (MOH).")
+
+    # MOH
+    if req.medication_use_days_per_month and req.medication_use_days_per_month >= 10:
+        notes.append(f"MEDICATION OVERUSE HEADACHE suspected — analgesic use {req.medication_use_days_per_month} days/month ≥10. Withdrawal essential (guided detoxification).")
+        if not any("MOH" in n for n in notes):
+            diagnosis = f"{diagnosis} + Medication Overuse Headache"
+            ichd3_code = "8.2"
+
+    return {
+        "diagnosis": diagnosis,
+        "ichd3_code": ichd3_code,
+        "red_flags": red_flags,
+        "treatment": treatment,
+        "preventive": preventive,
+        "notes": notes,
+        "diary_recommended": True,
+        "neurology_referral": req.frequency_per_month and req.frequency_per_month >= 8,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SPRINT 72 — PULMONOLOGY CDSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SpirometryInterpretRequest(BaseModel):
+    fev1: Optional[float] = None           # litres
+    fvc: Optional[float] = None            # litres
+    fev1_fvc_ratio: Optional[float] = None
+    fev1_percent_predicted: Optional[float] = None
+    fvc_percent_predicted: Optional[float] = None
+    tlc_percent_predicted: Optional[float] = None
+    dlco_percent_predicted: Optional[float] = None
+    pre_post_bronchodilator: bool = False
+    reversibility_percent: Optional[float] = None  # % improvement post-BD
+    age: Optional[int] = None
+    smoking_pack_years: Optional[float] = None
+
+@app.post("/pulmonology/spirometry/interpret")
+async def interpret_spirometry(req: SpirometryInterpretRequest):
+    """GOLD staging, spirometric pattern classification, reversibility."""
+
+    ratio = req.fev1_fvc_ratio
+    fev1pp = req.fev1_percent_predicted or 0
+    fvcpp = req.fvc_percent_predicted or 0
+    tlcpp = req.tlc_percent_predicted
+    dlcopp = req.dlco_percent_predicted
+    rev = req.reversibility_percent or 0
+
+    # Determine pattern
+    if ratio is None:
+        pattern = "indeterminate"
+        pattern_detail = "FEV1/FVC ratio not provided."
+    elif ratio < 0.70:
+        pattern = "obstructive"
+        pattern_detail = "FEV1/FVC < 0.70 consistent with airflow obstruction."
+    elif fvcpp < 80 and (tlcpp is None or tlcpp < 80):
+        pattern = "restrictive"
+        pattern_detail = "FVC reduced with preserved or elevated ratio; restriction likely."
+    elif fvcpp < 80 and ratio < 0.70:
+        pattern = "mixed"
+        pattern_detail = "Reduced FVC and reduced ratio; mixed obstructive-restrictive pattern."
+    else:
+        pattern = "normal"
+        pattern_detail = "FEV1/FVC ≥ 0.70 and FVC ≥ 80% predicted."
+
+    # GOLD staging (obstructive only)
+    gold_stage = None
+    gold_label = None
+    if pattern == "obstructive":
+        if fev1pp >= 80:
+            gold_stage = 1; gold_label = "GOLD 1 — Mild"
+        elif fev1pp >= 50:
+            gold_stage = 2; gold_label = "GOLD 2 — Moderate"
+        elif fev1pp >= 30:
+            gold_stage = 3; gold_label = "GOLD 3 — Severe"
+        else:
+            gold_stage = 4; gold_label = "GOLD 4 — Very Severe"
+
+    # Reversibility
+    reversible = False
+    reversibility_note = None
+    if req.pre_post_bronchodilator and rev >= 12:
+        reversible = True
+        reversibility_note = f"Significant bronchodilator reversibility ({rev:.1f}%). Consider asthma-COPD overlap."
+
+    # DLCO comment
+    dlco_note = None
+    if dlcopp is not None:
+        if dlcopp < 40:
+            dlco_note = "Severely reduced DLCO — significant parenchymal disease or pulmonary vascular involvement."
+        elif dlcopp < 60:
+            dlco_note = "Moderately reduced DLCO."
+        elif dlcopp < 80:
+            dlco_note = "Mildly reduced DLCO."
+
+    # Recommendations
+    recommendations = []
+    if pattern == "obstructive":
+        if gold_stage and gold_stage >= 2:
+            recommendations.append("Prescribe LAMA ± LABA per GOLD guidelines.")
+        if gold_stage and gold_stage >= 3:
+            recommendations.append("Consider ICS combination therapy (LABA/ICS or triple).")
+            recommendations.append("Refer for pulmonary rehabilitation.")
+        if gold_stage == 4:
+            recommendations.append("Assess for long-term oxygen therapy (LTOT).")
+            recommendations.append("Discuss lung volume reduction or transplantation referral.")
+    elif pattern == "restrictive":
+        recommendations.append("Investigate cause: ILD, chest wall, neuromuscular, obesity.")
+        recommendations.append("Consider HRCT thorax and rheumatology/ILD referral.")
+    elif pattern == "mixed":
+        recommendations.append("Address both obstructive and restrictive components.")
+
+    if req.smoking_pack_years and req.smoking_pack_years > 10:
+        recommendations.append("Smoking cessation is the single most effective intervention to slow FEV1 decline.")
+
+    return {
+        "pattern": pattern,
+        "pattern_detail": pattern_detail,
+        "gold_stage": gold_stage,
+        "gold_label": gold_label,
+        "reversible": reversible,
+        "reversibility_note": reversibility_note,
+        "dlco_note": dlco_note,
+        "recommendations": recommendations,
+    }
+
+
+class AsthmaStepUpRequest(BaseModel):
+    current_gina_step: int = Field(..., ge=1, le=5)
+    act_score: Optional[int] = None        # 5–25
+    control: str = "uncontrolled"          # controlled | partly_controlled | uncontrolled
+    reliever_puffs_per_week: Optional[int] = None
+    oral_steroid_courses_last_year: Optional[int] = None
+    eosinophil_count: Optional[float] = None   # cells × 10⁹/L
+    ige_total: Optional[float] = None          # IU/mL
+    age_years: Optional[int] = None
+    pregnancy: bool = False
+    smoking: bool = False
+    adherence_confirmed: bool = True
+
+GINA_STEPS = {
+    1: "SABA reliever only (as-needed low-dose ICS-formoterol or SABA)",
+    2: "Low-dose ICS + as-needed SABA",
+    3: "Low-dose ICS-LABA (preferred) OR medium-dose ICS",
+    4: "Medium-dose ICS-LABA",
+    5: "High-dose ICS-LABA + tiotropium; consider biologics",
+}
+
+@app.post("/pulmonology/asthma/stepup")
+async def asthma_step_up(req: AsthmaStepUpRequest):
+    """GINA 2023 step-up / step-down recommendations."""
+
+    # Check adherence before stepping up
+    if not req.adherence_confirmed and req.current_gina_step < 5:
+        return {
+            "action": "check_adherence",
+            "current_step": req.current_gina_step,
+            "recommended_step": req.current_gina_step,
+            "current_regimen": GINA_STEPS[req.current_gina_step],
+            "recommended_regimen": GINA_STEPS[req.current_gina_step],
+            "rationale": "Confirm inhaler technique and adherence before escalating therapy.",
+            "biologics": [],
+            "notes": [],
+        }
+
+    act = req.act_score or 0
+    ctrl = req.control
+
+    # Step direction
+    if ctrl == "controlled" and (act == 0 or act >= 20):
+        new_step = max(1, req.current_gina_step - 1)
+        action = "step_down"
+    elif ctrl in ("partly_controlled", "uncontrolled") or (act > 0 and act < 20):
+        new_step = min(5, req.current_gina_step + 1)
+        action = "step_up"
+    else:
+        new_step = req.current_gina_step
+        action = "maintain"
+
+    # Biologic eligibility (Step 5)
+    biologics = []
+    if new_step == 5:
+        eos = req.eosinophil_count or 0
+        ige = req.ige_total or 0
+        if eos >= 0.3:
+            biologics.append("Mepolizumab or Benralizumab (anti-IL-5/IL-5Rα) — eosinophilic asthma")
+        if eos >= 0.25 and req.oral_steroid_courses_last_year and req.oral_steroid_courses_last_year >= 2:
+            biologics.append("Dupilumab (anti-IL-4Rα) — type-2 inflammation")
+        if ige >= 30 and req.age_years and req.age_years >= 6:
+            biologics.append("Omalizumab (anti-IgE) — allergic asthma with elevated IgE")
+        if not biologics:
+            biologics.append("Assess phenotype/endotype to select biologic agent")
+
+    notes = []
+    if req.pregnancy:
+        notes.append("In pregnancy: maintain current ICS; LABA considered safe; avoid systemic steroids unless essential.")
+    if req.smoking:
+        notes.append("Smoking impairs ICS response. Prioritise smoking cessation. Consider higher ICS doses.")
+    if req.reliever_puffs_per_week and req.reliever_puffs_per_week >= 3:
+        notes.append("Frequent reliever use (≥3 puffs/week) indicates poor control — escalate.")
+    if req.oral_steroid_courses_last_year and req.oral_steroid_courses_last_year >= 2:
+        notes.append("≥2 OCS courses last year = severe asthma — pursue biologic evaluation.")
+
+    return {
+        "action": action,
+        "current_step": req.current_gina_step,
+        "recommended_step": new_step,
+        "current_regimen": GINA_STEPS[req.current_gina_step],
+        "recommended_regimen": GINA_STEPS[new_step],
+        "rationale": f"ACT {act}, control: {ctrl} → {action} to Step {new_step}.",
+        "biologics": biologics,
+        "notes": notes,
+    }
+
+
+class OxygenPrescribeRequest(BaseModel):
+    indication: str                        # hypoxaemia | cluster_headache | palliative | procedural | copd_ltot
+    spo2_resting: Optional[float] = None   # %
+    pao2_resting: Optional[float] = None   # kPa or mmHg
+    paco2_resting: Optional[float] = None
+    copd_diagnosis: bool = False
+    type2_respiratory_failure: bool = False
+    target_high_spo2: bool = False         # e.g. post-cardiac arrest neuroprotection
+
+DEVICE_FIO2 = {
+    "nasal_cannula_1lpm": ("Nasal Cannula @ 1 L/min", 0.24),
+    "nasal_cannula_2lpm": ("Nasal Cannula @ 2 L/min", 0.28),
+    "nasal_cannula_4lpm": ("Nasal Cannula @ 4 L/min", 0.36),
+    "simple_mask_6lpm":   ("Simple Face Mask @ 6 L/min", 0.40),
+    "venturi_24pct":      ("Venturi Mask 24%", 0.24),
+    "venturi_28pct":      ("Venturi Mask 28%", 0.28),
+    "venturi_35pct":      ("Venturi Mask 35%", 0.35),
+    "non_rebreather":     ("Non-Rebreather Mask @ 15 L/min", 0.90),
+    "high_flow_nasal":    ("High-Flow Nasal Cannula (titrate FiO2)", None),
+}
+
+@app.post("/pulmonology/oxygen/prescribe")
+async def prescribe_oxygen(req: OxygenPrescribeRequest):
+    """Evidence-based oxygen prescription: target SpO2, device, flow rate."""
+
+    alerts = []
+    device = None
+    flow_lpm = None
+    fio2 = None
+    target_spo2_min = 94
+    target_spo2_max = 98
+
+    indication = req.indication.lower()
+
+    if indication == "copd_ltot":
+        # BTS LTOT criteria
+        target_spo2_min = 88
+        target_spo2_max = 92
+        if req.type2_respiratory_failure:
+            device = "Venturi Mask 28%"; flow_lpm = 2.0; fio2 = 0.28
+            alerts.append("Type II RF: controlled oxygen. Target SpO2 88-92%. Monitor for CO2 retention.")
+        else:
+            device = "Nasal Cannula @ 2 L/min"; flow_lpm = 2.0; fio2 = 0.28
+        if req.pao2_resting and req.pao2_resting > 7.3:
+            alerts.append("PaO2 > 7.3 kPa at rest — does not yet meet LTOT threshold. Reassess after optimising therapy.")
+
+    elif indication == "cluster_headache":
+        target_spo2_min = 94
+        target_spo2_max = 99
+        device = "Non-Rebreather Mask @ 15 L/min"; flow_lpm = 15.0; fio2 = 0.90
+        alerts.append("100% O2 via NRM at 15 L/min for 15–20 minutes at cluster headache onset — high-level evidence.")
+
+    elif indication == "palliative":
+        target_spo2_min = 88
+        target_spo2_max = 95
+        device = "Nasal Cannula @ 2 L/min"; flow_lpm = 2.0; fio2 = 0.28
+        alerts.append("Palliation: only continue if patient-perceived benefit. Discontinue if no symptomatic relief.")
+
+    elif indication == "procedural":
+        target_spo2_min = 94
+        target_spo2_max = 98
+        device = "Nasal Cannula @ 4 L/min"; flow_lpm = 4.0; fio2 = 0.36
+
+    else:
+        # General hypoxaemia / acute illness
+        if req.copd_diagnosis and not req.target_high_spo2:
+            target_spo2_min = 88
+            target_spo2_max = 92
+            device = "Venturi Mask 28%"; flow_lpm = 2.0; fio2 = 0.28
+            alerts.append("COPD: target SpO2 88-92% to avoid hypercapnic drive suppression.")
+        else:
+            target_spo2_min = 94
+            target_spo2_max = 98
+            if req.spo2_resting and req.spo2_resting < 85:
+                device = "Non-Rebreather Mask @ 15 L/min"; flow_lpm = 15.0; fio2 = 0.90
+                alerts.append("Severe hypoxaemia — NRM. Reassess for intubation if no improvement.")
+            elif req.spo2_resting and req.spo2_resting < 90:
+                device = "High-Flow Nasal Cannula (titrate FiO2)"; flow_lpm = 40.0
+                alerts.append("Consider HFNC. Titrate FiO2 to achieve SpO2 ≥ 94%.")
+            else:
+                device = "Nasal Cannula @ 2 L/min"; flow_lpm = 2.0; fio2 = 0.28
+
+    if req.paco2_resting and req.paco2_resting > 6.0:
+        alerts.append(f"Elevated PaCO2 ({req.paco2_resting} kPa) — caution with high-flow oxygen. Use controlled delivery.")
+
+    return {
+        "indication": req.indication,
+        "recommended_device": device,
+        "flow_rate_lpm": flow_lpm,
+        "fio2_approximate": fio2,
+        "target_spo2_min": target_spo2_min,
+        "target_spo2_max": target_spo2_max,
+        "alerts": alerts,
+        "monitoring": [
+            "Measure SpO2 continuously during titration.",
+            "ABG within 30–60 min if type II RF risk or SpO2 not improving.",
+            "Reassess device and flow rate at each clinical review.",
+        ],
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

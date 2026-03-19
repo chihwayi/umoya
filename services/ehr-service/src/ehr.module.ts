@@ -18,6 +18,18 @@ import { FhirController } from './controllers/fhir.controller';
 import { Hl7Controller } from './controllers/hl7.controller';
 import { ClaimsController } from './controllers/claims.controller';
 import { CdssController } from './controllers/cdss.controller';
+import { CdssDecisionLogController } from './controllers/cdss-decision-log.controller';
+import { NurseTaskController } from './controllers/nurse-task.controller';
+import { AmbientController } from './controllers/ambient.controller';
+import { EncounterPrechartController } from './controllers/encounter-prechart.controller';
+import { InboxController } from './controllers/inbox.controller';
+import { TbController } from './controllers/tb.controller';
+import { PediatricsController } from './controllers/pediatrics.controller';
+import { MentalHealthController } from './controllers/mental-health.controller';
+import { MalariaController } from './controllers/malaria.controller';
+import { GeriatricsController } from './controllers/geriatrics.controller';
+import { NeurologyController } from './controllers/neurology.controller';
+import { PulmonologyController } from './controllers/pulmonology.controller';
 import { Dhis2Controller } from './controllers/dhis2.controller';
 import { ReportsController } from './controllers/reports.controller';
 import { NotificationsController } from './controllers/notifications.controller';
@@ -120,6 +132,22 @@ import { Hl7Service } from './services/hl7.service';
 import { TenantService } from './services/tenant.service';
 import { ClaimsService } from './services/claims.service';
 import { CdssService } from './services/cdss.service';
+import { CdssDecisionLogService } from './services/cdss-decision-log.service';
+import { CdssOutcomeBatchService } from './services/cdss-outcome-batch.service';
+import { NurseTaskService } from './services/nurse-task.service';
+import { CareGapSchedulerService } from './services/care-gap-scheduler.service';
+import { AmbientService } from './services/ambient.service';
+import { AmbientGateway } from './gateways/ambient.gateway';
+import { AppointmentPrecharterService } from './services/appointment-precharter.service';
+import { InboxTriageService } from './services/inbox-triage.service';
+import { InboxGateway } from './gateways/inbox.gateway';
+import { TbService } from './services/tb.service';
+import { PediatricsService } from './services/pediatrics.service';
+import { MentalHealthService } from './services/mental-health.service';
+import { MalariaService } from './services/malaria.service';
+import { GeriatricsService } from './services/geriatrics.service';
+import { NeurologyService } from './services/neurology.service';
+import { PulmonologyService } from './services/pulmonology.service';
 import { Dhis2Service } from './services/dhis2.service';
 import { Dhis2SchedulerService } from './services/dhis2-scheduler.service';
 import { ReportsService } from './services/reports.service';
@@ -293,6 +321,18 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     Hl7Controller,
     ClaimsController,
     CdssController,
+    CdssDecisionLogController,
+    NurseTaskController,
+    AmbientController,
+    EncounterPrechartController,
+    InboxController,
+    TbController,
+    PediatricsController,
+    MentalHealthController,
+    MalariaController,
+    GeriatricsController,
+    NeurologyController,
+    PulmonologyController,
     Dhis2Controller,
     ReportsController,
     NotificationsController,
@@ -439,6 +479,22 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TerminologyImportService,
     Icd10Service,
     CdssHookService,
+    CdssDecisionLogService,
+    CdssOutcomeBatchService,
+    NurseTaskService,
+    CareGapSchedulerService,
+    AmbientService,
+    AmbientGateway,
+    AppointmentPrecharterService,
+    InboxTriageService,
+    InboxGateway,
+    TbService,
+    PediatricsService,
+    MentalHealthService,
+    MalariaService,
+    GeriatricsService,
+    NeurologyService,
+    PulmonologyService,
     SpecialtyAutomationService,
     MetricsService,
     MedicationHistoryService,

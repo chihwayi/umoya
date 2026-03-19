@@ -138,6 +138,50 @@ import { MedicalAidEligibilityCheck } from '../entities/medical-aid-eligibility-
 import { MedicalAidClaimSubmission } from '../entities/medical-aid-claim-submission.entity';
 import { MedicalAidRemittance } from '../entities/medical-aid-remittance.entity';
 import { PatientEarlyWarningScore } from '../entities/patient-early-warning-score.entity';
+import { PatientSdoh } from '../entities/patient-sdoh.entity';
+import { CdssDecisionLog } from '../entities/cdss-decision-log.entity';
+import { NurseTask } from '../entities/nurse-task.entity';
+import { CareGapDetection } from '../entities/care-gap-detection.entity';
+import { AmbientSession } from '../entities/ambient-session.entity';
+import { EncounterPrechart } from '../entities/encounter-prechart.entity';
+import { InboxItem } from '../entities/inbox-item.entity';
+import { TbPatient } from '../entities/tb-patient.entity';
+import { TbDiagnosis } from '../entities/tb-diagnosis.entity';
+import { TbTreatmentEpisode } from '../entities/tb-treatment-episode.entity';
+import { TbDotRecord } from '../entities/tb-dot-record.entity';
+import { TbContactInvestigation } from '../entities/tb-contact-investigation.entity';
+import { TbDrugSusceptibility } from '../entities/tb-drug-susceptibility.entity';
+import { TbOutcome } from '../entities/tb-outcome.entity';
+import { PediatricProfile } from '../entities/pediatric-profile.entity';
+import { GrowthMeasurement } from '../entities/growth-measurement.entity';
+import { DevelopmentalMilestone } from '../entities/developmental-milestone.entity';
+import { NeonatalRecord } from '../entities/neonatal-record.entity';
+import { SchoolHealthRecord } from '../entities/school-health-record.entity';
+import { MentalHealthScreening } from '../entities/mental-health-screening.entity';
+import { PsychiatricEncounter } from '../entities/psychiatric-encounter.entity';
+import { CrisisEvent } from '../entities/crisis-event.entity';
+import { SafePlan } from '../entities/safe-plan.entity';
+import { PsychotropicMedication } from '../entities/psychotropic-medication.entity';
+import { SeizureRecord } from '../entities/seizure-record.entity';
+import { StrokeAssessment } from '../entities/stroke-assessment.entity';
+import { HeadacheDiary } from '../entities/headache-diary.entity';
+import { NeurologyExamination } from '../entities/neurology-examination.entity';
+import { CognitiveAssessment } from '../entities/cognitive-assessment.entity';
+import { GeriatricAssessment } from '../entities/geriatric-assessment.entity';
+import { FallsAssessment } from '../entities/falls-assessment.entity';
+import { PressureInjuryAssessment } from '../entities/pressure-injury-assessment.entity';
+import { PolypharmacyReview } from '../entities/polypharmacy-review.entity';
+import { AdvanceCarePlanning } from '../entities/advance-care-planning.entity';
+import { MalariaCase } from '../entities/malaria-case.entity';
+import { MalariaTest } from '../entities/malaria-test.entity';
+import { MalariaTreatment } from '../entities/malaria-treatment.entity';
+import { MalariaContactTracing } from '../entities/malaria-contact-tracing.entity';
+import { MalariaSurveillanceReport } from '../entities/malaria-surveillance-report.entity';
+import { SpirometryResult } from '../entities/spirometry-result.entity';
+import { CopdAssessment } from '../entities/copd-assessment.entity';
+import { AsthmaRecord } from '../entities/asthma-record.entity';
+import { PeakFlowDiary } from '../entities/peak-flow-diary.entity';
+import { OxygenTherapyRecord } from '../entities/oxygen-therapy-record.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface TenantDhis2Config {
@@ -453,6 +497,50 @@ export class TenantService {
         MedicalAidClaimSubmission,
         MedicalAidRemittance,
         PatientEarlyWarningScore,
+        PatientSdoh,
+        CdssDecisionLog,
+        NurseTask,
+        CareGapDetection,
+        AmbientSession,
+        EncounterPrechart,
+        InboxItem,
+        TbPatient,
+        TbDiagnosis,
+        TbTreatmentEpisode,
+        TbDotRecord,
+        TbContactInvestigation,
+        TbDrugSusceptibility,
+        TbOutcome,
+        PediatricProfile,
+        GrowthMeasurement,
+        DevelopmentalMilestone,
+        NeonatalRecord,
+        SchoolHealthRecord,
+        MentalHealthScreening,
+        PsychiatricEncounter,
+        CrisisEvent,
+        SafePlan,
+        PsychotropicMedication,
+        SeizureRecord,
+        StrokeAssessment,
+        HeadacheDiary,
+        NeurologyExamination,
+        CognitiveAssessment,
+        GeriatricAssessment,
+        FallsAssessment,
+        PressureInjuryAssessment,
+        PolypharmacyReview,
+        AdvanceCarePlanning,
+        SpirometryResult,
+        CopdAssessment,
+        AsthmaRecord,
+        PeakFlowDiary,
+        OxygenTherapyRecord,
+        MalariaCase,
+        MalariaTest,
+        MalariaTreatment,
+        MalariaContactTracing,
+        MalariaSurveillanceReport,
       ],
       logging: false,
     });
