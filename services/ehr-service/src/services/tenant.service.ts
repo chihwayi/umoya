@@ -196,6 +196,10 @@ import { SymptomBurdenScore } from '../entities/symptom-burden-score.entity';
 import { GoalsOfCare } from '../entities/goals-of-care.entity';
 import { AdvanceDirectiveRecord } from '../entities/advance-directive-record.entity';
 import { PalliativeMedicationReview } from '../entities/palliative-medication-review.entity';
+import { NutritionalScreening } from '../entities/nutritional-screening.entity';
+import { NutritionalAssessment } from '../entities/nutritional-assessment.entity';
+import { DietaryPrescription } from '../entities/dietary-prescription.entity';
+import { NutritionMonitoring } from '../entities/nutrition-monitoring.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface TenantDhis2Config {
@@ -564,6 +568,10 @@ export class TenantService {
         GoalsOfCare,
         AdvanceDirectiveRecord,
         PalliativeMedicationReview,
+        NutritionalScreening,
+        NutritionalAssessment,
+        DietaryPrescription,
+        NutritionMonitoring,
         MalariaCase,
         MalariaTest,
         MalariaTreatment,

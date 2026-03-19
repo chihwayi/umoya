@@ -6518,6 +6518,296 @@ def palliative_symptom_manage(req: SymptomManageReq):
     }
 
 
+# ── Sprint 76: Nutrition & Dietetics CDSS ────────────────────────────────────
+
+class NutritionScreenReq(BaseModel):
+    tool: str = Field("NRS2002", description="NRS2002 / MUST / MNA / STAMP_pediatric")
+    # NRS2002 fields
+    nrs_nutritional_impairment: int = Field(0, ge=0, le=3)   # 0–3
+    nrs_disease_severity: int = Field(0, ge=0, le=3)
+    age_over_70: bool = False
+    # MUST fields
+    must_bmi_score: int = Field(0, ge=0, le=2)
+    must_weight_loss_score: int = Field(0, ge=0, le=2)
+    must_acute_disease_score: int = Field(0, ge=0, le=2)
+    # MNA short-form answers (0–14)
+    mna_sf_score: Optional[int] = None
+    # Demographics
+    age_years: Optional[int] = None
+    weight_kg: Optional[float] = None
+    height_cm: Optional[float] = None
+
+@app.post("/nutrition/screen")
+def nutrition_screen(req: NutritionScreenReq):
+    """
+    Nutritional risk screening: NRS-2002, MUST, MNA short form.
+    """
+    tool = req.tool.upper()
+    score = 0
+    risk = "low"
+    recommendations = []
+    next_steps = []
+
+    if tool == "NRS2002":
+        score = req.nrs_nutritional_impairment + req.nrs_disease_severity + (1 if req.age_over_70 else 0)
+        if score >= 3:
+            risk = "high"
+            recommendations.append("Initiate nutritional support — dietitian referral urgent")
+            recommendations.append("Set calorie, protein, fluid targets within 24h")
+            next_steps.append("Commence oral nutritional supplements (ONS) if oral route available")
+            next_steps.append("Consider enteral feeding if oral intake inadequate after 48h")
+        elif score >= 1:
+            risk = "moderate"
+            recommendations.append("Weekly screening; dietitian review within 72h")
+            next_steps.append("Encourage high-protein diet; ONS if BMI <20 or weight loss >5%")
+        else:
+            risk = "low"
+            recommendations.append("Reassess weekly or at clinical deterioration")
+
+    elif tool == "MUST":
+        score = req.must_bmi_score + req.must_weight_loss_score + req.must_acute_disease_score
+        if score >= 2:
+            risk = "high"
+            recommendations.append("Initiate nutritional support; refer to dietitian")
+            recommendations.append("Monitor daily; set calorie/protein targets")
+        elif score == 1:
+            risk = "moderate"
+            recommendations.append("Document dietary intake for 3 days; dietitian review")
+        else:
+            risk = "low"
+            recommendations.append("Routine re-screening: weekly in hospital, monthly in community")
+
+    elif tool == "MNA":
+        s = req.mna_sf_score or 0
+        if s <= 7:
+            risk = "high"
+            score = s
+            recommendations.append("Malnourished — full MNA assessment + dietitian referral")
+        elif s <= 11:
+            risk = "moderate"
+            score = s
+            recommendations.append("At risk of malnutrition — dietary advice and ONS consideration")
+        else:
+            risk = "low"
+            score = s
+            recommendations.append("Normal nutritional status — routine review")
+
+    bmi = None
+    if req.weight_kg and req.height_cm:
+        bmi = round(req.weight_kg / ((req.height_cm / 100) ** 2), 1)
+        if bmi < 18.5:
+            recommendations.append(f"BMI {bmi} — underweight; energy-dense diet recommended")
+        elif bmi > 30:
+            recommendations.append(f"BMI {bmi} — obese; optimise protein whilst managing calories")
+
+    return {
+        "tool": tool,
+        "total_score": score,
+        "risk_category": risk,
+        "bmi": bmi,
+        "recommendations": recommendations,
+        "next_steps": next_steps,
+    }
+
+
+class NutritionPrescribeReq(BaseModel):
+    weight_kg: float
+    height_cm: float
+    age_years: int
+    sex: str = "male"               # male / female
+    activity_level: str = "sedentary"  # sedentary / light / moderate / active / very_active
+    stress_factor: str = "none"     # none / mild / moderate / severe / burns
+    route: str = "oral"             # oral / NGT / PEG / TPN / PN
+    special_diet: Optional[str] = None
+    renal_impairment: bool = False
+    hepatic_impairment: bool = False
+    is_critically_ill: bool = False
+    pregnant: bool = False
+
+@app.post("/nutrition/prescribe")
+def nutrition_prescribe(req: NutritionPrescribeReq):
+    """
+    Energy and protein requirements using Mifflin-St Jeor + Harris-Benedict
+    activity/stress factors (ESPEN guidelines 2023).
+    """
+    # Mifflin-St Jeor BMR
+    if req.sex.lower() == "female":
+        bmr = 10 * req.weight_kg + 6.25 * req.height_cm - 5 * req.age_years - 161
+    else:
+        bmr = 10 * req.weight_kg + 6.25 * req.height_cm - 5 * req.age_years + 5
+
+    # Activity factor
+    AF = {"sedentary": 1.2, "light": 1.375, "moderate": 1.55, "active": 1.725, "very_active": 1.9}
+    activity_factor = AF.get(req.activity_level, 1.2)
+
+    # Stress factor
+    SF = {"none": 1.0, "mild": 1.1, "moderate": 1.25, "severe": 1.5, "burns": 1.8}
+    stress_factor = SF.get(req.stress_factor, 1.0)
+
+    # TEE
+    tee = bmr * activity_factor * stress_factor
+
+    # Critical illness: ESPEN recommends 20–25 kcal/kg early, up to 30 kcal/kg once stable
+    if req.is_critically_ill:
+        tee = min(tee, req.weight_kg * 25)
+
+    # Pregnancy bonus
+    if req.pregnant:
+        tee += 300
+
+    # Protein target
+    if req.is_critically_ill:
+        protein_g = req.weight_kg * 1.5
+    elif req.stress_factor in ("severe", "burns"):
+        protein_g = req.weight_kg * 2.0
+    elif req.stress_factor == "moderate":
+        protein_g = req.weight_kg * 1.5
+    elif req.renal_impairment:
+        protein_g = req.weight_kg * 0.8  # CKD non-dialysis conservative
+    else:
+        protein_g = req.weight_kg * 1.2
+
+    # Fluid target (35 ml/kg; adjusted for age >65)
+    fluid_ml = req.weight_kg * (30 if req.age_years > 65 else 35)
+
+    bmi = round(req.weight_kg / ((req.height_cm / 100) ** 2), 1)
+
+    # Route recommendations
+    route_notes = []
+    if req.route == "oral":
+        route_notes.append("Fortify meals with protein supplements if intake <75% of target")
+    elif req.route in ("NGT", "NJ"):
+        route_notes.append("Confirm tube position before feeds; start at 25 ml/h; titrate to target over 24–48h")
+    elif req.route in ("PEG",):
+        route_notes.append("Bolus or continuous feeding; gastric residual volumes <500 ml")
+    elif req.route in ("TPN", "PN"):
+        route_notes.append("Line care protocol; monitor glucose 4-hourly; monitor electrolytes daily")
+        route_notes.append("Peripheral PN acceptable up to 900 mOsm/L; central TPN >900 mOsm/L")
+
+    # Micronutrient notes
+    micro = []
+    if req.stress_factor in ("severe", "burns"):
+        micro.append("High-dose zinc, selenium, vitamin C, vitamin E (antioxidant protocol)")
+    if req.renal_impairment:
+        micro.append("Restrict K⁺, PO₄, Na⁺ per serum levels; avoid excess fluid")
+    if req.hepatic_impairment:
+        micro.append("BCAA-enriched formula if hepatic encephalopathy; restrict Na⁺")
+
+    return {
+        "bmr_kcal": round(bmr),
+        "tee_kcal": round(tee),
+        "protein_target_g": round(protein_g, 1),
+        "fluid_target_ml": round(fluid_ml),
+        "bmi": bmi,
+        "route": req.route,
+        "route_notes": route_notes,
+        "micronutrient_notes": micro,
+        "formula_suggestion": "High-protein polymeric formula (1.2–2.0 kcal/ml)" if req.route != "oral" else None,
+        "guideline": "ESPEN 2023 Clinical Nutrition Guidelines",
+    }
+
+
+class RefeedingRiskReq(BaseModel):
+    duration_starvation_days: int
+    weight_kg: float
+    bmi: Optional[float] = None
+    serum_potassium_mmol_l: Optional[float] = None
+    serum_phosphate_mmol_l: Optional[float] = None
+    serum_magnesium_mmol_l: Optional[float] = None
+    has_alcohol_dependence: bool = False
+    has_insulin_dependent_dm: bool = False
+    has_malabsorption: bool = False
+    planned_calorie_rate_kcal_h: Optional[float] = None
+
+@app.post("/nutrition/refeeding-risk")
+def nutrition_refeeding_risk(req: RefeedingRiskReq):
+    """
+    Refeeding syndrome risk assessment (NICE CG32 / ASPEN guidelines).
+    """
+    risk_factors = []
+    high_risk = False
+    very_high_risk = False
+    alerts = []
+
+    # NICE criteria
+    one_or_more = False
+    two_or_more_count = 0
+
+    bmi = req.bmi or (None)
+
+    if bmi and bmi < 16:
+        risk_factors.append("BMI <16 kg/m²")
+        very_high_risk = True
+    elif bmi and bmi < 18.5:
+        risk_factors.append("BMI <18.5 kg/m²")
+        two_or_more_count += 1
+
+    if req.duration_starvation_days >= 10:
+        risk_factors.append(f"Little or no nutritional intake for {req.duration_starvation_days} days (≥10)")
+        two_or_more_count += 1
+    elif req.duration_starvation_days >= 5:
+        one_or_more = True
+        risk_factors.append(f"Reduced intake {req.duration_starvation_days} days")
+
+    if req.has_alcohol_dependence:
+        risk_factors.append("Alcohol dependence")
+        two_or_more_count += 1
+
+    if req.has_insulin_dependent_dm:
+        risk_factors.append("Insulin-dependent diabetes (poorly controlled)")
+        one_or_more = True
+
+    if req.has_malabsorption:
+        risk_factors.append("Malabsorption syndrome")
+        two_or_more_count += 1
+
+    # Electrolytes
+    electrolyte_alerts = []
+    if req.serum_potassium_mmol_l is not None and req.serum_potassium_mmol_l < 3.5:
+        electrolyte_alerts.append(f"Hypokalaemia: K⁺ {req.serum_potassium_mmol_l} mmol/L — correct before refeeding")
+    if req.serum_phosphate_mmol_l is not None and req.serum_phosphate_mmol_l < 0.8:
+        electrolyte_alerts.append(f"Hypophosphataemia: PO₄ {req.serum_phosphate_mmol_l} mmol/L — HIGH RISK REFEEDING SYNDROME")
+        very_high_risk = True
+    if req.serum_magnesium_mmol_l is not None and req.serum_magnesium_mmol_l < 0.7:
+        electrolyte_alerts.append(f"Hypomagnesaemia: Mg²⁺ {req.serum_magnesium_mmol_l} mmol/L — correct before refeeding")
+
+    if very_high_risk or two_or_more_count >= 2:
+        risk_level = "very_high"
+    elif two_or_more_count >= 1 or one_or_more:
+        risk_level = "high"
+    elif len(risk_factors) > 0:
+        risk_level = "moderate"
+    else:
+        risk_level = "low"
+
+    # Recommendations
+    recommendations = []
+    if risk_level in ("very_high", "high"):
+        recommendations.append("Start feeds at 5–10 kcal/kg/day; increase slowly over 4–7 days")
+        recommendations.append("Thiamine 200–300 mg IV/IM BEFORE and for 10 days; Pabrinex if alcohol dependence")
+        recommendations.append("Oral phosphate, potassium, magnesium replacement started before feeding")
+        recommendations.append("Monitor electrolytes twice daily for first 48h; ECG monitoring")
+        recommendations.append("Dietitian + physician review within 24h")
+        if req.planned_calorie_rate_kcal_h and req.weight_kg:
+            safe_max_kcal = req.weight_kg * 10
+            if req.planned_calorie_rate_kcal_h * 24 > safe_max_kcal:
+                alerts.append(f"Planned rate {req.planned_calorie_rate_kcal_h * 24:.0f} kcal/day exceeds safe start ({safe_max_kcal:.0f} kcal/day) — reduce rate")
+    elif risk_level == "moderate":
+        recommendations.append("Start at 50% estimated requirements; advance cautiously over 3 days")
+        recommendations.append("Thiamine supplementation orally; monitor electrolytes daily")
+    else:
+        recommendations.append("Standard nutritional support; routine monitoring")
+
+    return {
+        "risk_level": risk_level,
+        "risk_factors": risk_factors,
+        "electrolyte_alerts": electrolyte_alerts,
+        "recommendations": recommendations,
+        "alerts": alerts,
+        "guideline": "NICE CG32 / ASPEN Refeeding Syndrome Guidelines",
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

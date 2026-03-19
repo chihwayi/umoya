@@ -10697,4 +10697,82 @@ export const cdssApi = {
       headers: { Authorization: `Bearer ${token}` },
     });
   },
+
+  // ── Nutrition & Dietetics ─────────────────────────────────────────────────
+  getNutritionScreenings: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/nutrition/patient/${patientId}/screening`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addNutritionScreening: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/nutrition/patient/${patientId}/screening`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  getNutritionAssessments: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/nutrition/patient/${patientId}/assessment`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addNutritionAssessment: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/nutrition/patient/${patientId}/assessment`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  getNutritionPrescriptions: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/nutrition/patient/${patientId}/prescription`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addNutritionPrescription: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/nutrition/patient/${patientId}/prescription`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  getNutritionMonitoring: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/nutrition/patient/${patientId}/monitoring`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addNutritionMonitoring: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/nutrition/patient/${patientId}/monitoring`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  cdssNutritionScreen: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/nutrition/cdss/screen', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
+  cdssNutritionPrescribe: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/nutrition/cdss/prescribe', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
+  cdssRefeedingRisk: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/nutrition/cdss/refeeding-risk', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
 };
