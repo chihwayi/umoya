@@ -835,6 +835,13 @@ export class DatabaseProvisioningService {
         description: 'community_resources, sdoh_referrals, sdoh_screening_logs tables',
         statements: () => this.getSprint78SdohModuleStatements(),
       },
+      {
+        id: 'sprint79_ntd_regional',
+        label: 'Sprint 79 - Neglected Tropical Diseases + Regional Module',
+        version: '2026.03.19',
+        description: 'ntd_cases, cholera_cases, typhoid_cases, regional_disease_reports tables',
+        statements: () => this.getSprint79NtdRegionalStatements(),
+      },
     ];
   }
 
@@ -14338,6 +14345,80 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint79NtdRegionalStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS ntd_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        disease TEXT NOT NULL,
+        species TEXT,
+        acquisition_route TEXT,
+        presenting_manifestations TEXT[],
+        stool_urine_result TEXT,
+        treatment TEXT,
+        mass_chemoprophylaxis_campaign BOOLEAN NOT NULL DEFAULT FALSE,
+        diagnosis_date DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ntd_cases_patient ON ntd_cases (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ntd_cases_disease ON ntd_cases (disease)`,
+      `CREATE TABLE IF NOT EXISTS cholera_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        case_classification TEXT NOT NULL DEFAULT 'suspected',
+        onset DATE NOT NULL,
+        dehydration_severity TEXT,
+        ivf_given BOOLEAN NOT NULL DEFAULT FALSE,
+        oral_rehydration BOOLEAN NOT NULL DEFAULT FALSE,
+        antibiotic TEXT,
+        contact_tracing JSONB NOT NULL DEFAULT '[]',
+        outbreak_cluster TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_cholera_patient ON cholera_cases (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_cholera_cluster ON cholera_cases (outbreak_cluster)`,
+      `CREATE TABLE IF NOT EXISTS typhoid_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        onset_date DATE NOT NULL,
+        widal_titer TEXT,
+        blood_culture_result TEXT,
+        resistance_pattern TEXT[],
+        chloramphenicol_sensitivity TEXT,
+        treatment TEXT,
+        complication TEXT[],
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_typhoid_patient ON typhoid_cases (patient_id)`,
+      `CREATE TABLE IF NOT EXISTS regional_disease_reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        report_period TEXT NOT NULL,
+        period_type TEXT NOT NULL,
+        facility_id TEXT,
+        malaria_cases INT NOT NULL DEFAULT 0,
+        malaria_deaths INT NOT NULL DEFAULT 0,
+        cholera_cases INT NOT NULL DEFAULT 0,
+        cholera_deaths INT NOT NULL DEFAULT 0,
+        typhoid_cases INT NOT NULL DEFAULT 0,
+        ntd_cases INT NOT NULL DEFAULT 0,
+        schistosomiasis_cases INT NOT NULL DEFAULT 0,
+        submitted_to_mohcc BOOLEAN NOT NULL DEFAULT FALSE,
+        submission_date DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (report_period, period_type)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_rdr_period ON regional_disease_reports (report_period, period_type)`,
     ];
   }
 
