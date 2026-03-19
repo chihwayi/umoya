@@ -140,6 +140,12 @@ import { FhirInboundController } from './controllers/fhir-inbound.controller';
 import { MultilingualEducationController } from './controllers/multilingual-education.controller';
 import { OfflineSyncController } from './controllers/offline-sync.controller';
 import { IotController } from './controllers/iot.controller';
+import { RadiologyAiController } from './controllers/radiology-ai.controller';
+import { AlertDeliveryController } from './controllers/alert-delivery.controller';
+import { ModelMonitoringController } from './controllers/model-monitoring.controller';
+import { PatientAiController } from './controllers/patient-ai.controller';
+import { ClinicalTrialMatchingController } from './controllers/clinical-trial-matching.controller';
+import { SupplyChainAiController } from './controllers/supply-chain-ai.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -330,6 +336,13 @@ import { FhirInboundService } from './services/fhir-inbound.service';
 import { MultilingualEducationService } from './services/multilingual-education.service';
 import { OfflineSyncService } from './services/offline-sync.service';
 import { IotService } from './services/iot.service';
+import { RadiologyAiService } from './services/radiology-ai.service';
+import { AlertDeliveryService } from './services/alert-delivery.service';
+import { ModelMonitoringService } from './services/model-monitoring.service';
+import { PatientAiService } from './services/patient-ai.service';
+import { ClinicalTrialMatchingService } from './services/clinical-trial-matching.service';
+import { SupplyChainAiService } from './services/supply-chain-ai.service';
+import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -490,6 +503,12 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MultilingualEducationController,
     OfflineSyncController,
     IotController,
+    RadiologyAiController,
+    AlertDeliveryController,
+    ModelMonitoringController,
+    PatientAiController,
+    ClinicalTrialMatchingController,
+    SupplyChainAiController,
   ],
   providers: [
     AuthService,
@@ -680,6 +699,13 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MultilingualEducationService,
     OfflineSyncService,
     IotService,
+    RadiologyAiService,
+    AlertDeliveryService,
+    ModelMonitoringService,
+    PatientAiService,
+    ClinicalTrialMatchingService,
+    SupplyChainAiService,
+    CriticalAlertGateway,
     VoiceTranscriptionGateway,
     RolesGuard,
     JwtStrategy,

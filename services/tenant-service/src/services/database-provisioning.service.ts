@@ -947,6 +947,48 @@ export class DatabaseProvisioningService {
         description: 'iot_device_registrations, iot_data_ingestions tables',
         statements: () => this.getSprint95IotWearablesStatements(),
       },
+      {
+        id: 'sprint96_radiology_ai',
+        label: 'Sprint 96 - Radiology AI (DICOM + CXR/Retinal/Derm)',
+        version: '2026.03.19',
+        description: 'dicom_studies, radiology_ai_findings tables',
+        statements: () => this.getSprint96RadiologyAiStatements(),
+      },
+      {
+        id: 'sprint97_alert_delivery',
+        label: 'Sprint 97 - Real-Time Critical Alert Delivery',
+        version: '2026.03.19',
+        description: 'clinical_alert_deliveries table; ALTER users add fcm_token, on_call, phone',
+        statements: () => this.getSprint97AlertDeliveryStatements(),
+      },
+      {
+        id: 'sprint98_model_monitoring',
+        label: 'Sprint 98 - AI Model Drift & Fairness Monitoring',
+        version: '2026.03.19',
+        description: 'model_performance_metrics, model_fairness_reports tables',
+        statements: () => this.getSprint98ModelMonitoringStatements(),
+      },
+      {
+        id: 'sprint99_patient_ai',
+        label: 'Sprint 99 - Patient Conversational AI',
+        version: '2026.03.19',
+        description: 'symptom_checker_sessions, adherence_chat_logs tables',
+        statements: () => this.getSprint99PatientAiStatements(),
+      },
+      {
+        id: 'sprint100_trial_matching',
+        label: 'Sprint 100 - Clinical Trial Matching',
+        version: '2026.03.19',
+        description: 'trial_matches table with UNIQUE(patient_id, nct_id)',
+        statements: () => this.getSprint100TrialMatchingStatements(),
+      },
+      {
+        id: 'sprint101_supply_chain_ai',
+        label: 'Sprint 101 - Supply Chain AI / Stockout Prediction',
+        version: '2026.03.19',
+        description: 'pharmacy_inventory, stockout_predictions, procurement_alerts tables',
+        statements: () => this.getSprint101SupplyChainAiStatements(),
+      },
     ];
   }
 
@@ -14450,6 +14492,214 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint96RadiologyAiStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS dicom_studies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        imaging_order_id UUID,
+        study_uid VARCHAR(200) NOT NULL UNIQUE,
+        modality VARCHAR(20) NOT NULL,
+        body_part VARCHAR(50),
+        storage_key TEXT NOT NULL,
+        file_size_bytes BIGINT DEFAULT 0,
+        ai_analysis_requested BOOLEAN NOT NULL DEFAULT FALSE,
+        ai_analysis_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        acquired_at TIMESTAMPTZ,
+        uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_dicom_patient ON dicom_studies(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_dicom_status ON dicom_studies(ai_analysis_status)`,
+      `CREATE TABLE IF NOT EXISTS radiology_ai_findings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        study_id UUID NOT NULL,
+        patient_id UUID NOT NULL,
+        modality VARCHAR(20) NOT NULL,
+        findings JSONB NOT NULL DEFAULT '[]',
+        top_finding TEXT,
+        overall_confidence FLOAT,
+        heatmap_storage_key TEXT,
+        model_version VARCHAR(50),
+        radiologist_reviewed BOOLEAN NOT NULL DEFAULT FALSE,
+        radiologist_notes TEXT,
+        alerted BOOLEAN NOT NULL DEFAULT FALSE,
+        analyzed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_rad_findings_study ON radiology_ai_findings(study_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_rad_findings_patient ON radiology_ai_findings(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_rad_findings_alerted ON radiology_ai_findings(alerted) WHERE alerted=TRUE`,
+    ];
+  }
+
+  private getSprint97AlertDeliveryStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS clinical_alert_deliveries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        alert_type VARCHAR(50) NOT NULL,
+        source_entity_id UUID NOT NULL,
+        patient_id UUID NOT NULL,
+        recipient_user_id UUID NOT NULL,
+        recipient_role VARCHAR(30),
+        severity VARCHAR(20) NOT NULL,
+        message TEXT NOT NULL,
+        payload JSONB NOT NULL DEFAULT '{}',
+        websocket_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        fcm_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        sms_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
+        acknowledged_at TIMESTAMPTZ,
+        acknowledged_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_alert_del_recipient ON clinical_alert_deliveries(recipient_user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_alert_del_patient ON clinical_alert_deliveries(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_alert_del_ack ON clinical_alert_deliveries(acknowledged) WHERE acknowledged=FALSE`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS on_call BOOLEAN NOT NULL DEFAULT FALSE`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)`,
+    ];
+  }
+
+  private getSprint98ModelMonitoringStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS model_performance_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(50) NOT NULL,
+        evaluation_period VARCHAR(10) NOT NULL,
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        auc_roc FLOAT,
+        brier_score FLOAT,
+        sensitivity FLOAT,
+        specificity FLOAT,
+        ppv FLOAT,
+        calibration_data JSONB,
+        drift_detected BOOLEAN NOT NULL DEFAULT FALSE,
+        baseline_auc FLOAT,
+        computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_mpf_model_period ON model_performance_metrics(model_name, evaluation_period)`,
+      `CREATE INDEX IF NOT EXISTS idx_mpf_drift ON model_performance_metrics(drift_detected) WHERE drift_detected=TRUE`,
+      `CREATE TABLE IF NOT EXISTS model_fairness_reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(50) NOT NULL,
+        evaluation_period VARCHAR(10) NOT NULL,
+        dimension VARCHAR(30) NOT NULL,
+        group_metrics JSONB NOT NULL DEFAULT '{}',
+        max_disparity FLOAT,
+        fairness_flag BOOLEAN NOT NULL DEFAULT FALSE,
+        computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_mfr_model ON model_fairness_reports(model_name, evaluation_period)`,
+      `CREATE INDEX IF NOT EXISTS idx_mfr_flag ON model_fairness_reports(fairness_flag) WHERE fairness_flag=TRUE`,
+    ];
+  }
+
+  private getSprint99PatientAiStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS symptom_checker_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        reported_symptoms JSONB NOT NULL DEFAULT '[]',
+        duration_days INTEGER,
+        severity VARCHAR(20),
+        differential JSONB NOT NULL DEFAULT '[]',
+        triage_level VARCHAR(20),
+        recommended_action TEXT,
+        escalated_to_encounter BOOLEAN NOT NULL DEFAULT FALSE,
+        encounter_id UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_symptom_patient ON symptom_checker_sessions(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_symptom_triage ON symptom_checker_sessions(triage_level)`,
+      `CREATE TABLE IF NOT EXISTS adherence_chat_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        session_id UUID NOT NULL,
+        message_role VARCHAR(10) NOT NULL,
+        message TEXT NOT NULL,
+        intent VARCHAR(30),
+        medications_discussed JSONB NOT NULL DEFAULT '[]',
+        adherence_concern_flagged BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_adherence_patient ON adherence_chat_logs(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_adherence_session ON adherence_chat_logs(session_id)`,
+    ];
+  }
+
+  private getSprint100TrialMatchingStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS trial_matches (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        nct_id VARCHAR(20) NOT NULL,
+        trial_title TEXT NOT NULL,
+        phase VARCHAR(20),
+        condition VARCHAR(200) NOT NULL,
+        eligibility_score FLOAT NOT NULL DEFAULT 0,
+        inclusion_met JSONB NOT NULL DEFAULT '[]',
+        exclusion_flags JSONB NOT NULL DEFAULT '[]',
+        sponsor VARCHAR(200),
+        locations JSONB NOT NULL DEFAULT '[]',
+        status VARCHAR(20) NOT NULL DEFAULT 'matched',
+        contact_email VARCHAR(200),
+        matched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(patient_id, nct_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_trial_patient ON trial_matches(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_trial_condition ON trial_matches(condition)`,
+      `CREATE INDEX IF NOT EXISTS idx_trial_status ON trial_matches(status)`,
+    ];
+  }
+
+  private getSprint101SupplyChainAiStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS pharmacy_inventory (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        drug_id UUID NOT NULL,
+        drug_name VARCHAR(200) NOT NULL,
+        quantity_on_hand FLOAT NOT NULL DEFAULT 0,
+        unit VARCHAR(20),
+        reorder_level FLOAT DEFAULT 30,
+        reorder_quantity FLOAT,
+        last_counted_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ph_inv_drug ON pharmacy_inventory(drug_id)`,
+      `CREATE TABLE IF NOT EXISTS stockout_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        drug_id UUID,
+        drug_name VARCHAR(200) NOT NULL,
+        current_stock_units FLOAT NOT NULL DEFAULT 0,
+        avg_daily_consumption FLOAT NOT NULL DEFAULT 0,
+        days_to_stockout FLOAT,
+        predicted_stockout_date DATE,
+        safety_stock_days FLOAT NOT NULL DEFAULT 30,
+        reorder_quantity FLOAT,
+        risk_level VARCHAR(20) NOT NULL,
+        seasonal_factor FLOAT NOT NULL DEFAULT 1.0,
+        predicted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_stockout_drug ON stockout_predictions(drug_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_stockout_risk ON stockout_predictions(risk_level)`,
+      `CREATE TABLE IF NOT EXISTS procurement_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        prediction_id UUID NOT NULL,
+        drug_name VARCHAR(200) NOT NULL,
+        days_to_stockout FLOAT NOT NULL,
+        recommended_order_qty FLOAT NOT NULL,
+        urgency VARCHAR(20) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        acknowledged_by UUID,
+        acknowledged_at TIMESTAMPTZ,
+        order_reference VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_proc_alert_drug ON procurement_alerts(drug_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_proc_alert_status ON procurement_alerts(status)`,
     ];
   }
 
