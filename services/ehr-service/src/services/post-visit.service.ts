@@ -40,6 +40,7 @@ import {
 } from './soap-template-registry';
 import { PostVisitEscalationService } from './post-visit-escalation.service';
 import { PostVisitBillingIntelligenceService } from './post-visit-billing-intelligence.service';
+import { PostVisitCompanionMemoryService } from './post-visit-companion-memory.service';
 import { detectFromTranscript as realTimeAlertEngineDetect } from './real-time-alert-engine';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
 import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
@@ -323,6 +324,7 @@ export class PostVisitService {
     private readonly fileStorageService?: FileStorageService,
     @Optional() private readonly escalationService?: PostVisitEscalationService,
     @Optional() private readonly billingIntelligenceService?: PostVisitBillingIntelligenceService,
+    @Optional() private readonly companionMemoryService?: PostVisitCompanionMemoryService,
   ) {}
 
   // S108: Schema is now authoritative in provisioning scripts (sprint48–sprint58).
@@ -8522,11 +8524,15 @@ export class PostVisitService {
     return facts;
   }
 
+  // S108: Delegated to PostVisitCompanionMemoryService.
   async listSessionCompanionMemory(
     tenantDb: DataSource,
     sessionId: string,
     options: { limit?: number; includeInactive?: boolean } = {},
   ) {
+    if (this.companionMemoryService) {
+      return this.companionMemoryService.listSessionCompanionMemory(tenantDb, sessionId, options);
+    }
     await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
     if (!this.isCompanionMemoryEnabled()) {
@@ -8566,6 +8572,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitCompanionMemoryService.
   async curateCompanionMemory(
     tenantDb: DataSource,
     sessionId: string,
@@ -8573,6 +8580,9 @@ export class PostVisitService {
     payload: CuratePostVisitCompanionMemoryDto,
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.companionMemoryService) {
+      return this.companionMemoryService.curateCompanionMemory(tenantDb, sessionId, memoryId, payload, options);
+    }
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isCompanionMemoryEnabled()) {
       throw new BadRequestException('Companion memory is disabled by feature flag');
