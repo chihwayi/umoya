@@ -10775,4 +10775,70 @@ export const cdssApi = {
       headers: { Authorization: `Bearer ${token}` },
     });
   },
+
+  // ── ICU / Critical Care ───────────────────────────────────────────────────
+  getIcuAdmissions: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/icu/patient/${patientId}/admission`, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  addIcuAdmission: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/icu/patient/${patientId}/admission`, dto, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  updateIcuAdmission: async (id: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.patch(`/icu/admission/${id}`, dto, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  getIcuSofa: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/icu/patient/${patientId}/sofa`, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  addIcuSofa: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/icu/patient/${patientId}/sofa`, dto, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  getIcuVent: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/icu/patient/${patientId}/vent`, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  addIcuVent: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/icu/patient/${patientId}/vent`, dto, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  getIcuSedation: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/icu/patient/${patientId}/sedation`, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  addIcuSedation: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/icu/patient/${patientId}/sedation`, dto, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  getIcuLines: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/icu/patient/${patientId}/line`, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  addIcuLine: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/icu/patient/${patientId}/line`, dto, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  getIcuVasopressors: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/icu/patient/${patientId}/vasopressor`, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  addIcuVasopressor: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/icu/patient/${patientId}/vasopressor`, dto, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain } });
+  },
+  cdssIcuSofa: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/icu/cdss/sofa/calculate', data, { headers: { Authorization: `Bearer ${token}` } });
+  },
+  cdssIcuVent: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/icu/cdss/vent/protocol', data, { headers: { Authorization: `Bearer ${token}` } });
+  },
+  cdssIcuSedation: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/icu/cdss/sedation/assess', data, { headers: { Authorization: `Bearer ${token}` } });
+  },
 };

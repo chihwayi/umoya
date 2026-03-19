@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
   Pill, Baby,
-  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad
+  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad, MonitorHeart
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -27,6 +27,7 @@ import NephrologyDashboard from '../components/NephrologyDashboard';
 import DermatologyDashboard from '../components/DermatologyDashboard';
 import PalliativeDashboard from '../components/PalliativeDashboard';
 import NutritionDashboard from '../components/NutritionDashboard';
+import IcuDashboard from '../components/IcuDashboard';
 
 interface Patient {
   id: string;
@@ -76,7 +77,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology' | 'nephrology' | 'dermatology' | 'palliative' | 'nutrition'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology' | 'nephrology' | 'dermatology' | 'palliative' | 'nutrition' | 'icu'>('overview');
 
   // AI/RAG State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -671,6 +672,17 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               <Salad className="w-4 h-4 inline mr-2" />
               Nutrition
             </button>
+            <button
+              onClick={() => setActiveTab('icu')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'icu'
+                  ? 'border-slate-600 text-slate-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <MonitorHeart className="w-4 h-4 inline mr-2" />
+              ICU
+            </button>
           </nav>
         </div>
       </div>
@@ -1174,6 +1186,19 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               <Salad className="w-5 h-5" /> Nutrition & Dietetics
             </h2>
             <NutritionDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'icu' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <MonitorHeart className="w-5 h-5" /> ICU / Critical Care
+            </h2>
+            <IcuDashboard
               patientId={patientId}
               providerId={currentUser?.id || ''}
               tenantSubdomain={tenantSlug!}

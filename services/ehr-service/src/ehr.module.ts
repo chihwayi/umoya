@@ -34,6 +34,7 @@ import { NephrologyController } from './controllers/nephrology.controller';
 import { DermatologyController } from './controllers/dermatology.controller';
 import { PalliativeController } from './controllers/palliative.controller';
 import { NutritionController } from './controllers/nutrition.controller';
+import { IcuController } from './controllers/icu.controller';
 import { Dhis2Controller } from './controllers/dhis2.controller';
 import { ReportsController } from './controllers/reports.controller';
 import { NotificationsController } from './controllers/notifications.controller';
@@ -156,6 +157,7 @@ import { NephrologyService } from './services/nephrology.service';
 import { DermatologyService } from './services/dermatology.service';
 import { PalliativeService } from './services/palliative.service';
 import { NutritionService } from './services/nutrition.service';
+import { IcuService } from './services/icu.service';
 import { Dhis2Service } from './services/dhis2.service';
 import { Dhis2SchedulerService } from './services/dhis2-scheduler.service';
 import { ReportsService } from './services/reports.service';
@@ -345,6 +347,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DermatologyController,
     PalliativeController,
     NutritionController,
+    IcuController,
     Dhis2Controller,
     ReportsController,
     NotificationsController,
@@ -511,6 +514,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DermatologyService,
     PalliativeService,
     NutritionService,
+    IcuService,
     SpecialtyAutomationService,
     MetricsService,
     MedicationHistoryService,

@@ -6808,6 +6808,329 @@ def nutrition_refeeding_risk(req: RefeedingRiskReq):
     }
 
 
+# ── Sprint 77: ICU / Critical Care CDSS ──────────────────────────────────────
+
+class SofaCalcReq(BaseModel):
+    # Respiratory
+    pao2_fio2: Optional[float] = None        # mmHg or kPa × 7.5
+    on_ventilator: bool = False
+    # Coagulation
+    platelets_x10_9: Optional[float] = None
+    # Liver
+    bilirubin_umol_l: Optional[float] = None
+    # Cardiovascular
+    map_mmhg: Optional[float] = None
+    vasopressor_drug: Optional[str] = None   # "dopamine_5","dopamine_15","noradrenaline_01","noradrenaline_02","adrenaline_01","dobutamine"
+    vasopressor_dose: Optional[float] = None
+    # CNS
+    gcs: Optional[int] = None
+    # Renal
+    creatinine_umol_l: Optional[float] = None
+    urine_output_ml_24h: Optional[float] = None
+    previous_sofa: Optional[int] = None
+
+@app.post("/icu/sofa/calculate")
+def icu_sofa_calculate(req: SofaCalcReq):
+    """
+    Sequential Organ Failure Assessment (SOFA) score.
+    Each domain 0–4; total 0–24.
+    Delta SOFA ≥2 from baseline = organ dysfunction.
+    """
+    scores = {}
+
+    # Respiratory (PaO2/FiO2 ratio)
+    if req.pao2_fio2 is not None:
+        pf = req.pao2_fio2
+        if req.on_ventilator:
+            if pf < 100: scores["respiration"] = 4
+            elif pf < 200: scores["respiration"] = 3
+            elif pf < 300: scores["respiration"] = 2
+            elif pf < 400: scores["respiration"] = 1
+            else: scores["respiration"] = 0
+        else:
+            if pf < 200: scores["respiration"] = 2
+            elif pf < 300: scores["respiration"] = 1
+            else: scores["respiration"] = 0
+    else:
+        scores["respiration"] = None
+
+    # Coagulation
+    if req.platelets_x10_9 is not None:
+        p = req.platelets_x10_9
+        if p < 20: scores["coagulation"] = 4
+        elif p < 50: scores["coagulation"] = 3
+        elif p < 100: scores["coagulation"] = 2
+        elif p < 150: scores["coagulation"] = 1
+        else: scores["coagulation"] = 0
+    else:
+        scores["coagulation"] = None
+
+    # Liver (bilirubin μmol/L)
+    if req.bilirubin_umol_l is not None:
+        b = req.bilirubin_umol_l
+        if b >= 204: scores["liver"] = 4
+        elif b >= 102: scores["liver"] = 3
+        elif b >= 33: scores["liver"] = 2
+        elif b >= 20: scores["liver"] = 1
+        else: scores["liver"] = 0
+    else:
+        scores["liver"] = None
+
+    # Cardiovascular
+    cv = 0
+    if req.map_mmhg is not None and req.map_mmhg < 70:
+        cv = 1
+    drug = (req.vasopressor_drug or "").lower()
+    if "dopamine" in drug:
+        dose = req.vasopressor_dose or 0
+        if dose > 15 or "adrenaline" in drug or "noradrenaline" in drug:
+            cv = 4
+        elif dose > 5:
+            cv = 3
+        else:
+            cv = max(cv, 2)
+    elif "noradrenaline" in drug or "adrenaline" in drug:
+        dose = req.vasopressor_dose or 0
+        cv = 4 if dose > 0.1 else 3
+    elif "dobutamine" in drug:
+        cv = max(cv, 2)
+    scores["cardiovascular"] = cv
+
+    # CNS (GCS)
+    if req.gcs is not None:
+        g = req.gcs
+        if g < 6: scores["cns"] = 4
+        elif g < 10: scores["cns"] = 3
+        elif g < 13: scores["cns"] = 2
+        elif g < 15: scores["cns"] = 1
+        else: scores["cns"] = 0
+    else:
+        scores["cns"] = None
+
+    # Renal
+    renal = 0
+    if req.creatinine_umol_l is not None:
+        cr = req.creatinine_umol_l
+        if cr >= 440: renal = 4
+        elif cr >= 300: renal = 3
+        elif cr >= 171: renal = 2
+        elif cr >= 110: renal = 1
+    if req.urine_output_ml_24h is not None:
+        uo = req.urine_output_ml_24h
+        if uo < 200: renal = max(renal, 4)
+        elif uo < 500: renal = max(renal, 3)
+    scores["renal"] = renal
+
+    # Total
+    total = sum(v for v in scores.values() if v is not None)
+    delta = (total - req.previous_sofa) if req.previous_sofa is not None else None
+
+    # Interpretation
+    mortality_est = None
+    if total <= 1: mortality_est = "<10%"
+    elif total <= 6: mortality_est = "<10%"
+    elif total <= 9: mortality_est = "~15–20%"
+    elif total <= 11: mortality_est = "~40–50%"
+    elif total <= 14: mortality_est = "~50–60%"
+    else: mortality_est = ">80%"
+
+    alerts = []
+    if delta is not None and delta >= 2:
+        alerts.append(f"Delta SOFA +{delta} — new organ dysfunction criteria met (SEPSIS-3)")
+    if scores.get("cardiovascular", 0) >= 3:
+        alerts.append("Cardiovascular dysfunction — vasopressor-dependent shock")
+    if scores.get("renal", 0) >= 3:
+        alerts.append("Renal failure — consider renal replacement therapy")
+    if scores.get("respiration", 0) >= 3:
+        alerts.append("Severe hypoxaemia — ARDS criteria likely; apply lung-protective ventilation")
+
+    return {
+        "domain_scores": scores,
+        "total_sofa": total,
+        "delta_sofa": delta,
+        "estimated_mortality": mortality_est,
+        "alerts": alerts,
+    }
+
+
+class VentProtocolReq(BaseModel):
+    weight_kg: float
+    height_cm: float
+    sex: str = "male"               # male / female
+    pao2_mmhg: Optional[float] = None
+    fio2_pct: float = 60            # current FiO2 %
+    ph: Optional[float] = None
+    paco2_mmhg: Optional[float] = None
+    peep_current: float = 5
+    diagnosis: str = "ARDS"         # ARDS / COPD / asthma / neuromuscular / post_op
+    compliance_ml_cmh2o: Optional[float] = None
+
+@app.post("/icu/vent/protocol")
+def icu_vent_protocol(req: VentProtocolReq):
+    """
+    ARDSNet lung-protective ventilation protocol + Berlin ARDS classification.
+    PBW calculated from height/sex; TV 6 ml/kg PBW (max 8); PEEP/FiO2 table.
+    """
+    # Predicted body weight (PBW)
+    if req.sex.lower() == "female":
+        pbw = 45.5 + 0.91 * (req.height_cm - 152.4)
+    else:
+        pbw = 50.0 + 0.91 * (req.height_cm - 152.4)
+    pbw = max(pbw, 20)
+
+    # ARDS Berlin classification
+    pf = None
+    ards_severity = None
+    if req.pao2_mmhg and req.fio2_pct:
+        pf = round(req.pao2_mmhg / (req.fio2_pct / 100), 1)
+        if pf < 100:
+            ards_severity = "severe"
+        elif pf < 200:
+            ards_severity = "moderate"
+        elif pf < 300:
+            ards_severity = "mild"
+        else:
+            ards_severity = "not_ARDS"
+
+    # TV target
+    tv_6 = round(pbw * 6, 0)
+    tv_8 = round(pbw * 8, 0)
+
+    # PEEP/FiO2 table (ARDSNet higher PEEP table)
+    PEEP_FIO2_TABLE = [
+        (0.3, 5), (0.4, 5), (0.4, 8), (0.5, 8), (0.5, 10),
+        (0.6, 10), (0.7, 10), (0.7, 12), (0.7, 14), (0.8, 14),
+        (0.9, 14), (0.9, 16), (0.9, 18), (1.0, 20), (1.0, 22), (1.0, 24),
+    ]
+    fio2_dec = req.fio2_pct / 100
+    recommended_peep = 5
+    for fio2_val, peep_val in reversed(PEEP_FIO2_TABLE):
+        if fio2_dec >= fio2_val:
+            recommended_peep = peep_val
+            break
+
+    # Plateau pressure target <30 cmH2O
+    pp_alert = None
+    if req.compliance_ml_cmh2o and req.compliance_ml_cmh2o > 0:
+        pp_est = tv_6 / req.compliance_ml_cmh2o + req.peep_current
+        if pp_est > 30:
+            pp_alert = f"Estimated plateau pressure ~{pp_est:.0f} cmH2O — consider TV reduction to 4 ml/kg PBW"
+
+    # pH / CO2 guidance
+    vent_rate = 16
+    ph_note = None
+    if req.ph is not None:
+        if req.ph < 7.15:
+            ph_note = "Severe acidosis pH <7.15 — consider NaHCO3; may increase TV up to 8 ml/kg PBW"
+            vent_rate = 35
+        elif req.ph < 7.30:
+            ph_note = "Acidosis pH <7.30 — increase respiratory rate up to 35; avoid bicarbonate"
+            vent_rate = 30
+
+    # Prone positioning
+    prone = None
+    if pf is not None and pf < 150:
+        prone = "Consider prone positioning ≥16h/day (PROSEVA criteria: PaO2/FiO2 <150 on PEEP≥5, FiO2≥0.6)"
+
+    # Diagnosis-specific notes
+    diag_notes = []
+    if req.diagnosis == "COPD":
+        diag_notes = ["Extend expiratory time (I:E 1:3 to 1:5) to prevent auto-PEEP", "Target SpO2 88–92%", "Permissive hypercapnia acceptable"]
+    elif req.diagnosis == "asthma":
+        diag_notes = ["Extend expiratory time (I:E 1:3 to 1:4)", "Accept mild permissive hypercapnia", "Bronchodilators in-line", "Monitor for air-trapping (auto-PEEP)"]
+    elif req.diagnosis == "neuromuscular":
+        diag_notes = ["Higher TV 8–10 ml/kg PBW if no lung injury", "NIV preferred if tolerated", "Monitor for CO2 retention"]
+
+    return {
+        "pbw_kg": round(pbw, 1),
+        "tv_target_6mlkg_ml": tv_6,
+        "tv_max_8mlkg_ml": tv_8,
+        "pao2_fio2_ratio": pf,
+        "ards_severity": ards_severity,
+        "recommended_peep_cmh2o": recommended_peep,
+        "recommended_rate": vent_rate,
+        "plateau_pressure_alert": pp_alert,
+        "ph_note": ph_note,
+        "prone_positioning": prone,
+        "diagnosis_specific_notes": diag_notes,
+        "guideline": "ARDSNet / ESICM 2017 / Berlin ARDS Definition",
+    }
+
+
+class SedationAssessReq(BaseModel):
+    rass_actual: int = Field(..., ge=-5, le=4)
+    rass_target: int = Field(-2, ge=-5, le=4)
+    cam_icu_positive: bool = False
+    has_pain: bool = False
+    cpot_score: Optional[int] = None    # 0–8
+    current_sedatives: List[str] = []
+    current_analgesics: List[str] = []
+    icu_day: int = 1
+    has_agitation_trigger: Optional[str] = None   # pain/respiratory/procedure/unknown
+
+@app.post("/icu/sedation/assess")
+def icu_sedation_assess(req: SedationAssessReq):
+    """
+    ICU analgesia-first sedation protocol (PADIS guidelines 2018).
+    RASS target assessment; delirium management; SAT/SBT readiness.
+    """
+    recommendations = []
+    alerts = []
+
+    rass_diff = req.rass_actual - req.rass_target
+
+    # Analgesia first
+    if req.has_pain or (req.cpot_score is not None and req.cpot_score >= 3):
+        recommendations.append("Analgesia-first: ensure adequate pain control before titrating sedation")
+        if "fentanyl" not in [s.lower() for s in req.current_analgesics] and "morphine" not in [s.lower() for s in req.current_analgesics]:
+            recommendations.append("Consider IV opioid analgesia (fentanyl or morphine infusion)")
+
+    # RASS management
+    if rass_diff > 1:
+        recommendations.append(f"RASS {req.rass_actual} > target {req.rass_target} — patient over-sedated")
+        recommendations.append("Consider dose reduction or SAT (Spontaneous Awakening Trial)")
+        if req.icu_day >= 2:
+            recommendations.append("SAT criteria: no active seizures, no active alcohol/drug withdrawal, FiO2 ≤0.7, PEEP ≤10")
+    elif rass_diff < -1:
+        recommendations.append(f"RASS {req.rass_actual} < target {req.rass_target} — patient under-sedated/agitated")
+        if req.has_agitation_trigger:
+            recommendations.append(f"Address agitation trigger: {req.has_agitation_trigger}")
+        if "propofol" not in [s.lower() for s in req.current_sedatives]:
+            recommendations.append("Consider propofol 5–50 mcg/kg/min (short-term) or dexmedetomidine 0.2–1.5 mcg/kg/h")
+        recommendations.append("Avoid benzodiazepines where possible (↑ delirium risk)")
+    else:
+        recommendations.append(f"RASS at target ({req.rass_target}) — continue current regimen")
+
+    # Delirium
+    if req.cam_icu_positive:
+        alerts.append("CAM-ICU POSITIVE — delirium detected")
+        recommendations.append("ABCDEF bundle: Assess/prevent/manage pain; spontaneous Breathing trials; Choice of analgesia/sedation; Delirium: assess/prevent/manage; Early mobility; Family engagement")
+        recommendations.append("Non-pharmacological: reorientation, natural light, sleep hygiene, mobilise when safe")
+        recommendations.append("Pharmacological only if severe agitation: haloperidol 0.5–1 mg IV/IM (avoid in QTc >500ms)")
+        recommendations.append("Avoid quetiapine as routine delirium treatment (no mortality benefit)")
+        alerts.append("Screen for hyperactive vs hypoactive delirium — different management pathways")
+
+    # SBT readiness
+    sbt_ready = (
+        req.rass_actual >= -1 and
+        not req.cam_icu_positive and
+        not req.has_pain
+    )
+    if sbt_ready and req.icu_day >= 2:
+        recommendations.append("SBT (Spontaneous Breathing Trial) criteria potentially met — discuss weaning with team")
+
+    return {
+        "rass_target": req.rass_target,
+        "rass_actual": req.rass_actual,
+        "rass_interpretation": "over-sedated" if rass_diff > 1 else "under-sedated" if rass_diff < -1 else "at target",
+        "cam_icu": "positive" if req.cam_icu_positive else "negative",
+        "sbt_candidate": sbt_ready,
+        "recommendations": recommendations,
+        "alerts": alerts,
+        "guideline": "PADIS ICU Guidelines 2018 / ABCDEF Bundle",
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

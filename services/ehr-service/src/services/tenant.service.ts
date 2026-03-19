@@ -200,6 +200,12 @@ import { NutritionalScreening } from '../entities/nutritional-screening.entity';
 import { NutritionalAssessment } from '../entities/nutritional-assessment.entity';
 import { DietaryPrescription } from '../entities/dietary-prescription.entity';
 import { NutritionMonitoring } from '../entities/nutrition-monitoring.entity';
+import { IcuAdmission } from '../entities/icu-admission.entity';
+import { SofaScore } from '../entities/sofa-score.entity';
+import { VentilatorSettings } from '../entities/ventilator-settings.entity';
+import { SedationRecord } from '../entities/sedation-record.entity';
+import { CentralLineRecord } from '../entities/central-line-record.entity';
+import { VasopressorRecord } from '../entities/vasopressor-record.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface TenantDhis2Config {
@@ -572,6 +578,12 @@ export class TenantService {
         NutritionalAssessment,
         DietaryPrescription,
         NutritionMonitoring,
+        IcuAdmission,
+        SofaScore,
+        VentilatorSettings,
+        SedationRecord,
+        CentralLineRecord,
+        VasopressorRecord,
         MalariaCase,
         MalariaTest,
         MalariaTreatment,
