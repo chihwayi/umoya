@@ -877,6 +877,27 @@ export class DatabaseProvisioningService {
         description: 'ai_recommendation_audits table',
         statements: () => this.getSprint84AiExplainabilityStatements(),
       },
+      {
+        id: 'sprint86_smart_scheduling',
+        label: 'Sprint 86 - Smart Scheduling AI',
+        version: '2026.03.19',
+        description: 'scheduling_ai_predictions table; ALTER appointments add ai_recommended_duration, no_show_risk, overbooking_slot',
+        statements: () => this.getSprint86SmartSchedulingStatements(),
+      },
+      {
+        id: 'sprint87_smart_defaults',
+        label: 'Sprint 87 - Smart Defaults + Dynamic Forms',
+        version: '2026.03.19',
+        description: 'form_intelligence_configs table',
+        statements: () => this.getSprint87SmartDefaultsStatements(),
+      },
+      {
+        id: 'sprint88_formulary_optimization',
+        label: 'Sprint 88 - Formulary Optimization AI',
+        version: '2026.03.19',
+        description: 'formulary_ai_suggestions table; ALTER drugs add generic_name_canonical, formulary_tier, etc.',
+        statements: () => this.getSprint88FormularyOptimizationStatements(),
+      },
     ];
   }
 
@@ -14380,6 +14401,73 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint88FormularyOptimizationStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS formulary_ai_suggestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        prescription_id UUID,
+        patient_id UUID NOT NULL,
+        branded_drug TEXT NOT NULL,
+        generic_alternative TEXT,
+        branded_cost NUMERIC,
+        generic_cost NUMERIC,
+        saving_amount NUMERIC,
+        medical_aid_coverage BOOLEAN NOT NULL DEFAULT FALSE,
+        medical_aid_tier INT,
+        evidence_equivalence TEXT,
+        ai_recommendation TEXT NOT NULL,
+        reason TEXT,
+        accepted BOOLEAN,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_formulary_patient ON formulary_ai_suggestions (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_formulary_prescription ON formulary_ai_suggestions (prescription_id)`,
+      `ALTER TABLE drugs ADD COLUMN IF NOT EXISTS generic_name_canonical VARCHAR(255)`,
+      `ALTER TABLE drugs ADD COLUMN IF NOT EXISTS formulary_tier INT`,
+      `ALTER TABLE drugs ADD COLUMN IF NOT EXISTS average_unit_cost_usd DECIMAL(10,4)`,
+      `ALTER TABLE drugs ADD COLUMN IF NOT EXISTS bioequivalent_group VARCHAR(100)`,
+    ];
+  }
+
+  private getSprint87SmartDefaultsStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS form_intelligence_configs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        form_name TEXT NOT NULL,
+        visibility_rules JSONB NOT NULL DEFAULT '[]',
+        default_rules JSONB NOT NULL DEFAULT '[]',
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        version INT NOT NULL DEFAULT 1,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_form_intel_name ON form_intelligence_configs (form_name)`,
+    ];
+  }
+
+  private getSprint86SmartSchedulingStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS scheduling_ai_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id UUID NOT NULL UNIQUE,
+        no_show_probability NUMERIC NOT NULL,
+        cancel_probability NUMERIC NOT NULL,
+        recommended_duration INT,
+        confidence_score NUMERIC NOT NULL,
+        feature_importance JSONB NOT NULL DEFAULT '{}',
+        model TEXT,
+        prediction_date TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_sched_pred_apt ON scheduling_ai_predictions (appointment_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sched_pred_noshw ON scheduling_ai_predictions (no_show_probability DESC)`,
+      `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS ai_recommended_duration INT`,
+      `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS no_show_risk VARCHAR(20)`,
+      `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS overbooking_slot BOOLEAN DEFAULT FALSE`,
     ];
   }
 

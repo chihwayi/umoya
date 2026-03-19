@@ -129,6 +129,10 @@ import { AutoCodingController } from './controllers/auto-coding.controller';
 import { PgxController } from './controllers/pgx.controller';
 import { AntibiogramController } from './controllers/antibiogram.controller';
 import { AiExplainabilityController } from './controllers/ai-explainability.controller';
+import { StreamingDiagnosisController } from './controllers/streaming-diagnosis.controller';
+import { SmartSchedulingController } from './controllers/smart-scheduling.controller';
+import { SmartDefaultsController } from './controllers/smart-defaults.controller';
+import { FormularyOptimizationController } from './controllers/formulary-optimization.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -308,6 +312,10 @@ import { AutoCodingService } from './services/auto-coding.service';
 import { PgxService } from './services/pgx.service';
 import { AntibiogramService } from './services/antibiogram.service';
 import { AiExplainabilityService } from './services/ai-explainability.service';
+import { StreamingDiagnosisService } from './services/streaming-diagnosis.service';
+import { SmartSchedulingService } from './services/smart-scheduling.service';
+import { SmartDefaultsService } from './services/smart-defaults.service';
+import { FormularyOptimizationService } from './services/formulary-optimization.service';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -457,6 +465,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PgxController,
     AntibiogramController,
     AiExplainabilityController,
+    StreamingDiagnosisController,
+    SmartSchedulingController,
+    SmartDefaultsController,
+    FormularyOptimizationController,
   ],
   providers: [
     AuthService,
@@ -636,6 +648,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PgxService,
     AntibiogramService,
     AiExplainabilityService,
+    StreamingDiagnosisService,
+    SmartSchedulingService,
+    SmartDefaultsService,
+    FormularyOptimizationService,
     VoiceTranscriptionGateway,
     RolesGuard,
     JwtStrategy,
