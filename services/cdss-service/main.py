@@ -6156,6 +6156,368 @@ async def burn_fluid(req: BurnFluidRequest):
     }
 
 
+# ── Sprint 75: Palliative Care CDSS ──────────────────────────────────────────
+
+class PalliativePrognosisReq(BaseModel):
+    ecog_ps: int = Field(..., ge=0, le=4, description="ECOG Performance Status 0–4")
+    kps: int = Field(..., ge=0, le=100, description="Karnofsky Performance Status 0–100")
+    ppi_anorexia: int = Field(0, ge=0, le=2)       # 0=none,1=mod,2=severe
+    ppi_dyspnoea: int = Field(0, ge=0, le=2)
+    ppi_oedema: int = Field(0, ge=0, le=1)
+    ppi_delirium: int = Field(0, ge=0, le=2)
+    ppi_oral_intake: int = Field(0, ge=0, le=2)    # 0=normal,1=reduced,2=mouthcare
+    primary_diagnosis: str = ""
+    has_liver_mets: bool = False
+    has_distant_mets: bool = False
+    serum_albumin_g_dl: Optional[float] = None
+    lymphocyte_count_x10_9: Optional[float] = None
+
+@app.post("/palliative/prognosis")
+def palliative_prognosis(req: PalliativePrognosisReq):
+    """
+    Palliative Prognostic Index (PPI) and Palliative Prognostic Score (PaP).
+    PPI ≤ 2: >6 weeks; 2<PPI≤4: 3–6 weeks; PPI>4: ≤3 weeks.
+    """
+    # PPI calculation
+    ppi_score = req.ppi_anorexia + req.ppi_dyspnoea + req.ppi_oedema + req.ppi_delirium + req.ppi_oral_intake
+    # ECOG → PPS proxy (rough mapping)
+    if req.kps >= 60:
+        ppi_pps_score = 0
+    elif req.kps >= 40:
+        ppi_pps_score = 2.5
+    else:
+        ppi_pps_score = 4.0
+    total_ppi = ppi_score + ppi_pps_score
+
+    if total_ppi <= 2:
+        survival_estimate = ">6 weeks"
+        prognosis_group = "A"
+    elif total_ppi <= 4:
+        survival_estimate = "3–6 weeks"
+        prognosis_group = "B"
+    else:
+        survival_estimate = "≤3 weeks"
+        prognosis_group = "C"
+
+    # PaP score components (simplified)
+    pap_score = 0.0
+    pap_alerts = []
+
+    # Clinical prediction of survival (CPS)
+    if req.kps <= 20:
+        pap_score += 8.5
+    elif req.kps <= 40:
+        pap_score += 6.0
+    elif req.kps <= 60:
+        pap_score += 4.5
+
+    # Anorexia
+    if req.ppi_anorexia >= 1:
+        pap_score += 1.5
+
+    # Dyspnoea
+    if req.ppi_dyspnoea >= 1:
+        pap_score += 1.0
+
+    # Albumin
+    if req.serum_albumin_g_dl is not None and req.serum_albumin_g_dl < 2.5:
+        pap_score += 2.5
+        pap_alerts.append("Hypoalbuminaemia (<2.5 g/dL) — poor prognostic marker")
+
+    # Lymphocyte count
+    if req.lymphocyte_count_x10_9 is not None:
+        if req.lymphocyte_count_x10_9 < 0.8:
+            pap_score += 2.5
+            pap_alerts.append("Lymphopaenia (<0.8×10⁹/L) — poor prognostic marker")
+
+    # PaP prognostic group
+    if pap_score < 5.5:
+        pap_group = "A (>70% 30-day survival)"
+    elif pap_score < 11:
+        pap_group = "B (30–70% 30-day survival)"
+    else:
+        pap_group = "C (<30% 30-day survival)"
+
+    # Phase-of-illness recommendation
+    if prognosis_group == "C":
+        phase = "terminal"
+        recommendations = [
+            "Initiate comfort-focused care",
+            "Review DNACPR and advance directive status",
+            "Ensure anticipatory medications prescribed",
+            "Activate syringe driver pathway if oral route compromised",
+            "Notify next of kin and document last days of life care plan",
+        ]
+    elif prognosis_group == "B":
+        phase = "end_of_life"
+        recommendations = [
+            "Review and document Goals of Care",
+            "Optimise symptom management",
+            "Consider referral to inpatient palliative unit if symptoms uncontrolled",
+            "Ensure Legal & Proxy documentation up to date",
+        ]
+    else:
+        phase = "palliative"
+        recommendations = [
+            "Continue active symptom management",
+            "Schedule regular palliative review (monthly)",
+            "Consider hospice-at-home or day hospice referral",
+        ]
+
+    # Liver/distant mets modifier
+    if req.has_liver_mets:
+        recommendations.append("Hepatic involvement — monitor LFTs and jaundice")
+    if req.has_distant_mets:
+        recommendations.append("Distant metastases — systemic disease burden")
+
+    return {
+        "ppi_score": round(total_ppi, 1),
+        "ppi_prognosis_group": prognosis_group,
+        "survival_estimate": survival_estimate,
+        "pap_score": round(pap_score, 1),
+        "pap_prognosis_group": pap_group,
+        "phase_of_illness": phase,
+        "recommendations": recommendations,
+        "alerts": pap_alerts,
+    }
+
+
+class OpioidConvertReq(BaseModel):
+    drug: str                       # e.g. "morphine_oral", "oxycodone_oral"
+    dose_mg: float
+    route: str = "oral"             # oral / sc / iv / transdermal
+    target_drug: str = "morphine_oral"
+    target_route: str = "oral"
+    indication: str = "pain"
+    renal_impairment: bool = False
+    hepatic_impairment: bool = False
+
+@app.post("/palliative/opioid/convert")
+def palliative_opioid_convert(req: OpioidConvertReq):
+    """
+    Equianalgesic opioid conversion using validated ratios (Scottish Palliative Care Guidelines / BNF).
+    All doses expressed as morphine oral equivalents (MEDD mg/24h).
+    """
+    # Relative potency to morphine oral (1.0 = same)
+    POTENCY = {
+        # drug_route: factor vs oral morphine (multiply to get MEDD)
+        "morphine_oral": 1.0,
+        "morphine_sc": 2.0,
+        "morphine_iv": 3.0,
+        "oxycodone_oral": 1.5,
+        "oxycodone_sc": 3.0,
+        "oxycodone_iv": 3.0,
+        "hydromorphone_oral": 5.0,
+        "hydromorphone_sc": 15.0,
+        "codeine_oral": 0.1,
+        "tramadol_oral": 0.1,
+        "fentanyl_patch_mcg_h": 2.4,  # mcg/h × 2.4 ≈ MEDD mg/24h
+        "buprenorphine_patch_mcg_h": 75.0,  # mcg/h × 75 ≈ MEDD
+        "methadone_oral": None,  # variable — requires specialist
+        "tapentadol_oral": 0.4,
+        "diamorphine_sc": 3.0,
+    }
+
+    source_key = f"{req.drug.lower().replace(' ', '_')}_{req.route.lower()}"
+    target_key = f"{req.target_drug.lower().replace(' ', '_')}_{req.target_route.lower()}"
+    alerts = []
+    warnings = []
+
+    if source_key not in POTENCY:
+        # Try without route suffix if not found (e.g. fentanyl_patch already includes route)
+        source_key = req.drug.lower().replace(' ', '_')
+    if target_key not in POTENCY:
+        target_key = req.target_drug.lower().replace(' ', '_')
+
+    source_potency = POTENCY.get(source_key)
+    target_potency = POTENCY.get(target_key)
+
+    if source_potency is None:
+        return {"error": f"Methadone conversion requires specialist — contact palliative pharmacist."}
+    if source_potency is None or target_potency is None:
+        return {"error": f"Unknown drug/route combination: {source_key} → {target_key}. Consult pharmacist."}
+
+    medd = req.dose_mg * source_potency
+    raw_target_dose = medd / target_potency
+
+    # Safety reduction for cross-tolerance (25–50% for high-dose rotation)
+    reduction = 0.0
+    if medd > 200:
+        reduction = 0.25
+        alerts.append("High MEDD >200 mg: apply 25% cross-tolerance reduction")
+    if medd > 500:
+        reduction = 0.50
+        alerts.append("MEDD >500 mg: apply 50% cross-tolerance reduction — seek specialist advice")
+
+    adjusted_dose = raw_target_dose * (1 - reduction)
+
+    # Renal/hepatic adjustments
+    if req.renal_impairment:
+        warnings.append("Renal impairment: avoid morphine & hydromorphone metabolite accumulation; prefer oxycodone or alfentanil")
+    if req.hepatic_impairment:
+        warnings.append("Hepatic impairment: titrate cautiously; extended half-life; prefer low initial doses")
+
+    # PRN (as-needed) = 1/6th of 24h total
+    prn_dose = adjusted_dose / 6
+
+    # CSCI (24h syringe driver) — SC equivalents
+    csci_note = None
+    if "oral" in (req.target_route or ""):
+        csci_key = f"{req.target_drug.lower().replace(' ', '_')}_sc"
+        csci_potency = POTENCY.get(csci_key)
+        if csci_potency:
+            csci_dose = adjusted_dose * (target_potency / csci_potency) if csci_potency else None
+            if csci_dose:
+                csci_note = f"{req.target_drug} SC CSCI equivalent: {round(csci_dose, 1)} mg/24h"
+
+    return {
+        "source_drug": req.drug,
+        "source_route": req.route,
+        "source_dose_mg": req.dose_mg,
+        "medd_mg_24h": round(medd, 1),
+        "target_drug": req.target_drug,
+        "target_route": req.target_route,
+        "raw_equivalent_dose_mg": round(raw_target_dose, 2),
+        "cross_tolerance_reduction_pct": round(reduction * 100),
+        "adjusted_dose_mg_24h": round(adjusted_dose, 1),
+        "prn_dose_mg": round(prn_dose, 1),
+        "csci_equivalent": csci_note,
+        "alerts": alerts,
+        "warnings": warnings,
+    }
+
+
+class SymptomManageReq(BaseModel):
+    symptom: str           # pain / nausea / dyspnoea / agitation / constipation / secretions
+    severity: int = Field(..., ge=0, le=10)  # NRS 0–10
+    current_medications: List[str] = []
+    oral_route_available: bool = True
+    renal_impairment: bool = False
+    hepatic_impairment: bool = False
+    is_last_days_of_life: bool = False
+    weight_kg: Optional[float] = None
+
+@app.post("/palliative/symptom/manage")
+def palliative_symptom_manage(req: SymptomManageReq):
+    """
+    Evidence-based palliative symptom management (Scottish Palliative Care Guidelines / PCPLD / WHO).
+    """
+    symptom = req.symptom.lower().strip()
+    suggestions = []
+    non_pharmacological = []
+    alerts = []
+
+    if symptom == "pain":
+        non_pharmacological = ["Repositioning and pressure-relieving mattress", "TENS if appropriate", "Massage/heat"]
+        if req.severity <= 3:
+            suggestions.append("Continue current analgesic; reassess in 24h")
+            suggestions.append("Ensure regular paracetamol 1 g QDS (if renal/hepatic function allows)")
+        elif req.severity <= 6:
+            if req.oral_route_available:
+                if req.renal_impairment:
+                    suggestions.append("Oxycodone 2.5–5 mg oral PRN (avoid morphine — metabolite accumulation)")
+                else:
+                    suggestions.append("Morphine immediate-release 2.5–5 mg oral PRN 4-hourly")
+                    suggestions.append("If requiring ≥3 PRN/24h: convert to regular modified-release morphine + PRN 1/6 total")
+        else:
+            if not req.oral_route_available or req.is_last_days_of_life:
+                if req.renal_impairment:
+                    suggestions.append("Alfentanil CSCI — start 1 mg/24h SC (specialist review)")
+                    alerts.append("Renal impairment: alfentanil preferred over morphine/diamorphine")
+                else:
+                    suggestions.append("Diamorphine CSCI — convert from oral morphine (÷3) — SC via syringe driver")
+                    suggestions.append("PRN diamorphine SC = 1/6 of 24h CSCI dose")
+            else:
+                suggestions.append("Increase opioid dose by 25–33% of current 24h total")
+                suggestions.append("Ensure 6-hourly PRN available")
+            non_pharmacological.append("Specialist palliative care review for pain crisis")
+
+    elif symptom == "nausea":
+        non_pharmacological = ["Small frequent meals", "Ginger", "Fresh air", "Avoid strong odours"]
+        if req.severity <= 4:
+            if "metoclopramide" not in [m.lower() for m in req.current_medications]:
+                suggestions.append("Metoclopramide 10 mg TDS oral/SC (prokinetic — gastric stasis)")
+            else:
+                suggestions.append("Review trigger: opioid-induced → add haloperidol 0.5–1.5 mg/24h SC")
+        else:
+            suggestions.append("Haloperidol 1.5 mg SC/24h CSCI (opioid-induced / chemical cause)")
+            suggestions.append("Cyclizine 150 mg/24h CSCI (vestibular/raised ICP)")
+            suggestions.append("Levomepromazine 6.25–12.5 mg SC nocte (broad-spectrum refractory)")
+            if req.is_last_days_of_life:
+                suggestions.append("Add cyclizine to CSCI; consider midazolam 2.5 mg SC PRN for distress")
+        alerts.append("Avoid metoclopramide + cyclizine in same CSCI (incompatible)")
+
+    elif symptom == "dyspnoea":
+        non_pharmacological = [
+            "Fan directed at face (stimulates V2 branch of trigeminal — reduces breathlessness perception)",
+            "Upright positioning",
+            "Open window / cool air",
+            "Calm reassurance and breathing techniques",
+        ]
+        if req.severity <= 4:
+            suggestions.append("Low-dose oral morphine 2.5–5 mg PRN (reduces central breathlessness drive)")
+            suggestions.append("Anxiolytic: lorazepam 0.5 mg sublingual PRN for anxiety component")
+        else:
+            if not req.oral_route_available or req.is_last_days_of_life:
+                suggestions.append("Morphine 2.5–5 mg SC PRN (or diamorphine if already on CSCI)")
+                suggestions.append("Midazolam 2.5–5 mg SC PRN for associated distress/panic")
+            else:
+                suggestions.append("Morphine IR 2.5–5 mg oral 4-hourly if opioid-naïve")
+                suggestions.append("Increase existing opioid by 25% if already prescribed")
+            alerts.append("Do not use high-flow O₂ unless SpO₂ <88% — may prolong dying; fan is preferred")
+
+    elif symptom == "agitation":
+        non_pharmacological = [
+            "Quiet calm environment",
+            "Familiar carers/family present",
+            "Reduce light stimulation",
+            "Address reversible causes: urinary retention, constipation, pain, hypoxia",
+        ]
+        suggestions.append("Midazolam 2.5–5 mg SC PRN (first-line for terminal agitation)")
+        if req.is_last_days_of_life:
+            suggestions.append("Midazolam 10–20 mg/24h CSCI for continuous sedation if needed")
+            suggestions.append("Levomepromazine 12.5–25 mg SC PRN or CSCI if midazolam insufficient")
+            suggestions.append("Phenobarbitone 200–600 mg/24h SC CSCI for refractory terminal agitation (specialist)")
+        alerts.append("Review for reversible causes before initiating sedation")
+        alerts.append("Document consent and goals of care before continuous sedation")
+
+    elif symptom == "constipation":
+        non_pharmacological = ["Hydration", "Mobility if possible", "Abdominal massage"]
+        suggestions.append("Combination stimulant + softener: co-danthramer or senna + docusate")
+        suggestions.append("If opioid-induced: methylnaltrexone 8–12 mg SC alternate days (PAMORA)")
+        if req.severity >= 7:
+            suggestions.append("Rectal intervention: bisacodyl suppository or enema")
+        alerts.append("Stimulant alone inadequate for hard stool — add softener")
+
+    elif symptom == "secretions":
+        non_pharmacological = [
+            "Repositioning (lateral / semi-prone)",
+            "Reassure family — secretions rarely distressing to patient",
+            "Gentle oral hygiene",
+        ]
+        suggestions.append("Hyoscine butylbromide 20 mg SC PRN / 60–120 mg/24h CSCI (first-line)")
+        suggestions.append("Glycopyrronium 0.2 mg SC PRN / 0.6–1.2 mg/24h CSCI (alternative)")
+        alerts.append("Avoid hyoscine hydrobromide (CNS effects — delirium risk)")
+        alerts.append("Suctioning rarely helpful and distressing — not recommended")
+
+    else:
+        suggestions.append(f"Symptom '{req.symptom}' not in protocol — contact palliative specialist")
+
+    # Last days of life universal additions
+    if req.is_last_days_of_life and symptom not in ("secretions",):
+        if req.oral_route_available:
+            alerts.append("Oral route becoming unreliable — plan CSCI conversion")
+
+    return {
+        "symptom": req.symptom,
+        "severity_nrs": req.severity,
+        "pharmacological_suggestions": suggestions,
+        "non_pharmacological": non_pharmacological,
+        "alerts": alerts,
+        "guideline": "Scottish Palliative Care Guidelines 2023 / WHO Pain Ladder",
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

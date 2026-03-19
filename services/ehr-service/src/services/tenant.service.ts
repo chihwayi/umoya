@@ -191,6 +191,11 @@ import { SkinLesion } from '../entities/skin-lesion.entity';
 import { WoundAssessment } from '../entities/wound-assessment.entity';
 import { BurnAssessment } from '../entities/burn-assessment.entity';
 import { DermatologyNote } from '../entities/dermatology-note.entity';
+import { PalliativeAssessment } from '../entities/palliative-assessment.entity';
+import { SymptomBurdenScore } from '../entities/symptom-burden-score.entity';
+import { GoalsOfCare } from '../entities/goals-of-care.entity';
+import { AdvanceDirectiveRecord } from '../entities/advance-directive-record.entity';
+import { PalliativeMedicationReview } from '../entities/palliative-medication-review.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface TenantDhis2Config {
@@ -554,6 +559,11 @@ export class TenantService {
         WoundAssessment,
         BurnAssessment,
         DermatologyNote,
+        PalliativeAssessment,
+        SymptomBurdenScore,
+        GoalsOfCare,
+        AdvanceDirectiveRecord,
+        PalliativeMedicationReview,
         MalariaCase,
         MalariaTest,
         MalariaTreatment,

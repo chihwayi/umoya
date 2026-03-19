@@ -10605,4 +10605,96 @@ export const cdssApi = {
     });
     return res.data;
   },
+
+  // ── Palliative Care ───────────────────────────────────────────────────────
+  getPalliativeAssessments: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/palliative/patient/${patientId}/assessment`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addPalliativeAssessment: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/palliative/patient/${patientId}/assessment`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  getPalliativeEsas: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/palliative/patient/${patientId}/esas`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addPalliativeEsas: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/palliative/patient/${patientId}/esas`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  getPalliativeGoals: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/palliative/patient/${patientId}/goals`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addPalliativeGoals: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/palliative/patient/${patientId}/goals`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  getPalliativeDirectives: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/palliative/patient/${patientId}/directive`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addPalliativeDirective: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/palliative/patient/${patientId}/directive`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  getPalliativeMedReviews: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.get(`/palliative/patient/${patientId}/med-review`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  addPalliativeMedReview: async (patientId: string, dto: Record<string, any>, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post(`/palliative/patient/${patientId}/med-review`, dto, {
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-subdomain': tenantSubdomain },
+    });
+  },
+
+  palliativePrognosis: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/palliative/cdss/prognosis', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
+  palliativeOpioidConvert: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/palliative/cdss/opioid/convert', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
+  palliativeSymptomManage: async (data: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    return ehrAxios.post('/palliative/cdss/symptom/manage', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
 };

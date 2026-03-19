@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
   Pill, Baby,
-  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye
+  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -25,6 +25,7 @@ import NeurologyDashboard from '../components/NeurologyDashboard';
 import PulmonologyDashboard from '../components/PulmonologyDashboard';
 import NephrologyDashboard from '../components/NephrologyDashboard';
 import DermatologyDashboard from '../components/DermatologyDashboard';
+import PalliativeDashboard from '../components/PalliativeDashboard';
 
 interface Patient {
   id: string;
@@ -74,7 +75,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology' | 'nephrology' | 'dermatology'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology' | 'nephrology' | 'dermatology' | 'palliative'>('overview');
 
   // AI/RAG State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -647,6 +648,17 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               <Eye className="w-4 h-4 inline mr-2" />
               Dermatology
             </button>
+            <button
+              onClick={() => setActiveTab('palliative')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'palliative'
+                  ? 'border-violet-500 text-violet-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <HeartHandshake className="w-4 h-4 inline mr-2" />
+              Palliative
+            </button>
           </nav>
         </div>
       </div>
@@ -1124,6 +1136,19 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               <Eye className="w-5 h-5" /> Dermatology
             </h2>
             <DermatologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'palliative' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-violet-900 mb-4 flex items-center gap-2">
+              <HeartHandshake className="w-5 h-5" /> Palliative Care
+            </h2>
+            <PalliativeDashboard
               patientId={patientId}
               providerId={currentUser?.id || ''}
               tenantSubdomain={tenantSlug!}
