@@ -37,6 +37,8 @@ import { NutritionController } from './controllers/nutrition.controller';
 import { IcuController } from './controllers/icu.controller';
 import { SdohController } from './controllers/sdoh.controller';
 import { NtdController } from './controllers/ntd.controller';
+import { PmtctController } from './controllers/pmtct.controller';
+import { PepfarMerController } from './controllers/pepfar-mer.controller';
 import { Dhis2Controller } from './controllers/dhis2.controller';
 import { ReportsController } from './controllers/reports.controller';
 import { NotificationsController } from './controllers/notifications.controller';
@@ -162,6 +164,7 @@ import { NutritionService } from './services/nutrition.service';
 import { IcuService } from './services/icu.service';
 import { SdohService } from './services/sdoh.service';
 import { NtdService } from './services/ntd.service';
+import { PmtctService } from './services/pmtct.service';
 import { Dhis2Service } from './services/dhis2.service';
 import { Dhis2SchedulerService } from './services/dhis2-scheduler.service';
 import { ReportsService } from './services/reports.service';
@@ -354,6 +357,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     IcuController,
     SdohController,
     NtdController,
+    PmtctController,
+    PepfarMerController,
     Dhis2Controller,
     ReportsController,
     NotificationsController,
@@ -523,6 +528,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     IcuService,
     SdohService,
     NtdService,
+    PmtctService,
     SpecialtyAutomationService,
     MetricsService,
     MedicationHistoryService,

@@ -842,6 +842,13 @@ export class DatabaseProvisioningService {
         description: 'ntd_cases, cholera_cases, typhoid_cases, regional_disease_reports tables',
         statements: () => this.getSprint79NtdRegionalStatements(),
       },
+      {
+        id: 'sprint80_advanced_hiv_pmtct_pepfar',
+        label: 'Sprint 80 - Advanced HIV Module (PMTCT + PEPFAR MER)',
+        version: '2026.03.19',
+        description: 'pmtct_enrollments, pmtct_infants, pepfar_mer_indicators, art_cohorts tables',
+        statements: () => this.getSprint80AdvancedHivPmtctPepfarStatements(),
+      },
     ];
   }
 
@@ -14345,6 +14352,70 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint80AdvancedHivPmtctPepfarStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS pmtct_enrollments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        gestational_age_at_enrollment SMALLINT,
+        hiv_status_at_booking TEXT NOT NULL,
+        art_started BOOLEAN NOT NULL DEFAULT FALSE,
+        art_regimen TEXT,
+        viral_load_at_booking NUMERIC,
+        viral_load_at_delivery NUMERIC,
+        delivery_mode TEXT,
+        infant_nvp_provided BOOLEAN NOT NULL DEFAULT FALSE,
+        enrollment_date DATE NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pmtct_enroll_patient ON pmtct_enrollments (patient_id)`,
+      `CREATE TABLE IF NOT EXISTS pmtct_infants (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        mother_patient_id UUID NOT NULL,
+        infant_patient_id UUID,
+        birth_date DATE NOT NULL,
+        birth_weight_kg NUMERIC,
+        hiv_test_at_6weeks TEXT,
+        dbs_result_6weeks TEXT,
+        hiv_test_18months TEXT,
+        final_hiv_status TEXT,
+        breastfeeding_status TEXT,
+        cotrimoxazole_started BOOLEAN NOT NULL DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pmtct_infant_mother ON pmtct_infants (mother_patient_id)`,
+      `CREATE TABLE IF NOT EXISTS pepfar_mer_indicators (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        reporting_period TEXT NOT NULL,
+        indicator TEXT NOT NULL,
+        numerator INT,
+        denominator INT,
+        disaggregations JSONB NOT NULL DEFAULT '{}',
+        submitted_to_datim BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_mer_period_indicator ON pepfar_mer_indicators (reporting_period, indicator)`,
+      `CREATE TABLE IF NOT EXISTS art_cohorts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        cohort_start_date DATE NOT NULL,
+        cohort_size INT NOT NULL,
+        alive_on_art_12m INT,
+        lost_to_followup_12m INT,
+        died_12m INT,
+        transferred_out_12m INT,
+        retention_rate NUMERIC,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_art_cohort_date ON art_cohorts (cohort_start_date DESC)`,
     ];
   }
 
