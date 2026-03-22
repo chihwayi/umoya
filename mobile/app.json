@@ -7,6 +7,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#080E1A",
+    "newArchEnabled": true,
+    "jsEngine": "hermes",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -17,21 +19,48 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.medicore.clinical",
       "buildNumber": "1",
+      "jsEngine": "hermes",
       "infoPlist": {
-        "NSCameraUsageDescription": "MediCore uses the camera to scan clinic QR codes for login.",
-        "NSFaceIDUsageDescription": "MediCore uses Face ID to securely authenticate you.",
-        "NSHealthShareUsageDescription": "MediCore reads health data from Apple Health to display your vitals history.",
-        "NSHealthUpdateUsageDescription": "MediCore writes medication adherence and vitals data to Apple Health.",
-        "UIBackgroundModes": ["fetch", "remote-notification"]
+        "NSCameraUsageDescription": "MediCore uses the camera to scan clinic QR codes for secure login.",
+        "NSFaceIDUsageDescription": "MediCore uses Face ID to securely authenticate clinical staff and protect patient data.",
+        "NSHealthShareUsageDescription": "MediCore reads your health data from Apple Health to display your vitals history and medication adherence.",
+        "NSHealthUpdateUsageDescription": "MediCore writes medication adherence records and vitals data to Apple Health.",
+        "NSMicrophoneUsageDescription": "MediCore uses the microphone for voice dictation of clinical notes.",
+        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["85F4.1"]
+          }
+        ],
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyTracking": false
       },
       "entitlements": {
         "com.apple.developer.healthkit": true,
-        "com.apple.developer.healthkit.background-delivery": true
+        "com.apple.developer.healthkit.background-delivery": true,
+        "com.apple.developer.usernotifications.time-sensitive": true
       }
     },
     "android": {
       "package": "com.medicore.clinical",
       "versionCode": 1,
+      "jsEngine": "hermes",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#080E1A"
@@ -41,8 +70,16 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
       ],
+      "blockedPermissions": [
+        "android.permission.READ_CONTACTS",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_CALL_LOG"
+      ],
+      "allowBackup": false,
       "googleServicesFile": "./google-services.json"
     },
     "web": {
@@ -76,6 +113,7 @@
       "url": "https://u.expo.dev/REPLACE_WITH_EAS_PROJECT_ID",
       "enabled": true,
       "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD",
       "requestHeaders": { "expo-channel-name": "production" }
     },
     "runtimeVersion": { "policy": "appVersion" }

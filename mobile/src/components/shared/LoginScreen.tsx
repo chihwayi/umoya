@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView,
@@ -37,7 +37,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [otpToken, setOtpToken] = useState('');
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricType, setBiometricType] = useState<'face' | 'fingerprint' | 'none'>('none');
   const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Detect what biometric hardware is available
+  useEffect(() => {
+    (async () => {
+      const compatible = await LocalAuthentication.hasHardwareAsync();
+      const enrolled   = await LocalAuthentication.isEnrolledAsync();
+      if (!compatible || !enrolled) return;
+      setBiometricAvailable(true);
+      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+      if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+        setBiometricType('face');
+      } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+        setBiometricType('fingerprint');
+      }
+    })();
+  }, []);
 
   const shake = () => {
     Animated.sequence([
@@ -112,14 +130,34 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
-  // ── Biometric / PIN (returning patients) ─────────────────────────────────
+  // ── Biometric unlock (all roles — requires a stored JWT from prior login) ──
   const biometricLogin = async () => {
+    const { jwt } = useAuthStore.getState();
+    if (!jwt) {
+      Alert.alert(
+        'Sign in first',
+        'Use your credentials once to enable biometric unlock.',
+      );
+      return;
+    }
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: `Login to ${tenant?.name ?? 'MediCore'}`,
-      fallbackLabel: 'Enter PIN',
+      promptMessage: `Unlock ${tenant?.name ?? 'MediCore'}`,
+      fallbackLabel: 'Use password',
+      cancelLabel: 'Cancel',
+      disableDeviceFallback: false,
     });
-    if (result.success) onLoggedIn();
+    if (result.success) {
+      onLoggedIn();
+    } else if (result.error !== 'user_cancel' && result.error !== 'system_cancel') {
+      Alert.alert('Authentication failed', 'Please sign in with your password.');
+    }
   };
+
+  const biometricLabel = biometricType === 'face'
+    ? 'Face ID'
+    : biometricType === 'fingerprint'
+    ? 'Fingerprint'
+    : 'Biometric';
 
   const ROLES: { key: UserRole; label: string; emoji: string }[] = [
     { key: 'doctor', label: 'Doctor', emoji: '👨‍⚕️' },
@@ -226,7 +264,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   disabled={loading}
                 >
                   <LinearGradient
-                    colors={[accent, role === 'nurse' ? C.blue : C.blue]}
+                    colors={[accent, C.blue]}
                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                     style={styles.btnGradient}
                   >
@@ -236,6 +274,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     }
                   </LinearGradient>
                 </TouchableOpacity>
+
+                {biometricAvailable && (
+                  <TouchableOpacity
+                    style={styles.bioBtn}
+                    onPress={biometricLogin}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="shield" size={18} color={accent} />
+                    <Text style={[styles.bioBtnText, { color: accent }]}>
+                      Unlock with {biometricLabel}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -317,14 +368,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   </LinearGradient>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.bioBtn}
-                  onPress={biometricLogin}
-                  activeOpacity={0.8}
-                >
-                  <Icon name="shield" size={18} color={C.teal} />
-                  <Text style={styles.bioBtnText}>Use Face ID / Fingerprint</Text>
-                </TouchableOpacity>
+                {biometricAvailable && (
+                  <TouchableOpacity
+                    style={styles.bioBtn}
+                    onPress={biometricLogin}
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="shield" size={18} color={C.blue} />
+                    <Text style={[styles.bioBtnText, { color: C.blue }]}>
+                      Unlock with {biometricLabel}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </Animated.View>

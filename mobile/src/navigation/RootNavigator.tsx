@@ -9,30 +9,30 @@ import { CustomTabBar } from './TabBar';
 import { TenantSelectScreen } from '../components/shared/TenantSelectScreen';
 import { LoginScreen } from '../components/shared/LoginScreen';
 
-// Doctor screens
-import {
-  DoctorRoundsScreen,
-  DoctorPostVisitScreen,
-  DoctorEscalationScreen,
-  DoctorMessagesScreen,
-  DoctorAIScreen,
-} from '../components/doctor/PlaceholderScreens';
+// Doctor screens — S110
+import { DoctorRoundsScreen }    from '../components/doctor/DoctorRoundsScreen';
+import { DoctorPostVisitScreen } from '../components/doctor/DoctorPostVisitScreen';
+// Doctor screens — S111
+import { DoctorAIScreen } from '../components/doctor/DoctorAIScreen';
+// Doctor screens — S116
+import { DoctorMessagesScreen }    from '../components/doctor/DoctorMessagesScreen';
+// Doctor screens — S117
+import { DoctorEscalationScreen }  from '../components/doctor/DoctorEscalationScreen';
 
-// Nurse screens
-import {
-  NurseShiftScreen,
-  NurseVitalsScreen,
-  NurseMessagesScreen,
-} from '../components/nurse/PlaceholderScreens';
+// Nurse screens — S112
+import { NurseShiftScreen }  from '../components/nurse/NurseShiftScreen';
+import { NurseVitalsScreen } from '../components/nurse/NurseVitalsScreen';
+// Nurse screens — S116
+import { NurseMessagesScreen } from '../components/nurse/NurseMessagesScreen';
 
-// Patient screens
-import {
-  PatientHomeScreen,
-  PatientPostVisitScreen,
-  PatientMedsScreen,
-  PatientBillsScreen,
-  PatientHealthScreen,
-} from '../components/patient/PlaceholderScreens';
+// Patient screens — S113
+import { PatientHomeScreen }      from '../components/patient/PatientHomeScreen';
+import { PatientPostVisitScreen } from '../components/patient/PatientPostVisitScreen';
+// Patient screens — S114
+import { PatientMedsScreen }  from '../components/patient/PatientMedsScreen';
+import { PatientBillsScreen } from '../components/patient/PatientBillsScreen';
+// Patient screens — S115
+import { PatientHealthScreen } from '../components/patient/PatientHealthScreen';
 
 const Stack  = createNativeStackNavigator();
 const DoctorTabs  = createBottomTabNavigator();

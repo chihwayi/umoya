@@ -1,0 +1,377 @@
+import React, { useState, useRef } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  TextInput, ScrollView, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
+import { Icon, Card, AiBadge } from '../ui';
+import { NotificationCentre } from '../shared/NotificationCentre';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type MsgType = 'text' | 'voice' | 'attachment';
+
+interface Message {
+  id: string;
+  from: 'me' | 'them';
+  type: MsgType;
+  text: string;
+  time: string;
+  read: boolean;
+}
+
+interface Conversation {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  online: boolean;
+  unread: number;
+  lastMessage: string;
+  lastTime: string;
+  messages: Message[];
+}
+
+// ─── Quick replies ────────────────────────────────────────────────────────────
+
+const QUICK_REPLIES = [
+  'Patient stable',
+  'Vitals normal',
+  'On my way',
+  'Please review',
+  'Meds administered',
+  'Escalating now',
+];
+
+// ─── Mock data ────────────────────────────────────────────────────────────────
+
+const CONVERSATIONS: Conversation[] = [
+  {
+    id: 'c1', name: 'Dr. T. Chikwanda', role: 'Attending — Ward C', avatar: 'TC',
+    online: true, unread: 1, lastMessage: 'Aim for Friday discharge if troponin flat.',
+    lastTime: '18 min',
+    messages: [
+      { id: 'm1', from: 'me',   type: 'text', text: 'Good morning Doctor. Reginald Okafor is asking about his discharge date.', time: '08:12', read: true },
+      { id: 'm2', from: 'them', type: 'text', text: 'Aim for Friday discharge if troponin stays flat. I\'ll speak to him at rounds.', time: '08:15', read: true },
+      { id: 'm3', from: 'me',   type: 'text', text: 'Thank you. His SpO₂ has been 97–99% since 06:00 — looking stable.', time: '08:18', read: true },
+      { id: 'm4', from: 'them', type: 'text', text: 'Good. Also, please send me a voice note after you check Samuel Park\'s IV site.', time: '09:30', read: false },
+    ],
+  },
+  {
+    id: 'c2', name: 'Charge Nurse G. Ncube', role: 'Charge Nurse · Ward C', avatar: 'GN',
+    online: true, unread: 2, lastMessage: 'Shift allocation updated. Check your board.',
+    lastTime: '5 min',
+    messages: [
+      { id: 'm1', from: 'them', type: 'text',       text: 'Morning Amai. Shift allocation has been updated. Please check your assignment board.', time: '06:45', read: true },
+      { id: 'm2', from: 'them', type: 'attachment', text: '📎 Shift_Allocation_22Mar.pdf  ·  62 KB',                                               time: '06:45', read: false },
+      { id: 'm3', from: 'them', type: 'text',       text: 'Also, bed 302 needs a vitals recheck at 10:00.',                                        time: '07:02', read: false },
+    ],
+  },
+  {
+    id: 'c3', name: 'Thomas Ndlovu', role: 'Patient · Bed 305', avatar: 'TN',
+    online: false, unread: 0, lastMessage: 'Thank you nurse, I feel better now.',
+    lastTime: '2 hr',
+    messages: [
+      { id: 'm1', from: 'them', type: 'text', text: 'Nurse, I\'m feeling some chest tightness again.', time: '07:12', read: true },
+      { id: 'm2', from: 'me',   type: 'text', text: 'I\'m coming to you now Thomas. Please try to stay calm and breathe slowly.', time: '07:13', read: true },
+      { id: 'm3', from: 'them', type: 'text', text: 'Thank you nurse, I feel better now.', time: '07:40', read: true },
+    ],
+  },
+  {
+    id: 'c4', name: 'Dr. P. Zungu', role: 'Night Registrar · Handover', avatar: 'PZ',
+    online: false, unread: 0, lastMessage: 'Samuel Park had one desat at 02:15.',
+    lastTime: '6 hr',
+    messages: [
+      { id: 'm1', from: 'them', type: 'text',       text: 'Morning Amai. Samuel Park had a brief desat at 02:15 — resolved with repositioning. Keep a close eye.', time: '02:02', read: true },
+      { id: 'm2', from: 'them', type: 'attachment', text: '📎 Overnight_Nursing_Notes_22Mar.pdf  ·  44 KB', time: '02:03', read: true },
+    ],
+  },
+];
+
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+
+const AvatarCircle: React.FC<{ initials: string; online: boolean; size?: number }> = ({ initials, online, size = 42 }) => (
+  <View style={{ width: size, height: size }}>
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={[styles.avatarText, { fontSize: size * 0.34 }]}>{initials}</Text>
+    </View>
+    {online && <View style={styles.onlineDot} />}
+  </View>
+);
+
+// ─── Thread ───────────────────────────────────────────────────────────────────
+
+const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ convo, onBack }) => {
+  const [text, setText] = useState('');
+  const [messages, setMessages] = useState(convo.messages);
+  const flatRef = useRef<FlatList>(null);
+
+  const send = (msg?: string) => {
+    const content = msg ?? text.trim();
+    if (!content) return;
+    const newMsg: Message = {
+      id: `m${Date.now()}`, from: 'me', type: 'text', text: content,
+      time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      read: false,
+    };
+    setMessages(prev => [...prev, newMsg]);
+    setText('');
+    setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+  };
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Thread header */}
+      <View style={styles.threadHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Icon name="rounds" size={18} color={C.purple} />
+        </TouchableOpacity>
+        <AvatarCircle initials={convo.avatar} online={convo.online} size={36} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.threadName}>{convo.name}</Text>
+          <Text style={styles.threadRole}>{convo.role}  ·  {convo.online ? 'Online' : 'Offline'}</Text>
+        </View>
+        <TouchableOpacity style={styles.threadAction}>
+          <Icon name="escalate" size={16} color={C.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {/* HIPAA banner */}
+      <View style={styles.hipaaBar}>
+        <Icon name="sparkle" size={10} color={C.green} />
+        <Text style={styles.hipaaText}>End-to-end encrypted  ·  HIPAA compliant  ·  Audit logged</Text>
+      </View>
+
+      {/* Messages */}
+      <FlatList
+        ref={flatRef}
+        data={messages}
+        keyExtractor={m => m.id}
+        contentContainerStyle={styles.messageList}
+        onLayout={() => flatRef.current?.scrollToEnd({ animated: false })}
+        renderItem={({ item: msg }) => {
+          const isMe = msg.from === 'me';
+          return (
+            <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
+              {!isMe && <AvatarCircle initials={convo.avatar} online={false} size={28} />}
+              <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem,
+                msg.type === 'attachment' && styles.bubbleAttachment,
+              ]}>
+                <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe,
+                  msg.type === 'attachment' && styles.bubbleAttachText,
+                ]}>
+                  {msg.text}
+                </Text>
+                <View style={styles.bubbleMeta}>
+                  <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{msg.time}</Text>
+                  {isMe && <Text style={styles.readReceipt}>{msg.read ? '✓✓' : '✓'}</Text>}
+                </View>
+              </View>
+            </View>
+          );
+        }}
+      />
+
+      {/* Quick replies */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.quickRepliesScroll}
+        contentContainerStyle={styles.quickRepliesContent}
+      >
+        {QUICK_REPLIES.map(r => (
+          <TouchableOpacity key={r} style={styles.quickChip} onPress={() => send(r)}>
+            <Text style={styles.quickChipText}>{r}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Compose */}
+      <View style={styles.compose}>
+        <TouchableOpacity style={styles.composeAction}>
+          <Icon name="escalate" size={18} color={C.textMuted} />
+        </TouchableOpacity>
+        <TextInput
+          style={styles.composeInput}
+          placeholder="Secure message…"
+          placeholderTextColor={C.textMuted}
+          value={text}
+          onChangeText={setText}
+          multiline
+        />
+        <TouchableOpacity style={styles.composeAction}>
+          <Icon name="brain" size={18} color={C.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.sendBtn, { opacity: text.trim() ? 1 : 0.4 }]}
+          onPress={() => send()}
+          disabled={!text.trim()}
+        >
+          <Icon name="sparkle" size={16} color={C.bg} />
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
+  );
+};
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
+export const NurseMessagesScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const [search, setSearch] = useState('');
+  const [activeConvo, setActiveConvo] = useState<Conversation | null>(null);
+  const [notifVisible, setNotifVisible] = useState(false);
+
+  const totalUnread = CONVERSATIONS.reduce((s, c) => s + c.unread, 0);
+  const filtered = CONVERSATIONS.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.role.toLowerCase().includes(search.toLowerCase())
+  );
+
+  if (activeConvo) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <ThreadView convo={activeConvo} onBack={() => setActiveConvo(null)} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <LinearGradient colors={['#030B18', C.bg]} style={styles.header}>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Messages</Text>
+            <View style={styles.hipaaHeaderRow}>
+              <Icon name="sparkle" size={11} color={C.green} />
+              <Text style={styles.hipaaHeaderText}>HIPAA Secure</Text>
+            </View>
+          </View>
+          <AiBadge text="S116" />
+          <TouchableOpacity style={styles.notifBtn} onPress={() => setNotifVisible(true)}>
+            <Icon name="escalate" size={20} color={C.purple} />
+            {totalUnread > 0 && (
+              <View style={styles.notifDot}>
+                <Text style={styles.notifDotText}>{totalUnread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      {/* Search */}
+      <View style={styles.searchWrap}>
+        <Icon name="rounds" size={15} color={C.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search conversations…"
+          placeholderTextColor={C.textMuted}
+          value={search}
+          onChangeText={setSearch}
+        />
+      </View>
+
+      {/* Conversation list */}
+      <FlatList
+        data={filtered}
+        keyExtractor={c => c.id}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 32 }}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        renderItem={({ item: c }) => (
+          <TouchableOpacity style={styles.convoRow} onPress={() => setActiveConvo(c)} activeOpacity={0.82}>
+            <AvatarCircle initials={c.avatar} online={c.online} />
+            <View style={styles.convoMeta}>
+              <View style={styles.convoTopRow}>
+                <Text style={[styles.convoName, c.unread > 0 && styles.convoNameUnread]}>{c.name}</Text>
+                <Text style={styles.convoTime}>{c.lastTime}</Text>
+              </View>
+              <Text style={styles.convoRole}>{c.role}</Text>
+              <Text style={[styles.convoLast, c.unread > 0 && styles.convoLastUnread]} numberOfLines={1}>{c.lastMessage}</Text>
+            </View>
+            {c.unread > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{c.unread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+      />
+
+      <NotificationCentre visible={notifVisible} onClose={() => setNotifVisible(false)} />
+    </View>
+  );
+};
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  root:   { flex: 1, backgroundColor: C.bg },
+  header: { paddingHorizontal: 20, paddingBottom: 12 },
+
+  headerRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 12 },
+  headerTitle:     { fontFamily: FONT.uiBk, fontSize: 22, color: C.text, letterSpacing: -0.4 },
+  hipaaHeaderRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  hipaaHeaderText: { fontFamily: FONT.uiBd, fontSize: 10, color: C.green, letterSpacing: 0.3 },
+  notifBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },
+  notifDot:        { position: 'absolute', top: 0, right: 0, backgroundColor: C.red, borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  notifDotText:    { fontFamily: FONT.uiBd, fontSize: 9, color: '#fff' },
+
+  searchWrap:  { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 14, marginTop: 8, backgroundColor: C.surface2, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: C.border },
+  searchInput: { flex: 1, fontFamily: FONT.ui, fontSize: 13, color: C.text },
+
+  separator:       { height: 1, backgroundColor: C.border, marginLeft: 66 },
+  convoRow:        { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
+  convoMeta:       { flex: 1, gap: 2 },
+  convoTopRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  convoName:       { fontFamily: FONT.uiBd, fontSize: 14, color: C.textMuted },
+  convoNameUnread: { color: C.text },
+  convoRole:       { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
+  convoLast:       { fontFamily: FONT.ui, fontSize: 12, color: C.textMuted },
+  convoLastUnread: { color: C.text },
+  convoTime:       { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
+  unreadBadge:     { backgroundColor: C.purple, borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  unreadBadgeText: { fontFamily: FONT.uiBd, fontSize: 10, color: '#fff' },
+
+  avatar:    { backgroundColor: C.purple + '33', alignItems: 'center', justifyContent: 'center' },
+  avatarText:{ fontFamily: FONT.uiBk, color: C.purple },
+  onlineDot: { position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: C.green, borderWidth: 1.5, borderColor: C.bg },
+
+  // Thread
+  threadHeader:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.surface },
+  backBtn:       { width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },
+  threadName:    { fontFamily: FONT.uiBd, fontSize: 14, color: C.text },
+  threadRole:    { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
+  threadAction:  { width: 32, height: 32, borderRadius: 16, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },
+
+  hipaaBar:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 6, backgroundColor: C.green + '12', borderBottomWidth: 1, borderBottomColor: C.green + '22' },
+  hipaaText: { fontFamily: FONT.ui, fontSize: 10, color: C.green, letterSpacing: 0.3 },
+
+  messageList: { padding: 14, gap: 10, flexGrow: 1 },
+  msgRow:      { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  msgRowMe:    { flexDirection: 'row-reverse' },
+
+  bubble:           { maxWidth: '75%', borderRadius: RADIUS.lg, padding: 10, gap: 4 },
+  bubbleMe:         { backgroundColor: C.purple, borderBottomRightRadius: 4 },
+  bubbleThem:       { backgroundColor: C.surface2, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: C.border },
+  bubbleAttachment: { borderStyle: 'dashed', borderWidth: 1, borderColor: C.purple + '55', backgroundColor: C.purple + '12' },
+  bubbleText:       { fontFamily: FONT.ui, fontSize: 13, color: C.text, lineHeight: 19 },
+  bubbleTextMe:     { color: '#fff' },
+  bubbleAttachText: { fontFamily: FONT.uiBd, fontSize: 12, color: C.purple },
+  bubbleMeta:       { flexDirection: 'row', alignItems: 'center', gap: 4, justifyContent: 'flex-end' },
+  bubbleTime:       { fontFamily: FONT.ui, fontSize: 9, color: C.textMuted },
+  bubbleTimeMe:     { color: 'rgba(255,255,255,0.6)' },
+  readReceipt:      { fontFamily: FONT.uiBd, fontSize: 10, color: 'rgba(255,255,255,0.7)' },
+
+  quickRepliesScroll:   { maxHeight: 40, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.surface },
+  quickRepliesContent:  { paddingHorizontal: 12, paddingVertical: 6, gap: 6, flexDirection: 'row' },
+  quickChip:            { backgroundColor: C.purple + '22', borderRadius: RADIUS.pill, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: C.purple + '44' },
+  quickChipText:        { fontFamily: FONT.uiBd, fontSize: 11, color: C.purple },
+
+  compose:       { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.surface },
+  composeAction: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },
+  composeInput:  { flex: 1, fontFamily: FONT.ui, fontSize: 13, color: C.text, backgroundColor: C.surface2, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 8, maxHeight: 100, borderWidth: 1, borderColor: C.border },
+  sendBtn:       { width: 36, height: 36, borderRadius: 18, backgroundColor: C.purple, alignItems: 'center', justifyContent: 'center' },
+});

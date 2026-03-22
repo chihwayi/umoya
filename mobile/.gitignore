@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+.metro-cache
+google-play-key.json
+google-services.json

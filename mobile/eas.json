@@ -1,45 +1,91 @@
 {
   "cli": {
     "version": ">= 7.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "local",
+    "requireCommit": true
   },
   "build": {
+    "base": {
+      "node": "22.14.0",
+      "cache": {
+        "key": "medicore-v1",
+        "paths": ["node_modules", ".expo"]
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": true },
-      "android": { "buildType": "apk" },
+      "ios": {
+        "simulator": true,
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk",
+        "resourceClass": "medium"
+      },
+      "channel": "development",
       "env": {
         "EXPO_PUBLIC_API_BASE": "localhost:3000",
-        "EXPO_PUBLIC_WS_BASE":  "ws://localhost:3000"
+        "EXPO_PUBLIC_WS_BASE":  "ws://localhost:3000",
+        "EXPO_PUBLIC_ENV":      "development"
       }
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal",
-      "android": { "buildType": "apk" },
+      "ios": {
+        "resourceClass": "m-medium",
+        "credentialsSource": "remote"
+      },
+      "android": {
+        "buildType": "apk",
+        "resourceClass": "medium",
+        "credentialsSource": "remote"
+      },
+      "channel": "preview",
       "env": {
         "EXPO_PUBLIC_API_BASE": "api-staging.medicore.app",
-        "EXPO_PUBLIC_WS_BASE":  "wss://api-staging.medicore.app"
+        "EXPO_PUBLIC_WS_BASE":  "wss://api-staging.medicore.app",
+        "EXPO_PUBLIC_ENV":      "staging"
       }
     },
     "production": {
+      "extends": "base",
       "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-large",
+        "credentialsSource": "remote",
+        "image": "latest"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "resourceClass": "large",
+        "credentialsSource": "remote",
+        "image": "latest"
+      },
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_API_BASE": "api.medicore.app",
-        "EXPO_PUBLIC_WS_BASE":  "wss://api.medicore.app"
+        "EXPO_PUBLIC_WS_BASE":  "wss://api.medicore.app",
+        "EXPO_PUBLIC_ENV":      "production"
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "REPLACE_WITH_APPLE_ID",
-        "ascAppId": "REPLACE_WITH_ASC_APP_ID",
-        "appleTeamId": "REPLACE_WITH_TEAM_ID"
+        "appleId":     "REPLACE_WITH_APPLE_ID",
+        "ascAppId":    "REPLACE_WITH_ASC_APP_ID",
+        "appleTeamId": "REPLACE_WITH_TEAM_ID",
+        "language":    "en-US",
+        "sku":         "com.medicore.clinical"
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-key.json",
-        "track": "internal"
+        "track": "internal",
+        "releaseStatus": "draft",
+        "rollout": 0.1
       }
     }
   }
