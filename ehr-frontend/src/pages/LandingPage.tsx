@@ -443,7 +443,7 @@ export default function LandingPage() {
               <a href="#request-access" className="transition-colors hover:text-white">Get Access</a>
             </nav>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate('/tenants')}
                 className="hidden rounded-full border border-[#1E3050] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[#C5D5EE] transition hover:border-[#2B7FFF]/50 hover:bg-white/[0.08] lg:block"
@@ -452,7 +452,7 @@ export default function LandingPage() {
               </button>
               <button
                 onClick={() => document.getElementById('request-access')?.scrollIntoView({ behavior: 'smooth' })}
-                className="rounded-full bg-gradient-to-r from-[#00C896] to-[#00B080] px-5 py-2 text-sm font-bold text-[#051119] transition hover:from-[#00D9A3] hover:to-[#00C896]"
+                className="rounded-full bg-gradient-to-r from-[#00C896] to-[#00B080] px-4 py-2 text-xs font-bold text-[#051119] transition hover:from-[#00D9A3] hover:to-[#00C896] sm:px-5 sm:text-sm"
               >
                 Request Access
               </button>
@@ -462,8 +462,8 @@ export default function LandingPage() {
 
         <main>
           {/* ── HERO ── */}
-          <section className="mx-auto max-w-7xl px-5 pb-10 pt-16 lg:px-8 lg:pt-24">
-            <div className="grid gap-14 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16 lg:items-start">
+          <section className="mx-auto max-w-7xl px-4 pb-10 pt-12 sm:px-5 lg:px-8 lg:pt-24">
+            <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16 lg:items-start">
               {/* Left */}
               <div>
                 <div className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-[#00C896]/25 bg-[#00C896]/[0.08] px-4 py-2 text-xs font-semibold uppercase tracking-[0.26em] text-[#6EE7C2]">
@@ -476,7 +476,7 @@ export default function LandingPage() {
 
                 <h1
                   style={{ fontFamily: '"Fraunces", serif' }}
-                  className="text-[3.2rem] font-black leading-[0.95] tracking-tight text-white md:text-[4rem] xl:text-[5rem]"
+                  className="text-[2.4rem] font-black leading-[0.95] tracking-tight text-white sm:text-[3.2rem] md:text-[4rem] xl:text-[5rem]"
                 >
                   The EHR that{' '}
                   <span className="gradient-text-teal">thinks with you.</span>
@@ -488,17 +488,17 @@ export default function LandingPage() {
                   MediCore combines real-time CDSS, PostVisit AI, structured SNOMED CT data, FHIR R4 interoperability, DHIS2 program reporting, and deep clinical coverage across 40+ specialties — all in one platform built for clinicians, not administrators.
                 </p>
 
-                <div className="mt-8 flex flex-wrap gap-3">
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <button
                     onClick={() => document.getElementById('request-access')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="glow-teal inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#00C896] to-[#00A87A] px-7 py-3.5 text-sm font-bold text-[#051119] transition hover:from-[#00D9A3] hover:to-[#00C896]"
+                    className="glow-teal inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#00C896] to-[#00A87A] px-6 py-3 text-sm font-bold text-[#051119] transition hover:from-[#00D9A3] hover:to-[#00C896] sm:px-7 sm:py-3.5"
                   >
                     Request Guided Test Access
                     <ArrowRight className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => navigate('/tenants')}
-                    className="inline-flex items-center gap-2 rounded-full border border-[#1E3A5F] bg-white/[0.04] px-7 py-3.5 text-sm font-bold text-white transition hover:border-[#2B7FFF]/60 hover:bg-white/[0.08]"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1E3A5F] bg-white/[0.04] px-6 py-3 text-sm font-bold text-white transition hover:border-[#2B7FFF]/60 hover:bg-white/[0.08] sm:px-7 sm:py-3.5"
                   >
                     Clinic Login Directory
                     <ChevronRight className="h-4 w-4" />
@@ -518,7 +518,7 @@ export default function LandingPage() {
                 </div>
 
                 {/* Key proof points */}
-                <div className="mt-10 grid gap-3 sm:grid-cols-3">
+                <div className="mt-6 grid gap-3 grid-cols-1 sm:grid-cols-3">
                   {[
                     { icon: Brain, color: '#00C896', title: 'AI-First CDSS', sub: 'Real-time, protocol-linked, bedside' },
                     { icon: ShieldCheck, color: '#2B7FFF', title: 'HIPAA & FHIR', sub: 'Audit logs, structured, exportable' },
@@ -643,8 +643,8 @@ export default function LandingPage() {
           </section>
 
           {/* ── STATS ── */}
-          <section className="mx-auto max-w-7xl px-5 py-14 lg:px-8">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <section className="mx-auto max-w-7xl px-4 py-10 sm:px-5 lg:px-8">
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
               {stats.map((stat) => (
                 <div
                   key={stat.label}
@@ -664,7 +664,7 @@ export default function LandingPage() {
           </section>
 
           {/* ── WHY MEDICORE / AUDIENCE SEGMENTS ── */}
-          <section id="why" className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
+          <section id="why" className="mx-auto max-w-7xl px-4 py-10 sm:px-5 lg:px-8">
             <div className="mb-10 text-center">
               <div className="mb-3 inline-block text-xs font-bold uppercase tracking-[0.3em] text-[#5A78A0]">Built for every stakeholder</div>
               <h2
@@ -680,7 +680,7 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {audiences.map((audience) => {
                 const Icon = audience.icon;
                 return (
@@ -751,7 +751,7 @@ export default function LandingPage() {
                 </p>
               </div>
 
-              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {aiFeatures.map((feature) => {
                   const Icon = feature.icon;
                   return (
@@ -779,7 +779,7 @@ export default function LandingPage() {
           </section>
 
           {/* ── HEALTH STANDARDS DEEP DIVE ── */}
-          <section id="standards" className="mx-auto max-w-7xl px-5 py-16 lg:px-8">
+          <section id="standards" className="mx-auto max-w-7xl px-4 py-12 sm:px-5 lg:px-8">
             <div className="mb-10">
               <div className="mb-3 text-xs font-bold uppercase tracking-[0.3em] text-[#5A78A0]">
                 Global health informatics standards
@@ -798,7 +798,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
               {standardsGrid.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -854,7 +854,7 @@ export default function LandingPage() {
           </section>
 
           {/* ── CLINICAL MODULES ── */}
-          <section id="modules" className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
+          <section id="modules" className="mx-auto max-w-7xl px-4 py-10 sm:px-5 lg:px-8">
             <div className="mb-8 text-center">
               <div className="mb-3 text-xs font-bold uppercase tracking-[0.3em] text-[#5A78A0]">Clinical coverage</div>
               <h2
@@ -869,7 +869,7 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid gap-3 grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 lg:grid-cols-6">
               {modules.map((mod) => {
                 const Icon = mod.icon;
                 return (
@@ -891,7 +891,7 @@ export default function LandingPage() {
           </section>
 
           {/* ── REQUEST ACCESS FORM ── */}
-          <section id="request-access" className="mx-auto max-w-7xl px-5 pb-24 pt-10 lg:px-8">
+          <section id="request-access" className="mx-auto max-w-7xl px-4 pb-20 pt-10 sm:px-5 lg:px-8">
             {/* Section header */}
             <div className="mb-10 text-center">
               <div className="mb-3 text-xs font-bold uppercase tracking-[0.3em] text-[#5A78A0]">Get started today</div>
@@ -907,7 +907,7 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
+            <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
               {/* Left info panel */}
               <div className="rounded-[28px] border border-[#1A2E4A] bg-[#0A1525] p-7">
                 <div className="space-y-5">
@@ -983,7 +983,7 @@ export default function LandingPage() {
                 onSubmit={submitRequest}
                 className="rounded-[28px] border border-[#1A2E4A] bg-[#0A1525] p-6"
               >
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                   {[
                     { field: 'fullName' as const, label: 'Full name', placeholder: 'Dr. Tariro Moyo', required: true, type: 'text' },
                     { field: 'clinicName' as const, label: 'Clinic or hospital', placeholder: 'Borrowdale Specialist Centre', required: true, type: 'text' },
@@ -1107,8 +1107,8 @@ export default function LandingPage() {
 
         {/* ── FOOTER ── */}
         <footer className="border-t border-white/[0.06] bg-[#040A12]">
-          <div className="mx-auto max-w-7xl px-5 py-12 lg:px-8">
-            <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-5 lg:px-8">
+            <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
               {/* Brand */}
               <div>
                 <div className="flex items-center gap-3">
