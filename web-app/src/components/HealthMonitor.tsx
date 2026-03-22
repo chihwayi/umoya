@@ -77,16 +77,16 @@ const statusPillClass = (status: string): string => {
   switch (status) {
     case 'healthy':
     case 'running':
-      return 'text-emerald-700 bg-emerald-50 border border-emerald-200';
+      return 'text-[#6EE7C2] bg-[#00C896]/10 border border-emerald-200';
     case 'degraded':
     case 'unhealthy':
-      return 'text-amber-700 bg-amber-50 border border-amber-200';
+      return 'text-[#FFBD9A] bg-[#FF7A40]/10 border border-amber-200';
     case 'down':
     case 'stopped':
     case 'missing':
       return 'text-rose-700 bg-rose-50 border border-rose-200';
     default:
-      return 'text-slate-600 bg-slate-50 border border-slate-200';
+      return 'text-[#8FA8CC] bg-[#080E1A] border border-white/[0.07]';
   }
 };
 
@@ -310,7 +310,7 @@ export const HealthMonitor: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="text-sm text-white/90 flex items-center rounded-lg border border-white/30 px-3 py-1.5">
+            <div className="text-sm text-white/90 flex items-center rounded-2xl border border-white/30 px-3 py-1.5">
               <span className="w-2 h-2 bg-emerald-200 rounded-full mr-2 animate-pulse"></span>
               Live Monitoring
             </div>
@@ -318,7 +318,7 @@ export const HealthMonitor: React.FC = () => {
               type="button"
               onClick={handleRefreshNow}
               disabled={refreshing}
-              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-3 py-1.5 rounded-2xl text-xs font-semibold bg-white text-[#6EE7C2] hover:bg-[#00C896]/10 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {refreshing && (
                 <span className="mr-2 inline-block h-3 w-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
@@ -329,7 +329,7 @@ export const HealthMonitor: React.FC = () => {
               type="button"
               onClick={handleRepairAll}
               disabled={repairing}
-              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/75 text-white hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-3 py-1.5 rounded-2xl text-xs font-semibold bg-[#060C16]/75 text-white hover:bg-[#060C16] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {repairing && (
                 <span className="mr-2 inline-block h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -344,7 +344,7 @@ export const HealthMonitor: React.FC = () => {
               <span className="text-xs rounded-full px-3 py-1 bg-white/15 border border-white/25">{repairMessage}</span>
             )}
             {serviceActionMessage && (
-              <span className="text-xs rounded-full px-3 py-1 bg-emerald-500/30 border border-emerald-200/50">{serviceActionMessage}</span>
+              <span className="text-xs rounded-full px-3 py-1 bg-[#00C896]/100/30 border border-emerald-200/50">{serviceActionMessage}</span>
             )}
             {serviceActionError && (
               <span className="text-xs rounded-full px-3 py-1 bg-rose-500/30 border border-rose-200/50">{serviceActionError}</span>
@@ -355,40 +355,40 @@ export const HealthMonitor: React.FC = () => {
 
       {systemHealth && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Total Tenants</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{systemHealth.totalTenants}</p>
+          <div className="bg-white p-5 rounded-2xl border border-white/[0.07] shadow-sm">
+            <p className="text-sm font-medium text-[#7A9AB8]">Total Tenants</p>
+            <p className="text-2xl font-bold text-white mt-1">{systemHealth.totalTenants}</p>
           </div>
-          <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Healthy</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{systemHealth.healthy}</p>
+          <div className="bg-white p-5 rounded-2xl border border-white/[0.07] shadow-sm">
+            <p className="text-sm font-medium text-[#7A9AB8]">Healthy</p>
+            <p className="text-2xl font-bold text-white mt-1">{systemHealth.healthy}</p>
           </div>
-          <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Issues</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{systemHealth.unhealthy}</p>
+          <div className="bg-white p-5 rounded-2xl border border-white/[0.07] shadow-sm">
+            <p className="text-sm font-medium text-[#7A9AB8]">Issues</p>
+            <p className="text-2xl font-bold text-white mt-1">{systemHealth.unhealthy}</p>
           </div>
-          <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Avg DB Latency</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{Math.round(systemHealth.averageConnectionTime)}ms</p>
+          <div className="bg-white p-5 rounded-2xl border border-white/[0.07] shadow-sm">
+            <p className="text-sm font-medium text-[#7A9AB8]">Avg DB Latency</p>
+            <p className="text-2xl font-bold text-white mt-1">{Math.round(systemHealth.averageConnectionTime)}ms</p>
           </div>
         </div>
       )}
 
-      <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+      <section className="bg-white rounded-xl border border-white/[0.07] shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/[0.07] bg-[#080E1A] flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Runtime Endpoint Routing</h3>
-            <p className="text-xs text-slate-500 mt-1">
+            <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Runtime Endpoint Routing</h3>
+            <p className="text-xs text-[#7A9AB8] mt-1">
               Configure ports/hosts for platform monitoring and AI smoke tests. Leave blank to use environment defaults.
             </p>
           </div>
           <div className="flex items-center gap-2">
             {runtimeConfig?.hasOverrides ? (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#FF7A40]/10 text-[#FFBD9A] border border-amber-200">
                 Overrides Active
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#00C896]/10 text-[#6EE7C2] border border-emerald-200">
                 Env Defaults
               </span>
             )}
@@ -396,7 +396,7 @@ export const HealthMonitor: React.FC = () => {
               type="button"
               onClick={handleSaveRuntimeConfig}
               disabled={!runtimeConfigDraft || !runtimeConfigDirty || savingRuntimeConfig}
-              className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#00C896] text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingRuntimeConfig ? 'Saving...' : 'Save Routing'}
             </button>
@@ -421,12 +421,12 @@ export const HealthMonitor: React.FC = () => {
               return (
                 <label key={field.key} className="block">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-slate-600">{field.label}</span>
+                    <span className="text-xs font-medium text-[#8FA8CC]">{field.label}</span>
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                         source === 'override'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          ? 'bg-[#FF7A40]/10 text-[#FFBD9A] border border-amber-200'
+                          : 'bg-white/[0.04] text-[#8FA8CC] border border-white/[0.07]'
                       }`}
                     >
                       {source}
@@ -436,7 +436,7 @@ export const HealthMonitor: React.FC = () => {
                     type="text"
                     value={(runtimeConfigDraft[key] as any) || ''}
                     onChange={(event) => handleRuntimeConfigFieldChange(key, event.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                    className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                   />
                 </label>
               );
@@ -445,11 +445,11 @@ export const HealthMonitor: React.FC = () => {
         )}
       </section>
 
-      <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+      <section className="bg-white rounded-xl border border-white/[0.07] shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/[0.07] bg-[#080E1A] flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Platform Services</h3>
-            <p className="text-xs text-slate-500 mt-1">
+            <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Platform Services</h3>
+            <p className="text-xs text-[#7A9AB8] mt-1">
               {platformSummary.total > 0
                 ? `${platformSummary.healthy}/${platformSummary.total} healthy · ${platformSummary.degraded} degraded · ${platformSummary.down} down`
                 : 'Platform service telemetry unavailable'}
@@ -471,26 +471,26 @@ export const HealthMonitor: React.FC = () => {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-sm font-semibold text-slate-900">{service.name}</h4>
+                    <h4 className="text-sm font-semibold text-white">{service.name}</h4>
                     <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusPillClass(service.health)}`}>
                       {service.health.toUpperCase()}
                     </span>
                     {service.containerName && (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] text-slate-600 bg-slate-100 border border-slate-200">
+                      <span className="px-2 py-0.5 rounded-full text-[11px] text-[#8FA8CC] bg-white/[0.04] border border-white/[0.07]">
                         {service.containerName}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-slate-500 mt-1">{service.description}</p>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                  <p className="text-sm text-[#7A9AB8] mt-1">{service.description}</p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#7A9AB8]">
                     {service.container && (
                       <span>
-                        Container: <strong className="text-slate-700">{service.container.status}</strong>
+                        Container: <strong className="text-[#C5D5EE]">{service.container.status}</strong>
                       </span>
                     )}
                     {service.endpoint && (
                       <span>
-                        Endpoint: <strong className="text-slate-700">{service.endpoint.statusCode || (service.endpoint.reachable ? 'ok' : 'n/a')}</strong>
+                        Endpoint: <strong className="text-[#C5D5EE]">{service.endpoint.statusCode || (service.endpoint.reachable ? 'ok' : 'n/a')}</strong>
                         {service.endpoint.latencyMs ? ` · ${service.endpoint.latencyMs}ms` : ''}
                       </span>
                     )}
@@ -508,7 +508,7 @@ export const HealthMonitor: React.FC = () => {
                       type="button"
                       onClick={() => handleRestartService(service.id)}
                       disabled={restartingServiceId === service.id}
-                      className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#00C896] text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {restartingServiceId === service.id ? 'Restarting...' : 'Restart Service'}
                     </button>
@@ -520,29 +520,29 @@ export const HealthMonitor: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">AI Runtime Tests</h3>
-          <p className="text-xs text-slate-500 mt-1">Run built-in tests to validate Whisper transcription, OCR/vision, and Ollama model runtime.</p>
+      <section className="bg-white rounded-xl border border-white/[0.07] shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/[0.07] bg-[#080E1A]">
+          <h3 className="text-sm font-semibold text-white uppercase tracking-wider">AI Runtime Tests</h3>
+          <p className="text-xs text-[#7A9AB8] mt-1">Run built-in tests to validate Whisper transcription, OCR/vision, and Ollama model runtime.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6">
           {(platformOverview?.runtimeTests || []).map((test) => (
-            <article key={test.id} className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+            <article key={test.id} className="rounded-lg border border-white/[0.07] bg-[#080E1A]/60 p-4">
               <div className="flex items-center justify-between gap-2">
-                <h4 className="text-sm font-semibold text-slate-900">{test.name}</h4>
+                <h4 className="text-sm font-semibold text-white">{test.name}</h4>
                 <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusPillClass(test.health)}`}>
                   {test.health.toUpperCase()}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-1">{test.description}</p>
-              <div className="mt-3 space-y-1 text-xs text-slate-600">
+              <p className="text-xs text-[#7A9AB8] mt-1">{test.description}</p>
+              <div className="mt-3 space-y-1 text-xs text-[#8FA8CC]">
                 <p>
                   Last: {test.latest ? new Date(test.latest.checkedAt).toLocaleString() : 'Not run yet'}
                 </p>
                 {test.latest && (
                   <>
                     <p>Status: {test.latest.statusCode || 'n/a'} · {test.latest.latencyMs}ms</p>
-                    <p className={test.latest.ok ? 'text-emerald-700' : 'text-rose-700'}>{test.latest.message}</p>
+                    <p className={test.latest.ok ? 'text-[#6EE7C2]' : 'text-rose-700'}>{test.latest.message}</p>
                   </>
                 )}
               </div>
@@ -551,7 +551,7 @@ export const HealthMonitor: React.FC = () => {
                   type="button"
                   onClick={() => handleRunRuntimeTest(test.id)}
                   disabled={testingRuntimeId === test.id}
-                  className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#060C16] text-white hover:bg-[#0D1829] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {testingRuntimeId === test.id ? 'Testing...' : 'Run Test'}
                 </button>
@@ -560,7 +560,7 @@ export const HealthMonitor: React.FC = () => {
                     type="button"
                     onClick={() => handleRestartService(test.restartTargetServiceId!)}
                     disabled={restartingServiceId === test.restartTargetServiceId}
-                    className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-300 text-[#6EE7C2] bg-white hover:bg-[#00C896]/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {restartingServiceId === test.restartTargetServiceId ? 'Restarting...' : 'Restart Target'}
                   </button>
@@ -571,27 +571,27 @@ export const HealthMonitor: React.FC = () => {
         </div>
       </section>
 
-      <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Tenant Database Health</h3>
+      <section className="bg-white rounded-xl border border-white/[0.07] shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/[0.07] bg-[#080E1A]">
+          <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Tenant Database Health</h3>
         </div>
 
         {tenantHealth.length > 0 ? (
           <div className="divide-y divide-slate-200">
             {tenantHealth.map((tenant) => (
-              <div key={tenant.tenantId} className="p-6 hover:bg-slate-50 transition-colors">
+              <div key={tenant.tenantId} className="p-6 hover:bg-[#080E1A] transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h4 className="text-sm font-bold text-slate-900">{tenant.tenantName}</h4>
+                    <h4 className="text-sm font-bold text-white">{tenant.tenantName}</h4>
                     <div className="flex items-center mt-1 space-x-4">
-                      <span className="text-xs text-slate-500">Checked: {tenant.lastChecked.toLocaleTimeString()}</span>
+                      <span className="text-xs text-[#7A9AB8]">Checked: {tenant.lastChecked.toLocaleTimeString()}</span>
                       {tenant.error && <span className="text-xs text-rose-600">{tenant.error}</span>}
                     </div>
                   </div>
                   <div className="flex items-center space-x-6">
                     <div className="text-right">
-                      <p className="text-xs text-slate-500 mb-1">Latency</p>
-                      <p className="text-sm font-medium text-slate-900">{tenant.connectionTime}ms</p>
+                      <p className="text-xs text-[#7A9AB8] mb-1">Latency</p>
+                      <p className="text-sm font-medium text-white">{tenant.connectionTime}ms</p>
                     </div>
                     <div>
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusPillClass(tenant.databaseStatus)}`}>
@@ -605,8 +605,8 @@ export const HealthMonitor: React.FC = () => {
           </div>
         ) : (
           <div className="p-12 text-center">
-            <h3 className="text-sm font-medium text-slate-900">No health data available</h3>
-            <p className="text-sm text-slate-500 mt-1">System monitoring is active but no tenant data has been collected yet.</p>
+            <h3 className="text-sm font-medium text-white">No health data available</h3>
+            <p className="text-sm text-[#7A9AB8] mt-1">System monitoring is active but no tenant data has been collected yet.</p>
           </div>
         )}
       </section>

@@ -15,11 +15,11 @@ export const CdssAdmin: React.FC = () => {
       case 'failed':
         return `${base} bg-rose-100 text-rose-700`;
       case 'completed':
-        return `${base} bg-emerald-100 text-emerald-700`;
+        return `${base} bg-emerald-100 text-[#6EE7C2]`;
       case 'queued':
-        return `${base} bg-slate-100 text-slate-700`;
+        return `${base} bg-white/[0.04] text-[#C5D5EE]`;
       default:
-        return `${base} bg-slate-100 text-slate-600`;
+        return `${base} bg-white/[0.04] text-[#8FA8CC]`;
     }
   };
   const [status, setStatus] = useState<Status | null>(null);
@@ -732,90 +732,90 @@ export const CdssAdmin: React.FC = () => {
   }, [auditLimit]);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 text-slate-900">
+    <div className="space-y-6 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 text-white">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">🧠 CDSS Administration</h2>
-          <div className="text-sm text-slate-500">Manage AI features, ingestion, caching and audit trails</div>
+          <h2 className="text-2xl font-bold text-white tracking-tight">🧠 CDSS Administration</h2>
+          <div className="text-sm text-[#7A9AB8]">Manage AI features, ingestion, caching and audit trails</div>
         </div>
-        {loading && <span className="text-sm text-amber-600">Processing…</span>}
+        {loading && <span className="text-sm text-[#FF7A40]">Processing…</span>}
       </div>
 
       {message && (
-        <div className="p-3 rounded-md text-sm bg-emerald-50 border border-emerald-200 text-emerald-800">{message}</div>
+        <div className="p-3 rounded-xl text-sm bg-[#00C896]/10 border border-emerald-200 text-[#4DDBB0]">{message}</div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-4 border-t-4 border-indigo-500">
-          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">LLM</div>
-          <div className="mt-2 text-sm space-y-1 text-slate-800">
+        <div className="bg-[#0A1525] border border-white/[0.10] shadow-sm rounded-2xl p-4 border-t-4 border-indigo-500">
+          <div className="text-xs font-semibold text-[#8FA8CC] uppercase tracking-wide">LLM</div>
+          <div className="mt-2 text-sm space-y-1 text-white">
             <div>Enabled: {String(status?.llm?.enabled ?? '')}</div>
             <div>Model: {status?.llm?.model || '-'}</div>
             <div>API URL: {status?.llm?.api_url || '-'}</div>
           </div>
         </div>
-        <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-4 border-t-4 border-amber-500">
-          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">RAG</div>
-          <div className="mt-2 text-sm space-y-1 text-slate-800">
+        <div className="bg-[#0A1525] border border-white/[0.10] shadow-sm rounded-2xl p-4 border-t-4 border-amber-500">
+          <div className="text-xs font-semibold text-[#8FA8CC] uppercase tracking-wide">RAG</div>
+          <div className="mt-2 text-sm space-y-1 text-white">
             <div>Enabled: {String(status?.rag?.enabled ?? '')}</div>
             <div>Documents: {status?.rag?.documents ?? '-'}</div>
             <div>Cache: {status?.rag?.cache_enabled ? 'Enabled' : 'Disabled'}</div>
           </div>
         </div>
-        <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-4 border-t-4 border-emerald-500">
-          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Metrics</div>
-          <div className="mt-2 text-sm space-y-1 text-slate-800">
+        <div className="bg-[#0A1525] border border-white/[0.10] shadow-sm rounded-2xl p-4 border-t-4 border-emerald-500">
+          <div className="text-xs font-semibold text-[#8FA8CC] uppercase tracking-wide">Metrics</div>
+          <div className="mt-2 text-sm space-y-1 text-white">
             <div>Doc count: {metrics?.documents ?? '-'}</div>
             <div>Cache keys: {metrics?.cache_keys ?? '-'}</div>
             <div>RAG cache: {metrics?.rag_cache ? `${metrics.rag_cache.hit} hit / ${metrics.rag_cache.miss} miss (${metrics.rag_cache.hit_rate_percent}% hit)` : '-'}</div>
             <div>LLM cache: {metrics?.llm_cache ? `${metrics.llm_cache.hit} hit / ${metrics.llm_cache.miss} miss (${metrics.llm_cache.hit_rate_percent}% hit)` : '-'}</div>
             {rateLimit && (
-              <div className="text-xs text-slate-500 mt-1">Rate limit: {rateLimit.remaining}/{rateLimit.limit} • resets in {rateLimit.reset}s</div>
+              <div className="text-xs text-[#7A9AB8] mt-1">Rate limit: {rateLimit.remaining}/{rateLimit.limit} • resets in {rateLimit.reset}s</div>
             )}
           </div>
           <button
             onClick={handleRefreshMetrics}
-            className="mt-3 px-3 py-1.5 text-sm rounded-lg bg-slate-900 text-white shadow-sm hover:bg-slate-800 transition"
+            className="mt-3 px-3 py-1.5 text-sm rounded-2xl bg-[#060C16] text-white shadow-sm hover:bg-[#0D1829] transition"
           >
             Refresh
           </button>
           <button
             onClick={handleResetMetrics}
-            className="mt-3 ml-2 px-3 py-1.5 text-sm rounded-lg bg-rose-700 text-white shadow-sm hover:bg-rose-800 transition"
+            className="mt-3 ml-2 px-3 py-1.5 text-sm rounded-2xl bg-rose-700 text-white shadow-sm hover:bg-rose-800 transition"
           >
             Reset Counters
           </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-5 space-y-5">
+      <div className="bg-[#0A1525] border border-white/[0.10] shadow-sm rounded-2xl p-5 space-y-5">
         <div className="flex items-baseline justify-between">
           <div>
-            <div className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Configuration</div>
-            <div className="mt-1 text-sm font-semibold text-slate-800">🔧 Settings</div>
+            <div className="text-xs font-semibold tracking-wide text-[#7A9AB8] uppercase">Configuration</div>
+            <div className="mt-1 text-sm font-semibold text-white">🔧 Settings</div>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div>
-            <label className="block text-xs text-slate-600 uppercase mb-1">LLM Model Name</label>
+            <label className="block text-xs text-[#8FA8CC] uppercase mb-1">LLM Model Name</label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               value={settings?.llm_model_name || ''}
               onChange={(e) => setSettings({ ...settings, llm_model_name: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-600 uppercase mb-1">LLM API URL</label>
+            <label className="block text-xs text-[#8FA8CC] uppercase mb-1">LLM API URL</label>
             <input
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               value={settings?.llm_api_url || ''}
               onChange={(e) => setSettings({ ...settings, llm_api_url: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-600 uppercase mb-1">RAG Enabled</label>
+            <label className="block text-xs text-[#8FA8CC] uppercase mb-1">RAG Enabled</label>
             <select
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               value={String(settings?.rag_enabled ?? true)}
               onChange={(e) => setSettings({ ...settings, rag_enabled: e.target.value === 'true' })}
             >
@@ -824,10 +824,10 @@ export const CdssAdmin: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-600 uppercase mb-1">Cache TTL (seconds)</label>
+            <label className="block text-xs text-[#8FA8CC] uppercase mb-1">Cache TTL (seconds)</label>
             <input
               type="number"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               value={String(settings?.cache_ttl_seconds ?? 300)}
               onChange={(e) => setSettings({ ...settings, cache_ttl_seconds: Number(e.target.value || 0) })}
             />
@@ -836,7 +836,7 @@ export const CdssAdmin: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg bg-slate-900 text-white shadow-sm hover:bg-slate-800 transition disabled:opacity-50"
+            className="px-4 py-2 rounded-2xl bg-[#060C16] text-white shadow-sm hover:bg-[#0D1829] transition disabled:opacity-50"
             disabled={saveCooldown > 0}
             title={saveCooldown > 0 ? `Rate limited • wait ${saveCooldown}s` : 'Save settings'}
           >
@@ -845,22 +845,22 @@ export const CdssAdmin: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-300 shadow-sm rounded-2xl p-5 space-y-5">
+      <div className="bg-[#0A1525] border border-white/[0.10] shadow-sm rounded-2xl p-5 space-y-5">
         <div className="flex items-baseline justify-between">
           <div>
-            <div className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Pipelines</div>
-            <div className="mt-1 text-sm font-semibold text-slate-800">📚 Ingestion & Index</div>
+            <div className="text-xs font-semibold tracking-wide text-[#7A9AB8] uppercase">Pipelines</div>
+            <div className="mt-1 text-sm font-semibold text-white">📚 Ingestion & Index</div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <input
-            className="text-sm w-full sm:w-auto text-slate-900 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-800 hover:file:bg-slate-200"
+            className="text-sm w-full sm:w-auto text-white file:mr-3 file:rounded-md file:border file:border-white/[0.10] file:bg-white/[0.04] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-white/[0.06]"
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
           />
           <button
             onClick={handleIngest}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50 shadow-sm hover:bg-blue-700 transition w-full sm:w-auto"
+            className="px-4 py-2 rounded-2xl bg-blue-600 text-white disabled:opacity-50 shadow-sm hover:bg-blue-700 transition w-full sm:w-auto"
             disabled={ingestCooldown > 0}
             title={ingestCooldown > 0 ? `Rate limited • wait ${ingestCooldown}s` : 'Upload a PDF and start ingestion'}
           >
@@ -868,7 +868,7 @@ export const CdssAdmin: React.FC = () => {
           </button>
           <button
             onClick={handleReindex}
-            className="px-4 py-2 rounded-lg bg-amber-600 text-white disabled:opacity-50 shadow-sm hover:bg-amber-700 transition w-full sm:w-auto"
+            className="px-4 py-2 rounded-2xl bg-amber-600 text-white disabled:opacity-50 shadow-sm hover:bg-amber-700 transition w-full sm:w-auto"
             disabled={reindexCooldown > 0}
             title={reindexCooldown > 0 ? `Rate limited • wait ${reindexCooldown}s` : 'Rebuild vector + BM25 indexes'}
           >
@@ -876,19 +876,19 @@ export const CdssAdmin: React.FC = () => {
           </button>
           <button
             onClick={handleFlushCache}
-            className="px-4 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-50 shadow-sm hover:bg-rose-700 transition w-full sm:w-auto"
+            className="px-4 py-2 rounded-2xl bg-rose-600 text-white disabled:opacity-50 shadow-sm hover:bg-rose-700 transition w-full sm:w-auto"
             disabled={flushCooldown > 0}
             title={flushCooldown > 0 ? `Rate limited • wait ${flushCooldown}s` : 'Delete cache entries'}
           >
             Flush Cache
           </button>
           <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
-            <label className="text-xs text-slate-600">Auto-refresh</label>
+            <label className="text-xs text-[#8FA8CC]">Auto-refresh</label>
             <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
-            <label className="text-xs text-slate-600">Every (s)</label>
+            <label className="text-xs text-[#8FA8CC]">Every (s)</label>
             <input
               type="number"
-              className="w-16 border border-slate-300 rounded px-2 py-1 text-sm"
+              className="w-16 border border-white/[0.10] rounded px-2 py-1 text-sm"
               value={String(refreshSecs)}
               onChange={(e) => setRefreshSecs(Math.max(2, Number(e.target.value || 5)))}
             />
@@ -897,28 +897,28 @@ export const CdssAdmin: React.FC = () => {
                 const jobs = await cdssAdminAPI.getAdminJobs(50);
                 setIngestJobs(jobs?.jobs || []);
               }}
-              className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+              className="px-2 py-1 text-xs rounded bg-white/[0.06] text-[#C5D5EE] hover:bg-slate-300 transition"
             >
               Refresh Now
             </button>
             <div className="ml-3 flex items-center gap-2">
-              <label className="text-xs text-slate-600">Dense</label>
+              <label className="text-xs text-[#8FA8CC]">Dense</label>
               <input type="checkbox" checked={denseMode} onChange={(e) => setDenseMode(e.target.checked)} />
             </div>
           </div>
         </div>
         <div>
           <div className="flex items-center justify-between mt-2 mb-1">
-            <div className="text-xs font-semibold text-slate-600 uppercase">Jobs</div>
+            <div className="text-xs font-semibold text-[#8FA8CC] uppercase">Jobs</div>
             <div className="flex flex-wrap items-center gap-2">
               <input
-                className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+                className="border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
                 placeholder="Search Job ID"
                 value={jobIdQuery}
                 onChange={(e) => setJobIdQuery(e.target.value)}
               />
               <select
-                className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+                className="border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -928,25 +928,25 @@ export const CdssAdmin: React.FC = () => {
                 <option value="completed">Completed</option>
                 <option value="queued">Queued</option>
               </select>
-              <span className={`inline-block px-2 py-0.5 rounded ${runningCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+              <span className={`inline-block px-2 py-0.5 rounded ${runningCount > 0 ? 'bg-emerald-100 text-[#6EE7C2]' : 'bg-white/[0.04] text-[#8FA8CC]'}`}>
                 Running: {runningCount}
               </span>
               <button
-                className="ml-2 px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                className="ml-2 px-2 py-1 text-xs rounded bg-white/[0.06] text-[#C5D5EE] hover:bg-slate-300 transition"
                 onClick={() => { setStatusFilter('all'); setJobIdQuery(''); }}
                 title="Clear status filter and Job ID search"
               >
                 Clear Filters
               </button>
               <button
-                className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                className="px-2 py-1 text-xs rounded bg-white/[0.06] text-[#C5D5EE] hover:bg-slate-300 transition"
                 onClick={resetJobsColWidths}
                 title="Reset column widths"
               >
                 Reset Cols
               </button>
               <button
-                className="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700 transition"
+                className="px-2 py-1 text-xs rounded bg-[#00C896] text-white hover:bg-emerald-700 transition"
                 onClick={exportJobsCsv}
                 title="Export current Jobs view to CSV"
               >
@@ -954,14 +954,14 @@ export const CdssAdmin: React.FC = () => {
               </button>
             </div>
           </div>
-          <div className="overflow-auto rounded-lg border border-slate-200 max-h-96">
+          <div className="overflow-auto rounded-2xl border border-white/[0.07] max-h-96">
             <table className={`min-w-full ${denseMode ? 'text-xs' : 'text-sm'}`} style={{ tableLayout: 'fixed' }}>
               <thead>
-                <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                <tr className="text-left text-[#8FA8CC] uppercase text-xs bg-[#080E1A] border-b border-white/[0.07] sticky top-0 z-10">
                   <th style={{ width: jobsColWidths.jobId }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3`}>
                     <div className="relative pr-2">
                       <button onClick={() => toggleSort('jobId')} className="text-left w-full">
-                        Job ID <span className="text-slate-400">{sortIndicator('jobId')}</span>
+                        Job ID <span className="text-[#5A78A0]">{sortIndicator('jobId')}</span>
                       </button>
                       <div onMouseDown={beginResize('jobs', 'jobId', jobsColWidths.jobId)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                     </div>
@@ -969,7 +969,7 @@ export const CdssAdmin: React.FC = () => {
                   <th style={{ width: jobsColWidths.type }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                     <div className="relative pr-2">
                       <button onClick={() => toggleSort('type')} className="text-left w-full">
-                        Type <span className="text-slate-400">{sortIndicator('type')}</span>
+                        Type <span className="text-[#5A78A0]">{sortIndicator('type')}</span>
                       </button>
                       <div onMouseDown={beginResize('jobs', 'type', jobsColWidths.type)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                     </div>
@@ -977,7 +977,7 @@ export const CdssAdmin: React.FC = () => {
                   <th style={{ width: jobsColWidths.status }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                     <div className="relative pr-2">
                       <button onClick={() => toggleSort('status')} className="text-left w-full">
-                        Status <span className="text-slate-400">{sortIndicator('status')}</span>
+                        Status <span className="text-[#5A78A0]">{sortIndicator('status')}</span>
                       </button>
                       <div onMouseDown={beginResize('jobs', 'status', jobsColWidths.status)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                     </div>
@@ -985,7 +985,7 @@ export const CdssAdmin: React.FC = () => {
                   <th style={{ width: jobsColWidths.started }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                     <div className="relative pr-2">
                       <button onClick={() => toggleSort('started_at')} className="text-left w-full">
-                        Started <span className="text-slate-400">{sortIndicator('started_at')}</span>
+                        Started <span className="text-[#5A78A0]">{sortIndicator('started_at')}</span>
                       </button>
                       <div onMouseDown={beginResize('jobs', 'started', jobsColWidths.started)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                     </div>
@@ -993,7 +993,7 @@ export const CdssAdmin: React.FC = () => {
                   <th style={{ width: jobsColWidths.finished }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                     <div className="relative pr-2">
                       <button onClick={() => toggleSort('finished_at')} className="text-left w-full">
-                        Finished <span className="text-slate-400">{sortIndicator('finished_at')}</span>
+                        Finished <span className="text-[#5A78A0]">{sortIndicator('finished_at')}</span>
                       </button>
                       <div onMouseDown={beginResize('jobs', 'finished', jobsColWidths.finished)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                     </div>
@@ -1014,11 +1014,11 @@ export const CdssAdmin: React.FC = () => {
               </thead>
               <tbody>
                 {sortedJobs.map((j, idx) => (
-                  <tr key={idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''} hover:bg-slate-50`}>
+                  <tr key={idx} className={`border-t border-white/[0.05] ${idx % 2 === 1 ? 'bg-[#080E1A]/50' : ''} hover:bg-[#080E1A]`}>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 font-mono text-xs`}>
                       {j.jobId}
                       <button
-                        className="ml-2 px-1 py-0.5 text-[10px] rounded bg-slate-200 text-slate-700"
+                        className="ml-2 px-1 py-0.5 text-[10px] rounded bg-white/[0.06] text-[#C5D5EE]"
                         onClick={() => navigator.clipboard?.writeText(String(j.jobId || '')).catch(() => {})}
                         title="Copy Job ID"
                       >
@@ -1026,14 +1026,14 @@ export const CdssAdmin: React.FC = () => {
                       </button>
                     </td>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
-                      <span className="inline-block px-2 py-0.5 text-xs rounded bg-slate-100 text-slate-700">
+                      <span className="inline-block px-2 py-0.5 text-xs rounded bg-white/[0.04] text-[#C5D5EE]">
                         {j.type || 'ingest'}
                       </span>
                     </td>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}><span className={statusChip(j.status)}>{j.status}</span></td>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`} title={j.started_at || ''}>{relTime(j.started_at)}{nowTick ? '' : ''}</td>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`} title={j.finished_at || ''}>{j.finished_at ? relTime(j.finished_at) : '-' }{nowTick ? '' : ''}</td>
-                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 text-xs text-slate-500 max-w-xl truncate`} title={j.message || ''}>{j.message || '-'}</td>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 text-xs text-[#7A9AB8] max-w-xl truncate`} title={j.message || ''}>{j.message || '-'}</td>
                   <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                     {(j.status === 'failed' || j.status === 'completed') && (
                       <button
@@ -1072,17 +1072,17 @@ export const CdssAdmin: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-300 rounded-2xl p-4 space-y-4 shadow-sm">
+      <div className="bg-[#0A1525] border border-white/[0.10] rounded-2xl p-4 space-y-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm font-semibold text-slate-700">🗂 Ingestion History</div>
-            <div className="text-xs text-slate-500 mt-1">
+            <div className="text-sm font-semibold text-[#C5D5EE]">🗂 Ingestion History</div>
+            <div className="text-xs text-[#7A9AB8] mt-1">
               Track ingested document versions, hashes, and duplicate uploads.
             </div>
           </div>
           <div className="flex items-center gap-2">
             <input
-              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+              className="border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               placeholder="Search file/version/hash"
               value={ingestionSearch}
               onChange={(e) => setIngestionSearch(e.target.value)}
@@ -1099,15 +1099,15 @@ export const CdssAdmin: React.FC = () => {
                   setLoading(false);
                 }
               }}
-              className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white hover:bg-slate-800 transition"
+              className="px-3 py-1.5 text-sm rounded bg-[#060C16] text-white hover:bg-[#0D1829] transition"
             >
               Refresh
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+        <div className="overflow-x-auto border border-white/[0.07] rounded-xl bg-white">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-left text-slate-600 uppercase text-xs">
+            <thead className="bg-[#080E1A] border-b border-white/[0.07] text-left text-[#8FA8CC] uppercase text-xs">
               <tr>
                 <th className="py-2 px-3">Document</th>
                 <th className="py-2 px-3">Version</th>
@@ -1121,19 +1121,19 @@ export const CdssAdmin: React.FC = () => {
             <tbody>
               {filteredIngestionHistory.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-4 px-3 text-xs text-slate-500">
+                  <td colSpan={7} className="py-4 px-3 text-xs text-[#7A9AB8]">
                     No ingestion records yet.
                   </td>
                 </tr>
               )}
               {filteredIngestionHistory.map((row: any, idx: number) => (
-                <tr key={`${row?.jobId || 'job'}-${idx}`} className="border-t border-slate-100 hover:bg-slate-50/70">
+                <tr key={`${row?.jobId || 'job'}-${idx}`} className="border-t border-white/[0.05] hover:bg-[#080E1A]/70">
                   <td className="py-2 px-3">
-                    <div className="font-medium text-slate-800">{row?.fileName || 'Unknown'}</div>
-                    <div className="text-[11px] text-slate-500">Job {row?.jobId || '-'}</div>
+                    <div className="font-medium text-white">{row?.fileName || 'Unknown'}</div>
+                    <div className="text-[11px] text-[#7A9AB8]">Job {row?.jobId || '-'}</div>
                   </td>
-                  <td className="py-2 px-3 text-xs text-slate-700">{row?.versionLabel || 'n/a'}</td>
-                  <td className="py-2 px-3 text-xs font-mono text-slate-600">
+                  <td className="py-2 px-3 text-xs text-[#C5D5EE]">{row?.versionLabel || 'n/a'}</td>
+                  <td className="py-2 px-3 text-xs font-mono text-[#8FA8CC]">
                     {row?.fileSha256 ? `${String(row.fileSha256).slice(0, 12)}…` : 'n/a'}
                     {row?.duplicate ? (
                       <span className="ml-2 inline-block rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold">
@@ -1141,14 +1141,14 @@ export const CdssAdmin: React.FC = () => {
                       </span>
                     ) : null}
                   </td>
-                  <td className="py-2 px-3 text-xs text-slate-700">{row?.chunkCount ?? '-'}</td>
+                  <td className="py-2 px-3 text-xs text-[#C5D5EE]">{row?.chunkCount ?? '-'}</td>
                   <td className="py-2 px-3">
                     <span className={statusChip(String(row?.status || 'unknown'))}>{String(row?.status || 'unknown')}</span>
                   </td>
-                  <td className="py-2 px-3 text-xs text-slate-600" title={row?.ingestedAt || ''}>
+                  <td className="py-2 px-3 text-xs text-[#8FA8CC]" title={row?.ingestedAt || ''}>
                     {row?.ingestedAt ? relTime(row.ingestedAt) : '-'}
                   </td>
-                  <td className="py-2 px-3 text-xs text-slate-700">{row?.owner || '-'}</td>
+                  <td className="py-2 px-3 text-xs text-[#C5D5EE]">{row?.owner || '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1156,33 +1156,33 @@ export const CdssAdmin: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-300 rounded-2xl p-4 space-y-4 shadow-sm">
+      <div className="bg-[#0A1525] border border-white/[0.10] rounded-2xl p-4 space-y-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-semibold text-slate-700">🧾 Audit Logs</div>
+          <div className="text-sm font-semibold text-[#C5D5EE]">🧾 Audit Logs</div>
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={handleAuditPrev} disabled={auditOffset <= 0} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50 transition">Prev</button>
-            <span className="text-xs text-slate-500">page {Math.floor(auditOffset / auditLimit) + 1}</span>
-            <span className="text-xs text-slate-400">•</span>
-            <span className="text-xs text-slate-500">offset {auditOffset}</span>
+            <button onClick={handleAuditPrev} disabled={auditOffset <= 0} className="px-3 py-1.5 text-sm rounded bg-white/[0.06] text-[#C5D5EE] hover:bg-slate-300 disabled:opacity-50 transition">Prev</button>
+            <span className="text-xs text-[#7A9AB8]">page {Math.floor(auditOffset / auditLimit) + 1}</span>
+            <span className="text-xs text-[#5A78A0]">•</span>
+            <span className="text-xs text-[#7A9AB8]">offset {auditOffset}</span>
             <div className="flex items-center gap-1">
-              <span className="text-xs text-slate-500">page</span>
+              <span className="text-xs text-[#7A9AB8]">page</span>
               <input
-                className="w-16 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+                className="w-16 border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
                 value={auditPageInput}
                 onChange={(e) => setAuditPageInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAuditJump(); }}
               />
-              <button onClick={handleAuditJump} className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition">Go</button>
+              <button onClick={handleAuditJump} className="px-2 py-1 text-xs rounded bg-white/[0.06] text-[#C5D5EE] hover:bg-slate-300 transition">Go</button>
             </div>
             <input
-              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+              className="border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               placeholder="Filter actor"
               value={auditActorQuery}
               onChange={(e) => setAuditActorQuery(e.target.value)}
               title="Filter by actor"
             />
             <input
-              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+              className="border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               placeholder="Filter action"
               value={auditActionQuery}
               onChange={(e) => setAuditActionQuery(e.target.value)}
@@ -1190,27 +1190,27 @@ export const CdssAdmin: React.FC = () => {
             />
             <input
               type="date"
-              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+              className="border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               value={auditDateFrom}
               onChange={(e) => setAuditDateFrom(e.target.value)}
               title="From date"
             />
             <input
               type="date"
-              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+              className="border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               value={auditDateTo}
               onChange={(e) => setAuditDateTo(e.target.value)}
               title="To date"
             />
             <button
               onClick={() => { setAuditActorQuery(''); setAuditActionQuery(''); setAuditDateFrom(''); setAuditDateTo(''); }}
-              className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+              className="px-2 py-1 text-xs rounded bg-white/[0.06] text-[#C5D5EE] hover:bg-slate-300 transition"
               title="Clear audit filters"
             >
               Clear
             </button>
             <select
-              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
+              className="border border-white/[0.10] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               value={auditLimit}
               onChange={(e) => {
                 const newLimit = Number(e.target.value);
@@ -1222,21 +1222,21 @@ export const CdssAdmin: React.FC = () => {
               <option value={50}>limit 50</option>
               <option value={100}>limit 100</option>
             </select>
-            <button onClick={handleAuditNext} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition">Next</button>
-            <button onClick={resetAuditColWidths} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition">Reset Cols</button>
+            <button onClick={handleAuditNext} className="px-3 py-1.5 text-sm rounded bg-white/[0.06] text-[#C5D5EE] hover:bg-slate-300 transition">Next</button>
+            <button onClick={resetAuditColWidths} className="px-3 py-1.5 text-sm rounded bg-white/[0.06] text-[#C5D5EE] hover:bg-slate-300 transition">Reset Cols</button>
             <button onClick={exportAllAuditCsv} disabled={exportingAll} className="px-3 py-1.5 text-sm rounded bg-emerald-700 text-white disabled:opacity-50 hover:bg-emerald-800 transition">{exportingAll ? `Exporting… ${exportAllCount}` : 'Export All CSV'}</button>
-            <button onClick={exportAuditCsv} className="px-3 py-1.5 text-sm rounded bg-emerald-600 text-white hover:bg-emerald-700 transition">Export CSV</button>
-            <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white hover:bg-slate-800 transition">Refresh</button>
+            <button onClick={exportAuditCsv} className="px-3 py-1.5 text-sm rounded bg-[#00C896] text-white hover:bg-emerald-700 transition">Export CSV</button>
+            <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-[#060C16] text-white hover:bg-[#0D1829] transition">Refresh</button>
           </div>
         </div>
-        <div className="overflow-auto rounded-lg border border-slate-200 max-h-80">
+        <div className="overflow-auto rounded-2xl border border-white/[0.07] max-h-80">
           <table className={`min-w-full ${denseMode ? 'text-xs' : 'text-sm'}`} style={{ tableLayout: 'fixed' }}>
             <thead>
-              <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+              <tr className="text-left text-[#8FA8CC] uppercase text-xs bg-[#080E1A] border-b border-white/[0.07] sticky top-0 z-10">
                 <th style={{ width: auditColWidths.time }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3`}>
                   <div className="relative pr-2">
                     <button onClick={() => toggleAuditSort('time')} className="text-left w-full">
-                      Time <span className="text-slate-400">{auditSortIndicator('time')}</span>
+                      Time <span className="text-[#5A78A0]">{auditSortIndicator('time')}</span>
                     </button>
                     <div onMouseDown={beginResize('audit', 'time', auditColWidths.time)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                   </div>
@@ -1244,7 +1244,7 @@ export const CdssAdmin: React.FC = () => {
                 <th style={{ width: auditColWidths.actor }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                   <div className="relative pr-2">
                     <button onClick={() => toggleAuditSort('actor')} className="text-left w-full">
-                      Actor <span className="text-slate-400">{auditSortIndicator('actor')}</span>
+                      Actor <span className="text-[#5A78A0]">{auditSortIndicator('actor')}</span>
                     </button>
                     <div onMouseDown={beginResize('audit', 'actor', auditColWidths.actor)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                   </div>
@@ -1252,7 +1252,7 @@ export const CdssAdmin: React.FC = () => {
                 <th style={{ width: auditColWidths.action }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                   <div className="relative pr-2">
                     <button onClick={() => toggleAuditSort('action')} className="text-left w-full">
-                      Action <span className="text-slate-400">{auditSortIndicator('action')}</span>
+                      Action <span className="text-[#5A78A0]">{auditSortIndicator('action')}</span>
                     </button>
                     <div onMouseDown={beginResize('audit', 'action', auditColWidths.action)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                   </div>
@@ -1267,15 +1267,15 @@ export const CdssAdmin: React.FC = () => {
             </thead>
             <tbody>
               {auditRows.map((log: any, idx: number) => (
-                <tr key={idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''} hover:bg-slate-50`}>
-                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 text-slate-700`} title={log.created_at || ''}>{relTime(log.created_at)}{nowTick ? '' : ''}</td>
+                <tr key={idx} className={`border-t border-white/[0.05] ${idx % 2 === 1 ? 'bg-[#080E1A]/50' : ''} hover:bg-[#080E1A]`}>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 text-[#C5D5EE]`} title={log.created_at || ''}>{relTime(log.created_at)}{nowTick ? '' : ''}</td>
                   <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{log.actor}</td>
                   <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{log.action}</td>
-                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 text-xs text-slate-600`}>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 text-xs text-[#8FA8CC]`}>
                     <div className="flex items-start gap-2">
-                      <pre className="flex-1 whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded p-2">{JSON.stringify(log.payload || {}, null, 2)}</pre>
+                      <pre className="flex-1 whitespace-pre-wrap bg-[#080E1A] border border-white/[0.07] rounded p-2">{JSON.stringify(log.payload || {}, null, 2)}</pre>
                       <button
-                        className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+                        className="px-2 py-1 text-xs rounded bg-white/[0.06] text-[#C5D5EE]"
                         onClick={() => navigator.clipboard?.writeText(JSON.stringify(log.payload || {}, null, 2)).catch(() => {})}
                         title="Copy payload JSON"
                       >
