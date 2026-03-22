@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Animated, Modal, Pressable, ScrollView, Alert,
+  Animated, Modal, Pressable, ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Card, AiBadge, AiPulse, Badge } from '../ui';
+import { EscalationsService, ApiEscalation } from '../../services/escalations';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,11 +49,38 @@ const SLA_MS: Record<Severity, number> = {
   medium:   30 * 60 * 1000,
 };
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── API mapper ───────────────────────────────────────────────────────────────
 
-const now = Date.now();
+function mapApiEscalation(e: ApiEscalation): Escalation {
+  const sev = (e.severity === 'low' ? 'medium' : e.severity) as Severity;
+  const status = (e.status === 'dismissed' ? 'resolved' : e.status) as EscStatus;
+  const escalatedMs = new Date(e.escalatedAt).getTime();
+  const slaDeadline = e.slaDeadlineMs ?? (escalatedMs + SLA_MS[sev]);
+  const fmt = (d?: string) => d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined;
+  return {
+    id:              e.id,
+    severity:        sev,
+    status,
+    patient:         e.patientName ?? 'Unknown patient',
+    room:            e.room ?? '—',
+    ward:            e.ward ?? 'Ward',
+    alertType:       e.alertType ?? e.title ?? 'Clinical Alert',
+    summary:         e.message ?? '',
+    nurseNote:       e.nurseNotes ?? '',
+    nurse:           e.nurseName ?? 'Nurse',
+    slaDeadline,
+    escalatedAt:     fmt(e.escalatedAt) ?? '—',
+    acknowledgedAt:  fmt(e.acknowledgedAt),
+    resolvedAt:      fmt(e.resolvedAt),
+    vitalsAtAlert:   (e.vitalsAtAlert ?? []) as Escalation['vitalsAtAlert'],
+    history:         e.history ?? [],
+    icon:            'escalate',
+  };
+}
 
-const INITIAL_ESCALATIONS: Escalation[] = [
+// ─── Placeholder escalations (replaced by API on mount) ───────────────────────
+
+const _PLACEHOLDER_ESCALATIONS: Escalation[] = [
   {
     id: 'e1',
     severity: 'critical', status: 'active',
@@ -128,10 +156,10 @@ const INITIAL_ESCALATIONS: Escalation[] = [
   {
     id: 'e4',
     severity: 'high', status: 'acknowledged',
-    patient: 'Reginald Okafor', room: '101', ward: 'Ward A',
+    patient: 'Cardiology Patient', room: '101', ward: 'Ward A',
     alertType: 'Chest Pain',
     summary: 'New onset chest pain 7/10 — ECG changes under review',
-    nurseNote: 'Reginald reported 7/10 central chest pain at 08:55. 12-lead ECG ordered and sent. Not a repeat STEMI pattern but ST changes in V4-V5.',
+    nurseNote: 'Patient reported 7/10 central chest pain at 08:55. 12-lead ECG ordered and sent. Not a repeat STEMI pattern but ST changes in V4-V5.',
     nurse: 'Nurse Amai Dube',
     slaDeadline: now + 12 * 60 * 1000 + 30 * 1000,
     escalatedAt: '08:55',
@@ -498,11 +526,25 @@ const DetailSheet: React.FC<{ esc: Escalation; onClose: () => void; onAck: () =>
 
 export const DoctorEscalationScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const [escalations, setEscalations] = useState(INITIAL_ESCALATIONS);
-  const [filterTab, setFilterTab] = useState<FilterTab>('active');
-  const [sevFilter, setSevFilter] = useState<Severity | 'all'>('all');
-  const [selected, setSelected] = useState<Escalation | null>(null);
+  const [escalations, setEscalations] = useState<Escalation[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [filterTab,   setFilterTab]   = useState<FilterTab>('active');
+  const [sevFilter,   setSevFilter]   = useState<Severity | 'all'>('all');
+  const [selected,    setSelected]    = useState<Escalation | null>(null);
   const getSlaMs = useSlaCountdowns(escalations);
+
+  const loadEscalations = useCallback(async () => {
+    try {
+      const data = await EscalationsService.pending();
+      setEscalations((data ?? []).map(mapApiEscalation));
+    } catch {
+      // keep current state
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadEscalations(); }, [loadEscalations]);
 
   const filtered = escalations
     .filter(e => e.status === filterTab)
@@ -523,23 +565,27 @@ export const DoctorEscalationScreen: React.FC = () => {
     resolved:     escalations.filter(e => e.status === 'resolved').length,
   };
 
-  const acknowledge = (id: string) => {
+  const acknowledge = useCallback(async (id: string) => {
     const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    // Optimistic update
     setEscalations(prev => prev.map(e => e.id === id
       ? { ...e, status: 'acknowledged', acknowledgedAt: time,
-          history: [...e.history, { time, actor: 'Dr. Chikwanda', action: 'Escalation acknowledged' }] }
+          history: [...e.history, { time, actor: 'Me', action: 'Escalation acknowledged' }] }
       : e
     ));
-  };
+    try { await EscalationsService.acknowledge(id); } catch { /* best-effort */ }
+  }, []);
 
-  const resolve = (id: string) => {
+  const resolve = useCallback(async (id: string) => {
     const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    // Optimistic update
     setEscalations(prev => prev.map(e => e.id === id
       ? { ...e, status: 'resolved', resolvedAt: time,
-          history: [...e.history, { time, actor: 'Dr. Chikwanda', action: 'Escalation resolved' }] }
+          history: [...e.history, { time, actor: 'Me', action: 'Escalation resolved' }] }
       : e
     ));
-  };
+    try { await EscalationsService.dismiss(id); } catch { /* best-effort */ }
+  }, []);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>

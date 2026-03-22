@@ -11,8 +11,7 @@ import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, AiPulse, Card } from '../ui';
 import { useAuthStore, Tenant } from '../../stores/useAuthStore';
 import { buildApiClient } from '../../services/api';
-
-const API_PROTOCOL = 'https';
+import { API_BASE_URL } from '../../config/env';
 
 interface TenantSelectScreenProps {
   onSelected: () => void;
@@ -38,7 +37,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
       setSearching(true);
       try {
         // Discovery endpoint on the main MediCore platform
-        const url = `${API_PROTOCOL}://${process.env.EXPO_PUBLIC_API_BASE}/tenants/search?q=${encodeURIComponent(q)}`;
+        const url = `${API_BASE_URL}/tenants/search?q=${encodeURIComponent(q)}`;
         const res = await axios.get<Tenant[]>(url, { timeout: 8000 });
         setResults(res.data ?? []);
       } catch {
@@ -47,7 +46,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
           setResults([{
             slug: q.split('.')[0],
             name: q,
-            baseUrl: `${API_PROTOCOL}://${q}`,
+            baseUrl: q.startsWith('http') ? q : `https://${q}`,
           }]);
         }
       } finally {

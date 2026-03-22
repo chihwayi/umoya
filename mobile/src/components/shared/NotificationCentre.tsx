@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge } from '../ui';
+import { StaffNotificationsService, ApiStaffNotification } from '../../services/staffNotifications';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,18 +26,31 @@ interface Props {
   onClose: () => void;
 }
 
-// ─── Mock notifications ───────────────────────────────────────────────────────
+// ─── Mapper ───────────────────────────────────────────────────────────────────
 
-const MOCK_NOTIFS: Notification[] = [
-  { id: 'n1', category: 'critical', title: 'Critical Alert — Rm 302',   body: 'Samuel Park SpO₂ dropped to 88%. Immediate review required.',      time: '2 min ago',  read: false, icon: 'escalate' },
-  { id: 'n2', category: 'critical', title: 'BP Critical — Rm 201',      body: 'Fatima Al-Rashid systolic 185 mmHg. Auto-escalation triggered.',   time: '8 min ago',  read: false, icon: 'escalate' },
-  { id: 'n3', category: 'message',  title: 'Nurse Amai Dube',           body: 'Reginald Okafor asking about discharge timing. Can you advise?',  time: '14 min ago', read: false, icon: 'chat'     },
-  { id: 'n4', category: 'message',  title: 'Dr. B. Moyo (Cardiology)',  body: 'Echo report for Thomas Ndlovu is ready for review.',              time: '32 min ago', read: true,  icon: 'chat'     },
-  { id: 'n5', category: 'message',  title: 'Nurse Takudzwa Phiri',      body: 'Amelia Chen vitals stable. Moved to step-down.',                  time: '1 hr ago',   read: true,  icon: 'chat'     },
-  { id: 'n6', category: 'system',   title: 'PostVisit Queue',           body: '3 AI drafts are awaiting your signature.',                        time: '1 hr ago',   read: true,  icon: 'sparkle'  },
-  { id: 'n7', category: 'system',   title: 'Lab Results Ready',         body: 'New cardiac panel results for 4 patients on your ward.',          time: '2 hr ago',   read: true,  icon: 'pulse'    },
-  { id: 'n8', category: 'system',   title: 'Shift Handover',            body: 'Dr. P. Zungu has completed overnight rounds handover notes.',     time: '6 hr ago',   read: true,  icon: 'rounds'   },
-];
+function mapApiNotif(n: ApiStaffNotification): Notification {
+  const cat: NotifCategory =
+    n.category ?? (n.type === 'critical_alert' ? 'critical' : n.type === 'message' ? 'message' : 'system');
+  const icon = cat === 'critical' ? 'escalate' : cat === 'message' ? 'chat' : 'sparkle';
+  const ts = n.createdAt ?? n.sentAt;
+  let time = '—';
+  if (ts) {
+    const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+    if      (diff < 120)    time = `${Math.round(diff)} sec ago`;
+    else if (diff < 3600)   time = `${Math.round(diff / 60)} min ago`;
+    else if (diff < 86400)  time = `${Math.round(diff / 3600)} hr ago`;
+    else                    time = new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+  return {
+    id:       n.id,
+    category: cat,
+    title:    n.title ?? 'Notification',
+    body:     n.body ?? n.message ?? '',
+    time,
+    read:     n.isRead ?? n.read ?? false,
+    icon,
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,12 +66,15 @@ const categoryLabel = (c: NotifCategory) =>
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const NotificationCentre: React.FC<Props> = ({ visible, onClose }) => {
-  const [notifs, setNotifs] = React.useState(MOCK_NOTIFS);
+  const [notifs, setNotifs] = React.useState<Notification[]>([]);
   const slideAnim = useRef(new Animated.Value(-480)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
+      StaffNotificationsService.list({ limit: 30 })
+        .then(data => setNotifs(data.map(mapApiNotif)))
+        .catch(() => {});
       Animated.parallel([
         Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 70, friction: 12 }),
         Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
@@ -70,8 +87,14 @@ export const NotificationCentre: React.FC<Props> = ({ visible, onClose }) => {
     }
   }, [visible]);
 
-  const dismiss = (id: string) => setNotifs(prev => prev.filter(n => n.id !== id));
-  const markAllRead = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+  const dismiss = (id: string) => {
+    setNotifs(prev => prev.filter(n => n.id !== id));
+    StaffNotificationsService.markRead(id).catch(() => {});
+  };
+  const markAllRead = () => {
+    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+    StaffNotificationsService.markAllRead().catch(() => {});
+  };
   const clearAll = () => setNotifs([]);
 
   const unread = notifs.filter(n => !n.read).length;

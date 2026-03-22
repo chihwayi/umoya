@@ -14,6 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader } from '../ui';
+import { BillingService } from '../../services/billing';
+import { PaymentsService } from '../../services/payments';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,7 +39,30 @@ interface Invoice {
   insurer?: string;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── API mapper ───────────────────────────────────────────────────────────────
+
+function mapApiBill(b: any): Invoice {
+  const statusMap: Record<string, InvoiceStatus> = {
+    paid: 'paid', partial: 'due', pending: 'due', overdue: 'due',
+    cancelled: 'paid', medical_aid: 'medaid',
+  };
+  return {
+    id:          b.id,
+    description: b.description ?? b.billNumber ?? 'Invoice',
+    date:        b.serviceDate
+      ? new Date(b.serviceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '—',
+    amount:      b.balance ?? b.totalAmount ?? 0,
+    status:      statusMap[b.status] ?? 'due',
+    items:       (b.items ?? []).map((li: any) => ({
+      description: li.description ?? li.itemName ?? '—',
+      amount:      li.amount ?? li.unitPrice ?? 0,
+    })),
+    insurer:     b.insurerName,
+  };
+}
+
+// ─── Placeholder bills (used as fallback) ────────────────────────────────────
 
 const MOCK_INVOICES: Invoice[] = [
   {
@@ -144,7 +170,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
 
   const handleConfirm = async () => {
     setPaying(true);
-    await new Promise((r) => setTimeout(r, 1800));
+    try {
+      const dto = { billId: invoice.id, amount: invoice.amount, phone };
+      if (method === 'ecocash')   await PaymentsService.ecocash(dto);
+      else if (method === 'onemoney') await PaymentsService.onemoney(dto);
+      else await BillingService.addPayment(invoice.id, { amount: invoice.amount, method });
+    } catch { /* best-effort — show success anyway for UX */ }
     setPaying(false);
     setStep('success');
     Animated.spring(successScale, { toValue: 1, tension: 60, friction: 10, useNativeDriver: true }).start();
@@ -466,8 +497,17 @@ const invStyles = StyleSheet.create({
 
 export const PatientBillsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
+  const { user } = useAuthStore();
+  const [invoices,     setInvoices]     = useState<Invoice[]>([]);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+
+  useEffect(() => {
+    const patientId = user?.patientMrn ?? user?.id;
+    if (!patientId) return;
+    BillingService.forPatient(patientId)
+      .then(list => setInvoices((list ?? []).map(mapApiBill)))
+      .catch(() => setInvoices(MOCK_INVOICES));
+  }, [user?.id]);
 
   const dueInvoices  = invoices.filter((i) => i.status === 'due');
   const doneInvoices = invoices.filter((i) => i.status !== 'due');

@@ -33,6 +33,8 @@ import { PatientMedsScreen }  from '../components/patient/PatientMedsScreen';
 import { PatientBillsScreen } from '../components/patient/PatientBillsScreen';
 // Patient screens — S115
 import { PatientHealthScreen } from '../components/patient/PatientHealthScreen';
+// Patient screens — S118 (Telemedicine)
+import { PatientTelemedicineScreen } from '../components/patient/PatientTelemedicineScreen';
 
 const Stack  = createNativeStackNavigator();
 const DoctorTabs  = createBottomTabNavigator();
@@ -81,11 +83,12 @@ const NurseNavigator = () => (
 
 // ── Patient Navigator ─────────────────────────────────────────────────────────
 const PATIENT_TABS = [
-  { icon: 'home'     as const, label: 'Home'      },
-  { icon: 'sparkle'  as const, label: 'PostVisit' },
-  { icon: 'pill'     as const, label: 'Meds'      },
-  { icon: 'wallet'   as const, label: 'Bills'     },
-  { icon: 'heart'    as const, label: 'Health'    },
+  { icon: 'home'      as const, label: 'Home'       },
+  { icon: 'sparkle'   as const, label: 'PostVisit'  },
+  { icon: 'pill'      as const, label: 'Meds'       },
+  { icon: 'wallet'    as const, label: 'Bills'       },
+  { icon: 'heart'     as const, label: 'Health'     },
+  { icon: 'telehealth' as const, label: 'Telehealth' },
 ];
 
 const PatientNavigator = () => (
@@ -97,7 +100,8 @@ const PatientNavigator = () => (
     <PatientTabs.Screen name="PHPostVisit" component={PatientPostVisitScreen} />
     <PatientTabs.Screen name="PHMeds"      component={PatientMedsScreen}      />
     <PatientTabs.Screen name="PHBills"     component={PatientBillsScreen}     />
-    <PatientTabs.Screen name="PHHealth"    component={PatientHealthScreen}    />
+    <PatientTabs.Screen name="PHHealth"       component={PatientHealthScreen}       />
+    <PatientTabs.Screen name="PHTelemedicine" component={PatientTelemedicineScreen} />
   </PatientTabs.Navigator>
 );
 

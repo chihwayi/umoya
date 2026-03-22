@@ -16,6 +16,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, SectionHeader, AiBadge, AiPulse } from '../ui';
+import { PostVisitService } from '../../services/postVisit';
+import { PatientAiService } from '../../services/patientAi';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,12 +49,36 @@ interface ChatMessage {
   time: string;
 }
 
-// ─── Mock visit data ──────────────────────────────────────────────────────────
+// ─── API mapper ───────────────────────────────────────────────────────────────
+
+function mapApiSession(s: any): VisitNote {
+  const soap: SOAPSection[] = [];
+  if (s.soap?.subjective) soap.push({ key: 'sx',  label: 'Your Symptoms',  icon: 'shift',    content: s.soap.subjective });
+  if (s.soap?.objective)  soap.push({ key: 'obj', label: 'Examination',    icon: 'pulse',    content: s.soap.objective  });
+  if (s.soap?.assessment) soap.push({ key: 'as',  label: 'Assessment',     icon: 'sparkle',  content: s.soap.assessment });
+  if (s.soap?.plan)       soap.push({ key: 'pl',  label: 'Your Care Plan', icon: 'calendar', content: s.soap.plan       });
+  if (soap.length === 0)  soap.push({ key: 'cc',  label: 'Visit Summary',  icon: 'chat',     content: s.quickSummary ?? '' });
+
+  return {
+    id:           s.id,
+    doctorName:   s.doctorName ?? 'Your doctor',
+    specialty:    s.specialty  ?? '',
+    visitDate:    s.appointmentDate
+      ? new Date(s.appointmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '—',
+    visitType:    s.visitType ?? 'Consultation',
+    quickSummary: s.quickSummary ?? '',
+    diagnoses:    (s.diagnoses ?? []).map((d: any) => ({ name: d.name ?? d, icd: d.icd ?? '' })),
+    soap,
+  };
+}
+
+// ─── Placeholder visit data (fallback) ───────────────────────────────────────
 
 const MOCK_VISITS: VisitNote[] = [
   {
     id: 'v1',
-    doctorName: 'Dr. Chukwu',
+    doctorName: 'Your doctor',
     specialty: 'Cardiologist',
     visitDate: '22 March 2026',
     visitType: 'Follow-up',
@@ -154,11 +181,11 @@ const MOCK_VISITS: VisitNote[] = [
 // ─── AI chat responses ────────────────────────────────────────────────────────
 
 const AI_RESPONSES: Record<string, string> = {
-  default: `I can only answer questions about what was in your visit note — I won't speculate beyond what Dr. Chukwu recorded for you. If your question isn't covered in the note, I'd suggest writing it down and asking at your follow-up appointment.`,
+  default: `I can only answer questions about what was in your visit note — I won't speculate beyond what your doctor recorded for you. If your question isn't covered in the note, I'd suggest writing it down and asking at your follow-up appointment.`,
   medication: `During your visit, your doctor started or adjusted several medications:\n\n• **Aspirin 100mg** + **Ticagrelor 90mg** — taken together to keep your heart artery open. Do not stop either without asking your cardiologist first, even if you feel fine.\n\n• **Atorvastatin 80mg** — taken at night. This protects your heart arteries long-term.\n\n• **Metoprolol 25mg** — slows your heart rate while your heart heals. You may notice feeling slightly more tired — this is normal.`,
   conclusion: `Your diagnosis is NSTEMI — a type of heart attack caused by a partial blockage in one of your heart's arteries.\n\nThe good news: it was caught and treated quickly. Your troponin blood test confirmed there was stress on your heart muscle, and your ECG showed the expected changes. You had a procedure to look at the artery (angiogram) and treatment was started immediately.\n\nYour heart is expected to recover well with the medications and lifestyle changes discussed.`,
   symptoms: `During your visit, you reported:\n• Crushing chest pain (8/10)\n• Pain spreading to your left arm and jaw\n• Sweating and nausea\n\nThe symptoms you did **not** have — like shortness of breath or leg swelling — were just as important to your doctor. They helped rule out other conditions and confirm this was a heart attack rather than something else.`,
-  followup: `Your follow-up plan:\n\n• **Cardiology clinic in 6 weeks** — Dr. Chukwu will review your recovery and check your heart function.\n\n• **Cardiac rehabilitation** — a programme of supervised exercise and education to help your heart recover. A referral has been made for you.\n\n• **Driving** — at least 4 weeks off, and you should notify the licencing authority.\n\n• **Work** — light duties only until cleared by your cardiologist.`,
+  followup: `Your follow-up plan:\n\n• **Cardiology clinic follow-up** — your doctor will review your recovery and check your heart function.\n\n• **Cardiac rehabilitation** — a programme of supervised exercise and education to help your heart recover. A referral has been made for you.\n\n• **Driving** — at least 4 weeks off, and you should notify the licencing authority.\n\n• **Work** — light duties only until cleared by your cardiologist.`,
   worry: `Your doctor's notes show you are recovering as expected. Your troponin is trending downward and your ECG changes are improving.\n\nThe medications you've been given are specifically designed to prevent another event. Taking them every day is the most important thing you can do.\n\nIf you experience chest pain, sudden shortness of breath, or feel unwell, go to your nearest emergency department immediately — don't wait.`,
   examination: `Here's what the doctor found when examining you:\n\n• Blood pressure: 158/94 — higher than normal (this is being treated)\n• Heart rate: 108 — slightly fast at the time\n• Oxygen level: 94% — borderline normal\n• Heart sounds: normal\n• Lungs: clear (no fluid)\n• Legs: no swelling\n\nThe key finding was your blood test — Troponin-I was 2.4, which is well above the normal limit of 0.04. This confirmed the heart attack diagnosis.`,
 };
@@ -420,6 +447,7 @@ const AIChatTab: React.FC<AIChatProps> = ({ note, initialQuestion, onClearInitia
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
+    const patientId = useAuthStore.getState().user?.patientMrn ?? useAuthStore.getState().user?.id ?? '';
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -430,17 +458,27 @@ const AIChatTab: React.FC<AIChatProps> = ({ note, initialQuestion, onClearInitia
     setInput('');
     setTyping(true);
 
-    await new Promise((r) => setTimeout(r, 1400 + Math.random() * 600));
-
-    const aiMsg: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'ai',
-      text: getAiResponse(text),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    setMessages((prev) => [...prev, aiMsg]);
-    setTyping(false);
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    try {
+      const res = await PatientAiService.chat({ patientId, message: text.trim() });
+      const aiMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'ai',
+        text: res.content ?? getAiResponse(text),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch {
+      const aiMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'ai',
+        text: getAiResponse(text),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } finally {
+      setTyping(false);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    }
   }, []);
 
   // Handle pre-queued question from Visit Summary "Ask" button
@@ -620,10 +658,23 @@ const chatStyles = StyleSheet.create({
 type PVTab = 'summary' | 'chat';
 
 export const PatientPostVisitScreen: React.FC = () => {
-  const insets = useSafeAreaInsets();
-  const [selectedNote, setSelectedNote] = useState<VisitNote>(MOCK_VISITS[0]);
-  const [activeTab, setActiveTab]       = useState<PVTab>('summary');
+  const insets  = useSafeAreaInsets();
+  const { user } = useAuthStore();
+  const [visits,       setVisits]       = useState<VisitNote[]>([]);
+  const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
+  const [activeTab,    setActiveTab]    = useState<PVTab>('summary');
   const [chatQuestion, setChatQuestion] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const patientId = user?.patientMrn ?? user?.id;
+    PostVisitService.sessions(patientId)
+      .then(list => {
+        const mapped = (list ?? []).map(mapApiSession);
+        setVisits(mapped);
+        if (mapped.length > 0) setSelectedNote(mapped[0]);
+      })
+      .catch(() => {});
+  }, [user?.id]);
 
   const handleAskAbout = (q: string) => {
     setChatQuestion(q);
@@ -638,15 +689,15 @@ export const PatientPostVisitScreen: React.FC = () => {
       <View style={[rootStyles.header, { paddingTop: 12 }]}>
         <View>
           <Text style={rootStyles.headerSub}>PostVisit AI</Text>
-          <Text style={rootStyles.headerTitle}>{selectedNote.doctorName}</Text>
+          <Text style={rootStyles.headerTitle}>{selectedNote?.doctorName ?? '—'}</Text>
         </View>
         <AiBadge text="Citation-Grounded" />
       </View>
 
       {/* Visit selector (multiple visits) */}
-      {MOCK_VISITS.length > 1 && (
+      {visits.length > 1 && selectedNote && (
         <View style={{ borderBottomWidth: 1, borderBottomColor: C.border }}>
-          <VisitSelector visits={MOCK_VISITS} selected={selectedNote} onSelect={setSelectedNote} />
+          <VisitSelector visits={visits} selected={selectedNote} onSelect={setSelectedNote} />
         </View>
       )}
 

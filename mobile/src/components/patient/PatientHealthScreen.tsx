@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   FlatList, Animated, Modal, Pressable,
@@ -7,6 +7,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Card, AiBadge, AiPulse, Badge, Sparkline } from '../ui';
+import { VitalsService, VitalTrend } from '../../services/vitals';
+import { LabOrdersService } from '../../services/labOrders';
+import { DocumentsService } from '../../services/documents';
+import { useAuthStore } from '../../stores/useAuthStore';
+import { PatientProfileService, ApiPatientProfile, ApiCondition, ApiAllergy } from '../../services/patientProfile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,7 +76,7 @@ interface Allergy {
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
-const VITALS: VitalEntry[] = [
+const MOCK_VITALS: VitalEntry[] = [
   { label: 'Systolic BP',   unit: 'mmHg', values: [145, 138, 130, 128, 122, 118, 115], dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [90,120],  warn: [121,139], icon: 'pulse',  accent: C.teal   },
   { label: 'Heart Rate',    unit: 'bpm',  values: [88, 82, 78, 76, 74, 72, 71],        dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [60,100],  warn: [100,110], icon: 'pulse',  accent: C.blue   },
   { label: 'SpO₂',          unit: '%',    values: [96, 97, 97, 98, 98, 98, 99],        dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [95,100],  warn: [90,94],   icon: 'pulse',  accent: C.green  },
@@ -79,7 +84,7 @@ const VITALS: VitalEntry[] = [
   { label: 'Weight',        unit: 'kg',   values: [85, 84.8, 84.5, 84.2, 84.0, 83.8, 83.6], dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [60,90], warn: [90,100], icon: 'pulse', accent: C.purple },
 ];
 
-const LABS: LabResult[] = [
+const MOCK_LABS: LabResult[] = [
   { id: 'l1', name: 'Troponin I',    value: 0.02, unit: 'ng/mL',  refLow: 0,   refHigh: 0.04, date: '18 Mar', panel: 'Cardiac',  trend: [0.85,0.42,0.18,0.08,0.04,0.02], flag: 'normal',   aiNote: 'Troponin trending down well — cardiac biomarker normalisation on track post-PCI.' },
   { id: 'l2', name: 'LDL Cholesterol', value: 3.1, unit: 'mmol/L', refLow: 0,  refHigh: 2.6,  date: '18 Mar', panel: 'Lipids',   trend: [4.8,4.1,3.8,3.5,3.3,3.1],      flag: 'high',     aiNote: 'LDL above target for post-ACS patients (<1.8 mmol/L). Atorvastatin dose may need review.' },
   { id: 'l3', name: 'HbA1c',          value: 5.9, unit: '%',       refLow: 0,  refHigh: 6.4,  date: '18 Mar', panel: 'Metabolic', trend: [6.4,6.2,6.1,6.0,5.9],          flag: 'normal',   aiNote: 'Pre-diabetic range but trending down — dietary changes are working.' },
@@ -97,7 +102,7 @@ const WEARABLES: WearableService[] = [
   { id: 'withings',name: 'Withings',       icon: 'pulse',   connected: false, metrics: ['BP','Weight','Sleep','ECG','SpO₂'],                                               accentColor: '#00A59B' },
 ];
 
-const DOCUMENTS: MedDocument[] = [
+const MOCK_DOCUMENTS: MedDocument[] = [
   { id: 'd1', title: 'Discharge Summary — NSTEMI', type: 'discharge',    date: '14 Mar 2026', doctor: 'Dr. T. Chikwanda', size: '248 KB' },
   { id: 'd2', title: 'Cardiac Lab Panel',           type: 'lab',         date: '18 Mar 2026', doctor: 'MediCore Labs',     size: '84 KB'  },
   { id: 'd3', title: 'Aspirin 100mg Prescription',  type: 'prescription', date: '14 Mar 2026', doctor: 'Dr. T. Chikwanda', size: '32 KB'  },
@@ -106,18 +111,105 @@ const DOCUMENTS: MedDocument[] = [
   { id: 'd6', title: 'Procedure Consent Form',      type: 'consent',     date: '13 Mar 2026', doctor: 'Dr. B. Moyo',      size: '44 KB'  },
 ];
 
-const CONDITIONS: Condition[] = [
+const MOCK_CONDITIONS: Condition[] = [
   { name: 'NSTEMI (post-PCI)',         icd: 'I21.4', since: 'Mar 2026', severity: 'severe'   },
   { name: 'Hypertension Stage 1',      icd: 'I10',   since: 'Jan 2024', severity: 'moderate' },
   { name: 'Hypercholesterolaemia',     icd: 'E78.0', since: 'Jun 2023', severity: 'moderate' },
   { name: 'Pre-diabetes',              icd: 'R73.0', since: 'Jun 2023', severity: 'mild'     },
 ];
 
-const ALLERGIES: Allergy[] = [
+const MOCK_ALLERGIES: Allergy[] = [
   { substance: 'Penicillin',      reaction: 'Anaphylaxis',      severity: 'life-threatening' },
   { substance: 'Sulfonamides',    reaction: 'Rash / urticaria', severity: 'moderate'         },
   { substance: 'Contrast dye',    reaction: 'Nausea / flushing', severity: 'mild'            },
 ];
+
+// ─── API Mappers ──────────────────────────────────────────────────────────────
+
+function mapApiConditions(raw: ApiCondition[]): Condition[] {
+  if (!raw?.length) return MOCK_CONDITIONS;
+  return raw.map(c => ({
+    name:     c.name ?? c.diagnosisName ?? 'Unknown condition',
+    icd:      c.icdCode ?? c.icd10Code ?? '—',
+    since:    c.onsetDate ?? c.diagnosisDate
+      ? new Date(c.onsetDate ?? c.diagnosisDate ?? '').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+      : '—',
+    severity: (['mild','moderate','severe'].includes(c.severity ?? '') ? c.severity : 'moderate') as Condition['severity'],
+  }));
+}
+
+function mapApiAllergies(raw: ApiAllergy[]): Allergy[] {
+  if (!raw?.length) return MOCK_ALLERGIES;
+  return raw.map(a => ({
+    substance: a.substance ?? a.allergen ?? 'Unknown',
+    reaction:  Array.isArray(a.reactions) ? a.reactions.join(', ') : (a.reaction ?? 'Unknown reaction'),
+    severity:  (['mild','moderate','severe','life-threatening'].includes(a.severity ?? '')
+      ? a.severity : 'moderate') as Allergy['severity'],
+  }));
+}
+
+function mapApiVitals(apiVitals: VitalTrend[]): VitalEntry[] {
+  if (!apiVitals?.length) return MOCK_VITALS;
+  return apiVitals.map(av => {
+    const readings = av.readings.slice(-7);
+    const values = readings.map(r => r.value);
+    const dates = readings.map(r =>
+      new Date(r.recordedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    );
+    const base = MOCK_VITALS.find(v =>
+      v.label.toLowerCase().includes(av.label.toLowerCase().split(' ')[0]) ||
+      av.vital.toLowerCase().includes(v.label.toLowerCase().split(' ')[0])
+    ) ?? MOCK_VITALS[0];
+    return {
+      ...base,
+      label: av.label,
+      unit: av.unit,
+      values: values.length > 0 ? values : base.values,
+      dates: dates.length > 0 ? dates : base.dates,
+    };
+  });
+}
+
+function mapApiLabs(orders: any[]): LabResult[] {
+  const results: LabResult[] = [];
+  (orders ?? []).forEach((order: any) => {
+    (order.results ?? []).forEach((r: any) => {
+      results.push({
+        id: String(r.id ?? Math.random()),
+        name: r.testName ?? 'Unknown',
+        value: Number(r.value ?? 0),
+        unit: r.unit ?? '',
+        refLow: Number(r.referenceRangeLow ?? r.refLow ?? 0),
+        refHigh: Number(r.referenceRangeHigh ?? r.refHigh ?? 100),
+        date: r.resultDate
+          ? new Date(r.resultDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+          : '—',
+        panel: r.panel ?? r.category ?? order.testName ?? 'General',
+        trend: r.trend ?? [Number(r.value ?? 0)],
+        flag: (r.flag === 'critical_high' || r.flag === 'critical_low' ? 'critical'
+             : r.flag === 'high' ? 'high'
+             : r.flag === 'low' ? 'low' : 'normal') as LabResult['flag'],
+        aiNote: r.aiInterpretation ?? r.interpretation,
+      });
+    });
+  });
+  return results.length > 0 ? results : MOCK_LABS;
+}
+
+function mapApiDocuments(docs: any[]): MedDocument[] {
+  if (!docs?.length) return MOCK_DOCUMENTS;
+  const validTypes = ['discharge', 'lab', 'prescription', 'referral', 'imaging', 'consent'];
+  return docs.map((d: any) => ({
+    id: String(d.id ?? Math.random()),
+    title: d.documentName ?? d.title ?? 'Document',
+    type: (validTypes.includes(d.documentType ?? d.type ?? '') ? (d.documentType ?? d.type) : 'lab') as MedDocument['type'],
+    date: (d.uploadedAt ?? d.createdAt)
+      ? new Date(d.uploadedAt ?? d.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '—',
+    doctor: d.uploadedBy ?? 'MediCore',
+    size: d.fileSize ? `${Math.round(d.fileSize / 1024)} KB` : '—',
+  }));
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -192,29 +284,55 @@ const SubTabBar: React.FC<{ active: SubTab; onChange: (t: SubTab) => void }> = (
 
 // ── Profile Tab ───────────────────────────────────────────────────────────────
 
-const ProfileTab: React.FC = () => (
+const ProfileTab: React.FC<{
+  conditions: Condition[];
+  allergies: Allergy[];
+  profile: ApiPatientProfile | null;
+  userName: string;
+}> = ({ conditions, allergies, profile, userName }) => {
+  const initials = (profile?.firstName && profile?.lastName)
+    ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase()
+    : userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
+  const fullName = profile
+    ? [profile.firstName, profile.lastName].filter(Boolean).join(' ') || userName
+    : userName;
+
+  const dob = profile?.dateOfBirth ? new Date(profile.dateOfBirth) : null;
+  const age = dob ? Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000)) : null;
+  const dobLabel = dob
+    ? `${dob.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}${age ? `  ·  ${age} y/o` : ''}`
+    : '—';
+
+  const bmi = (profile?.height && profile?.weight)
+    ? (profile.weight / Math.pow(profile.height / 100, 2)).toFixed(1)
+    : '—';
+
+  return (
   <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
     {/* Identity card */}
     <LinearGradient colors={[C.teal + '30', C.blue + '18']} style={styles.profileCard}>
       <View style={styles.profileAvatarRow}>
         <View style={styles.profileAvatar}>
-          <Text style={styles.profileInitials}>RO</Text>
+          <Text style={styles.profileInitials}>{initials}</Text>
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.profileName}>Reginald Okafor</Text>
-          <Text style={styles.profileMeta}>DOB: 14 Aug 1968  ·  57 y/o</Text>
-          <Text style={styles.profileMeta}>MRN: MED-2026-00847</Text>
+          <Text style={styles.profileName}>{fullName}</Text>
+          <Text style={styles.profileMeta}>DOB: {dobLabel}</Text>
+          {(profile?.mrn) && <Text style={styles.profileMeta}>MRN: {profile.mrn}</Text>}
         </View>
-        <View style={styles.bloodTypePill}>
-          <Text style={styles.bloodTypeText}>O+</Text>
-        </View>
+        {profile?.bloodType && (
+          <View style={styles.bloodTypePill}>
+            <Text style={styles.bloodTypeText}>{profile.bloodType}</Text>
+          </View>
+        )}
       </View>
       <View style={styles.profileStatsRow}>
         {[
-          { label: 'Blood Type', value: 'O Rh+' },
-          { label: 'Height',     value: '178 cm' },
-          { label: 'Weight',     value: '83.6 kg' },
-          { label: 'BMI',        value: '26.4'   },
+          { label: 'Blood Type', value: profile?.bloodType ?? '—' },
+          { label: 'Height',     value: profile?.height ? `${profile.height} cm` : '—' },
+          { label: 'Weight',     value: profile?.weight ? `${profile.weight} kg` : '—' },
+          { label: 'BMI',        value: bmi },
         ].map(s => (
           <View key={s.label} style={styles.profileStat}>
             <Text style={styles.profileStatVal}>{s.value}</Text>
@@ -227,8 +345,8 @@ const ProfileTab: React.FC = () => (
     {/* Conditions */}
     <Text style={styles.sectionTitle}>Active Conditions</Text>
     <Card style={styles.listCard}>
-      {CONDITIONS.map((c, i) => (
-        <View key={c.icd} style={[styles.listRow, i < CONDITIONS.length - 1 && styles.listRowBorder]}>
+      {conditions.map((c, i) => (
+        <View key={c.icd} style={[styles.listRow, i < conditions.length - 1 && styles.listRowBorder]}>
           <View style={[styles.severityDot, { backgroundColor: severityColor(c.severity) }]} />
           <View style={{ flex: 1 }}>
             <Text style={styles.listRowTitle}>{c.name}</Text>
@@ -244,8 +362,8 @@ const ProfileTab: React.FC = () => (
     {/* Allergies */}
     <Text style={styles.sectionTitle}>Allergies & Reactions</Text>
     <Card style={styles.listCard}>
-      {ALLERGIES.map((a, i) => (
-        <View key={a.substance} style={[styles.listRow, i < ALLERGIES.length - 1 && styles.listRowBorder]}>
+      {allergies.map((a, i) => (
+        <View key={a.substance} style={[styles.listRow, i < allergies.length - 1 && styles.listRowBorder]}>
           <View style={[styles.allergyIcon, { backgroundColor: severityColor(a.severity) + '22' }]}>
             <Icon name="escalate" size={14} color={severityColor(a.severity)} />
           </View>
@@ -268,8 +386,12 @@ const ProfileTab: React.FC = () => (
           <Icon name="escalate" size={18} color={C.red} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.listRowTitle}>Chidi Okafor (Son)</Text>
-          <Text style={styles.listRowSub}>+263 77 123 4567</Text>
+          <Text style={styles.listRowTitle}>
+            {profile?.emergencyContactName
+              ? `${profile.emergencyContactName}${profile.emergencyContactRelation ? ` (${profile.emergencyContactRelation})` : ''}`
+              : '—'}
+          </Text>
+          <Text style={styles.listRowSub}>{profile?.emergencyContactPhone ?? '—'}</Text>
         </View>
         <TouchableOpacity style={styles.callBtn}>
           <Text style={styles.callBtnText}>Call</Text>
@@ -277,11 +399,12 @@ const ProfileTab: React.FC = () => (
       </View>
     </Card>
   </ScrollView>
-);
+  );
+};
 
 // ── Vitals Tab ────────────────────────────────────────────────────────────────
 
-const VitalsTab: React.FC = () => {
+const VitalsTab: React.FC<{ vitals: VitalEntry[] }> = ({ vitals }) => {
   const [expanded, setExpanded] = useState<string | null>(null);
   return (
     <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
@@ -289,7 +412,7 @@ const VitalsTab: React.FC = () => {
         <AiBadge text="7-DAY TREND" />
         <Text style={styles.vitalsSubtitle}>Tap any card to see full history</Text>
       </View>
-      {VITALS.map(v => {
+      {vitals.map(v => {
         const latest = v.values[v.values.length - 1];
         const status = vitalStatus(v, latest);
         const isOpen = expanded === v.label;
@@ -337,7 +460,7 @@ const VitalsTab: React.FC = () => {
 
 // ── Labs Tab ──────────────────────────────────────────────────────────────────
 
-const LabsTab: React.FC = () => {
+const LabsTab: React.FC<{ labs: LabResult[] }> = ({ labs }) => {
   const [selected, setSelected] = useState<LabResult | null>(null);
   const slideAnim = useRef(new Animated.Value(400)).current;
   const openSheet = (lab: LabResult) => {
@@ -348,7 +471,7 @@ const LabsTab: React.FC = () => {
     Animated.spring(slideAnim, { toValue: 400, useNativeDriver: true, tension: 65, friction: 11 }).start(() => setSelected(null));
   };
 
-  const panels = [...new Set(LABS.map(l => l.panel))];
+  const panels = [...new Set(labs.map(l => l.panel))];
 
   return (
     <>
@@ -360,7 +483,7 @@ const LabsTab: React.FC = () => {
         {panels.map(panel => (
           <View key={panel}>
             <Text style={styles.panelTitle}>{panel}</Text>
-            {LABS.filter(l => l.panel === panel).map(lab => (
+            {labs.filter(l => l.panel === panel).map(lab => (
               <TouchableOpacity key={lab.id} onPress={() => openSheet(lab)} activeOpacity={0.85}>
                 <Card style={[styles.labCard, { borderLeftColor: flagColor(lab.flag), borderLeftWidth: 3 }]}>
                   <View style={styles.labCardRow}>
@@ -506,13 +629,13 @@ const ServicesTab: React.FC = () => {
 
 // ── Documents Tab ─────────────────────────────────────────────────────────────
 
-const DocumentsTab: React.FC = () => (
+const DocumentsTab: React.FC<{ docs: MedDocument[] }> = ({ docs }) => (
   <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
     <View style={styles.vitalsHeader}>
       <AiBadge text="MEDICAL RECORDS" />
-      <Text style={styles.vitalsSubtitle}>{DOCUMENTS.length} documents on file</Text>
+      <Text style={styles.vitalsSubtitle}>{docs.length} documents on file</Text>
     </View>
-    {DOCUMENTS.map(doc => (
+    {docs.map(doc => (
       <TouchableOpacity key={doc.id} activeOpacity={0.85}>
         <Card style={styles.docCard}>
           <View style={styles.docCardRow}>
@@ -555,6 +678,47 @@ const DocumentsTab: React.FC = () => (
 export const PatientHealthScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<SubTab>('profile');
+  const { user } = useAuthStore();
+
+  const [profile,    setProfile]    = useState<ApiPatientProfile | null>(null);
+  const [vitals,     setVitals]     = useState<VitalEntry[]>(MOCK_VITALS);
+  const [labs,       setLabs]       = useState<LabResult[]>(MOCK_LABS);
+  const [docs,       setDocs]       = useState<MedDocument[]>(MOCK_DOCUMENTS);
+  const [conditions, setConditions] = useState<Condition[]>(MOCK_CONDITIONS);
+  const [allergies,  setAllergies]  = useState<Allergy[]>(MOCK_ALLERGIES);
+
+  useEffect(() => {
+    const id = user?.patientMrn ?? user?.id;
+
+    PatientProfileService.getProfile().then(p => setProfile(p)).catch(() => {});
+
+    if (!id) return;
+
+    PatientProfileService.getConditions(id).then(raw => {
+      const mapped = mapApiConditions(raw ?? []);
+      if (mapped !== MOCK_CONDITIONS) setConditions(mapped);
+    }).catch(() => {});
+
+    PatientProfileService.getAllergies(id).then(raw => {
+      const mapped = mapApiAllergies(raw ?? []);
+      if (mapped !== MOCK_ALLERGIES) setAllergies(mapped);
+    }).catch(() => {});
+
+    VitalsService.trends(id).then(data => {
+      const mapped = mapApiVitals(data ?? []);
+      if (mapped !== MOCK_VITALS) setVitals(mapped);
+    }).catch(() => {});
+
+    LabOrdersService.results(id).then(orders => {
+      const mapped = mapApiLabs(orders ?? []);
+      if (mapped !== MOCK_LABS) setLabs(mapped);
+    }).catch(() => {});
+
+    DocumentsService.forPatient(id).then(data => {
+      const mapped = mapApiDocuments(data ?? []);
+      if (mapped !== MOCK_DOCUMENTS) setDocs(mapped);
+    }).catch(() => {});
+  }, [user?.id]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -572,11 +736,11 @@ export const PatientHealthScreen: React.FC = () => {
 
       {/* Content */}
       <View style={styles.body}>
-        {tab === 'profile'   && <ProfileTab />}
-        {tab === 'vitals'    && <VitalsTab />}
-        {tab === 'labs'      && <LabsTab />}
+        {tab === 'profile'   && <ProfileTab conditions={conditions} allergies={allergies} profile={profile} userName={user?.name ?? ''} />}
+        {tab === 'vitals'    && <VitalsTab vitals={vitals} />}
+        {tab === 'labs'      && <LabsTab labs={labs} />}
         {tab === 'services'  && <ServicesTab />}
-        {tab === 'documents' && <DocumentsTab />}
+        {tab === 'documents' && <DocumentsTab docs={docs} />}
       </View>
     </View>
   );

@@ -13,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge } from '../ui';
+import { PrescriptionsService } from '../../services/prescriptions';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,9 +38,36 @@ interface Medication {
   warnings: string[];
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── API mapper ───────────────────────────────────────────────────────────────
 
 const MED_COLORS = [C.teal, C.blue, C.purple, C.amber, C.red, C.green];
+
+function mapApiPrescription(p: any, idx: number): Medication {
+  const adherence: AdherenceDay[] = Array.from({ length: 7 }, (_, i) =>
+    i < 6 ? 'taken' : 'future'
+  );
+  return {
+    id:             p.id,
+    name:           p.drugName ?? p.genericName ?? 'Medication',
+    dose:           p.dosage ?? '',
+    schedule:       p.frequency ?? 'As prescribed',
+    time:           '08:00',
+    color:          MED_COLORS[idx % MED_COLORS.length],
+    takenToday:     false,
+    adherence,
+    adherencePct:   83,
+    note:           p.instructions ?? '',
+    prescribedBy:   p.prescribedBy ?? 'Your doctor',
+    prescribedDate: p.prescribedDate
+      ? new Date(p.prescribedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '—',
+    refillDaysLeft: 30,
+    mechanism:      '',
+    warnings:       p.contraindications ?? p.sideEffects ?? [],
+  };
+}
+
+// ─── Placeholder (fallback if API unavailable) ────────────────────────────────
 
 const MOCK_MEDS: Medication[] = [
   {
@@ -52,7 +81,7 @@ const MOCK_MEDS: Medication[] = [
     adherence: ['taken','taken','taken','missed','taken','taken','future'],
     adherencePct: 83,
     note: 'Take with food to protect your stomach. Do not stop without asking your doctor.',
-    prescribedBy: 'Dr. Chukwu',
+    prescribedBy: 'Your doctor',
     prescribedDate: '22 Mar 2026',
     refillDaysLeft: 24,
     mechanism: 'Aspirin is a blood thinner that prevents platelets (tiny blood cells) from sticking together and forming clots. After a heart attack, this helps keep your heart arteries open.',
@@ -69,7 +98,7 @@ const MOCK_MEDS: Medication[] = [
     adherence: ['taken','taken','missed','taken','taken','taken','future'],
     adherencePct: 83,
     note: 'Take BOTH doses every day. Missing doses significantly increases your risk of another heart attack.',
-    prescribedBy: 'Dr. Chukwu',
+    prescribedBy: 'Your doctor',
     prescribedDate: '22 Mar 2026',
     refillDaysLeft: 24,
     mechanism: 'Ticagrelor blocks the P2Y12 receptor on platelets, preventing them from clumping together. Together with Aspirin (dual antiplatelet therapy), it significantly reduces the risk of another heart attack after stent placement.',
@@ -86,7 +115,7 @@ const MOCK_MEDS: Medication[] = [
     adherence: ['taken','missed','taken','taken','taken','taken','future'],
     adherencePct: 83,
     note: 'Take at night — statins work better overnight. Do not eat grapefruit.',
-    prescribedBy: 'Dr. Chukwu',
+    prescribedBy: 'Your doctor',
     prescribedDate: '22 Mar 2026',
     refillDaysLeft: 24,
     mechanism: 'Atorvastatin blocks HMG-CoA reductase, an enzyme your liver uses to make cholesterol. By reducing LDL ("bad") cholesterol, it slows the build-up of fatty deposits in your heart arteries and reduces inflammation in the artery walls.',
@@ -103,7 +132,7 @@ const MOCK_MEDS: Medication[] = [
     adherence: ['taken','taken','taken','taken','taken','taken','future'],
     adherencePct: 100,
     note: 'Do not skip doses. Do not stop suddenly — wean off under doctor supervision if needed.',
-    prescribedBy: 'Dr. Chukwu',
+    prescribedBy: 'Your doctor',
     prescribedDate: '22 Mar 2026',
     refillDaysLeft: 24,
     mechanism: 'Metoprolol is a beta-blocker. It blocks adrenaline from making your heart beat faster and harder, which reduces the workload on your heart while it recovers from the heart attack. It also helps control your blood pressure.',
@@ -318,8 +347,17 @@ const MedCard: React.FC<MedCardProps> = ({ med, onMark, onDetail }) => {
 
 export const PatientMedsScreen: React.FC = () => {
   const insets  = useSafeAreaInsets();
-  const [meds, setMeds]     = useState<Medication[]>(MOCK_MEDS);
+  const { user } = useAuthStore();
+  const [meds,   setMeds]   = useState<Medication[]>([]);
   const [detail, setDetail] = useState<Medication | null>(null);
+
+  useEffect(() => {
+    const patientId = user?.patientMrn ?? user?.id;
+    if (!patientId) return;
+    PrescriptionsService.forPatient(patientId)
+      .then(list => setMeds((list ?? []).map(mapApiPrescription)))
+      .catch(() => setMeds(MOCK_MEDS));
+  }, [user?.id]);
 
   const takenToday = meds.filter((m) => m.takenToday).length;
   const totalToday = meds.length;

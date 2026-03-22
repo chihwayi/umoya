@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, AiPulse } from '../ui';
+import { PostVisitService, ApiPostVisitSession } from '../../services/postVisit';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ const MOCK_NOTES: PostVisitNote[] = [
   {
     id: 'n1',
     patientId: 'p1',
-    patientName: 'Reginald Okafor',
+    patientName: 'Patient',
     age: 67,
     mrn: 'MRN-004821',
     ward: 'Cardiology',
@@ -707,12 +708,63 @@ const reviewStyles = StyleSheet.create({
   },
 });
 
+// ─── API Mapper ───────────────────────────────────────────────────────────────
+
+function mapApiSession(s: ApiPostVisitSession): PostVisitNote {
+  const SOAP_KEYS = [
+    { key: 'S', label: 'Subjective', icon: 'chat'    },
+    { key: 'O', label: 'Objective',  icon: 'pulse'   },
+    { key: 'A', label: 'Assessment', icon: 'brain'   },
+    { key: 'P', label: 'Plan',       icon: 'sparkle' },
+  ];
+  const soap: SOAPSection[] = SOAP_KEYS.map(sk => ({
+    ...sk,
+    edited: false,
+    content: s.soap?.[sk.key.toLowerCase() as keyof typeof s.soap] ?? '',
+  }));
+
+  const dt = s.appointmentDate ?? s.createdAt;
+  const d = dt ? new Date(dt) : null;
+
+  return {
+    id:                       s.id,
+    patientId:                s.patientId,
+    patientName:              s.patientName ?? 'Patient',
+    age:                      0,
+    mrn:                      '',
+    ward:                     '',
+    bed:                      '',
+    visitDate:                d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—',
+    visitTime:                d ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—',
+    consultDuration:          '—',
+    diagnosis:                (s.diagnoses ?? []).map(dx => `${dx.name}${dx.icd ? ` (${dx.icd})` : ''}`),
+    status:                   (s.status === 'signed' || s.status === 'amended') ? s.status as SignoffStatus : 'pending',
+    aiGeneratedAt:            d ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—',
+    soap,
+    medications:              (s.medications ?? []).map(m => ({
+      drug:   m.name,
+      action: 'continued' as MedChange['action'],
+      dose:   m.dose,
+      reason: m.instruction ?? '',
+    })),
+    followUp:                 s.followUpInstructions ?? s.followUpDate ?? '',
+    referrals:                [],
+    audioTranscriptAvailable: false,
+  };
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export const DoctorPostVisitScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const [notes, setNotes] = useState<PostVisitNote[]>(MOCK_NOTES);
+  const [notes, setNotes] = useState<PostVisitNote[]>([]);
   const [selected, setSelected] = useState<PostVisitNote | null>(null);
+
+  useEffect(() => {
+    PostVisitService.sessions().then(data => {
+      if (data?.length) setNotes(data.map(mapApiSession));
+    }).catch(() => {});
+  }, []);
 
   const pending = notes.filter((n) => n.status === 'pending');
   const signed  = notes.filter((n) => n.status === 'signed' || n.status === 'amended');

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, SectionHeader, AiBadge, AiPulse, Dot } from '../ui';
+import { useAuthStore } from '../../stores/useAuthStore';
+import { PrescriptionsService } from '../../services/prescriptions';
+import { LabOrdersService } from '../../services/labOrders';
+import { PostVisitService } from '../../services/postVisit';
+import { AppointmentsService, ApiAppointment } from '../../services/appointments';
+import { MessagesService } from '../../services/messages';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -21,31 +27,14 @@ function greeting(): string {
   return 'Good evening';
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Types for home screen data ───────────────────────────────────────────────
 
-const PATIENT = { firstName: 'Sarah', lastName: 'Moyo' };
+type LabStatus = 'normal' | 'warning' | 'critical';
 
-const POSTVISIT_NOTE = {
-  doctorName: 'Dr. Chukwu',
-  specialty:  'Cardiologist',
-  visitDate:  '22 March 2026',
-  visitType:  'Follow-up',
-  summary:    'You came in for a cardiac follow-up. Your blood pressure is better controlled and your ECG showed improvement.',
-};
-
-const NEXT_MED = {
-  name: 'Aspirin',
-  dose: '100mg',
-  time: '09:00',
-  isOverdue: false,
-  totalDueToday: 3,
-};
-
-const RECENT_LABS = [
-  { name: 'HbA1c',      value: '6.8',  unit: '%',     date: '20 Mar', status: 'normal'  as const },
-  { name: 'Troponin-I', value: '0.03', unit: 'μg/L',  date: '22 Mar', status: 'normal'  as const },
-  { name: 'Cholesterol',value: '5.8',  unit: 'mmol/L', date: '18 Mar', status: 'warning' as const },
-];
+interface HomeLab { name: string; value: string; unit: string; date: string; status: LabStatus }
+interface HomePostVisit { doctorName: string; specialty: string; visitDate: string; visitType: string }
+interface HomeMed { name: string; dose: string; time: string; isOverdue: boolean; totalDueToday: number }
+interface HomeAppointment { month: string; day: string; title: string; meta: string; id: string }
 
 const LAB_STATUS_COLOR = { normal: C.green, warning: C.amber, critical: C.red };
 
@@ -90,8 +79,15 @@ interface PatientHomeScreenProps {
 }
 
 export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation }) => {
-  const insets   = useSafeAreaInsets();
+  const insets    = useSafeAreaInsets();
+  const { user }  = useAuthStore();
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const [postVisit,    setPostVisit]    = useState<HomePostVisit | null>(null);
+  const [nextMed,      setNextMed]      = useState<HomeMed | null>(null);
+  const [labs,         setLabs]         = useState<HomeLab[]>([]);
+  const [appointment,  setAppointment]  = useState<HomeAppointment | null>(null);
+  const [unreadCount,  setUnreadCount]  = useState(0);
 
   useEffect(() => {
     Animated.loop(
@@ -101,6 +97,82 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
       ])
     ).start();
   }, []);
+
+  useEffect(() => {
+    const id = user?.patientMrn ?? user?.id;
+    if (!id) return;
+
+    // Load latest post-visit session
+    PostVisitService.sessions(id).then(sessions => {
+      if (sessions?.[0]) {
+        const s = sessions[0];
+        setPostVisit({
+          doctorName: s.doctorName ?? 'Your doctor',
+          specialty:  s.specialty  ?? '',
+          visitDate:  s.appointmentDate
+            ? new Date(s.appointmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+            : '—',
+          visitType:  s.visitType ?? 'Consultation',
+        });
+      }
+    }).catch(() => {});
+
+    // Load prescriptions for next-med card
+    PrescriptionsService.forPatient(id).then(list => {
+      if (list?.[0]) {
+        setNextMed({
+          name:          list[0].drugName ?? 'Medication',
+          dose:          list[0].dosage ?? '',
+          time:          '08:00',
+          isOverdue:     false,
+          totalDueToday: list.filter(p => p.status === 'active').length,
+        });
+      }
+    }).catch(() => {});
+
+    // Load next upcoming appointment
+    AppointmentsService.upcoming(id).then(list => {
+      const appt = (list ?? [])[0];
+      if (appt) {
+        const dt = appt.scheduledAt ?? appt.appointmentDate ?? appt.startTime;
+        const d = dt ? new Date(dt) : null;
+        setAppointment({
+          id:    appt.id,
+          month: d ? d.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase() : '—',
+          day:   d ? String(d.getDate()).padStart(2, '0') : '—',
+          title: appt.appointmentType ?? appt.type ?? 'Appointment',
+          meta:  [
+            appt.doctorName,
+            d ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null,
+            appt.clinicName ?? appt.location,
+          ].filter(Boolean).join(' · '),
+        });
+      }
+    }).catch(() => {});
+
+    // Load unread message count for bell badge
+    MessagesService.unreadCount().then(n => setUnreadCount(n ?? 0)).catch(() => {});
+
+    // Load recent lab results
+    LabOrdersService.results(id).then(orders => {
+      const results: HomeLab[] = [];
+      (orders ?? []).slice(0, 3).forEach(order => {
+        (order.results ?? []).slice(0, 1).forEach(r => {
+          results.push({
+            name:   r.testName,
+            value:  String(r.value ?? '—'),
+            unit:   r.unit ?? '',
+            date:   r.resultDate
+              ? new Date(r.resultDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+              : '—',
+            status: (r.flag === 'critical_high' || r.flag === 'critical_low' ? 'critical'
+                   : r.flag === 'high' || r.flag === 'low' ? 'warning' : 'normal') as LabStatus,
+          });
+        });
+      });
+      if (results.length > 0) setLabs(results.slice(0, 3));
+    }).catch(() => {});
+  }, [user?.id]);
 
   const goToPostVisit = () => {
     navigation?.navigate('PHPostVisit');
@@ -116,13 +188,15 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
         <View style={styles.greetingRow}>
           <View>
             <Text style={styles.greetingSub}>{greeting()}</Text>
-            <Text style={styles.greetingName}>{PATIENT.firstName}</Text>
+            <Text style={styles.greetingName}>{user?.name?.split(' ')[0] ?? 'Welcome'}</Text>
           </View>
           <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8}>
             <Icon name="bell" size={20} color={C.textSecondary} />
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>2</Text>
-            </View>
+            {unreadCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -139,10 +213,10 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
               <View style={styles.heroText}>
                 <AiBadge text="PostVisit AI" />
                 <Text style={styles.heroTitle}>
-                  {POSTVISIT_NOTE.doctorName} signed your visit summary
+                  {postVisit?.doctorName ?? 'Your doctor'} signed your visit summary
                 </Text>
                 <Text style={styles.heroSub}>
-                  {POSTVISIT_NOTE.visitDate} · {POSTVISIT_NOTE.visitType} · Tap to read & chat with AI
+                  {{postVisit?.visitDate ?? '—'} · {postVisit?.visitType ?? 'Consultation'} · Tap to read & chat with AI
                 </Text>
               </View>
               <Icon name="arrow" size={20} color="#fff" />
@@ -154,24 +228,24 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
         <TouchableOpacity
           style={[
             styles.medStrip,
-            NEXT_MED.isOverdue && { borderColor: C.amber, backgroundColor: C.amber + '10' },
+            nextMed?.isOverdue && { borderColor: C.amber, backgroundColor: C.amber + '10' },
           ]}
           onPress={() => navigation?.navigate('PHMeds')}
           activeOpacity={0.85}
         >
-          <View style={[styles.medIcon, { backgroundColor: NEXT_MED.isOverdue ? C.amber + '25' : C.teal + '20' }]}>
-            <Icon name="pill" size={18} color={NEXT_MED.isOverdue ? C.amber : C.teal} />
+          <View style={[styles.medIcon, { backgroundColor: nextMed?.isOverdue ? C.amber + '25' : C.teal + '20' }]}>
+            <Icon name="pill" size={18} color={nextMed?.isOverdue ? C.amber : C.teal} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.medLabel}>
-              {NEXT_MED.isOverdue ? 'Overdue medication' : 'Next medication due'}
+              {nextMed?.isOverdue ? 'Overdue medication' : 'Next medication due'}
             </Text>
             <Text style={styles.medName}>
-              {NEXT_MED.name} {NEXT_MED.dose} — {NEXT_MED.time}
+              {{nextMed?.name ?? '—'} {nextMed?.dose ?? ''} — {nextMed?.time ?? '—'}
             </Text>
           </View>
-          <Badge color={NEXT_MED.isOverdue ? C.amber : C.teal} size="xs">
-            {NEXT_MED.totalDueToday} today
+          <Badge color={nextMed?.isOverdue ? C.amber : C.teal} size="xs">
+            {nextMed?.totalDueToday ?? 0} today
           </Badge>
           <Icon name="chevron" size={14} color={C.textMuted} />
         </TouchableOpacity>
@@ -182,7 +256,7 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
             Recent Results
           </SectionHeader>
           <View style={styles.labList}>
-            {RECENT_LABS.map((lab) => (
+            {labs.map((lab) => (
               <Card key={lab.name} style={styles.labCard}>
                 <View style={styles.labRow}>
                   <View style={styles.labDotCol}>
@@ -215,13 +289,13 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
               label="Book Appointment"
               icon="calendar"
               accent={C.teal}
-              onPress={() => {}}
+              onPress={() => navigation?.navigate('PHTelemedicine')}
             />
             <QuickAction
               label="Telehealth"
               icon="telehealth"
               accent={C.blue}
-              onPress={() => {}}
+              onPress={() => navigation?.navigate('PHTelemedicine')}
             />
             <QuickAction
               label="Pay Bills"
@@ -239,19 +313,25 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
         </View>
 
         {/* Upcoming appointment */}
-        <Card accent={C.blue} style={styles.apptCard}>
-          <View style={styles.apptRow}>
-            <View style={[styles.apptDateBox, { backgroundColor: C.blue + '20' }]}>
-              <Text style={styles.apptMonth}>APR</Text>
-              <Text style={styles.apptDay}>03</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.apptTitle}>Cardiology Follow-up</Text>
-              <Text style={styles.apptMeta}>Dr. Chukwu · 10:30 AM · Cardiology Clinic</Text>
-            </View>
-            <Icon name="chevron" size={14} color={C.textMuted} />
-          </View>
-        </Card>
+        {appointment && (
+          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation?.navigate('PHTelemedicine')}>
+            <Card accent={C.blue} style={styles.apptCard}>
+              <View style={styles.apptRow}>
+                <View style={[styles.apptDateBox, { backgroundColor: C.blue + '20' }]}>
+                  <Text style={styles.apptMonth}>{appointment.month}</Text>
+                  <Text style={styles.apptDay}>{appointment.day}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.apptTitle}>{appointment.title}</Text>
+                  {appointment.meta ? (
+                    <Text style={styles.apptMeta}>{appointment.meta}</Text>
+                  ) : null}
+                </View>
+                <Icon name="chevron" size={14} color={C.textMuted} />
+              </View>
+            </Card>
+          </TouchableOpacity>
+        )}
 
       </ScrollView>
     </View>

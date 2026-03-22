@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ScrollView, KeyboardAvoidingView, Platform,
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Card, AiBadge } from '../ui';
 import { NotificationCentre } from '../shared/NotificationCentre';
+import { MessagesService } from '../../services/messages';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,52 @@ interface Conversation {
   messages: Message[];
 }
 
+// ─── Mapper ───────────────────────────────────────────────────────────────────
+
+function mapInboxToConversations(msgs: any[]): Conversation[] {
+  if (!msgs?.length) return [];
+  const byThread: Record<string, any[]> = {};
+  msgs.forEach((m: any) => {
+    const key = m.threadId ?? m.senderId ?? String(m.id);
+    if (!byThread[key]) byThread[key] = [];
+    byThread[key].push(m);
+  });
+  const now = Date.now();
+  return Object.entries(byThread).map(([key, threadMsgs]) => {
+    const sorted = [...threadMsgs].sort((a, b) =>
+      new Date(a.sentAt ?? a.createdAt ?? 0).getTime() - new Date(b.sentAt ?? b.createdAt ?? 0).getTime()
+    );
+    const latest = sorted[sorted.length - 1];
+    const other = sorted.find((m: any) => m.senderId) ?? latest;
+    const senderName: string = other.senderName ?? other.senderDisplayName ?? other.senderId ?? 'Unknown';
+    const initials = senderName.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2).toUpperCase();
+    const unread = sorted.filter((m: any) => !m.isRead && !m.readAt).length;
+    const ts = latest.sentAt ?? latest.createdAt;
+    const diffMin = ts ? Math.floor((now - new Date(ts).getTime()) / 60000) : 0;
+    const lastTime = diffMin < 60 ? `${diffMin} min` : diffMin < 1440 ? `${Math.floor(diffMin / 60)} hr` : 'Yesterday';
+    return {
+      id: key,
+      name: senderName,
+      role: other.senderRole ?? '',
+      avatar: initials || 'U',
+      online: false,
+      unread,
+      lastMessage: latest.body ?? '',
+      lastTime,
+      messages: sorted.map((m: any) => ({
+        id: String(m.id ?? Math.random()),
+        from: (m.isOwn ? 'me' : 'them') as 'me' | 'them',
+        type: (m.attachments?.length ? 'attachment' : 'text') as MsgType,
+        text: m.body ?? '',
+        time: (m.sentAt ?? m.createdAt)
+          ? new Date(m.sentAt ?? m.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+          : '--:--',
+        read: !!(m.isRead ?? m.readAt),
+      })),
+    };
+  });
+}
+
 // ─── Quick replies ────────────────────────────────────────────────────────────
 
 const QUICK_REPLIES = [
@@ -53,7 +100,7 @@ const CONVERSATIONS: Conversation[] = [
     online: true, unread: 1, lastMessage: 'Aim for Friday discharge if troponin flat.',
     lastTime: '18 min',
     messages: [
-      { id: 'm1', from: 'me',   type: 'text', text: 'Good morning Doctor. Reginald Okafor is asking about his discharge date.', time: '08:12', read: true },
+      { id: 'm1', from: 'me',   type: 'text', text: 'Good morning Doctor. A patient is asking about his discharge date.', time: '08:12', read: true },
       { id: 'm2', from: 'them', type: 'text', text: 'Aim for Friday discharge if troponin stays flat. I\'ll speak to him at rounds.', time: '08:15', read: true },
       { id: 'm3', from: 'me',   type: 'text', text: 'Thank you. His SpO₂ has been 97–99% since 06:00 — looking stable.', time: '08:18', read: true },
       { id: 'm4', from: 'them', type: 'text', text: 'Good. Also, please send me a voice note after you check Samuel Park\'s IV site.', time: '09:30', read: false },
@@ -109,16 +156,17 @@ const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ con
   const flatRef = useRef<FlatList>(null);
 
   const send = (msg?: string) => {
-    const content = msg ?? text.trim();
-    if (!content) return;
+    const body = msg ?? text.trim();
+    if (!body) return;
     const newMsg: Message = {
-      id: `m${Date.now()}`, from: 'me', type: 'text', text: content,
+      id: `m${Date.now()}`, from: 'me', type: 'text', text: body,
       time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
       read: false,
     };
     setMessages(prev => [...prev, newMsg]);
     setText('');
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+    MessagesService.send({ recipient_id: convo.id, body }).catch(() => {});
   };
 
   return (
@@ -223,9 +271,19 @@ export const NurseMessagesScreen: React.FC = () => {
   const [search, setSearch] = useState('');
   const [activeConvo, setActiveConvo] = useState<Conversation | null>(null);
   const [notifVisible, setNotifVisible] = useState(false);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
 
-  const totalUnread = CONVERSATIONS.reduce((s, c) => s + c.unread, 0);
-  const filtered = CONVERSATIONS.filter(c =>
+  const loadInbox = useCallback(() => {
+    MessagesService.inbox({}).then(msgs => {
+      const mapped = mapInboxToConversations(msgs ?? []);
+      if (mapped.length > 0) setConversations(mapped);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadInbox(); }, [loadInbox]);
+
+  const totalUnread = conversations.reduce((s, c) => s + c.unread, 0);
+  const filtered = conversations.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     c.role.toLowerCase().includes(search.toLowerCase())
   );

@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, AiPulse, Dot } from '../ui';
+import { NurseWorklistService } from '../../services/nurseWorklist';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,11 +55,43 @@ interface Doctor {
   available: boolean;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── API mappers ──────────────────────────────────────────────────────────────
+
+function mapApiTask(t: any): ShiftTask {
+  const priMap: Record<string, TaskPriority> = { URGENT: 'URGENT', HIGH: 'HIGH', MED: 'MED', LOW: 'LOW' };
+  return {
+    id:           t.id,
+    patientName:  t.patientName ?? 'Patient',
+    bed:          t.bed ?? '—',
+    ward:         t.ward ?? '—',
+    priority:     priMap[t.priority] ?? 'MED',
+    task:         t.taskDescription ?? t.task ?? 'Task',
+    dueTime:      t.dueTime ?? '—',
+    done:         t.completed ?? false,
+    escalated:    t.escalated ?? false,
+    escalatable:  t.taskType !== 'routine',
+  };
+}
+
+function mapApiTriage(t: any): TriagePatient {
+  return {
+    id:         t.id,
+    name:       t.patientName ?? 'Unknown',
+    age:        t.age ?? 0,
+    complaint:  t.chiefComplaint ?? '—',
+    esi:        (t.esiLevel ?? 3) as ESILevel,
+    waitMins:   t.waitMinutes ?? 0,
+    arrived:    t.arrivedAt
+      ? new Date(t.arrivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '—',
+  };
+}
+
+// ─── Placeholder mock data (used as fallback before API loads) ────────────────
 
 const MOCK_TASKS: ShiftTask[] = [
   { id: 't1', patientName: 'Fatima Al-Rashid', bed: 'C-301', ward: 'Obs & Gynae', priority: 'URGENT', task: 'BP recheck + CTG strip (pre-eclampsia monitoring)', dueTime: '08:15', done: false, escalated: false, escalatable: true },
-  { id: 't2', patientName: 'Reginald Okafor',  bed: 'A-204', ward: 'Cardiology',  priority: 'URGENT', task: '12-lead ECG — bradycardia follow-up', dueTime: '08:30', done: false, escalated: false, escalatable: true },
+  { id: 't2', patientName: 'Cardiology Patient', bed: 'A-204', ward: 'Cardiology', priority: 'URGENT', task: '12-lead ECG — bradycardia follow-up', dueTime: '08:30', done: false, escalated: false, escalatable: true },
   { id: 't3', patientName: 'Amelia Chen',      bed: 'B-108', ward: 'Gen Medicine', priority: 'HIGH',   task: 'SpO₂ hourly check — pneumonia, target >94%', dueTime: '08:45', done: false, escalated: false, escalatable: true },
   { id: 't4', patientName: 'Thomas Ndlovu',    bed: 'A-211', ward: 'Cardiology',  priority: 'HIGH',   task: 'IV furosemide 80mg — check fluid balance first', dueTime: '09:00', done: false, escalated: false, escalatable: false },
   { id: 't5', patientName: 'Samuel Park',      bed: 'B-115', ward: 'Gen Medicine', priority: 'HIGH',   task: 'BGL check + insulin dose per sliding scale', dueTime: '09:00', done: false, escalated: false, escalatable: false },
@@ -77,13 +110,13 @@ const MOCK_TRIAGE: TriagePatient[] = [
 ];
 
 const MOCK_DOCTORS: Doctor[] = [
-  { id: 'd1', name: 'Dr. Chukwu',  role: 'Ward Lead',    available: true  },
+  { id: 'd1', name: 'On-call Doctor', role: 'Ward Lead',  available: true  },
   { id: 'd2', name: 'Dr. Patel',   role: 'On-Call',      available: true  },
   { id: 'd3', name: 'Dr. Osei',    role: 'Cardiologist', available: false },
   { id: 'd4', name: 'Dr. Hassan',  role: 'Registrar',    available: true  },
 ];
 
-const AI_HANDOFF = `End-of-shift AI summary:\n\n• C-301 (Al-Rashid): Pre-eclampsia — BP 156/101, CTG reactive. Two BP rechecks this shift, both above threshold. Escalation pending.\n• A-204 (Okafor): Post-STEMI bradycardia HR 48. Metoprolol dose under review. ECG at 10:00.\n• B-108 (Chen): CAP — SpO₂ trending up (91% → 96%). Responding to antibiotics. Monitor overnight.\n• A-211 (Ndlovu): HF decompensation. Net -1.8L diuresis. K+ 3.1 — replacement in progress.`;
+const AI_HANDOFF = `End-of-shift AI summary will be generated from live patient data when you complete handover.`;
 
 // ─── Priority helpers ─────────────────────────────────────────────────────────
 
@@ -548,9 +581,10 @@ const wlStyles = StyleSheet.create({
 
 interface TriageProps {
   onEscalate: (name: string) => void;
+  patients: TriagePatient[];
 }
 
-const TriageTab: React.FC<TriageProps> = ({ onEscalate }) => {
+const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients }) => {
   const [assessing, setAssessing] = useState<TriagePatient | null>(null);
   const [aiESI, setAiESI]         = useState<ESILevel | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -575,7 +609,7 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate }) => {
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={triStyles.content}>
-      {MOCK_TRIAGE.map((p) => {
+      {patients.map((p) => {
         const color = ESI_COLOR[p.esi];
         return (
           <Card key={p.id} style={triStyles.triageCard} accentSide accent={color}>
@@ -702,9 +736,21 @@ type ShiftTab = 'worklist' | 'triage';
 
 export const NurseShiftScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<ShiftTab>('worklist');
-  const [tasks, setTasks]         = useState<ShiftTask[]>(MOCK_TASKS);
-  const [escalating, setEscalating]     = useState<{ name: string } | null>(null);
+  const [activeTab,  setActiveTab]  = useState<ShiftTab>('worklist');
+  const [tasks,      setTasks]      = useState<ShiftTask[]>([]);
+  const [triage,     setTriage]     = useState<TriagePatient[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [escalating, setEscalating] = useState<{ name: string } | null>(null);
+
+  useEffect(() => {
+    NurseWorklistService.state()
+      .then(state => {
+        setTasks((state.tasks ?? []).map(mapApiTask));
+        setTriage((state.triage ?? []).map(mapApiTriage));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   const toggleTask = useCallback((id: string) => {
     setTasks((prev) => prev.map((t) => t.id === id ? { ...t, done: !t.done } : t));
@@ -758,7 +804,7 @@ export const NurseShiftScreen: React.FC = () => {
 
       {activeTab === 'worklist'
         ? <Worklist tasks={tasks} onToggle={toggleTask} onEscalate={openEscalate} />
-        : <TriageTab onEscalate={(name) => openEscalate(name)} />
+        : <TriageTab onEscalate={(name) => openEscalate(name)} patients={triage} />
       }
 
       <EscalateModal

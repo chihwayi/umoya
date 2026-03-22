@@ -11,11 +11,16 @@ import {
   FlatList,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW, SEVERITY } from '../../design/tokens';
 import { Icon, Badge, Dot, SlaTimer, Sparkline, Card, ScreenHeader, SectionHeader, AiBadge } from '../ui';
+import { PatientsService, patientName, patientAge } from '../../services/patients';
+import { VitalsService } from '../../services/vitals';
+import { EscalationsService } from '../../services/escalations';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,12 +62,63 @@ interface Patient {
   postVisitPending: boolean;
 }
 
-// ─── Mock data (will be replaced by API in S111) ──────────────────────────────
+// ─── API → screen type mapper ─────────────────────────────────────────────────
 
-const MOCK_PATIENTS: Patient[] = [
+function mapApiToPatient(p: any, vitals: any[] = [], alerts: any[] = []): Patient {
+  const sevMap: Record<string, Severity> = {
+    critical: 'critical', high: 'high', warning: 'warning', stable: 'stable',
+  };
+
+  const mappedVitals: Vital[] = vitals.slice(0, 4).map((v: any) => ({
+    label: v.label ?? v.vital ?? 'Vital',
+    value: String(v.latest ?? v.value ?? '—'),
+    unit:  v.unit ?? '',
+    trend: (v.readings ?? []).slice(-6).map((r: any) => Number(r.value ?? r)),
+    ref:   [v.normal?.[0] ?? 0, v.normal?.[1] ?? 999] as [number, number],
+    status: (sevMap[v.status] ?? 'stable') as Severity,
+  }));
+
+  const mappedAlerts: Alert[] = alerts.map((a: any) => ({
+    id:       a.id,
+    type:     'lab' as Alert['type'],
+    message:  a.message ?? a.title ?? 'Alert',
+    severity: (sevMap[a.severity] ?? 'warning') as Severity,
+    time:     a.escalatedAt
+      ? new Date(a.escalatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '—',
+  }));
+
+  const admittedMs  = p.admissionDate ? Date.now() - new Date(p.admissionDate).getTime() : 0;
+  const admittedDays = Math.max(0, Math.floor(admittedMs / 86400000));
+
+  return {
+    id:              p.id,
+    name:            patientName(p),
+    age:             patientAge(p.dateOfBirth),
+    mrn:             p.mrn ?? p.id,
+    bed:             p.bedNumber ?? '—',
+    ward:            p.ward ?? 'General',
+    diagnosis:       p.primaryDiagnosis ?? 'Under assessment',
+    severity:        mappedAlerts.some(a => a.severity === 'critical') ? 'critical'
+                   : mappedAlerts.some(a => a.severity === 'high')     ? 'high'
+                   : 'stable' as Severity,
+    admittedDays,
+    lastRound:       '—',
+    slaMins:         60,
+    slaMax:          120,
+    vitals:          mappedVitals,
+    alerts:          mappedAlerts,
+    aiSummary:       p.aiSummary ?? '',
+    postVisitPending: false,
+  };
+}
+
+// ─── Placeholder patients array (shown while API loads) ──────────────────────
+
+const EMPTY_PATIENTS: Patient[] = [
   {
     id: 'p1',
-    name: 'Reginald Okafor',
+    name: 'Loading...',
     age: 67,
     mrn: 'MRN-004821',
     bed: 'A-204',
@@ -626,12 +682,42 @@ const filterStyles = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export const DoctorRoundsScreen: React.FC = () => {
-  const insets = useSafeAreaInsets();
-  const [patients, setPatients] = useState<Patient[]>(MOCK_PATIENTS);
-  const [filter, setFilter] = useState<FilterKey>('all');
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<Patient | null>(null);
+  const insets  = useSafeAreaInsets();
+  const { user } = useAuthStore();
+  const [patients,   setPatients]   = useState<Patient[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [filter,     setFilter]     = useState<FilterKey>('all');
+  const [search,     setSearch]     = useState('');
+  const [selected,   setSelected]   = useState<Patient | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const loadPatients = useCallback(async () => {
+    try {
+      const result = await PatientsService.list(1, 50);
+      const list   = result.patients ?? [];
+
+      // Load vitals + alerts for each patient in parallel
+      const enriched = await Promise.all(
+        list.map(async (p) => {
+          const [vitals, alerts] = await Promise.allSettled([
+            VitalsService.trends(p.id),
+            EscalationsService.forPatient(p.id),
+          ]);
+          return mapApiToPatient(
+            p,
+            vitals.status  === 'fulfilled' ? vitals.value  : [],
+            alerts.status  === 'fulfilled' ? alerts.value  : [],
+          );
+        })
+      );
+      setPatients(enriched);
+    } catch {
+      // keep previous data on error
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   const filteredPatients = patients.filter((p) => {
     const matchSearch = !search ||
@@ -654,18 +740,26 @@ export const DoctorRoundsScreen: React.FC = () => {
     rounded:  patients.filter((p) => p.slaMins > (p.slaMax * 0.5)).length,
   };
 
+  useEffect(() => { loadPatients(); }, [loadPatients]);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1200);
-  }, []);
+    loadPatients();
+  }, [loadPatients]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <LinearGradient colors={['#030B18', C.bg]} style={StyleSheet.absoluteFill} />
 
+      {loading && (
+        <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+          <ActivityIndicator color={C.teal} />
+        </View>
+      )}
+
       <ScreenHeader
         title="Ward Rounds"
-        subtitle={`${patients.length} patients`}
+        subtitle={loading ? 'Loading…' : `${patients.length} patients`}
         accent={C.teal}
         rightSlot={
           <TouchableOpacity style={styles.filterBtn} activeOpacity={0.8}>
