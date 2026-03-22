@@ -1,0 +1,83 @@
+{
+  "expo": {
+    "name": "MediCore Clinical",
+    "slug": "medicore-clinical",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#080E1A",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#080E1A"
+    },
+    "scheme": "medicore",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.medicore.clinical",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "MediCore uses the camera to scan clinic QR codes for login.",
+        "NSFaceIDUsageDescription": "MediCore uses Face ID to securely authenticate you.",
+        "NSHealthShareUsageDescription": "MediCore reads health data from Apple Health to display your vitals history.",
+        "NSHealthUpdateUsageDescription": "MediCore writes medication adherence and vitals data to Apple Health.",
+        "UIBackgroundModes": ["fetch", "remote-notification"]
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.background-delivery": true
+      }
+    },
+    "android": {
+      "package": "com.medicore.clinical",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#080E1A"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-camera",
+        { "cameraPermission": "MediCore uses the camera to scan clinic QR codes." }
+      ],
+      [
+        "expo-local-authentication",
+        { "faceIDPermission": "MediCore uses Face ID to securely sign you in." }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#00C896",
+          "sounds": []
+        }
+      ],
+      "expo-splash-screen"
+    ],
+    "extra": {
+      "eas": { "projectId": "REPLACE_WITH_EAS_PROJECT_ID" }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/REPLACE_WITH_EAS_PROJECT_ID",
+      "enabled": true,
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": { "expo-channel-name": "production" }
+    },
+    "runtimeVersion": { "policy": "appVersion" }
+  }
+}
