@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { SymptomCheckerSession } from '../entities/symptom-checker-session.entity';
 import { AdherenceChatLog } from '../entities/adherence-chat-log.entity';
 import axios from 'axios';
@@ -8,11 +9,13 @@ import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class PatientAiService {
   private readonly logger = new Logger(PatientAiService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
   private claudeApiKey = process.env.ANTHROPIC_API_KEY || '';
   private claudeModel = 'claude-sonnet-4-6';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Symptom Checker ────────────────────────────────────────────────────────
 
@@ -32,13 +35,13 @@ export class PatientAiService {
     };
 
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/symptom-check`, {
+      result = await this.cdssService.diagnosisAssist({
         symptoms: dto.symptoms,
         duration_days: dto.durationDays,
         severity: dto.severity,
         patient_context: dto.context || {},
-      }, { timeout: 15000 });
-      result = data;
+        context: 'symptom_checker',
+      }, true);
     } catch (e: any) {
       this.logger.warn(`Symptom check CDSS unavailable: ${e?.message}`);
     }

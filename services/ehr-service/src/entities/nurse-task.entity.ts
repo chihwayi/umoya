@@ -79,6 +79,13 @@ export class NurseTask {
   @Column({ name: 'completion_notes', type: 'text', nullable: true })
   completionNotes?: string;
 
+  /** Set when a nurse opens/views this task notification — prevents it from re-appearing as "new" */
+  @Column({ name: 'viewed_at', type: 'timestamptz', nullable: true })
+  viewedAt?: Date;
+
+  @Column({ name: 'viewed_by', type: 'uuid', nullable: true })
+  viewedBy?: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

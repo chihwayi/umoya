@@ -38,6 +38,8 @@ import LabResultsViewer from '../components/LabResultsViewer';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { GuidelineRecommendationCard } from '../components/GuidelineRecommendationCard';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -4236,12 +4238,19 @@ const NurseDashboard: React.FC = () => {
                 </button>
               </div>
               {vitalsCopilotResult && (
-                <div className="mt-3 text-sm text-slate-700 space-y-1">
-                  <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-lg bg-white p-2 border border-blue-100 text-sm text-slate-700">
+                    <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                  </div>
                   {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
-                    <p><strong>Top Recommendation:</strong> {String(vitalsCopilotResult.recommendations[0])}</p>
+                    <GuidelineRecommendationCard
+                      data={{
+                        recommendation: String(vitalsCopilotResult.recommendations[0]),
+                        evidence_level: vitalsCopilotResult.riskLevel === 'high' ? 'High' : vitalsCopilotResult.riskLevel === 'medium' ? 'Medium' : 'Low',
+                      }}
+                    />
                   )}
-                  <div className="mt-2 flex gap-2">
+                  <div className="flex gap-2">
                     <button type="button" onClick={() => handleCopilotDecision('vitals', 'accept', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
                     <button type="button" onClick={() => handleCopilotDecision('vitals', 'modify', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
                     <button type="button" onClick={() => handleCopilotDecision('vitals', 'reject', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
@@ -5449,50 +5458,7 @@ const NurseDashboard: React.FC = () => {
                 ) : guidelineResults.length > 0 ? (
                   <div className="space-y-4">
                     {guidelineResults.map((result, index) => (
-                      <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex gap-3">
-                          <div className="mt-1 min-w-[24px]">
-                            <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold">
-                              {index + 1}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-slate-900 leading-tight">
-                                {result.source || 'Clinical Guideline'}
-                              </h4>
-                              {result.confidence && (
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
-                                  result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
-                                  result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                  'bg-red-50 text-red-700 border-red-100'
-                                }`}>
-                                  {Math.round(result.confidence * 100)}% Match
-                                </span>
-                              )}
-                            </div>
-                            <div className="prose prose-sm max-w-none text-slate-700">
-                              <p className="whitespace-pre-wrap">{result.text}</p>
-                              {result.recommendation && (
-                                <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                                  <strong className="block text-blue-900 text-xs uppercase tracking-wide mb-1">Recommendation</strong>
-                                  <p className="text-blue-800 text-sm m-0">{result.recommendation}</p>
-                                </div>
-                              )}
-                            </div>
-                            {result.url && (
-                              <a 
-                                href={result.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="inline-flex items-center mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
-                              >
-                                View Source Document
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <GuidelineCitationCard key={index} result={result} index={index} />
                     ))}
                   </div>
                 ) : (

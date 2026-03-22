@@ -10,6 +10,7 @@ import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import ModalPortal from '../components/ModalPortal';
 import ProblemListModal from '../components/ProblemListModal';
 import AllergiesModal from '../components/AllergiesModal';
@@ -1342,46 +1343,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                 <div className="space-y-4">
                   {guidelineResults.length > 0 ? (
                     guidelineResults.map((result, index) => (
-                      <div key={index} className="bg-white border border-blue-100 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200 group">
-                        <div className="flex items-start justify-between mb-3">
-                          <h4 className="text-base font-bold text-slate-800 flex items-center gap-2 group-hover:text-blue-700 transition-colors">
-                            <BookOpen className="w-4 h-4 text-blue-500" />
-                            {result.source || 'Clinical Guideline'}
-                          </h4>
-                          {result.confidence && (
-                            <span className={`text-xs font-bold px-2 py-1 rounded-lg border ${
-                              result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-200' :
-                              result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                              'bg-red-50 text-red-700 border-red-200'
-                            }`}>
-                              {Math.round(result.confidence * 100)}% Confidence
-                            </span>
-                          )}
-                        </div>
-                        
-                        <p className="text-slate-600 mb-4 leading-relaxed text-sm">{result.text}</p>
-                        
-                        {result.recommendation && (
-                          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl mb-4">
-                            <strong className="flex items-center gap-2 text-blue-800 mb-2 text-sm">
-                              <Sparkles className="w-4 h-4 text-blue-600" />
-                              Recommendation
-                            </strong>
-                            <p className="text-blue-900 text-sm">{result.recommendation}</p>
-                          </div>
-                        )}
-
-                        {result.url && (
-                          <a 
-                            href={result.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            View Source Document <ArrowRight className="w-4 h-4 ml-1" />
-                          </a>
-                        )}
-                      </div>
+                      <GuidelineCitationCard key={index} result={result} />
                     ))
                   ) : (
                     !loadingGuidelines && (

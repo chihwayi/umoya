@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { MedicalRecord } from '../entities/medical-record.entity';
 import { LabOrder } from '../entities/lab-order.entity';
@@ -13,7 +14,10 @@ import { Vitals } from '../entities/vitals.entity';
 export class PatientPortalService {
   private readonly logger = new Logger(PatientPortalService.name);
 
-  constructor(private tenantService: TenantService) {}
+  constructor(
+    private tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   private async getPatientRepository(tenantId: string): Promise<Repository<Patient>> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
@@ -1614,5 +1618,112 @@ export class PatientPortalService {
     nextDate.setHours(hours, minutes, 0, 0);
 
     return nextDate;
+  }
+
+  // ── AI Health Insights ────────────────────────────────────────────────────
+
+  /**
+   * GET /patient-portal/patients/:id/ai-insights
+   * Returns an AI-generated health summary with risk assessment and care gaps,
+   * personalised from the patient's latest vitals, active medications, and conditions.
+   * Falls back to a structured static summary when CDSS is unavailable.
+   */
+  async getPatientHealthInsights(patientId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+
+    // Gather context in parallel
+    const [patientRows, vitalsRows, prescriptionRows, conditionRows] = await Promise.all([
+      connection.query(
+        `SELECT date_of_birth, gender, first_name FROM patients WHERE id = $1 LIMIT 1`,
+        [patientId],
+      ).catch(() => []),
+      connection.query(
+        `SELECT blood_pressure_systolic, blood_pressure_diastolic, heart_rate, temperature,
+                oxygen_saturation, weight, height, recorded_at
+         FROM vitals WHERE patient_id = $1 ORDER BY recorded_at DESC LIMIT 1`,
+        [patientId],
+      ).catch(() => []),
+      connection.query(
+        `SELECT medication_name, dosage, frequency FROM prescriptions
+         WHERE patient_id = $1 AND status = 'active' LIMIT 20`,
+        [patientId],
+      ).catch(() => []),
+      connection.query(
+        `SELECT condition_type, condition_name, status, risk_level FROM chronic_disease_registry
+         WHERE patient_id = $1 AND status NOT IN ('resolved') LIMIT 10`,
+        [patientId],
+      ).catch(() => []),
+    ]);
+
+    const patient = patientRows[0] || {};
+    const vitals = vitalsRows[0] || {};
+    const age = patient.date_of_birth
+      ? Math.floor((Date.now() - new Date(patient.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+      : undefined;
+
+    const patientContext = {
+      patientId,
+      age,
+      gender: patient.gender,
+      vitals: {
+        systolicBp: vitals.blood_pressure_systolic,
+        diastolicBp: vitals.blood_pressure_diastolic,
+        heartRate: vitals.heart_rate,
+        temperature: vitals.temperature,
+        spo2: vitals.oxygen_saturation,
+        weight: vitals.weight,
+        height: vitals.height,
+      },
+      medications: prescriptionRows.map((p: any) => p.medication_name),
+      diagnoses: conditionRows.map((c: any) => ({ name: c.condition_name, status: c.status })),
+      context: 'patient_portal_health_insights',
+    };
+
+    try {
+      const [riskResult, careGaps] = await Promise.all([
+        this.cdssService.riskAssessment(patientContext, connection),
+        this.cdssService.detectCareGaps(patientContext, connection).catch(() => null),
+      ]);
+
+      return {
+        source: 'cdss',
+        patientId,
+        generatedAt: new Date().toISOString(),
+        riskLevel: riskResult?.risk_level || riskResult?.risk,
+        riskSummary: riskResult?.summary || riskResult?.explanation,
+        riskFactors: riskResult?.risk_factors || [],
+        recommendations: riskResult?.recommendations || [],
+        careGaps: careGaps?.gaps || careGaps?.care_gaps || [],
+        conditions: conditionRows,
+        latestVitals: vitals.recorded_at ? vitals : null,
+        activeMedicationCount: prescriptionRows.length,
+      };
+    } catch (err: any) {
+      this.logger.warn(`[PatientPortal] CDSS health insights unavailable: ${err?.message}`);
+      // Structured local summary
+      const highRiskConditions = conditionRows.filter((c: any) => ['high', 'critical'].includes(c.risk_level));
+      const bpSystolic = Number(vitals.blood_pressure_systolic ?? 0);
+      const localFlags: string[] = [];
+      if (bpSystolic >= 140) localFlags.push('Elevated blood pressure');
+      if (Number(vitals.oxygen_saturation ?? 100) < 94) localFlags.push('Low oxygen saturation');
+      if (highRiskConditions.length > 0) {
+        localFlags.push(...highRiskConditions.map((c: any) => `${c.condition_name} (${c.risk_level} risk)`));
+      }
+      return {
+        source: 'local_fallback',
+        patientId,
+        generatedAt: new Date().toISOString(),
+        riskLevel: localFlags.length > 2 ? 'high' : localFlags.length > 0 ? 'moderate' : 'low',
+        riskFactors: localFlags,
+        recommendations: localFlags.length > 0
+          ? ['Please discuss these findings with your healthcare provider at your next visit.']
+          : ['Your health indicators appear stable. Keep up with scheduled screenings.'],
+        careGaps: [],
+        conditions: conditionRows,
+        latestVitals: vitals.recorded_at ? vitals : null,
+        activeMedicationCount: prescriptionRows.length,
+      };
+    }
   }
 }

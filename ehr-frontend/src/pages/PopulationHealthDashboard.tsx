@@ -16,10 +16,12 @@ import {
   ClipboardCheck,
   CheckCircle2,
   Clock,
+  X,
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, populationHealthApi } from '../services/api';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
+import ModalPortal from '../components/ModalPortal';
 
 interface PopulationHealthDashboardProps {
   embedded?: boolean;
@@ -57,6 +59,7 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
   const [includeResolved, setIncludeResolved] = useState(false);
   const [updatingReminderId, setUpdatingReminderId] = useState<string | null>(null);
   const [reviewingRegistryId, setReviewingRegistryId] = useState<string | null>(null);
+  const [reviewModal, setReviewModal] = useState<{ item: any; intervalDays: string; note: string } | null>(null);
 
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
   const [guidelineQuery, setGuidelineQuery] = useState('');
@@ -231,33 +234,36 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
     }
   };
 
-  const handleReviewRegistryEntry = async (item: any) => {
+  const handleReviewRegistryEntry = (item: any) => {
     const suggestedDays =
       Number.isFinite(Number(item?.reviewDeltaDays)) && Number(item.reviewDeltaDays) > 0
         ? Number(item.reviewDeltaDays)
         : 90;
-    const nextReviewInput = window.prompt('Next review interval in days', String(suggestedDays));
-    if (nextReviewInput === null) return;
-    const reviewIntervalDays = Number(nextReviewInput);
+    setReviewModal({ item, intervalDays: String(suggestedDays), note: '' });
+  };
+
+  const submitRegistryReview = async () => {
+    if (!reviewModal) return;
+    const { item, intervalDays, note } = reviewModal;
+    const reviewIntervalDays = Number(intervalDays);
     if (!Number.isFinite(reviewIntervalDays) || reviewIntervalDays <= 0) {
       showError('Invalid Value', 'Please enter a valid number of days for the next review.');
       return;
     }
-    const reviewNote = window.prompt('Optional review note', '') || undefined;
-
     try {
       setReviewingRegistryId(item.id);
       await populationHealthApi.reviewRegistryEntry(
         item.id,
         {
           reviewIntervalDays: Math.round(reviewIntervalDays),
-          reviewNote,
+          reviewNote: note.trim() || undefined,
           status: item.conditionStatus === 'uncontrolled' ? 'active' : undefined,
         },
         token,
         tenantSlug || '',
       );
       showSuccess('Saved', 'Review recorded and next review date updated.');
+      setReviewModal(null);
       await loadWorklist(true);
       const dashRes = await populationHealthApi.getRegistryDashboard(token, tenantSlug || '');
       setDashboard(dashRes.data || null);
@@ -942,6 +948,55 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
         </div>
       </div>
     </div>
+
+    {/* ── Registry Review Modal ── */}
+    {reviewModal && (
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold text-slate-800">Record Registry Review</h2>
+              <button onClick={() => setReviewModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Next review interval (days) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={reviewModal.intervalDays}
+                  onChange={(e) => setReviewModal((p) => p ? { ...p, intervalDays: e.target.value } : p)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Review note (optional)</label>
+                <textarea
+                  rows={3}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={reviewModal.note}
+                  onChange={(e) => setReviewModal((p) => p ? { ...p, note: e.target.value } : p)}
+                  placeholder="Clinical notes about this review..."
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end p-4 border-t">
+              <button onClick={() => setReviewModal(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={submitRegistryReview}
+                disabled={!!reviewingRegistryId}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {reviewingRegistryId ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Save Review
+              </button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    )}
   );
 };
 

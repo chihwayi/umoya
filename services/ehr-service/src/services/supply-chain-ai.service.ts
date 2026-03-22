@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { StockoutPrediction } from '../entities/stockout-prediction.entity';
 import { ProcurementAlert } from '../entities/procurement-alert.entity';
 import axios from 'axios';
@@ -10,7 +11,10 @@ export class SupplyChainAiService {
   private readonly logger = new Logger(SupplyChainAiService.name);
   private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── On-demand prediction ───────────────────────────────────────────────────
 
@@ -104,14 +108,16 @@ export class SupplyChainAiService {
 
     let predData: any = { seasonal_factor: 1.0 };
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/supply/stockout-predict`, {
+      const result = await this.cdssService.getGuidelines('supply chain stockout prediction seasonal factor', {
         drugName: drug.name,
         currentStock: drug.current_stock,
         avgDailyConsumption: avgDaily,
         safetyStockDays: drug.safety_stock_days,
-      }, { timeout: 5000 });
-      predData = data;
-    } catch {}
+      });
+      if ((result as any)?.seasonal_factor) predData = result;
+    } catch {
+      // silent — local linear projection used below
+    }
 
     const seasonalFactor = predData.seasonal_factor || 1.0;
     const adjustedDaily = avgDaily * seasonalFactor;

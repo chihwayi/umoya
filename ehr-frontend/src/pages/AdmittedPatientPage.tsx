@@ -4,17 +4,13 @@ import {
   ArrowLeft, Activity, FileText, Heart, ArrowRightLeft, LogOut,
   User, Bed, Calendar, Clock, Pill, TestTube
 } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import ClinicalNotesModal from '../components/ClinicalNotesModal';
 import PrescriptionsModal from '../components/PrescriptionsModal';
 import LabOrdersModal from '../components/LabOrdersModal';
 import ICD10Picker from '../components/ICD10Picker';
-import { runtimeUrls } from '../config/runtime';
-
-const EHR_API_URL = runtimeUrls.ehrApi;
-const ehrAxios = axios.create({ baseURL: EHR_API_URL });
+import { ehrAxios } from '../services/api';
 
 const AdmittedPatientPage: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

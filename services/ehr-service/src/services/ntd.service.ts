@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { Dhis2Service } from './dhis2.service';
+import { CdssService } from './cdss.service';
 import { NtdCase } from '../entities/ntd-case.entity';
 import { CholeraCase } from '../entities/cholera-case.entity';
 import { TyphoidCase } from '../entities/typhoid-case.entity';
 import { RegionalDiseaseReport } from '../entities/regional-disease-report.entity';
-import axios from 'axios';
 
 @Injectable()
 export class NtdService {
@@ -14,9 +14,8 @@ export class NtdService {
   constructor(
     private readonly tenantService: TenantService,
     private readonly dhis2Service: Dhis2Service,
+    private readonly cdssService: CdssService,
   ) {}
-
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
   // ── NTD Cases ──────────────────────────────────────────────────────────────
 
@@ -175,12 +174,85 @@ export class NtdService {
   // ── CDSS ──────────────────────────────────────────────────────────────────
 
   async screenNtd(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/ntd/screen`, payload);
-    return data;
+    try {
+      return await this.cdssService.diagnosisAssist(
+        { symptoms: payload.symptoms || payload, conditions: payload.conditions, context: 'ntd_screen' },
+        true,
+      );
+    } catch (err: any) {
+      this.logger.warn(`[NTD] CDSS screen unavailable, using local fallback: ${err?.message}`);
+      return this.localNtdScreen(payload);
+    }
   }
 
   async choleraRisk(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/ntd/cholera/risk`, payload);
-    return data;
+    try {
+      return await this.cdssService.riskAssessment({ ...payload, context: 'cholera_risk' });
+    } catch (err: any) {
+      this.logger.warn(`[NTD] CDSS cholera risk unavailable, using local fallback: ${err?.message}`);
+      return this.localCholeraRisk(payload);
+    }
+  }
+
+  /** Local NTD screening — maps symptom clusters to probable NTD (WHO IDSR criteria). */
+  private localNtdScreen(payload: any): Record<string, any> {
+    const symptoms: string[] = (payload.symptoms || []).map((s: any) => String(s).toLowerCase());
+    const findings: Array<{ ntd: string; probability: string; action: string }> = [];
+
+    if (symptoms.some(s => s.includes('disfigur') || s.includes('limb swelling') || s.includes('lymphoedema'))) {
+      findings.push({ ntd: 'Lymphatic filariasis', probability: 'moderate', action: 'Refer for microfilariae blood smear at night; MDA if confirmed' });
+    }
+    if (symptoms.some(s => s.includes('skin lesion') || s.includes('depigment') || s.includes('anaesth'))) {
+      findings.push({ ntd: 'Leprosy', probability: 'moderate', action: 'Skin slit smear for AFB; refer to NTD clinic for MDT' });
+    }
+    if (symptoms.some(s => s.includes('haematuria') || s.includes('blood in urine'))) {
+      findings.push({ ntd: 'Schistosomiasis (urogenital)', probability: 'moderate', action: 'Urine filtration for S. haematobium eggs; Praziquantel if confirmed' });
+    }
+    if (symptoms.some(s => s.includes('bloody diarrhea') || s.includes('abdominal pain') || s.includes('hepatomegaly'))) {
+      findings.push({ ntd: 'Schistosomiasis (intestinal)', probability: 'low-moderate', action: 'Stool microscopy (Kato-Katz); serology; Praziquantel' });
+    }
+    if (symptoms.some(s => s.includes('trachoma') || s.includes('corneal') || s.includes('eyelid'))) {
+      findings.push({ ntd: 'Trachoma', probability: 'moderate', action: 'WHO SAFE strategy; Azithromycin MDA if active trachomatous inflammation' });
+    }
+    if (findings.length === 0) {
+      findings.push({ ntd: 'No specific NTD pattern detected', probability: 'low', action: 'Continue routine screening; review again if symptoms persist >2 weeks' });
+    }
+    return {
+      source: 'local_fallback',
+      findings,
+      guideline: 'WHO NTD Roadmap 2030 / Zimbabwe IDSR Guidelines',
+    };
+  }
+
+  /** Local cholera risk scoring — WHO dehydration classification A/B/C. */
+  private localCholeraRisk(payload: any): Record<string, any> {
+    const flags: string[] = [];
+    if (payload.watery_diarrhea_episodes && Number(payload.watery_diarrhea_episodes) >= 3) {
+      flags.push(`Watery diarrhoea ≥3 episodes/hr`);
+    }
+    if (payload.vomiting) flags.push('Vomiting');
+    if (payload.sunken_eyes) flags.push('Sunken eyes');
+    if (payload.skin_turgor === 'decreased') flags.push('Decreased skin turgor');
+    if (payload.unable_to_drink || payload.lethargic) flags.push('Lethargy / unable to drink');
+    if (Number(payload.systolic_bp ?? 999) < 90) flags.push('Hypotension');
+
+    let dehydration: 'A' | 'B' | 'C' = 'A';
+    if (flags.length >= 4) dehydration = 'C'; // Severe
+    else if (flags.length >= 2) dehydration = 'B'; // Some
+
+    const treatment: Record<string, string> = {
+      A: 'Plan A: ORS 50–100 mL/kg over 4 h, reassess every 30 min',
+      B: 'Plan B: ORS 75 mL/kg over 4 h under supervision; IV if cannot drink',
+      C: 'Plan C: IV Ringer\'s Lactate 100 mL/kg (adults: 30 mL/kg in 30 min then 70 mL/kg in 2.5 h); Doxycycline 300 mg stat if cholera confirmed',
+    };
+    return {
+      source: 'local_fallback',
+      dehydration_class: dehydration,
+      flags,
+      treatment: treatment[dehydration],
+      isolation: true,
+      notify_public_health: dehydration === 'C' || payload.suspected_cholera,
+      guideline: 'WHO Cholera Outbreak Response Guidelines 2017',
+    };
   }
 }

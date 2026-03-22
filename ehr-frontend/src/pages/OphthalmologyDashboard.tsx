@@ -27,6 +27,7 @@ import ModalPortal from '../components/ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import {
   buildSharedContextTags,
   getOphthalmologyCreateEncounterPrefill,
@@ -1187,55 +1188,7 @@ const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedde
                   ) : guidelineResults.length > 0 ? (
                     <div className="space-y-4">
                       {guidelineResults.map((result, idx) => (
-                        <div key={idx} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:border-indigo-200 group">
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">
-                                {idx + 1}
-                              </span>
-                              <h4 className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">
-                                {result.source || 'Clinical Guideline'}
-                              </h4>
-                            </div>
-                            {result.confidence && (
-                              <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
-                                result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                                result.confidence > 0.5 ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                'bg-red-50 text-red-700 border-red-100'
-                              }`}>
-                                {Math.round(result.confidence * 100)}% Match
-                              </span>
-                            )}
-                          </div>
-                          
-                          <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap mb-4 pl-8">
-                            {result.text}
-                          </p>
-                          
-                          <div className="pl-8 space-y-3">
-                            {result.recommendation && (
-                              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
-                                <h5 className="text-xs font-bold text-indigo-800 uppercase tracking-wide mb-1 flex items-center gap-1">
-                                  <Sparkles className="w-3 h-3" />
-                                  Recommendation
-                                </h5>
-                                <p className="text-sm text-indigo-900">{result.recommendation}</p>
-                              </div>
-                            )}
-
-                            {result.url && (
-                              <a 
-                                href={result.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="inline-flex items-center text-xs text-slate-500 hover:text-indigo-600 font-medium hover:underline transition-colors"
-                              >
-                                <BookOpen className="w-3 h-3 mr-1.5" />
-                                View Source Document
-                              </a>
-                            )}
-                          </div>
-                        </div>
+                        <GuidelineCitationCard key={idx} result={result} index={idx} />
                       ))}
                     </div>
                   ) : (

@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Bed, Stethoscope, FileText, Calendar, Check, AlertCircle } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
-import axios from 'axios';
 import ICD10Picker from './ICD10Picker';
-import { runtimeUrls } from '../config/runtime';
+import { ehrAxios } from '../services/api';
 
 interface AdmissionWorkflowProps {
   patientId?: string;
@@ -23,7 +22,6 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
   onSuccess,
 }) => {
   const { showSuccess, showError } = useNotification();
-  const ehrApiUrl = runtimeUrls.ehrApi;
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [doctors, setDoctors] = useState<any[]>([]);
@@ -56,12 +54,9 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadPatients = async () => {
     try {
-      const response = await axios.get(`${ehrApiUrl}/patients`, {
-        headers: {
-          'X-Tenant-ID': tenantSlug,
-          'Authorization': `Bearer ${token}`
-        },
-        params: { limit: 100 }
+      const response = await ehrAxios.get('/patients', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params: { limit: 100 },
       });
       setPatients(response.data?.patients || response.data || []);
     } catch (error) {
@@ -71,11 +66,8 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadAdmittedPatients = async () => {
     try {
-      const response = await axios.get(`${ehrApiUrl}/beds/admissions`, {
-        headers: {
-          'X-Tenant-ID': tenantSlug,
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await ehrAxios.get('/beds/admissions', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       });
       const admitted = (response.data || []).map((admission: any) => admission.patientId);
       setAdmittedPatients(admitted);
@@ -86,12 +78,9 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadDoctors = async () => {
     try {
-      const response = await axios.get(`${ehrApiUrl}/users`, {
-        headers: {
-          'X-Tenant-ID': tenantSlug,
-          'Authorization': `Bearer ${token}`
-        },
-        params: { role: 'doctor' }
+      const response = await ehrAxios.get('/users', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params: { role: 'doctor' },
       });
       setDoctors(response.data || []);
     } catch (error) {
@@ -104,12 +93,9 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
       const params: any = {};
       if (formData.ward) params.wardName = formData.ward;
       
-      const response = await axios.get(`${ehrApiUrl}/beds/available`, {
-        headers: {
-          'X-Tenant-ID': tenantSlug,
-          'Authorization': `Bearer ${token}`
-        },
-        params
+      const response = await ehrAxios.get('/beds/available', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params,
       });
       setAvailableBeds(response.data || []);
     } catch (error) {
@@ -128,19 +114,10 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
     try {
       setLoading(true);
       
-      // Use direct axios call to avoid ehrApi.post function error
-      const response = await axios.post(
-        `${ehrApiUrl}/beds/admissions`,
-        {
-          patientId: selectedPatient?.id || patientId,
-          ...formData,
-        },
-        {
-          headers: {
-            'X-Tenant-ID': tenantSlug,
-            'Authorization': `Bearer ${token}`
-          }
-        }
+      const response = await ehrAxios.post(
+        '/beds/admissions',
+        { patientId: selectedPatient?.id || patientId, ...formData },
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       
       showSuccess('Success', 'Patient admitted successfully');

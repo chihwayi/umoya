@@ -4,6 +4,8 @@ import { AlertTriangle, Activity, Clock, TrendingUp, Loader2, ArrowLeft, Brain, 
 import { cdssApi, ehrAxios } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
+import PromptDialog from '../components/PromptDialog';
+import { GuidelineRecommendationCard } from '../components/GuidelineRecommendationCard';
 
 interface SepsisDashboardProps {
   embedded?: boolean;
@@ -28,6 +30,7 @@ const SepsisDashboard: React.FC<SepsisDashboardProps> = ({ embedded = false }) =
   const [bundleWorklist, setBundleWorklist] = useState<any[]>([]);
   const [operationalBrief, setOperationalBrief] = useState<any>(null);
   const [actionBundleId, setActionBundleId] = useState<string | null>(null);
+  const [bundleNotePrompt, setBundleNotePrompt] = useState<{ bundle: any; value: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [worklistFocus, setWorklistFocus] = useState<'all' | 'critical' | 'three-hour' | 'repeat-lactate' | 'antibiotics' | 'documentation'>('all');
   const [includeCompleted, setIncludeCompleted] = useState(false);
@@ -169,21 +172,22 @@ const SepsisDashboard: React.FC<SepsisDashboardProps> = ({ embedded = false }) =
     }
   };
 
-  const handleDocumentBundleNote = async (bundle: any) => {
-    const existingNote = String(bundle?.notes || '').trim();
-    const note = window.prompt(
-      'Document sepsis bundle clinical note (assessment/escalation rationale):',
-      existingNote,
-    );
-    if (note === null) return;
+  const handleDocumentBundleNote = (bundle: any) => {
+    setBundleNotePrompt({ bundle, value: String(bundle?.notes || '').trim() });
+  };
+
+  const submitBundleNote = async () => {
+    if (!bundleNotePrompt) return;
+    const { bundle, value } = bundleNotePrompt;
     try {
       setActionBundleId(bundle.id);
       await ehrAxios.put(
         `/sepsis/bundles/${bundle.id}/notes`,
-        { notes: note.trim() },
+        { notes: value.trim() },
         { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       showSuccess('Bundle note updated', 'Clinical sepsis note saved.');
+      setBundleNotePrompt(null);
       loadData();
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to save sepsis note');
@@ -416,15 +420,16 @@ const SepsisDashboard: React.FC<SepsisDashboardProps> = ({ embedded = false }) =
             )}
 
             {Array.isArray(operationalBrief.recommendations) && operationalBrief.recommendations.length > 0 && (
-              <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2">
-                <p className="text-xs uppercase font-semibold text-cyan-800 mb-1">Recommended Actions</p>
-                <div className="space-y-1">
-                  {operationalBrief.recommendations.slice(0, 5).map((recommendation: string, idx: number) => (
-                    <p key={`sepsis-recommendation-${idx}`} className="text-sm text-cyan-900">
-                      {recommendation}
-                    </p>
-                  ))}
-                </div>
+              <div className="space-y-2">
+                {operationalBrief.recommendations.slice(0, 5).map((recommendation: string, idx: number) => (
+                  <GuidelineRecommendationCard
+                    key={`sepsis-recommendation-${idx}`}
+                    data={{
+                      recommendation,
+                      evidence_level: 'High',
+                    }}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -757,6 +762,20 @@ const SepsisDashboard: React.FC<SepsisDashboardProps> = ({ embedded = false }) =
 
       </div>
     </div>
+
+    <PromptDialog
+      isOpen={!!bundleNotePrompt}
+      title="Sepsis Bundle Clinical Note"
+      message="Document assessment, escalation rationale, or bundle progress:"
+      placeholder="Clinical note…"
+      value={bundleNotePrompt?.value ?? ''}
+      onChange={v => setBundleNotePrompt(p => p ? { ...p, value: v } : p)}
+      onConfirm={submitBundleNote}
+      onCancel={() => setBundleNotePrompt(null)}
+      confirmText="Save Note"
+      type="warning"
+      multiline
+    />
   );
 };
 

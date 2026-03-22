@@ -141,6 +141,7 @@ import { PatientEarlyWarningScore } from '../entities/patient-early-warning-scor
 import { PatientSdoh } from '../entities/patient-sdoh.entity';
 import { CdssDecisionLog } from '../entities/cdss-decision-log.entity';
 import { NurseTask } from '../entities/nurse-task.entity';
+import { StaffNotification } from '../entities/staff-notification.entity';
 import { CareGapDetection } from '../entities/care-gap-detection.entity';
 import { AmbientSession } from '../entities/ambient-session.entity';
 import { EncounterPrechart } from '../entities/encounter-prechart.entity';
@@ -524,6 +525,7 @@ export class TenantService {
         PatientSdoh,
         CdssDecisionLog,
         NurseTask,
+        StaffNotification,
         CareGapDetection,
         AmbientSession,
         EncounterPrechart,

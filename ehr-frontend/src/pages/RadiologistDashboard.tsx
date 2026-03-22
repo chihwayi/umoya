@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams } from 'react-router-dom';
 import { Camera, Brain, BookOpen, Search, RefreshCw, Settings, LayoutDashboard } from 'lucide-react';
 import RadiologistWorklist from '../components/RadiologistWorklist';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
 import MedicalVisionPanel from '../components/MedicalVision/MedicalVisionPanel';
 import { ehrApi, cdssApi } from '../services/api';
@@ -186,18 +187,7 @@ const RadiologistDashboard: React.FC = () => {
             {guidelineResults.length > 0 && (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {guidelineResults.slice(0, 2).map((result: any, index: number) => (
-                  <div key={index} className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <h4 className="font-medium text-purple-900 mb-2 flex items-center gap-2">
-                      <BookOpen className="w-4 h-4" />
-                      {result.source}
-                    </h4>
-                    <p className="text-sm text-slate-700 mb-2">{result.text}</p>
-                    {result.recommendation && (
-                      <div className="mt-2 p-2 bg-white border border-purple-100 rounded text-sm text-purple-800">
-                        <strong>Recommendation:</strong> {result.recommendation}
-                      </div>
-                    )}
-                  </div>
+                  <GuidelineCitationCard key={index} result={result} />
                 ))}
               </div>
             )}

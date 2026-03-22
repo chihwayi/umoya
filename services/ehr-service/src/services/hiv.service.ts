@@ -1746,6 +1746,47 @@ export class HivService {
       ]);
     }
 
+    // CDSS: ARV drug interaction check — fires async, does not block visit save
+    if (arvRegimenCode) {
+      const patientRows = await tenantDb
+        .query(`SELECT patient_id FROM hiv_care_enrollments WHERE id = $1 LIMIT 1`, [enrollmentId])
+        .catch(() => []);
+      const patientId: string | undefined = patientRows[0]?.patient_id;
+      if (patientId) {
+        const activePrescRows = await tenantDb
+          .query(
+            `SELECT medication_name FROM prescriptions WHERE patient_id = $1 AND status IN ('active', 'pending') LIMIT 20`,
+            [patientId],
+          )
+          .catch(() => []);
+        const medsForCheck = [arvRegimenCode, ...activePrescRows.map((r: any) => r.medication_name).filter(Boolean)];
+        if (medsForCheck.length >= 2) {
+          this.cdssService
+            .checkDrugInteractions(medsForCheck, patientId)
+            .then(async (ddiResult: any) => {
+              const criticalInteractions = (ddiResult?.interactions ?? []).filter(
+                (i: any) => String(i.severity || '').toLowerCase() === 'critical',
+              );
+              if (criticalInteractions.length > 0) {
+                await tenantDb
+                  .query(
+                    `INSERT INTO hiv_clinical_alerts (enrollment_id, alert_type, severity, title, message, related_data, is_resolved)
+                     VALUES ($1, 'drug_interaction', 'critical', 'Critical Drug Interaction Detected', $2, $3, false)
+                     ON CONFLICT DO NOTHING`,
+                    [
+                      enrollmentId,
+                      `CDSS detected critical interaction with regimen ${arvRegimenCode}: ${criticalInteractions.map((i: any) => i.description || `${i.drug1} \u2194 ${i.drug2}`).join('; ')}`,
+                      JSON.stringify({ regimen: arvRegimenCode, interactions: criticalInteractions, visitId: result[0]?.id }),
+                    ],
+                  )
+                  .catch(() => undefined);
+              }
+            })
+            .catch((e: any) => this.logger.warn(`CDSS HIV visit DDI check failed: ${e?.message || e}`));
+        }
+      }
+    }
+
     // ============================================
     // Auto-Schedule Appointment from Next Review Date
     // ============================================
@@ -2972,6 +3013,36 @@ export class HivService {
       }
     }
 
+    // CDSS: drug interaction check for the requested regimen + all active medications
+    let cdssInteractions: any = null;
+    const medsToCheck = [...regimenComponentsNormalized, ...activeMedsLower].filter(Boolean);
+    if (medsToCheck.length >= 2) {
+      cdssInteractions = await this.cdssService
+        .checkDrugInteractions(medsToCheck, enrollment.patient_id)
+        .catch((e: any) => {
+          this.logger.warn(`CDSS interaction check failed for regimen precheck: ${e?.message || e}`);
+          return null;
+        });
+      if (cdssInteractions?.interactions?.length) {
+        for (const interaction of cdssInteractions.interactions) {
+          const sev = String(interaction.severity || 'moderate').toLowerCase();
+          const entry = {
+            ruleKey: `cdss_ddi_${String(interaction.drug1 || '').replace(/\s+/g, '_')}_${String(interaction.drug2 || '').replace(/\s+/g, '_')}`,
+            domain: 'drug_interaction',
+            severity: sev === 'critical' ? 'block' : 'warn',
+            message: interaction.description || `Drug interaction: ${interaction.drug1} \u2194 ${interaction.drug2}`,
+            recommendedAction: interaction.recommendation || null,
+            guidelineReference: interaction.reference || 'CDSS Drug Interaction Database',
+          };
+          if (sev === 'critical') {
+            blockers.push(entry);
+          } else {
+            warnings.push(entry);
+          }
+        }
+      }
+    }
+
     return {
       allowed: blockers.length === 0,
       enrollmentId,
@@ -2999,6 +3070,7 @@ export class HivService {
       requiredData: Array.from(requiredData),
       guidelineReferences: Array.from(guidelineReferences),
       ruleVersionCode,
+      cdssInteractions: cdssInteractions?.interactions ?? null,
     };
   }
 

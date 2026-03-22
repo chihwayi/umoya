@@ -77,6 +77,16 @@ export class SepsisController {
     });
   }
 
+  /**
+   * POST /sepsis/risk-score
+   * Calculate qSOFA, SIRS, NEWS2 and composite sepsis probability from raw vitals.
+   * Does NOT persist — use for real-time monitoring and nurse copilot.
+   */
+  @Post('risk-score')
+  calculateRiskScore(@Body() vitals: any) {
+    return this.sepsisService.calculateRiskFromVitals(vitals);
+  }
+
   @Get('operational-brief')
   async getOperationalBrief(
     @Query('startDate') startDate: string,

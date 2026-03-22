@@ -147,6 +147,7 @@ import { PatientAiController } from './controllers/patient-ai.controller';
 import { ClinicalTrialMatchingController } from './controllers/clinical-trial-matching.controller';
 import { SupplyChainAiController } from './controllers/supply-chain-ai.controller';
 import { ModelRegistryController } from './controllers/model-registry.controller';
+import { StaffNotificationsController } from './controllers/staff-notifications.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -352,6 +353,7 @@ import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
 import { TelemedicineGateway } from './gateways/telemedicine.gateway';
 import { ModelRegistryService } from './services/model-registry.service';
 import { TelemedicinePostVisitBridgeService } from './services/telemedicine-postvisit-bridge.service';
+import { StaffNotificationsService } from './services/staff-notifications.service';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -519,6 +521,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalTrialMatchingController,
     SupplyChainAiController,
     ModelRegistryController,
+    StaffNotificationsController,
   ],
   providers: [
     AuthService,
@@ -723,6 +726,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalTrialMatchingService,
     SupplyChainAiService,
     ModelRegistryService,
+    StaffNotificationsService,
     CriticalAlertGateway,
     VoiceTranscriptionGateway,
     RolesGuard,

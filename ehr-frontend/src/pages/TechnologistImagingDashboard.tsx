@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Activity, Camera, CalendarDays, BookOpen, Search, X, Loader2, Settings, LayoutDashboard, Brain } from 'lucide-react';
 import { GuidelineResult } from '../types/guidelines';
 import { cdssApi } from '../services/api';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import TechnologistImagingWorklist from '../components/TechnologistImagingWorklist';
 import AdminNavigationShell from '../components/AdminNavigationShell';
 
@@ -192,50 +193,7 @@ const TechnologistImagingDashboard: React.FC = () => {
                 ) : guidelineResults.length > 0 ? (
                   <div className="space-y-4">
                     {guidelineResults.map((result, index) => (
-                      <div key={index} className="bg-slate-900/50 p-5 rounded-xl border border-slate-800 hover:border-indigo-500/30 transition-colors">
-                        <div className="flex gap-3">
-                          <div className="mt-1 min-w-[24px]">
-                            <div className="w-6 h-6 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-sm font-bold border border-indigo-500/20">
-                              {index + 1}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-indigo-200 leading-tight">
-                                {result.source || 'Protocol/Guideline'}
-                              </h4>
-                              {result.confidence && (
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
-                                  result.confidence > 0.8 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                  result.confidence > 0.5 ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                                  'bg-red-500/10 text-red-400 border-red-500/20'
-                                }`}>
-                                  {Math.round(result.confidence * 100)}% Match
-                                </span>
-                              )}
-                            </div>
-                            <div className="prose prose-sm max-w-none text-slate-300 prose-invert">
-                              <p className="whitespace-pre-wrap">{result.text}</p>
-                              {result.recommendation && (
-                                <div className="mt-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
-                                  <strong className="block text-indigo-300 text-xs uppercase tracking-wide mb-1">Recommendation</strong>
-                                  <p className="text-indigo-200 text-sm m-0">{result.recommendation}</p>
-                                </div>
-                              )}
-                            </div>
-                            {result.url && (
-                              <a 
-                                href={result.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="inline-flex items-center mt-3 text-sm text-indigo-400 hover:text-indigo-300 font-medium hover:underline"
-                              >
-                                View Source Document
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <GuidelineCitationCard key={index} result={result} index={index} dark />
                     ))}
                   </div>
                 ) : (

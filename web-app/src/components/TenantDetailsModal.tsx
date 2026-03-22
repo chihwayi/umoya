@@ -10,7 +10,7 @@ import {
   TenantSubscriptionPaymentProvider,
 } from '../types';
 import { tenantAPI } from '../services/api';
-import { ConfirmModal, Modal } from './Modal';
+import { ConfirmModal, Modal, PromptModal } from './Modal';
 import {
   CORE_INCLUDED_MODULES,
   DEMO_DEFAULT_MODULES,
@@ -172,6 +172,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [subscriptionPaymentsLoading, setSubscriptionPaymentsLoading] = useState(false);
   const [paymentSessionLoading, setPaymentSessionLoading] = useState(false);
   const [paymentConfirmLoading, setPaymentConfirmLoading] = useState(false);
+  const [confirmPaymentPrompt, setConfirmPaymentPrompt] = useState<{ payment: TenantSubscriptionPayment; value: string } | null>(null);
   const [selectedPaymentProvider, setSelectedPaymentProvider] = useState('zimswitch');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMonthsToExtend, setPaymentMonthsToExtend] = useState<number>(1);
@@ -424,14 +425,13 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     }
   };
 
-  const handleConfirmSubscriptionPayment = async (payment: TenantSubscriptionPayment) => {
-    if (!tenant) return;
-    const externalPaymentId = window.prompt(
-      `Confirm payment ${payment.reference}. Enter gateway transaction/reference ID:`,
-      payment.externalPaymentId || '',
-    );
-    if (externalPaymentId === null) return;
+  const handleConfirmSubscriptionPayment = (payment: TenantSubscriptionPayment) => {
+    setConfirmPaymentPrompt({ payment, value: payment.externalPaymentId || '' });
+  };
 
+  const submitConfirmSubscriptionPayment = async (externalPaymentId: string) => {
+    if (!tenant || !confirmPaymentPrompt) return;
+    const { payment } = confirmPaymentPrompt;
     setPaymentConfirmLoading(true);
     try {
       await tenantAPI.confirmSubscriptionPayment(tenant.id, payment.id, {
@@ -439,11 +439,11 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
         externalPaymentId: externalPaymentId.trim() || undefined,
         note: 'Confirmed from super admin portal',
       });
+      setConfirmPaymentPrompt(null);
       await loadSubscriptionPayments();
       onUpdate();
       showSuccess('Subscription payment confirmed and tenant billing extended');
     } catch (error: any) {
-      console.error('Failed to confirm subscription payment:', error);
       const msg = error?.response?.data?.message;
       showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to confirm payment');
     } finally {
@@ -1670,6 +1670,19 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
         confirmText="Delete"
         cancelText="Keep"
         type="danger"
+      />
+
+      <PromptModal
+        isOpen={!!confirmPaymentPrompt}
+        onClose={() => setConfirmPaymentPrompt(null)}
+        onConfirm={submitConfirmSubscriptionPayment}
+        title={`Confirm Payment — ${confirmPaymentPrompt?.payment.reference || ''}`}
+        message="Enter the gateway transaction / reference ID to confirm this subscription payment."
+        value={confirmPaymentPrompt?.value || ''}
+        onValueChange={(v) => setConfirmPaymentPrompt((p) => p ? { ...p, value: v } : p)}
+        placeholder="Gateway transaction ID (optional)"
+        confirmText="Confirm Payment"
+        type="info"
       />
     </>
   );

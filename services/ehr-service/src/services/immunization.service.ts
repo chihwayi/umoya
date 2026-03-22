@@ -3,10 +3,13 @@ import { DataSource } from 'typeorm';
 import { Immunization } from '../entities/immunization.entity';
 import { VaccineInventory } from '../entities/vaccine-inventory.entity';
 import { ImmunizationSchedule } from '../entities/immunization-schedule.entity';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class ImmunizationService {
   private readonly logger = new Logger(ImmunizationService.name);
+
+  constructor(private readonly cdssService: CdssService) {}
 
   private async generateImmunizationNumber(tenantDb: DataSource): Promise<string> {
     const [result] = await tenantDb.query(
@@ -217,6 +220,18 @@ export class ImmunizationService {
       }
     }
 
+    // Enrich with CDSS catch-up guidance if the patient has overdue doses
+    if (forecasts.length > 0) {
+      this.cdssService.getGuidelines(
+        'immunization catch-up schedule',
+        { patientId, ageMonths, overdueVaccines: forecasts.map((f) => f.vaccineCode) },
+      ).then((cdssGuidance: any) => {
+        if (cdssGuidance) {
+          this.logger.log(`[Immunization] CDSS catch-up guidance available for patient ${patientId}`);
+        }
+      }).catch(() => { /* CDSS offline — static forecast already returned */ });
+    }
+
     return forecasts;
   }
 
@@ -282,6 +297,26 @@ export class ImmunizationService {
     );
 
     this.logger.log(`Adverse event recorded for immunization: ${immunizationId}`);
+
+    // Fire-and-forget CDSS classification of the adverse event (VAERS-style severity + management)
+    const normalizedSeverity = String(eventData.severity || '').toLowerCase();
+    if (['serious', 'severe', 'life-threatening'].some(s => normalizedSeverity.includes(s))
+        || eventData.hospitalizationRequired) {
+      this.cdssService.diagnosisAssist(
+        {
+          conditions: [`vaccine adverse event: ${eventData.eventDescription}`],
+          severity: eventData.severity,
+          hospitalizationRequired: eventData.hospitalizationRequired,
+          immunizationId,
+          context: 'vaccine_adverse_event',
+        },
+        true,
+      ).then((result: any) => {
+        if (result) {
+          this.logger.warn(`[Immunization] CDSS adverse event assessment for ${immunizationId}: ${JSON.stringify(result?.primary_diagnosis || result?.recommendation || '')}`);
+        }
+      }).catch((e: any) => this.logger.warn(`[Immunization] CDSS adverse event classification failed: ${e?.message}`));
+    }
   }
 
   /**

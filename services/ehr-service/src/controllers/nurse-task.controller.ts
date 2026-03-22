@@ -19,7 +19,7 @@ export class NurseTaskController {
   @ApiOperation({ summary: 'Create a nurse task manually' })
   @ApiResponse({ status: 201 })
   async createTask(@Body() dto: CreateNurseTaskDto, @Request() req: RequestWithTenant) {
-    return this.nurseTaskService.createTask(dto, req.tenantDb);
+    return this.nurseTaskService.createTask(dto, req.tenantDb, req.tenantId);
   }
 
   @Get('pending')
@@ -50,6 +50,16 @@ export class NurseTaskController {
     @Request() req: RequestWithTenant,
   ) {
     return this.nurseTaskService.getTasksForPatient(patientId, req.tenantDb);
+  }
+
+  @Patch(':id/viewed')
+  @ApiOperation({ summary: 'Mark a task as viewed — prevents notification from reappearing after login' })
+  @ApiResponse({ status: 200 })
+  async markAsViewed(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant & { user: { userId: string } },
+  ) {
+    return this.nurseTaskService.markAsViewed(id, req.user.userId, req.tenantDb!);
   }
 
   @Patch(':id')

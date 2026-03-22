@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Bell, Heart, LogOut, Menu, Settings, User, Users, X, type LucideIcon } from 'lucide-react';
-import { tenantApi } from '../services/api';
+import { Bell, Heart, LogOut, Menu, Settings, User, Users, X, CheckCheck, ExternalLink, type LucideIcon } from 'lucide-react';
+import { tenantApi, ehrApi } from '../services/api';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -53,6 +53,11 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<EhrUser | null>(null);
   const [tenantBranding, setTenantBranding] = useState<TenantBranding | null>(() => readCachedTenantBranding(tenantSlug));
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const notifPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -106,6 +111,69 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
   );
 
   const tenantInitials = useMemo(() => getBrandInitials(tenantDisplayName), [tenantDisplayName]);
+
+  // Poll unread count every 60 s while the user is logged in
+  useEffect(() => {
+    const token = localStorage.getItem('ehr_token') || '';
+    if (!token || !tenantSlug) return;
+
+    const fetchCount = () => {
+      ehrApi.getStaffNotificationsUnreadCount(token, tenantSlug)
+        .then(({ data }) => setUnreadCount(data?.count ?? 0))
+        .catch(() => {});
+    };
+
+    fetchCount();
+    const interval = setInterval(fetchCount, 60_000);
+    return () => clearInterval(interval);
+  }, [tenantSlug]);
+
+  // Close panel on outside click
+  useEffect(() => {
+    if (!notifPanelOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (notifPanelRef.current && !notifPanelRef.current.contains(e.target as Node)) {
+        setNotifPanelOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifPanelOpen]);
+
+  const openNotifPanel = async () => {
+    setNotifPanelOpen(prev => !prev);
+    if (notifPanelOpen) return;
+    const token = localStorage.getItem('ehr_token') || '';
+    if (!token || !tenantSlug) return;
+    setNotifLoading(true);
+    try {
+      const { data } = await ehrApi.getStaffNotifications(token, tenantSlug, { limit: 20 });
+      setNotifications(data?.notifications ?? []);
+      setUnreadCount(data?.unreadCount ?? 0);
+    } catch { /* silent */ } finally {
+      setNotifLoading(false);
+    }
+  };
+
+  const markAllRead = async () => {
+    const token = localStorage.getItem('ehr_token') || '';
+    if (!token || !tenantSlug) return;
+    try {
+      await ehrApi.markAllStaffNotificationsRead(token, tenantSlug);
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch { /* silent */ }
+  };
+
+  const markOneRead = async (id: string) => {
+    const token = localStorage.getItem('ehr_token') || '';
+    if (!token || !tenantSlug) return;
+    try {
+      await ehrApi.markStaffNotificationRead(id, token, tenantSlug);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch { /* silent */ }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('ehr_token');
@@ -267,10 +335,95 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
 
             <div className="flex items-center gap-3">
               {topBarActions}
-              <button className="p-2 hover:bg-white/20 rounded-lg relative transition-colors">
-                <Bell className="w-5 h-5 text-white" />
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />
-              </button>
+              {/* ── Notification Bell ── */}
+              <div className="relative" ref={notifPanelRef}>
+                <button
+                  onClick={openNotifPanel}
+                  className="p-2 hover:bg-white/20 rounded-lg relative transition-colors"
+                  aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+                >
+                  <Bell className="w-5 h-5 text-white" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center px-0.5">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {notifPanelOpen && (
+                  <div className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+                    {/* Panel header */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+                      <span className="font-semibold text-slate-800 text-sm">Notifications</span>
+                      <div className="flex items-center gap-2">
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={markAllRead}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            <CheckCheck className="w-3.5 h-3.5" />
+                            Mark all read
+                          </button>
+                        )}
+                        <button onClick={() => setNotifPanelOpen(false)} className="p-1 hover:bg-slate-200 rounded">
+                          <X className="w-4 h-4 text-slate-500" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Panel body */}
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifLoading ? (
+                        <div className="flex items-center justify-center py-8 text-slate-400 text-sm">Loading…</div>
+                      ) : notifications.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                          <Bell className="w-8 h-8 mb-2 opacity-30" />
+                          <span className="text-sm">No notifications</span>
+                        </div>
+                      ) : (
+                        notifications.map(n => (
+                          <div
+                            key={n.id}
+                            className={`px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors ${!n.read ? 'bg-blue-50/60' : ''}`}
+                          >
+                            <div className="flex items-start gap-2">
+                              {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium text-slate-800 ${n.read ? 'pl-4' : ''}`}>{n.title}</p>
+                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                                <div className="flex items-center justify-between mt-1.5 gap-2">
+                                  <span className="text-[10px] text-slate-400">
+                                    {new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    {n.actionUrl && (
+                                      <a
+                                        href={n.actionUrl}
+                                        onClick={() => { markOneRead(n.id); setNotifPanelOpen(false); }}
+                                        className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
+                                      >
+                                        {n.actionLabel || 'View'} <ExternalLink className="w-2.5 h-2.5" />
+                                      </a>
+                                    )}
+                                    {!n.read && (
+                                      <button
+                                        onClick={() => markOneRead(n.id)}
+                                        className="text-[10px] text-slate-400 hover:text-slate-600"
+                                      >
+                                        Dismiss
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/15 rounded-lg">
                 <User className="w-4 h-4 text-white" />
                 <span className="text-sm text-white font-medium capitalize">{workspaceLabel}</span>

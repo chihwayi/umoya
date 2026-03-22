@@ -5,6 +5,7 @@ import { TerminologyService } from './terminology.service';
 import { CreateOrderDto, OrderService } from './order.service';
 import { LabOrderService } from './lab-order.service';
 import { ReferralService } from './referral.service';
+import { CdssService } from './cdss.service';
 import { OrderPriority, OrderType } from '../entities/order.entity';
 import { Priority as LabPriority } from '../entities/lab-order.entity';
 
@@ -133,6 +134,7 @@ export class MaternityService {
     private readonly orderService: OrderService,
     private readonly labOrderService: LabOrderService,
     private readonly referralService: ReferralService,
+    private readonly cdssService: CdssService,
   ) {}
 
   private parseDate(raw: any): Date | null {
@@ -2385,6 +2387,55 @@ export class MaternityService {
         visitDate: visit_date,
       },
     });
+
+    // Fire-and-forget CDSS AI risk assessment — enriches the visit record asynchronously.
+    // On critical flags (pre-eclampsia, fetal distress, severe anaemia) inserts a maternity alert.
+    this.cdssService.riskAssessment(
+      {
+        patientId: patient_id,
+        age: vitalFields.maternal_age,
+        gender: 'female',
+        vitals: {
+          systolicBp: vitalFields.blood_pressure_systolic,
+          diastolicBp: vitalFields.blood_pressure_diastolic,
+          temperature: vitalFields.temperature,
+          heartRate: vitalFields.pulse,
+          respiratoryRate: vitalFields.respiratory_rate,
+          spo2: vitalFields.spo2,
+        },
+        labResults: {
+          hemoglobin: vitalFields.hemoglobin,
+          proteinuria: vitalFields.proteinuria,
+          glucoseUrine: vitalFields.glucose_urine,
+          hiv_status: vitalFields.hiv_status,
+        },
+        context: 'anc',
+        gestationalAgeWeeks: gestationalAge,
+        complications: complicationsList,
+        edema: vitalFields.edema,
+        fetalHeartRate: vitalFields.fetal_heart_rate,
+      },
+      tenantDb,
+    ).then(async (riskResult: any) => {
+      const riskLevel = String(riskResult?.risk_level || riskResult?.risk || '').toLowerCase();
+      if (riskLevel === 'high' || riskLevel === 'critical') {
+        await tenantDb.query(
+          `INSERT INTO maternity_alerts
+             (maternity_enrollment_id, patient_id, alert_type, severity, message, source, visit_id, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+           ON CONFLICT DO NOTHING`,
+          [
+            maternity_enrollment_id,
+            patient_id,
+            'cdss_risk_flag',
+            riskLevel,
+            riskResult?.summary || riskResult?.message || `CDSS flagged ${riskLevel} risk at ANC visit #${visit_number}`,
+            'cdss_risk_assessment',
+            createdVisit.id,
+          ],
+        ).catch((e: any) => this.logger.warn(`[Maternity] Could not insert CDSS alert: ${e?.message}`));
+      }
+    }).catch((e: any) => this.logger.warn(`[Maternity] CDSS ANC risk assessment failed: ${e?.message}`));
 
     this.logger.log(`Created ANC visit #${visit_number} for enrollment ${maternity_enrollment_id}`);
     return createdVisit;

@@ -4,6 +4,8 @@ import { Droplet, Activity, AlertTriangle, TrendingUp, Loader2, ArrowLeft, Flask
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrApi, ehrAxios } from '../services/api';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
+import PromptDialog from '../components/PromptDialog';
+import ModalPortal from '../components/ModalPortal';
 
 interface BloodBankDashboardProps {
   embedded?: boolean;
@@ -51,6 +53,12 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
+  // ── Dialog state (replaces window.prompt) ────────────────────────────────
+  const [reservePrompt, setReservePrompt] = useState<{ unitId: string; value: string } | null>(null);
+  const [startTransfusionPrompt, setStartTransfusionPrompt] = useState<{ transfusion: any; value: string } | null>(null);
+  const [recordVitalsPrompt, setRecordVitalsPrompt] = useState<{ transfusion: any; value: string } | null>(null);
+  const [completeModal, setCompleteModal] = useState<{ transfusion: any; volume: string; notes: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -256,41 +264,47 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
     }
   };
 
-  const handleReserveUnit = async (unitId: string) => {
-    const patientId = window.prompt('Enter patient ID to reserve this unit:');
-    if (patientId === null) return;
-    if (!patientId.trim()) {
+  const handleReserveUnit = (unitId: string) => {
+    setReservePrompt({ unitId, value: '' });
+  };
+
+  const submitReserveUnit = async () => {
+    if (!reservePrompt) return;
+    if (!reservePrompt.value.trim()) {
       showError('Patient ID required', 'Please provide a patient ID before reserving a unit.');
       return;
     }
-
     try {
-      await ehrAxios.post(`/blood-bank/inventory/${unitId}/reserve`, { patientId: patientId.trim() }, { headers: headers() });
+      await ehrAxios.post(`/blood-bank/inventory/${reservePrompt.unitId}/reserve`, { patientId: reservePrompt.value.trim() }, { headers: headers() });
       showSuccess('Unit reserved', 'Blood unit has been reserved for the patient.');
+      setReservePrompt(null);
       loadData();
     } catch (e: any) {
       showError('Error', e.response?.data?.message || 'Failed to reserve unit');
     }
   };
 
-  const handleStartTransfusion = async (transfusion: any) => {
+  const handleStartTransfusion = (transfusion: any) => {
     const safety = getTransfusionSafetyAssessment(transfusion);
     if (safety.severity === 'critical') {
       showError('Critical safety block', 'Resolve blood compatibility and consent risks before starting transfusion.');
       return;
     }
+    setStartTransfusionPrompt({ transfusion, value: '' });
+  };
 
-    const vitalsSummary = window.prompt('Enter pre-transfusion baseline vitals summary (BP/HR/Temp/SpO2):', '');
-    if (vitalsSummary === null) return;
-
+  const submitStartTransfusion = async () => {
+    if (!startTransfusionPrompt) return;
+    const { transfusion, value } = startTransfusionPrompt;
     try {
       setActionTransfusionId(transfusion.id);
       await ehrAxios.post(
         `/blood-bank/transfusions/${transfusion.id}/start`,
-        { preVitals: { summary: vitalsSummary || 'Not documented in UI' } },
+        { preVitals: { summary: value.trim() || 'Not documented in UI' } },
         { headers: headers() },
       );
       showSuccess('Transfusion started', 'Monitoring has started for this transfusion.');
+      setStartTransfusionPrompt(null);
       loadData();
     } catch (e: any) {
       showError('Error', e.response?.data?.message || 'Failed to start transfusion');
@@ -299,18 +313,23 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
     }
   };
 
-  const handleRecordVitals = async (transfusion: any) => {
-    const vitalsSummary = window.prompt('Enter transfusion vitals check (BP/HR/Temp/SpO2 + symptoms):', '');
-    if (vitalsSummary === null || !vitalsSummary.trim()) return;
+  const handleRecordVitals = (transfusion: any) => {
+    setRecordVitalsPrompt({ transfusion, value: '' });
+  };
 
+  const submitRecordVitals = async () => {
+    if (!recordVitalsPrompt) return;
+    if (!recordVitalsPrompt.value.trim()) return;
+    const { transfusion, value } = recordVitalsPrompt;
     try {
       setActionTransfusionId(transfusion.id);
       await ehrAxios.post(
         `/blood-bank/transfusions/${transfusion.id}/vitals`,
-        { summary: vitalsSummary.trim() },
+        { summary: value.trim() },
         { headers: headers() },
       );
       showSuccess('Vitals recorded', 'Transfusion vitals have been captured.');
+      setRecordVitalsPrompt(null);
       loadData();
     } catch (e: any) {
       showError('Error', e.response?.data?.message || 'Failed to record vitals');
@@ -319,24 +338,26 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
     }
   };
 
-  const handleCompleteTransfusion = async (transfusion: any) => {
-    const volumeInput = window.prompt('Enter transfused volume (mL):', '450');
-    if (volumeInput === null) return;
-    const volume = Number(volumeInput);
+  const handleCompleteTransfusion = (transfusion: any) => {
+    setCompleteModal({ transfusion, volume: '450', notes: '' });
+  };
+
+  const submitCompleteTransfusion = async () => {
+    if (!completeModal) return;
+    const volume = Number(completeModal.volume);
     if (!Number.isFinite(volume) || volume <= 0) {
       showError('Invalid volume', 'Please enter a valid transfused volume in mL.');
       return;
     }
-    const notes = window.prompt('Completion notes (optional):', '') ?? '';
-
     try {
-      setActionTransfusionId(transfusion.id);
+      setActionTransfusionId(completeModal.transfusion.id);
       await ehrAxios.post(
-        `/blood-bank/transfusions/${transfusion.id}/complete`,
-        { volumeTransfused: volume, notes },
+        `/blood-bank/transfusions/${completeModal.transfusion.id}/complete`,
+        { volumeTransfused: volume, notes: completeModal.notes },
         { headers: headers() },
       );
       showSuccess('Transfusion completed', 'The transfusion has been marked as completed.');
+      setCompleteModal(null);
       loadData();
     } catch (e: any) {
       showError('Error', e.response?.data?.message || 'Failed to complete transfusion');
@@ -1198,6 +1219,89 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
         </div>
       </div>
     </div>
+
+    {/* ── Dialogs (replace window.prompt) ───────────────────────────── */}
+    <PromptDialog
+      isOpen={!!reservePrompt}
+      title="Reserve Blood Unit"
+      message="Enter the patient ID to reserve this unit for:"
+      placeholder="Patient ID"
+      value={reservePrompt?.value ?? ''}
+      onChange={v => setReservePrompt(p => p ? { ...p, value: v } : p)}
+      onConfirm={submitReserveUnit}
+      onCancel={() => setReservePrompt(null)}
+      confirmText="Reserve"
+      type="info"
+    />
+
+    <PromptDialog
+      isOpen={!!startTransfusionPrompt}
+      title="Pre-Transfusion Vitals"
+      message="Document baseline vitals before starting (BP / HR / Temp / SpO₂):"
+      placeholder="e.g. BP 120/80, HR 78, Temp 36.8°C, SpO₂ 98%"
+      value={startTransfusionPrompt?.value ?? ''}
+      onChange={v => setStartTransfusionPrompt(p => p ? { ...p, value: v } : p)}
+      onConfirm={submitStartTransfusion}
+      onCancel={() => setStartTransfusionPrompt(null)}
+      confirmText="Start Transfusion"
+      type="warning"
+    />
+
+    <PromptDialog
+      isOpen={!!recordVitalsPrompt}
+      title="Transfusion Monitoring Vitals"
+      message="Record vitals check (BP / HR / Temp / SpO₂ + any symptoms):"
+      placeholder="e.g. BP 118/76, HR 80, Temp 36.9°C, SpO₂ 97% – no symptoms"
+      value={recordVitalsPrompt?.value ?? ''}
+      onChange={v => setRecordVitalsPrompt(p => p ? { ...p, value: v } : p)}
+      onConfirm={submitRecordVitals}
+      onCancel={() => setRecordVitalsPrompt(null)}
+      confirmText="Record Vitals"
+      type="info"
+    />
+
+    {/* Complete transfusion — two fields: volume + notes */}
+    {completeModal && (
+      <ModalPortal>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-green-200 bg-white shadow-2xl">
+            <div className="flex items-start gap-4 border-b border-slate-200 px-6 py-5">
+              <div className="rounded-xl bg-green-100 p-3"><CheckCircle className="h-6 w-6 text-green-600" /></div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-slate-900">Complete Transfusion</h3>
+                <p className="mt-1 text-sm text-slate-600">Document final volume and any completion notes.</p>
+              </div>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Volume transfused (mL) <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  min="1"
+                  value={completeModal.volume}
+                  onChange={e => setCompleteModal(m => m ? { ...m, volume: e.target.value } : m)}
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Completion notes (optional)</label>
+                <textarea
+                  rows={3}
+                  value={completeModal.notes}
+                  onChange={e => setCompleteModal(m => m ? { ...m, notes: e.target.value } : m)}
+                  placeholder="Any observations, reactions, or follow-up notes…"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 rounded-b-2xl bg-slate-50 px-6 py-4">
+              <button onClick={() => setCompleteModal(null)} className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+              <button onClick={submitCompleteTransfusion} className="rounded-xl bg-green-600 px-5 py-2.5 font-medium text-white hover:bg-green-700">Complete Transfusion</button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    )}
   );
 };
 

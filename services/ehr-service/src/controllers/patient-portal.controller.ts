@@ -2255,7 +2255,18 @@ export class PatientPortalController {
     if (!visit) {
       throw new Error('ED visit not found or access denied');
     }
-    
+
     return visit;
+  }
+
+  // ── AI Health Insights ─────────────────────────────────────────────────────
+
+  @Get('ai-insights')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get AI-generated personalised health insights for the logged-in patient' })
+  async getHealthInsights(@Req() req: any) {
+    const patientId: string = req.user?.patientId || req.user?.id;
+    const tenantId: string = req.tenantId || req.headers?.['x-tenant-id'];
+    return this.patientPortalService.getPatientHealthInsights(patientId, tenantId);
   }
 }

@@ -407,16 +407,84 @@ export class CdssService {
   }
 
   /**
-   * Basic drug interaction checking (fallback) - DISABLED
+   * Basic drug interaction checking (fallback) — curated local table.
+   * Covers the highest-risk pairs relevant to Zimbabwe TB/HIV/malaria co-treatment context.
+   * Conservative: only flags known dangerous pairs, never clears unknown combinations.
    */
   private async basicDrugInteractionCheck(drugIds: string[]) {
-    // Return empty result to avoid fake data
+    const KNOWN_INTERACTIONS: Array<{
+      drugA: string; drugB: string;
+      severity: 'critical' | 'major' | 'moderate';
+      description: string;
+      recommendation: string;
+    }> = [
+      // TB/HIV co-treatment — high prevalence in Zimbabwe
+      { drugA: 'rifampicin', drugB: 'efavirenz', severity: 'major', description: 'Rifampicin induces CYP3A4, reducing efavirenz levels ~26%. Sub-therapeutic ARV levels risk treatment failure.', recommendation: 'Increase efavirenz to 800mg/day or switch regimen per national TB/HIV guidelines.' },
+      { drugA: 'rifampicin', drugB: 'nevirapine', severity: 'critical', description: 'Rifampicin reduces nevirapine AUC ~58%. High risk of virological failure.', recommendation: 'Avoid. Use efavirenz-based regimen per WHO TB/HIV co-treatment guidelines.' },
+      { drugA: 'rifampicin', drugB: 'lopinavir', severity: 'critical', description: 'Rifampicin reduces lopinavir levels >75%. Combination not recommended.', recommendation: 'Avoid or use super-boosted LPV/r (400/400mg BD). Consult HIV specialist.' },
+      { drugA: 'rifampicin', drugB: 'dolutegravir', severity: 'major', description: 'Rifampicin reduces dolutegravir AUC ~54%.', recommendation: 'Double dolutegravir to 50mg BD when co-administered with rifampicin.' },
+      { drugA: 'rifampicin', drugB: 'warfarin', severity: 'major', description: 'Rifampicin is a strong CYP2C9 inducer — INR may fall dramatically.', recommendation: 'Monitor INR weekly. Warfarin dose may need to increase 2–5-fold. Recheck until stable.' },
+      // Anticoagulant bleeding risk
+      { drugA: 'warfarin', drugB: 'aspirin', severity: 'major', description: 'Additive bleeding risk — platelet inhibition plus anticoagulation.', recommendation: 'Avoid unless strong indication. If necessary, use lowest aspirin dose and monitor for bleeding.' },
+      { drugA: 'warfarin', drugB: 'ibuprofen', severity: 'major', description: 'NSAIDs inhibit platelets, cause GI erosion and may elevate INR.', recommendation: 'Avoid NSAIDs. Use paracetamol for analgesia. Monitor INR if unavoidable.' },
+      { drugA: 'warfarin', drugB: 'metronidazole', severity: 'major', description: 'Metronidazole inhibits CYP2C9 — INR can double within days.', recommendation: 'Reduce warfarin ~50% empirically. Check INR every 2–3 days during metronidazole course.' },
+      { drugA: 'warfarin', drugB: 'fluconazole', severity: 'major', description: 'Potent CYP2C9 inhibitor — INR may double within 48h.', recommendation: 'Reduce warfarin dose. Monitor INR every 2–3 days. Consider alternative antifungal.' },
+      { drugA: 'warfarin', drugB: 'cotrimoxazole', severity: 'major', description: 'Cotrimoxazole inhibits CYP2C9 — significant INR elevation. Common in HIV patients on CTX prophylaxis.', recommendation: 'Monitor INR closely and reduce warfarin dose as needed.' },
+      // Cardiac
+      { drugA: 'digoxin', drugB: 'amiodarone', severity: 'critical', description: 'Amiodarone doubles digoxin levels — high risk of digoxin toxicity (bradycardia, AV block, arrhythmia).', recommendation: 'Reduce digoxin dose 50% on starting amiodarone. Monitor digoxin levels and ECG.' },
+      { drugA: 'digoxin', drugB: 'clarithromycin', severity: 'major', description: 'Clarithromycin inhibits P-glycoprotein — digoxin levels rise significantly.', recommendation: 'Monitor for digoxin toxicity. Consider dose reduction or alternative antibiotic.' },
+      { drugA: 'digoxin', drugB: 'erythromycin', severity: 'major', description: 'Erythromycin raises digoxin levels and also prolongs QT.', recommendation: 'Monitor digoxin levels. Use azithromycin as alternative if QTc not already prolonged.' },
+      // QT prolongation — critical in malaria treatment context
+      { drugA: 'artemether', drugB: 'amiodarone', severity: 'critical', description: 'Both prolong QT — risk of torsades de pointes.', recommendation: 'Avoid. Use alternative antimalarial. If unavoidable, continuous ECG monitoring required.' },
+      { drugA: 'artemether', drugB: 'ciprofloxacin', severity: 'major', description: 'Additive QT prolongation.', recommendation: 'Use with caution. Obtain baseline ECG. Avoid if QTc >450ms.' },
+      { drugA: 'halofantrine', drugB: 'lumefantrine', severity: 'critical', description: 'Severe additive QT prolongation — risk of fatal arrhythmia.', recommendation: 'Contraindicated. Do not combine.' },
+      // Renal / metabolic
+      { drugA: 'metformin', drugB: 'contrast', severity: 'major', description: 'Contrast can cause AKI, impairing metformin excretion — lactic acidosis risk.', recommendation: 'Hold metformin 48h before and after iodinated contrast. Check renal function before restarting.' },
+      { drugA: 'cotrimoxazole', drugB: 'ramipril', severity: 'major', description: 'Both raise potassium — life-threatening hyperkalemia risk, especially in CKD.', recommendation: 'Monitor potassium within 1 week. Avoid in CKD stage 3b+.' },
+      { drugA: 'cotrimoxazole', drugB: 'lisinopril', severity: 'major', description: 'Both raise potassium — common in HIV patients on CTX prophylaxis and ACE inhibitors.', recommendation: 'Monitor potassium closely. Avoid in advanced CKD.' },
+      { drugA: 'lithium', drugB: 'ibuprofen', severity: 'critical', description: 'NSAIDs reduce renal lithium clearance — lithium toxicity risk (tremor, confusion, seizures).', recommendation: 'Contraindicated. Use paracetamol. Check lithium level urgently if inadvertent co-prescription.' },
+      // Cytotoxic / antibiotic
+      { drugA: 'methotrexate', drugB: 'ibuprofen', severity: 'critical', description: 'NSAIDs reduce methotrexate clearance — severe toxicity risk (myelosuppression, mucositis).', recommendation: 'Contraindicated during methotrexate therapy. Use paracetamol only.' },
+      { drugA: 'ciprofloxacin', drugB: 'theophylline', severity: 'major', description: 'Ciprofloxacin inhibits CYP1A2 — theophylline levels rise, risk of toxicity.', recommendation: 'Reduce theophylline 30–50% or use alternative antibiotic. Monitor theophylline levels.' },
+      { drugA: 'linezolid', drugB: 'fluoxetine', severity: 'critical', description: 'Linezolid is an MAOI — serotonin syndrome risk with SSRIs.', recommendation: 'Contraindicated. Discontinue SSRI ≥2 weeks before starting linezolid.' },
+      { drugA: 'linezolid', drugB: 'sertraline', severity: 'critical', description: 'Serotonin syndrome risk (linezolid MAOI + SSRI).', recommendation: 'Contraindicated. See linezolid + fluoxetine guidance.' },
+    ];
+
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedIds = drugIds.map(normalize);
+
+    const interactions: any[] = [];
+    for (const pair of KNOWN_INTERACTIONS) {
+      const a = normalize(pair.drugA);
+      const b = normalize(pair.drugB);
+      const aMatch = normalizedIds.some(id => id.includes(a) || a.includes(id));
+      const bMatch = normalizedIds.some(id => id.includes(b) || b.includes(id));
+      if (aMatch && bMatch) {
+        interactions.push({
+          drugA: pair.drugA, drugB: pair.drugB,
+          severity: pair.severity,
+          description: pair.description,
+          recommendation: pair.recommendation,
+          source: 'local_fallback',
+        });
+      }
+    }
+
+    const severity_summary = {
+      critical: interactions.filter(i => i.severity === 'critical').length,
+      major: interactions.filter(i => i.severity === 'major').length,
+      moderate: interactions.filter(i => i.severity === 'moderate').length,
+      minor: 0,
+    };
+
     return {
-      hasInteractions: false,
-      interactions: [],
-      severity_summary: { critical: 0, major: 0, moderate: 0, minor: 0 },
-      recommendations: [],
-      source: 'fallback_empty',
+      hasInteractions: interactions.length > 0,
+      interactions,
+      severity_summary,
+      recommendations: interactions.map(i => i.recommendation),
+      source: 'local_fallback',
+      cdss_unavailable: true,
+      warning: 'CDSS service unavailable. Showing local interaction table (critical pairs only). Full checking requires CDSS service.',
     };
   }
 
@@ -535,20 +603,126 @@ export class CdssService {
   }
 
   /**
-   * Basic diagnostic assistance (fallback) - DISABLED
+   * Basic diagnostic assistance (fallback) — local rule-based engine.
+   * Tuned for Zimbabwe disease burden: TB, HIV, Malaria, Cholera co-prevalence.
+   * Conservative: only surfaces diagnoses with clear symptom support.
    */
   private async basicDiagnosisAssist(symptoms: any) {
-    this.logger.warn(`[FALLBACK] Basic diagnosis assist triggered but disabled to prevent fake data.`);
-    
+    let symptomText = '';
+    if (typeof symptoms === 'string') {
+      symptomText = symptoms.toLowerCase();
+    } else if (symptoms?.symptoms) {
+      symptomText = (Array.isArray(symptoms.symptoms)
+        ? symptoms.symptoms.join(' ')
+        : String(symptoms.symptoms)).toLowerCase();
+    }
+    if (symptoms?.chiefComplaint) symptomText += ' ' + String(symptoms.chiefComplaint).toLowerCase();
+    if (symptoms?.clinicalNotes) symptomText += ' ' + String(symptoms.clinicalNotes).toLowerCase();
+
+    const age = Number(symptoms?.age) || null;
+
+    const has = (pattern: RegExp) => pattern.test(symptomText);
+    const hasFever            = has(/fever|pyrexia|febrile|high.?temp/);
+    const hasCough            = has(/cough|haemoptysis|hemoptysis|sputum/);
+    const hasChestPain        = has(/chest.?pain|chest.?tight|pleuritic/);
+    const hasSob              = has(/short.?ness.?of.?breath|dyspn[oe]a|sob|difficulty.?breath/);
+    const hasProlongedCough   = has(/chronic.?cough|cough.*\d+.?week|week.*cough|cough.*month/);
+    const hasNightSweats      = has(/night.?sweat/);
+    const hasWeightLoss       = has(/weight.?loss|losing.?weight|wasting/);
+    const hasRigors           = has(/rigor|chills|shivering/);
+    const hasDiarrhea         = has(/diarr[h]?[o]?ea|loose.?stool|watery.?stool|bloody.?stool/);
+    const hasVomiting         = has(/vomit|nausea/);
+    const hasHeadache         = has(/headache|head.?ache/);
+    const hasAlteredConsciousness = has(/confused|confusion|unconsci|altered.?mental|seizure/);
+    const hasAbdoPain         = has(/abdomin|abdo.?pain|stomach.?pain|epigastric/);
+    const hasDysuria          = has(/dysuria|burning.?urin|frequency|urgency/);
+    const hasPalpitations     = has(/palpitation|fast.?heart|racing.?heart/);
+    const hasSyncope          = has(/syncope|faint|collapse|pass.?out/);
+
+    type Confidence = 'high' | 'moderate' | 'low';
+    const diagnoses: Array<{ diagnosis: string; probability: number; confidence: Confidence; reasoning: string }> = [];
+    const redFlags: string[] = [];
+    const recommendedTests: string[] = [];
+
+    // Malaria — high base prevalence in Zimbabwe
+    if (hasFever && hasRigors) {
+      diagnoses.push({ diagnosis: 'Malaria', probability: 0.60, confidence: 'moderate', reasoning: 'Fever with rigors is classic presentation of malaria in endemic Zimbabwe.' });
+      recommendedTests.push('Malaria RDT or thick/thin blood film');
+      if (hasAlteredConsciousness) redFlags.push('Altered consciousness with fever — consider cerebral malaria. Urgent IV artesunate required.');
+    } else if (hasFever) {
+      diagnoses.push({ diagnosis: 'Malaria', probability: 0.35, confidence: 'low', reasoning: 'Fever in Zimbabwe — malaria must be excluded regardless of other findings.' });
+      recommendedTests.push('Malaria RDT');
+    }
+
+    // Pulmonary TB — key triggers per WHO W4SS criteria
+    if (hasProlongedCough || (hasCough && hasNightSweats) || (hasCough && hasWeightLoss)) {
+      const tbProb = (hasProlongedCough && (hasNightSweats || hasWeightLoss)) ? 0.65 : 0.45;
+      diagnoses.push({ diagnosis: 'Pulmonary Tuberculosis', probability: tbProb, confidence: tbProb >= 0.6 ? 'moderate' : 'low', reasoning: 'WHO W4SS criteria met: cough ≥2 weeks and/or constitutional symptoms (night sweats, weight loss).' });
+      recommendedTests.push('Sputum GeneXpert MTB/RIF', 'Chest X-ray', 'HIV test (TB/HIV co-infection screening)');
+      if (hasWeightLoss && hasNightSweats && hasCough) redFlags.push('Classic TB symptom triad: cough + weight loss + night sweats. Initiate TB investigations urgently and institute infection control precautions.');
+    }
+
+    // Community-acquired pneumonia
+    if (hasFever && hasCough && hasSob) {
+      diagnoses.push({ diagnosis: 'Community-Acquired Pneumonia', probability: 0.55, confidence: 'moderate', reasoning: 'Fever + productive cough + dyspnoea triad is consistent with pneumonia.' });
+      recommendedTests.push('Chest X-ray', 'Full Blood Count', 'Blood culture (if hospitalised)');
+      redFlags.push('Dyspnoea with fever — assess SpO2 urgently. SpO2 <94% requires supplemental oxygen and prompt antibiotic therapy.');
+    }
+
+    // Typhoid
+    if (hasFever && hasAbdoPain && !hasRigors && age !== null && age > 5) {
+      diagnoses.push({ diagnosis: 'Typhoid Fever', probability: 0.30, confidence: 'low', reasoning: 'Sustained fever with abdominal symptoms without rigors in a school-age or older patient.' });
+      recommendedTests.push('Blood culture (gold standard)', 'Widal test (limited specificity)', 'Full Blood Count');
+    }
+
+    // Cholera / acute gastroenteritis
+    if (hasDiarrhea && hasVomiting) {
+      const severity = has(/rice.?water|profuse|watery/) ? 0.55 : 0.35;
+      diagnoses.push({ diagnosis: 'Acute Gastroenteritis / Cholera', probability: severity, confidence: severity > 0.45 ? 'moderate' : 'low', reasoning: 'Diarrhoea and vomiting — cholera must be considered in Zimbabwe, especially during outbreak periods.' });
+      recommendedTests.push('Stool microscopy and culture', 'Electrolytes (dehydration severity)', 'Cholera RDT if available');
+      redFlags.push('Assess hydration status immediately. Severe dehydration can be fatal within hours. Start ORS or IV fluids per WHO dehydration plan.');
+    }
+
+    // Bacterial meningitis
+    if (hasFever && hasHeadache && hasAlteredConsciousness) {
+      diagnoses.push({ diagnosis: 'Bacterial Meningitis', probability: 0.55, confidence: 'moderate', reasoning: 'Fever + headache + altered consciousness = meningism triad until proven otherwise.' });
+      recommendedTests.push('Lumbar puncture (after fundoscopy/CT if raised ICP suspected)', 'Blood cultures', 'Blood glucose and FBC');
+      redFlags.push('EMERGENCY: Fever + altered consciousness + headache. Administer empiric ceftriaxone IV immediately if bacterial meningitis suspected — do not delay treatment awaiting LP.');
+    }
+
+    // ACS / cardiac chest pain
+    if (hasChestPain && (hasSob || hasPalpitations || hasSyncope)) {
+      diagnoses.push({ diagnosis: 'Acute Coronary Syndrome', probability: 0.40, confidence: 'low', reasoning: 'Chest pain with associated cardiac symptoms warrants urgent ACS workup.' });
+      recommendedTests.push('12-lead ECG (urgent)', 'Troponin', 'Chest X-ray');
+      redFlags.push('Chest pain with dyspnoea or syncope — obtain 12-lead ECG immediately. STEMI requires thrombolysis within 30 minutes of diagnosis.');
+    }
+
+    // UTI
+    if (hasDysuria && !hasFever) {
+      diagnoses.push({ diagnosis: 'Urinary Tract Infection', probability: 0.55, confidence: 'moderate', reasoning: 'Dysuria/frequency without fever suggests lower UTI.' });
+      recommendedTests.push('Urine dipstick', 'Midstream urine culture and sensitivity');
+    }
+
+    diagnoses.sort((a, b) => b.probability - a.probability);
+    const topDiagnoses = diagnoses.slice(0, 5).map(d => ({
+      diagnosis: d.diagnosis,
+      probability: d.probability,
+      confidence: d.confidence,
+      reasoning: d.reasoning,
+      matching_symptoms: [],
+      source: 'local_fallback',
+    }));
+
     return {
-      suggested_diagnoses: [],
-      recommended_tests: [],
-      red_flags: [],
-      differentialDiagnoses: [],
-      recommendedTests: [],
-      urgencyLevel: 'unknown',
-      source: 'fallback_empty',
-      error: 'CDSS service unavailable'
+      suggested_diagnoses: topDiagnoses,
+      recommended_tests: [...new Set(recommendedTests)],
+      red_flags: redFlags,
+      differentialDiagnoses: topDiagnoses,
+      recommendedTests: [...new Set(recommendedTests)],
+      urgencyLevel: redFlags.length > 0 ? 'high' : diagnoses.some(d => d.probability >= 0.5) ? 'moderate' : 'low',
+      source: 'local_fallback',
+      cdss_unavailable: true,
+      warning: 'CDSS service unavailable. Showing local rule-based fallback. Results are indicative only — must be validated clinically.',
     };
   }
 
@@ -723,34 +897,266 @@ export class CdssService {
   }
 
   /**
-   * Basic guideline search (fallback) - NOW DISABLED to prevent fake data
+   * Basic guideline search (fallback) — keyword-to-guideline mapping.
+   * Returns key clinical points from local evidence base when CDSS is offline.
    */
   private basicSearchGuidelines(query: string) {
-    // We intentionally return empty results here to avoid showing
-    // hardcoded/outdated/fake guidelines when the AI service is down.
-    this.logger.warn(`[FALLBACK] Basic search triggered for query "${query}" but disabled to prevent fake data.`);
-    
+    const q = query.toLowerCase();
+
+    const KEYWORD_MAP: Record<string, string[]> = {
+      tuberculosis: [
+        'New DS-TB: 2HRZE intensive phase + 4HR continuation (WHO 2022)',
+        'DOT (Directly Observed Therapy) recommended for entire treatment course',
+        'Screen all household contacts; offer LTBI treatment to contacts aged <5 or HIV+',
+        'MDR-TB: refer to national MDR-TB programme immediately — do not treat empirically',
+        'TB/HIV co-treatment: start ART within 2–8 weeks of TB treatment initiation',
+      ],
+      malaria: [
+        'Uncomplicated falciparum malaria first-line: Artemether-Lumefantrine 6-dose over 3 days',
+        'Take AL with food or milk for optimal absorption',
+        'Severe malaria: IV Artesunate 2.4mg/kg at 0h, 12h, 24h then daily — admit to hospital',
+        'Pregnant women first trimester: quinine + clindamycin; AL acceptable from second trimester',
+        'Check G6PD before primaquine for P. vivax radical cure',
+      ],
+      hiv: [
+        'Test and Treat: start ART same day as HIV diagnosis',
+        'Preferred first-line Zimbabwe: TDF + 3TC + DTG (dolutegravir-based)',
+        'Viral load at 6 months then annually if suppressed (<1000 copies/mL)',
+        'Cotrimoxazole prophylaxis: all patients with CD4 <200 or WHO stage 3/4',
+        'TB screening at every visit using W4SS (cough, fever, night sweats, weight loss)',
+      ],
+      hypertension: [
+        'Target BP <140/90 for most adults; <130/80 for diabetes or CKD',
+        'First-line: ACE inhibitor (or ARB) ± calcium channel blocker ± thiazide diuretic',
+        'Lifestyle: low-sodium diet, exercise 150min/week, weight loss, limit alcohol',
+        'Hypertensive emergency (BP ≥180/120 + organ damage): IV labetalol or nitroprusside',
+        'Avoid ACE inhibitors/ARBs in pregnancy — use methyldopa or nifedipine SR',
+      ],
+      diabetes: [
+        'Target HbA1c <7% for most; <8% for elderly with comorbidities',
+        'First-line: Metformin 500mg BD with meals, titrate to 1000mg BD',
+        'Annual: HbA1c, foot exam, eye exam, microalbuminuria, renal function, lipids',
+        'Stop metformin if eGFR <30mL/min — renal dose adjustment required',
+        'Add SGLT2 inhibitor or GLP-1 agonist if CVD or CKD present',
+      ],
+      sepsis: [
+        'Hour-1 bundle: blood cultures x2, serum lactate, IV broad-spectrum antibiotics, 30ml/kg crystalloid',
+        'IV antibiotics must be given within 1 hour of sepsis recognition',
+        'Target MAP ≥65mmHg — start noradrenaline if fluids insufficient',
+        'Lactate >4mmol/L = septic shock — ICU admission required',
+        'Re-evaluate haemodynamic status at 1h and 3h after resuscitation',
+      ],
+      pneumonia: [
+        'CURB-65 scoring: Confusion, Urea >7, RR >30, BP <90/60, Age >65',
+        'CURB-65 0–1: outpatient amoxicillin 500mg TDS × 5 days',
+        'CURB-65 ≥2: hospital admission, IV amoxicillin-clavulanate or ceftriaxone',
+        'SpO2 target ≥94% — start O2 if below threshold',
+        'HIV test in all pneumonia patients in Zimbabwe (Pneumocystis jirovecii risk)',
+      ],
+      cholera: [
+        'Assess dehydration: WHO Plan A (mild), Plan B (moderate ORS), Plan C (severe IV Ringer\'s)',
+        'Adults: ORS 75ml/kg over 4h for moderate dehydration',
+        'Antibiotic: doxycycline 300mg single dose (adults); azithromycin for children/pregnant',
+        'Zinc supplementation for children <5 years (10–20mg/day × 10–14 days)',
+        'Isolation and case notification to district health office within 24h',
+      ],
+      heart_failure: [
+        'HFrEF cornerstone: ACE inhibitor (or ARB) + beta-blocker + spironolactone',
+        'Daily weight monitoring — escalate if >2kg gain over 2 days',
+        'Furosemide for congestion — titrate to euvolaemia',
+        'Fluid restriction <1.5L/day in decompensated HF',
+        'Avoid NSAIDs, diltiazem/verapamil in HFrEF, thiazolidinediones, high-sodium diet',
+      ],
+    };
+
+    const citations: Array<{ title: string; text: string; source: string; url: null; score: number }> = [];
+    for (const [topic, points] of Object.entries(KEYWORD_MAP)) {
+      if (q.includes(topic) || topic.split('_').some(w => q.includes(w))) {
+        for (const point of points.slice(0, 3)) {
+          citations.push({ title: `${topic.replace(/_/g, ' ')} — key guideline point`, text: point, source: 'Local Clinical Guidelines (Fallback)', url: null, score: 0.75 });
+        }
+      }
+    }
+    // Partial word match if no direct hit
+    if (citations.length === 0) {
+      for (const [topic, points] of Object.entries(KEYWORD_MAP)) {
+        const words = q.split(/\s+/).filter(w => w.length > 3);
+        if (words.some(w => topic.includes(w) || w.includes(topic.split('_')[0]))) {
+          citations.push({ title: `${topic.replace(/_/g, ' ')} — related guideline`, text: points[0], source: 'Local Clinical Guidelines (Fallback)', url: null, score: 0.4 });
+          break;
+        }
+      }
+    }
+
     return {
       query,
-      citations: [],
-      count: 0,
-      error: null
+      citations,
+      count: citations.length,
+      error: null,
+      source: 'local_fallback',
+      cdss_unavailable: true,
     };
   }
 
   /**
-   * Basic guidelines (fallback) - NOW DISABLED to prevent fake data
+   * Basic guidelines (fallback) — curated local evidence-based guideline map.
+   * Covers 10 conditions with highest clinical burden in Zimbabwe.
    */
   private async basicGetGuidelines(condition: string) {
-    // Return empty/generic structure to avoid hardcoded fake guidelines
+    type GuidelineEntry = { title: string; source: string; recommendations: string[]; contraindications: Record<string, string> };
+    const LOCAL_GUIDELINES: Record<string, GuidelineEntry> = {
+      hypertension: {
+        title: 'Hypertension Management',
+        source: 'WHO/JNC 2023',
+        recommendations: [
+          'Target BP <140/90 for most adults; <130/80 for diabetes or CKD',
+          'First-line: ACE inhibitor (or ARB) + thiazide diuretic ± calcium channel blocker',
+          'Lifestyle modifications: low-sodium diet, exercise 150min/week, weight loss, limit alcohol',
+          'Hypertensive urgency: oral amlodipine or captopril. Emergency (+ organ damage): IV labetalol',
+          'Monitor BP every 4 weeks until controlled, then every 3–6 months',
+        ],
+        contraindications: { pregnancy: 'Avoid ACE inhibitors/ARBs. Use methyldopa or nifedipine SR.' },
+      },
+      tuberculosis: {
+        title: 'TB Treatment — WHO 2022 Guidelines',
+        source: 'WHO 2022 / MOHCC Zimbabwe',
+        recommendations: [
+          'New DS-TB: 2HRZE (intensive) / 4HR (continuation) — total 6 months',
+          'DOT (Directly Observed Therapy) for entire treatment course',
+          'Test for HIV at diagnosis — co-treatment required',
+          'MDR-TB: refer to national MDR-TB programme — do not treat empirically',
+          'Notify district TB coordinator within 3 days of diagnosis',
+          'Contact tracing: screen all household contacts; offer LTBI treatment to <5 years or HIV+',
+        ],
+        contraindications: { liver_disease: 'Pyrazinamide and isoniazid — monitor LFTs. Withhold if transaminases >5× ULN.' },
+      },
+      malaria: {
+        title: 'Malaria Treatment — Zimbabwe National Guidelines',
+        source: 'MOHCC Zimbabwe 2023',
+        recommendations: [
+          'Uncomplicated falciparum: Artemether-Lumefantrine (AL) 6-dose over 3 days',
+          'Take AL with food or milk for optimal absorption',
+          'Severe/complicated: IV Artesunate 2.4mg/kg at 0h, 12h, 24h then daily — admit',
+          'Treat severe anaemia (Hb <8g/dL) concurrently',
+          'Pregnant women first trimester: quinine + clindamycin; AL acceptable from second trimester',
+          'Check G6PD before primaquine for P. vivax radical cure',
+        ],
+        contraindications: { first_trimester: 'Avoid artemisinin combinations in first trimester. Use quinine + clindamycin.' },
+      },
+      hiv: {
+        title: 'HIV/ART Management',
+        source: 'WHO 2021 / MOHCC Zimbabwe',
+        recommendations: [
+          'Test and Treat: start ART same day as HIV diagnosis',
+          'Preferred first-line: TDF + 3TC + DTG (dolutegravir-based)',
+          'Viral load at 6 months, then annually if suppressed',
+          'Cotrimoxazole prophylaxis: CD4 <200 or WHO stage 3/4',
+          'TB screening at every visit (W4SS: cough, fever, night sweats, weight loss)',
+          'Isoniazid Preventive Therapy (IPT) for all HIV+ without active TB',
+        ],
+        contraindications: { pregnancy: 'TDF + 3TC + DTG preferred in pregnancy. Discuss efavirenz risks in first trimester.' },
+      },
+      diabetes: {
+        title: 'Type 2 Diabetes Management',
+        source: 'ADA 2024',
+        recommendations: [
+          'Target HbA1c <7% for most; <8% for elderly/complex comorbidities',
+          'First-line: Metformin 500mg BD with meals, titrate to 1000mg BD',
+          'Add SGLT2 inhibitor or GLP-1 agonist if CVD or CKD present',
+          'Monitor: HbA1c q3–6mo until stable, then annually; foot exam, eye exam, microalbuminuria, renal function annually',
+          'Lifestyle: low glycaemic diet, 150min moderate exercise/week',
+        ],
+        contraindications: { renal_impairment: 'Stop metformin if eGFR <30mL/min. Contrast dye: hold metformin 48h before and after.' },
+      },
+      pneumonia: {
+        title: 'Community-Acquired Pneumonia',
+        source: 'WHO/BTS Guidelines',
+        recommendations: [
+          'Assess severity with CURB-65 (Confusion, Urea >7, RR >30, BP <90/60, Age >65)',
+          'CURB-65 0–1: outpatient amoxicillin 500mg TDS × 5 days',
+          'CURB-65 ≥2: hospital admission, IV amoxicillin-clavulanate or ceftriaxone',
+          'CURB-65 3–5: consider ICU, broad-spectrum IV antibiotics',
+          'SpO2 target ≥94% — start O2 if below threshold',
+          'HIV test in all hospitalised pneumonia patients in Zimbabwe',
+        ],
+        contraindications: { penicillin_allergy: 'Mild CAP: azithromycin monotherapy or doxycycline.' },
+      },
+      sepsis: {
+        title: 'Sepsis Management — Surviving Sepsis Campaign',
+        source: 'SSC 2021',
+        recommendations: [
+          'Hour-1 Bundle: blood cultures ×2, serum lactate, IV broad-spectrum antibiotics, 30ml/kg crystalloid',
+          'IV antibiotics within 1 hour of recognition',
+          'Target MAP ≥65mmHg — noradrenaline if fluids insufficient',
+          'Lactate >4mmol/L = septic shock — ICU admission required',
+          'Re-assess at 1h and 3h post-resuscitation',
+        ],
+        contraindications: {},
+      },
+      heart_failure: {
+        title: 'Heart Failure Management',
+        source: 'ESC/ACC 2022',
+        recommendations: [
+          'HFrEF: ACE inhibitor + beta-blocker + spironolactone as cornerstone',
+          'Daily weight monitoring — escalate if >2kg in 2 days',
+          'Furosemide for congestion — titrate to euvolaemia',
+          'Fluid restriction <1.5L/day in decompensated HF',
+          'Avoid NSAIDs, CCBs (diltiazem/verapamil), thiazolidinediones, high-sodium diet',
+        ],
+        contraindications: { hypotension: 'Hold ACE inhibitor/ARB if systolic BP <90mmHg.' },
+      },
+      asthma: {
+        title: 'Asthma Management — GINA 2024',
+        source: 'GINA 2024',
+        recommendations: [
+          'Low-dose ICS (budesonide 200–400mcg/day) + SABA PRN for steps 1–2',
+          'Low-dose ICS-LABA maintenance for step 3',
+          'Acute exacerbation: salbutamol 4–8 puffs q20min × 3, systemic corticosteroids',
+          'SpO2 <92% or severe: hospital admission, O2, IV magnesium sulfate 2g over 20min',
+          'Assess and avoid triggers: dust, smoke, aspirin/NSAIDs, cold air',
+        ],
+        contraindications: { pregnancy: 'Preferred ICS in pregnancy: budesonide. SABAs are safe.' },
+      },
+      copd: {
+        title: 'COPD Management — GOLD 2024',
+        source: 'GOLD 2024',
+        recommendations: [
+          'Smoking cessation — single most important intervention',
+          'SABA (salbutamol) for symptom relief; add LAMA (tiotropium) for persistent symptoms',
+          'LAMA + LABA for breathlessness despite monotherapy',
+          'ICS-containing regimens for ≥2 exacerbations/year or ≥1 hospitalisation',
+          'Annual influenza vaccination; pneumococcal vaccination',
+        ],
+        contraindications: {},
+      },
+    };
+
+    const key = condition.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const guideline = LOCAL_GUIDELINES[key] ?? Object.entries(LOCAL_GUIDELINES).find(([k]) => key.includes(k) || k.includes(key.split('_')[0]))?.[1];
+
+    if (guideline) {
+      return {
+        guidelines: [{ condition, guidelines: guideline.recommendations }],
+        recommendations: guideline.recommendations,
+        contraindications: Object.entries(guideline.contraindications).map(([k, v]) => `${k}: ${v}`),
+        medication_warnings: [],
+        evidence_level: 'high',
+        matched_condition: condition,
+        source: 'local_fallback',
+        cdss_unavailable: true,
+        warning: 'CDSS service unavailable. Showing local evidence-based guidelines. Verify with current national protocols.',
+      };
+    }
+
     return {
-      guidelines: [{ condition, guidelines: ['Guideline service unavailable'] }],
-      recommendations: [],
+      guidelines: [{ condition, guidelines: ['No local guideline found. Consult current national protocols or UpToDate.'] }],
+      recommendations: ['Consult current national treatment protocols for this condition.'],
       contraindications: [],
       medication_warnings: [],
       evidence_level: 'unknown',
       matched_condition: condition,
-      source: 'fallback_empty',
+      source: 'local_fallback_empty',
+      cdss_unavailable: true,
     };
   }
 
@@ -905,14 +1311,91 @@ export class CdssService {
       return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS duplicate therapy detection unavailable: ${error.message}`);
-      return {
-        has_duplicates: false, // Default to false but warn
-        duplicates: [],
-        warnings: ['CDSS service unavailable - duplicate check failed'],
-        summary: { total_medications: medications.length },
-        source: 'error'
-      };
+      return this.localDuplicateTherapyCheck([...medications, ...(prescriptions || [])]);
     }
+  }
+
+  private localDuplicateTherapyCheck(allMeds: any[]) {
+    // Therapeutic class groupings for duplicate/concurrent-class detection
+    const DRUG_CLASSES: Record<string, string[]> = {
+      nsaid: ['ibuprofen', 'naproxen', 'diclofenac', 'aspirin', 'indomethacin', 'meloxicam', 'celecoxib', 'piroxicam', 'ketorolac', 'mefenamic'],
+      ace_inhibitor: ['lisinopril', 'enalapril', 'ramipril', 'captopril', 'perindopril', 'quinapril', 'fosinopril', 'benazepril'],
+      arb: ['losartan', 'valsartan', 'irbesartan', 'candesartan', 'olmesartan', 'telmisartan'],
+      beta_blocker: ['atenolol', 'metoprolol', 'propranolol', 'bisoprolol', 'carvedilol', 'nebivolol', 'labetalol'],
+      statin: ['atorvastatin', 'simvastatin', 'rosuvastatin', 'pravastatin', 'fluvastatin', 'lovastatin'],
+      opioid: ['morphine', 'codeine', 'tramadol', 'oxycodone', 'fentanyl', 'pethidine', 'buprenorphine', 'hydrocodone'],
+      benzodiazepine: ['diazepam', 'lorazepam', 'clonazepam', 'alprazolam', 'midazolam', 'temazepam', 'nitrazepam', 'oxazepam'],
+      ssri: ['fluoxetine', 'sertraline', 'paroxetine', 'citalopram', 'escitalopram', 'fluvoxamine'],
+      sulfonyl_urea: ['glibenclamide', 'glipizide', 'gliclazide', 'glimepiride', 'tolbutamide', 'gliquidone'],
+      fluoroquinolone: ['ciprofloxacin', 'levofloxacin', 'moxifloxacin', 'ofloxacin', 'norfloxacin'],
+      arv_nnrti: ['efavirenz', 'nevirapine', 'rilpivirine', 'doravirine', 'etravirine'],
+      arv_nrti: ['tenofovir', 'lamivudine', 'emtricitabine', 'zidovudine', 'abacavir', 'stavudine'],
+      arv_insti: ['dolutegravir', 'raltegravir', 'elvitegravir', 'bictegravir', 'cabotegravir'],
+    };
+
+    const normalize = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const extractName = (m: any): string =>
+      normalize(m?.name ?? m?.medication_name ?? m?.medicationName ?? m?.drug ?? '');
+
+    const names = allMeds.map(extractName).filter(Boolean);
+
+    const duplicates: any[] = [];
+    const classHits: Record<string, string[]> = {};
+
+    // Exact name duplicates
+    const nameCount: Record<string, number> = {};
+    for (const n of names) nameCount[n] = (nameCount[n] ?? 0) + 1;
+    for (const [name, count] of Object.entries(nameCount)) {
+      if (count > 1) {
+        duplicates.push({
+          type: 'exact_duplicate',
+          drug: name,
+          count,
+          severity: 'major',
+          message: `Duplicate prescription: ${name} appears ${count} times`,
+          recommendation: `Review and consolidate duplicate ${name} prescriptions`,
+        });
+      }
+    }
+
+    // Therapeutic class duplicates
+    for (const [className, drugs] of Object.entries(DRUG_CLASSES)) {
+      const matches = names.filter(n => drugs.some(d => n.includes(normalize(d)) || normalize(d).includes(n)));
+      if (matches.length > 1) classHits[className] = matches;
+    }
+    for (const [className, matches] of Object.entries(classHits)) {
+      // ACE + ARB is a known dangerous combination (not just duplicate class)
+      if (className === 'arb' && classHits['ace_inhibitor']) continue; // handled below
+      duplicates.push({
+        type: 'same_class',
+        drugClass: className.replace('_', ' '),
+        drugs: matches,
+        severity: className === 'opioid' || className === 'benzodiazepine' ? 'major' : 'moderate',
+        message: `Multiple ${className.replace(/_/g, ' ')} agents: ${matches.join(', ')}`,
+        recommendation: `Review concurrent ${className.replace(/_/g, ' ')} use — generally avoid duplicate class prescriptions`,
+      });
+    }
+    // ACE + ARB combination (dual RAAS blockade)
+    if (classHits['ace_inhibitor'] && classHits['arb']) {
+      duplicates.push({
+        type: 'dangerous_class_combination',
+        drugClass: 'dual_raas_blockade',
+        drugs: [...classHits['ace_inhibitor'], ...classHits['arb']],
+        severity: 'major',
+        message: `ACE inhibitor + ARB combination (dual RAAS blockade) — risk of AKI and hyperkalemia`,
+        recommendation: 'Avoid dual RAAS blockade. Use one agent only per ONTARGET trial evidence.',
+      });
+    }
+
+    return {
+      has_duplicates: duplicates.length > 0,
+      duplicates,
+      warnings: duplicates.length === 0 ? [] : ['Duplicate therapy detected — review prescriptions'],
+      summary: { total_medications: allMeds.length, duplicate_count: duplicates.length },
+      source: 'local_fallback',
+      cdss_unavailable: true,
+    };
   }
 
   /**
@@ -941,16 +1424,129 @@ export class CdssService {
       return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS high-risk medication check unavailable: ${error.message}`);
-      return {
-        has_high_risk_medications: false, // Default to false but warn
-        beers_criteria_alerts: [],
-        stopp_criteria_alerts: [],
-        high_alert_medications: [],
-        summary: { total_medications: medications.length },
-        warnings: ['CDSS service unavailable - high risk check failed'],
-        source: 'error'
-      };
+      return this.localHighRiskMedicationCheck(medications, patientAge, patientGender, renalFunction);
     }
+  }
+
+  private localHighRiskMedicationCheck(
+    medications: any[],
+    patientAge?: number,
+    patientGender?: string,
+    renalFunction?: number,
+  ) {
+    const normalize = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const names = medications.map(m =>
+      normalize(m?.name ?? m?.medication_name ?? m?.medicationName ?? m?.drug ?? ''),
+    ).filter(Boolean);
+
+    const high_alert_medications: any[] = [];
+    const beers_criteria_alerts: any[] = [];
+    const renal_alerts: any[] = [];
+
+    // WHO high-alert medications (ISMP list) — severe harm potential
+    const WHO_HIGH_ALERT: Array<{ drug: string; alert: string; recommendation: string }> = [
+      { drug: 'warfarin', alert: 'Anticoagulant — high bleeding risk. Narrow therapeutic index.', recommendation: 'Monitor INR regularly. Review concurrent medications for interactions.' },
+      { drug: 'heparin', alert: 'Anticoagulant — IV heparin errors cause fatal haemorrhage.', recommendation: 'Use weight-based protocols. Verify dose independently before administration.' },
+      { drug: 'insulin', alert: 'High-alert: insulin errors cause severe hypoglycaemia.', recommendation: 'Double-check dose, type, and route. Use insulin-specific syringes.' },
+      { drug: 'digoxin', alert: 'Narrow therapeutic index. Toxicity risk with hypokalaemia.', recommendation: 'Monitor digoxin levels, renal function, and potassium. Target 0.5–0.9 ng/mL.' },
+      { drug: 'lithium', alert: 'Narrow therapeutic index. Toxicity with dehydration or NSAIDs.', recommendation: 'Monitor lithium levels every 3–6 months. Avoid NSAIDs and ACE inhibitors.' },
+      { drug: 'methotrexate', alert: 'Cytotoxic at high doses. Fatal errors documented with daily instead of weekly dosing.', recommendation: 'Confirm weekly dosing for non-oncology use. Avoid NSAIDs.' },
+      { drug: 'morphine', alert: 'Opioid — respiratory depression risk. High diversion potential.', recommendation: 'Start low, titrate. Monitor respiratory rate. Naloxone available.' },
+      { drug: 'fentanyl', alert: 'Potent opioid — 100× morphine potency. Patch errors cause fatalities.', recommendation: 'Patch: no cutting, no heat exposure. IV: dose in micrograms, not milligrams.' },
+      { drug: 'potassium', alert: 'Concentrated potassium IV — cardiac arrest risk if given undiluted.', recommendation: 'Never give undiluted IV bolus. Max 20 mmol/h peripheral, 40 mmol/h central.' },
+      { drug: 'amiodarone', alert: 'Multiple organ toxicities (pulmonary, thyroid, hepatic, corneal). Many drug interactions.', recommendation: 'Annual TFT, LFT, CXR. Review all concurrent medications for interactions.' },
+      { drug: 'cyclophosphamide', alert: 'Cytotoxic — bone marrow suppression, haemorrhagic cystitis.', recommendation: 'Adequate hydration. Monitor FBC. Mesna for haemorrhagic cystitis prevention.' },
+      { drug: 'phenytoin', alert: 'Narrow therapeutic index. Non-linear pharmacokinetics.', recommendation: 'Monitor phenytoin levels. Many drug interactions — review concurrent medications.' },
+    ];
+
+    for (const entry of WHO_HIGH_ALERT) {
+      const key = normalize(entry.drug);
+      if (names.some(n => n.includes(key) || key.includes(n))) {
+        high_alert_medications.push({
+          drug: entry.drug,
+          category: 'who_high_alert',
+          alert: entry.alert,
+          recommendation: entry.recommendation,
+        });
+      }
+    }
+
+    // Beers criteria (AGS 2023) — medications potentially inappropriate in adults ≥65
+    if (patientAge !== undefined && patientAge >= 65) {
+      const BEERS: Array<{ drug: string; concern: string; recommendation: string }> = [
+        { drug: 'ibuprofen', concern: 'NSAIDs: GI bleeding, renal impairment, fluid retention in older adults.', recommendation: 'Avoid NSAIDs in ≥65 unless alternatives inadequate. Use PPI if NSAID required.' },
+        { drug: 'naproxen', concern: 'NSAID — same Beers concerns as ibuprofen.', recommendation: 'Avoid in older adults. Paracetamol preferred for pain.' },
+        { drug: 'diclofenac', concern: 'NSAID — Beers criteria. Cardiovascular and renal risk in elderly.', recommendation: 'Avoid. Consider topical diclofenac for localised pain.' },
+        { drug: 'diazepam', concern: 'Benzodiazepine — fall and fracture risk, cognitive impairment, paradoxical excitation in elderly.', recommendation: 'Avoid. If insomnia: CBT-I first. If anxiety: SSRI. Taper existing BZDs slowly.' },
+        { drug: 'lorazepam', concern: 'Benzodiazepine — Beers criteria: increased fall risk and cognitive decline in ≥65.', recommendation: 'Avoid. Consider buspirone or low-dose SSRI for anxiety.' },
+        { drug: 'amitriptyline', concern: 'Tricyclic antidepressant — anticholinergic, sedating, QT prolonging. Beers criteria.', recommendation: 'Avoid for depression. SSRI preferred. Use low-dose for neuropathic pain only if necessary.' },
+        { drug: 'chlorpheniramine', concern: 'First-gen antihistamine — anticholinergic (confusion, urinary retention, dry mouth) in elderly.', recommendation: 'Use non-sedating antihistamine (loratadine, cetirizine) instead.' },
+        { drug: 'promethazine', concern: 'Anticholinergic antihistamine — Beers criteria. High fall and confusion risk in ≥65.', recommendation: 'Avoid. Use prochlorperazine cautiously for nausea or metoclopramide short-term.' },
+        { drug: 'digoxin', concern: 'Avoid >0.125mg/day in ≥65 — reduced renal clearance raises toxicity risk.', recommendation: 'Target 0.0625–0.125mg/day in older adults. Monitor levels and renal function.' },
+        { drug: 'amiodarone', concern: 'Thyroid toxicity risk higher in elderly. Many interactions.', recommendation: 'Use sotalol or dronedarone as alternatives for AF where possible.' },
+        { drug: 'glibenclamide', concern: 'Long-acting sulphonylurea — prolonged hypoglycaemia risk in elderly with erratic eating.', recommendation: 'Use shorter-acting gliclazide or non-sulphonylurea agent.' },
+      ];
+
+      for (const entry of BEERS) {
+        const key = normalize(entry.drug);
+        if (names.some(n => n.includes(key) || key.includes(n))) {
+          beers_criteria_alerts.push({
+            drug: entry.drug,
+            concern: entry.concern,
+            recommendation: entry.recommendation,
+            criteria: 'AGS_Beers_2023',
+          });
+        }
+      }
+    }
+
+    // Renal dosing flags — when renalFunction (eGFR) is low
+    if (renalFunction !== undefined && renalFunction < 45) {
+      const RENAL_ADJUST: Array<{ drug: string; eGFRThreshold: number; concern: string; recommendation: string }> = [
+        { drug: 'metformin', eGFRThreshold: 30, concern: 'Lactic acidosis risk when eGFR <30.', recommendation: 'Withhold metformin if eGFR <30 mL/min. Halve dose if eGFR 30–45.' },
+        { drug: 'ibuprofen', eGFRThreshold: 45, concern: 'NSAIDs reduce GFR — can precipitate AKI in CKD.', recommendation: 'Avoid NSAIDs if eGFR <45. Use paracetamol.' },
+        { drug: 'naproxen', eGFRThreshold: 45, concern: 'NSAID — nephrotoxic in CKD.', recommendation: 'Avoid if eGFR <45.' },
+        { drug: 'digoxin', eGFRThreshold: 45, concern: 'Digoxin renally cleared — accumulation risk in CKD.', recommendation: 'Reduce dose 50% if eGFR 30–45. Avoid if eGFR <30 or use with close monitoring.' },
+        { drug: 'lithium', eGFRThreshold: 45, concern: 'Lithium renally excreted — toxicity in CKD.', recommendation: 'Reduce dose. Monitor lithium levels frequently. Avoid if eGFR <30.' },
+        { drug: 'tenofovir', eGFRThreshold: 50, concern: 'TDF is nephrotoxic — renal tubular dysfunction.', recommendation: 'Use TAF (tenofovir alafenamide) instead of TDF if eGFR <50. Monitor creatinine 3-monthly.' },
+        { drug: 'cotrimoxazole', eGFRThreshold: 30, concern: 'High-dose cotrimoxazole requires dose reduction in renal impairment.', recommendation: 'Halve dose if eGFR 15–30. Avoid if eGFR <15 (unless no alternative).' },
+      ];
+
+      for (const entry of RENAL_ADJUST) {
+        if (renalFunction < entry.eGFRThreshold) {
+          const key = normalize(entry.drug);
+          if (names.some(n => n.includes(key) || key.includes(n))) {
+            renal_alerts.push({
+              drug: entry.drug,
+              eGFR: renalFunction,
+              concern: entry.concern,
+              recommendation: entry.recommendation,
+            });
+          }
+        }
+      }
+    }
+
+    const allAlerts = [...high_alert_medications, ...beers_criteria_alerts, ...renal_alerts];
+
+    return {
+      has_high_risk_medications: allAlerts.length > 0,
+      high_alert_medications,
+      beers_criteria_alerts,
+      renal_alerts,
+      stopp_criteria_alerts: [],
+      summary: {
+        total_medications: medications.length,
+        high_alert_count: high_alert_medications.length,
+        beers_count: beers_criteria_alerts.length,
+        renal_count: renal_alerts.length,
+      },
+      warnings: allAlerts.length > 0
+        ? ['High-risk medications identified — clinical review required']
+        : [],
+      source: 'local_fallback',
+      cdss_unavailable: true,
+    };
   }
 
   /**
@@ -1083,18 +1679,53 @@ export class CdssService {
   }
 
   /**
-   * Basic risk assessment (fallback) - DISABLED
+   * Basic risk assessment (fallback) — wires to existing vitals safety logic
+   * plus age and diagnosis-based risk stratification.
    */
   private async basicRiskAssessment(patientData: any) {
-    this.logger.warn(`[FALLBACK] Basic risk assessment triggered but disabled to prevent fake data.`);
+    const vitals = patientData?.vitals || {};
+    const age = Number(patientData?.age) || null;
+    const diagnoses: string[] = Array.isArray(patientData?.diagnoses)
+      ? patientData.diagnoses
+      : typeof patientData?.diagnoses === 'string'
+        ? [patientData.diagnoses]
+        : [];
 
+    // Leverage the existing vitals safety analysis
+    const safetyResult = this.applyVitalsSafetyOverrides(null, vitals);
+
+    // Age-based risk factors
+    const ageFactors: Array<{ factor: string; impact: string }> = [];
+    if (age !== null) {
+      if (age >= 65) ageFactors.push({ factor: 'Age ≥65 — increased vulnerability to adverse outcomes', impact: 'moderate' });
+      if (age < 5)  ageFactors.push({ factor: 'Age <5 — high vulnerability, paediatric protocols required', impact: 'moderate' });
+    }
+
+    // Diagnosis-based risk elevations
+    const diagText = diagnoses.join(' ').toLowerCase();
+    const diagFactors: Array<{ factor: string; impact: string }> = [];
+    if (/diabetes|diabetic/.test(diagText))           diagFactors.push({ factor: 'Diabetes mellitus — increased infection risk and impaired wound healing', impact: 'moderate' });
+    if (/hiv|aids/.test(diagText))                    diagFactors.push({ factor: 'HIV/AIDS — immunosuppression increases infection severity and atypical presentation risk', impact: 'major' });
+    if (/\btb\b|tuberculosis/.test(diagText))         diagFactors.push({ factor: 'Active TB — airborne infection control precautions required', impact: 'major' });
+    if (/heart.?fail|cardiac|cardiomyopath/.test(diagText)) diagFactors.push({ factor: 'Cardiac disease — haemodynamic monitoring required', impact: 'major' });
+    if (/renal|kidney|\bckd\b/.test(diagText))        diagFactors.push({ factor: 'Renal impairment — adjust drug doses; monitor fluid balance', impact: 'moderate' });
+    if (/malaria/.test(diagText))                     diagFactors.push({ factor: 'Malaria — monitor for progression to severe disease (cerebral, severe anaemia)', impact: 'moderate' });
+
+    // Elevate risk level if major diagnosis factors present
+    let finalLevel = safetyResult.riskLevel;
+    if (diagFactors.some(f => f.impact === 'major') && (finalLevel === 'low' || finalLevel === 'unknown')) {
+      finalLevel = 'moderate';
+    }
+
+    const scoreMap: Record<string, number> = { critical: 0.9, high: 0.7, moderate: 0.4, low: 0.2, unknown: 0.0 };
     return {
-      overall_score: 0,
-      risk_level: 'unknown',
-      factors: [],
-      recommendations: [],
-      source: 'fallback_empty',
-      error: 'CDSS service unavailable'
+      overall_score: scoreMap[finalLevel] ?? 0.0,
+      risk_level: finalLevel,
+      factors: [...safetyResult.factors, ...ageFactors, ...diagFactors],
+      recommendations: safetyResult.recommendations,
+      source: 'local_fallback',
+      cdss_unavailable: true,
+      warning: 'CDSS service unavailable. Risk assessment based on vitals safety rules and known diagnoses only. Full ML-based scoring requires CDSS service.',
     };
   }
 

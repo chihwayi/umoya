@@ -1,16 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { TrialMatch } from '../entities/trial-match.entity';
 import axios from 'axios';
 
 @Injectable()
 export class ClinicalTrialMatchingService {
   private readonly logger = new Logger(ClinicalTrialMatchingService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
   private clinicalTrialsUrl = 'https://clinicaltrials.gov/api/v2/studies';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Match patient to trials ────────────────────────────────────────────────
 
@@ -26,17 +29,19 @@ export class ClinicalTrialMatchingService {
     const trials = await this.fetchTrials(searchCondition);
     if (!trials.length) return [];
 
-    // AI eligibility scoring via CDSS
+    // AI eligibility scoring via CDSS (circuit breaker + retry)
     let scored: any[] = [];
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/trials/match`, {
+      const result = await this.cdssService.diagnosisAssist({
         patientProfile: profile,
-        trials: trials.slice(0, 20), // score top 20
-      }, { timeout: 30000 });
-      scored = data.matches || [];
+        trials: trials.slice(0, 20),
+        context: 'clinical_trial_eligibility',
+      }, true);
+      scored = (result as any)?.matches || (result as any)?.recommendations || [];
+      if (!scored.length) throw new Error('Empty matches');
     } catch (e: any) {
       this.logger.warn(`Trial matching CDSS unavailable, using basic scoring: ${e?.message}`);
-      scored = trials.slice(0, 10).map(t => ({
+      scored = trials.slice(0, 10).map((t: any) => ({
         nctId: t.nctId,
         eligibilityScore: 0.5,
         inclusionMet: [],

@@ -3,12 +3,13 @@ import { DataSource } from 'typeorm';
 import { InfectionSurveillance } from '../entities/infection-surveillance.entity';
 import { IsolationPrecaution } from '../entities/isolation-precaution.entity';
 import { AntimicrobialStewardship } from '../entities/antimicrobial-stewardship.entity';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class InfectionControlService {
   private readonly logger = new Logger(InfectionControlService.name);
 
-  constructor() {}
+  constructor(private readonly cdssService: CdssService) {}
 
   // ==================== INFECTION SURVEILLANCE ====================
 
@@ -16,7 +17,7 @@ export class InfectionControlService {
     infectionData: any,
     userId: string,
     tenantDb: DataSource,
-  ): Promise<InfectionSurveillance> {
+  ): Promise<InfectionSurveillance & { cdssGuidance?: any }> {
     const repository = tenantDb.getRepository(InfectionSurveillance);
 
     const infection = repository.create({
@@ -25,7 +26,65 @@ export class InfectionControlService {
       detectedDate: new Date(),
     });
 
-    return await repository.save(infection) as unknown as InfectionSurveillance;
+    const saved = await repository.save(infection) as unknown as InfectionSurveillance;
+
+    // CDSS: isolation category + antimicrobial guidance for this infection type
+    const infectionTerm = String(infectionData.infectionType ?? infectionData.organism ?? 'infection').toLowerCase();
+    const cdssGuidance = await this.cdssService
+      .getGuidelines(infectionTerm, {
+        age: undefined,
+        gender: undefined,
+        comorbidities: infectionData.deviceAssociated ? ['device-associated'] : [],
+      })
+      .catch((e: any) => {
+        this.logger.warn(`CDSS infection guidance failed: ${e?.message || e}`);
+        return this.localIsolationGuidance(infectionTerm, infectionData.organism);
+      });
+
+    return { ...saved, cdssGuidance };
+  }
+
+  /**
+   * Local isolation category map — used when CDSS is unavailable.
+   * Based on CDC/WHO isolation precaution categories.
+   */
+  private localIsolationGuidance(infectionType: string, organism?: string): Record<string, any> {
+    const t = String(infectionType || '').toLowerCase();
+    const o = String(organism || '').toLowerCase();
+
+    const ISOLATION_MAP: Array<{ match: string[]; category: string; precautions: string[]; notifiable: boolean }> = [
+      { match: ['mrsa', 'methicillin-resistant'], category: 'Contact', precautions: ['Gloves', 'Gown', 'Private room or cohort', 'Dedicated equipment'], notifiable: false },
+      { match: ['vre', 'vancomycin-resistant enterococcus'], category: 'Contact', precautions: ['Gloves', 'Gown', 'Private room or cohort'], notifiable: false },
+      { match: ['cre', 'carbapenem-resistant', 'klebsiella', 'acinetobacter'], category: 'Contact + Enhanced', precautions: ['Gloves', 'Gown', 'Private room', 'Dedicated equipment', 'Enhanced environmental cleaning'], notifiable: true },
+      { match: ['c. diff', 'cdiff', 'clostridium difficile', 'clostridioides'], category: 'Contact (spore)', precautions: ['Gloves', 'Gown', 'Private room', 'Soap and water only (not alcohol gel)'], notifiable: false },
+      { match: ['tuberculosis', 'tb', 'mtb', 'pulmonary tb', 'acid fast'], category: 'Airborne', precautions: ['N95 respirator', 'Negative pressure room', 'Door closed at all times', 'Patient wears surgical mask when transported'], notifiable: true },
+      { match: ['measles', 'rubeola', 'varicella', 'chickenpox', 'disseminated zoster'], category: 'Airborne', precautions: ['N95 respirator', 'Negative pressure room', 'Immune staff only'], notifiable: true },
+      { match: ['influenza', 'flu', 'covid', 'sars', 'respiratory syncytial', 'rsv', 'pertussis'], category: 'Droplet', precautions: ['Surgical mask', 'Eye protection', 'Private room or 1m spacing', 'Door closed'], notifiable: false },
+      { match: ['meningitis', 'meningococcal', 'neisseria meningitidis'], category: 'Droplet', precautions: ['Surgical mask for 24h after antibiotics started', 'Notify public health'], notifiable: true },
+      { match: ['cholera', 'vibrio cholerae'], category: 'Contact + Enteric', precautions: ['Gloves', 'Gown', 'Private bathroom or commode', 'Strict hand hygiene'], notifiable: true },
+      { match: ['ebola', 'viral haemorrhagic fever', 'marburg', 'lassa'], category: 'Airborne + Contact + Droplet (PPE)', precautions: ['Full PPE', 'Isolated unit', 'Specialist IPC team immediately'], notifiable: true },
+    ];
+
+    const combined = `${t} ${o}`;
+    for (const entry of ISOLATION_MAP) {
+      if (entry.match.some(keyword => combined.includes(keyword))) {
+        return {
+          isolationCategory: entry.category,
+          precautions: entry.precautions,
+          notifiableDisease: entry.notifiable,
+          source: 'local_ipc_guidelines',
+          cdss_unavailable: true,
+        };
+      }
+    }
+
+    return {
+      isolationCategory: 'Standard',
+      precautions: ['Hand hygiene', 'Gloves if contact with body fluids', 'Eye protection if splash risk'],
+      notifiableDisease: false,
+      source: 'local_ipc_guidelines',
+      cdss_unavailable: true,
+    };
   }
 
   async getInfectionsByDateRange(
@@ -98,24 +157,98 @@ export class InfectionControlService {
       [startDate, endDate, limit],
     );
 
+    // Temporal trend analysis — weekly case counts + rolling baseline
+    // Lookback window: 8 weeks before startDate for baseline
+    const baselineStart = new Date(startDate);
+    baselineStart.setDate(baselineStart.getDate() - 56);
+
+    const weeklyRows = await tenantDb.query(
+      `
+      SELECT
+        infection_type,
+        COALESCE(NULLIF(TRIM(organism), ''), 'Unknown organism') AS organism,
+        DATE_TRUNC('week', infection_date)::date AS week_start,
+        COUNT(*)::int AS weekly_count
+      FROM infection_surveillance
+      WHERE infection_date >= $1
+        AND infection_date <= $2
+      GROUP BY infection_type, COALESCE(NULLIF(TRIM(organism), ''), 'Unknown organism'), DATE_TRUNC('week', infection_date)
+      ORDER BY week_start ASC
+      `,
+      [baselineStart, endDate],
+    ).catch(() => []);
+
+    // Build week-by-week map keyed by "type|organism"
+    const weeklyMap: Record<string, Array<{ week: string; count: number }>> = {};
+    for (const r of weeklyRows) {
+      const key = `${r.infection_type}|${r.organism}`;
+      if (!weeklyMap[key]) weeklyMap[key] = [];
+      weeklyMap[key].push({ week: r.week_start, count: Number(r.weekly_count) });
+    }
+
+    const periodStartMs = startDate.getTime();
+
     const items = (rows || []).map((row: any) => {
       const activeCount = Number(row?.active_count || 0);
       const caseCount = Number(row?.case_count || 0);
+
+      // Temporal analysis for this infection/organism pair
+      const key = `${row.infection_type}|${row.organism}`;
+      const weekSeries = weeklyMap[key] ?? [];
+      const baselineWeeks = weekSeries.filter(w => new Date(w.week).getTime() < periodStartMs);
+      const periodWeeks = weekSeries.filter(w => new Date(w.week).getTime() >= periodStartMs);
+
+      const baselineAvg = baselineWeeks.length > 0
+        ? baselineWeeks.reduce((s, w) => s + w.count, 0) / baselineWeeks.length
+        : 0;
+      const periodAvg = periodWeeks.length > 0
+        ? periodWeeks.reduce((s, w) => s + w.count, 0) / periodWeeks.length
+        : caseCount;
+
+      // Epidemic signal: current average > 2× historical baseline (WHO threshold)
+      const epidemicThresholdExceeded = baselineAvg > 0 && periodAvg >= baselineAvg * 2;
+
+      // Trend: compare last 2 weeks
+      let trend: 'rising' | 'falling' | 'stable' | 'exponential' = 'stable';
+      let doublingTimeDays: number | null = null;
+      if (periodWeeks.length >= 2) {
+        const last = periodWeeks[periodWeeks.length - 1].count;
+        const prev = periodWeeks[periodWeeks.length - 2].count;
+        const ratio = prev > 0 ? last / prev : 1;
+        if (ratio >= 2) {
+          trend = 'exponential';
+          doublingTimeDays = 7; // one week doubling time
+        } else if (ratio > 1.2) {
+          trend = 'rising';
+          if (prev > 0 && ratio > 1) {
+            doublingTimeDays = Math.round(7 * Math.log(2) / Math.log(ratio));
+          }
+        } else if (ratio < 0.8) {
+          trend = 'falling';
+        }
+      }
+
       const riskLevel =
-        activeCount >= 3 || caseCount >= 4
-          ? 'high'
-          : activeCount >= 2 || caseCount >= 3
-          ? 'moderate'
-          : 'low';
+        epidemicThresholdExceeded || trend === 'exponential' ? 'outbreak_confirmed'
+        : activeCount >= 3 || caseCount >= 4 || (trend === 'rising' && epidemicThresholdExceeded) ? 'high'
+        : activeCount >= 2 || caseCount >= 3 ? 'moderate'
+        : 'low';
 
       const recommendedActions: string[] = [
         'Validate source control and environmental cleaning bundle compliance.',
       ];
+      if (riskLevel === 'outbreak_confirmed') {
+        recommendedActions.unshift('OUTBREAK CONFIRMED: Activate outbreak response team. Notify infection control lead and public health authority.');
+        recommendedActions.push('Implement enhanced surveillance with daily case counts and contact tracing.');
+      }
       if (activeCount >= 2) {
         recommendedActions.push('Escalate to IPC huddle and review transmission pathways.');
       }
       if (String(row?.organism || '').toLowerCase() !== 'unknown organism') {
         recommendedActions.push('Confirm culture sensitivities and isolate affected contacts as indicated.');
+      }
+      if (trend === 'rising' || trend === 'exponential') {
+        recommendedActions.push('Cases are increasing — intensify active case finding and implement contact precautions.');
       }
 
       return {
@@ -124,6 +257,11 @@ export class InfectionControlService {
         active_count: activeCount,
         distinct_patients: Number(row?.distinct_patients || 0),
         risk_level: riskLevel,
+        trend,
+        baseline_avg_weekly: Number(baselineAvg.toFixed(2)),
+        period_avg_weekly: Number(periodAvg.toFixed(2)),
+        epidemic_threshold_exceeded: epidemicThresholdExceeded,
+        doubling_time_days: doublingTimeDays,
         recommended_actions: recommendedActions,
       };
     });
@@ -131,9 +269,11 @@ export class InfectionControlService {
     return {
       summary: {
         totalClusters: items.length,
+        outbreakConfirmed: items.filter((item: any) => item.risk_level === 'outbreak_confirmed').length,
         highRisk: items.filter((item: any) => item.risk_level === 'high').length,
         moderateRisk: items.filter((item: any) => item.risk_level === 'moderate').length,
         activeClusters: items.filter((item: any) => Number(item.active_count || 0) > 0).length,
+        risingTrend: items.filter((item: any) => item.trend === 'rising' || item.trend === 'exponential').length,
       },
       items,
     };
@@ -664,11 +804,28 @@ export class InfectionControlService {
   async trackAntibiotic(
     stewardshipData: any,
     tenantDb: DataSource,
-  ): Promise<AntimicrobialStewardship> {
+  ): Promise<AntimicrobialStewardship & { cdssGuidance?: any }> {
     const repository = tenantDb.getRepository(AntimicrobialStewardship);
 
     const stewardship = repository.create(stewardshipData);
-    return await repository.save(stewardship) as unknown as AntimicrobialStewardship;
+    const saved = await repository.save(stewardship) as unknown as AntimicrobialStewardship;
+
+    // CDSS: empiric guideline check for the indication
+    const indication = String(stewardshipData.indication ?? stewardshipData.infectionType ?? '');
+    const cdssGuidance = indication
+      ? await this.cdssService
+          .getGuidelines(indication, {
+            age: undefined,
+            gender: undefined,
+            comorbidities: [],
+          })
+          .catch((e: any) => {
+            this.logger.warn(`CDSS stewardship guidance failed: ${e?.message || e}`);
+            return null;
+          })
+      : null;
+
+    return { ...saved, cdssGuidance };
   }
 
   async getAntibioticUsageReport(

@@ -9,6 +9,7 @@ import {
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import ModalPortal from '../components/ModalPortal';
 import HIVPatientDetailModal from '../components/HIVPatientDetailModal';
 import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
@@ -778,18 +779,7 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
             {guidelineResults.length > 0 && (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {guidelineResults.slice(0, 2).map((result: any, index: number) => (
-                  <div key={index} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                    <h4 className="font-medium text-emerald-900 mb-2 flex items-center gap-2">
-                      <BookOpen className="w-4 h-4" />
-                      {result.source}
-                    </h4>
-                    <p className="text-sm text-slate-700 mb-2">{result.text}</p>
-                    {result.recommendation && (
-                      <div className="mt-2 p-2 bg-emerald-50 border border-emerald-100 rounded text-sm text-emerald-800">
-                        <strong>Recommendation:</strong> {result.recommendation}
-                      </div>
-                    )}
-                  </div>
+                  <GuidelineCitationCard key={index} result={result} />
                 ))}
               </div>
             )}

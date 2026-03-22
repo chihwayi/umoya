@@ -148,6 +148,16 @@ export class TbController {
 
   // ── CDSS ──────────────────────────────────────────────────────────────────
 
+  /**
+   * POST /tb/cdss/screen
+   * WHO W4SS TB screening + CDSS diagnosis assist.
+   * Body: { cough, fever, night_sweats, weight_loss, coughDurationWeeks, age, gender }
+   */
+  @Post('cdss/screen')
+  screenForTb(@Body() body: Record<string, any>) {
+    return this.tbService.screenForTb(body);
+  }
+
   @Post('cdss/regimen')
   recommendRegimen(@Body() body: Record<string, any>) {
     return this.tbService.recommendRegimen(body);
@@ -159,7 +169,7 @@ export class TbController {
   }
 
   @Post('cdss/adherence')
-  adherence(@Body() body: Record<string, any>) {
-    return this.tbService.analyseAdherence(body);
+  adherence(@Body() body: Record<string, any>, @Request() req: RequestWithTenant) {
+    return this.tbService.analyseAdherence(body, req.tenantDb);
   }
 }

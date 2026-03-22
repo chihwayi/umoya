@@ -9624,6 +9624,50 @@ export const cdssApi = {
     return { data: response.data };
   },
 
+  /** Mark a nurse task as viewed — prevents it reappearing as "new" after login */
+  markNurseTaskViewed: async (taskId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/nurse-tasks/${taskId}/viewed`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // ── Staff Notifications (Sprint 109) ──────────────────────────────────────
+
+  getStaffNotifications: async (
+    token: string,
+    tenantSlug: string,
+    opts?: { read?: boolean; limit?: number },
+  ) => {
+    const params = new URLSearchParams();
+    if (opts?.read !== undefined) params.set('read', String(opts.read));
+    if (opts?.limit !== undefined) params.set('limit', String(opts.limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const response = await ehrAxios.get(`/staff-notifications${qs}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getStaffNotificationsUnreadCount: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/staff-notifications/unread-count', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data as { count: number } };
+  },
+
+  markStaffNotificationRead: async (notificationId: string, token: string, tenantSlug: string) => {
+    await ehrAxios.patch(`/staff-notifications/${notificationId}/read`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+  },
+
+  markAllStaffNotificationsRead: async (token: string, tenantSlug: string) => {
+    await ehrAxios.patch('/staff-notifications/read-all', {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+  },
+
   // ── SDOH endpoints (Sprint 60) ─────────────────────────────────────────────
 
   getPatientSdoh: async (patientId: string, token: string, tenantSlug: string) => {

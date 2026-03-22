@@ -108,7 +108,7 @@ export class CdssHookService {
       ]);
 
       if (!risk && !diagnosis) {
-        return null;
+        return { cdssUnavailable: true, risk: null, diagnosis: null };
       }
 
       return { risk, diagnosis };
@@ -181,7 +181,7 @@ export class CdssHookService {
       ]);
 
       if (!interactions && !highRisk && !duplicates) {
-        return null;
+        return { cdssUnavailable: true, interactions: null, highRisk: null, duplicates: null };
       }
 
       return {
@@ -281,13 +281,13 @@ export class CdssHookService {
         !guidelines &&
         (!careGaps || (!careGaps.has_gaps && !(careGaps.gaps && careGaps.gaps.length > 0)))
       ) {
-        return null;
+        return { cdssUnavailable: true, guidelines: null, careGaps: null };
       }
 
       return { guidelines, careGaps };
     } catch (error) {
       this.logger.warn(`Failed to handle lab-order CDSS hook: ${error instanceof Error ? error.message : error}`);
-      return null;
+      return { cdssUnavailable: true, guidelines: null, careGaps: null };
     }
   }
 
@@ -331,13 +331,13 @@ export class CdssHookService {
         !guidelines &&
         (!careGaps || (!careGaps.has_gaps && !(careGaps.gaps && careGaps.gaps.length > 0)))
       ) {
-        return null;
+        return { cdssUnavailable: true, guidelines: null, careGaps: null };
       }
 
       return { guidelines, careGaps };
     } catch (error) {
       this.logger.warn(`Failed to handle imaging-order CDSS hook: ${error instanceof Error ? error.message : error}`);
-      return null;
+      return { cdssUnavailable: true, guidelines: null, careGaps: null };
     }
   }
 
@@ -386,7 +386,7 @@ export class CdssHookService {
         !diagnosis &&
         (!careGaps || (!careGaps.has_gaps && !(careGaps.gaps && careGaps.gaps.length > 0)))
       ) {
-        return null;
+        return { cdssUnavailable: true, diagnosis: null, careGaps: null, recommendedInterventions: [] };
       }
 
       return {
@@ -396,7 +396,7 @@ export class CdssHookService {
       };
     } catch (error) {
       this.logger.warn(`Failed to handle nursing-note CDSS hook: ${error instanceof Error ? error.message : error}`);
-      return null;
+      return { cdssUnavailable: true, diagnosis: null, careGaps: null, recommendedInterventions: [] };
     }
   }
 

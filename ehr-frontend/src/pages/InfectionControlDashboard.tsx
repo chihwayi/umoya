@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
+import {
   Shield, AlertTriangle, Activity, Users,
   Loader2, Calendar, BarChart3, ArrowLeft, ClipboardCheck,
-  Brain, Search, BookOpen
+  Brain, Search, BookOpen, X
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
+import PromptDialog from '../components/PromptDialog';
+import ModalPortal from '../components/ModalPortal';
 
 interface InfectionControlDashboardProps {
   embedded?: boolean;
@@ -45,6 +47,38 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
+  // Dialog state for stewardship review (replaces 6 browser dialogs)
+  const [stewardshipModal, setStewardshipModal] = useState<{
+    item: any;
+    recommendation: string;
+    appropriateIndication: boolean;
+    appropriateDose: boolean;
+    appropriateDuration: boolean;
+    deEscalationOpportunity: boolean;
+    deEscalationNotes: string;
+  } | null>(null);
+
+  // Dialog state for infection review (replaces 5 browser dialogs)
+  const [infectionModal, setInfectionModal] = useState<{
+    item: any;
+    investigationNotes: string;
+    rootCause: string;
+    reportedToCdc: boolean;
+    markResolved: boolean;
+    outcome: string;
+  } | null>(null);
+
+  // Dialog state for isolation order (replaces 2 browser prompts)
+  const [isolationOrderModal, setIsolationOrderModal] = useState<{
+    item: any;
+    isolationType: string;
+    reason: string;
+  } | null>(null);
+
+  // Dialog state for discontinue isolation (replaces 1 browser prompt)
+  const [discontinuePrompt, setDiscontinuePrompt] = useState<{ isolation: any; value: string } | null>(null);
+
   const [hhDepartment, setHhDepartment] = useState('');
   const [hhOpportunity, setHhOpportunity] = useState('before_patient_contact');
   const [hhPerformed, setHhPerformed] = useState(true);
@@ -175,18 +209,21 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (char) => char.toUpperCase());
 
-  const handleReviewStewardship = async (item: any) => {
-    const recommendation = window.prompt('Stewardship recommendation (de-escalate, continue, stop, etc):', item?.stewardship_recommendation || '');
-    if (recommendation === null) return;
-    const appropriateIndication = window.confirm('Indication appropriate? OK = Yes, Cancel = No');
-    const appropriateDose = window.confirm('Dose appropriate? OK = Yes, Cancel = No');
-    const appropriateDuration = window.confirm('Duration appropriate? OK = Yes, Cancel = No');
-    const deEscalationOpportunity = window.confirm('Is there a de-escalation opportunity? OK = Yes, Cancel = No');
-    const deEscalationNotes = deEscalationOpportunity
-      ? window.prompt('Document de-escalation notes:', item?.de_escalation_notes || '')
-      : '';
-    if (deEscalationOpportunity && deEscalationNotes === null) return;
+  const handleReviewStewardship = (item: any) => {
+    setStewardshipModal({
+      item,
+      recommendation: item?.stewardship_recommendation || '',
+      appropriateIndication: true,
+      appropriateDose: true,
+      appropriateDuration: true,
+      deEscalationOpportunity: false,
+      deEscalationNotes: item?.de_escalation_notes || '',
+    });
+  };
 
+  const submitStewardshipReview = async () => {
+    if (!stewardshipModal) return;
+    const { item, recommendation, appropriateIndication, appropriateDose, appropriateDuration, deEscalationOpportunity, deEscalationNotes } = stewardshipModal;
     try {
       setReviewingStewardshipId(item.id);
       await ehrAxios.put(
@@ -197,11 +234,12 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
           appropriateDose,
           appropriateDuration,
           deEscalationOpportunity,
-          deEscalationNotes: deEscalationNotes || null,
+          deEscalationNotes: deEscalationOpportunity ? (deEscalationNotes.trim() || null) : null,
         },
         { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       showSuccess('Stewardship review saved', 'Antimicrobial review has been documented.');
+      setStewardshipModal(null);
       loadData();
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to save antimicrobial review');
@@ -210,18 +248,24 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
     }
   };
 
-  const handleReviewInfection = async (item: any) => {
-    const investigationNotes = window.prompt(
-      'Clinical investigation notes (IPC findings, containment actions, follow-up plan):',
-      item?.investigation_notes || '',
-    );
-    if (investigationNotes === null) return;
-    const rootCause = window.prompt('Root cause (optional):', item?.root_cause || '') || '';
-    const reportedToCdc = window.confirm('Report this case to public health/CDC? OK = Yes, Cancel = No');
-    const markResolved = window.confirm('Mark this infection case as resolved? OK = Yes, Cancel = No');
-    const outcome = markResolved ? window.prompt('Resolved outcome summary (optional):', item?.outcome || '') : '';
-    if (markResolved && outcome === null) return;
+  const handleReviewInfection = (item: any) => {
+    setInfectionModal({
+      item,
+      investigationNotes: item?.investigation_notes || '',
+      rootCause: item?.root_cause || '',
+      reportedToCdc: false,
+      markResolved: false,
+      outcome: item?.outcome || '',
+    });
+  };
 
+  const submitInfectionReview = async () => {
+    if (!infectionModal) return;
+    const { item, investigationNotes, rootCause, reportedToCdc, markResolved, outcome } = infectionModal;
+    if (!investigationNotes.trim()) {
+      showError('Required', 'Investigation notes are required.');
+      return;
+    }
     try {
       setReviewingInfectionId(item.id);
       await ehrAxios.put(
@@ -231,11 +275,12 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
           rootCause: rootCause.trim() || null,
           reportedToCdc,
           markResolved,
-          outcome: outcome ? outcome.trim() : null,
+          outcome: markResolved ? (outcome.trim() || null) : null,
         },
         { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       showSuccess('Infection review saved', 'Clinical IPC review has been documented.');
+      setInfectionModal(null);
       loadData();
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to save infection review');
@@ -244,20 +289,23 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
     }
   };
 
-  const handleOrderIsolation = async (item: any) => {
-    const isolationType = window.prompt(
-      'Isolation type (contact/droplet/airborne/protective):',
-      item?.active_isolation_type || 'contact',
-    );
-    if (!isolationType) return;
-    const reason = window.prompt(
-      'Isolation reason:',
-      item?.mdro_signal
+  const handleOrderIsolation = (item: any) => {
+    setIsolationOrderModal({
+      item,
+      isolationType: item?.active_isolation_type || 'contact',
+      reason: item?.mdro_signal
         ? `${item.infection_type || 'Infection'} with MDRO risk - initiate transmission-based precautions.`
         : `${item.infection_type || 'Infection'} transmission risk precautions.`,
-    );
-    if (!reason || !reason.trim()) return;
+    });
+  };
 
+  const submitIsolationOrder = async () => {
+    if (!isolationOrderModal) return;
+    const { item, isolationType, reason } = isolationOrderModal;
+    if (!isolationType.trim() || !reason.trim()) {
+      showError('Required', 'Both isolation type and reason are required.');
+      return;
+    }
     try {
       setIsolationActionId(item.id);
       await ehrAxios.post(
@@ -272,6 +320,7 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
         { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       showSuccess('Isolation ordered', 'Isolation precautions are now active for this patient.');
+      setIsolationOrderModal(null);
       loadData();
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to order isolation');
@@ -280,21 +329,25 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
     }
   };
 
-  const handleDiscontinueIsolation = async (isolation: any) => {
-    const reason = window.prompt(
-      'Reason for discontinuing isolation precautions:',
-      'Clinical criteria met, discontinue isolation precautions.',
-    );
-    if (!reason || !reason.trim()) return;
+  const handleDiscontinueIsolation = (isolation: any) => {
+    setDiscontinuePrompt({ isolation, value: 'Clinical criteria met, discontinue isolation precautions.' });
+  };
 
+  const submitDiscontinueIsolation = async () => {
+    if (!discontinuePrompt || !discontinuePrompt.value.trim()) {
+      showError('Required', 'A reason is required to discontinue isolation.');
+      return;
+    }
+    const { isolation, value } = discontinuePrompt;
     try {
       setIsolationActionId(isolation.id);
       await ehrAxios.post(
         `/infection-control/isolation/${isolation.id}/discontinue`,
-        { reason: reason.trim() },
+        { reason: value.trim() },
         { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       showSuccess('Isolation discontinued', 'Isolation precaution status has been updated.');
+      setDiscontinuePrompt(null);
       loadData();
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to discontinue isolation');
@@ -1093,6 +1146,217 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
 
       </div>
     </div>
+
+    {/* ── Stewardship Review Modal ── */}
+    {stewardshipModal && (
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold text-slate-800">Antimicrobial Stewardship Review</h2>
+              <button onClick={() => setStewardshipModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Recommendation</label>
+                <input
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={stewardshipModal.recommendation}
+                  onChange={(e) => setStewardshipModal((p) => p ? { ...p, recommendation: e.target.value } : p)}
+                  placeholder="de-escalate, continue, stop, etc."
+                />
+              </div>
+              {(
+                [
+                  { key: 'appropriateIndication', label: 'Indication appropriate?' },
+                  { key: 'appropriateDose', label: 'Dose appropriate?' },
+                  { key: 'appropriateDuration', label: 'Duration appropriate?' },
+                  { key: 'deEscalationOpportunity', label: 'De-escalation opportunity?' },
+                ] as const
+              ).map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-sm text-slate-700">{label}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setStewardshipModal((p) => p ? { ...p, [key]: true } : p)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${stewardshipModal[key] ? 'bg-green-100 border-green-400 text-green-700' : 'bg-white border-slate-300 text-slate-500'}`}
+                    >Yes</button>
+                    <button
+                      onClick={() => setStewardshipModal((p) => p ? { ...p, [key]: false } : p)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!stewardshipModal[key] ? 'bg-red-100 border-red-400 text-red-700' : 'bg-white border-slate-300 text-slate-500'}`}
+                    >No</button>
+                  </div>
+                </div>
+              ))}
+              {stewardshipModal.deEscalationOpportunity && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">De-escalation Notes</label>
+                  <textarea
+                    rows={3}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={stewardshipModal.deEscalationNotes}
+                    onChange={(e) => setStewardshipModal((p) => p ? { ...p, deEscalationNotes: e.target.value } : p)}
+                    placeholder="Document de-escalation plan..."
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end p-4 border-t">
+              <button onClick={() => setStewardshipModal(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={submitStewardshipReview}
+                disabled={!!reviewingStewardshipId}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {reviewingStewardshipId ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Save Review
+              </button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    )}
+
+    {/* ── Infection Review Modal ── */}
+    {infectionModal && (
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold text-slate-800">IPC Infection Review</h2>
+              <button onClick={() => setInfectionModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Investigation Notes <span className="text-red-500">*</span></label>
+                <textarea
+                  rows={4}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={infectionModal.investigationNotes}
+                  onChange={(e) => setInfectionModal((p) => p ? { ...p, investigationNotes: e.target.value } : p)}
+                  placeholder="IPC findings, containment actions, follow-up plan..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Root Cause (optional)</label>
+                <input
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={infectionModal.rootCause}
+                  onChange={(e) => setInfectionModal((p) => p ? { ...p, rootCause: e.target.value } : p)}
+                  placeholder="Root cause analysis..."
+                />
+              </div>
+              {(
+                [
+                  { key: 'reportedToCdc', label: 'Report to public health / CDC?' },
+                  { key: 'markResolved', label: 'Mark infection case as resolved?' },
+                ] as const
+              ).map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-sm text-slate-700">{label}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setInfectionModal((p) => p ? { ...p, [key]: true } : p)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${infectionModal[key] ? 'bg-green-100 border-green-400 text-green-700' : 'bg-white border-slate-300 text-slate-500'}`}
+                    >Yes</button>
+                    <button
+                      onClick={() => setInfectionModal((p) => p ? { ...p, [key]: false } : p)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!infectionModal[key] ? 'bg-red-100 border-red-400 text-red-700' : 'bg-white border-slate-300 text-slate-500'}`}
+                    >No</button>
+                  </div>
+                </div>
+              ))}
+              {infectionModal.markResolved && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Outcome Summary (optional)</label>
+                  <textarea
+                    rows={2}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={infectionModal.outcome}
+                    onChange={(e) => setInfectionModal((p) => p ? { ...p, outcome: e.target.value } : p)}
+                    placeholder="Resolved outcome notes..."
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end p-4 border-t">
+              <button onClick={() => setInfectionModal(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={submitInfectionReview}
+                disabled={!!reviewingInfectionId}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {reviewingInfectionId ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Save Review
+              </button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    )}
+
+    {/* ── Isolation Order Modal ── */}
+    {isolationOrderModal && (
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold text-slate-800">Order Isolation Precautions</h2>
+              <button onClick={() => setIsolationOrderModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Isolation Type</label>
+                <select
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={isolationOrderModal.isolationType}
+                  onChange={(e) => setIsolationOrderModal((p) => p ? { ...p, isolationType: e.target.value } : p)}
+                >
+                  <option value="contact">Contact</option>
+                  <option value="droplet">Droplet</option>
+                  <option value="airborne">Airborne</option>
+                  <option value="protective">Protective (Reverse)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Reason <span className="text-red-500">*</span></label>
+                <textarea
+                  rows={3}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={isolationOrderModal.reason}
+                  onChange={(e) => setIsolationOrderModal((p) => p ? { ...p, reason: e.target.value } : p)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end p-4 border-t">
+              <button onClick={() => setIsolationOrderModal(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={submitIsolationOrder}
+                disabled={!!isolationActionId}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {isolationActionId ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Order Isolation
+              </button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    )}
+
+    {/* ── Discontinue Isolation Prompt ── */}
+    <PromptDialog
+      isOpen={!!discontinuePrompt}
+      onCancel={() => setDiscontinuePrompt(null)}
+      onConfirm={submitDiscontinueIsolation}
+      title="Discontinue Isolation Precautions"
+      message="Provide a reason for discontinuing isolation. This will be recorded in the patient's IPC record."
+      value={discontinuePrompt?.value || ''}
+      onChange={(v) => setDiscontinuePrompt((p) => p ? { ...p, value: v } : p)}
+      placeholder="Clinical criteria met, discontinue isolation precautions."
+      type="warning"
+      confirmText="Discontinue"
+    />
   );
 };
 

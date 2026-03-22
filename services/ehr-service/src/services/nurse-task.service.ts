@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { NurseTask } from '../entities/nurse-task.entity';
 import { CareGapDetection } from '../entities/care-gap-detection.entity';
+import { StaffNotificationsService } from './staff-notifications.service';
 
 export interface CreateNurseTaskDto {
   patientId: string;
@@ -29,14 +30,28 @@ export interface UpdateNurseTaskDto {
 export class NurseTaskService {
   private readonly logger = new Logger(NurseTaskService.name);
 
-  async createTask(dto: CreateNurseTaskDto, tenantDb: DataSource): Promise<NurseTask> {
+  constructor(private readonly staffNotifications: StaffNotificationsService) {}
+
+  async createTask(dto: CreateNurseTaskDto, tenantDb: DataSource, tenantId?: string): Promise<NurseTask> {
     const repo = tenantDb.getRepository(NurseTask);
     const task = repo.create({
       ...dto,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
       status: 'pending',
     });
-    return repo.save(task);
+    const saved = await repo.save(task);
+
+    // Notify the assigned nurse so the task shows up in their notification inbox
+    if (dto.assignedTo && tenantId) {
+      this.staffNotifications.notifyTaskAssigned(tenantId, tenantDb, {
+        assignedTo: dto.assignedTo,
+        taskId: saved.id,
+        taskTitle: saved.title,
+        priority: saved.priority,
+      }).catch(e => this.logger.warn(`Task notification failed: ${e?.message}`));
+    }
+
+    return saved;
   }
 
   async updateTask(
@@ -96,6 +111,22 @@ export class NurseTaskService {
       order: { priority: 'DESC', dueDate: 'ASC' },
       take: limit,
     });
+  }
+
+  /**
+   * Record that a nurse has opened/viewed a task notification.
+   * Once marked, the task will NOT re-appear as "new" after login/logout.
+   */
+  async markAsViewed(taskId: string, userId: string, tenantDb: DataSource): Promise<NurseTask> {
+    const repo = tenantDb.getRepository(NurseTask);
+    const task = await repo.findOne({ where: { id: taskId } });
+    if (!task) throw new NotFoundException(`NurseTask ${taskId} not found`);
+    if (!task.viewedAt) {
+      task.viewedAt = new Date();
+      task.viewedBy = userId;
+      await repo.save(task);
+    }
+    return task;
   }
 
   // ── Care gap detections ───────────────────────────────────────────────────

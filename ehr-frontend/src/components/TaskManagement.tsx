@@ -385,6 +385,12 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         newSet.delete(taskId);
       } else {
         newSet.add(taskId);
+        // Fire-and-forget: mark this nurse task as viewed so it won't reappear as unread
+        const token = localStorage.getItem('ehr_token');
+        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+        if (token && tenantSlug) {
+          ehrApi.markNurseTaskViewed(taskId, token, tenantSlug).catch(() => {/* non-critical */});
+        }
       }
       return newSet;
     });

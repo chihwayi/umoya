@@ -24,6 +24,7 @@ import {
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import { useConfirmation } from '../hooks/useConfirmation';
 
 const TelemedicineConsultationPage: React.FC = () => {
@@ -428,45 +429,7 @@ const TelemedicineConsultationPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {guidelineResults.length > 0 ? (
                 guidelineResults.map((result, index) => (
-                  <div key={index} className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="text-sm font-medium text-purple-300 flex items-center gap-2">
-                        <BookOpen className="w-3 h-3" />
-                        {result.source || 'Clinical Guideline'}
-                      </h4>
-                      {result.confidence && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                          result.confidence > 0.8 ? 'bg-green-500/20 text-green-300 border-green-500/30' :
-                          result.confidence > 0.5 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' :
-                          'bg-red-500/20 text-red-300 border-red-500/30'
-                        }`}>
-                          {Math.round(result.confidence * 100)}%
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-white/80 mb-3 leading-relaxed">{result.text}</p>
-                    
-                    {result.recommendation && (
-                      <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-xs mb-3">
-                        <strong className="flex items-center gap-1.5 text-purple-300 mb-1">
-                          <Sparkles className="w-3 h-3" />
-                          Recommendation
-                        </strong>
-                        <p className="text-purple-100">{result.recommendation}</p>
-                      </div>
-                    )}
-
-                    {result.url && (
-                      <a 
-                        href={result.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="inline-flex items-center text-xs text-purple-400 hover:text-purple-300 hover:underline mt-1"
-                      >
-                        View Source <ArrowRight className="w-3 h-3 ml-1" />
-                      </a>
-                    )}
-                  </div>
+                  <GuidelineCitationCard key={index} result={result} dark />
                 ))
               ) : (
                 <div className="text-center py-8 text-white/40">

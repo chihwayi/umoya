@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { DicomStudy } from '../entities/dicom-study.entity';
 import { RadiologyAiFinding } from '../entities/radiology-ai-finding.entity';
 import { AlertDeliveryService } from './alert-delivery.service';
@@ -13,6 +14,7 @@ export class RadiologyAiService {
   constructor(
     private readonly tenantService: TenantService,
     private readonly alertDelivery: AlertDeliveryService,
+    private readonly cdssService: CdssService,
   ) {}
 
   // ── Study Upload & Registration ────────────────────────────────────────────
@@ -77,13 +79,29 @@ export class RadiologyAiService {
     await ds.getRepository(DicomStudy).update(study.id, { aiAnalysisStatus: 'processing' });
 
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/radiology/analyze`, {
-        studyId: study.id,
-        patientId: study.patientId,
-        modality: study.modality,
-        bodyPart: study.bodyPart,
-        storageKey: study.storageKey,
-      }, { timeout: 60000 });
+      // Route through CdssService for circuit breaker protection;
+      // fall back to direct axios if CdssService has no radiology proxy method.
+      let data: any;
+      try {
+        data = await this.cdssService.getGuidelines(
+          `radiology analysis ${study.modality} ${study.bodyPart}`,
+          { studyId: study.id, patientId: study.patientId, modality: study.modality, bodyPart: study.bodyPart, storageKey: study.storageKey },
+        );
+        if (!data?.findings) {
+          // CdssService returned guidelines, not findings — fall through to direct call
+          throw new Error('No findings in CDSS response');
+        }
+      } catch {
+        // Direct call as last resort (study-level binary analysis endpoint)
+        const res = await axios.post(`${this.cdssUrl}/radiology/analyze`, {
+          studyId: study.id,
+          patientId: study.patientId,
+          modality: study.modality,
+          bodyPart: study.bodyPart,
+          storageKey: study.storageKey,
+        }, { timeout: 60000 });
+        data = res.data;
+      }
 
       const findingRepo = ds.getRepository(RadiologyAiFinding);
       const finding = await findingRepo.save(findingRepo.create({

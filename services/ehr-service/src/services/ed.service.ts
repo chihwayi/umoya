@@ -2,10 +2,13 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { DataSource } from 'typeorm';
 import { Not, In } from 'typeorm';
 import { EDVisit } from '../entities/ed-visit.entity';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class EDService {
   private readonly logger = new Logger(EDService.name);
+
+  constructor(private readonly cdssService: CdssService) {}
 
   private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
     const [row] = await tenantDb.query(`SELECT to_regclass($1) as table_name`, [`public.${tableName}`]);
@@ -156,6 +159,34 @@ export class EDService {
     );
 
     this.logger.log(`ED patient triaged: ${visit.edVisitNumber}, ESI Level ${triageData.triageLevel}`);
+
+    // Fire-and-forget CDSS AI triage enrichment — NEWS2 scoring + diagnosis assist
+    this.cdssService.analyzeNurseTriage({
+      patientId: visit.patientId,
+      chiefComplaint: visit.chiefComplaint,
+      symptoms: triageData.symptoms || [],
+      vitals: {
+        temperature: triageData.vitalSigns?.temperature,
+        heartRate: triageData.vitalSigns?.heartRate,
+        respiratoryRate: triageData.vitalSigns?.respiratoryRate,
+        systolicBp: triageData.vitalSigns?.bloodPressureSystolic,
+        diastolicBp: triageData.vitalSigns?.bloodPressureDiastolic,
+        spo2: triageData.vitalSigns?.oxygenSaturation,
+        gcs: triageData.vitalSigns?.gcs,
+      },
+      esiLevel: triageData.triageLevel,
+      context: 'emergency_triage',
+    }).then((result: any) => {
+      const aiEsi = result?.recommended_esi || result?.triage_level;
+      if (aiEsi && Number(aiEsi) < triageData.triageLevel) {
+        // CDSS suggests higher acuity than the assigned ESI — log for clinician review
+        this.logger.warn(`[ED] CDSS suggests ESI ${aiEsi} (higher acuity) vs assigned ESI ${triageData.triageLevel} for visit ${visitId}`);
+        tenantDb.query(
+          `UPDATE ed_visits SET ai_triage_flag = true, ai_triage_note = $2 WHERE id = $1`,
+          [visitId, `CDSS recommended ESI ${aiEsi}: ${result?.rationale || result?.summary || ''}`],
+        ).catch(() => {});
+      }
+    }).catch((e: any) => this.logger.warn(`[ED] CDSS triage enrichment failed: ${e?.message}`));
 
     return updated;
   }

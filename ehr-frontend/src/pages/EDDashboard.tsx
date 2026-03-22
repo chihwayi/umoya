@@ -11,6 +11,7 @@ import EDTrackingBoard from '../components/EDTrackingBoard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import ModalPortal from '../components/ModalPortal';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import { useConfirmation } from '../hooks/useConfirmation';
 import {
   buildSharedContextTags,
@@ -677,50 +678,7 @@ const EDDashboard: React.FC = () => {
                 ) : guidelineResults.length > 0 ? (
                   <div className="space-y-4">
                     {guidelineResults.map((result, index) => (
-                      <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex gap-3">
-                          <div className="mt-1 min-w-[24px]">
-                            <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold">
-                              {index + 1}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-slate-900 leading-tight">
-                                {result.source || 'Clinical Guideline'}
-                              </h4>
-                              {result.confidence && (
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
-                                  result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
-                                  result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                  'bg-red-50 text-red-700 border-red-100'
-                                }`}>
-                                  {Math.round(result.confidence * 100)}% Match
-                                </span>
-                              )}
-                            </div>
-                            <div className="prose prose-sm max-w-none text-slate-700">
-                              <p className="whitespace-pre-wrap">{result.text}</p>
-                              {result.recommendation && (
-                                <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                                  <strong className="block text-blue-900 text-xs uppercase tracking-wide mb-1">Recommendation</strong>
-                                  <p className="text-blue-800 text-sm m-0">{result.recommendation}</p>
-                                </div>
-                              )}
-                            </div>
-                            {result.url && (
-                              <a 
-                                href={result.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="inline-flex items-center mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
-                              >
-                                View Source Document
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <GuidelineCitationCard key={index} result={result} index={index} />
                     ))}
                   </div>
                 ) : (

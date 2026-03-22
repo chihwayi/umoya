@@ -10,6 +10,102 @@ const ALLOWED_BUNDLE_ELEMENTS = [
   'repeat_lactate_measured',
 ] as const;
 
+// ── Sepsis scoring helpers ──────────────────────────────────────────────────
+
+function deriveQsofaCriteria(d: any): { alteredMentalStatus: boolean; systolicBpLow: boolean; respiratoryRateHigh: boolean } {
+  const sbp = Number(d.systolicBp ?? d.systolic_bp ?? NaN);
+  const rr  = Number(d.respiratoryRate ?? d.respiratory_rate ?? NaN);
+  return {
+    alteredMentalStatus: Boolean(d.qsofaAlteredMentalStatus ?? d.alteredMentalStatus ?? d.gcs_lt15 ?? false),
+    systolicBpLow:      !isNaN(sbp) ? sbp <= 100 : Boolean(d.qsofaSystolicBpLow ?? false),
+    respiratoryRateHigh: !isNaN(rr)  ? rr >= 22   : Boolean(d.qsofaRespiratoryRateHigh ?? false),
+  };
+}
+
+function deriveSirsCriteria(d: any): { tempAbnormal: boolean; heartRateHigh: boolean; respiratoryRateHigh: boolean; wbcAbnormal: boolean } {
+  const temp = Number(d.temperature ?? NaN);
+  const hr   = Number(d.heartRate ?? d.heart_rate ?? NaN);
+  const rr   = Number(d.respiratoryRate ?? d.respiratory_rate ?? NaN);
+  const wbc  = Number(d.wbcCount ?? d.wbc_count ?? NaN);
+  return {
+    tempAbnormal:       !isNaN(temp) ? (temp < 36 || temp > 38)  : Boolean(d.sirsTempAbnormal ?? false),
+    heartRateHigh:      !isNaN(hr)   ? hr > 90                   : Boolean(d.sirsHeartRateHigh ?? false),
+    respiratoryRateHigh:!isNaN(rr)   ? rr > 20                   : Boolean(d.sirsRespiratoryRateHigh ?? false),
+    wbcAbnormal:        !isNaN(wbc)  ? (wbc < 4 || wbc > 12)    : Boolean(d.sirsWbcAbnormal ?? false),
+  };
+}
+
+/**
+ * National Early Warning Score 2 (NEWS2) — Royal College of Physicians standard.
+ * Higher = more physiologically deranged.
+ */
+function calculateNEWS2(d: any): { score: number; components: Record<string, number>; riskCategory: string } {
+  const rr   = Number(d.respiratoryRate ?? d.respiratory_rate ?? NaN);
+  const spo2 = Number(d.oxygenSaturation ?? d.spo2 ?? NaN);
+  const sbp  = Number(d.systolicBp ?? d.systolic_bp ?? NaN);
+  const hr   = Number(d.heartRate ?? d.heart_rate ?? NaN);
+  const temp = Number(d.temperature ?? NaN);
+  const avpu = String(d.consciousness ?? d.avpu ?? 'A').toUpperCase();
+
+  const rrScore  = isNaN(rr)   ? 0 : rr <= 8 ? 3 : rr <= 11 ? 1 : rr <= 20 ? 0 : rr <= 24 ? 2 : 3;
+  const spo2Score= isNaN(spo2) ? 0 : spo2 <= 91 ? 3 : spo2 <= 93 ? 2 : spo2 <= 95 ? 1 : 0;
+  const sbpScore = isNaN(sbp)  ? 0 : sbp <= 90 ? 3 : sbp <= 100 ? 2 : sbp <= 110 ? 1 : sbp <= 219 ? 0 : 3;
+  const hrScore  = isNaN(hr)   ? 0 : hr <= 40 ? 3 : hr <= 50 ? 1 : hr <= 90 ? 0 : hr <= 110 ? 1 : hr <= 130 ? 2 : 3;
+  const tempScore= isNaN(temp) ? 0 : temp <= 35.0 ? 3 : temp <= 36.0 ? 1 : temp <= 38.0 ? 0 : temp <= 39.0 ? 1 : 2;
+  const avpuScore= avpu.startsWith('A') ? 0 : 3;
+
+  const total = rrScore + spo2Score + sbpScore + hrScore + tempScore + avpuScore;
+  const riskCategory = total >= 7 ? 'high' : total >= 5 ? 'medium' : total >= 1 ? 'low' : 'minimal';
+
+  return {
+    score: total,
+    components: { rr: rrScore, spo2: spo2Score, sbp: sbpScore, hr: hrScore, temp: tempScore, avpu: avpuScore },
+    riskCategory,
+  };
+}
+
+/**
+ * Composite sepsis probability (0–1) fusing qSOFA, SIRS, NEWS2 and lactate.
+ * Returns an interpretable risk label and early-sepsis flag.
+ */
+function calculateCompositeRisk(args: {
+  qsofaScore: number; sirsScore: number; news2: number;
+  lactate: number | null; age: number | null;
+}): { probability: number; label: 'septic_shock' | 'severe_sepsis' | 'sepsis' | 'early_concern' | 'low'; earlyWarning: boolean; earlyWarningReason: string } {
+  const { qsofaScore, sirsScore, news2, lactate, age } = args;
+  const lac = lactate !== null && !isNaN(lactate) ? lactate : 0;
+
+  let score = 0;
+  score += qsofaScore >= 2 ? 0.35 : qsofaScore === 1 ? 0.15 : 0;
+  score += sirsScore >= 2  ? 0.25 : sirsScore === 1 ? 0.10 : 0;
+  score += news2 >= 7      ? 0.20 : news2 >= 5 ? 0.12 : news2 >= 3 ? 0.05 : 0;
+  score += lac >= 4        ? 0.25 : lac >= 2 ? 0.15 : lac >= 1.5 ? 0.05 : 0;
+  if (age !== null && age >= 65) score += 0.05;
+
+  const probability = Math.min(score, 0.98);
+
+  const septicShock  = (qsofaScore >= 2 || sirsScore >= 2) && lac >= 2;
+  const severeSepsis = (qsofaScore >= 2 || sirsScore >= 2) && lac >= 1;
+  const sepsis       = qsofaScore >= 2 || sirsScore >= 2;
+  const earlyConcern = (qsofaScore === 1 && lac >= 2) || (news2 >= 5 && sirsScore >= 1) || (lac >= 2 && sirsScore >= 2);
+
+  const earlyWarningReasons: string[] = [];
+  if (qsofaScore === 1 && lac >= 2) earlyWarningReasons.push('qSOFA=1 with lactate ≥2 mmol/L — early sepsis concern');
+  if (news2 >= 5)                   earlyWarningReasons.push(`NEWS2=${news2} (${news2 >= 7 ? 'high' : 'medium'} clinical risk)`);
+  if (lac >= 2 && qsofaScore < 2)   earlyWarningReasons.push('Lactate ≥2 mmol/L with sub-threshold qSOFA — monitor closely');
+
+  const label = septicShock ? 'septic_shock' : severeSepsis ? 'severe_sepsis' : sepsis ? 'sepsis' : earlyConcern ? 'early_concern' : 'low';
+
+  return {
+    probability: Math.round(probability * 100) / 100,
+    label,
+    earlyWarning: earlyConcern && !sepsis,
+    earlyWarningReason: earlyWarningReasons.join('; '),
+  };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+
 @Injectable()
 export class SepsisService {
   private readonly logger = new Logger(SepsisService.name);
@@ -21,17 +117,23 @@ export class SepsisService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<any> {
-    // Calculate scores
-    const qsofaScore = (screeningData.qsofaAlteredMentalStatus ? 1 : 0) + 
-                      (screeningData.qsofaSystolicBpLow ? 1 : 0) + 
-                      (screeningData.qsofaRespiratoryRateHigh ? 1 : 0);
-    
-    const sirsScore = (screeningData.sirsTempAbnormal ? 1 : 0) + 
-                     (screeningData.sirsHeartRateHigh ? 1 : 0) + 
-                     (screeningData.sirsRespiratoryRateHigh ? 1 : 0) + 
-                     (screeningData.sirsWbcAbnormal ? 1 : 0);
-    
-    const sepsisSuspected = qsofaScore >= 2 || (sirsScore >= 2 && screeningData.lactate > 2);
+    // Auto-derive criteria from raw vitals (overrides manual booleans when vitals present)
+    const qsofa = deriveQsofaCriteria(screeningData);
+    const sirs  = deriveSirsCriteria(screeningData);
+    const news2 = calculateNEWS2(screeningData);
+    const lactate = screeningData.lactate != null ? Number(screeningData.lactate) : null;
+    const age     = screeningData.age != null ? Number(screeningData.age) : null;
+
+    const qsofaScore = (qsofa.alteredMentalStatus ? 1 : 0) + (qsofa.systolicBpLow ? 1 : 0) + (qsofa.respiratoryRateHigh ? 1 : 0);
+    const sirsScore  = (sirs.tempAbnormal ? 1 : 0) + (sirs.heartRateHigh ? 1 : 0) + (sirs.respiratoryRateHigh ? 1 : 0) + (sirs.wbcAbnormal ? 1 : 0);
+
+    const composite = calculateCompositeRisk({ qsofaScore, sirsScore, news2: news2.score, lactate, age });
+
+    // Expanded sepsis detection: standard threshold + early warning signals
+    const sepsisSuspected = qsofaScore >= 2
+      || (sirsScore >= 2 && (lactate ?? 0) > 2)
+      || composite.earlyWarning
+      || news2.score >= 7;
 
     const result = await tenantDb.query(
       `INSERT INTO sepsis_screenings (patient_id, admission_id, screening_location,
@@ -40,15 +142,72 @@ export class SepsisService {
         temperature, heart_rate, respiratory_rate, systolic_bp, oxygen_saturation, wbc_count, lactate,
         sepsis_suspected, sepsis_alert_triggered, screened_by)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING *`,
-      [screeningData.patientId, screeningData.admissionId, screeningData.screeningLocation,
-       screeningData.qsofaAlteredMentalStatus, screeningData.qsofaSystolicBpLow, screeningData.qsofaRespiratoryRateHigh, qsofaScore,
-       screeningData.sirsTempAbnormal, screeningData.sirsHeartRateHigh, screeningData.sirsRespiratoryRateHigh, screeningData.sirsWbcAbnormal, sirsScore,
-       screeningData.temperature, screeningData.heartRate, screeningData.respiratoryRate, 
-       screeningData.systolicBp, screeningData.oxygenSaturation, screeningData.wbcCount, screeningData.lactate,
-       sepsisSuspected, sepsisSuspected, userId]
+      [
+        screeningData.patientId, screeningData.admissionId, screeningData.screeningLocation,
+        // Use auto-derived criteria (more reliable than manual boolean entry)
+        qsofa.alteredMentalStatus, qsofa.systolicBpLow, qsofa.respiratoryRateHigh, qsofaScore,
+        sirs.tempAbnormal, sirs.heartRateHigh, sirs.respiratoryRateHigh, sirs.wbcAbnormal, sirsScore,
+        screeningData.temperature, screeningData.heartRate, screeningData.respiratoryRate,
+        screeningData.systolicBp, screeningData.oxygenSaturation, screeningData.wbcCount, screeningData.lactate,
+        sepsisSuspected, sepsisSuspected, userId,
+      ],
     );
 
-    return result[0];
+    const row = result[0];
+    return {
+      ...row,
+      // Enriched AI scoring fields returned to caller
+      news2Score:            news2.score,
+      news2RiskCategory:     news2.riskCategory,
+      news2Components:       news2.components,
+      compositeProbability:  composite.probability,
+      compositeLabel:        composite.label,
+      earlyWarning:          composite.earlyWarning,
+      earlyWarningReason:    composite.earlyWarningReason,
+      derivedCriteria: {
+        qsofa, sirs,
+        lactateMmolL: lactate,
+      },
+    };
+  }
+
+  /**
+   * Calculate sepsis risk scores from raw vitals without persisting a screening.
+   * Used by real-time monitoring and nurse copilot.
+   */
+  calculateRiskFromVitals(vitals: {
+    temperature?: number; heartRate?: number; respiratoryRate?: number;
+    systolicBp?: number; oxygenSaturation?: number; wbcCount?: number;
+    lactate?: number; age?: number; consciousness?: string;
+  }): {
+    qsofaScore: number; qsofa: ReturnType<typeof deriveQsofaCriteria>;
+    sirsScore: number;  sirs: ReturnType<typeof deriveSirsCriteria>;
+    news2: ReturnType<typeof calculateNEWS2>;
+    composite: ReturnType<typeof calculateCompositeRisk>;
+    sepsisSuspected: boolean;
+    immediateActions: string[];
+  } {
+    const qsofa = deriveQsofaCriteria(vitals);
+    const sirs  = deriveSirsCriteria(vitals);
+    const news2 = calculateNEWS2(vitals);
+    const lactate = vitals.lactate != null ? Number(vitals.lactate) : null;
+    const age     = vitals.age != null ? Number(vitals.age) : null;
+    const qsofaScore = (qsofa.alteredMentalStatus ? 1 : 0) + (qsofa.systolicBpLow ? 1 : 0) + (qsofa.respiratoryRateHigh ? 1 : 0);
+    const sirsScore  = (sirs.tempAbnormal ? 1 : 0) + (sirs.heartRateHigh ? 1 : 0) + (sirs.respiratoryRateHigh ? 1 : 0) + (sirs.wbcAbnormal ? 1 : 0);
+    const composite  = calculateCompositeRisk({ qsofaScore, sirsScore, news2: news2.score, lactate, age });
+    const sepsisSuspected = qsofaScore >= 2 || (sirsScore >= 2 && (lactate ?? 0) > 2) || composite.earlyWarning || news2.score >= 7;
+
+    const immediateActions: string[] = [];
+    if (composite.label === 'septic_shock')  immediateActions.push('SEPTIC SHOCK: IV broad-spectrum antibiotics NOW, 30ml/kg fluid bolus, noradrenaline if MAP <65.');
+    if (composite.label === 'severe_sepsis') immediateActions.push('SEVERE SEPSIS: Blood cultures ×2, IV antibiotics within 1h, lactate, IV fluid resuscitation.');
+    if (composite.label === 'sepsis')        immediateActions.push('SEPSIS: Initiate 1-hour bundle — cultures, antibiotics, lactate, fluid assessment.');
+    if (composite.earlyWarning)              immediateActions.push(`Early concern: ${composite.earlyWarningReason}. Increase monitoring frequency, reassess in 30 min.`);
+    if (news2.score >= 7)                    immediateActions.push(`NEWS2=${news2.score} (HIGH risk) — urgent clinical review required.`);
+    else if (news2.score >= 5)               immediateActions.push(`NEWS2=${news2.score} (medium risk) — increase vital signs monitoring to every 1h.`);
+    if (lactate !== null && lactate >= 4)    immediateActions.push('Lactate ≥4 mmol/L — septic shock criterion met. Resuscitate and recheck lactate within 2h.');
+    else if (lactate !== null && lactate >= 2) immediateActions.push('Lactate ≥2 mmol/L — repeat within 2–4h to assess trajectory.');
+
+    return { qsofaScore, qsofa, sirsScore, sirs, news2, composite, sepsisSuspected, immediateActions };
   }
 
   async initiateSepsisBundle(

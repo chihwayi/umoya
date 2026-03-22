@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+// PromptDialog replaces window.prompt for charge action notes
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   DollarSign,
@@ -19,6 +20,7 @@ import { cdssApi, ehrAxios } from '../services/api';
 import AddChargeModal from '../components/AddChargeModal';
 import ChargeReviewModal from '../components/ChargeReviewModal';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
+import PromptDialog from '../components/PromptDialog';
 
 interface RevenueCycleDashboardProps {
   embedded?: boolean;
@@ -49,6 +51,7 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
   const [activeTab, setActiveTab] = useState<'master' | 'pending'>('pending');
   const [includeResolved, setIncludeResolved] = useState(false);
   const [actionChargeId, setActionChargeId] = useState<string | null>(null);
+  const [chargeActionPrompt, setChargeActionPrompt] = useState<{ charge: any; action: 'approve' | 'reject' | 'review'; value: string } | null>(null);
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
@@ -147,33 +150,35 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
     return 'bg-green-100 text-green-800';
   };
 
-  const handleQuickAction = async (charge: any, action: 'review' | 'approve' | 'reject') => {
+  const handleQuickAction = (charge: any, action: 'review' | 'approve' | 'reject') => {
+    setChargeActionPrompt({ charge, action, value: '' });
+  };
+
+  const submitChargeAction = async () => {
+    if (!chargeActionPrompt) return;
+    const { charge, action, value } = chargeActionPrompt;
+    if (action === 'reject' && !value.trim()) {
+      showError('Reason required', 'Rejection requires a reason.');
+      return;
+    }
     try {
       setActionChargeId(charge.id);
       if (action === 'reject') {
-        const reason = window.prompt('Provide rejection reason:', '');
-        if (reason === null) return;
-        if (!reason.trim()) {
-          showError('Reason required', 'Rejection requires a reason.');
-          return;
-        }
         await ehrAxios.put(
           `/revenue-cycle/charges/${charge.id}/reject`,
-          { reason: reason.trim() },
+          { reason: value.trim() },
           { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
         );
       } else if (action === 'approve') {
-        const notes = window.prompt('Approval notes (optional):', '') ?? '';
         await ehrAxios.put(
           `/revenue-cycle/charges/${charge.id}/approve`,
-          { notes: notes || null },
+          { notes: value.trim() || null },
           { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
         );
       } else {
-        const notes = window.prompt('Review notes (optional):', '') ?? '';
         await ehrAxios.put(
           `/revenue-cycle/charges/${charge.id}/mark-reviewed`,
-          { notes: notes || null },
+          { notes: value.trim() || null },
           { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
         );
       }
@@ -186,6 +191,7 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
           ? 'Charge rejected successfully.'
           : 'Charge marked as reviewed.',
       );
+      setChargeActionPrompt(null);
       loadPendingCharges();
     } catch (error: any) {
       showError('Error', error.response?.data?.message || `Failed to ${action} charge`);
@@ -748,6 +754,37 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
           setShowReviewModal(false);
         }}
         tenantSlug={tenantSlug || ''}
+      />
+
+      <PromptDialog
+        isOpen={!!chargeActionPrompt}
+        onCancel={() => setChargeActionPrompt(null)}
+        onConfirm={submitChargeAction}
+        title={
+          chargeActionPrompt?.action === 'reject'
+            ? 'Reject Charge'
+            : chargeActionPrompt?.action === 'approve'
+            ? 'Approve Charge'
+            : 'Mark as Reviewed'
+        }
+        message={
+          chargeActionPrompt?.action === 'reject'
+            ? `Reject charge for ${chargeActionPrompt?.charge?.description || 'this item'}? Please provide a reason (required).`
+            : chargeActionPrompt?.action === 'approve'
+            ? `Approve charge for ${chargeActionPrompt?.charge?.description || 'this item'}? You may add optional notes.`
+            : `Mark charge for ${chargeActionPrompt?.charge?.description || 'this item'} as reviewed? You may add optional notes.`
+        }
+        value={chargeActionPrompt?.value || ''}
+        onChange={(v) => setChargeActionPrompt((p) => p ? { ...p, value: v } : p)}
+        placeholder={chargeActionPrompt?.action === 'reject' ? 'Rejection reason (required)' : 'Notes (optional)'}
+        type={chargeActionPrompt?.action === 'reject' ? 'danger' : 'info'}
+        confirmText={
+          chargeActionPrompt?.action === 'reject'
+            ? 'Reject'
+            : chargeActionPrompt?.action === 'approve'
+            ? 'Approve'
+            : 'Mark Reviewed'
+        }
       />
     </div>
   );

@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { ChronicDiseaseRegistry } from '../entities/chronic-disease-registry.entity';
 import { PreventiveCareReminder } from '../entities/preventive-care-reminder.entity';
 import { RecallList } from '../entities/recall-list.entity';
+import { CdssService } from './cdss.service';
 
 const CONDITION_TYPES = ['hypertension', 'diabetes', 'asthma', 'copd', 'ckd', 'heart_failure', 'obesity', 'depression', 'other'] as const;
 const RISK_LEVELS = ['low', 'moderate', 'high', 'critical'] as const;
@@ -13,6 +14,8 @@ const WORKLIST_FOCUS = ['all', 'high-risk', 'uncontrolled', 'overdue-review', 'c
 @Injectable()
 export class PopulationHealthService {
   private readonly logger = new Logger(PopulationHealthService.name);
+
+  constructor(private readonly cdssService: CdssService) {}
 
   async enrollInRegistry(
     tenantDb: DataSource,
@@ -45,7 +48,27 @@ export class PopulationHealthService {
       managementPlan: body.managementPlan ?? null,
       notes: body.notes ?? null,
     });
-    return repo.save(entity);
+    const saved = await repo.save(entity);
+
+    // Fire-and-forget: ask CDSS if AI risk stratification differs from the submitted level.
+    // If CDSS returns a higher risk level, upgrade the registry entry.
+    this.cdssService.riskAssessment({
+      patientId,
+      diagnoses: [{ code: body.conditionCode, name: body.conditionName }],
+      context: 'chronic_disease_registry',
+      conditionType,
+    }).then(async (result: any) => {
+      const cdssRisk = String(result?.risk_level || result?.risk || '').toLowerCase();
+      const riskOrder = ['low', 'moderate', 'high', 'critical'];
+      if (cdssRisk && RISK_LEVELS.includes(cdssRisk as any)) {
+        if (riskOrder.indexOf(cdssRisk) > riskOrder.indexOf(riskLevel)) {
+          await repo.update(saved.id, { riskLevel: cdssRisk } as any);
+          this.logger.log(`[PopHealth] CDSS upgraded risk for patient ${patientId}: ${riskLevel} → ${cdssRisk}`);
+        }
+      }
+    }).catch((e: any) => this.logger.warn(`[PopHealth] CDSS risk stratification failed: ${e?.message}`));
+
+    return saved;
   }
 
   async getRegistryDashboard(
@@ -543,6 +566,25 @@ export class PopulationHealthService {
         await repo.save(repo.create(item));
         generated++;
       }
+
+      // CDSS care-gap detection for additional AI-identified gaps beyond static rules
+      this.cdssService.detectCareGaps(
+        { patientId: pid, age, gender, context: 'preventive_care' },
+        tenantDb,
+      ).then(async (cdssGaps: any) => {
+        const gaps: any[] = cdssGaps?.gaps || cdssGaps?.care_gaps || [];
+        for (const gap of gaps) {
+          const screeningType = String(gap.screening_type || gap.type || '').toLowerCase().replace(/\s+/g, '_');
+          if (!screeningType || types.has(screeningType)) continue;
+          await repo.save(repo.create({
+            patientId: pid,
+            screeningType,
+            dueDate: gap.due_date ? new Date(gap.due_date) : new Date(today),
+            status: 'due',
+          }));
+          generated++;
+        }
+      }).catch(() => { /* CDSS offline — static rules already applied */ });
     }
     return { generated };
   }

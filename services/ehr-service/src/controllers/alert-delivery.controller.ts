@@ -1,6 +1,11 @@
-import { Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AlertDeliveryService } from '../services/alert-delivery.service';
 
+@ApiTags('Clinical Alerts')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('alerts')
 export class AlertDeliveryController {
   constructor(private readonly svc: AlertDeliveryService) {}

@@ -1,6 +1,7 @@
 import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
 import { ModelFairnessReport } from '../entities/model-fairness-report.entity';
 import { FederatedLearningService } from './federated-learning.service';
@@ -18,6 +19,7 @@ export class ModelMonitoringService {
     private readonly tenantService: TenantService,
     @Inject(forwardRef(() => FederatedLearningService))
     private readonly federatedLearning: FederatedLearningService,
+    private readonly cdssService: CdssService,
   ) {}
 
   // ── Manual / on-demand evaluation ─────────────────────────────────────────
@@ -30,10 +32,15 @@ export class ModelMonitoringService {
     let metrics: any = { auc_roc: null, brier_score: null, sensitivity: null, specificity: null, ppv: null, calibration: [] };
 
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/model/performance`, {
-        modelName, period: evalPeriod, outcomes,
-      });
-      metrics = data;
+      const result = await this.cdssService.getGuidelines(
+        `model performance evaluation ${modelName}`,
+        { modelName, period: evalPeriod, outcomes },
+      );
+      if ((result as any)?.auc_roc !== undefined) {
+        metrics = result;
+      } else {
+        throw new Error('CDSS response did not include model metrics');
+      }
     } catch (e: any) {
       this.logger.warn(`Model performance API unavailable, computing locally: ${e?.message}`);
       metrics = this.computeLocalMetrics(outcomes);

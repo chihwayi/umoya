@@ -5,6 +5,7 @@ import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
 import MedicationScannerModal from '../components/MedicationScannerModal';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
+import PromptDialog from '../components/PromptDialog';
 
 interface MARDashboardProps {
   embedded?: boolean;
@@ -46,6 +47,11 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
+  // Dialog state replacing window.prompt calls
+  const [alertAckPrompt, setAlertAckPrompt] = useState<{ alert: any; value: string } | null>(null);
+  const [statusActionPrompt, setStatusActionPrompt] = useState<{ mar: any; action: 'hold' | 'refuse'; value: string } | null>(null);
+  const [escalatePrompt, setEscalatePrompt] = useState<{ item: any; value: string } | null>(null);
 
   const isDoctor = user?.role === 'doctor';
 
@@ -193,22 +199,26 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
     }
   };
 
-  const handleAcknowledgeAlert = async (alert: any) => {
-    const reason = window.prompt('Provide override reason to acknowledge this alert:');
-    if (reason === null) return;
-    if (!reason.trim()) {
+  const handleAcknowledgeAlert = (alert: any) => {
+    setAlertAckPrompt({ alert, value: '' });
+  };
+
+  const submitAcknowledgeAlert = async () => {
+    if (!alertAckPrompt) return;
+    const { alert, value } = alertAckPrompt;
+    if (!value.trim()) {
       showError('Override reason required', 'Please provide a reason to acknowledge this alert.');
       return;
     }
-
     try {
       setAcknowledgingAlertId(alert.id);
       await ehrAxios.post(
         `/bcma/alerts/${alert.id}/acknowledge`,
-        { overrideReason: reason.trim() },
+        { overrideReason: value.trim() },
         { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       showSuccess('Alert acknowledged', 'The medication alert has been acknowledged.');
+      setAlertAckPrompt(null);
       loadActiveAlerts();
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to acknowledge alert');
@@ -217,30 +227,29 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
     }
   };
 
-  const handleStatusAction = async (mar: any, action: 'hold' | 'refuse') => {
-    const reason = window.prompt(
-      action === 'hold'
-        ? 'Provide hold reason for this medication:'
-        : 'Provide refusal reason documented by patient:',
-    );
+  const handleStatusAction = (mar: any, action: 'hold' | 'refuse') => {
+    setStatusActionPrompt({ mar, action, value: '' });
+  };
 
-    if (reason === null) return;
-    if (!reason.trim()) {
+  const submitStatusAction = async () => {
+    if (!statusActionPrompt) return;
+    const { mar, action, value } = statusActionPrompt;
+    if (!value.trim()) {
       showError('Reason required', 'Please provide a reason before continuing.');
       return;
     }
-
     try {
       setStatusActionMarId(mar.id);
       await ehrAxios.post(
         `/bcma/mar/${mar.id}/${action}`,
-        { reason: reason.trim() },
+        { reason: value.trim() },
         { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       showSuccess(
         action === 'hold' ? 'Medication held' : 'Refusal documented',
         action === 'hold' ? 'Medication was marked as held.' : 'Patient refusal has been recorded.',
       );
+      setStatusActionPrompt(null);
       loadMARs();
       loadActiveAlerts();
     } catch (error: any) {
@@ -250,9 +259,13 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
     }
   };
 
-  const handleEscalateRisk = async (worklistItem: any) => {
-    const message = window.prompt('Escalation note (why this requires immediate attention):', '');
-    if (message === null) return;
+  const handleEscalateRisk = (worklistItem: any) => {
+    setEscalatePrompt({ item: worklistItem, value: '' });
+  };
+
+  const submitEscalateRisk = async () => {
+    if (!escalatePrompt) return;
+    const { item: worklistItem, value: message } = escalatePrompt;
     try {
       setEscalatingMarId(worklistItem.id);
       await ehrAxios.post(
@@ -270,6 +283,7 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
         { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       showSuccess('Escalated', 'Medication safety alert escalation created.');
+      setEscalatePrompt(null);
       loadMedicationSafetyWorklist();
       if (resolveSelectedPatientId() === worklistItem.patientId) {
         loadActiveAlerts();
@@ -996,6 +1010,49 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
         }}
       />
     )}
+
+    <PromptDialog
+      isOpen={!!alertAckPrompt}
+      onCancel={() => setAlertAckPrompt(null)}
+      onConfirm={submitAcknowledgeAlert}
+      title="Acknowledge Medication Alert"
+      message="Provide an override reason to acknowledge and dismiss this safety alert. This will be recorded in the audit log."
+      value={alertAckPrompt?.value || ''}
+      onChange={(v) => setAlertAckPrompt((p) => p ? { ...p, value: v } : p)}
+      placeholder="Override reason (required)"
+      type="danger"
+      confirmText="Acknowledge"
+    />
+
+    <PromptDialog
+      isOpen={!!statusActionPrompt}
+      onCancel={() => setStatusActionPrompt(null)}
+      onConfirm={submitStatusAction}
+      title={statusActionPrompt?.action === 'hold' ? 'Hold Medication' : 'Document Patient Refusal'}
+      message={
+        statusActionPrompt?.action === 'hold'
+          ? 'Provide the clinical reason for placing this medication on hold.'
+          : 'Document the reason for patient refusal. This will be recorded in the MAR.'
+      }
+      value={statusActionPrompt?.value || ''}
+      onChange={(v) => setStatusActionPrompt((p) => p ? { ...p, value: v } : p)}
+      placeholder={statusActionPrompt?.action === 'hold' ? 'Hold reason (required)' : 'Refusal reason (required)'}
+      type="warning"
+      confirmText={statusActionPrompt?.action === 'hold' ? 'Hold Medication' : 'Document Refusal'}
+    />
+
+    <PromptDialog
+      isOpen={!!escalatePrompt}
+      onCancel={() => setEscalatePrompt(null)}
+      onConfirm={submitEscalateRisk}
+      title="Escalate Medication Safety Risk"
+      message="Add an escalation note explaining why this requires immediate attention. A high-priority alert will be created."
+      value={escalatePrompt?.value || ''}
+      onChange={(v) => setEscalatePrompt((p) => p ? { ...p, value: v } : p)}
+      placeholder="Escalation note (optional — defaults to medication name)"
+      type="warning"
+      confirmText="Escalate"
+    />
   </>
   );
 };
