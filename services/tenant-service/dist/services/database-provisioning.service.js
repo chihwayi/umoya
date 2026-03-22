@@ -652,6 +652,307 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 description: 'ML feedback loop tables: model metrics, training snapshots, coding corpus, and prediction outcome tracking',
                 statements: () => this.getSprintL1ContinuousLearningStatements(),
             },
+            {
+                id: 'sprint59_vitals_extended',
+                label: 'Sprint 59 - Extended Vitals',
+                version: '2026.03.18',
+                description: 'Extended vitals: waist, hip, bmi, spo2, pain scale, pupil, glasgow coma, growth/developmental fields',
+                statements: () => this.getSprint59VitalsExtendedStatements(),
+            },
+            {
+                id: 'sprint60_patient_extended_sdoh',
+                label: 'Sprint 60 - Patient Extended Fields + SDOH',
+                version: '2026.03.18',
+                description: 'Patient entity extensions: disability, preferred language, next of kin, insurance, SDOH screening columns',
+                statements: () => this.getSprint60PatientExtendedSdohStatements(),
+            },
+            {
+                id: 'sprint61_cdss_outcome_feedback',
+                label: 'Sprint 61 - CDSS Outcome Feedback Loop',
+                version: '2026.03.18',
+                description: 'cdss_decision_logs, cdss_outcome_feedback, cdss_model_metrics tables for AI learning loop',
+                statements: () => this.getSprint61CdssOutcomeFeedbackStatements(),
+            },
+            {
+                id: 'sprint62_proactive_care_gaps',
+                label: 'Sprint 62 - Proactive Care Gap Engine',
+                version: '2026.03.18',
+                description: 'care_gaps, care_gap_rules, care_gap_actions tables for proactive population health',
+                statements: () => this.getSprint62ProactiveCareGapsStatements(),
+            },
+            {
+                id: 'sprint63_ambient_ai',
+                label: 'Sprint 63 - Ambient AI Transcription',
+                version: '2026.03.18',
+                description: 'ambient_sessions, ambient_transcripts, ambient_soap_notes tables for real-time visit capture',
+                statements: () => this.getSprint63AmbientAiStatements(),
+            },
+            {
+                id: 'sprint64_pre_charting',
+                label: 'Sprint 64 - Pre-Charting AI',
+                version: '2026.03.18',
+                description: 'encounter_precharts table for AI-generated pre-visit summaries and clinical prep',
+                statements: () => this.getSprint64PreChartingStatements(),
+            },
+            {
+                id: 'sprint65_smart_inbox',
+                label: 'Sprint 65 - Smart Inbox AI Triage',
+                version: '2026.03.18',
+                description: 'inbox_messages, inbox_triage_results tables for AI-prioritised clinical inbox',
+                statements: () => this.getSprint65SmartInboxStatements(),
+            },
+            {
+                id: 'sprint66_tb_module',
+                label: 'Sprint 66 - Tuberculosis Module',
+                version: '2026.03.18',
+                description: 'tb_cases, tb_treatment_records, tb_contact_traces, tb_sputum_results, tb_drug_susceptibility tables',
+                statements: () => this.getSprint66TbModuleStatements(),
+            },
+            {
+                id: 'sprint67_pediatrics_module',
+                label: 'Sprint 67 - Pediatrics Module',
+                version: '2026.03.18',
+                description: 'growth_measurements, developmental_milestones, neonatal_assessments, vaccination_records, pediatric_consultations tables',
+                statements: () => this.getSprint67PediatricsModuleStatements(),
+            },
+            {
+                id: 'sprint68_mental_health_module',
+                label: 'Sprint 68 - Mental Health Module',
+                version: '2026.03.18',
+                description: 'mental_health_assessments, mental_health_treatment_plans, mental_health_sessions, crisis_incidents, substance_use_records tables',
+                statements: () => this.getSprint68MentalHealthModuleStatements(),
+            },
+            {
+                id: 'sprint69_malaria_module',
+                label: 'Sprint 69 - Malaria Module',
+                version: '2026.03.18',
+                description: 'malaria_cases, malaria_rdt_results, malaria_treatments tables',
+                statements: () => this.getSprint69MalariaModuleStatements(),
+            },
+            {
+                id: 'sprint70_geriatrics_module',
+                label: 'Sprint 70 - Geriatrics Module',
+                version: '2026.03.18',
+                description: 'geriatric_assessments, fall_risk_assessments, cognitive_assessments, frailty_scores, polypharmacy_reviews tables',
+                statements: () => this.getSprint70GeriatricsModuleStatements(),
+            },
+            {
+                id: 'sprint71_neurology_module',
+                label: 'Sprint 71 - Neurology Module',
+                version: '2026.03.18',
+                description: 'seizure_records, stroke_assessments, headache_diaries, cognitive_screenings tables',
+                statements: () => this.getSprint71NeurologyModuleStatements(),
+            },
+            {
+                id: 'sprint72_pulmonology_module',
+                label: 'Sprint 72 - Pulmonology Module',
+                version: '2026.03.18',
+                description: 'spirometry_results, copd_assessments, asthma_records, peak_flow_diaries, oxygen_therapy_records tables',
+                statements: () => this.getSprint72PulmonologyModuleStatements(),
+            },
+            {
+                id: 'sprint73_nephrology_module',
+                label: 'Sprint 73 - Nephrology Module',
+                version: '2026.03.18',
+                description: 'ckd_assessments, dialysis_records, fluid_balance_records, renal_biopsies, transplant_records tables',
+                statements: () => this.getSprint73NephrologyModuleStatements(),
+            },
+            {
+                id: 'sprint74_dermatology_module',
+                label: 'Sprint 74 - Dermatology Module',
+                version: '2026.03.18',
+                description: 'skin_lesions, wound_assessments, burn_assessments, dermatology_notes tables',
+                statements: () => this.getSprint74DermatologyModuleStatements(),
+            },
+            {
+                id: 'sprint75_palliative_care_module',
+                label: 'Sprint 75 - Palliative Care Module',
+                version: '2026.03.19',
+                description: 'palliative_assessments, symptom_burden_scores (ESAS), goals_of_care, advance_directive_records, palliative_medication_reviews tables',
+                statements: () => this.getSprint75PalliativeCareModuleStatements(),
+            },
+            {
+                id: 'sprint76_nutrition_module',
+                label: 'Sprint 76 - Nutrition & Dietetics Module',
+                version: '2026.03.19',
+                description: 'nutritional_screenings, nutritional_assessments, dietary_prescriptions, nutrition_monitoring tables',
+                statements: () => this.getSprint76NutritionModuleStatements(),
+            },
+            {
+                id: 'sprint77_icu_module',
+                label: 'Sprint 77 - ICU / Critical Care Module',
+                version: '2026.03.19',
+                description: 'icu_admissions, sofa_scores, ventilator_settings, sedation_records, central_line_records, vasopressor_records tables',
+                statements: () => this.getSprint77IcuModuleStatements(),
+            },
+            {
+                id: 'sprint78_sdoh_module',
+                label: 'Sprint 78 - SDOH Module (Structured Social Determinants)',
+                version: '2026.03.19',
+                description: 'community_resources, sdoh_referrals, sdoh_screening_logs tables',
+                statements: () => this.getSprint78SdohModuleStatements(),
+            },
+            {
+                id: 'sprint79_ntd_regional',
+                label: 'Sprint 79 - Neglected Tropical Diseases + Regional Module',
+                version: '2026.03.19',
+                description: 'ntd_cases, cholera_cases, typhoid_cases, regional_disease_reports tables',
+                statements: () => this.getSprint79NtdRegionalStatements(),
+            },
+            {
+                id: 'sprint80_advanced_hiv_pmtct_pepfar',
+                label: 'Sprint 80 - Advanced HIV Module (PMTCT + PEPFAR MER)',
+                version: '2026.03.19',
+                description: 'pmtct_enrollments, pmtct_infants, pepfar_mer_indicators, art_cohorts tables',
+                statements: () => this.getSprint80AdvancedHivPmtctPepfarStatements(),
+            },
+            {
+                id: 'sprint81_auto_coding',
+                label: 'Sprint 81 - Auto ICD-10/CPT Coding NLP Pipeline',
+                version: '2026.03.19',
+                description: 'auto_coding_suggestions table',
+                statements: () => this.getSprint81AutoCodingStatements(),
+            },
+            {
+                id: 'sprint82_pharmacogenomics',
+                label: 'Sprint 82 - Pharmacogenomics Module',
+                version: '2026.03.19',
+                description: 'pgx_profiles, pgx_alerts tables',
+                statements: () => this.getSprint82PharmacogenomicsStatements(),
+            },
+            {
+                id: 'sprint83_antibiogram',
+                label: 'Sprint 83 - Local Antibiogram AI',
+                version: '2026.03.19',
+                description: 'antibiogram_entries, antibiogram_summaries, culture_sensitivity_results tables',
+                statements: () => this.getSprint83AntibiogramStatements(),
+            },
+            {
+                id: 'sprint84_ai_explainability',
+                label: 'Sprint 84 - AI Explainability Layer',
+                version: '2026.03.19',
+                description: 'ai_recommendation_audits table',
+                statements: () => this.getSprint84AiExplainabilityStatements(),
+            },
+            {
+                id: 'sprint86_smart_scheduling',
+                label: 'Sprint 86 - Smart Scheduling AI',
+                version: '2026.03.19',
+                description: 'scheduling_ai_predictions table; ALTER appointments add ai_recommended_duration, no_show_risk, overbooking_slot',
+                statements: () => this.getSprint86SmartSchedulingStatements(),
+            },
+            {
+                id: 'sprint87_smart_defaults',
+                label: 'Sprint 87 - Smart Defaults + Dynamic Forms',
+                version: '2026.03.19',
+                description: 'form_intelligence_configs table',
+                statements: () => this.getSprint87SmartDefaultsStatements(),
+            },
+            {
+                id: 'sprint88_formulary_optimization',
+                label: 'Sprint 88 - Formulary Optimization AI',
+                version: '2026.03.19',
+                description: 'formulary_ai_suggestions table; ALTER drugs add generic_name_canonical, formulary_tier, etc.',
+                statements: () => this.getSprint88FormularyOptimizationStatements(),
+            },
+            {
+                id: 'sprint89_predictive_risk',
+                label: 'Sprint 89 - Predictive Deterioration & Readmission',
+                version: '2026.03.19',
+                description: 'deterioration_predictions, readmission_predictions tables',
+                statements: () => this.getSprint89PredictiveRiskStatements(),
+            },
+            {
+                id: 'sprint90_federated_learning',
+                label: 'Sprint 90 - Federated Learning Infrastructure',
+                version: '2026.03.19',
+                description: 'fl_rounds, fl_participation_logs tables',
+                statements: () => this.getSprint90FederatedLearningStatements(),
+            },
+            {
+                id: 'sprint91_himis_reporting',
+                label: 'Sprint 91 - MOHCC HIMIS + OpenMRS Migration',
+                version: '2026.03.19',
+                description: 'mohcc_report_submissions, openmrs_migration_logs tables',
+                statements: () => this.getSprint91HimisReportingStatements(),
+            },
+            {
+                id: 'sprint92_fhir_inbound',
+                label: 'Sprint 92 - Bidirectional FHIR Inbound',
+                version: '2026.03.19',
+                description: 'fhir_ingestion_logs table',
+                statements: () => this.getSprint92FhirInboundStatements(),
+            },
+            {
+                id: 'sprint93_multilingual_education',
+                label: 'Sprint 93 - Multilingual Patient Education',
+                version: '2026.03.19',
+                description: 'patient_education_materials table',
+                statements: () => this.getSprint93MultilingualEducationStatements(),
+            },
+            {
+                id: 'sprint94_offline_sync',
+                label: 'Sprint 94 - Offline Sync PWA',
+                version: '2026.03.19',
+                description: 'sync_queue_logs table',
+                statements: () => this.getSprint94OfflineSyncStatements(),
+            },
+            {
+                id: 'sprint95_iot_wearables',
+                label: 'Sprint 95 - IoT / Wearables Integration',
+                version: '2026.03.19',
+                description: 'iot_device_registrations, iot_data_ingestions tables',
+                statements: () => this.getSprint95IotWearablesStatements(),
+            },
+            {
+                id: 'sprint96_radiology_ai',
+                label: 'Sprint 96 - Radiology AI (DICOM + CXR/Retinal/Derm)',
+                version: '2026.03.19',
+                description: 'dicom_studies, radiology_ai_findings tables',
+                statements: () => this.getSprint96RadiologyAiStatements(),
+            },
+            {
+                id: 'sprint97_alert_delivery',
+                label: 'Sprint 97 - Real-Time Critical Alert Delivery',
+                version: '2026.03.19',
+                description: 'clinical_alert_deliveries table; ALTER users add fcm_token, on_call, phone',
+                statements: () => this.getSprint97AlertDeliveryStatements(),
+            },
+            {
+                id: 'sprint98_model_monitoring',
+                label: 'Sprint 98 - AI Model Drift & Fairness Monitoring',
+                version: '2026.03.19',
+                description: 'model_performance_metrics, model_fairness_reports tables',
+                statements: () => this.getSprint98ModelMonitoringStatements(),
+            },
+            {
+                id: 'sprint99_patient_ai',
+                label: 'Sprint 99 - Patient Conversational AI',
+                version: '2026.03.19',
+                description: 'symptom_checker_sessions, adherence_chat_logs tables',
+                statements: () => this.getSprint99PatientAiStatements(),
+            },
+            {
+                id: 'sprint100_trial_matching',
+                label: 'Sprint 100 - Clinical Trial Matching',
+                version: '2026.03.19',
+                description: 'trial_matches table with UNIQUE(patient_id, nct_id)',
+                statements: () => this.getSprint100TrialMatchingStatements(),
+            },
+            {
+                id: 'sprint101_supply_chain_ai',
+                label: 'Sprint 101 - Supply Chain AI / Stockout Prediction',
+                version: '2026.03.19',
+                description: 'pharmacy_inventory, stockout_predictions, procurement_alerts tables',
+                statements: () => this.getSprint101SupplyChainAiStatements(),
+            },
+            {
+                id: 'sprint103_model_registry',
+                label: 'Sprint 103 - Autonomous Learning Loop / Model Registry',
+                version: '2026.03.19',
+                description: 'model_registry table with UNIQUE production constraint per model_name',
+                statements: () => this.getSprint103ModelRegistryStatements(),
+            },
         ];
     }
     getCoreSchemaStatements() {
@@ -2697,6 +2998,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
     }
     async applyClinicSchema(connectionString, options) {
         const tenantDataSource = new typeorm_1.DataSource({
+            name: `tenant_${Date.now()}`,
             type: 'postgres',
             url: connectionString,
         });
@@ -2858,7 +3160,9 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             this.logger.log(`Schema migration completed${pendingBundles.length > 0 ? ` with ${pendingBundles.length} unresolved bundle(s)` : ''}`);
         }
         finally {
-            await tenantDataSource.destroy();
+            if (tenantDataSource.isInitialized) {
+                await tenantDataSource.destroy();
+            }
         }
     }
     getClinicSchema() {
@@ -11911,6 +12215,1930 @@ RECOMMENDATIONS:
         statements.push(`COMMENT ON COLUMN pharmacy_dispensings.amount_paid IS 'Amount paid by patient'`);
         statements.push(`COMMENT ON COLUMN pharmacy_dispensings.discount_amount IS 'Discount amount applied'`);
         return statements;
+    }
+    getSprint59VitalsExtendedStatements() {
+        return [
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS waist_cm NUMERIC(5,1)`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS hip_cm NUMERIC(5,1)`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS bmi NUMERIC(5,2)`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS spo2_percent NUMERIC(5,2)`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS pain_score SMALLINT`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS pupil_left_mm NUMERIC(3,1)`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS pupil_right_mm NUMERIC(3,1)`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS pupil_reaction TEXT`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS glasgow_coma_scale SMALLINT`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS gcs_eye SMALLINT`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS gcs_verbal SMALLINT`,
+            `ALTER TABLE vitals ADD COLUMN IF NOT EXISTS gcs_motor SMALLINT`,
+        ];
+    }
+    getSprint60PatientExtendedSdohStatements() {
+        return [
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS disability_status TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS preferred_language TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS secondary_language TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS next_of_kin_name TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS next_of_kin_relationship TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS next_of_kin_phone TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS insurance_provider TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS insurance_number TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS sdoh_housing TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS sdoh_food_security TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS sdoh_transport TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS sdoh_employment TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS sdoh_education TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS sdoh_social_support TEXT`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS sdoh_screened_at TIMESTAMPTZ`,
+        ];
+    }
+    getSprint61CdssOutcomeFeedbackStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS cdss_decision_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID,
+        encounter_id UUID,
+        rule_id TEXT NOT NULL,
+        rule_version TEXT,
+        input_snapshot JSONB NOT NULL DEFAULT '{}',
+        recommendation JSONB NOT NULL DEFAULT '{}',
+        confidence NUMERIC(5,4),
+        clinician_id UUID,
+        action_taken TEXT CHECK (action_taken IN ('accepted','modified','rejected','deferred')),
+        action_note TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_cdss_log_patient ON cdss_decision_logs (patient_id, created_at DESC)`,
+            `CREATE INDEX IF NOT EXISTS idx_cdss_log_rule ON cdss_decision_logs (rule_id, created_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS cdss_outcome_feedback (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        decision_log_id UUID REFERENCES cdss_decision_logs(id) ON DELETE SET NULL,
+        patient_id UUID,
+        outcome_type TEXT,
+        outcome_date DATE,
+        outcome_value JSONB,
+        notes TEXT,
+        recorded_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS cdss_model_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        rule_id TEXT NOT NULL,
+        metric_date DATE NOT NULL,
+        total_fired INTEGER DEFAULT 0,
+        accepted INTEGER DEFAULT 0,
+        rejected INTEGER DEFAULT 0,
+        modified INTEGER DEFAULT 0,
+        tp INTEGER DEFAULT 0,
+        fp INTEGER DEFAULT 0,
+        tn INTEGER DEFAULT 0,
+        fn INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (rule_id, metric_date)
+      )`,
+        ];
+    }
+    getSprint62ProactiveCareGapsStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS care_gap_rules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        rule_code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT,
+        condition_type TEXT,
+        logic JSONB NOT NULL DEFAULT '{}',
+        priority TEXT CHECK (priority IN ('low','medium','high','critical')) DEFAULT 'medium',
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS care_gaps (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        rule_id UUID REFERENCES care_gap_rules(id) ON DELETE SET NULL,
+        rule_code TEXT,
+        gap_description TEXT,
+        due_date DATE,
+        status TEXT CHECK (status IN ('open','in_progress','resolved','dismissed')) DEFAULT 'open',
+        priority TEXT CHECK (priority IN ('low','medium','high','critical')) DEFAULT 'medium',
+        assigned_to UUID,
+        resolved_at TIMESTAMPTZ,
+        resolution_note TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_care_gaps_patient ON care_gaps (patient_id, status)`,
+            `CREATE TABLE IF NOT EXISTS care_gap_actions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        gap_id UUID REFERENCES care_gaps(id) ON DELETE CASCADE,
+        action_type TEXT,
+        performed_by UUID,
+        performed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        notes TEXT
+      )`,
+        ];
+    }
+    getSprint63AmbientAiStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS ambient_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        provider_id UUID NOT NULL,
+        appointment_id UUID,
+        started_at TIMESTAMPTZ NOT NULL,
+        ended_at TIMESTAMPTZ,
+        status TEXT CHECK (status IN ('recording','processing','completed','failed')) DEFAULT 'recording',
+        audio_storage_key TEXT,
+        duration_seconds INTEGER,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ambient_sessions_patient ON ambient_sessions (patient_id, started_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS ambient_transcripts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID REFERENCES ambient_sessions(id) ON DELETE CASCADE,
+        transcript_text TEXT,
+        speaker_labels JSONB DEFAULT '[]',
+        confidence NUMERIC(5,4),
+        language TEXT DEFAULT 'en',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS ambient_soap_notes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID REFERENCES ambient_sessions(id) ON DELETE CASCADE,
+        subjective TEXT,
+        objective TEXT,
+        assessment TEXT,
+        plan TEXT,
+        icd10_suggestions JSONB DEFAULT '[]',
+        medication_suggestions JSONB DEFAULT '[]',
+        clinician_reviewed BOOLEAN DEFAULT FALSE,
+        review_edits JSONB DEFAULT '{}',
+        finalized_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint64PreChartingStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS encounter_precharts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id UUID,
+        patient_id UUID NOT NULL,
+        provider_id UUID NOT NULL,
+        generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        chief_complaint TEXT,
+        relevant_history JSONB DEFAULT '[]',
+        active_medications JSONB DEFAULT '[]',
+        active_allergies JSONB DEFAULT '[]',
+        pending_orders JSONB DEFAULT '[]',
+        overdue_screenings JSONB DEFAULT '[]',
+        risk_flags JSONB DEFAULT '[]',
+        suggested_agenda JSONB DEFAULT '[]',
+        clinician_reviewed BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_precharts_appointment ON encounter_precharts (appointment_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_precharts_patient ON encounter_precharts (patient_id, generated_at DESC)`,
+        ];
+    }
+    getSprint65SmartInboxStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS inbox_messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id UUID NOT NULL,
+        message_type TEXT CHECK (message_type IN ('lab_result','imaging','referral','patient_message','task','alert','system')) DEFAULT 'system',
+        subject TEXT,
+        body TEXT,
+        sender_id UUID,
+        sender_name TEXT,
+        patient_id UUID,
+        priority TEXT CHECK (priority IN ('low','normal','high','urgent')) DEFAULT 'normal',
+        is_read BOOLEAN DEFAULT FALSE,
+        is_actioned BOOLEAN DEFAULT FALSE,
+        actioned_at TIMESTAMPTZ,
+        related_entity_type TEXT,
+        related_entity_id UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_inbox_provider ON inbox_messages (provider_id, is_read, priority)`,
+            `CREATE TABLE IF NOT EXISTS inbox_triage_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        message_id UUID REFERENCES inbox_messages(id) ON DELETE CASCADE,
+        ai_priority TEXT,
+        ai_category TEXT,
+        ai_summary TEXT,
+        ai_action_suggestion TEXT,
+        confidence NUMERIC(5,4),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint66TbModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS tb_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        registered_by UUID NOT NULL,
+        registration_date DATE NOT NULL,
+        tb_type TEXT CHECK (tb_type IN ('pulmonary','extrapulmonary','disseminated')),
+        site_of_disease TEXT,
+        patient_category TEXT CHECK (patient_category IN ('new','relapse','treatment_after_failure','treatment_after_loss_to_follow_up','other')),
+        hiv_status TEXT CHECK (hiv_status IN ('positive','negative','unknown')),
+        baseline_weight_kg NUMERIC(5,2),
+        outcome TEXT,
+        outcome_date DATE,
+        treatment_end_date DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_tb_cases_patient ON tb_cases (patient_id, registration_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS tb_treatment_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        case_id UUID REFERENCES tb_cases(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL,
+        regimen TEXT NOT NULL,
+        phase TEXT CHECK (phase IN ('intensive','continuation')),
+        start_date DATE NOT NULL,
+        end_date DATE,
+        dot_adherence_pct NUMERIC(5,2),
+        adverse_effects JSONB DEFAULT '[]',
+        weight_kg NUMERIC(5,2),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS tb_contact_traces (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        case_id UUID REFERENCES tb_cases(id) ON DELETE CASCADE,
+        contact_name TEXT NOT NULL,
+        relationship TEXT,
+        contact_date DATE,
+        tst_result TEXT,
+        igra_result TEXT,
+        ltbi_treatment_started BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS tb_sputum_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        case_id UUID REFERENCES tb_cases(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL,
+        sample_date DATE NOT NULL,
+        test_type TEXT CHECK (test_type IN ('smear','culture','xpert','line_probe')),
+        result TEXT CHECK (result IN ('positive','negative','contaminated','pending')),
+        bacillary_load TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS tb_drug_susceptibility (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        case_id UUID REFERENCES tb_cases(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL,
+        test_date DATE NOT NULL,
+        method TEXT,
+        results JSONB NOT NULL DEFAULT '{}',
+        xdr_tb BOOLEAN DEFAULT FALSE,
+        mdr_tb BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint67PediatricsModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS growth_measurements (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        measured_by UUID NOT NULL,
+        measurement_date DATE NOT NULL,
+        weight_kg NUMERIC(5,3),
+        height_cm NUMERIC(5,1),
+        head_circumference_cm NUMERIC(5,1),
+        muac_cm NUMERIC(4,1),
+        weight_for_age_zscore NUMERIC(5,2),
+        height_for_age_zscore NUMERIC(5,2),
+        weight_for_height_zscore NUMERIC(5,2),
+        bmi_for_age_zscore NUMERIC(5,2),
+        nutritional_status TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_growth_patient ON growth_measurements (patient_id, measurement_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS developmental_milestones (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        age_months SMALLINT,
+        gross_motor JSONB DEFAULT '{}',
+        fine_motor JSONB DEFAULT '{}',
+        language_communication JSONB DEFAULT '{}',
+        social_emotional JSONB DEFAULT '{}',
+        cognitive JSONB DEFAULT '{}',
+        overall_status TEXT CHECK (overall_status IN ('on_track','monitor','delayed','referred')),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS neonatal_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date TIMESTAMPTZ NOT NULL,
+        birth_weight_kg NUMERIC(5,3),
+        gestational_age_weeks SMALLINT,
+        apgar_1min SMALLINT,
+        apgar_5min SMALLINT,
+        delivery_mode TEXT,
+        complications JSONB DEFAULT '[]',
+        feeding_method TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS pediatric_consultations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        provider_id UUID NOT NULL,
+        consultation_date TIMESTAMPTZ NOT NULL,
+        chief_complaint TEXT,
+        imci_classification JSONB DEFAULT '[]',
+        danger_signs JSONB DEFAULT '[]',
+        diagnoses JSONB DEFAULT '[]',
+        treatment_plan TEXT,
+        follow_up_date DATE,
+        referred BOOLEAN DEFAULT FALSE,
+        referral_reason TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ped_consult_patient ON pediatric_consultations (patient_id, consultation_date DESC)`,
+        ];
+    }
+    getSprint68MentalHealthModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS mental_health_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        clinician_id UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        assessment_tool TEXT,
+        total_score INTEGER,
+        severity TEXT CHECK (severity IN ('none','minimal','mild','moderate','moderately_severe','severe')),
+        primary_diagnosis TEXT,
+        risk_level TEXT CHECK (risk_level IN ('low','moderate','high','imminent')),
+        suicide_risk_score SMALLINT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_mh_assess_patient ON mental_health_assessments (patient_id, assessment_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS mental_health_treatment_plans (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        clinician_id UUID NOT NULL,
+        plan_date DATE NOT NULL,
+        diagnosis TEXT,
+        goals JSONB DEFAULT '[]',
+        interventions JSONB DEFAULT '[]',
+        medications JSONB DEFAULT '[]',
+        review_date DATE,
+        status TEXT CHECK (status IN ('active','completed','discontinued')) DEFAULT 'active',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS mental_health_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        clinician_id UUID NOT NULL,
+        session_date TIMESTAMPTZ NOT NULL,
+        session_type TEXT CHECK (session_type IN ('individual','group','family','crisis','review')),
+        duration_minutes SMALLINT,
+        progress_notes TEXT,
+        risk_assessment TEXT,
+        next_session_date DATE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS crisis_incidents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        reported_by UUID NOT NULL,
+        incident_date TIMESTAMPTZ NOT NULL,
+        crisis_type TEXT,
+        description TEXT,
+        interventions JSONB DEFAULT '[]',
+        outcome TEXT,
+        follow_up_plan TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS substance_use_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        substances JSONB NOT NULL DEFAULT '[]',
+        audit_c_score SMALLINT,
+        dast_score SMALLINT,
+        treatment_recommended TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint69MalariaModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS malaria_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        diagnosed_by UUID NOT NULL,
+        diagnosis_date DATE NOT NULL,
+        species TEXT CHECK (species IN ('P_falciparum','P_vivax','P_malariae','P_ovale','P_knowlesi','mixed','unknown')),
+        severity TEXT CHECK (severity IN ('uncomplicated','severe','cerebral')),
+        parasitaemia_percent NUMERIC(5,2),
+        hb_g_dl NUMERIC(4,2),
+        outcome TEXT,
+        travel_history TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_malaria_patient ON malaria_cases (patient_id, diagnosis_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS malaria_rdt_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        case_id UUID REFERENCES malaria_cases(id) ON DELETE SET NULL,
+        patient_id UUID NOT NULL,
+        test_date TIMESTAMPTZ NOT NULL,
+        rdt_brand TEXT,
+        pf_result BOOLEAN,
+        pv_result BOOLEAN,
+        pan_result BOOLEAN,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS malaria_treatments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        case_id UUID REFERENCES malaria_cases(id) ON DELETE SET NULL,
+        patient_id UUID NOT NULL,
+        regimen TEXT NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE,
+        weight_kg NUMERIC(5,2),
+        artemisinin_doses JSONB DEFAULT '[]',
+        iv_artesunate_used BOOLEAN DEFAULT FALSE,
+        treatment_outcome TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint70GeriatricsModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS geriatric_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        cga_domains JSONB NOT NULL DEFAULT '{}',
+        functional_status TEXT CHECK (functional_status IN ('independent','mild_dependency','moderate_dependency','severe_dependency','total_dependency')),
+        adl_score SMALLINT,
+        iadl_score SMALLINT,
+        barthel_index SMALLINT,
+        polypharmacy BOOLEAN DEFAULT FALSE,
+        falls_last_year SMALLINT DEFAULT 0,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_geriatric_patient ON geriatric_assessments (patient_id, assessment_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS fall_risk_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        tool TEXT CHECK (tool IN ('morse','stratify','hendrich','timed_up_go')),
+        total_score SMALLINT,
+        risk_level TEXT CHECK (risk_level IN ('low','moderate','high')),
+        tug_seconds NUMERIC(5,2),
+        interventions JSONB DEFAULT '[]',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS cognitive_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        tool TEXT CHECK (tool IN ('mmse','moca','adas_cog','clock_drawing','gds','csid')),
+        total_score SMALLINT,
+        max_score SMALLINT,
+        severity TEXT CHECK (severity IN ('normal','mild_ci','mild_dementia','moderate_dementia','severe_dementia')),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS frailty_scores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        tool TEXT CHECK (tool IN ('fried','cfs','prisma7')),
+        total_score SMALLINT,
+        frailty_level TEXT CHECK (frailty_level IN ('robust','pre_frail','frail')),
+        components JSONB DEFAULT '{}',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS polypharmacy_reviews (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        reviewed_by UUID NOT NULL,
+        review_date DATE NOT NULL,
+        total_medications SMALLINT,
+        potentially_inappropriate JSONB DEFAULT '[]',
+        drug_interactions JSONB DEFAULT '[]',
+        beers_criteria_flags JSONB DEFAULT '[]',
+        stopp_start_flags JSONB DEFAULT '[]',
+        deprescribing_recommendations JSONB DEFAULT '[]',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint71NeurologyModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS seizure_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        recorded_by UUID NOT NULL,
+        seizure_date TIMESTAMPTZ NOT NULL,
+        seizure_type TEXT,
+        duration_seconds INTEGER,
+        triggers JSONB DEFAULT '[]',
+        postictal_state TEXT,
+        current_medications JSONB DEFAULT '[]',
+        eeg_finding TEXT,
+        mri_finding TEXT,
+        status_epilepticus BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_seizure_patient ON seizure_records (patient_id, seizure_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS stroke_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        onset_time TIMESTAMPTZ NOT NULL,
+        stroke_type TEXT CHECK (stroke_type IN ('ischaemic','haemorrhagic','tia','unknown')),
+        nihss_score SMALLINT,
+        aspects_score SMALLINT,
+        thrombolysis_given BOOLEAN DEFAULT FALSE,
+        thrombectomy_given BOOLEAN DEFAULT FALSE,
+        door_to_needle_minutes INTEGER,
+        outcome TEXT,
+        mrs_discharge SMALLINT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS headache_diaries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        recorded_by UUID NOT NULL,
+        headache_date DATE NOT NULL,
+        headache_type TEXT CHECK (headache_type IN ('migraine','tension','cluster','secondary','unclassified')),
+        severity_nrs SMALLINT CHECK (severity_nrs BETWEEN 0 AND 10),
+        duration_hours NUMERIC(5,1),
+        triggers JSONB DEFAULT '[]',
+        associated_symptoms JSONB DEFAULT '[]',
+        medication_used TEXT,
+        relief_obtained BOOLEAN,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS cognitive_screenings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        screened_by UUID NOT NULL,
+        screening_date DATE NOT NULL,
+        tool TEXT CHECK (tool IN ('mmse','moca','ace_iii','slums')),
+        total_score SMALLINT,
+        max_score SMALLINT,
+        domains JSONB DEFAULT '{}',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint72PulmonologyModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS spirometry_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        performed_by UUID NOT NULL,
+        test_date DATE NOT NULL,
+        fvc_l NUMERIC(5,3),
+        fev1_l NUMERIC(5,3),
+        fev1_fvc_ratio NUMERIC(5,4),
+        fev1_percent_predicted NUMERIC(5,2),
+        fvc_percent_predicted NUMERIC(5,2),
+        tlc_l NUMERIC(5,3),
+        dlco_percent_predicted NUMERIC(5,2),
+        reversibility_test BOOLEAN DEFAULT FALSE,
+        post_bronchodilator_fev1 NUMERIC(5,3),
+        gold_stage TEXT,
+        interpretation TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_spirometry_patient ON spirometry_results (patient_id, test_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS copd_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        mmrc_dyspnoea SMALLINT CHECK (mmrc_dyspnoea BETWEEN 0 AND 4),
+        cat_score SMALLINT,
+        gold_group TEXT CHECK (gold_group IN ('A','B','C','D','E')),
+        exacerbations_last_year SMALLINT DEFAULT 0,
+        hospitalizations_last_year SMALLINT DEFAULT 0,
+        current_medications JSONB DEFAULT '[]',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS asthma_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        gina_control TEXT CHECK (gina_control IN ('well_controlled','partly_controlled','uncontrolled')),
+        gina_step SMALLINT CHECK (gina_step BETWEEN 1 AND 5),
+        ace_score SMALLINT,
+        reliever_use_week SMALLINT,
+        night_waking BOOLEAN DEFAULT FALSE,
+        activity_limitation BOOLEAN DEFAULT FALSE,
+        current_ics_dose TEXT,
+        trigger_factors JSONB DEFAULT '[]',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS peak_flow_diaries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        recorded_at TIMESTAMPTZ NOT NULL,
+        pef_l_min NUMERIC(5,1),
+        personal_best_l_min NUMERIC(5,1),
+        percent_predicted NUMERIC(5,2),
+        zone TEXT GENERATED ALWAYS AS (
+          CASE
+            WHEN percent_predicted >= 80 THEN 'green'
+            WHEN percent_predicted >= 50 THEN 'yellow'
+            ELSE 'red'
+          END
+        ) STORED,
+        symptoms TEXT,
+        reliever_taken BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_peak_flow_patient ON peak_flow_diaries (patient_id, recorded_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS oxygen_therapy_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        prescribed_by UUID NOT NULL,
+        prescription_date DATE NOT NULL,
+        indication TEXT,
+        flow_rate_l_min NUMERIC(4,1),
+        delivery_device TEXT,
+        target_spo2_min NUMERIC(4,1),
+        target_spo2_max NUMERIC(4,1),
+        hours_per_day SMALLINT,
+        is_active BOOLEAN DEFAULT TRUE,
+        review_date DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint73NephrologyModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS ckd_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        egfr_ml_min NUMERIC(6,2),
+        egfr_formula TEXT CHECK (egfr_formula IN ('CKD_EPI','MDRD','Cockcroft_Gault')),
+        ckd_stage TEXT CHECK (ckd_stage IN ('G1','G2','G3a','G3b','G4','G5','G5D')),
+        acr_mg_mmol NUMERIC(7,3),
+        acr_category TEXT CHECK (acr_category IN ('A1','A2','A3')),
+        kdigo_risk TEXT,
+        creatinine_umol NUMERIC(7,2),
+        urea_mmol NUMERIC(6,2),
+        potassium_mmol NUMERIC(5,2),
+        bicarbonate_mmol NUMERIC(5,2),
+        phosphate_mmol NUMERIC(5,2),
+        haemoglobin_g_dl NUMERIC(4,2),
+        bp_systolic SMALLINT,
+        bp_diastolic SMALLINT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ckd_patient ON ckd_assessments (patient_id, assessment_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS dialysis_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        performed_by UUID NOT NULL,
+        session_date TIMESTAMPTZ NOT NULL,
+        dialysis_type TEXT CHECK (dialysis_type IN ('HD','HDF','CRRT','PD_CAPD','PD_APD','SLED')),
+        access_type TEXT,
+        duration_hours NUMERIC(4,2),
+        blood_flow_ml_min NUMERIC(5,1),
+        dialysate_flow_ml_min NUMERIC(5,1),
+        uf_volume_ml NUMERIC(7,1),
+        kt_v NUMERIC(5,3),
+        urr_percent NUMERIC(5,2),
+        pre_weight_kg NUMERIC(5,2),
+        post_weight_kg NUMERIC(5,2),
+        complications TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS fluid_balance_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        recorded_by UUID NOT NULL,
+        recorded_at TIMESTAMPTZ NOT NULL,
+        intake_oral_ml NUMERIC(7,1) DEFAULT 0,
+        intake_iv_ml NUMERIC(7,1) DEFAULT 0,
+        intake_other_ml NUMERIC(7,1) DEFAULT 0,
+        output_urine_ml NUMERIC(7,1) DEFAULT 0,
+        output_drain_ml NUMERIC(7,1) DEFAULT 0,
+        output_other_ml NUMERIC(7,1) DEFAULT 0,
+        net_balance_ml NUMERIC(9,1) GENERATED ALWAYS AS (
+          (COALESCE(intake_oral_ml,0) + COALESCE(intake_iv_ml,0) + COALESCE(intake_other_ml,0))
+          - (COALESCE(output_urine_ml,0) + COALESCE(output_drain_ml,0) + COALESCE(output_other_ml,0))
+        ) STORED,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_fluid_patient ON fluid_balance_records (patient_id, recorded_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS renal_biopsies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        performed_by UUID NOT NULL,
+        biopsy_date DATE NOT NULL,
+        indication TEXT,
+        histopathology_result TEXT,
+        immunofluorescence TEXT,
+        electron_microscopy TEXT,
+        diagnosis TEXT,
+        complications TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS transplant_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        transplant_date DATE NOT NULL,
+        organ TEXT CHECK (organ IN ('kidney','liver','heart','lung','pancreas','other')),
+        donor_type TEXT CHECK (donor_type IN ('living_related','living_unrelated','deceased_dcd','deceased_dbd')),
+        hla_mismatch TEXT,
+        initial_function TEXT CHECK (initial_function IN ('immediate','delayed','primary_non_function')),
+        rejection_episodes JSONB DEFAULT '[]',
+        current_immunosuppression JSONB DEFAULT '[]',
+        latest_egfr NUMERIC(6,2),
+        graft_status TEXT CHECK (graft_status IN ('functioning','failed','returned_to_dialysis')),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint74DermatologyModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS skin_lesions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        documented_by UUID NOT NULL,
+        documentation_date DATE NOT NULL,
+        location TEXT,
+        morphology TEXT,
+        size_mm NUMERIC(5,1),
+        colour TEXT,
+        borders TEXT CHECK (borders IN ('regular','irregular','indistinct')),
+        diameter_mm NUMERIC(5,1),
+        evolution TEXT,
+        dermoscopy_findings TEXT,
+        biopsy_result TEXT,
+        diagnosis TEXT,
+        management_plan TEXT,
+        images JSONB DEFAULT '[]',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_lesion_patient ON skin_lesions (patient_id, documentation_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS wound_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        wound_type TEXT CHECK (wound_type IN ('pressure_ulcer','diabetic_foot','venous_leg_ulcer','arterial_ulcer','surgical','traumatic','other')),
+        location TEXT,
+        size_length_cm NUMERIC(5,1),
+        size_width_cm NUMERIC(5,1),
+        depth_cm NUMERIC(4,1),
+        stage TEXT,
+        bed_tissue JSONB DEFAULT '{}',
+        exudate_type TEXT,
+        exudate_amount TEXT CHECK (exudate_amount IN ('none','minimal','moderate','heavy')),
+        infection_signs BOOLEAN DEFAULT FALSE,
+        pain_score SMALLINT,
+        dressing_type TEXT,
+        next_review DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS burn_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        assessed_by UUID NOT NULL,
+        assessment_date TIMESTAMPTZ NOT NULL,
+        mechanism TEXT CHECK (mechanism IN ('thermal','chemical','electrical','radiation')),
+        tbsa_percent NUMERIC(5,2),
+        depth_classification TEXT CHECK (depth_classification IN ('superficial','superficial_partial','deep_partial','full_thickness','subdermal')),
+        areas_affected JSONB DEFAULT '[]',
+        inhalation_injury BOOLEAN DEFAULT FALSE,
+        fluid_resuscitation_ml NUMERIC(8,2),
+        parkland_total_ml NUMERIC(8,2),
+        admission_required BOOLEAN DEFAULT FALSE,
+        referral_to_burns_unit BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS dermatology_notes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        clinician_id UUID NOT NULL,
+        note_date DATE NOT NULL,
+        consultation_type TEXT CHECK (consultation_type IN ('new','follow_up','procedure','emergency')),
+        subjective TEXT,
+        objective TEXT,
+        assessment TEXT,
+        plan TEXT,
+        procedures JSONB DEFAULT '[]',
+        follow_up_weeks SMALLINT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint75PalliativeCareModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS palliative_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        clinician_id UUID NOT NULL,
+        assessment_date TIMESTAMPTZ NOT NULL,
+        ecog_ps SMALLINT CHECK (ecog_ps BETWEEN 0 AND 4),
+        kps SMALLINT CHECK (kps BETWEEN 0 AND 100),
+        palliative_phase TEXT CHECK (palliative_phase IN ('palliative','end_of_life','terminal','bereavement')),
+        ppi_score NUMERIC(5,2),
+        pps_score SMALLINT,
+        clinician_notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_pall_assess_patient ON palliative_assessments (patient_id, assessment_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS symptom_burden_scores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        pain_score SMALLINT CHECK (pain_score BETWEEN 0 AND 10),
+        tiredness_score SMALLINT CHECK (tiredness_score BETWEEN 0 AND 10),
+        nausea_score SMALLINT CHECK (nausea_score BETWEEN 0 AND 10),
+        depression_score SMALLINT CHECK (depression_score BETWEEN 0 AND 10),
+        anxiety_score SMALLINT CHECK (anxiety_score BETWEEN 0 AND 10),
+        drowsiness_score SMALLINT CHECK (drowsiness_score BETWEEN 0 AND 10),
+        appetite_score SMALLINT CHECK (appetite_score BETWEEN 0 AND 10),
+        wellbeing_score SMALLINT CHECK (wellbeing_score BETWEEN 0 AND 10),
+        dyspnoea_score SMALLINT CHECK (dyspnoea_score BETWEEN 0 AND 10),
+        esas_total SMALLINT GENERATED ALWAYS AS (
+          COALESCE(pain_score,0)+COALESCE(tiredness_score,0)+COALESCE(nausea_score,0)+COALESCE(depression_score,0)+
+          COALESCE(anxiety_score,0)+COALESCE(drowsiness_score,0)+COALESCE(appetite_score,0)+
+          COALESCE(wellbeing_score,0)+COALESCE(dyspnoea_score,0)
+        ) STORED,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_esas_patient ON symptom_burden_scores (patient_id, recorded_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS goals_of_care (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        documented_by UUID NOT NULL,
+        document_date DATE NOT NULL,
+        cpr_wish TEXT CHECK (cpr_wish IN ('yes','no','discuss')),
+        ventilation_wish TEXT CHECK (ventilation_wish IN ('yes','no','discuss')),
+        artificial_nutrition_wish TEXT CHECK (artificial_nutrition_wish IN ('yes','no','discuss')),
+        hospital_admission_wish TEXT CHECK (hospital_admission_wish IN ('yes','no','comfort','discuss')),
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_of_care_active ON goals_of_care (patient_id) WHERE is_active = TRUE`,
+            `CREATE TABLE IF NOT EXISTS advance_directive_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        document_type TEXT NOT NULL,
+        document_date DATE NOT NULL,
+        summary TEXT,
+        witness_name TEXT,
+        physician_name TEXT,
+        storage_key TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        superseded_by_id UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS palliative_medication_reviews (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        reviewed_by UUID NOT NULL,
+        review_date TIMESTAMPTZ NOT NULL,
+        opioid_equivalence_mg_oral NUMERIC(8,2),
+        syringe_driver_contents JSONB NOT NULL DEFAULT '[]',
+        prn_medications JSONB NOT NULL DEFAULT '[]',
+        discontinued_medications JSONB NOT NULL DEFAULT '[]',
+        route_of_administration TEXT,
+        bowel_care_plan TEXT,
+        anticipatory_medications JSONB NOT NULL DEFAULT '[]',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+        ];
+    }
+    getSprint76NutritionModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS nutritional_screenings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        screened_by UUID NOT NULL,
+        screening_tool TEXT NOT NULL CHECK (screening_tool IN ('NRS2002','MUST','MNA','STAMP_pediatric','SNAQ')),
+        total_score SMALLINT NOT NULL,
+        risk_category TEXT NOT NULL CHECK (risk_category IN ('low','moderate','high')),
+        follow_up_required BOOLEAN NOT NULL DEFAULT FALSE,
+        notes TEXT,
+        screened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_nutr_screen_patient ON nutritional_screenings (patient_id, screened_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS nutritional_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        dietitian_id UUID NOT NULL,
+        assessment_date DATE NOT NULL,
+        sga_score TEXT CHECK (sga_score IN ('A','B','C')),
+        body_composition JSONB NOT NULL DEFAULT '{}',
+        dietary_history TEXT,
+        intolerances TEXT[],
+        meal_frequency SMALLINT,
+        supplements TEXT[],
+        current_weight_kg NUMERIC(6,2),
+        ideal_weight_kg NUMERIC(6,2),
+        height_cm NUMERIC(5,1),
+        bmi NUMERIC(4,1),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS dietary_prescriptions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        prescribed_by UUID NOT NULL,
+        prescription_date DATE NOT NULL,
+        calorie_target NUMERIC(7,1),
+        protein_target_g NUMERIC(6,1),
+        fluid_target_ml NUMERIC(7,1),
+        route TEXT NOT NULL CHECK (route IN ('oral','NGT','PEG','TPN','PN','NJ')),
+        formula TEXT,
+        special_diet TEXT CHECK (special_diet IN ('standard','diabetic','renal','cardiac','low_sodium','low_fat','ketogenic','high_protein','vegan','gluten_free','other')),
+        restrictions JSONB NOT NULL DEFAULT '[]',
+        duration_days SMALLINT,
+        review_date DATE,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE TABLE IF NOT EXISTS nutrition_monitoring (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        recorded_by UUID NOT NULL,
+        monitoring_date DATE NOT NULL,
+        actual_calories_intake NUMERIC(7,1),
+        actual_protein_intake_g NUMERIC(6,1),
+        oral_intake_percent SMALLINT CHECK (oral_intake_percent BETWEEN 0 AND 100),
+        tolerance_issues TEXT,
+        weight_kg NUMERIC(6,2),
+        albumin_g_dl NUMERIC(4,2),
+        prealbumin_mg_dl NUMERIC(5,2),
+        plan_adjustment TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_nutr_mon_patient ON nutrition_monitoring (patient_id, monitoring_date DESC)`,
+        ];
+    }
+    getSprint77IcuModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS icu_admissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        admission_id UUID,
+        icu_admission_date TIMESTAMPTZ NOT NULL,
+        icu_discharge_date TIMESTAMPTZ,
+        admission_source TEXT,
+        primary_diagnosis TEXT,
+        apache_ii_score SMALLINT,
+        sofa_admission SMALLINT,
+        icu_discharge_reason TEXT,
+        mortality_predicted NUMERIC(5,2),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_icu_adm_patient ON icu_admissions (patient_id, icu_admission_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS sofa_scores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        scored_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        pao2_fio2 NUMERIC(6,1),
+        respiration SMALLINT CHECK (respiration BETWEEN 0 AND 4),
+        platelets NUMERIC(7,0),
+        coagulation SMALLINT CHECK (coagulation BETWEEN 0 AND 4),
+        bilirubin_umol NUMERIC(7,1),
+        liver SMALLINT CHECK (liver BETWEEN 0 AND 4),
+        map_mmhg NUMERIC(5,1),
+        vasopressors TEXT,
+        cardiovascular SMALLINT CHECK (cardiovascular BETWEEN 0 AND 4),
+        gcs SMALLINT CHECK (gcs BETWEEN 3 AND 15),
+        cns SMALLINT CHECK (cns BETWEEN 0 AND 4),
+        creatinine_umol NUMERIC(7,1),
+        urine_output_ml NUMERIC(7,1),
+        renal SMALLINT CHECK (renal BETWEEN 0 AND 4),
+        total_sofa SMALLINT,
+        delta_sofa SMALLINT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_sofa_patient ON sofa_scores (patient_id, scored_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS ventilator_settings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        recorded_at TIMESTAMPTZ NOT NULL,
+        mode TEXT NOT NULL CHECK (mode IN ('AC_VC','AC_PC','SIMV','CPAP','PRVC','BiPAP','HFNC','NIV_CPAP','NIV_BiPAP')),
+        tidal_volume_ml NUMERIC(6,1),
+        rate SMALLINT,
+        fio2_pct NUMERIC(5,2),
+        peep_cmh2o NUMERIC(5,1),
+        i_pressure_cmh2o NUMERIC(5,1),
+        pip_cmh2o NUMERIC(5,1),
+        map_airway NUMERIC(5,1),
+        compliance_ml_cmh2o NUMERIC(6,2),
+        spo2_pct NUMERIC(5,2),
+        pao2_kpa NUMERIC(5,1),
+        paco2_kpa NUMERIC(5,1),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_vent_patient ON ventilator_settings (patient_id, recorded_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS sedation_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        rass_target SMALLINT CHECK (rass_target BETWEEN -5 AND 4),
+        rass_actual SMALLINT CHECK (rass_actual BETWEEN -5 AND 4),
+        cam_icu_result TEXT CHECK (cam_icu_result IN ('positive','negative','unable_to_assess')),
+        analgesic JSONB NOT NULL DEFAULT '{}',
+        sedative JSONB NOT NULL DEFAULT '{}',
+        nmba_used BOOLEAN NOT NULL DEFAULT FALSE,
+        sab_hold_date DATE,
+        wakefulness_trial_completed BOOLEAN NOT NULL DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_sed_patient ON sedation_records (patient_id, recorded_at DESC)`,
+            `CREATE TABLE IF NOT EXISTS central_line_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        line_type TEXT NOT NULL CHECK (line_type IN ('CVL','arterial','PICC','Midline','PA_catheter','dialysis')),
+        site TEXT,
+        insertion_date DATE NOT NULL,
+        removal_date DATE,
+        inserted_by UUID,
+        indication TEXT,
+        dressing_changes JSONB NOT NULL DEFAULT '[]',
+        complications JSONB NOT NULL DEFAULT '[]',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_line_patient ON central_line_records (patient_id, insertion_date DESC)`,
+            `CREATE TABLE IF NOT EXISTS vasopressor_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        drug TEXT NOT NULL,
+        dose NUMERIC(8,3),
+        unit TEXT,
+        start_time TIMESTAMPTZ NOT NULL,
+        stop_time TIMESTAMPTZ,
+        titrations JSONB NOT NULL DEFAULT '[]',
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+        ];
+    }
+    getSprint103ModelRegistryStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS model_registry (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(50) NOT NULL,
+        version VARCHAR(20) NOT NULL,
+        round_id UUID,
+        status VARCHAR(20) NOT NULL DEFAULT 'staging',
+        minio_path TEXT NOT NULL,
+        auc_roc FLOAT,
+        brier_score FLOAT,
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        tenant_count INTEGER NOT NULL DEFAULT 0,
+        model_hash VARCHAR(64),
+        feature_names JSONB NOT NULL DEFAULT '[]',
+        framework VARCHAR(20) NOT NULL DEFAULT 'sklearn',
+        promoted_at TIMESTAMPTZ,
+        retired_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_model_reg_name_status ON model_registry(model_name, status)`,
+            `CREATE UNIQUE INDEX IF NOT EXISTS idx_model_reg_production ON model_registry(model_name) WHERE status='production'`,
+        ];
+    }
+    getSprint96RadiologyAiStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS dicom_studies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        imaging_order_id UUID,
+        study_uid VARCHAR(200) NOT NULL UNIQUE,
+        modality VARCHAR(20) NOT NULL,
+        body_part VARCHAR(50),
+        storage_key TEXT NOT NULL,
+        file_size_bytes BIGINT DEFAULT 0,
+        ai_analysis_requested BOOLEAN NOT NULL DEFAULT FALSE,
+        ai_analysis_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        acquired_at TIMESTAMPTZ,
+        uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_dicom_patient ON dicom_studies(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_dicom_status ON dicom_studies(ai_analysis_status)`,
+            `CREATE TABLE IF NOT EXISTS radiology_ai_findings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        study_id UUID NOT NULL,
+        patient_id UUID NOT NULL,
+        modality VARCHAR(20) NOT NULL,
+        findings JSONB NOT NULL DEFAULT '[]',
+        top_finding TEXT,
+        overall_confidence FLOAT,
+        heatmap_storage_key TEXT,
+        model_version VARCHAR(50),
+        radiologist_reviewed BOOLEAN NOT NULL DEFAULT FALSE,
+        radiologist_notes TEXT,
+        alerted BOOLEAN NOT NULL DEFAULT FALSE,
+        analyzed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_rad_findings_study ON radiology_ai_findings(study_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_rad_findings_patient ON radiology_ai_findings(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_rad_findings_alerted ON radiology_ai_findings(alerted) WHERE alerted=TRUE`,
+        ];
+    }
+    getSprint97AlertDeliveryStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS clinical_alert_deliveries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        alert_type VARCHAR(50) NOT NULL,
+        source_entity_id UUID NOT NULL,
+        patient_id UUID NOT NULL,
+        recipient_user_id UUID NOT NULL,
+        recipient_role VARCHAR(30),
+        severity VARCHAR(20) NOT NULL,
+        message TEXT NOT NULL,
+        payload JSONB NOT NULL DEFAULT '{}',
+        websocket_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        fcm_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        sms_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
+        acknowledged_at TIMESTAMPTZ,
+        acknowledged_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_alert_del_recipient ON clinical_alert_deliveries(recipient_user_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_alert_del_patient ON clinical_alert_deliveries(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_alert_del_ack ON clinical_alert_deliveries(acknowledged) WHERE acknowledged=FALSE`,
+            `ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT`,
+            `ALTER TABLE users ADD COLUMN IF NOT EXISTS on_call BOOLEAN NOT NULL DEFAULT FALSE`,
+            `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)`,
+        ];
+    }
+    getSprint98ModelMonitoringStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS model_performance_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(50) NOT NULL,
+        evaluation_period VARCHAR(10) NOT NULL,
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        auc_roc FLOAT,
+        brier_score FLOAT,
+        sensitivity FLOAT,
+        specificity FLOAT,
+        ppv FLOAT,
+        calibration_data JSONB,
+        drift_detected BOOLEAN NOT NULL DEFAULT FALSE,
+        baseline_auc FLOAT,
+        computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_mpf_model_period ON model_performance_metrics(model_name, evaluation_period)`,
+            `CREATE INDEX IF NOT EXISTS idx_mpf_drift ON model_performance_metrics(drift_detected) WHERE drift_detected=TRUE`,
+            `CREATE TABLE IF NOT EXISTS model_fairness_reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        model_name VARCHAR(50) NOT NULL,
+        evaluation_period VARCHAR(10) NOT NULL,
+        dimension VARCHAR(30) NOT NULL,
+        group_metrics JSONB NOT NULL DEFAULT '{}',
+        max_disparity FLOAT,
+        fairness_flag BOOLEAN NOT NULL DEFAULT FALSE,
+        computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_mfr_model ON model_fairness_reports(model_name, evaluation_period)`,
+            `CREATE INDEX IF NOT EXISTS idx_mfr_flag ON model_fairness_reports(fairness_flag) WHERE fairness_flag=TRUE`,
+        ];
+    }
+    getSprint99PatientAiStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS symptom_checker_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        reported_symptoms JSONB NOT NULL DEFAULT '[]',
+        duration_days INTEGER,
+        severity VARCHAR(20),
+        differential JSONB NOT NULL DEFAULT '[]',
+        triage_level VARCHAR(20),
+        recommended_action TEXT,
+        escalated_to_encounter BOOLEAN NOT NULL DEFAULT FALSE,
+        encounter_id UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_symptom_patient ON symptom_checker_sessions(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_symptom_triage ON symptom_checker_sessions(triage_level)`,
+            `CREATE TABLE IF NOT EXISTS adherence_chat_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        session_id UUID NOT NULL,
+        message_role VARCHAR(10) NOT NULL,
+        message TEXT NOT NULL,
+        intent VARCHAR(30),
+        medications_discussed JSONB NOT NULL DEFAULT '[]',
+        adherence_concern_flagged BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_adherence_patient ON adherence_chat_logs(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_adherence_session ON adherence_chat_logs(session_id)`,
+        ];
+    }
+    getSprint100TrialMatchingStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS trial_matches (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        nct_id VARCHAR(20) NOT NULL,
+        trial_title TEXT NOT NULL,
+        phase VARCHAR(20),
+        condition VARCHAR(200) NOT NULL,
+        eligibility_score FLOAT NOT NULL DEFAULT 0,
+        inclusion_met JSONB NOT NULL DEFAULT '[]',
+        exclusion_flags JSONB NOT NULL DEFAULT '[]',
+        sponsor VARCHAR(200),
+        locations JSONB NOT NULL DEFAULT '[]',
+        status VARCHAR(20) NOT NULL DEFAULT 'matched',
+        contact_email VARCHAR(200),
+        matched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(patient_id, nct_id)
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_trial_patient ON trial_matches(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_trial_condition ON trial_matches(condition)`,
+            `CREATE INDEX IF NOT EXISTS idx_trial_status ON trial_matches(status)`,
+        ];
+    }
+    getSprint101SupplyChainAiStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS pharmacy_inventory (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        drug_id UUID NOT NULL,
+        drug_name VARCHAR(200) NOT NULL,
+        quantity_on_hand FLOAT NOT NULL DEFAULT 0,
+        unit VARCHAR(20),
+        reorder_level FLOAT DEFAULT 30,
+        reorder_quantity FLOAT,
+        last_counted_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ph_inv_drug ON pharmacy_inventory(drug_id)`,
+            `CREATE TABLE IF NOT EXISTS stockout_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        drug_id UUID,
+        drug_name VARCHAR(200) NOT NULL,
+        current_stock_units FLOAT NOT NULL DEFAULT 0,
+        avg_daily_consumption FLOAT NOT NULL DEFAULT 0,
+        days_to_stockout FLOAT,
+        predicted_stockout_date DATE,
+        safety_stock_days FLOAT NOT NULL DEFAULT 30,
+        reorder_quantity FLOAT,
+        risk_level VARCHAR(20) NOT NULL,
+        seasonal_factor FLOAT NOT NULL DEFAULT 1.0,
+        predicted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_stockout_drug ON stockout_predictions(drug_name)`,
+            `CREATE INDEX IF NOT EXISTS idx_stockout_risk ON stockout_predictions(risk_level)`,
+            `CREATE TABLE IF NOT EXISTS procurement_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        prediction_id UUID NOT NULL,
+        drug_name VARCHAR(200) NOT NULL,
+        days_to_stockout FLOAT NOT NULL,
+        recommended_order_qty FLOAT NOT NULL,
+        urgency VARCHAR(20) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'open',
+        acknowledged_by UUID,
+        acknowledged_at TIMESTAMPTZ,
+        order_reference VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_proc_alert_drug ON procurement_alerts(drug_name)`,
+            `CREATE INDEX IF NOT EXISTS idx_proc_alert_status ON procurement_alerts(status)`,
+        ];
+    }
+    getSprint89PredictiveRiskStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS deterioration_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        admission_id UUID,
+        prediction_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deterioration_score NUMERIC(5,2) NOT NULL DEFAULT 0,
+        predicted_event_type VARCHAR(50),
+        predicted_timeframe_hours INTEGER,
+        feature_contributions JSONB NOT NULL DEFAULT '{}',
+        triggered_alert BOOLEAN NOT NULL DEFAULT FALSE,
+        model_used VARCHAR(50) DEFAULT 'MEWS',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_det_pred_patient ON deterioration_predictions(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_det_pred_alert ON deterioration_predictions(triggered_alert) WHERE triggered_alert = TRUE`,
+            `CREATE TABLE IF NOT EXISTS readmission_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        discharge_id UUID,
+        prediction_date DATE NOT NULL,
+        readmission_30day_risk NUMERIC(5,4) NOT NULL DEFAULT 0,
+        risk_category VARCHAR(20) NOT NULL DEFAULT 'low',
+        key_risk_factors JSONB NOT NULL DEFAULT '[]',
+        recommended_followup_interval INTEGER,
+        prediction_model VARCHAR(50) DEFAULT 'LACE+',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_readm_pred_patient ON readmission_predictions(patient_id)`,
+        ];
+    }
+    getSprint90FederatedLearningStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS fl_rounds (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        round_number INTEGER NOT NULL,
+        global_model_version VARCHAR(100) NOT NULL,
+        model_type VARCHAR(50) NOT NULL,
+        participating_tenants JSONB NOT NULL DEFAULT '[]',
+        aggregated_metrics JSONB NOT NULL DEFAULT '{}',
+        model_weights_ref TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        initiated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_fl_rounds_type ON fl_rounds(model_type)`,
+            `CREATE TABLE IF NOT EXISTS fl_participation_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        round_id UUID NOT NULL,
+        tenant_subdomain VARCHAR(100) NOT NULL,
+        local_model_metrics JSONB NOT NULL DEFAULT '{}',
+        sample_count INTEGER NOT NULL DEFAULT 0,
+        gradient_norm NUMERIC(10,6),
+        privacy_epsilon NUMERIC(10,6),
+        status VARCHAR(20) NOT NULL DEFAULT 'submitted',
+        submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_fl_logs_round ON fl_participation_logs(round_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_fl_logs_tenant ON fl_participation_logs(tenant_subdomain)`,
+        ];
+    }
+    getSprint91HimisReportingStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS mohcc_report_submissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        report_type VARCHAR(50) NOT NULL,
+        period_label VARCHAR(20) NOT NULL,
+        facility_code VARCHAR(50),
+        payload JSONB NOT NULL DEFAULT '{}',
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        response_code VARCHAR(10),
+        response_message TEXT,
+        submitted_by VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        submitted_at TIMESTAMPTZ
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_mohcc_subs_period ON mohcc_report_submissions(period_label)`,
+            `CREATE INDEX IF NOT EXISTS idx_mohcc_subs_type ON mohcc_report_submissions(report_type)`,
+            `CREATE TABLE IF NOT EXISTS openmrs_migration_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        batch_id VARCHAR(100) NOT NULL,
+        resource_type VARCHAR(50) NOT NULL,
+        openmrs_uuid VARCHAR(100),
+        medicore_id UUID,
+        status VARCHAR(20) NOT NULL DEFAULT 'migrated',
+        error_details TEXT,
+        raw_record JSONB,
+        migrated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_openmrs_batch ON openmrs_migration_logs(batch_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_openmrs_uuid ON openmrs_migration_logs(openmrs_uuid)`,
+        ];
+    }
+    getSprint92FhirInboundStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS fhir_ingestion_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_system VARCHAR(100) NOT NULL,
+        bundle_id VARCHAR(200),
+        received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        resources_received INTEGER NOT NULL DEFAULT 0,
+        resources_imported INTEGER NOT NULL DEFAULT 0,
+        conflicts_detected INTEGER NOT NULL DEFAULT 0,
+        conflicts_resolved INTEGER NOT NULL DEFAULT 0,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        error_details JSONB
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_fhir_ingestion_source ON fhir_ingestion_logs(source_system)`,
+            `CREATE INDEX IF NOT EXISTS idx_fhir_ingestion_status ON fhir_ingestion_logs(status)`,
+        ];
+    }
+    getSprint93MultilingualEducationStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS patient_education_materials (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        encounter_id UUID,
+        topic VARCHAR(200) NOT NULL,
+        language VARCHAR(10) NOT NULL DEFAULT 'en',
+        reading_level INTEGER NOT NULL DEFAULT 6,
+        content TEXT NOT NULL DEFAULT '',
+        content_html TEXT,
+        pdf_storage_key VARCHAR(500),
+        ai_generated BOOLEAN NOT NULL DEFAULT FALSE,
+        delivery_method VARCHAR(20),
+        delivered_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_edu_patient ON patient_education_materials(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_edu_language ON patient_education_materials(language)`,
+        ];
+    }
+    getSprint94OfflineSyncStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS sync_queue_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id VARCHAR(100) NOT NULL,
+        operation_type VARCHAR(20) NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id UUID,
+        payload JSONB NOT NULL DEFAULT '{}',
+        client_timestamp TIMESTAMPTZ NOT NULL,
+        server_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        sync_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        conflict_details JSONB
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_sync_client ON sync_queue_logs(client_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_sync_status ON sync_queue_logs(sync_status)`,
+            `CREATE INDEX IF NOT EXISTS idx_sync_entity ON sync_queue_logs(entity_type, entity_id)`,
+        ];
+    }
+    getSprint95IotWearablesStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS iot_device_registrations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        device_type VARCHAR(50) NOT NULL,
+        device_name VARCHAR(100),
+        manufacturer VARCHAR(100),
+        model VARCHAR(100),
+        serial_number VARCHAR(100),
+        oauth_token_encrypted TEXT,
+        webhook_url TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        last_sync_at TIMESTAMPTZ,
+        registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_iot_device_patient ON iot_device_registrations(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_iot_device_status ON iot_device_registrations(status)`,
+            `CREATE TABLE IF NOT EXISTS iot_data_ingestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        device_id UUID NOT NULL,
+        measurement_type VARCHAR(100) NOT NULL,
+        value NUMERIC(12,4) NOT NULL,
+        unit VARCHAR(20),
+        measured_at TIMESTAMPTZ NOT NULL,
+        ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        fhir_observation_id VARCHAR(200),
+        ai_processed BOOLEAN NOT NULL DEFAULT FALSE,
+        alert_triggered BOOLEAN NOT NULL DEFAULT FALSE
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_iot_data_patient ON iot_data_ingestions(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_iot_data_device ON iot_data_ingestions(device_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_iot_data_type ON iot_data_ingestions(measurement_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_iot_data_alert ON iot_data_ingestions(alert_triggered) WHERE alert_triggered = TRUE`,
+        ];
+    }
+    getSprint88FormularyOptimizationStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS formulary_ai_suggestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        prescription_id UUID,
+        patient_id UUID NOT NULL,
+        branded_drug TEXT NOT NULL,
+        generic_alternative TEXT,
+        branded_cost NUMERIC,
+        generic_cost NUMERIC,
+        saving_amount NUMERIC,
+        medical_aid_coverage BOOLEAN NOT NULL DEFAULT FALSE,
+        medical_aid_tier INT,
+        evidence_equivalence TEXT,
+        ai_recommendation TEXT NOT NULL,
+        reason TEXT,
+        accepted BOOLEAN,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_formulary_patient ON formulary_ai_suggestions (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_formulary_prescription ON formulary_ai_suggestions (prescription_id)`,
+            `ALTER TABLE drugs ADD COLUMN IF NOT EXISTS generic_name_canonical VARCHAR(255)`,
+            `ALTER TABLE drugs ADD COLUMN IF NOT EXISTS formulary_tier INT`,
+            `ALTER TABLE drugs ADD COLUMN IF NOT EXISTS average_unit_cost_usd DECIMAL(10,4)`,
+            `ALTER TABLE drugs ADD COLUMN IF NOT EXISTS bioequivalent_group VARCHAR(100)`,
+        ];
+    }
+    getSprint87SmartDefaultsStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS form_intelligence_configs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        form_name TEXT NOT NULL,
+        visibility_rules JSONB NOT NULL DEFAULT '[]',
+        default_rules JSONB NOT NULL DEFAULT '[]',
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        version INT NOT NULL DEFAULT 1,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_form_intel_name ON form_intelligence_configs (form_name)`,
+        ];
+    }
+    getSprint86SmartSchedulingStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS scheduling_ai_predictions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id UUID NOT NULL UNIQUE,
+        no_show_probability NUMERIC NOT NULL,
+        cancel_probability NUMERIC NOT NULL,
+        recommended_duration INT,
+        confidence_score NUMERIC NOT NULL,
+        feature_importance JSONB NOT NULL DEFAULT '{}',
+        model TEXT,
+        prediction_date TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_sched_pred_apt ON scheduling_ai_predictions (appointment_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_sched_pred_noshw ON scheduling_ai_predictions (no_show_probability DESC)`,
+            `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS ai_recommended_duration INT`,
+            `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS no_show_risk VARCHAR(20)`,
+            `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS overbooking_slot BOOLEAN DEFAULT FALSE`,
+        ];
+    }
+    getSprint84AiExplainabilityStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS ai_recommendation_audits (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        decision_log_id UUID,
+        recommendation_type TEXT NOT NULL,
+        patient_id UUID,
+        confidence NUMERIC,
+        reasoning TEXT,
+        evidence JSONB NOT NULL DEFAULT '[]',
+        alternatives JSONB NOT NULL DEFAULT '[]',
+        override_logged BOOLEAN NOT NULL DEFAULT FALSE,
+        override_reason TEXT,
+        override_by UUID,
+        displayed_to_user BOOLEAN NOT NULL DEFAULT FALSE,
+        user_read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ai_audit_patient ON ai_recommendation_audits (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ai_audit_type ON ai_recommendation_audits (recommendation_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_ai_audit_override ON ai_recommendation_audits (override_logged) WHERE override_logged = true`,
+        ];
+    }
+    getSprint83AntibiogramStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS antibiogram_entries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        organism TEXT NOT NULL,
+        antibiotic TEXT NOT NULL,
+        year INT NOT NULL,
+        quarter SMALLINT,
+        susceptible_percent NUMERIC NOT NULL,
+        intermediate_percent NUMERIC NOT NULL DEFAULT 0,
+        resistant_percent NUMERIC NOT NULL,
+        total_isolates INT NOT NULL,
+        specimen_type TEXT NOT NULL,
+        ward TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_abio_organism ON antibiogram_entries (organism, antibiotic, year)`,
+            `CREATE INDEX IF NOT EXISTS idx_abio_specimen ON antibiogram_entries (specimen_type, year)`,
+            `CREATE TABLE IF NOT EXISTS antibiogram_summaries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        period_label TEXT NOT NULL,
+        specimen_type TEXT NOT NULL,
+        data JSONB NOT NULL,
+        top_resistant_organisms JSONB NOT NULL DEFAULT '[]',
+        recommended_empirical_choices JSONB NOT NULL DEFAULT '{}',
+        generated_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (period_label, specimen_type)
+      )`,
+            `CREATE TABLE IF NOT EXISTS culture_sensitivity_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        lab_order_id UUID,
+        specimen_type TEXT NOT NULL,
+        collection_date DATE NOT NULL,
+        organism_isolated TEXT,
+        no_growth BOOLEAN NOT NULL DEFAULT FALSE,
+        disk_diffusion_results JSONB NOT NULL DEFAULT '{}',
+        mic_values JSONB NOT NULL DEFAULT '{}',
+        clsi_breakpoints_used TEXT,
+        esbl_detected BOOLEAN,
+        carbapenem_resistant BOOLEAN,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_culture_patient ON culture_sensitivity_results (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_culture_organism ON culture_sensitivity_results (organism_isolated)`,
+        ];
+    }
+    getSprint82PharmacogenomicsStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS pgx_profiles (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL UNIQUE,
+        genotype_source TEXT NOT NULL DEFAULT 'lab_test',
+        report_date DATE,
+        cyp2d6_phenotype TEXT,
+        cyp2c19_phenotype TEXT,
+        cyp2c9_phenotype TEXT,
+        vkorc1_variant TEXT,
+        tpmt_phenotype TEXT,
+        hla_b_5701 TEXT,
+        hla_b_1502 TEXT,
+        slco1b1_variant TEXT,
+        g6pd_status TEXT,
+        ugt1a1_phenotype TEXT,
+        raw_genotyping_data JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_pgx_profile_patient ON pgx_profiles (patient_id)`,
+            `CREATE TABLE IF NOT EXISTS pgx_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        drug TEXT NOT NULL,
+        pgx_interaction TEXT NOT NULL,
+        clinical_implication TEXT NOT NULL,
+        alternative_recommended TEXT,
+        severity TEXT NOT NULL,
+        gene_involved TEXT,
+        acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
+        acknowledged_by UUID,
+        generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_pgx_alert_patient ON pgx_alerts (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_pgx_alert_unacked ON pgx_alerts (patient_id, acknowledged)`,
+        ];
+    }
+    getSprint81AutoCodingStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS auto_coding_suggestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        note_id UUID NOT NULL UNIQUE,
+        patient_id UUID NOT NULL,
+        encounter_id UUID,
+        suggested_icd10_codes JSONB NOT NULL DEFAULT '[]',
+        suggested_cpt_codes JSONB NOT NULL DEFAULT '[]',
+        review_status TEXT NOT NULL DEFAULT 'pending',
+        confirmed_codes JSONB,
+        reviewed_by UUID,
+        reviewed_at TIMESTAMPTZ,
+        coding_model TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_acs_patient ON auto_coding_suggestions (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_acs_status ON auto_coding_suggestions (review_status)`,
+            `CREATE INDEX IF NOT EXISTS idx_acs_note ON auto_coding_suggestions (note_id)`,
+        ];
+    }
+    getSprint80AdvancedHivPmtctPepfarStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS pmtct_enrollments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        gestational_age_at_enrollment SMALLINT,
+        hiv_status_at_booking TEXT NOT NULL,
+        art_started BOOLEAN NOT NULL DEFAULT FALSE,
+        art_regimen TEXT,
+        viral_load_at_booking NUMERIC,
+        viral_load_at_delivery NUMERIC,
+        delivery_mode TEXT,
+        infant_nvp_provided BOOLEAN NOT NULL DEFAULT FALSE,
+        enrollment_date DATE NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_pmtct_enroll_patient ON pmtct_enrollments (patient_id)`,
+            `CREATE TABLE IF NOT EXISTS pmtct_infants (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        mother_patient_id UUID NOT NULL,
+        infant_patient_id UUID,
+        birth_date DATE NOT NULL,
+        birth_weight_kg NUMERIC,
+        hiv_test_at_6weeks TEXT,
+        dbs_result_6weeks TEXT,
+        hiv_test_18months TEXT,
+        final_hiv_status TEXT,
+        breastfeeding_status TEXT,
+        cotrimoxazole_started BOOLEAN NOT NULL DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_pmtct_infant_mother ON pmtct_infants (mother_patient_id)`,
+            `CREATE TABLE IF NOT EXISTS pepfar_mer_indicators (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        reporting_period TEXT NOT NULL,
+        indicator TEXT NOT NULL,
+        numerator INT,
+        denominator INT,
+        disaggregations JSONB NOT NULL DEFAULT '{}',
+        submitted_to_datim BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_mer_period_indicator ON pepfar_mer_indicators (reporting_period, indicator)`,
+            `CREATE TABLE IF NOT EXISTS art_cohorts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        cohort_start_date DATE NOT NULL,
+        cohort_size INT NOT NULL,
+        alive_on_art_12m INT,
+        lost_to_followup_12m INT,
+        died_12m INT,
+        transferred_out_12m INT,
+        retention_rate NUMERIC,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_art_cohort_date ON art_cohorts (cohort_start_date DESC)`,
+        ];
+    }
+    getSprint79NtdRegionalStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS ntd_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        disease TEXT NOT NULL,
+        species TEXT,
+        acquisition_route TEXT,
+        presenting_manifestations TEXT[],
+        stool_urine_result TEXT,
+        treatment TEXT,
+        mass_chemoprophylaxis_campaign BOOLEAN NOT NULL DEFAULT FALSE,
+        diagnosis_date DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_ntd_cases_patient ON ntd_cases (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_ntd_cases_disease ON ntd_cases (disease)`,
+            `CREATE TABLE IF NOT EXISTS cholera_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        case_classification TEXT NOT NULL DEFAULT 'suspected',
+        onset DATE NOT NULL,
+        dehydration_severity TEXT,
+        ivf_given BOOLEAN NOT NULL DEFAULT FALSE,
+        oral_rehydration BOOLEAN NOT NULL DEFAULT FALSE,
+        antibiotic TEXT,
+        contact_tracing JSONB NOT NULL DEFAULT '[]',
+        outbreak_cluster TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_cholera_patient ON cholera_cases (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_cholera_cluster ON cholera_cases (outbreak_cluster)`,
+            `CREATE TABLE IF NOT EXISTS typhoid_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        onset_date DATE NOT NULL,
+        widal_titer TEXT,
+        blood_culture_result TEXT,
+        resistance_pattern TEXT[],
+        chloramphenicol_sensitivity TEXT,
+        treatment TEXT,
+        complication TEXT[],
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_typhoid_patient ON typhoid_cases (patient_id)`,
+            `CREATE TABLE IF NOT EXISTS regional_disease_reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        report_period TEXT NOT NULL,
+        period_type TEXT NOT NULL,
+        facility_id TEXT,
+        malaria_cases INT NOT NULL DEFAULT 0,
+        malaria_deaths INT NOT NULL DEFAULT 0,
+        cholera_cases INT NOT NULL DEFAULT 0,
+        cholera_deaths INT NOT NULL DEFAULT 0,
+        typhoid_cases INT NOT NULL DEFAULT 0,
+        ntd_cases INT NOT NULL DEFAULT 0,
+        schistosomiasis_cases INT NOT NULL DEFAULT 0,
+        submitted_to_mohcc BOOLEAN NOT NULL DEFAULT FALSE,
+        submission_date DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (report_period, period_type)
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_rdr_period ON regional_disease_reports (report_period, period_type)`,
+        ];
+    }
+    getSprint78SdohModuleStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS community_resources (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT,
+        address TEXT,
+        phone TEXT,
+        website TEXT,
+        eligibility_criteria TEXT,
+        languages TEXT[],
+        availability TEXT,
+        tenant_specific BOOLEAN NOT NULL DEFAULT TRUE,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_comm_res_category ON community_resources (category)`,
+            `CREATE INDEX IF NOT EXISTS idx_comm_res_active ON community_resources (is_active)`,
+            `CREATE TABLE IF NOT EXISTS sdoh_referrals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        resource_id UUID NOT NULL,
+        referral_date DATE NOT NULL,
+        referral_reason TEXT NOT NULL,
+        referred_by UUID NOT NULL,
+        status TEXT NOT NULL DEFAULT 'sent',
+        outcome TEXT,
+        follow_up_date DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_sdoh_ref_patient ON sdoh_referrals (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_sdoh_ref_status ON sdoh_referrals (status)`,
+            `CREATE TABLE IF NOT EXISTS sdoh_screening_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        screening_date DATE NOT NULL,
+        tool_used TEXT NOT NULL,
+        responses JSONB NOT NULL DEFAULT '{}',
+        positive_screens JSONB NOT NULL DEFAULT '[]',
+        z_codes TEXT[],
+        conducted_by UUID NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_sdoh_screen_patient ON sdoh_screening_logs (patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_sdoh_screen_date ON sdoh_screening_logs (screening_date)`,
+        ];
     }
 };
 exports.DatabaseProvisioningService = DatabaseProvisioningService;
