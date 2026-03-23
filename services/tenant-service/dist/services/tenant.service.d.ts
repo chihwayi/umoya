@@ -71,6 +71,12 @@ export declare class TenantService implements OnModuleInit {
     findById(id: string): Promise<Tenant>;
     findAll(): Promise<Tenant[]>;
     getAllTenants(): Promise<Tenant[]>;
+    searchTenants(q: string): Promise<Array<{
+        slug: string;
+        name: string;
+        baseUrl: string;
+        logoUrl?: string;
+    }>>;
     updateTenantStatus(id: string, status: TenantStatus): Promise<Tenant>;
     deleteTenant(id: string): Promise<void>;
     getTenantDhis2Config(tenantId: string): Promise<TenantDhis2ConfigView | null>;

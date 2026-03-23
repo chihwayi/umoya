@@ -26,6 +26,12 @@ export declare class TenantController {
     }>;
     getAllTenants(): Promise<SafeTenant[]>;
     getActiveTenants(): Promise<PublicTenant[]>;
+    searchTenants(q: string): Promise<Array<{
+        slug: string;
+        name: string;
+        baseUrl: string;
+        logoUrl?: string;
+    }>>;
     getTenantBySubdomain(subdomain: string): Promise<PublicTenant>;
     getTenantLogo(id: string, res: Response): Promise<void>;
     getTenantById(id: string): Promise<SafeTenant>;

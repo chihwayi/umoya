@@ -1,12 +1,13 @@
 import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { ensurePublicApiBaseUrl } from '../config/env';
 
 let _apiInstance: AxiosInstance | null = null;
 
 // Build or rebuild the axios instance when the tenant changes
 export function buildApiClient(baseUrl: string): AxiosInstance {
   const instance = axios.create({
-    baseURL: baseUrl,
+    baseURL: ensurePublicApiBaseUrl(baseUrl),
     timeout: 15000,
     headers: { 'Content-Type': 'application/json' },
   });

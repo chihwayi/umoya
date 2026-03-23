@@ -11,7 +11,7 @@ import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, AiPulse, Card } from '../ui';
 import { useAuthStore, Tenant } from '../../stores/useAuthStore';
 import { buildApiClient } from '../../services/api';
-import { API_BASE_URL } from '../../config/env';
+import { TENANT_DISCOVERY_URL, ensurePublicApiBaseUrl } from '../../config/env';
 
 interface TenantSelectScreenProps {
   onSelected: () => void;
@@ -24,6 +24,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Tenant[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [qrPermission, setQrPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
@@ -31,23 +32,42 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
 
   const search = (q: string) => {
     setQuery(q);
+    setSearchError(null);
     if (debounce.current) clearTimeout(debounce.current);
-    if (q.trim().length < 2) { setResults([]); return; }
+    if (q.trim().length < 2) {
+      setResults([]);
+      return;
+    }
     debounce.current = setTimeout(async () => {
       setSearching(true);
       try {
         // Discovery endpoint on the main MediCore platform
-        const url = `${API_BASE_URL}/tenants/search?q=${encodeURIComponent(q)}`;
+        const url = `${TENANT_DISCOVERY_URL}/search?q=${encodeURIComponent(q)}`;
+        console.log('[TenantSearch] GET', url);
         const res = await axios.get<Tenant[]>(url, { timeout: 8000 });
-        setResults(res.data ?? []);
-      } catch {
+        const nextResults = Array.isArray(res.data) ? res.data : [];
+        console.log('[TenantSearch] Results', nextResults.length);
+        setResults(nextResults);
+        if (!Array.isArray(res.data)) {
+          setSearchError('Tenant discovery returned an unexpected response.');
+        }
+      } catch (error) {
+        console.error('[TenantSearch] Failed', {
+          query: q,
+          url: `${TENANT_DISCOVERY_URL}/search?q=${encodeURIComponent(q)}`,
+          error,
+        });
         // Allow manual subdomain entry if search fails
         if (q.includes('.')) {
           setResults([{
             slug: q.split('.')[0],
             name: q,
-            baseUrl: q.startsWith('http') ? q : `https://${q}`,
+            baseUrl: ensurePublicApiBaseUrl(q.startsWith('http') ? q : `https://${q}`),
           }]);
+          setSearchError('Clinic search failed, but manual clinic URL entry is available.');
+        } else {
+          setResults([]);
+          setSearchError('Clinic search failed. Check the mobile API connection.');
         }
       } finally {
         setSearching(false);
@@ -184,6 +204,21 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
           />
         )}
 
+        {searchError && (
+          <View style={styles.errorState}>
+            <Text style={styles.errorText}>{searchError}</Text>
+          </View>
+        )}
+
+        {!searching && query.trim().length >= 2 && results.length === 0 && !searchError && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No clinics found</Text>
+            <Text style={styles.emptyBody}>
+              Try the clinic name or the exact tenant slug.
+            </Text>
+          </View>
+        )}
+
         {/* Empty state */}
         {query.length < 2 && results.length === 0 && (
           <View style={styles.emptyState}>
@@ -297,6 +332,17 @@ const styles = StyleSheet.create({
     color: C.textMuted,
     textAlign: 'center',
     lineHeight: 19,
+  },
+  errorState: {
+    paddingHorizontal: 24,
+    marginTop: 8,
+  },
+  errorText: {
+    fontFamily: FONT.ui,
+    fontSize: 12,
+    color: '#F7A6A6',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   // QR overlay
   qrContainer: { flex: 1, backgroundColor: '#000' },

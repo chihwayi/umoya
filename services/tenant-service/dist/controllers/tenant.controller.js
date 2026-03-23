@@ -70,6 +70,11 @@ let TenantController = class TenantController {
             .filter((tenant) => tenant.status === tenant_entity_1.TenantStatus.ACTIVE)
             .map((tenant) => this.toPublicTenant(tenant));
     }
+    async searchTenants(q) {
+        if (!q || q.trim().length < 2)
+            return [];
+        return this.tenantService.searchTenants(q.trim());
+    }
     async getTenantBySubdomain(subdomain) {
         const tenant = await this.tenantService.findBySubdomain(subdomain);
         return this.toPublicTenant(tenant);
@@ -190,6 +195,15 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "getActiveTenants", null);
+__decorate([
+    (0, common_1.Get)('search'),
+    (0, swagger_1.ApiOperation)({ summary: 'Search active tenants by name or subdomain (public — mobile discovery)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Matching tenants' }),
+    __param(0, (0, common_1.Query)('q')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "searchTenants", null);
 __decorate([
     (0, common_1.Get)('subdomain/:subdomain'),
     __param(0, (0, common_1.Param)('subdomain')),

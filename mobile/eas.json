@@ -24,12 +24,7 @@
         "buildType": "apk",
         "resourceClass": "medium"
       },
-      "channel": "development",
-      "env": {
-        "EXPO_PUBLIC_API_BASE": "localhost:3000",
-        "EXPO_PUBLIC_WS_BASE":  "ws://localhost:3000",
-        "EXPO_PUBLIC_ENV":      "development"
-      }
+      "channel": "development"
     },
     "preview": {
       "extends": "base",
@@ -43,12 +38,7 @@
         "resourceClass": "medium",
         "credentialsSource": "remote"
       },
-      "channel": "preview",
-      "env": {
-        "EXPO_PUBLIC_API_BASE": "api-staging.medicore.app",
-        "EXPO_PUBLIC_WS_BASE":  "wss://api-staging.medicore.app",
-        "EXPO_PUBLIC_ENV":      "staging"
-      }
+      "channel": "preview"
     },
     "production": {
       "extends": "base",
@@ -64,12 +54,7 @@
         "credentialsSource": "remote",
         "image": "latest"
       },
-      "channel": "production",
-      "env": {
-        "EXPO_PUBLIC_API_BASE": "api.medicore.app",
-        "EXPO_PUBLIC_WS_BASE":  "wss://api.medicore.app",
-        "EXPO_PUBLIC_ENV":      "production"
-      }
+      "channel": "production"
     }
   },
   "submit": {

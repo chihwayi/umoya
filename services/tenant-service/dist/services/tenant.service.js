@@ -187,6 +187,29 @@ let TenantService = TenantService_1 = class TenantService {
             order: { createdAt: 'DESC' }
         });
     }
+    async searchTenants(q) {
+        const term = `%${q.toLowerCase()}%`;
+        const tenants = await this.tenantRepository
+            .createQueryBuilder('t')
+            .where('t.status = :status', { status: tenant_entity_1.TenantStatus.ACTIVE })
+            .andWhere('(LOWER(t."clinicName") LIKE :term OR LOWER(t.subdomain) LIKE :term)', { term })
+            .orderBy('t."clinicName"', 'ASC')
+            .limit(20)
+            .getMany();
+        const ehrBase = (process.env.PUBLIC_EHR_BASE_URL ||
+            process.env.REACT_APP_EHR_API_URL ||
+            (process.env.SERVER_HOST ? `http://${process.env.SERVER_HOST}:${process.env.PORT_EHR_SERVICE || '3013'}/api` : '') ||
+            `http://localhost:${process.env.PORT_EHR_SERVICE || '3013'}/api` ||
+            process.env.SERVICE_EHR_URL ||
+            'http://localhost:3013/api').replace(/\/$/, '');
+        const publicEhrBase = ehrBase.endsWith('/api') ? ehrBase : `${ehrBase}/api`;
+        return tenants.map(t => ({
+            slug: t.subdomain,
+            name: t.clinicName,
+            baseUrl: publicEhrBase,
+            ...(t.logoUrl ? { logoUrl: t.logoUrl } : {}),
+        }));
+    }
     async updateTenantStatus(id, status) {
         const tenant = await this.findById(id);
         tenant.status = status;

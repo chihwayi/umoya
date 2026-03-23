@@ -140,6 +140,10 @@ export declare class DatabaseProvisioningService {
     private getSprint75PalliativeCareModuleStatements;
     private getSprint76NutritionModuleStatements;
     private getSprint77IcuModuleStatements;
+    private getSprint104TelemedicineVideoStatements;
+    private getSprint106TelemedicineFixesStatements;
+    private getSprint107TelemedicinePostvisitBridgeStatements;
+    private getSprint109NotificationPersistenceStatements;
     private getSprint103ModelRegistryStatements;
     private getSprint96RadiologyAiStatements;
     private getSprint97AlertDeliveryStatements;
