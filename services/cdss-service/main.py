@@ -48,9 +48,12 @@ from service_auth import (
 import jwt
 import threading
 import pathlib
+import logging
 import redis as redis_pkg
 from uuid import uuid4
 from threading import Lock
+
+logger = logging.getLogger(__name__)
 
 _DEV_LIKE_ENVIRONMENTS = {"dev", "development", "local", "test"}
 
@@ -7360,6 +7363,11 @@ def model_status():
         }
     }
 
+class DeteriorationReq(BaseModel):
+    patientId: str
+    admissionId: Optional[str] = None
+    vitals: Optional[Dict[str, Any]] = None
+
 # ── Update /risk/deterioration to use ML model when loaded ────────────────
 # Overrides the MEWS-only version defined earlier by shadowing via wrapper
 
@@ -7439,11 +7447,6 @@ async def load_production_models():
 import math as _math
 
 # ── S89: Deterioration (MEWS) ─────────────────────────────────────────────────
-
-class DeteriorationReq(BaseModel):
-    patientId: str
-    admissionId: Optional[str] = None
-    vitals: Optional[Dict[str, Any]] = None
 
 @app.post("/risk/deterioration")
 def risk_deterioration(req: DeteriorationReq):

@@ -46,6 +46,7 @@ const ALL_MODULE_KEYS = [
     'population_health',
 ];
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DEMO_DELETE_BUFFER_DAYS = 3;
 let TenantService = TenantService_1 = class TenantService {
     constructor(tenantRepository, databaseProvisioningService) {
         this.tenantRepository = tenantRepository;
@@ -78,7 +79,12 @@ let TenantService = TenantService_1 = class TenantService {
         for (const tenant of tenants) {
             if (tenant.subscriptionMode === 'demo' && tenant.autoDeleteAt && tenant.autoDeleteAt.getTime() <= now.getTime()) {
                 this.logger.warn(`Auto-deleting expired demo tenant ${tenant.id} (${tenant.subdomain})`);
-                await this.deleteTenant(tenant.id);
+                try {
+                    await this.deleteTenant(tenant.id);
+                }
+                catch (err) {
+                    this.logger.error(`Failed to auto-delete demo tenant ${tenant.id} (${tenant.subdomain}): ${err instanceof Error ? err.message : String(err)}`);
+                }
                 continue;
             }
             if (this.applyLifecycleState(tenant, now)) {
@@ -811,7 +817,7 @@ let TenantService = TenantService_1 = class TenantService {
                 : input.demoDurationDays !== undefined
                     ? new Date(now.getTime() + demoDurationDays * ONE_DAY_MS)
                     : existing?.demoExpiresAt || new Date(now.getTime() + demoDurationDays * ONE_DAY_MS);
-            const autoDeleteAt = new Date(demoExpiresAt.getTime());
+            const autoDeleteAt = new Date(demoExpiresAt.getTime() + DEMO_DELETE_BUFFER_DAYS * ONE_DAY_MS);
             const temp = {
                 subscriptionMode,
                 subscriptionState: 'demo',
