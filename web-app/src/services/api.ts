@@ -448,11 +448,12 @@ export const healthAPI = {
 
 // Terminology API
 export const terminologyAPI = {
-  importFile: async (file: File, type: 'snomed' | 'icd10'): Promise<{ jobId: string; message: string }> => {
+  importFile: async (file: File, type: 'snomed' | 'icd10' | 'icd11', replace = false): Promise<{ jobId: string; message: string }> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', type);
-    
+    formData.append('replace', replace ? 'true' : 'false');
+
     const response = await api.post('/terminology/import/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -471,7 +472,7 @@ export const terminologyAPI = {
     return response.data;
   },
 
-  getStats: async (): Promise<{ snomedConcepts: number; icd10Codes: number }> => {
+  getStats: async (): Promise<{ snomedConcepts: number; icd10Codes: number; icd11Codes: number }> => {
     const response = await api.get('/terminology/import/stats');
     return response.data;
   }

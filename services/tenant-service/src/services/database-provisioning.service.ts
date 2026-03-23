@@ -996,6 +996,41 @@ export class DatabaseProvisioningService {
         description: 'model_registry table with UNIQUE production constraint per model_name',
         statements: () => this.getSprint103ModelRegistryStatements(),
       },
+      {
+        id: 'sprint104_telemedicine_video',
+        label: 'Sprint 104 - Telemedicine Real Video Provider (Daily.co)',
+        version: '2026.03.19',
+        description: 'recording_download_url + recording_fetched_at columns on telemedicine_consultations',
+        statements: () => this.getSprint104TelemedicineVideoStatements(),
+      },
+      {
+        id: 'sprint106_telemedicine_fixes',
+        label: 'Sprint 106 - Telemedicine Notifications + State Machine',
+        version: '2026.03.19',
+        description: 'reminder_sent_at + updated_by on telemedicine_consultations; reminder index',
+        statements: () => this.getSprint106TelemedicineFixesStatements(),
+      },
+      {
+        id: 'sprint107_telemedicine_postvisit_bridge',
+        label: 'Sprint 107 - Telemedicine ↔ PostVisit Bridge',
+        version: '2026.03.19',
+        description: 'recording_sha256 on post_visit_sessions; consultation_id index for bridge',
+        statements: () => this.getSprint107TelemedicinePostvisitBridgeStatements(),
+      },
+      {
+        id: 'sprint108_postvisit_decomposition',
+        label: 'Sprint 108 - PostVisit Service Decomposition',
+        version: '2026.03.19',
+        description: 'Marker only — pure code refactor, no schema changes',
+        statements: () => [],
+      },
+      {
+        id: 'sprint109_notification_persistence',
+        label: 'Sprint 109 - Persistent Notification System',
+        version: '2026.03.21',
+        description: 'nurse_tasks viewed_at/viewed_by + staff_notifications inbox table',
+        statements: () => this.getSprint109NotificationPersistenceStatements(),
+      },
     ];
   }
 
@@ -14499,6 +14534,75 @@ RECOMMENDATIONS:
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE INDEX IF NOT EXISTS idx_vaso_patient ON vasopressor_records (patient_id, start_time DESC)`,
+    ];
+  }
+
+  private getSprint104TelemedicineVideoStatements(): string[] {
+    return [
+      `ALTER TABLE telemedicine_consultations
+         ADD COLUMN IF NOT EXISTS recording_download_url TEXT,
+         ADD COLUMN IF NOT EXISTS recording_fetched_at TIMESTAMP WITH TIME ZONE`,
+    ];
+  }
+
+  private getSprint106TelemedicineFixesStatements(): string[] {
+    return [
+      `ALTER TABLE telemedicine_consultations
+         ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP WITH TIME ZONE,
+         ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES users(id) ON DELETE SET NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_tele_upcoming_reminder
+         ON telemedicine_consultations (scheduled_start_time)
+         WHERE status = 'scheduled' AND reminder_sent_at IS NULL`,
+    ];
+  }
+
+  private getSprint107TelemedicinePostvisitBridgeStatements(): string[] {
+    return [
+      `ALTER TABLE post_visit_sessions
+         ADD COLUMN IF NOT EXISTS recording_sha256 TEXT`,
+      `CREATE INDEX IF NOT EXISTS idx_pvs_consultation_id
+         ON post_visit_sessions (consultation_id)
+         WHERE consultation_id IS NOT NULL`,
+    ];
+  }
+
+  private getSprint109NotificationPersistenceStatements(): string[] {
+    return [
+      `ALTER TABLE nurse_tasks
+         ADD COLUMN IF NOT EXISTS viewed_at   TIMESTAMPTZ,
+         ADD COLUMN IF NOT EXISTS viewed_by   UUID REFERENCES users(id) ON DELETE SET NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_nurse_tasks_unseen
+         ON nurse_tasks(assigned_to, viewed_at)
+         WHERE status IN ('pending', 'in_progress') AND viewed_at IS NULL`,
+      `CREATE TABLE IF NOT EXISTS staff_notifications (
+        id                UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id         VARCHAR(120) NOT NULL,
+        recipient_id      UUID         NOT NULL,
+        recipient_role    VARCHAR(50),
+        notification_type VARCHAR(60)  NOT NULL,
+        title             VARCHAR(255) NOT NULL,
+        message           TEXT         NOT NULL,
+        action_url        VARCHAR(500),
+        action_label      VARCHAR(100),
+        priority          VARCHAR(20)  NOT NULL DEFAULT 'normal',
+        read              BOOLEAN      NOT NULL DEFAULT FALSE,
+        read_at           TIMESTAMPTZ,
+        source_entity_id  UUID,
+        metadata          JSONB,
+        expires_at        TIMESTAMPTZ,
+        created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_staff_notif_recipient
+         ON staff_notifications(tenant_id, recipient_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_staff_notif_unread
+         ON staff_notifications(tenant_id, recipient_id, read)
+         WHERE read = FALSE`,
+      `CREATE INDEX IF NOT EXISTS idx_staff_notif_source
+         ON staff_notifications(tenant_id, recipient_id, source_entity_id, notification_type)
+         WHERE source_entity_id IS NOT NULL AND read = FALSE`,
+      `CREATE INDEX IF NOT EXISTS idx_staff_notif_expires
+         ON staff_notifications(expires_at)
+         WHERE expires_at IS NOT NULL`,
     ];
   }
 

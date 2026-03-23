@@ -17,10 +17,12 @@ interface ImportJob {
 
 export const TerminologyImport: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [type, setType] = useState<'snomed' | 'icd10'>('snomed');
+  const [type, setType] = useState<'snomed' | 'icd10' | 'icd11'>('snomed');
+  const [replace, setReplace] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
-  const [stats, setStats] = useState<{ snomedConcepts: number; icd10Codes: number }>({ snomedConcepts: 0, icd10Codes: 0 });
+  const [stats, setStats] = useState<{ snomedConcepts: number; icd10Codes: number; icd11Codes: number }>({ snomedConcepts: 0, icd10Codes: 0, icd11Codes: 0 });
   const { success, error: notifyError } = useNotification();
 
   useEffect(() => {
@@ -65,7 +67,7 @@ export const TerminologyImport: React.FC = () => {
 
     setLoading(true);
     try {
-      await terminologyAPI.importFile(file, type);
+      await terminologyAPI.importFile(file, type, replace);
       success('Success', 'Import job started');
       setFile(null);
       // Reset file input
@@ -82,7 +84,7 @@ export const TerminologyImport: React.FC = () => {
   return (
     <div className="space-y-6 text-white">
       {/* System Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-white/[0.07] shadow-sm flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-[#8FA8CC] uppercase tracking-wider">SNOMED CT Concepts</h3>
@@ -105,6 +107,17 @@ export const TerminologyImport: React.FC = () => {
             </svg>
           </div>
         </div>
+        <div className="bg-white p-6 rounded-2xl border border-white/[0.07] shadow-sm flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-[#8FA8CC] uppercase tracking-wider">ICD-11 Codes</h3>
+            <p className="text-3xl font-bold text-white mt-2">{stats.icd11Codes.toLocaleString()}</p>
+          </div>
+          <div className="p-3 bg-purple-100 rounded-full">
+            <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white p-6 rounded-2xl border border-white/[0.07] shadow-sm">
@@ -119,6 +132,7 @@ export const TerminologyImport: React.FC = () => {
             >
               <option value="snomed">SNOMED CT (RF2 Zip)</option>
               <option value="icd10">ICD-10 (Zip/Text)</option>
+              <option value="icd11">ICD-11 MMS (JSON/CSV Zip)</option>
             </select>
           </div>
           <div>
@@ -131,6 +145,18 @@ export const TerminologyImport: React.FC = () => {
               className="w-full text-sm text-[#C5D5EE] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-white/[0.10] file:text-sm file:font-semibold file:bg-white/[0.04] file:text-white hover:file:bg-white/[0.06]"
             />
           </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <input
+            id="replace-toggle"
+            type="checkbox"
+            checked={replace}
+            onChange={(e) => setReplace(e.target.checked)}
+            className="w-4 h-4 rounded border-white/20 bg-white/10 text-blue-500 focus:ring-blue-500"
+          />
+          <label htmlFor="replace-toggle" className="text-sm text-[#C5D5EE]">
+            Replace existing data <span className="text-[#7A9AB8]">(truncates before import — use for version upgrades)</span>
+          </label>
         </div>
         <div className="mt-4 flex justify-end">
           <button

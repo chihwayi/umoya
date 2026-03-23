@@ -20,9 +20,6 @@ config.transformer.getTransformOptions = async () => ({
   },
 });
 
-// ─── SVG transformer ──────────────────────────────────────────────────────────
-config.transformer.babelTransformerPath = require.resolve('metro-react-native-babel-transformer');
-
 // ─── Resolver ─────────────────────────────────────────────────────────────────
 // Exclude SVG from asset handling so the transformer above can process it
 config.resolver.assetExts = config.resolver.assetExts.filter(ext => ext !== 'svg');

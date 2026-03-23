@@ -105,6 +105,16 @@ export class TenantController {
       .map((tenant) => this.toPublicTenant(tenant));
   }
 
+  @Get('search')
+  @ApiOperation({ summary: 'Search active tenants by name or subdomain (public — mobile discovery)' })
+  @ApiResponse({ status: 200, description: 'Matching tenants' })
+  async searchTenants(
+    @Query('q') q: string,
+  ): Promise<Array<{ slug: string; name: string; baseUrl: string; logoUrl?: string }>> {
+    if (!q || q.trim().length < 2) return [];
+    return this.tenantService.searchTenants(q.trim());
+  }
+
   @Get('subdomain/:subdomain')
   async getTenantBySubdomain(@Param('subdomain') subdomain: string): Promise<PublicTenant> {
     const tenant = await this.tenantService.findBySubdomain(subdomain);

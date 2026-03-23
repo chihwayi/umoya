@@ -216,7 +216,7 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
                   {postVisit?.doctorName ?? 'Your doctor'} signed your visit summary
                 </Text>
                 <Text style={styles.heroSub}>
-                  {{postVisit?.visitDate ?? '—'} · {postVisit?.visitType ?? 'Consultation'} · Tap to read & chat with AI
+                  {`${postVisit?.visitDate ?? '—'} · ${postVisit?.visitType ?? 'Consultation'} · Tap to read & chat with AI`}
                 </Text>
               </View>
               <Icon name="arrow" size={20} color="#fff" />
@@ -241,7 +241,7 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
               {nextMed?.isOverdue ? 'Overdue medication' : 'Next medication due'}
             </Text>
             <Text style={styles.medName}>
-              {{nextMed?.name ?? '—'} {nextMed?.dose ?? ''} — {nextMed?.time ?? '—'}
+              {`${nextMed?.name ?? '—'} ${nextMed?.dose ?? ''} — ${nextMed?.time ?? '—'}`}
             </Text>
           </View>
           <Badge color={nextMed?.isOverdue ? C.amber : C.teal} size="xs">

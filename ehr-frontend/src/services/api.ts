@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import { handleAutoLogout } from '../utils/autoLogout';
+import { handleAutoLogout, isOnProtectedRoute } from '../utils/autoLogout';
 import { runtimeUrls } from '../config/runtime';
 
 type RetriableAxiosConfig = {
@@ -75,7 +75,7 @@ const createAxiosInstance = (baseURL: string) => {
         }
       } catch {}
       const isLoginRequest = error.config?.url?.endsWith('/auth/login');
-      if (error.response?.status === 401 && !isLoginRequest) {
+      if (error.response?.status === 401 && !isLoginRequest && isOnProtectedRoute()) {
         console.log('🚨 401 Unauthorized detected - triggering auto-logout');
         handleAutoLogout();
       }

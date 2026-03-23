@@ -120,6 +120,7 @@ const ALL_MODULE_KEYS = [
 ] as const;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DEMO_DELETE_BUFFER_DAYS = 3; // keep demo data 3 days after expiry before hard-deleting
 
 @Injectable()
 export class TenantService implements OnModuleInit {
@@ -165,7 +166,13 @@ export class TenantService implements OnModuleInit {
     for (const tenant of tenants) {
       if (tenant.subscriptionMode === 'demo' && tenant.autoDeleteAt && tenant.autoDeleteAt.getTime() <= now.getTime()) {
         this.logger.warn(`Auto-deleting expired demo tenant ${tenant.id} (${tenant.subdomain})`);
-        await this.deleteTenant(tenant.id);
+        try {
+          await this.deleteTenant(tenant.id);
+        } catch (err) {
+          this.logger.error(
+            `Failed to auto-delete demo tenant ${tenant.id} (${tenant.subdomain}): ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
         continue;
       }
 
@@ -295,6 +302,30 @@ export class TenantService implements OnModuleInit {
     return this.tenantRepository.find({
       order: { createdAt: 'DESC' }
     });
+  }
+
+  async searchTenants(q: string): Promise<Array<{ slug: string; name: string; baseUrl: string; logoUrl?: string }>> {
+    const term = `%${q.toLowerCase()}%`;
+    const tenants = await this.tenantRepository
+      .createQueryBuilder('t')
+      .where('t.status = :status', { status: TenantStatus.ACTIVE })
+      .andWhere('(LOWER(t."clinicName") LIKE :term OR LOWER(t.subdomain) LIKE :term)', { term })
+      .orderBy('t."clinicName"', 'ASC')
+      .limit(20)
+      .getMany();
+
+    const ehrBase = (
+      process.env.PUBLIC_EHR_BASE_URL ||
+      process.env.SERVICE_EHR_URL ||
+      'http://localhost:3013'
+    ).replace(/\/$/, '');
+
+    return tenants.map(t => ({
+      slug: t.subdomain,
+      name: t.clinicName,
+      baseUrl: ehrBase,
+      ...(t.logoUrl ? { logoUrl: t.logoUrl } : {}),
+    }));
   }
 
   async updateTenantStatus(id: string, status: TenantStatus): Promise<Tenant> {
@@ -1087,7 +1118,7 @@ export class TenantService implements OnModuleInit {
           ? new Date(now.getTime() + demoDurationDays * ONE_DAY_MS)
           : existing?.demoExpiresAt || new Date(now.getTime() + demoDurationDays * ONE_DAY_MS);
 
-      const autoDeleteAt = new Date(demoExpiresAt.getTime());
+      const autoDeleteAt = new Date(demoExpiresAt.getTime() + DEMO_DELETE_BUFFER_DAYS * ONE_DAY_MS);
       const temp = {
         subscriptionMode,
         subscriptionState: 'demo' as SubscriptionState,

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Icon } from './Icon';
+import { View, StyleSheet, Animated, Image } from 'react-native';
 import { C } from '../../design/tokens';
+
+const LOGO = require('../../../assets/icon.png');
 
 interface AiPulseProps {
   size?: number;
@@ -53,14 +53,9 @@ export const AiPulse: React.FC<AiPulseProps> = ({ size = 48, active = true }) =>
     <View style={[styles.container, { width: size * 1.6, height: size * 1.6 }]}>
       {active && <Animated.View style={ringStyle(ring1)} />}
       {active && <Animated.View style={ringStyle(ring2)} />}
-      <LinearGradient
-        colors={[C.teal, C.blue]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.orb, { width: size, height: size, borderRadius: size / 2 }]}
-      >
-        <Icon name="sparkle" size={size * 0.38} color="#000" strokeWidth={2} />
-      </LinearGradient>
+      <View style={[styles.orb, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Image source={LOGO} style={{ width: size, height: size, borderRadius: size / 2 }} resizeMode="cover" />
+      </View>
     </View>
   );
 };
@@ -73,5 +68,8 @@ const styles = StyleSheet.create({
   orb: {
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: C.teal + '50',
   },
 });
