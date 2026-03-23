@@ -1081,6 +1081,7 @@ export class Dhis2Service {
       };
     }
 
+    if (profile === 'pharmacy_stock') {
     const [stockOnHandTotal, stockOutItemCount, dispensedUnits, dispensingTransactions] = await Promise.all([
       this.safeMetricSum(
         tenantDb,
@@ -1175,6 +1176,9 @@ export class Dhis2Service {
       ]);
       return { pmtctEnrolled, hivPositiveAtBooking, artStartedInPregnancy, infantsTestedAt6Weeks, infantsHivPositive };
     }
+
+    return {};
+  }
 
   private async getProgramType(context: Dhis2Context, programId: string): Promise<string | null> {
     if (!context.client) {
