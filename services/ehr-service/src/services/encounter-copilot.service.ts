@@ -715,6 +715,8 @@ export class EncounterCopilotService {
       this.buildHivContributor(tenantDb, patientId),
       this.buildMaternityContributor(tenantDb, patientId),
       this.buildOncologyContributor(tenantDb, patientId),
+      this.buildCardiologyContributor(tenantDb, patientId),
+      this.buildEmergencySepsisContributor(tenantDb, patientId),
       this.buildRequestedSpecialtyContributor(requestedSpecialty),
     ]);
 
@@ -1025,6 +1027,329 @@ export class EncounterCopilotService {
         primaryDiagnosis: row.primary_diagnosis ?? null,
         overallStage: row.overall_stage ?? null,
         treatmentIntent: row.treatment_intent ?? null,
+      },
+    };
+  }
+
+  private async buildCardiologyContributor(tenantDb: DataSource, patientId: string) {
+    const [row] = await tenantDb.query(
+      `
+      SELECT
+        id,
+        encounter_date,
+        encounter_type,
+        visit_reason,
+        hemodynamics,
+        diagnostic_tests,
+        care_plan,
+        follow_up_plan,
+        risk_score,
+        care_status
+      FROM cardiology_encounters
+      WHERE patient_id = $1
+      ORDER BY encounter_date DESC, created_at DESC
+      LIMIT 1
+      `,
+      [patientId],
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    const diagnosticTests = this.toJsonValue<any[]>(row.diagnostic_tests, []);
+    const hemodynamics = this.toJsonValue<Record<string, any>>(row.hemodynamics, {});
+    const suggestedOrders: any[] = [];
+    const careGaps: any[] = [];
+    const visitReason = String(row.visit_reason || '').toLowerCase();
+    const riskScore = String(row.risk_score || '').toLowerCase();
+
+    if (!diagnosticTests.length) {
+      suggestedOrders.push({
+        name: 'Cardiology diagnostic order set',
+        type: 'order_set',
+        priority: riskScore === 'critical' ? 'urgent' : 'high',
+        rationale: 'High-risk cardiology encounter without diagnostic-test planning on record.',
+        sourceModule: 'cardiology',
+      });
+    }
+
+    if (!row.follow_up_plan) {
+      careGaps.push({
+        gapType: 'cardiology_followup_plan_missing',
+        gapDescription: 'Recent cardiology encounter lacks an explicit follow-up plan.',
+        priority: riskScore === 'critical' ? 'urgent' : 'high',
+        recommendedAction: 'Document follow-up timing, return precautions, and clinician handoff checkpoints.',
+        source: 'encounter_copilot',
+      });
+    }
+
+    if (!row.care_plan) {
+      careGaps.push({
+        gapType: 'cardiology_care_plan_incomplete',
+        gapDescription: 'Recent cardiology encounter lacks a documented care plan.',
+        priority: 'high',
+        recommendedAction: 'Document active management steps and testing/medication strategy before encounter close.',
+        source: 'encounter_copilot',
+      });
+    }
+
+    if (
+      riskScore === 'critical' ||
+      visitReason.includes('chest pain') ||
+      visitReason.includes('heart failure')
+    ) {
+      suggestedOrders.push({
+        name: 'Urgent ECG and troponin review',
+        type: 'diagnostic_review',
+        priority: 'urgent',
+        rationale: 'Recent cardiology context suggests an acute coronary or decompensation workflow should be confirmed.',
+        sourceModule: 'cardiology',
+      });
+    }
+
+    return {
+      module: 'cardiology',
+      specialty: 'cardiology',
+      title: 'Active cardiology longitudinal context available',
+      findings: [
+        row.visit_reason ? `Recent visit reason ${row.visit_reason}` : 'Recent cardiology visit recorded',
+        row.risk_score ? `Risk score ${row.risk_score}` : 'Risk score not documented',
+        hemodynamics?.bloodPressure || hemodynamics?.heartRate
+          ? `Hemodynamics ${[hemodynamics?.bloodPressure, hemodynamics?.heartRate ? `HR ${hemodynamics.heartRate}` : null].filter(Boolean).join(', ')}`
+          : 'Hemodynamic summary not documented',
+      ],
+      suggestedOrders,
+      likelyCareGaps: careGaps,
+      pathwayHints: [
+        'cardiology',
+        row.encounter_type || null,
+        row.visit_reason || null,
+        riskScore === 'critical' ? 'acute coronary syndrome' : null,
+        visitReason.includes('heart failure') ? 'heart failure' : null,
+      ].filter(Boolean),
+      recommendationReason:
+        riskScore === 'critical'
+          ? 'Critical cardiology risk should drive urgent pathway selection and treatment orchestration.'
+          : 'Recent cardiology encounter context should shape testing, follow-up, and longitudinal treatment planning.',
+      evidence: {
+        encounterId: row.id,
+        encounterDate: row.encounter_date ?? null,
+        encounterType: row.encounter_type ?? null,
+        visitReason: row.visit_reason ?? null,
+        riskScore: row.risk_score ?? null,
+        careStatus: row.care_status ?? null,
+        followUpPlanPresent: Boolean(row.follow_up_plan),
+        carePlanPresent: Boolean(row.care_plan),
+        diagnosticTestCount: diagnosticTests.length,
+      },
+    };
+  }
+
+  private async buildEmergencySepsisContributor(tenantDb: DataSource, patientId: string) {
+    const [latestEdVisit, latestSepsisScreening, latestSepsisBundle] = await Promise.all([
+      tenantDb.query(
+        `
+        SELECT
+          id,
+          arrival_date,
+          chief_complaint,
+          triage_level,
+          triage_acuity,
+          ed_status,
+          disposition,
+          code_stroke,
+          code_stemi,
+          code_sepsis,
+          follow_up_instructions,
+          quality_flags
+        FROM ed_visits
+        WHERE patient_id = $1
+        ORDER BY arrival_date DESC, created_at DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      tenantDb.query(
+        `
+        SELECT
+          id,
+          screening_datetime,
+          qsofa_score,
+          sirs_score,
+          lactate,
+          sepsis_suspected,
+          severe_sepsis,
+          septic_shock,
+          sepsis_bundle_initiated
+        FROM sepsis_screenings
+        WHERE patient_id = $1
+        ORDER BY screening_datetime DESC, created_at DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      tenantDb.query(
+        `
+        SELECT
+          id,
+          bundle_start_time,
+          lactate_value,
+          repeat_lactate_measured,
+          repeat_lactate_value,
+          three_hour_bundle_complete,
+          six_hour_bundle_complete,
+          overall_compliance,
+          patient_outcome
+        FROM sepsis_bundles
+        WHERE patient_id = $1
+        ORDER BY bundle_start_time DESC, created_at DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+    ]);
+
+    const edVisit = latestEdVisit?.[0] ?? null;
+    const sepsisScreening = latestSepsisScreening?.[0] ?? null;
+    const sepsisBundle = latestSepsisBundle?.[0] ?? null;
+
+    if (!edVisit && !sepsisScreening && !sepsisBundle) {
+      return null;
+    }
+
+    const suggestedOrders: any[] = [];
+    const careGaps: any[] = [];
+    const findings: string[] = [];
+    const pathwayHints = ['emergency', 'sepsis'];
+
+    if (edVisit) {
+      findings.push(
+        edVisit.chief_complaint
+          ? `Recent ED visit for ${edVisit.chief_complaint}`
+          : 'Recent ED visit context available',
+      );
+      if (edVisit.triage_acuity) {
+        findings.push(`ED triage acuity ${edVisit.triage_acuity}`);
+      }
+      if (!edVisit.disposition) {
+        careGaps.push({
+          gapType: 'ed_disposition_pending',
+          gapDescription: 'Recent ED visit lacks a documented disposition plan.',
+          priority: 'high',
+          recommendedAction: 'Complete ED disposition planning and clinician handoff before encounter closure.',
+          source: 'encounter_copilot',
+        });
+      }
+      if (!edVisit.follow_up_instructions) {
+        careGaps.push({
+          gapType: 'ed_followup_instructions_missing',
+          gapDescription: 'Recent ED visit lacks follow-up instructions.',
+          priority: 'high',
+          recommendedAction: 'Document return precautions and follow-up instructions before ED closure.',
+          source: 'encounter_copilot',
+        });
+      }
+      if (edVisit.code_stemi || String(edVisit.chief_complaint || '').toLowerCase().includes('chest pain')) {
+        suggestedOrders.push({
+          name: 'Emergency cardiac protocol review',
+          type: 'order_set',
+          priority: 'urgent',
+          rationale: 'ED chest-pain/STEMI context requires explicit protocol confirmation and execution tracking.',
+          sourceModule: 'ed',
+        });
+        pathwayHints.push('acute coronary syndrome');
+      }
+      if (edVisit.code_stroke) {
+        pathwayHints.push('stroke');
+      }
+      if (edVisit.code_sepsis) {
+        pathwayHints.push('sepsis');
+      }
+    }
+
+    if (sepsisScreening) {
+      findings.push(
+        sepsisScreening.sepsis_suspected
+          ? `Sepsis screening triggered with qSOFA ${sepsisScreening.qsofa_score ?? 0} and lactate ${sepsisScreening.lactate ?? 'n/a'}`
+          : 'Recent sepsis screening recorded',
+      );
+      if (sepsisScreening.sepsis_suspected && !sepsisScreening.sepsis_bundle_initiated && !sepsisBundle) {
+        suggestedOrders.push({
+          name: 'Initiate sepsis hour-one bundle',
+          type: 'order_set',
+          priority: sepsisScreening.septic_shock ? 'urgent' : 'high',
+          rationale: 'Sepsis is suspected but no bundle initiation is documented.',
+          sourceModule: 'sepsis',
+        });
+        careGaps.push({
+          gapType: 'sepsis_bundle_not_started',
+          gapDescription: 'Recent sepsis screening suggests sepsis but no bundle initiation is documented.',
+          priority: sepsisScreening.septic_shock ? 'urgent' : 'high',
+          recommendedAction: 'Start the sepsis bundle, document antibiotics/cultures, and track time-to-intervention.',
+          source: 'encounter_copilot',
+        });
+      }
+    }
+
+    if (sepsisBundle) {
+      findings.push(
+        sepsisBundle.overall_compliance
+          ? 'Recent sepsis bundle marked compliant'
+          : 'Recent sepsis bundle remains incomplete',
+      );
+      if (!sepsisBundle.three_hour_bundle_complete) {
+        suggestedOrders.push({
+          name: 'Queue sepsis three-hour bundle follow-through',
+          type: 'order_set',
+          priority: 'urgent',
+          rationale: 'Recent sepsis bundle is incomplete and needs structured three-hour follow-through.',
+          sourceModule: 'sepsis',
+        });
+      }
+      if (!sepsisBundle.repeat_lactate_measured && Number(sepsisBundle.lactate_value) >= 2) {
+        suggestedOrders.push({
+          name: 'Repeat lactate monitoring plan',
+          type: 'lab_followup',
+          priority: Number(sepsisBundle.lactate_value) >= 4 ? 'urgent' : 'high',
+          rationale: 'Elevated lactate without documented repeat measurement needs follow-through.',
+          sourceModule: 'sepsis',
+        });
+        careGaps.push({
+          gapType: 'sepsis_repeat_lactate_pending',
+          gapDescription: 'Recent sepsis bundle lacks repeat lactate follow-through.',
+          priority: Number(sepsisBundle.lactate_value) >= 4 ? 'urgent' : 'high',
+          recommendedAction: 'Document repeat lactate timing and complete sepsis reassessment workflow.',
+          source: 'encounter_copilot',
+        });
+      }
+    }
+
+    return {
+      module: 'emergency_sepsis',
+      specialty: 'emergency_medicine',
+      title: 'Emergency and sepsis acute-care context available',
+      findings,
+      suggestedOrders,
+      likelyCareGaps: careGaps,
+      pathwayHints: this.dedupeByKey(pathwayHints.filter(Boolean), (item) => String(item).toLowerCase()),
+      recommendationReason:
+        sepsisBundle && !sepsisBundle.overall_compliance
+          ? 'Incomplete sepsis bundle follow-through should immediately shape encounter priorities and escalation.'
+          : edVisit && !edVisit.disposition
+            ? 'Active emergency visit context should drive disposition, protocol execution, and handoff planning.'
+            : 'Recent emergency/sepsis context should influence acute-care pathway ranking.',
+      evidence: {
+        edVisitId: edVisit?.id ?? null,
+        edStatus: edVisit?.ed_status ?? null,
+        triageAcuity: edVisit?.triage_acuity ?? null,
+        sepsisScreeningId: sepsisScreening?.id ?? null,
+        qsofaScore: sepsisScreening?.qsofa_score ?? null,
+        sirsScore: sepsisScreening?.sirs_score ?? null,
+        lactate: sepsisScreening?.lactate ?? sepsisBundle?.lactate_value ?? null,
+        sepsisBundleId: sepsisBundle?.id ?? null,
+        sepsisBundleCompliant: sepsisBundle?.overall_compliance ?? null,
+        repeatLactateMeasured: sepsisBundle?.repeat_lactate_measured ?? null,
       },
     };
   }

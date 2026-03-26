@@ -84,7 +84,9 @@ import { ChargeApprovalNotification } from '../entities/charge-approval-notifica
 import { PatientConsent } from '../entities/patient-consent.entity';
 import { ConsentSignature } from '../entities/consent-signature.entity';
 import { PharmacyDispensing } from '../entities/pharmacy-dispensing.entity';
+import { PharmacyDispensingAnomaly } from '../entities/pharmacy-dispensing-anomaly.entity';
 import { PharmacyDispensingItem } from '../entities/pharmacy-dispensing-item.entity';
+import { PharmacyInventoryForecast } from '../entities/pharmacy-inventory-forecast.entity';
 import { PharmacyInventory } from '../entities/pharmacy-inventory.entity';
 import { PharmacySupplier } from '../entities/pharmacy-supplier.entity';
 import { PharmacyPurchaseOrder } from '../entities/pharmacy-purchase-order.entity';
@@ -99,6 +101,8 @@ import { PharmacyStockMovement } from '../entities/pharmacy-stock-movement.entit
 import { PharmacyPricingRule } from '../entities/pharmacy-pricing-rule.entity';
 import { PharmacyFormulary } from '../entities/pharmacy-formulary.entity';
 import { PharmacyAlert } from '../entities/pharmacy-alert.entity';
+import { MedicationReconciliationAiReview } from '../entities/medication-reconciliation-ai-review.entity';
+import { PharmacySubstitutionRecommendation } from '../entities/pharmacy-substitution-recommendation.entity';
 import { NurseCopilotTaskEvent } from '../entities/nurse-copilot-task-event.entity';
 import { NurseCopilotAlertEvent } from '../entities/nurse-copilot-alert-event.entity';
 import { NurseHandoffWorkflowState } from '../entities/nurse-handoff-workflow-state.entity';
@@ -498,7 +502,9 @@ export class TenantService {
         PatientConsent,
         ConsentSignature,
         PharmacyDispensing,
+        PharmacyDispensingAnomaly,
         PharmacyDispensingItem,
+        PharmacyInventoryForecast,
         PharmacyInventory,
         PharmacySupplier,
         PharmacyPurchaseOrder,
@@ -513,6 +519,8 @@ export class TenantService {
         PharmacyPricingRule,
         PharmacyFormulary,
         PharmacyAlert,
+        MedicationReconciliationAiReview,
+        PharmacySubstitutionRecommendation,
         NurseCopilotTaskEvent,
         NurseCopilotAlertEvent,
         NurseHandoffWorkflowState,

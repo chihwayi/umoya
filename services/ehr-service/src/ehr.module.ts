@@ -245,6 +245,7 @@ import { CcdaService } from './services/ccda.service';
 import { HipaaAuditService } from './services/hipaa-audit.service';
 import { FhirValidatorService } from './fhir/validators/fhir-validator.service';
 import { PharmacyService } from './services/pharmacy.service';
+import { PharmacyIntelligenceService } from './services/pharmacy-intelligence.service';
 import { DoctorAvailabilityService } from './services/doctor-availability.service';
 import { TelemedicineService } from './services/telemedicine.service';
 import { TelemedicineVideoService } from './services/telemedicine-video.service';
@@ -627,6 +628,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MinimumNecessaryGuard,
     QualityMeasuresService,
     PharmacyService,
+    PharmacyIntelligenceService,
     DoctorAvailabilityService,
     TelemedicineService,
     TelemedicineVideoService,

@@ -63,7 +63,7 @@ const StatCard: React.FC<{
 
 const PharmacyDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -73,12 +73,18 @@ const PharmacyDashboard: React.FC = () => {
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [pendingPrescriptions, setPendingPrescriptions] = useState<any[]>([]);
+  const [inventoryForecasts, setInventoryForecasts] = useState<any[]>([]);
+  const [dispensingAnomalies, setDispensingAnomalies] = useState<any[]>([]);
+  const [stewardshipReviews, setStewardshipReviews] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'orders' | 'receipts' | 'suppliers' | 'alerts' | 'dispensing' | 'shared-documents'>('overview');
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
   const [showCopilot, setShowCopilot] = useState(false);
   const [copilotQuery, setCopilotQuery] = useState('');
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [copilotResults, setCopilotResults] = useState<any[]>([]);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
+  const [stewardshipLoadingId, setStewardshipLoadingId] = useState<string | null>(null);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
@@ -130,6 +136,9 @@ const PharmacyDashboard: React.FC = () => {
         loadPurchaseOrders(),
         loadAlerts(),
         loadPendingPrescriptions(),
+        loadInventoryForecasts(),
+        loadDispensingAnomalies(),
+        loadStewardshipReviews(),
       ]);
     } catch (error) {
       console.error('Failed to load dashboard data', error);
@@ -193,6 +202,78 @@ const PharmacyDashboard: React.FC = () => {
     }
   };
 
+  const loadInventoryForecasts = async () => {
+    try {
+      const response = await pharmacyApi.listInventoryForecasts(token, tenantSlug!, { limit: 5 });
+      setInventoryForecasts(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Failed to load inventory forecasts', error);
+    }
+  };
+
+  const loadDispensingAnomalies = async () => {
+    try {
+      const response = await pharmacyApi.listDispensingAnomalies(token, tenantSlug!, { limit: 5, status: 'open' });
+      setDispensingAnomalies(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Failed to load dispensing anomalies', error);
+    }
+  };
+
+  const loadStewardshipReviews = async () => {
+    try {
+      const response = await pharmacyApi.listStewardshipReviews(token, tenantSlug!, { limit: 5, reviewRequired: true });
+      setStewardshipReviews(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Failed to load stewardship reviews', error);
+    }
+  };
+
+  const runInventoryForecasts = async () => {
+    if (!tenantSlug || !token) return;
+    try {
+      setForecastLoading(true);
+      await pharmacyApi.generateInventoryForecasts({ horizonDays: 30, lookbackDays: 45 }, token, tenantSlug);
+      await loadInventoryForecasts();
+      showSuccess('Forecasts updated', 'Inventory shortage forecasts were regenerated.');
+    } catch (error) {
+      console.error('Failed to generate inventory forecasts', error);
+      showError('Forecasts', 'Unable to refresh pharmacy inventory forecasts right now.');
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
+  const runDispensingAnomalyScan = async () => {
+    if (!tenantSlug || !token) return;
+    try {
+      setAnomalyLoading(true);
+      await pharmacyApi.detectDispensingAnomalies({ lookbackDays: 90, limit: 250 }, token, tenantSlug);
+      await loadDispensingAnomalies();
+      showSuccess('Anomaly scan complete', 'Dispensing anomalies were refreshed for pharmacist review.');
+    } catch (error) {
+      console.error('Failed to scan dispensing anomalies', error);
+      showError('Anomalies', 'Unable to refresh dispensing anomaly review right now.');
+    } finally {
+      setAnomalyLoading(false);
+    }
+  };
+
+  const runHighRiskReview = async (prescriptionId: string) => {
+    if (!tenantSlug || !token || !prescriptionId) return;
+    try {
+      setStewardshipLoadingId(prescriptionId);
+      await pharmacyApi.generateHighRiskMedicationReview({ prescriptionId }, token, tenantSlug);
+      await loadStewardshipReviews();
+      showSuccess('Stewardship review generated', 'High-risk medication review was added to the stewardship queue.');
+    } catch (error) {
+      console.error('Failed to generate stewardship review', error);
+      showError('Stewardship', 'Unable to generate the stewardship review right now.');
+    } finally {
+      setStewardshipLoadingId(null);
+    }
+  };
+
   const runCopilot = async () => {
     if (!copilotQuery.trim()) return;
     if (!tenantSlug || !token) return;
@@ -220,6 +301,9 @@ const PharmacyDashboard: React.FC = () => {
       .map((rx) => rx.patient_id || rx.patient_number)
       .filter(Boolean),
   ).size;
+  const criticalForecasts = inventoryForecasts.filter((item) => item.shortageRisk === 'critical' || item.shortageRisk === 'high').length;
+  const openAnomalies = dispensingAnomalies.filter((item) => item.status === 'open').length;
+  const pendingStewardship = stewardshipReviews.filter((item) => item.reviewRequired && !item.reviewDate).length;
 
   if (loading) {
     return (
@@ -404,6 +488,137 @@ const PharmacyDashboard: React.FC = () => {
                 accent="from-purple-500 to-purple-600"
                 subtitle="Purchase orders"
               />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">Shortage Forecasts</h2>
+                    <p className="text-sm text-slate-500">{criticalForecasts} high-risk stock signals</p>
+                  </div>
+                  <button
+                    onClick={runInventoryForecasts}
+                    disabled={forecastLoading}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${forecastLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {inventoryForecasts.length === 0 ? (
+                    <p className="text-sm text-slate-500">No persisted forecasts yet.</p>
+                  ) : (
+                    inventoryForecasts.slice(0, 4).map((forecast) => (
+                      <div key={forecast.id} className="rounded-xl border border-slate-200 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-slate-900">{forecast.inventorySnapshot?.inventoryName || 'Inventory item'}</p>
+                            <p className="text-xs text-slate-500">
+                              Demand {forecast.projectedDemand} / {forecast.forecastHorizonDays}d
+                            </p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            forecast.shortageRisk === 'critical'
+                              ? 'bg-red-100 text-red-700'
+                              : forecast.shortageRisk === 'high'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {forecast.shortageRisk}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-2">
+                          Recommended reorder: {forecast.recommendedOrderQuantity}
+                          {forecast.daysUntilStockout ? ` • stockout in ~${forecast.daysUntilStockout} days` : ''}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">Dispensing Anomalies</h2>
+                    <p className="text-sm text-slate-500">{openAnomalies} open review items</p>
+                  </div>
+                  <button
+                    onClick={runDispensingAnomalyScan}
+                    disabled={anomalyLoading}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${anomalyLoading ? 'animate-spin' : ''}`} />
+                    Scan
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {dispensingAnomalies.length === 0 ? (
+                    <p className="text-sm text-slate-500">No open dispensing anomalies yet.</p>
+                  ) : (
+                    dispensingAnomalies.slice(0, 4).map((anomaly) => (
+                      <div key={anomaly.id} className="rounded-xl border border-slate-200 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-slate-900">{anomaly.medicationName}</p>
+                            <p className="text-xs text-slate-500">{anomaly.anomalyType.replace(/_/g, ' ')}</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            anomaly.severity === 'high'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {anomaly.severity}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-2">{anomaly.rationale}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">Stewardship Queue</h2>
+                    <p className="text-sm text-slate-500">{pendingStewardship} review-required entries</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {pendingPrescriptions.slice(0, 4).map((prescription) => (
+                    <div key={prescription.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-900">{prescription.medication_name || prescription.medicationName || 'Prescription'}</p>
+                          <p className="text-xs text-slate-500">
+                            Patient {prescription.patient_number || prescription.patient_id || 'unknown'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => runHighRiskReview(prescription.id)}
+                          disabled={stewardshipLoadingId === prescription.id}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-60"
+                        >
+                          {stewardshipLoadingId === prescription.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
+                          Review
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {pendingPrescriptions.length === 0 && stewardshipReviews.length === 0 && (
+                    <p className="text-sm text-slate-500">No pending stewardship work yet.</p>
+                  )}
+                  {stewardshipReviews.slice(0, 2).map((review) => (
+                    <div key={review.id} className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                      <p className="font-medium text-slate-900">{review.antibioticName}</p>
+                      <p className="text-xs text-slate-600 mt-1">{review.stewardshipRecommendation || 'Stewardship recommendation generated.'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Low Stock Alert */}

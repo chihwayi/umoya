@@ -17,7 +17,7 @@ Use this document together with the execution tracker:
 
 - [SPRINT_111_EXECUTION_TRACKER.md](/Users/devoop/Dev/personal/medicore/docs/SPRINT_111_EXECUTION_TRACKER.md)
 
-**Execution snapshot (2026-03-25):** `MOAS-00`, `MOAS-02`, `MOAS-03`, `MOAS-10`, and `MOAS-11` are validated. `MOAS-04` is now `implemented_not_validated` with deterministic payment-state handling plus persisted denial-prediction and financial-clearance artifacts. Use the execution tracker for live status, evidence, and next actions.
+**Execution snapshot (2026-03-26):** `MOAS-00`, `MOAS-02`, `MOAS-03`, `MOAS-05`, `MOAS-06`, `MOAS-10`, and `MOAS-11` are validated. `MOAS-04` and `MOAS-07` are now `implemented_not_validated`; finance has deterministic payment-state handling plus persisted denial-prediction and financial-clearance artifacts, and pharmacy now has persisted reconciliation/substitution/counseling, inventory-forecasting, dispensing-anomaly, stewardship-review, and first dashboard-consumption slices. Use the execution tracker for live status, evidence, and next actions.
 
 This document exists to ensure an agent can:
 
@@ -667,7 +667,7 @@ Likely new tables:
 
 ### Execution note
 
-- 2026-03-26 first MOAS-06 slices landed: `encounter_copilot_sessions`, `treatment_pathway_instances`, `order_appropriateness_reviews`, and `result_followup_tasks` now exist, and the new encounter copilot persists unified encounter output, ranked pathway recommendations, pre-finalization order-review artifacts, and post-result follow-up tasks from critical labs plus radiology findings using diabetes, HIV, maternity, oncology, ambient, smart-defaults, care-gap, lab-alert, and imaging context. Remaining required work in this section still includes deeper cardiology/emergency pathway contribution depth.
+- 2026-03-26 MOAS-06 is now validated: `encounter_copilot_sessions`, `treatment_pathway_instances`, `order_appropriateness_reviews`, and `result_followup_tasks` exist, the encounter copilot persists unified encounter output, ranked pathway recommendations, pre-finalization order-review artifacts, and post-result follow-up tasks from critical labs plus radiology findings using diabetes, HIV, maternity, oncology, cardiology, emergency/sepsis, ambient, smart-defaults, care-gap, lab-alert, and imaging context, and the lifecycle spec now proves generation -> pathway persistence -> order review -> result follow-up -> hydrated session readback against shared tenant state.
 
 ---
 
@@ -729,6 +729,10 @@ Likely new tables:
 ### Definition of done
 
 - pharmacy becomes an AI-first module, not just inventory and dispensing CRUD
+
+### Execution note
+
+- 2026-03-26 MOAS-07 is now `implemented_not_validated` with multiple persisted pharmacy intelligence slices through `sprint111_pharmacy_intelligence@2026.03.26.2`: `PharmacyIntelligenceService` now persists medication-history vs patient-reported reconciliation output, duplicate-therapy and adherence concerns, medication-safety signals, governed multilingual counseling material, formulary-driven substitution recommendations with cost/rationale metadata, shortage-risk inventory forecasts with reorder guidance, dispensing anomalies for quantity/refill/control-pattern review, and governed high-risk medication review that persists antimicrobial stewardship records through the existing stewardship table. The EHR pharmacy dashboard now consumes forecasts, anomalies, and stewardship actions through the new intelligence endpoints, while deeper reconciliation/substitution workflow embedding remains the main remaining MOAS-07 gap.
 
 ---
 

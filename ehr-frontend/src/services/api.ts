@@ -8238,6 +8238,59 @@ export const pharmacyApi = {
     });
     return { data: response.data };
   },
+
+  // Intelligence
+  generateMedicationReview: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/intelligence/reconciliation-review', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getMedicationReview: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/intelligence/reconciliation-review/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  generateInventoryForecasts: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/intelligence/inventory-forecast', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  listInventoryForecasts: async (token: string, tenantSlug: string, filters?: { shortageRisk?: string; limit?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/intelligence/inventory-forecast', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  detectDispensingAnomalies: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/intelligence/dispensing-anomalies', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  listDispensingAnomalies: async (token: string, tenantSlug: string, filters?: { status?: string; severity?: string; limit?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/intelligence/dispensing-anomalies', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  generateHighRiskMedicationReview: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/intelligence/high-risk-review', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  listStewardshipReviews: async (token: string, tenantSlug: string, filters?: { patientId?: string; reviewRequired?: boolean; limit?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/intelligence/stewardship', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
 };
 
 // Medical Aid Claims API

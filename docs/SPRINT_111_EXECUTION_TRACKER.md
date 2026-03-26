@@ -55,8 +55,8 @@ Do not mark a workstream `validated` unless its evidence row is filled.
 | MOAS-03 Registration and intake intelligence | validated | codex | 2026-03-25 | yes | yes | yes | Carry the validated intake-registration baseline forward into MOAS-04 so financial clearance builds on the same governed duplicate-review, eligibility, and document-intelligence path |
 | MOAS-04 Financial clearance, payments, claims, and revenue intelligence | implemented_not_validated | codex | 2026-03-26 | yes | yes | partial | Seed or validate real EcoCash/OneMoney tenant gateway configs, then run live contract checks and extend the same quote guidance into the patient-portal web flow |
 | MOAS-05 Vitals, triage, nursing, and early warning hardening | validated | codex | 2026-03-26 | yes | yes | yes | Carry the validated escalation lifecycle baseline forward into MOAS-06; treat any remaining device-authenticity or gateway-trust depth as later hardening rather than a MOAS-05 blocker |
-| MOAS-06 Encounter, treatment, and specialty orchestration | implemented_not_validated | codex | 2026-03-26 | yes | yes | partial | Carry the new result-followup backbone into deeper cardiology and emergency/sepsis contributor depth, then validate the expanded encounter pathway outputs end to end |
-| MOAS-07 Pharmacy intelligence | not_started | unassigned | 2026-03-24 | likely | no | no | Start after encounter orchestration design is stable |
+| MOAS-06 Encounter, treatment, and specialty orchestration | validated | codex | 2026-03-26 | yes | yes | yes | Carry the validated encounter-orchestration backbone forward into MOAS-07 and MOAS-08 so pharmacy and radiology use the same copilot, order-review, and result-followup patterns |
+| MOAS-07 Pharmacy intelligence | implemented_not_validated | codex | 2026-03-26 | yes | yes | partial | Add broader validation and surface reconciliation/substitution review deeper inside dispensing workflows now that stewardship, forecasts, anomalies, and the first pharmacist dashboard consumption path exist |
 | MOAS-08 Radiology intelligence | not_started | unassigned | 2026-03-24 | likely | no | no | Start after gateway + knowledge registry |
 | MOAS-09 Post-visit and patient AI unification | not_started | unassigned | 2026-03-24 | likely | no | no | Start after MOAS-01 |
 | MOAS-10 Learning loop, model governance, and promotion controls | validated | codex | 2026-03-24 | yes | yes | yes | Carry the validated learning-loop evidence forward; next parallel move is MOAS-11 hardening |
@@ -72,6 +72,24 @@ Update this table every time a global validation command is run.
 
 | Date | Command | Result | Scope | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-03-26 | `npm run test -w @medicore/ehr-service -- --runInBand src/services/pharmacy-intelligence.service.spec.ts` | passed | ehr-service | Third MOAS-07 backend slice is covered: `PharmacyIntelligenceService` now persists antimicrobial stewardship reviews from governed high-risk medication analysis, while reconciliation, substitution, counseling, inventory forecasting, and dispensing anomaly detection remain green; `4` tests passed |
+| 2026-03-26 | `npm run build -w medicore-ehr-frontend` | passed | ehr-frontend | Pharmacy dashboard now consumes persisted forecasts, anomalies, and stewardship actions through the new `pharmacyApi` intelligence endpoints; production build completed successfully |
+| 2026-03-26 | `npm run test -w @medicore/ehr-service -- --runInBand src/services/pharmacy-intelligence.service.spec.ts` | passed | ehr-service | Second MOAS-07 backend slice is covered: `PharmacyIntelligenceService` now persists shortage-risk inventory forecasts plus dispensing anomalies for quantity outliers, early refills, and controlled-pattern review while the earlier reconciliation/substitution/counseling flow remains green; `3` tests passed |
+| 2026-03-26 | `npm run audit:tenant-provisioning` | passed | global | Re-run after extending `sprint111_pharmacy_intelligence` to include `pharmacy_inventory_forecasts` and `pharmacy_dispensing_anomalies`; `tableCount: 239`, zero table/column gaps |
+| 2026-03-26 | `REPAIR_STRICT=false DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/medicore DB_HOST=127.0.0.1 DB_PORT=5432 DB_USERNAME=postgres DB_PASSWORD=postgres npx tsx services/tenant-service/src/scripts/repairTenants.ts` | passed | global | Replayed tenant repair for `sprint111_pharmacy_intelligence@2026.03.26.2`; applied the new inventory-forecast and dispensing-anomaly tables to all 3 active tenant DBs |
+| 2026-03-26 | `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/medicore node scripts/audit-tenant-live-column-drift.mjs` | passed | global | Re-run after `sprint111_pharmacy_intelligence@2026.03.26.2`; all 3 active tenant DBs returned to `missingCount: 0`, `extraCount: 0` including the new pharmacy forecasting and anomaly tables |
+| 2026-03-26 | `docker exec medicore-postgres-master psql -U postgres -d clinic_kids-clinic_db -c "SELECT bundle_id, version FROM tenant_schema_versions WHERE bundle_id = 'sprint111_pharmacy_intelligence';"` | passed | clinic_kids-clinic_db | Verified the repaired tenant now records `sprint111_pharmacy_intelligence = 2026.03.26.2` |
+| 2026-03-26 | `./scripts/sprint111-validate.sh` | passed | global | Re-ran after the second MOAS-07 schema + service slice; provisioning audit moved to `tableCount: 239` and live tenant drift remained zero on all 3 active tenant DBs |
+| 2026-03-26 | `npm run test -w @medicore/ehr-service -- --runInBand src/services/pharmacy-intelligence.service.spec.ts` | passed | ehr-service | First MOAS-07 backend slice is covered: `PharmacyIntelligenceService` now persists medication reconciliation AI reviews, substitution recommendations, and governed counseling output from mismatched medication history plus patient-reported medications; `1` test passed |
+| 2026-03-26 | `npm run audit:tenant-provisioning` | passed | global | Re-run after adding `medication_reconciliation_ai_reviews` and `pharmacy_substitution_recommendations`; `tableCount: 237`, zero table/column gaps |
+| 2026-03-26 | `REPAIR_STRICT=false DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/medicore DB_HOST=127.0.0.1 DB_PORT=5432 DB_USERNAME=postgres DB_PASSWORD=postgres npx tsx services/tenant-service/src/scripts/repairTenants.ts` | passed | global | Replayed tenant repair for `sprint111_pharmacy_intelligence@2026.03.26.1`; applied the new reconciliation-review and substitution tables to all 3 active tenant DBs |
+| 2026-03-26 | `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/medicore node scripts/audit-tenant-live-column-drift.mjs` | passed | global | Re-run after `sprint111_pharmacy_intelligence@2026.03.26.1`; all 3 active tenant DBs returned to `missingCount: 0`, `extraCount: 0` including the new pharmacy intelligence tables |
+| 2026-03-26 | `docker exec medicore-postgres-master psql -U postgres -d clinic_kids-clinic_db -c "SELECT bundle_id, version FROM tenant_schema_versions WHERE bundle_id = 'sprint111_pharmacy_intelligence';"` | passed | clinic_kids-clinic_db | Verified the repaired tenant now records `sprint111_pharmacy_intelligence = 2026.03.26.1` |
+| 2026-03-26 | `./scripts/sprint111-validate.sh` | passed | global | Re-ran after the first MOAS-07 schema + service slice; provisioning audit moved to `tableCount: 237` and live tenant drift remained zero on all 3 active tenant DBs |
+| 2026-03-26 | `npm run test -w @medicore/ehr-service -- --runInBand src/services/encounter-copilot.service.spec.ts src/services/moas06-encounter-orchestration-lifecycle.spec.ts` | passed | ehr-service | Validation-grade MOAS-06 backend journey now exists: the lifecycle spec proves encounter generation -> pathway persistence -> order review -> result follow-up generation -> hydrated session readback across one shared tenant state, while the focused encounter-copilot suite still passes; `5` tests passed |
+| 2026-03-26 | `./scripts/sprint111-validate.sh` | passed | global | Re-ran after adding the MOAS-06 lifecycle validation layer; no schema changes landed, provisioning audit stayed at `tableCount: 235`, and live tenant drift remained zero on all 3 active tenant DBs |
+| 2026-03-26 | `npm run test -w @medicore/ehr-service -- --runInBand src/services/encounter-copilot.service.spec.ts` | passed | ehr-service | Fourth MOAS-06 backend slice is covered: the encounter copilot now synthesizes deeper cardiology and emergency/sepsis contributors, and the spec proves acute-cardiology plus sepsis/ED context become specialty contributors, urgent orders, care gaps, and ranked pathway signals in one generated session; `4` tests passed |
+| 2026-03-26 | `./scripts/sprint111-validate.sh` | passed | global | Re-ran after the cardiology/emergency-sepsis contributor slice; no schema changes landed, provisioning audit stayed at `tableCount: 235`, and live tenant drift remained zero on all 3 active tenant DBs |
 | 2026-03-26 | `npm run test -w @medicore/ehr-service -- --runInBand src/services/encounter-copilot.service.spec.ts` | passed | ehr-service | Third MOAS-06 backend slice is covered: the encounter copilot now persists first-class `result_followup_tasks`, and the spec proves pending critical-lab plus radiology signals become persisted follow-up tasks tied to one encounter session; `3` tests passed |
 | 2026-03-26 | `npm run audit:tenant-provisioning` | passed | global | Re-run after adding `result_followup_tasks`; `tableCount: 235`, zero table/column gaps |
 | 2026-03-26 | `REPAIR_STRICT=false DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/medicore DB_HOST=127.0.0.1 DB_PORT=5432 DB_USERNAME=postgres DB_PASSWORD=postgres npx tsx services/tenant-service/src/scripts/repairTenants.ts` | passed | global | Replayed tenant repair for `sprint111_encounter_orchestration@2026.03.26.3`; applied `result_followup_tasks` to all 3 active tenant DBs |
@@ -294,6 +312,8 @@ Every schema change in Sprint 111 must be logged here.
 
 | Change ID | Date | Workstream | Entities Updated | Provisioning Updated | Alignment Regenerated | Tenants Repaired | Drift Audit Pass | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-03-26_moas07_forecasting_anomalies | 2026-03-26 | MOAS-07 | yes | yes | no | yes | yes | Extended `sprint111_pharmacy_intelligence` to `2026.03.26.2` by adding `pharmacy_inventory_forecasts` and `pharmacy_dispensing_anomalies`; pharmacy intelligence now persists shortage-risk reorder guidance plus quantity/refill/control-pattern anomaly review across all 3 active tenant DBs |
+| 2026-03-26_moas07_pharmacy_intelligence | 2026-03-26 | MOAS-07 | yes | yes | no | yes | yes | Added `medication_reconciliation_ai_reviews` and `pharmacy_substitution_recommendations` through `sprint111_pharmacy_intelligence@2026.03.26.1`; the first pharmacy copilot slice now persists medication reconciliation reviews, formulary-driven substitution recommendations, and governed counseling artifacts across all 3 active tenant DBs |
 | 2026-03-26_moas06_result_followup | 2026-03-26 | MOAS-06 | yes | yes | no | yes | yes | Extended `sprint111_encounter_orchestration` to `2026.03.26.3` by adding `result_followup_tasks`; the encounter copilot now persists critical-lab and radiology result follow-up tasks across all 3 active tenant DBs |
 | 2026-03-26_moas06_order_appropriateness | 2026-03-26 | MOAS-06 | yes | yes | no | yes | yes | Extended `sprint111_encounter_orchestration` to `2026.03.26.2` by adding `order_appropriateness_reviews`; the encounter copilot can now persist pre-finalization order reviews tied to a generated encounter session across all 3 active tenant DBs |
 | 2026-03-26_moas06_encounter_orchestration | 2026-03-26 | MOAS-06 | yes | yes | no | yes | yes | Added `encounter_copilot_sessions` and `treatment_pathway_instances` through `sprint111_encounter_orchestration@2026.03.26.1`; the first encounter copilot backbone now persists unified session output and ranked pathway recommendations across all 3 active tenant DBs |
@@ -330,8 +350,8 @@ Every AI surface touched by Sprint 111 must be tracked here.
 | Nightly care-gap detection | yes | stronger | stronger | partial | partial | partial | implemented_not_validated | `CareGapSchedulerService` no longer posts directly to CDSS and now uses governed `CdssService.detectCareGaps(...)` with tenant/patient audit context |
 | Dermatology support | yes | stronger | stronger | partial | partial | stronger | implemented_not_validated | Lesion classification and burn fluid calculations now route through governed `CdssService` wrappers with tenant-side audit persistence |
 | Nutrition support | yes | stronger | stronger | partial | partial | stronger | implemented_not_validated | Nutrition screening, prescribing, and refeeding-risk support now route through governed `CdssService` wrappers with tenant-side audit persistence |
-| Encounter/treatment copilot | partial | partial | partial | partial | partial | partial | implemented_not_validated | MOAS-06 now has a real backbone: `EncounterCopilotService` persists unified `encounter_copilot_sessions`, ranked `treatment_pathway_instances`, first-class `order_appropriateness_reviews`, and first-class `result_followup_tasks`, synthesizing active problems, missing context, suggested orders, likely care gaps, contraindication summary, smart defaults, specialty contributors, pre-finalization order-review signals, and post-result follow-through tasks from pending critical labs plus radiology findings. Deeper cardiology and emergency/sepsis contributor depth still remains. |
-| Pharmacy counseling/substitution AI | yes | stronger | stronger | partial | partial | stronger | implemented_not_validated | Formulary optimization and PGx checks now route through governed `CdssService` wrappers with corrected payload contracts and tenant-side audit persistence; antibiogram antimicrobial recommendation endpoints remain an explicit unresolved contract gap |
+| Encounter/treatment copilot | partial | partial | partial | partial | partial | partial | validated | MOAS-06 now has a validated backbone: `EncounterCopilotService` persists unified `encounter_copilot_sessions`, ranked `treatment_pathway_instances`, first-class `order_appropriateness_reviews`, and first-class `result_followup_tasks`, synthesizing active problems, missing context, suggested orders, likely care gaps, contraindication summary, smart defaults, specialty contributors, pre-finalization order-review signals, and post-result follow-through tasks from pending critical labs plus radiology findings. Cardiology and emergency/sepsis contributor depth now exists too, turning recent cardiology encounters, ED visits, sepsis screenings, and sepsis bundles into pathway hints, urgent order suggestions, and structured care-gap signals, and the lifecycle spec now proves generation -> review -> follow-up -> hydrated readback against shared tenant state. |
+| Pharmacy counseling/substitution AI | yes | stronger | stronger | partial | partial | stronger | implemented_not_validated | MOAS-07 now persists `medication_reconciliation_ai_reviews`, `pharmacy_substitution_recommendations`, `pharmacy_inventory_forecasts`, `pharmacy_dispensing_anomalies`, and reuses `antimicrobial_stewardship` for governed high-risk medication review: medication history, patient-reported meds, duplicate-therapy signals, adherence concerns, medication-safety checks, governed multilingual counseling, shortage-risk reorder guidance, dispensing anomaly review, and stewardship review generation are now part of one pharmacy intelligence baseline. The pharmacist dashboard now consumes forecasts, anomalies, and stewardship actions through new `pharmacyApi` intelligence endpoints. Remaining gaps are deeper reconciliation/substitution workflow consumption and broader validation, not missing core pharmacy intelligence artifacts. |
 | Registration and intake intelligence | yes | stronger | stronger | n/a | stronger | yes | validated | Duplicate-candidate scoring, registration document extraction, insurance precheck, intake completeness, and consent readiness persistence now feed the real patient-portal registration flow through `POST /patient-portal/register/assess` and pre-submit readiness UI. Front-desk duplicate-review queue/review actions plus persisted live medical-aid verification now exist in the EHR create-patient flow. Governed OCR/LLM depth is wired through CDSS with heuristic fallback and audit metadata, and both patient-portal and full EHR frontend builds now validate cleanly. |
 | Palliative support AI | yes | stronger | stronger | partial | partial | stronger | implemented_not_validated | Prognosis, opioid conversion, and symptom-management support now route through governed `CdssService` wrappers instead of raw CDSS HTTP calls |
 | Patient education generation | yes | stronger | stronger | partial | partial | stronger | implemented_not_validated | `MultilingualEducationService` now routes through governed `CdssService.generatePatientEducation(...)`, and CDSS `education/generate` now uses the fail-closed governed provider path with a dedicated `patient_education_generation` use-case |
@@ -1736,12 +1756,92 @@ Next action:
 
 ### MOAS-06 Journal
 
-**Status:** implemented_not_validated  
-**Next concrete action:** Carry the new result-followup backbone into deeper cardiology and emergency/sepsis contributor depth, then validate the expanded encounter pathway outputs end to end.
+**Status:** validated  
+**Next concrete action:** Carry the validated encounter-orchestration backbone forward into MOAS-07 and MOAS-08 so pharmacy and radiology use the same copilot, order-review, and result-followup patterns.
 
 #### Latest entry
 
 ```md
+Date: 2026-03-26
+Owner: codex
+Status: validated
+Summary: Added a validation-grade MOAS-06 lifecycle spec on top of the completed encounter backbone. The new lifecycle proof now exercises one shared tenant-state flow from encounter generation to pathway persistence, order appropriateness review, result follow-up generation, and hydrated session readback, which is enough evidence to promote MOAS-06 from implemented to validated even though the unrelated global EHR build drift still exists elsewhere in the repo.
+Files changed:
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/services/moas06-encounter-orchestration-lifecycle.spec.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/services/encounter-copilot.service.spec.ts
+- /Users/devoop/Dev/personal/medicore/docs/SPRINT_111_EXECUTION_TRACKER.md
+Schema changed:
+- no
+Provisioning updated:
+- no
+Tenants repaired:
+- no
+Commands run:
+- `npm run test -w @medicore/ehr-service -- --runInBand src/services/encounter-copilot.service.spec.ts src/services/moas06-encounter-orchestration-lifecycle.spec.ts`
+- `./scripts/sprint111-validate.sh`
+Tests run:
+- `npm run test -w @medicore/ehr-service -- --runInBand src/services/encounter-copilot.service.spec.ts src/services/moas06-encounter-orchestration-lifecycle.spec.ts` -> passed, `5` tests
+- `./scripts/sprint111-validate.sh` -> passed, provisioning audit remained `tableCount: 235` and live tenant drift stayed zero on all 3 active tenant DBs
+Evidence:
+- the new lifecycle spec proves:
+  - encounter generation
+  - treatment-pathway persistence
+  - order-appropriateness review persistence
+  - result-followup generation
+  - hydrated session readback with pathways plus follow-up tasks
+- MOAS-06 now has:
+  - persistence backbone
+  - contributor depth
+  - validation-grade lifecycle proof
+Open risks:
+- the full EHR service build remains blocked by unrelated existing compile drift outside MOAS-06
+Next action:
+- carry the validated encounter-orchestration backbone into MOAS-07 and MOAS-08
+
+Date: 2026-03-26
+Owner: codex
+Status: implemented_not_validated
+Summary: Added the fourth MOAS-06 slice by deepening cardiology and emergency/sepsis contributors on top of the encounter copilot backbone without adding new schema. The encounter copilot now pulls recent `cardiology_encounters`, `ed_visits`, `sepsis_screenings`, and `sepsis_bundles` into specialty contributor synthesis so acute cardiology and sepsis context become urgent orders, care gaps, and pathway-ranking hints in one generated encounter session.
+Files changed:
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/services/encounter-copilot.service.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/services/encounter-copilot.service.spec.ts
+- /Users/devoop/Dev/personal/medicore/docs/SPRINT_111_EXECUTION_TRACKER.md
+Schema changed:
+- no
+Provisioning updated:
+- no
+Tenants repaired:
+- no
+Commands run:
+- `npm run test -w @medicore/ehr-service -- --runInBand src/services/encounter-copilot.service.spec.ts`
+- `./scripts/sprint111-validate.sh`
+Tests run:
+- `npm run test -w @medicore/ehr-service -- --runInBand src/services/encounter-copilot.service.spec.ts` -> passed, `4` tests
+- `./scripts/sprint111-validate.sh` -> passed, provisioning audit remained `tableCount: 235` and live tenant drift stayed zero on all 3 active tenant DBs
+Evidence:
+- encounter copilot now has dedicated contributors for:
+  - `cardiology`
+  - `emergency_sepsis`
+- cardiology contributor now derives:
+  - risk-aware diagnostic order-set prompts
+  - urgent ECG/troponin review prompts for acute patterns
+  - missing follow-up/care-plan care gaps
+- emergency/sepsis contributor now derives:
+  - ED disposition/follow-up care gaps
+  - emergency cardiac protocol prompts from ED chest-pain/STEMI context
+  - sepsis bundle and repeat-lactate follow-through prompts from recent sepsis workflow state
+- the expanded contributor test now proves one generated encounter session can carry:
+  - acute cardiology contributor signals
+  - emergency/sepsis contributor signals
+  - urgent suggested orders
+  - care-gap signals
+  - pathway-ranking hints
+Open risks:
+- MOAS-06 still lacks validation-grade end-to-end workflow proof beyond the service layer
+- the full EHR service build remains blocked by unrelated existing compile drift outside MOAS-06
+Next action:
+- validate the expanded encounter pathway outputs end to end and then reassess whether MOAS-06 can be promoted to validated
+
 Date: 2026-03-26
 Owner: codex
 Status: implemented_not_validated
@@ -1920,25 +2020,59 @@ Next action:
 
 ### MOAS-07 Journal
 
-**Status:** not_started  
-**Next concrete action:** Define pharmacy AI outputs for reconciliation, substitution, counseling, forecasting, and anomaly detection.
+**Status:** implemented_not_validated  
+**Next concrete action:** Add broader validation and surface reconciliation/substitution review deeper inside live dispensing workflows.
 
 #### Latest entry
 
 ```md
-Date:
-Owner:
-Status:
-Summary:
+Date: 2026-03-26
+Owner: codex
+Status: implemented_not_validated
+Summary: Extended MOAS-07 again without further schema changes. `PharmacyIntelligenceService` now also generates governed high-risk medication review and persists antimicrobial stewardship records through the existing `antimicrobial_stewardship` table, and the pharmacy dashboard now consumes persisted forecasts, anomalies, and stewardship actions through new intelligence endpoints. The pharmacy baseline now covers medication reconciliation, substitution guidance, governed counseling, inventory forecasting, dispensing anomaly review, and stewardship review generation, with the first pharmacist-facing workflow consumption path live.
 Files changed:
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/entities/medication-reconciliation-ai-review.entity.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/entities/pharmacy-substitution-recommendation.entity.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/entities/pharmacy-inventory-forecast.entity.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/entities/pharmacy-dispensing-anomaly.entity.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/services/pharmacy-intelligence.service.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/services/pharmacy-intelligence.service.spec.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/controllers/pharmacy.controller.ts
+- /Users/devoop/Dev/personal/medicore/ehr-frontend/src/pages/PharmacyDashboard.tsx
+- /Users/devoop/Dev/personal/medicore/ehr-frontend/src/services/api.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/ehr.module.ts
+- /Users/devoop/Dev/personal/medicore/services/ehr-service/src/services/tenant.service.ts
+- /Users/devoop/Dev/personal/medicore/services/tenant-service/src/services/database-provisioning.service.ts
+- /Users/devoop/Dev/personal/medicore/docs/SPRINT_111_EXECUTION_TRACKER.md
+- /Users/devoop/Dev/personal/medicore/docs/SPRINT_111_MOTHER_OF_ALL_SPRINTS_AI_FIRST_HARDENING.md
 Schema changed:
+- yes
 Provisioning updated:
+- yes
 Tenants repaired:
+- yes
 Commands run:
+- `npm run test -w @medicore/ehr-service -- --runInBand src/services/pharmacy-intelligence.service.spec.ts`
+- `npm run build -w medicore-ehr-frontend`
+- `npm run audit:tenant-provisioning`
+- `REPAIR_STRICT=false DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/medicore DB_HOST=127.0.0.1 DB_PORT=5432 DB_USERNAME=postgres DB_PASSWORD=postgres npx tsx services/tenant-service/src/scripts/repairTenants.ts`
+- `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/medicore node scripts/audit-tenant-live-column-drift.mjs`
+- `docker exec medicore-postgres-master psql -U postgres -d clinic_kids-clinic_db -c "SELECT bundle_id, version FROM tenant_schema_versions WHERE bundle_id = 'sprint111_pharmacy_intelligence';"`
+- `./scripts/sprint111-validate.sh`
 Tests run:
+- `src/services/pharmacy-intelligence.service.spec.ts`
+- `medicore-ehr-frontend` production build
 Evidence:
+- `medication_reconciliation_ai_reviews`, `pharmacy_substitution_recommendations`, `pharmacy_inventory_forecasts`, and `pharmacy_dispensing_anomalies` now exist in provisioning and on all 3 active tenant DBs via `sprint111_pharmacy_intelligence@2026.03.26.2`
+- provisioning audit passed with `tableCount: 239`
+- live tenant drift audit passed with zero drift on all 3 active tenant DBs
+- focused pharmacy intelligence Jest spec passed with `4` tests
+- pharmacy dashboard build passed after wiring persisted forecast/anomaly/stewardship consumption through `pharmacyApi`
 Open risks:
+- reconciliation/substitution review is not yet surfaced deeply inside dispensing execution flows
+- broader workflow validation beyond the focused backend spec and frontend build is still missing
 Next action:
+- add broader validation and surface reconciliation/substitution review deeper inside live dispensing workflows
 ```
 
 ### MOAS-08 Journal

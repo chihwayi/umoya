@@ -409,4 +409,229 @@ describe('EncounterCopilotService', () => {
       ]),
     );
   });
+
+  it('adds cardiology and emergency-sepsis contributors with acute follow-through recommendations', async () => {
+    const smartDefaultsService = buildSmartDefaultsService();
+    const sessionRepo = buildRepo();
+    const pathwayInstanceRepo = buildRepo();
+    const resultFollowupRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    };
+    const clinicalPathwayRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'pathway-card-1',
+          pathwayCode: 'CARD-001',
+          pathwayName: 'Acute Coronary Syndrome Pathway',
+          specialty: 'cardiology',
+          condition: 'acute coronary syndrome',
+          evidenceLevel: 'A',
+          guidelineSource: 'WHO',
+          targetPopulation: 'Adults',
+          isDefault: false,
+        } as ClinicalPathway,
+        {
+          id: 'pathway-sepsis-1',
+          pathwayCode: 'SEP-001',
+          pathwayName: 'Sepsis Response Pathway',
+          specialty: 'emergency_medicine',
+          condition: 'sepsis',
+          evidenceLevel: 'A',
+          guidelineSource: 'WHO',
+          targetPopulation: 'Adults',
+          isDefault: false,
+        } as ClinicalPathway,
+      ]),
+    };
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM patients')) {
+          return [
+            {
+              id: 'patient-1',
+              patient_number: 'P100',
+              first_name: 'James',
+              last_name: 'Pulse',
+              date_of_birth: '1975-04-10',
+              gender: 'male',
+              pregnancy_status: null,
+              emergency_contact_name: 'Jane Pulse',
+              emergency_contact_phone: '0772555000',
+            },
+          ];
+        }
+        if (sql.includes('FROM medical_records')) {
+          return [
+            {
+              id: 'mr-2',
+              appointment_id: 'appt-2',
+              record_type: 'consultation',
+              visit_date: '2026-03-26T09:00:00.000Z',
+              chief_complaint: 'Chest pain and fever',
+              assessment: 'Acute chest pain with possible infection',
+              plan: 'Cardiac and sepsis workup',
+              diagnoses: [{ description: 'Chest pain', code: 'R07.9' }],
+            },
+          ];
+        }
+        if (sql.includes('FROM ambient_sessions')) {
+          return [];
+        }
+        if (sql.includes('FROM problems')) {
+          return [];
+        }
+        if (sql.includes('FROM allergies')) {
+          return [];
+        }
+        if (sql.includes('FROM prescriptions')) {
+          return [];
+        }
+        if (sql.includes('FROM care_gap_detections')) {
+          return [];
+        }
+        if (sql.includes('FROM medication_alerts')) {
+          return [];
+        }
+        if (sql.includes('FROM vitals')) {
+          return [{ heart_rate: 118, blood_pressure: '92/58', respiratory_rate: 24, recorded_at: '2026-03-26T08:45:00.000Z' }];
+        }
+        if (sql.includes('FROM diabetes_registry')) {
+          return [];
+        }
+        if (sql.includes('FROM hiv_care_enrollments')) {
+          return [];
+        }
+        if (sql.includes('FROM maternity_enrollments')) {
+          return [];
+        }
+        if (sql.includes('FROM oncology_cases')) {
+          return [];
+        }
+        if (sql.includes('FROM cardiology_encounters')) {
+          return [
+            {
+              id: 'card-enc-1',
+              encounter_date: '2026-03-25T08:00:00.000Z',
+              encounter_type: 'clinic_visit',
+              visit_reason: 'Chest pain',
+              hemodynamics: { bloodPressure: '92/58', heartRate: 118 },
+              diagnostic_tests: [],
+              care_plan: null,
+              follow_up_plan: null,
+              risk_score: 'critical',
+              care_status: 'in_progress',
+            },
+          ];
+        }
+        if (sql.includes('FROM ed_visits')) {
+          return [
+            {
+              id: 'ed-visit-1',
+              arrival_date: '2026-03-26T07:00:00.000Z',
+              chief_complaint: 'Chest pain',
+              triage_level: 2,
+              triage_acuity: 'emergent',
+              ed_status: 'in_treatment',
+              disposition: null,
+              code_stroke: false,
+              code_stemi: true,
+              code_sepsis: true,
+              follow_up_instructions: null,
+              quality_flags: [],
+            },
+          ];
+        }
+        if (sql.includes('FROM sepsis_screenings')) {
+          return [
+            {
+              id: 'screen-1',
+              screening_datetime: '2026-03-26T07:10:00.000Z',
+              qsofa_score: 2,
+              sirs_score: 3,
+              lactate: 4.4,
+              sepsis_suspected: true,
+              severe_sepsis: true,
+              septic_shock: false,
+              sepsis_bundle_initiated: true,
+            },
+          ];
+        }
+        if (sql.includes('FROM sepsis_bundles')) {
+          return [
+            {
+              id: 'bundle-1',
+              bundle_start_time: '2026-03-26T07:20:00.000Z',
+              lactate_value: 4.4,
+              repeat_lactate_measured: false,
+              repeat_lactate_value: null,
+              three_hour_bundle_complete: false,
+              six_hour_bundle_complete: false,
+              overall_compliance: false,
+              patient_outcome: null,
+            },
+          ];
+        }
+        return [];
+      }),
+      getRepository: jest.fn((entity: any) => {
+        if (entity === EncounterCopilotSession) {
+          return sessionRepo;
+        }
+        if (entity === TreatmentPathwayInstance) {
+          return pathwayInstanceRepo;
+        }
+        if (entity === ResultFollowupTask) {
+          return resultFollowupRepo;
+        }
+        if (entity === ClinicalPathway) {
+          return clinicalPathwayRepo;
+        }
+        throw new Error(`Unexpected repository request: ${entity?.name}`);
+      }),
+    } as any;
+
+    const service = new EncounterCopilotService(smartDefaultsService as any);
+    const result = await service.generateSession(
+      'kids-clinic',
+      tenantDb,
+      {
+        patientId: 'patient-1',
+        appointmentId: 'appt-2',
+        specialty: 'emergency_medicine',
+      },
+      'user-1',
+    );
+
+    expect(sessionRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        specialtyContributors: expect.arrayContaining([
+          expect.objectContaining({ module: 'cardiology', specialty: 'cardiology' }),
+          expect.objectContaining({ module: 'emergency_sepsis', specialty: 'emergency_medicine' }),
+        ]),
+        suggestedOrders: expect.arrayContaining([
+          expect.objectContaining({ name: 'Cardiology diagnostic order set' }),
+          expect.objectContaining({ name: 'Urgent ECG and troponin review' }),
+          expect.objectContaining({ name: 'Emergency cardiac protocol review' }),
+          expect.objectContaining({ name: 'Queue sepsis three-hour bundle follow-through' }),
+          expect.objectContaining({ name: 'Repeat lactate monitoring plan' }),
+        ]),
+        likelyCareGaps: expect.arrayContaining([
+          expect.objectContaining({ gapType: 'cardiology_followup_plan_missing' }),
+          expect.objectContaining({ gapType: 'ed_disposition_pending' }),
+          expect.objectContaining({ gapType: 'sepsis_repeat_lactate_pending' }),
+        ]),
+        pathwayRecommendations: expect.arrayContaining([
+          expect.objectContaining({ pathwayName: 'Acute Coronary Syndrome Pathway' }),
+          expect.objectContaining({ pathwayName: 'Sepsis Response Pathway' }),
+        ]),
+      }),
+    );
+    expect(pathwayInstanceRepo.save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ pathwayName: 'Acute Coronary Syndrome Pathway' }),
+        expect.objectContaining({ pathwayName: 'Sepsis Response Pathway' }),
+      ]),
+    );
+  });
 });
