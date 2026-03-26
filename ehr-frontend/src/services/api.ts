@@ -4401,6 +4401,26 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  prepareImagingOrderAiReview: async (tenantSlug: string, token: string, orderId: string) => {
+    const response = await ehrAxios.post(`/imaging/orders/${orderId}/ai-review`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getImagingOrderAiReview: async (tenantSlug: string, token: string, orderId: string) => {
+    const response = await ehrAxios.get(`/imaging/orders/${orderId}/ai-review`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   getPatientImagingOrders: async (tenantSlug: string, token: string, patientId: string) => {
     const response = await ehrAxios.get(`/imaging/orders/patient/${patientId}`, {
       headers: {
@@ -4433,6 +4453,26 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+
+  generateImagingReportDraft: async (tenantSlug: string, token: string, studyId: string) => {
+    const response = await ehrAxios.post(`/imaging/studies/${studyId}/report-draft`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getImagingReportDraft: async (tenantSlug: string, token: string, studyId: string) => {
+    const response = await ehrAxios.get(`/imaging/studies/${studyId}/report-draft`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
     });
     return { data: response.data };
   },
@@ -4612,6 +4652,71 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+
+  getImagingReportDiscrepancyReviews: async (tenantSlug: string, token: string, reportId: string) => {
+    const response = await ehrAxios.get(`/imaging/reports/${reportId}/discrepancy-reviews`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getImagingReportIncidentalFollowups: async (tenantSlug: string, token: string, reportId: string) => {
+    const response = await ehrAxios.get(`/imaging/reports/${reportId}/incidental-followups`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  resolveImagingDiscrepancyReview: async (
+    tenantSlug: string,
+    token: string,
+    reviewId: string,
+    payload: { review_status?: string; resolution_notes?: string } = {},
+  ) => {
+    const response = await ehrAxios.patch(`/imaging/discrepancy-reviews/${reviewId}/resolve`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  acknowledgeImagingIncidentalFollowup: async (
+    tenantSlug: string,
+    token: string,
+    followupId: string,
+    payload: { resolution_notes?: string } = {},
+  ) => {
+    const response = await ehrAxios.patch(`/imaging/incidental-followups/${followupId}/acknowledge`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  completeImagingIncidentalFollowup: async (
+    tenantSlug: string,
+    token: string,
+    followupId: string,
+    payload: { resolution_notes?: string } = {},
+  ) => {
+    const response = await ehrAxios.patch(`/imaging/incidental-followups/${followupId}/complete`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
     });
     return { data: response.data };
   },
@@ -8232,7 +8337,16 @@ export const pharmacyApi = {
     });
     return { data: response.data };
   },
-  dispensePrescription: async (prescriptionId: string, data: { items: Array<{ inventoryId: string; quantityDispensed: number }>; paymentMethod?: string; notes?: string }, token: string, tenantSlug: string) => {
+  dispensePrescription: async (prescriptionId: string, data: {
+    items: Array<{ inventoryId: string; quantityDispensed: number }>;
+    paymentMethod?: string;
+    notes?: string;
+    medicationReviewId?: string;
+    selectedSubstitutionRecommendationIds?: string[];
+    stewardshipReviewIds?: string[];
+    aiReviewAcknowledged?: boolean;
+    aiReviewSummary?: Record<string, any>;
+  }, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/pharmacy/prescriptions/${prescriptionId}/dispense`, data, {
       headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
     });
@@ -8248,6 +8362,12 @@ export const pharmacyApi = {
   },
   getMedicationReview: async (id: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/pharmacy/intelligence/reconciliation-review/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  prepareDispensePlan: async (data: { prescriptionId: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/intelligence/dispense-plan', data, {
       headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
     });
     return { data: response.data };

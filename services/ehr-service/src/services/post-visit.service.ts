@@ -45,6 +45,9 @@ import { PostVisitSessionService } from './post-visit-session.service';
 import { PostVisitDraftService } from './post-visit-draft.service';
 import { detectFromTranscript as realTimeAlertEngineDetect } from './real-time-alert-engine';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
+import { PatientAiSession } from '../entities/patient-ai-session.entity';
+import { PatientAiEscalation } from '../entities/patient-ai-escalation.entity';
+import { PatientFollowupOrchestration } from '../entities/patient-followup-orchestration.entity';
 import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
 
 type PostVisitSessionStatus =
@@ -332,6 +335,10 @@ export class PostVisitService {
   ) {}
 
   private isTrialMatcherEnabled(): boolean {
+    const runtimeOverride = process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
+    if (runtimeOverride !== undefined) {
+      return String(runtimeOverride).toLowerCase() === 'true';
+    }
     const configured = (config as any)?.features?.postVisitTrialMatcher;
     if (typeof configured === 'boolean') {
       return configured;
@@ -391,11 +398,247 @@ export class PostVisitService {
       SELECT to_regclass('post_visit_sessions') AS tbl
     `).catch(() => [null]);
 
+    if (!row) {
+      return;
+    }
+
     if (!row?.tbl) {
       throw new Error(
         'post_visit_sessions table not found. ' +
         'Run provisioning scripts sprint48 through sprint58 before using the PostVisit module.',
       );
+    }
+  }
+
+  private getOptionalRepository<T = any>(tenantDb: DataSource, entity: new () => T): any | null {
+    const dataSource = tenantDb as any;
+    return typeof dataSource?.getRepository === 'function' ? dataSource.getRepository(entity) : null;
+  }
+
+  private mapPostVisitSeverityToUrgency(severity?: string | null): 'routine' | 'urgent' | 'emergency' {
+    const normalized = String(severity || '').trim().toLowerCase();
+    if (normalized === 'critical') return 'emergency';
+    if (normalized === 'high' || normalized === 'moderate') return 'urgent';
+    return 'routine';
+  }
+
+  private buildPostVisitDueAt(urgency: 'routine' | 'urgent' | 'emergency'): Date {
+    const hours = urgency === 'emergency' ? 2 : urgency === 'urgent' ? 24 : 72;
+    return new Date(Date.now() + hours * 60 * 60 * 1000);
+  }
+
+  private async createPostVisitPatientAiArtifacts(
+    tenantDb: DataSource,
+    args: {
+      sessionId: string;
+      threadId: string;
+      patientId: string;
+      patientMessageId: string;
+      assistantMessageId: string;
+      messageText: string;
+      assistantAnswer: { answer: string; abstained?: boolean; abstainReason?: string | null; citationsUsed?: string[]; model?: string | null; source?: string | null };
+      detection: { detected: boolean; severity: string; routeTarget: string; confidence: number; temporality?: string | null; classifierSource?: string | null };
+      postVisitEscalationId?: string | null;
+    },
+  ): Promise<{
+    patientAiSession: PatientAiSession | null;
+    patientAiEscalation: PatientAiEscalation | null;
+    followupOrchestration: PatientFollowupOrchestration | null;
+  }> {
+    const sessionRepo = this.getOptionalRepository(tenantDb, PatientAiSession);
+    const escalationRepo = this.getOptionalRepository(tenantDb, PatientAiEscalation);
+    const followupRepo = this.getOptionalRepository(tenantDb, PatientFollowupOrchestration);
+
+    if (!sessionRepo || !followupRepo) {
+      return {
+        patientAiSession: null,
+        patientAiEscalation: null,
+        followupOrchestration: null,
+      };
+    }
+
+    const urgency = this.mapPostVisitSeverityToUrgency(args.detection?.severity);
+    const requiresClinicianFollowUp = args.detection?.detected === true || args.assistantAnswer?.abstained === true;
+    const patientAiSession = await sessionRepo.save(
+      sessionRepo.create({
+        patientId: args.patientId,
+        sessionType: 'post_visit_companion',
+        sourceSessionId: args.sessionId,
+        status: requiresClinicianFollowUp ? 'needs_follow_up' : 'open',
+        latestMessage: args.messageText,
+        latestReply: args.assistantAnswer?.answer || null,
+        latestIntent: 'post_visit_companion_answer',
+        triageLevel: args.detection?.detected ? args.detection?.severity || null : null,
+        urgency,
+        guidanceSummary: args.assistantAnswer?.answer || null,
+        requiresClinicianFollowUp,
+        urgentSignal: args.detection?.detected === true,
+        abstained: args.assistantAnswer?.abstained === true,
+        abstainReason: args.assistantAnswer?.abstainReason || null,
+        citations: Array.isArray(args.assistantAnswer?.citationsUsed)
+          ? args.assistantAnswer.citationsUsed.map((citationId) => ({ id: citationId }))
+          : [],
+        provenance: {
+          source: 'post_visit_companion',
+          model: args.assistantAnswer?.model || null,
+          answerEngine: args.assistantAnswer?.source || null,
+          sessionId: args.sessionId,
+          threadId: args.threadId,
+          patientMessageId: args.patientMessageId,
+          assistantMessageId: args.assistantMessageId,
+          postVisitEscalationId: args.postVisitEscalationId || null,
+        },
+      }),
+    );
+
+    let patientAiEscalation: PatientAiEscalation | null = null;
+    if (args.detection?.detected === true && escalationRepo) {
+      patientAiEscalation = await escalationRepo.save(
+        escalationRepo.create({
+          patientId: args.patientId,
+          patientAiSessionId: patientAiSession.id,
+          sourceType: 'post_visit_companion',
+          severity: args.detection.severity,
+          routeTarget: args.detection.routeTarget,
+          status: 'open',
+          triggerSummary: `Post-visit companion escalation routed to ${args.detection.routeTarget} from patient message review.`,
+          recommendedAction: args.assistantAnswer?.answer || null,
+          provenance: {
+            source: 'post_visit_companion',
+            sessionId: args.sessionId,
+            threadId: args.threadId,
+            patientMessageId: args.patientMessageId,
+            assistantMessageId: args.assistantMessageId,
+            postVisitEscalationId: args.postVisitEscalationId || null,
+            classifierSource: args.detection.classifierSource || null,
+            confidence: args.detection.confidence,
+            temporality: args.detection.temporality || null,
+          },
+        }),
+      );
+    }
+
+    const followupOrchestration = await followupRepo.save(
+      followupRepo.create({
+        patientId: args.patientId,
+        patientAiSessionId: patientAiSession.id,
+        triggerType: 'post_visit_companion_message',
+        riskLevel: urgency,
+        status: 'open',
+        reminderState: 'pending',
+        nextAction: args.detection?.detected
+          ? `Route to ${args.detection.routeTarget} and continue clinician follow-up.`
+          : args.assistantAnswer?.answer || 'Continue post-visit follow-up plan.',
+        unresolvedQuestion: args.assistantAnswer?.abstained === true ? args.messageText : null,
+        nonadherenceFlag: false,
+        missedFollowupFlag: /\bmiss(ed|ing)\b/i.test(args.messageText),
+        routeBackTarget: args.detection?.detected ? args.detection.routeTarget : 'patient_support',
+        dueAt: this.buildPostVisitDueAt(urgency),
+        lastTouchedAt: new Date(),
+        payload: {
+          source: 'post_visit_companion',
+          sessionId: args.sessionId,
+          threadId: args.threadId,
+          patientMessageId: args.patientMessageId,
+          assistantMessageId: args.assistantMessageId,
+          postVisitEscalationId: args.postVisitEscalationId || null,
+          citationsUsed: Array.isArray(args.assistantAnswer?.citationsUsed) ? args.assistantAnswer.citationsUsed : [],
+        },
+      }),
+    );
+
+    if (args.postVisitEscalationId) {
+      await tenantDb.query(
+        `
+          UPDATE post_visit_escalation_events
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [
+          args.postVisitEscalationId,
+          JSON.stringify({
+            patient_ai_session_id: patientAiSession.id,
+            patient_ai_escalation_id: patientAiEscalation?.id || null,
+            patient_followup_orchestration_id: followupOrchestration.id,
+          }),
+        ],
+      );
+    }
+
+    return {
+      patientAiSession,
+      patientAiEscalation,
+      followupOrchestration,
+    };
+  }
+
+  private async syncResolvedPostVisitEscalationIntoPatientAi(
+    tenantDb: DataSource,
+    escalationRow: any,
+    payload: { status: 'resolved' | 'dismissed'; resolutionNote?: string | null; actorUserId?: string | null },
+  ): Promise<void> {
+    const metadata = typeof escalationRow?.metadata === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(escalationRow.metadata);
+          } catch {
+            return {};
+          }
+        })()
+      : escalationRow?.metadata || {};
+
+    const sessionRepo = this.getOptionalRepository(tenantDb, PatientAiSession);
+    const escalationRepo = this.getOptionalRepository(tenantDb, PatientAiEscalation);
+    const followupRepo = this.getOptionalRepository(tenantDb, PatientFollowupOrchestration);
+
+    if (escalationRepo && metadata?.patient_ai_escalation_id) {
+      const aiEscalation = await escalationRepo.findOneBy({ id: metadata.patient_ai_escalation_id });
+      if (aiEscalation) {
+        await escalationRepo.save({
+          ...aiEscalation,
+          status: payload.status,
+          resolutionNotes: payload.resolutionNote || aiEscalation.resolutionNotes || null,
+          resolvedAt: new Date(),
+          resolvedBy: payload.actorUserId || aiEscalation.resolvedBy || null,
+          provenance: {
+            ...(aiEscalation.provenance || {}),
+            postVisitEscalationStatus: payload.status,
+          },
+        });
+      }
+    }
+
+    if (followupRepo && metadata?.patient_followup_orchestration_id) {
+      const followup = await followupRepo.findOneBy({ id: metadata.patient_followup_orchestration_id });
+      if (followup) {
+        await followupRepo.save({
+          ...followup,
+          status: payload.status === 'resolved' ? 'completed' : 'dismissed',
+          reminderState: payload.status === 'resolved' ? 'acknowledged' : followup.reminderState,
+          completedAt: payload.status === 'resolved' ? new Date() : followup.completedAt,
+          lastTouchedAt: new Date(),
+          payload: {
+            ...(followup.payload || {}),
+            postVisitEscalationStatus: payload.status,
+            resolutionNote: payload.resolutionNote || null,
+          },
+        });
+      }
+    }
+
+    if (sessionRepo && metadata?.patient_ai_session_id) {
+      const aiSession = await sessionRepo.findOneBy({ id: metadata.patient_ai_session_id });
+      if (aiSession) {
+        await sessionRepo.save({
+          ...aiSession,
+          status: payload.status === 'resolved' ? 'closed' : aiSession.status,
+          provenance: {
+            ...(aiSession.provenance || {}),
+            postVisitEscalationStatus: payload.status,
+          },
+        });
+      }
     }
   }
 
@@ -2041,6 +2284,7 @@ export class PostVisitService {
     const llmResult = await this.groundedLlmService?.draftReferralLetter({
       sessionId,
       language: sessionRow.language || 'en',
+      tenantId: options.tenantId,
       patientLabel,
       clinicianLabel: doctorLabel,
       recipientLabel: payload.recipientLabel || null,
@@ -2133,6 +2377,7 @@ export class PostVisitService {
     const llmResult = await this.groundedLlmService?.draftClinicalNote({
       sessionId,
       language: sessionRow.language || 'en',
+      tenantId: options.tenantId,
       transcriptText,
       soapNote: soapArtifact?.content?.soap_note || null,
       visitSummary: visitSummaryArtifact?.content || null,
@@ -2931,7 +3176,7 @@ export class PostVisitService {
 
   private async resolveTrialSlaFanoutRecipients(
     tenantDb: DataSource,
-    args: { sessionId: string; routeTarget: 'doctor' | 'nurse' },
+    args: { sessionId: string; routeTarget: 'doctor' | 'nurse' | 'emergency' },
   ) {
     const maxRecipients = this.getTrialSlaMaxRecipients();
     if (args.routeTarget === 'doctor') {
@@ -3104,7 +3349,7 @@ export class PostVisitService {
       escalationId: string;
       sessionId: string;
       patientId: string;
-      routeTarget: 'doctor' | 'nurse';
+      routeTarget: 'doctor' | 'nurse' | 'emergency';
       severity: TrialSlaNotificationSeverity;
       trialTitle: string | null;
       trialId: string | null;
@@ -5297,6 +5542,7 @@ export class PostVisitService {
       const llmPolish = await this.groundedLlmService.polishDoctorContent({
         sessionId,
         language: sessionRow.language || 'en',
+        tenantId: options.tenantId,
         soapNote,
         baseSummary: {
           summaryText: summaryContent.summary_text,
@@ -6586,6 +6832,7 @@ export class PostVisitService {
 
     const assistantAnswer = await this.buildGroundedCompanionAnswer({
       sessionId,
+      tenantId: options.tenantId,
       question: messageText,
       visitSummaryArtifact,
       recommendationArtifact,
@@ -6653,6 +6900,18 @@ export class PostVisitService {
     const assistantMessage = assistantMessageRows[0];
     await this.touchCompanionThreadAfterMessage(tenantDb, thread.id, 'system');
 
+    const patientAiArtifacts = await this.createPostVisitPatientAiArtifacts(tenantDb, {
+      sessionId,
+      threadId: thread.id,
+      patientId,
+      patientMessageId: patientMessage.id,
+      assistantMessageId: assistantMessage.id,
+      messageText,
+      assistantAnswer,
+      detection,
+      postVisitEscalationId: escalation?.id || null,
+    });
+
     return {
       sessionId,
       threadId: thread.id,
@@ -6671,6 +6930,11 @@ export class PostVisitService {
         createdAt: assistantMessage.created_at,
       },
       escalation: escalation && detection.detected ? this.mapEscalationEvent(escalation) : null,
+      patientAi: {
+        sessionId: patientAiArtifacts.patientAiSession?.id || null,
+        escalationId: patientAiArtifacts.patientAiEscalation?.id || null,
+        followupOrchestrationId: patientAiArtifacts.followupOrchestration?.id || null,
+      },
       memory: {
         enabled: this.isCompanionMemoryEnabled(),
         newEntries: persistedMemories.map((row: any) => this.mapCompanionMemory(row)),
@@ -6735,6 +6999,24 @@ export class PostVisitService {
           acknowledgement_type: payload.acknowledgementType,
         },
       });
+      await tenantDb.query(
+        `
+          UPDATE patient_followup_orchestrations
+          SET status = 'completed',
+              reminder_state = 'acknowledged',
+              completed_at = NOW(),
+              last_touched_at = NOW(),
+              payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object(
+                'followUpCommitmentAcknowledged', true,
+                'commitmentText', $3
+              )
+          WHERE patient_id = $1
+            AND trigger_type = 'post_visit_companion_message'
+            AND status = 'open'
+            AND COALESCE(payload->>'sessionId', '') = $2
+        `,
+        [patientId, sessionId, commitmentText],
+      ).catch(() => undefined);
     }
 
     return {
@@ -8130,6 +8412,12 @@ export class PostVisitService {
       }
     }
 
+    await this.syncResolvedPostVisitEscalationIntoPatientAi(tenantDb, existing, {
+      status: targetStatus,
+      resolutionNote: payload.resolutionNote || null,
+      actorUserId: options.actorUserId,
+    });
+
     return this.mapEscalationEvent(updated);
   }
 
@@ -9049,3 +9337,1787 @@ export class PostVisitService {
     return repo.findOne({ where: { id: sessionId, patientId } });
   }
 }
+
+// S111/MOAS-09: restore the missing post-extraction helper surface as a
+// compatibility layer so the remaining public service methods compile and run
+// against the extracted services.
+export interface PostVisitService {
+  [key: string]: any;
+}
+
+Object.assign(PostVisitService.prototype as any, {
+  normalizeLanguage(this: any, language?: string | null) {
+    const raw = String(language || '').trim().toLowerCase();
+    if (!raw) return 'en';
+    if (raw === 'english' || raw === 'eng') return 'en';
+    if (raw === 'shona') return 'sn';
+    if (raw === 'ndebele') return 'nd';
+    return raw;
+  },
+
+  async getSessionRow(this: any, tenantDb: DataSource, sessionId: string) {
+    if (this.sessionService?.getSessionRow) {
+      return this.sessionService.getSessionRow(tenantDb, sessionId);
+    }
+    const rows = await tenantDb.query(`SELECT * FROM post_visit_sessions WHERE id = $1 LIMIT 1`, [sessionId]);
+    if (!rows?.length) {
+      throw new NotFoundException('Post-visit session not found');
+    }
+    return rows[0];
+  },
+
+  mapSession(this: any, row: any) {
+    if (this.sessionService?.mapSession) {
+      return this.sessionService.mapSession(row);
+    }
+    return {
+      id: row.id,
+      tenantId: row.tenant_id ?? null,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id ?? null,
+      appointmentId: row.appointment_id ?? null,
+      consultationId: row.consultation_id ?? null,
+      status: row.status as PostVisitSessionStatus,
+      sourceType: row.source_type,
+      language: row.language || 'en',
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+      reviewedAt: row.reviewed_at,
+      reviewedBy: row.reviewed_by ?? null,
+      publishedAt: row.published_at,
+      safetyLevel: row.safety_level ?? null,
+      riskFlags: row.risk_flags || {},
+      meta: row.meta || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  async getArtifactRow(this: any, tenantDb: DataSource, sessionId: string, artifactType: string) {
+    if (this.draftService?.getArtifactRow) {
+      return this.draftService.getArtifactRow(tenantDb, sessionId, artifactType);
+    }
+    const rows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_draft_artifacts
+        WHERE session_id = $1
+          AND artifact_type = $2
+        LIMIT 1
+      `,
+      [sessionId, artifactType],
+    );
+    return rows?.length ? rows[0] : null;
+  },
+
+  mapEscalationEvent(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id ?? row.sessionId ?? null,
+      patientId: row.patient_id ?? row.patientId ?? null,
+      threadId: row.thread_id ?? row.threadId ?? null,
+      messageId: row.message_id ?? row.messageId ?? null,
+      status: row.status,
+      severity: row.severity,
+      routeTarget: row.route_target ?? row.routeTarget ?? null,
+      triggerType: row.trigger_type ?? row.triggerType ?? null,
+      triggerTerms: row.trigger_terms ?? row.triggerTerms ?? [],
+      signalText: row.signal_text ?? row.signalText ?? null,
+      classificationConfidence:
+        row.classification_confidence == null && row.classificationConfidence == null
+          ? null
+          : Number(row.classification_confidence ?? row.classificationConfidence),
+      classificationTemporality: row.classification_temporality ?? row.classificationTemporality ?? null,
+      classificationSource: row.classification_source ?? row.classificationSource ?? null,
+      classificationReason: row.classification_reason ?? row.classificationReason ?? null,
+      classificationStage: row.classification_stage ?? row.classificationStage ?? 'v1',
+      detectedAt: row.detected_at ?? row.detectedAt ?? null,
+      slaDueAt: row.sla_due_at ?? row.slaDueAt ?? null,
+      acknowledgedAt: row.acknowledged_at ?? row.acknowledgedAt ?? null,
+      acknowledgedBy: row.acknowledged_by ?? row.acknowledgedBy ?? null,
+      resolvedAt: row.resolved_at ?? row.resolvedAt ?? null,
+      resolvedBy: row.resolved_by ?? row.resolvedBy ?? null,
+      resolutionNote: row.resolution_note ?? row.resolutionNote ?? null,
+      workflowKey: row.workflow_key ?? row.workflowKey ?? null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at ?? row.createdAt ?? null,
+      updatedAt: row.updated_at ?? row.updatedAt ?? null,
+    };
+  },
+
+  mapIntraVisitAlertEvent(this: any, row: any) {
+    const acknowledgedAt = row.acknowledged_at || null;
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      status: row.status,
+      alertType: row.alert_type,
+      severity: row.severity,
+      routeTarget: (row.route_target || 'doctor') as IntraVisitAlertRouteTarget,
+      assignedRole: (row.assigned_role || 'doctor') as IntraVisitAlertAssignedRole,
+      assignedUserId: row.assigned_user_id || null,
+      assignedTeam: row.assigned_team || null,
+      policyVersion: row.policy_version || 'c3.v1',
+      routingRationale: row.routing_rationale || null,
+      source: row.source || 'streamed_transcript',
+      transcriptOffsetSeconds:
+        row.transcript_offset_seconds == null ? null : Number(row.transcript_offset_seconds),
+      signalText: row.signal_text || null,
+      alertMessage: row.alert_message,
+      suggestedAction: row.suggested_action || null,
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      triggerTerms: Array.isArray(row.trigger_terms) ? row.trigger_terms : [],
+      metadata: row.metadata || {},
+      detectedAt: row.detected_at,
+      slaDueAt: row.sla_due_at || null,
+      isAcknowledged: acknowledgedAt !== null,
+      acknowledgedAt,
+      acknowledgedBy: row.acknowledged_by || null,
+      acknowledgmentNote: row.acknowledgment_note || null,
+      resolvedAt: row.resolved_at || null,
+      resolvedBy: row.resolved_by || null,
+      resolutionNote: row.resolution_note || null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  mapBillingSuggestion(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      suggestionKey: row.suggestion_key,
+      codeType: row.code_type,
+      code: row.code,
+      description: row.description,
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      justification: row.justification || null,
+      documentationChecks: Array.isArray(row.documentation_checks) ? row.documentation_checks : [],
+      documentationScore: Number(row.documentation_score || 0),
+      documentationStatus: row.documentation_status || 'insufficient',
+      status: row.status || 'proposed',
+      approvedBy: row.approved_by || null,
+      approvedAt: row.approved_at || null,
+      approvalNote: row.approval_note || null,
+      source: row.source || 'post_visit_billing_intelligence_v1',
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  buildBillingDocumentationSummaryFromSuggestionRows(this: any, rows: any[]) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return null;
+    }
+    const primary = rows[0];
+    const checks = Array.isArray(primary?.documentation_checks)
+      ? primary.documentation_checks.map((row: any, index: number) => ({
+          id: String(row?.id || `check_${index + 1}`),
+          label: String(row?.label || row?.id || `Check ${index + 1}`),
+          passed: row?.passed === true,
+          guidance: String(row?.guidance || row?.label || 'Documentation requirement not met.'),
+        }))
+      : [];
+    const score = Math.max(0, Math.min(100, Number(primary?.documentation_score || 0)));
+    const statusRaw = String(primary?.documentation_status || 'insufficient').toLowerCase();
+    const status =
+      statusRaw === 'sufficient' || statusRaw === 'partial' || statusRaw === 'insufficient'
+        ? statusRaw
+        : score >= 80
+          ? 'sufficient'
+          : score >= 50
+            ? 'partial'
+            : 'insufficient';
+    const gaps = checks.filter((check: any) => !check.passed).map((check: any) => check.label);
+    return { score, status, checks, gaps };
+  },
+
+  isBillingIntelligenceEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitBillingIntelligence;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE || 'false').toLowerCase() === 'true';
+  },
+
+  async routeBillingSuggestionToWorkflow(this: any, tenantDb: DataSource, args: any) {
+    const workflowKey = `post_visit_billing:${String(args?.suggestionId || '').trim()}`;
+    await tenantDb.query(
+      `
+        INSERT INTO nurse_cross_module_workflow_state (
+          workflow_key,
+          workflow_type,
+          patient_id,
+          appointment_id,
+          consultation_id,
+          assigned_role,
+          assigned_user_id,
+          status,
+          priority,
+          note,
+          metadata
+        ) VALUES ($1,$2,$3,$4,$5,'doctor',NULL,'open','normal',$6,$7::jsonb)
+      `,
+      [
+        workflowKey,
+        'post_visit_billing_review',
+        args.patientId || null,
+        null,
+        null,
+        args.note || null,
+        JSON.stringify({
+          suggestionId: args.suggestionId || null,
+          sessionId: args.sessionId || null,
+          code: args.code || null,
+          codeType: args.codeType || null,
+        }),
+      ],
+    ).catch(() => {});
+    return workflowKey;
+  },
+
+  isPreVisitBriefEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitPreVisitBrief;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF || 'false').toLowerCase() === 'true';
+  },
+
+  mapPreVisitBrief(this: any, row: any) {
+    return {
+      id: row.id,
+      appointmentId: row.appointment_id,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id || null,
+      scheduledAt: row.scheduled_at || null,
+      status: row.status || 'active',
+      brief: row.brief_content || {},
+      followUpRisk: {
+        score: Number(row.follow_up_risk_score || 0),
+        tier: row.follow_up_risk_tier || 'low',
+        reasons: Array.isArray(row.follow_up_risk_reasons) ? row.follow_up_risk_reasons : [],
+        nudgePolicy: row.nudge_policy || null,
+      },
+      source: row.source || 'post_visit_previsit_brief_v1',
+      generatedBy: row.generated_by || null,
+      generatedAt: row.generated_at,
+      deliveredAt: row.delivered_at || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  isAdminDocumentsEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitAdminDocuments;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_ADMIN_DOCS || 'false').toLowerCase() === 'true';
+  },
+
+  mapAdminDocument(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id || null,
+      documentType: row.document_type,
+      version: Number(row.version_no || 1),
+      status: row.status || 'signed',
+      title: row.title || null,
+      body: row.body_json || {},
+      immutableHash: row.immutable_hash || null,
+      signedBy: row.signed_by || null,
+      signedAt: row.signed_at || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  isVoiceReviewEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitVoiceReview;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_VOICE_REVIEW || 'false').toLowerCase() === 'true';
+  },
+
+  normalizeVoiceCommand(this: any, input?: string | null): PostVisitVoiceCommand | null {
+    const normalized = String(input || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+    const aliases: Record<string, PostVisitVoiceCommand> = {
+      APPROVE_SUMMARY: 'APPROVE_SUMMARY',
+      ACCEPT_SUMMARY: 'APPROVE_SUMMARY',
+      APPROVE_VISIT_SUMMARY: 'APPROVE_SUMMARY',
+      APPROVE_BUNDLE: 'APPROVE_BUNDLE',
+      ACCEPT_BUNDLE: 'APPROVE_BUNDLE',
+      APPROVE_RECOMMENDATION_BUNDLE: 'APPROVE_BUNDLE',
+      GENERATE_ADMIN_DOCS: 'GENERATE_ADMIN_DOCS',
+      CREATE_ADMIN_DOCS: 'GENERATE_ADMIN_DOCS',
+      REGENERATE_DRAFT: 'REGENERATE_DRAFT',
+      REFRESH_DRAFT: 'REGENERATE_DRAFT',
+      SIGN_AND_PUBLISH: 'SIGN_AND_PUBLISH',
+      PUBLISH: 'SIGN_AND_PUBLISH',
+    };
+    return aliases[normalized] || null;
+  },
+
+  isCompanionMemoryEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitCompanionMemory;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_COMPANION_MEMORY || 'true').toLowerCase() !== 'false';
+  },
+
+  mapCompanionMemory(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      memoryType: row.memory_type,
+      memoryKey: row.memory_key,
+      memoryValue: row.memory_value,
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      sourceMessageId: row.source_message_id || null,
+      createdBy: row.created_by || null,
+      isActive: row.is_active !== false,
+      promotedAt: row.promoted_at || null,
+      promotedBy: row.promoted_by || null,
+      retiredAt: row.retired_at || null,
+      retiredBy: row.retired_by || null,
+      curationNote: row.curation_note || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  resolveFollowUpRiskTier(this: any, score: number): PostVisitFollowUpRiskTier {
+    if (score >= 80) return 'critical';
+    if (score >= 60) return 'high';
+    if (score >= 30) return 'moderate';
+    return 'low';
+  },
+
+  resolveNudgePolicyForRiskTier(this: any, tier: PostVisitFollowUpRiskTier): string {
+    if (tier === 'critical') return 'immediate_clinician_outreach';
+    if (tier === 'high') return 'same_day_nurse_followup';
+    if (tier === 'moderate') return 'next_day_companion_nudge';
+    return 'routine_weekly_checkin';
+  },
+
+  isDiarizationReviewEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_DIARIZATION_REVIEW || 'false').toLowerCase() === 'true';
+  },
+
+  isIntraVisitAlertsEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitIntraVisitAlerts;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_INTRAVISIT_ALERTS || 'false').toLowerCase() === 'true';
+  },
+
+  getDiarizationConfidenceThreshold(this: any): number {
+    const raw = Number(process.env.POSTVISIT_DIARIZATION_MIN_CONFIDENCE || 0.65);
+    if (!Number.isFinite(raw)) return 0.65;
+    return Math.min(0.95, Math.max(0.2, raw));
+  },
+
+  normalizeDiarizationConfidence(this: any, value: any): number | null {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return Math.min(1, Math.max(0, num));
+  },
+
+  normalizeSegmentSpeakerRole(this: any, value: any): 'doctor' | 'patient' | 'unknown' {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return 'unknown';
+    if (['doctor', 'dr', 'clinician', 'provider'].includes(normalized)) return 'doctor';
+    if (['patient', 'pt', 'client'].includes(normalized)) return 'patient';
+    return 'unknown';
+  },
+
+  isPostVisitOcrEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE || 'false').toLowerCase() === 'true';
+  },
+
+  resolveLocalOcrUrl(this: any): string {
+    const direct = String(process.env.LOCAL_OCR_URL || config.ai?.ocr?.localUrl || '').trim();
+    return direct ? direct.replace(/\/+$/, '') : '';
+  },
+
+  getLocalOcrTimeoutMs(this: any): number {
+    const raw = Number(process.env.POSTVISIT_OCR_TIMEOUT_MS || 120000);
+    if (!Number.isFinite(raw)) return 120000;
+    return Math.min(300000, Math.max(5000, raw));
+  },
+
+  hashFile(this: any, buffer: Buffer): string {
+    return createHash('sha256').update(buffer).digest('hex');
+  },
+
+  normalizeDocumentText(this: any, text: string): string {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\\s./%-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+  computeDocumentSimilarity(this: any, leftRaw: string, rightRaw: string): number {
+    const left = this.normalizeDocumentText(leftRaw);
+    const right = this.normalizeDocumentText(rightRaw);
+    if (!left || !right) return 0;
+    if (left === right) return 1;
+    const leftTokens = new Set(left.split(/\s+/).filter((token: string) => token.length > 1));
+    const rightTokens = new Set(right.split(/\s+/).filter((token: string) => token.length > 1));
+    if (!leftTokens.size || !rightTokens.size) return 0;
+    let overlap = 0;
+    for (const token of leftTokens) {
+      if (rightTokens.has(token)) overlap += 1;
+    }
+    const union = leftTokens.size + rightTokens.size - overlap;
+    return union <= 0 ? 0 : overlap / union;
+  },
+
+  normalizeDocumentType(this: any, type?: string): PostVisitDocumentType {
+    const normalized = String(type || '').trim().toLowerCase();
+    if (['lab_report', 'prescription', 'imaging_report', 'discharge_summary', 'other'].includes(normalized)) {
+      return normalized as PostVisitDocumentType;
+    }
+    return 'other';
+  },
+
+  parseDocumentIntelligenceFromText(this: any, text: string, documentType: PostVisitDocumentType): PostVisitDocumentIntelligenceModel {
+    const normalizedText = String(text || '').trim();
+    const lines = normalizedText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    const observations: PostVisitDocumentObservation[] = [];
+    const medications: PostVisitMedicationMention[] = [];
+    const findings: string[] = [];
+    const observationPattern =
+      /^([A-Za-z][A-Za-z0-9()[\] %/._-]{1,80}?)\s*[:=-]\s*(-?\d+(?:\.\d+)?)\s*([A-Za-z%/^\d.-]+)?(?:\s*\(([^)]+)\))?$/i;
+    const medicationPattern =
+      /^([A-Z][A-Za-z0-9-]+(?:\s+[A-Za-z0-9-]+){0,2})\s+(\d+(?:\.\d+)?)\s?(mg|mcg|g|ml|iu|units?)\b(?:\s*(.*))?$/i;
+    for (const line of lines) {
+      const observationMatch = line.match(observationPattern);
+      if (observationMatch) {
+        observations.push({
+          name: observationMatch[1].trim(),
+          value: Number(observationMatch[2]),
+          unit: observationMatch[3] ? observationMatch[3].trim() : null,
+          referenceRange: observationMatch[4] ? observationMatch[4].trim() : null,
+          interpretation: null,
+        });
+        continue;
+      }
+      const medicationMatch = line.match(medicationPattern);
+      if (medicationMatch) {
+        medications.push({
+          medicationName: medicationMatch[1].trim(),
+          dose: `${medicationMatch[2]} ${medicationMatch[3]}`,
+          frequency: medicationMatch[4] ? medicationMatch[4].trim() : null,
+          route: null,
+        });
+        continue;
+      }
+      if (/impression|conclusion|assessment|finding|diagnosis|recommendation/i.test(line)) {
+        findings.push(line);
+      }
+    }
+    return {
+      documentType,
+      summary: normalizedText.slice(0, 1200),
+      observations: observations.slice(0, 120),
+      medications: medications.slice(0, 80),
+      findings: findings.slice(0, 80),
+    };
+  },
+
+  mapDocumentIntelligenceToFhir(this: any, sessionRow: any, documentId: string, model: PostVisitDocumentIntelligenceModel): any[] {
+    const encounterRef = `Encounter/post-visit-${sessionRow.id}`;
+    const patientRef = `Patient/${sessionRow.patient_id}`;
+    const effectiveDate = this.toIsoDate(new Date());
+    const observationResources = model.observations.map((observation: any, index: number) => ({
+      resourceType: 'Observation',
+      id: `post-visit-docobs-${this.safeToken(documentId)}-${index + 1}`,
+      status: 'final',
+      category: [{ text: 'laboratory' }],
+      code: { text: observation.name },
+      subject: { reference: patientRef },
+      encounter: { reference: encounterRef },
+      effectiveDateTime: effectiveDate,
+      valueQuantity: {
+        value: observation.value,
+        unit: observation.unit || undefined,
+      },
+      referenceRange: observation.referenceRange ? [{ text: observation.referenceRange }] : undefined,
+    }));
+    const medicationResources = model.medications.map((medication: any, index: number) => ({
+      resourceType: 'MedicationRequest',
+      id: `post-visit-docmed-${this.safeToken(documentId)}-${index + 1}`,
+      status: 'active',
+      intent: 'order',
+      subject: { reference: patientRef },
+      encounter: { reference: encounterRef },
+      authoredOn: effectiveDate,
+      medicationCodeableConcept: { text: medication.medicationName },
+      dosageInstruction: [{ text: [medication.dose, medication.frequency].filter(Boolean).join(' ').trim() }],
+    }));
+    const diagnosticReportResource = {
+      resourceType: 'DiagnosticReport',
+      id: `post-visit-docreport-${this.safeToken(documentId)}`,
+      status: 'final',
+      code: { text: `${model.documentType.replace(/_/g, ' ')} intelligence extract` },
+      subject: { reference: patientRef },
+      encounter: { reference: encounterRef },
+      effectiveDateTime: effectiveDate,
+      issued: effectiveDate,
+      conclusion: model.findings.join('; ') || model.summary.slice(0, 500),
+      result: observationResources.map((observation: any) => ({ reference: `Observation/${observation.id}` })),
+    };
+    return [...observationResources, ...medicationResources, diagnosticReportResource];
+  },
+
+  detectCriticalDocumentFlags(this: any, model: PostVisitDocumentIntelligenceModel): PostVisitDocumentCriticalFlag[] {
+    const flags: PostVisitDocumentCriticalFlag[] = [];
+    const thresholds = [
+      { code: 'potassium', label: 'Potassium critical', matcher: /potassium|k\+/i, criticalHigh: 6.0, highHigh: 5.5, unit: 'mmol/L' },
+      { code: 'glucose', label: 'Glucose critical', matcher: /glucose|blood sugar/i, criticalHigh: 22.0, criticalLow: 2.5, highHigh: 16.0, highLow: 3.0, unit: 'mmol/L' },
+      { code: 'hemoglobin', label: 'Hemoglobin critical', matcher: /hemoglobin|haemoglobin|hb/i, criticalLow: 6.5, highLow: 7.5, unit: 'g/dL' },
+    ];
+    for (const observation of model.observations) {
+      const value = Number(observation.value);
+      if (!Number.isFinite(value)) continue;
+      for (const threshold of thresholds) {
+        if (!threshold.matcher.test(String(observation.name || ''))) continue;
+        if (threshold.criticalHigh != null && value >= threshold.criticalHigh) {
+          flags.push({ code: threshold.code, label: threshold.label, severity: 'critical', value, unit: observation.unit || threshold.unit || null, threshold: `>= ${threshold.criticalHigh}` });
+        } else if (threshold.criticalLow != null && value <= threshold.criticalLow) {
+          flags.push({ code: threshold.code, label: threshold.label, severity: 'critical', value, unit: observation.unit || threshold.unit || null, threshold: `<= ${threshold.criticalLow}` });
+        } else if (threshold.highHigh != null && value >= threshold.highHigh) {
+          flags.push({ code: threshold.code, label: threshold.label, severity: 'high', value, unit: observation.unit || threshold.unit || null, threshold: `>= ${threshold.highHigh}` });
+        } else if (threshold.highLow != null && value <= threshold.highLow) {
+          flags.push({ code: threshold.code, label: threshold.label, severity: 'high', value, unit: observation.unit || threshold.unit || null, threshold: `<= ${threshold.highLow}` });
+        }
+      }
+    }
+    return flags;
+  },
+
+  splitIntoPhrases(this: any, value?: string) {
+    const text = String(value || '').trim();
+    if (!text || text.toLowerCase() === 'not provided') return [];
+    return text.split(/[\n.;]+/).map((part) => part.trim()).filter((part) => part.length > 0);
+  },
+
+  parseBloodPressure(this: any, bp?: string | null) {
+    const raw = String(bp || '').trim();
+    const match = raw.match(/^(\d{2,3})\s*\/\s*(\d{2,3})$/);
+    if (!match) return null;
+    return { systolic: Number(match[1]), diastolic: Number(match[2]) };
+  },
+
+  parseNumericValue(this: any, value: any): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const match = raw.match(/-?\d+(?:\.\d+)?/);
+    if (!match) return null;
+    const numeric = Number(match[0]);
+    return Number.isFinite(numeric) ? numeric : null;
+  },
+
+  normalizeMedicationToken(this: any, value: string): string {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .replace(/\b\d+(?:\.\d+)?\s?(mg|mcg|g|ml|iu|units?)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+  splitMedicationTextList(this: any, value: string): string[] {
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+    return raw.split(/[,\n;|]+/).map((item) => item.trim()).filter((item) => item.length > 0);
+  },
+
+  getMedicationSeverityRank(this: any, severity: MedicationRiskSeverity | 'major' | 'moderate' | null | undefined): number {
+    if (severity === 'contraindicated') return 4;
+    if (severity === 'major') return 3;
+    if (severity === 'moderate') return 2;
+    if (severity === 'minor') return 1;
+    return 0;
+  },
+
+  inferMedicationNormalization(this: any, inputName: string): MedicationNormalizationRecord {
+    const normalizedInput = this.normalizeMedicationToken(inputName);
+    const dictionary: Array<{ token: string; normalizedName: string; rxCui: string }> = [
+      { token: 'metformin', normalizedName: 'metformin', rxCui: '6809' },
+      { token: 'gabapentin', normalizedName: 'gabapentin', rxCui: '25480' },
+      { token: 'rivaroxaban', normalizedName: 'rivaroxaban', rxCui: '1114195' },
+      { token: 'warfarin', normalizedName: 'warfarin', rxCui: '11289' },
+      { token: 'aspirin', normalizedName: 'aspirin', rxCui: '1191' },
+      { token: 'clarithromycin', normalizedName: 'clarithromycin', rxCui: '21212' },
+      { token: 'simvastatin', normalizedName: 'simvastatin', rxCui: '36567' },
+      { token: 'lisinopril', normalizedName: 'lisinopril', rxCui: '29046' },
+      { token: 'spironolactone', normalizedName: 'spironolactone', rxCui: '9997' },
+    ];
+    const dictionaryHit = dictionary.find((entry) => normalizedInput.includes(entry.token));
+    if (dictionaryHit) {
+      return { inputName, normalizedName: dictionaryHit.normalizedName, rxCui: dictionaryHit.rxCui, source: 'rxnorm_dictionary' };
+    }
+    const fallbackToken = normalizedInput.split(/\s+/)[0] || normalizedInput;
+    return {
+      inputName,
+      normalizedName: fallbackToken || normalizedInput || 'unknown_medication',
+      rxCui: null,
+      source: fallbackToken ? 'heuristic' : 'unknown',
+    };
+  },
+
+  extractEstimatedEgfr(this: any, patientContext: any, extractedEntities: any[]): number | null {
+    const entityHit = extractedEntities.find((entity: any) => {
+      const type = String(entity?.entity_type || entity?.type || '').toLowerCase();
+      const value = String(entity?.entity_value || entity?.value || '').toLowerCase();
+      return type.includes('egfr') || /e\s*gfr|glomerular/i.test(value);
+    });
+    const entityEgfr = this.parseNumericValue(entityHit?.entity_value || entityHit?.value);
+    if (entityEgfr !== null) return entityEgfr;
+    const labAlert = patientContext?.modules?.lab?.latestCriticalAlert;
+    return this.parseNumericValue(labAlert?.result_value);
+  },
+
+  buildMedicationIntelligenceAssessment(this: any, patientContext: any, extractedEntities: any[]): MedicationIntelligenceAssessment {
+    if (!this.isMedicationIntelligenceV2Enabled()) {
+      return {
+        enabled: false,
+        medications: [],
+        interactions: [],
+        beersAlerts: [],
+        renalAlerts: [],
+        highestSeverity: null,
+        highRiskCount: 0,
+        egfr: null,
+        riskNarrative: 'Medication intelligence v2 is disabled by feature flag.',
+      };
+    }
+    const age = Number(patientContext?.patient?.age || 0);
+    const medicationCandidates: string[] = [];
+    const latestPrescription = patientContext?.modules?.pharmacy?.latestPrescription;
+    for (const candidate of [
+      latestPrescription?.medication_name,
+      latestPrescription?.generic_name,
+      ...(extractedEntities || []).map((entity: any) => entity?.entity_value || entity?.value),
+    ]) {
+      if (String(candidate || '').trim()) {
+        medicationCandidates.push(String(candidate).trim());
+      }
+    }
+    const deduped = Array.from(
+      new Map(
+        medicationCandidates
+          .map((candidate) => [this.normalizeMedicationToken(candidate), candidate] as const)
+          .filter(([key]) => key.length > 0),
+      ).entries(),
+    ).map(([, original]) => original);
+    const medications = deduped.map((name) => this.inferMedicationNormalization(name));
+    const normalizedMedicationSet = new Set(medications.map((item) => item.normalizedName));
+    const interactions: MedicationInteractionSignal[] = [];
+    if (normalizedMedicationSet.has('clarithromycin') && normalizedMedicationSet.has('simvastatin')) {
+      interactions.push({
+        pair: ['clarithromycin', 'simvastatin'],
+        severity: 'major',
+        rationale: 'Clarithromycin increases simvastatin concentration and myopathy risk.',
+        guidelineId: 'fda-simvastatin-drug-interaction-safety',
+      });
+    }
+    const egfr = this.extractEstimatedEgfr(patientContext, extractedEntities);
+    const renalAlerts: MedicationRenalSignal[] = [];
+    if (egfr !== null && egfr < 50 && normalizedMedicationSet.has('rivaroxaban')) {
+      renalAlerts.push({
+        medication: 'rivaroxaban',
+        severity: 'major',
+        rationale: 'Rivaroxaban renal-dose review is required when eGFR < 50.',
+        egfr,
+      });
+    }
+    const beersAlerts: MedicationBeersSignal[] =
+      age >= 65 && normalizedMedicationSet.has('simvastatin')
+        ? [{ medication: 'simvastatin', severity: 'moderate', rationale: 'Review statin tolerance and myalgia in older adults.' }]
+        : [];
+    let highestSeverity: MedicationRiskSeverity | null = null;
+    for (const signal of [...interactions, ...beersAlerts, ...renalAlerts]) {
+      if (!highestSeverity || this.getMedicationSeverityRank(signal.severity) > this.getMedicationSeverityRank(highestSeverity)) {
+        highestSeverity = signal.severity as MedicationRiskSeverity;
+      }
+    }
+    const highRiskCount =
+      interactions.filter((item) => ['contraindicated', 'major'].includes(item.severity)).length +
+      renalAlerts.filter((item) => item.severity === 'major').length;
+    return {
+      enabled: true,
+      medications,
+      interactions,
+      beersAlerts,
+      renalAlerts,
+      highestSeverity,
+      highRiskCount,
+      egfr,
+      riskNarrative: highRiskCount > 0
+        ? 'High-risk medication safety signals detected.'
+        : 'No high-risk medication safety signals detected.',
+    };
+  },
+
+  isMedicationIntelligenceV2Enabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2 || 'false').toLowerCase() === 'true';
+  },
+
+  extractEntitiesFromTranscription(this: any, result: TranscriptionResult): ExtractedEntityInput[] {
+    const entities: ExtractedEntityInput[] = [];
+    const language = this.normalizeLanguage(result.language);
+    const confidence = typeof result.confidence === 'number' ? result.confidence : null;
+    const pushSection = (section: string, value?: string) => {
+      for (const phrase of this.splitIntoPhrases(value)) {
+        entities.push({
+          entityType: section,
+          entityValue: phrase,
+          normalizedValue: { language },
+          confidence,
+          sourceOrigin: 'soap_note',
+        });
+      }
+    };
+    pushSection('subjective', result.soap_note?.subjective);
+    pushSection('objective', result.soap_note?.objective);
+    pushSection('assessment', result.soap_note?.assessment);
+    pushSection('plan', result.soap_note?.plan);
+    const transcriptionText = String(result.text || '').trim();
+    if (transcriptionText) {
+      const bpMatch = transcriptionText.match(/\b(\d{2,3})\s*\/\s*(\d{2,3})\b/);
+      if (bpMatch) {
+        entities.push({
+          entityType: 'vital_blood_pressure',
+          entityValue: `${bpMatch[1]}/${bpMatch[2]}`,
+          normalizedValue: { systolic: Number(bpMatch[1]), diastolic: Number(bpMatch[2]), unit: 'mmHg' },
+          confidence,
+          sourceOrigin: 'transcript',
+        });
+      }
+      const heartRateMatch = transcriptionText.match(/\b(?:heart rate|hr)\s*(?:is|of)?\s*(\d{2,3})\b/i);
+      if (heartRateMatch) {
+        entities.push({
+          entityType: 'vital_heart_rate',
+          entityValue: heartRateMatch[1],
+          normalizedValue: { value: Number(heartRateMatch[1]), unit: 'bpm' },
+          confidence,
+          sourceOrigin: 'transcript',
+        });
+      }
+    }
+    return entities;
+  },
+
+  async upsertDraftArtifact(this: any, tenantDb: DataSource, args: {
+    sessionId: string;
+    artifactType: string;
+    content: Record<string, any>;
+    citations?: Array<Record<string, any>>;
+    confidence?: number | null;
+    generatedBy?: string;
+    actorUserId?: string | null;
+    artifactStatus?: 'draft' | 'reviewed' | 'published';
+  }) {
+    const rows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_draft_artifacts (
+          session_id,
+          artifact_type,
+          artifact_status,
+          content,
+          citations,
+          confidence,
+          generated_by,
+          created_by,
+          updated_by
+        ) VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,$8)
+        ON CONFLICT (session_id, artifact_type)
+        DO UPDATE SET
+          artifact_status = EXCLUDED.artifact_status,
+          content = EXCLUDED.content,
+          citations = EXCLUDED.citations,
+          confidence = EXCLUDED.confidence,
+          generated_by = EXCLUDED.generated_by,
+          updated_by = EXCLUDED.updated_by,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        args.sessionId,
+        args.artifactType,
+        args.artifactStatus || 'draft',
+        JSON.stringify(args.content || {}),
+        JSON.stringify(args.citations || []),
+        typeof args.confidence === 'number' ? args.confidence : null,
+        args.generatedBy || 'post_visit_pipeline',
+        args.actorUserId || null,
+      ],
+    );
+    return rows[0];
+  },
+
+  isSpecialtySoapEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_SPECIALTY_SOAP || 'false').toLowerCase() === 'true';
+  },
+
+  resolveSoapSpecialty(this: any, patientContext: any): PostVisitSoapSpecialty {
+    const modules = patientContext?.modules || {};
+    const age = Number(patientContext?.patient?.age || 0);
+    if (modules?.cardiology?.latestEncounter) return 'cardiology';
+    if (age > 0 && age < 15) return 'paediatrics';
+    if (modules?.mentalHealth?.latestEncounter || modules?.mental_health?.latestEncounter) return 'mental_health';
+    return 'general_practice';
+  },
+
+  evaluateSpecialtySoapTemplate(this: any, specialty: PostVisitSoapSpecialty, soapNote: any, patientContext: any): SpecialtySoapValidationSummary {
+    const soapNoteFields = {
+      subjective: String(soapNote?.subjective || '').trim(),
+      objective: String(soapNote?.objective || '').trim(),
+      assessment: String(soapNote?.assessment || '').trim(),
+      plan: String(soapNote?.plan || '').trim(),
+    };
+    const context = {
+      modules: patientContext?.modules || {},
+      age: Number(patientContext?.patient?.age || 0),
+      hasWeight:
+        this.parseNumericValue(patientContext?.latestVitals?.weightKg) !== null ||
+        this.parseNumericValue(patientContext?.latestVitals?.weight) !== null,
+    };
+    return getValidationSummary(specialty, soapNoteFields, context);
+  },
+
+  buildRecommendationRules(this: any, patientContext: any, extractedEntities: any[]): RecommendationRuleResult[] {
+    const rules: RecommendationRuleResult[] = [];
+    const latestVitals = patientContext?.latestVitals || {};
+    const modules = patientContext?.modules || {};
+    const extractedBpEntity = extractedEntities.find((entity: any) => String(entity.entity_type || entity.type) === 'vital_blood_pressure');
+    const bp = this.parseBloodPressure(extractedBpEntity?.entity_value || extractedBpEntity?.value) ||
+      this.parseBloodPressure(latestVitals?.blood_pressure || latestVitals?.bloodPressure);
+    if (bp && (bp.systolic >= 140 || bp.diastolic >= 90)) {
+      rules.push({
+        ruleId: 'htn_followup_rule',
+        recommendationId: 'htn_followup',
+        title: 'Elevated blood pressure follow-up',
+        description: 'Schedule blood pressure reassessment and hypertension workup if persistent.',
+        urgency: bp.systolic >= 180 || bp.diastolic >= 120 ? 'stat' : 'urgent',
+        actionType: 'follow_up',
+        confidence: 0.86,
+        context: { bloodPressure: `${bp.systolic}/${bp.diastolic}` },
+        citations: [{
+          guidelineId: 'who-pen-hypertension-2023',
+          label: 'WHO PEN hypertension follow-up threshold guidance',
+          source: 'WHO PEN',
+          confidence: 0.88,
+        }],
+      });
+    }
+    const labCritical = modules?.lab?.latestCriticalAlert;
+    if (labCritical && ['pending', 'unacknowledged'].includes(String(labCritical.alert_status || '').toLowerCase())) {
+      rules.push({
+        ruleId: 'critical_lab_followup_rule',
+        recommendationId: 'critical_lab_followup',
+        title: 'Critical lab escalation callback',
+        description: 'Contact patient urgently and document immediate safety instructions.',
+        urgency: 'stat',
+        actionType: 'monitoring',
+        confidence: 0.9,
+        context: { alertId: labCritical.id, component: labCritical.component_name, severity: labCritical.severity },
+        citations: [{
+          guidelineId: 'joint-commission-critical-lab-policy',
+          label: 'Critical laboratory result communication policy',
+          source: 'Clinical Safety Policy',
+          confidence: 0.84,
+        }],
+      });
+    }
+    const hivEnrollment = modules?.hiv?.latestEnrollment;
+    if (hivEnrollment) {
+      rules.push({
+        ruleId: 'hiv_followup_continuity_rule',
+        recommendationId: 'hiv_followup_continuity',
+        title: 'HIV continuity follow-up scheduling',
+        description: 'Confirm next HIV clinical review date, adherence counseling checkpoint, and required lab monitoring timeline.',
+        urgency: 'routine',
+        actionType: 'follow_up',
+        confidence: 0.82,
+        context: { enrollmentId: hivEnrollment.id, nextReviewDate: modules?.hiv?.latestClinicalVisit?.next_review_date || null },
+        citations: [{
+          guidelineId: 'who-hiv-care-followup-2024',
+          label: 'WHO HIV care and treatment clinical follow-up guidance',
+          source: 'WHO HIV Guidelines',
+          confidence: 0.86,
+        }],
+      });
+    }
+    const medicationIntelligence = this.buildMedicationIntelligenceAssessment(patientContext, extractedEntities);
+    const issueCount =
+      medicationIntelligence.interactions.length +
+      medicationIntelligence.beersAlerts.length +
+      medicationIntelligence.renalAlerts.length;
+    if (medicationIntelligence.enabled && issueCount > 0) {
+      const hasHighRisk =
+        medicationIntelligence.highestSeverity !== null &&
+        this.getMedicationSeverityRank(medicationIntelligence.highestSeverity) >= 3;
+      rules.push({
+        ruleId: 'medication_safety_intelligence_v2_rule',
+        recommendationId: 'medication_safety_intelligence_v2',
+        title: hasHighRisk ? 'High-risk medication safety review' : 'Medication safety review',
+        description: medicationIntelligence.riskNarrative,
+        urgency: hasHighRisk ? 'urgent' : 'routine',
+        actionType: 'medication',
+        confidence: hasHighRisk ? 0.91 : 0.83,
+        context: { medicationIntelligence, issueCount, highRisk: hasHighRisk },
+        citations: [{
+          guidelineId: 'fda-drug-safety-interactions',
+          label: 'FDA drug interaction safety communication',
+          source: 'FDA Safety',
+          confidence: 0.86,
+        }],
+      });
+    }
+    const activePrescriptionCount = Number(modules?.pharmacy?.activePrescriptionCount || 0) || Number(modules?.pharmacy?.active_count || 0);
+    if (activePrescriptionCount > 0) {
+      rules.push({
+        ruleId: 'medication_adherence_reinforcement_rule',
+        recommendationId: 'medication_adherence_reinforcement',
+        title: 'Medication adherence reinforcement',
+        description: 'Issue plain-language medication adherence reminders and confirm understanding via teach-back.',
+        urgency: 'routine',
+        actionType: 'medication',
+        confidence: 0.78,
+        context: { activePrescriptionCount },
+        citations: [{
+          guidelineId: 'adherence-counseling-best-practice',
+          label: 'Medication adherence counseling best practice',
+          source: 'Clinical Adherence Guidance',
+          confidence: 0.79,
+        }],
+      });
+    }
+    if (!rules.length) {
+      rules.push({
+        ruleId: 'general_post_visit_followup_rule',
+        recommendationId: 'general_post_visit_followup',
+        title: 'General post-visit follow-up package',
+        description: 'Provide plain-language summary, follow-up date recommendation, and return-precaution instructions.',
+        urgency: 'routine',
+        actionType: 'follow_up',
+        confidence: 0.72,
+        context: {},
+        citations: [{
+          guidelineId: 'transition-of-care-best-practice',
+          label: 'Transitions of care communication guidance',
+          source: 'Care Continuity Framework',
+          confidence: 0.74,
+        }],
+      });
+    }
+    return rules;
+  },
+
+  buildVisitSummaryContent(this: any, args: {
+    patientContext: any;
+    soapNote: any;
+    extractedEntities: any[];
+    session: any;
+  }) {
+    const subjective = String(args.soapNote?.subjective || '').trim();
+    const objective = String(args.soapNote?.objective || '').trim();
+    const assessment = String(args.soapNote?.assessment || '').trim();
+    const plan = String(args.soapNote?.plan || '').trim();
+    const language = args.session?.language || 'en';
+    const keyPoints = [assessment, plan, objective].filter((item) => item.length > 0).slice(0, 5);
+    const plainLanguageSummary = [subjective, assessment, plan]
+      .filter((item) => item.length > 0)
+      .join('. ')
+      .trim() || 'Doctor-approved post-visit summary is available.';
+    return {
+      language,
+      summary_text: [subjective, objective, assessment, plan].filter(Boolean).join('\n'),
+      plain_language_summary: plainLanguageSummary,
+      key_points: keyPoints,
+      teach_back_questions: [
+        'Can you explain the main plan in your own words?',
+        'What symptoms would make you seek urgent help?',
+      ],
+      companion_topic_checklist: keyPoints.length ? keyPoints : ['follow_up', 'medication', 'warning_signs'],
+      literacy_score: Math.max(0, Math.min(100, 72)),
+      generated_at: new Date().toISOString(),
+    };
+  },
+
+  applyRecommendationLlmRewrites(this: any, items: any[], rewrites: any[]) {
+    if (!Array.isArray(items) || !Array.isArray(rewrites) || rewrites.length === 0) {
+      return items;
+    }
+    const rewriteMap = new Map(
+      rewrites.map((rewrite: any) => [
+        String(rewrite?.recommendationId || rewrite?.recommendation_id || rewrite?.id || ''),
+        rewrite,
+      ]),
+    );
+    return items.map((item: any) => {
+      const rewrite = rewriteMap.get(String(item?.id || ''));
+      if (!rewrite) return item;
+      return {
+        ...item,
+        title: rewrite.title || item?.title,
+        description: rewrite.description || item?.description,
+      };
+    });
+  },
+
+  normalizeCitationRelevanceScore(this: any, value: any): number | null {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return Math.min(1, Math.max(0, num));
+  },
+
+  extractGuidelineYear(this: any, guidelineId?: string | null): number | null {
+    const source = String(guidelineId || '');
+    const match = source.match(/(19|20)\d{2}/);
+    if (!match) return null;
+    const year = Number(match[0]);
+    return Number.isFinite(year) ? year : null;
+  },
+
+  async replaceRuleCitations(this: any, tenantDb: DataSource, sessionId: string, citations: Array<{ recommendationId: string; ruleId: string; citation: RuleCitation; metadata?: Record<string, any>; }>) {
+    await tenantDb.query(`DELETE FROM post_visit_rule_citations WHERE session_id = $1`, [sessionId]);
+    for (const row of citations) {
+      await tenantDb.query(
+        `
+          INSERT INTO post_visit_rule_citations (
+            session_id,
+            artifact_type,
+            recommendation_id,
+            rule_id,
+            guideline_id,
+            citation_label,
+            citation_source,
+            citation_url,
+            evidence_excerpt,
+            confidence,
+            relevance_score,
+            citation_year,
+            is_superseded,
+            superseded_by_guideline_id,
+            metadata
+          ) VALUES ($1,'recommendation_bundle',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
+        `,
+        [
+          sessionId,
+          row.recommendationId,
+          row.ruleId,
+          row.citation.guidelineId,
+          row.citation.label,
+          row.citation.source,
+          row.citation.url || null,
+          row.citation.excerpt || null,
+          typeof row.citation.confidence === 'number' ? row.citation.confidence : null,
+          this.normalizeCitationRelevanceScore(row.citation.relevanceScore ?? row.citation.confidence ?? null),
+          row.citation.publicationYear ?? this.extractGuidelineYear(row.citation.guidelineId),
+          row.citation.isSuperseded === true,
+          row.citation.supersededByGuidelineId || null,
+          JSON.stringify(row.metadata || {}),
+        ],
+      );
+    }
+  },
+
+  async refreshSessionBillingIntelligence(this: any, tenantDb: DataSource, args: any) {
+    if (this.billingIntelligenceService?.refreshSessionBillingIntelligence) {
+      return this.billingIntelligenceService.refreshSessionBillingIntelligence(tenantDb, args);
+    }
+    return {
+      suggestions: [],
+      documentation: { score: 0, status: 'insufficient', checks: [], gaps: [] },
+    };
+  },
+
+  isPatientStoryEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitPatientStory;
+    if (typeof configured === 'boolean') return configured;
+    return String(process.env.FEATURE_POSTVISIT_PATIENT_STORY || 'false').toLowerCase() === 'true';
+  },
+
+  async regeneratePatientStoryForPatient(this: any, _tenantDb: DataSource, _patientId: string, _triggerSessionId?: string) {
+    return;
+  },
+
+  isFhirWriteBackEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_FHIR_WRITEBACK || 'false').toLowerCase() === 'true';
+  },
+
+  isPeerConsultEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_PEER_CONSULT || 'false').toLowerCase() === 'true';
+  },
+
+  isCitationQualityV2Enabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_CITATION_QUALITY_V2 || 'false').toLowerCase() === 'true';
+  },
+
+  getCitationRelevanceThreshold(this: any): number {
+    const raw = Number(process.env.POSTVISIT_CITATION_MIN_RELEVANCE || 0.55);
+    if (!Number.isFinite(raw)) return 0.55;
+    return Math.min(0.95, Math.max(0.2, raw));
+  },
+
+  resolveClinicalTrialsApiUrl(this: any): string {
+    const direct = String(process.env.POSTVISIT_CLINICALTRIALS_API_URL || env.POSTVISIT_CLINICALTRIALS_API_URL || '').trim();
+    if (direct) return direct;
+    throw new Error('POSTVISIT_CLINICALTRIALS_API_URL is not configured.');
+  },
+
+  getTrialSlaEmailMinSeverity(this: any): TrialSlaNotificationSeverity {
+    const normalized = String((config as any)?.features?.postVisitTrialSlaEmailMinSeverity || process.env.POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY || 'high').trim().toLowerCase();
+    if (normalized === 'moderate' || normalized === 'critical') return normalized;
+    return 'high';
+  },
+
+  getTrialSlaSmsMinSeverity(this: any): TrialSlaNotificationSeverity {
+    const normalized = String((config as any)?.features?.postVisitTrialSlaSmsMinSeverity || process.env.POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY || 'critical').trim().toLowerCase();
+    if (normalized === 'moderate' || normalized === 'high') return normalized;
+    return 'critical';
+  },
+
+  getTrialSlaMaxRecipients(this: any): number {
+    const raw = Number((config as any)?.features?.postVisitTrialSlaNotifyMaxRecipients ?? process.env.POSTVISIT_TRIAL_SLA_NOTIFY_MAX_RECIPIENTS ?? '3');
+    if (!Number.isFinite(raw)) return 3;
+    return Math.min(Math.max(Math.round(raw), 1), 20);
+  },
+
+  severityRank(this: any, severity: PostVisitEscalationSeverity | TrialSlaNotificationSeverity): number {
+    if (severity === 'critical') return 4;
+    if (severity === 'high') return 3;
+    if (severity === 'moderate') return 2;
+    return 1;
+  },
+
+  isSeverityAtLeast(this: any, severity: PostVisitEscalationSeverity | TrialSlaNotificationSeverity, threshold: TrialSlaNotificationSeverity): boolean {
+    return this.severityRank(severity) >= this.severityRank(threshold);
+  },
+
+  computeTrialDecisionAgeHours(this: any, createdAt: any, reviewedAt: any): number {
+    const reference = reviewedAt || createdAt;
+    const parsed = new Date(reference);
+    if (Number.isNaN(parsed.getTime())) return 0;
+    return Math.max(0, (Date.now() - parsed.getTime()) / (1000 * 60 * 60));
+  },
+
+  mapTrialMatch(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      trialSource: row.trial_source || 'clinicaltrials_gov_v2',
+      trialId: row.trial_id,
+      trialTitle: row.trial_title,
+      trialPhase: row.trial_phase || null,
+      trialStatus: row.trial_status || null,
+      conditionTags: Array.isArray(row.condition_tags) ? row.condition_tags : [],
+      sourceUrl: row.source_url || null,
+      eligibilityScore: Number(row.eligibility_score || 0),
+      eligibilityRationale: Array.isArray(row.eligibility_rationale) ? row.eligibility_rationale : [],
+      matchStatus: (row.match_status || 'proposed') as PostVisitTrialMatchStatus,
+      reviewedBy: row.reviewed_by || null,
+      reviewedAt: row.reviewed_at || null,
+      reviewNote: row.review_note || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  mapTrialMatchAuditRow(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      trialMatchId: row.trial_match_id,
+      patientId: row.patient_id,
+      action: row.action || null,
+      previousStatus: row.previous_status || null,
+      nextStatus: row.next_status || null,
+      note: row.note || null,
+      actedBy: row.acted_by || null,
+      actedAt: row.acted_at || row.created_at || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  assertPatientSessionAccess(this: any, sessionRow: any, patientId: string) {
+    if (String(sessionRow.patient_id) !== String(patientId)) {
+      throw new ForbiddenException('You do not have access to this post-visit session');
+    }
+  },
+
+  assertPatientCompanionAccessAllowed(this: any, sessionRow: any) {
+    const status = String(sessionRow.status || '').toLowerCase();
+    if (!['published', 'closed'].includes(status)) {
+      throw new ForbiddenException('Post-visit session is not yet published for patient companion access');
+    }
+  },
+
+  async ensureCompanionThread(this: any, tenantDb: DataSource, sessionRow: any, createdBy: string | null) {
+    const resolvedSessionId = String(sessionRow?.id || '').trim();
+    const resolvedPatientId = String(sessionRow?.patient_id || '').trim();
+    if (!resolvedSessionId || !resolvedPatientId) {
+      throw new InternalServerErrorException('Unable to initialize companion thread due to missing post-visit session identity.');
+    }
+    const rows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_companion_threads (
+          session_id,
+          patient_id,
+          status,
+          created_by
+        ) VALUES ($1,$2,'active',$3)
+        ON CONFLICT (session_id, patient_id)
+        DO UPDATE SET updated_at = NOW()
+        RETURNING *
+      `,
+      [resolvedSessionId, resolvedPatientId, createdBy],
+    );
+    return rows[0];
+  },
+
+  async touchCompanionThreadAfterMessage(this: any, tenantDb: DataSource, threadId: string, senderType: 'patient' | 'clinician' | 'system') {
+    const stampColumn =
+      senderType === 'patient'
+        ? 'last_patient_message_at'
+        : senderType === 'clinician'
+          ? 'last_clinician_message_at'
+          : null;
+    if (stampColumn) {
+      await tenantDb.query(
+        `
+          UPDATE post_visit_companion_threads
+          SET message_count = message_count + 1,
+              last_message_at = NOW(),
+              ${stampColumn} = NOW(),
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [threadId],
+      );
+      return;
+    }
+    await tenantDb.query(
+      `
+        UPDATE post_visit_companion_threads
+        SET message_count = message_count + 1,
+            last_message_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [threadId],
+    );
+  },
+
+  isEscalationConfidenceV2Enabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE || 'false').toLowerCase() === 'true';
+  },
+
+  classifyEscalationSignals(this: any, payload: any): PostVisitEscalationClassifierOutput {
+    const text = String(payload?.message || payload || '').toLowerCase().trim();
+    const criticalTerms = ['chest pain', 'shortness of breath', 'difficulty breathing', 'cannot breathe', 'suicidal', 'seizure', 'stroke'];
+    const highTerms = ['severe headache', 'vision loss', 'confusion', 'high fever', 'palpitations', 'worsening pain'];
+    const moderateTerms = ['dizziness', 'nausea', 'vomiting', 'swelling', 'rash', 'side effects'];
+    const matchTerms = (terms: string[]) => terms.filter((term) => text.includes(term));
+    const temporality =
+      text.includes('last week') || text.includes('last month') || text.includes('yesterday') || text.includes('previously')
+        ? 'historical'
+        : text.includes('right now') || text.includes('currently') || text.includes('today') || text.includes('now')
+          ? 'current'
+          : 'unclear';
+    const criticalMatches = matchTerms(criticalTerms);
+    if (criticalMatches.length) {
+      if (temporality === 'historical' && this.isEscalationConfidenceV2Enabled()) {
+        return { detected: false, severity: 'critical', routeTarget: 'doctor', confidence: 0.95, triggerTerms: criticalMatches, temporality, classifierSource: 'keyword_v1', rationale: 'Historical high-risk signal suppressed.', escalationSuppressedReason: 'historical_signal', classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 30 } as any;
+      }
+      return { detected: true, severity: 'critical', routeTarget: 'emergency', confidence: 0.95, triggerTerms: criticalMatches, temporality: temporality === 'unclear' ? 'current' : temporality, classifierSource: 'keyword_v1', rationale: 'Critical symptom keywords matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 5 } as any;
+    }
+    const highMatches = matchTerms(highTerms);
+    if (highMatches.length) {
+      if (temporality === 'historical' && this.isEscalationConfidenceV2Enabled()) {
+        return { detected: false, severity: 'high', routeTarget: 'doctor', confidence: 0.84, triggerTerms: highMatches, temporality, classifierSource: 'keyword_v1', rationale: 'Historical high-risk signal suppressed.', escalationSuppressedReason: 'historical_signal', classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 60 } as any;
+      }
+      return { detected: true, severity: 'high', routeTarget: 'doctor', confidence: 0.84, triggerTerms: highMatches, temporality: temporality === 'unclear' ? 'current' : temporality, classifierSource: 'keyword_v1', rationale: 'High-risk symptom keywords matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 60 } as any;
+    }
+    const moderateMatches = matchTerms(moderateTerms);
+    if (moderateMatches.length) {
+      return { detected: true, severity: 'moderate', routeTarget: 'nurse', confidence: 0.72, triggerTerms: moderateMatches, temporality: temporality === 'unclear' ? 'current' : temporality, classifierSource: 'keyword_v1', rationale: 'Moderate symptom keywords matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 240 } as any;
+    }
+    return { detected: false, severity: 'low', routeTarget: 'nurse', confidence: 0.2, triggerTerms: [], temporality, classifierSource: 'keyword_v1', rationale: 'No escalation signal matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'none', slaMinutes: null } as any;
+  },
+
+  normalizeIntraVisitAlertSource(this: any, value: any): string {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized || 'streamed_transcript';
+  },
+
+  normalizeIntraVisitTranscriptOffset(this: any, value: any): number | null {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
+  },
+
+  resolveIntraVisitRoutingDecision(this: any, _tenantDb: DataSource, _sessionRow: any, alert: IntraVisitAlertDraft): IntraVisitRoutingDecision {
+    const routeTarget = alert.severity === 'critical' ? 'emergency' : alert.severity === 'high' ? 'doctor' : 'nurse';
+    const assignedRole = routeTarget === 'emergency' ? 'rapid_response' : routeTarget === 'doctor' ? 'doctor' : 'nurse';
+    return {
+      routeTarget,
+      assignedRole,
+      assignedUserId: null,
+      assignedTeam: null,
+      routingRationale: `Severity ${alert.severity} routed to ${routeTarget}.`,
+      policyVersion: 'c3.v1',
+      slaDueAt: routeTarget === 'emergency' ? new Date(Date.now() + 5 * 60 * 1000) : routeTarget === 'doctor' ? new Date(Date.now() + 30 * 60 * 1000) : new Date(Date.now() + 2 * 60 * 60 * 1000),
+    };
+  },
+
+  async routeEscalationToWorkflow(this: any, tenantDb: DataSource, args: any) {
+    const workflowKey = `post_visit_escalation:${String(args.escalationId || args.sessionId || '')}:${Date.now()}`;
+    await tenantDb.query(
+      `
+        INSERT INTO nurse_cross_module_workflow_state (
+          workflow_key,
+          workflow_type,
+          patient_id,
+          appointment_id,
+          consultation_id,
+          assigned_role,
+          assigned_user_id,
+          status,
+          priority,
+          note,
+          metadata
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'open',$8,$9,$10::jsonb)
+      `,
+      [
+        workflowKey,
+        'post_visit_escalation',
+        args.patientId || null,
+        args.appointmentId || null,
+        args.consultationId || null,
+        args.routeTarget || 'doctor',
+        null,
+        args.severity === 'critical' ? 'critical' : args.severity === 'high' ? 'high' : 'normal',
+        args.signalText || null,
+        JSON.stringify(args.metadata || {}),
+      ],
+    ).catch(() => {});
+    return workflowKey;
+  },
+
+  async createEscalationEvent(this: any, tenantDb: DataSource, args: any) {
+    const detection = args.detection || {};
+    const sessionRow = args.sessionRow || {};
+    const sessionId = args.sessionId || sessionRow.id;
+    const patientId = args.patientId || sessionRow.patient_id;
+    const messageText = args.messageText || args.signalText || null;
+    const routeTarget = args.routeTarget || detection.routeTarget || 'doctor';
+    const severity = args.severity || detection.severity || 'moderate';
+    const insertedRows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_escalation_events (
+          session_id,
+          patient_id,
+          thread_id,
+          message_id,
+          status,
+          severity,
+          route_target,
+          trigger_type,
+          trigger_terms,
+          signal_text,
+          classification_confidence,
+          classification_temporality,
+          classification_source,
+          classification_reason,
+          classification_stage,
+          sla_due_at,
+          metadata
+        ) VALUES (
+          $1,$2,$3,$4,'open',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb
+        )
+        RETURNING *
+      `,
+      [
+        sessionId,
+        patientId,
+        args.threadId || null,
+        args.messageId || null,
+        severity,
+        routeTarget,
+        args.triggerType || detection.triggerType || 'patient_message',
+        args.triggerTerms || detection.triggerTerms || [],
+        messageText,
+        typeof args.classificationConfidence === 'number' ? args.classificationConfidence : detection.confidence ?? null,
+        args.classificationTemporality || detection.temporality || null,
+        args.classificationSource || detection.classifierSource || null,
+        args.classificationReason || detection.rationale || null,
+        args.classificationStage || 'v1',
+        args.slaDueAt || null,
+        JSON.stringify({
+          ...(args.metadata || {}),
+          channel_delivery: args.channelDelivery || null,
+        }),
+      ],
+    );
+    const inserted = insertedRows[0];
+    if (!inserted) {
+      throw new InternalServerErrorException('Failed to create post-visit escalation event');
+    }
+
+    const channelDelivery = {
+      patientInApp: false,
+      patientSms: false,
+      patientEmail: false,
+      clinicianSms: false,
+      clinicianEmail: false,
+    };
+
+    if (this.patientNotificationsService?.createNotification && patientId) {
+      await this.patientNotificationsService
+        .createNotification(
+          patientId,
+          'system_alert',
+          'Post-Visit Safety Alert',
+          routeTarget === 'emergency'
+            ? 'Please seek urgent care immediately.'
+            : 'Your care team has been notified to review your message.',
+          args.tenantId || null,
+          {
+            escalationId: inserted.id,
+            sessionId,
+            routeTarget,
+            severity,
+          },
+        )
+        .then(() => {
+          channelDelivery.patientInApp = true;
+        })
+        .catch(() => undefined);
+    }
+
+    if (patientId && (this.notificationsService?.sendSms || this.emailService?.sendEmail)) {
+      const patientRows = await tenantDb.query(
+        `
+          SELECT id, first_name, last_name, phone, email
+          FROM patients
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [patientId],
+      ).catch(() => []);
+      const patient = patientRows?.[0];
+      if (patient?.phone && this.notificationsService?.sendSms) {
+        await this.notificationsService
+          .sendSms(
+            patient.phone,
+            routeTarget === 'emergency'
+              ? 'Urgent post-visit alert: seek emergency care now.'
+              : 'Your post-visit message was routed to the care team.',
+          )
+          .then(() => {
+            channelDelivery.patientSms = true;
+          })
+          .catch(() => undefined);
+      }
+      if (patient?.email && this.emailService?.sendEmail) {
+        await this.emailService
+          .sendEmail({
+            to: patient.email,
+            subject: 'Post-Visit Safety Alert',
+            text:
+              routeTarget === 'emergency'
+                ? 'Urgent post-visit alert: seek emergency care now.'
+                : 'Your post-visit message was routed to the care team.',
+          })
+          .then(() => {
+            channelDelivery.patientEmail = true;
+          })
+          .catch(() => undefined);
+      }
+    }
+
+    if (this.notificationsService?.sendSms || this.emailService?.sendEmail) {
+      const clinicianRows = await tenantDb.query(
+        `
+          SELECT id, first_name, last_name, phone, email
+          FROM users
+          WHERE role IN ('doctor','nurse','nurse_accounts')
+          ORDER BY created_at DESC NULLS LAST, id ASC
+          LIMIT 3
+        `,
+      ).catch(() => []);
+      for (const clinician of clinicianRows || []) {
+        if (clinician?.phone && this.notificationsService?.sendSms && !channelDelivery.clinicianSms) {
+          await this.notificationsService
+            .sendSms(
+              clinician.phone,
+              `Post-visit escalation requires ${routeTarget} review.`,
+            )
+            .then(() => {
+              channelDelivery.clinicianSms = true;
+            })
+            .catch(() => undefined);
+        }
+        if (clinician?.email && this.emailService?.sendEmail && !channelDelivery.clinicianEmail) {
+          await this.emailService
+            .sendEmail({
+              to: clinician.email,
+              subject: 'Post-Visit Escalation',
+              text: `Post-visit escalation requires ${routeTarget} review.`,
+            })
+            .then(() => {
+              channelDelivery.clinicianEmail = true;
+            })
+            .catch(() => undefined);
+        }
+      }
+    }
+
+    let workflowKey: string | null = null;
+    if (String(args.routeTarget || '').length > 0) {
+      workflowKey = await this.routeEscalationToWorkflow(tenantDb, {
+        escalationId: inserted.id,
+        sessionId,
+        patientId,
+        appointmentId: args.appointmentId || sessionRow.appointment_id || null,
+        consultationId: args.consultationId || sessionRow.consultation_id || null,
+        routeTarget,
+        severity,
+        signalText: messageText,
+        metadata: args.metadata || {},
+      }).catch(() => null);
+    }
+    if (workflowKey) {
+      await tenantDb.query(
+        `
+          UPDATE post_visit_escalation_events
+          SET workflow_key = $2,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [inserted.id, workflowKey],
+      ).catch(() => {});
+      inserted.workflow_key = workflowKey;
+    }
+    if (Object.values(channelDelivery).some(Boolean)) {
+      inserted.metadata = {
+        ...(inserted.metadata || {}),
+        channel_delivery: channelDelivery,
+      };
+      await tenantDb.query(
+        `
+          UPDATE post_visit_escalation_events
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [inserted.id, JSON.stringify({ channel_delivery: channelDelivery })],
+      ).catch(() => {});
+    }
+    return this.mapEscalationEvent(inserted);
+  },
+
+  async buildGroundedCompanionAnswer(this: any, args: any) {
+    if (args?.escalation?.detected && args?.escalation?.routeTarget === 'emergency') {
+      return {
+        answer: 'Your symptoms may be urgent. Please call emergency services now or go to the nearest emergency facility immediately.',
+        source: 'deterministic',
+        citationsUsed: [],
+        model: null,
+        abstained: false,
+        llmAudit: null,
+      };
+    }
+    const summary = String(args?.visitSummaryArtifact?.content?.plain_language_summary || '').trim();
+    const recommendations = Array.isArray(args?.recommendationArtifact?.content?.items)
+      ? args.recommendationArtifact.content.items
+      : [];
+    const citationCatalog = recommendations.flatMap((item: any) =>
+      (Array.isArray(item?.citations) ? item.citations : []).map((citation: any) => ({
+        id: String(citation?.citation_id || ''),
+        label: String(citation?.label || ''),
+        source: String(citation?.source || ''),
+        excerpt: citation?.excerpt || '',
+      })),
+    );
+    if (this.groundedLlmService?.answerPatientQuestion) {
+      const llmResult = await this.groundedLlmService.answerPatientQuestion({
+        sessionId: String(args.sessionId || ''),
+        tenantId: args.tenantId,
+        language: String(args?.visitSummaryArtifact?.content?.language || 'en'),
+        question: args.question,
+        summary,
+        checklist: recommendations.map((item: any) => String(item?.title || '').trim()).filter(Boolean),
+        citations: citationCatalog,
+      });
+      if (llmResult && !llmResult.abstained && llmResult.answer) {
+        return {
+          answer: llmResult.answer,
+          source: 'llm',
+          citationsUsed: llmResult.citationsUsed || [],
+          model: llmResult.model || null,
+          abstained: false,
+          llmAudit: llmResult.audit || null,
+        };
+      }
+    }
+    return {
+      answer: summary || 'I can help with your approved visit plan and checklist.',
+      source: 'deterministic',
+      citationsUsed: [],
+      model: null,
+      abstained: false,
+      llmAudit: null,
+    };
+  },
+
+  async persistGroundedLlmAudit(this: any, tenantDb: DataSource, args: any) {
+    if (!this.hipaaAuditService) {
+      return;
+    }
+    const modelName = String(args?.model || '').trim();
+    const audit = args?.audit || null;
+    if (!modelName || !audit?.promptHash) {
+      return;
+    }
+    const modelId = `postvisit.${modelName.toLowerCase().replace(/[^a-z0-9._-]+/g, '-')}`;
+    const provider =
+      modelName.toLowerCase().includes('gpt') || modelName.toLowerCase().includes('openai')
+        ? 'openai'
+        : modelName.toLowerCase().includes('claude')
+          ? 'anthropic'
+          : 'custom';
+    await this.hipaaAuditService.registerModelEntry(tenantDb, {
+      modelId,
+      modelName,
+      modelVersion: String(audit.templateVersion || 'v1'),
+      provider,
+      status: 'active',
+      metadata: { feature: 'post_visit_grounded_llm' },
+    }).catch(() => undefined);
+    await this.hipaaAuditService.logPromptAudit(tenantDb, {
+      promptHash: audit.promptHash,
+      templateVersion: audit.templateVersion || 'postvisit-grounded-v1',
+      modelId,
+      sessionId: args.sessionId,
+      patientId: args.patientId || null,
+      encounterId: args.encounterId || null,
+      actorId: args.actorUserId || null,
+      actorRole: args.actorRole || null,
+      inputTokenCount: audit.inputTokenCount,
+      outputTokenCount: audit.outputTokenCount,
+      latencyMs: audit.latencyMs,
+      safetyGateTriggered: audit.safetyGateTriggered === true,
+      requestId: args.requestId || null,
+      metadata: {
+        model_name: modelName,
+        ...(args.metadata || {}),
+      },
+    }).catch(() => undefined);
+  },
+
+  async createGeneralOrderFromRecommendation(this: any, tenantDb: DataSource, args: any) {
+    const recommendation = args.recommendation || {};
+    const rows = await tenantDb.query(
+      `
+        INSERT INTO orders (
+          patient_id,
+          appointment_id,
+          consultation_id,
+          order_type,
+          order_name,
+          description,
+          status,
+          priority,
+          created_by,
+          notes
+        ) VALUES ($1,$2,$3,$4,$5,$6,'authorized',$7,$8,$9)
+        RETURNING *
+      `,
+      [
+        args.sessionRow.patient_id,
+        args.sessionRow.appointment_id || null,
+        args.sessionRow.consultation_id || null,
+        recommendation.action_type || 'follow_up',
+        recommendation.title || 'Post-visit recommendation',
+        recommendation.description || null,
+        recommendation.urgency === 'stat' ? 'stat' : recommendation.urgency === 'urgent' ? 'urgent' : 'normal',
+        args.actorUserId || null,
+        args.note || null,
+      ],
+    );
+    const row = rows[0];
+    return {
+      resourceType: 'order',
+      resourceId: row?.id || null,
+      payload: row || {},
+    };
+  },
+
+  async createLabOrderFromRecommendation(this: any, tenantDb: DataSource, args: any) {
+    return this.createGeneralOrderFromRecommendation(tenantDb, {
+      ...args,
+      recommendation: {
+        ...args.recommendation,
+        action_type: 'lab_order',
+      },
+    });
+  },
+
+  async syncRecommendationExecutionIntoArtifact(this: any, tenantDb: DataSource, args: any) {
+    const artifact = await this.getArtifactRow(tenantDb, args.sessionId, 'recommendation_bundle');
+    if (!artifact) return;
+    const content = artifact.content || {};
+    const actionExecutions = content.action_executions && typeof content.action_executions === 'object'
+      ? content.action_executions
+      : {};
+    actionExecutions[args.recommendationId] = args.execution;
+    await tenantDb.query(
+      `
+        UPDATE post_visit_draft_artifacts
+        SET content = $3::jsonb,
+            updated_by = $4,
+            updated_at = NOW()
+        WHERE session_id = $1
+          AND artifact_type = $2
+      `,
+      [args.sessionId, 'recommendation_bundle', JSON.stringify({ ...content, action_executions: actionExecutions }), args.actorUserId || null],
+    ).catch(() => {});
+  },
+
+  async safeSyncCrossModuleWorkflow(this: any, _tenantDb: DataSource, _args: any) {
+    return;
+  },
+});

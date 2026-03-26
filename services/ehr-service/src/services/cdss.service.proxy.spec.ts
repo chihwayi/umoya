@@ -233,6 +233,57 @@ describe('CdssService proxy routing', () => {
     expect(response.governance).toEqual({ governed_path: true, phi_minimized: true });
   });
 
+  it('proxies governed JSON requests to the dedicated governed endpoint', async () => {
+    const service = new CdssService(undefined, undefined);
+    const postMock = jest.fn().mockResolvedValue({
+      data: {
+        json: { answer: 'Use the approved visit plan.' },
+        model: 'governed-json-model',
+        audit: { templateVersion: 'postvisit-answer-v1' },
+        governance: { governed_path: true, use_case: 'post_visit_patient_answer' },
+      },
+    });
+    (service as any).cdssClient = { post: postMock };
+    (service as any).retryMax = 0;
+
+    const response = await service.requestGovernedJson(
+      {
+        useCase: 'post_visit_patient_answer',
+        schemaDescription: '{"answer":"string"}',
+        templateVersion: 'postvisit-answer-v1',
+        messages: [
+          { role: 'system', content: 'Answer only from approved context.' },
+          { role: 'user', content: 'What should I do next?' },
+        ],
+        sessionId: 'session-1',
+        patientId: 'patient-1',
+      },
+      'tenant-postvisit',
+    );
+
+    expect(postMock).toHaveBeenCalledWith(
+      '/governed/json',
+      {
+        use_case: 'post_visit_patient_answer',
+        schema_description: '{"answer":"string"}',
+        messages: [
+          { role: 'system', content: 'Answer only from approved context.' },
+          { role: 'user', content: 'What should I do next?' },
+        ],
+        template_version: 'postvisit-answer-v1',
+        temperature: 0.1,
+        session_id: 'session-1',
+        patient_id: 'patient-1',
+      },
+      {
+        timeout: 15000,
+        headers: { 'X-Tenant-ID': 'tenant-postvisit' },
+      },
+    );
+    expect(response.model).toBe('governed-json-model');
+    expect(response.governance).toEqual({ governed_path: true, use_case: 'post_visit_patient_answer' });
+  });
+
   it('forwards specialty and module into intelligent diagnosis patient_data', async () => {
     const service = new CdssService(undefined, undefined);
     const postMock = jest.fn().mockResolvedValue({

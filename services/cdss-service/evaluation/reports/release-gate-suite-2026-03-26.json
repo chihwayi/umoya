@@ -1,0 +1,198 @@
+{
+  "generated_at": "2026-03-26T19:44:28.577517+00:00",
+  "suite_version": "2026-03-26.v1",
+  "blocked": false,
+  "blocked_surfaces": [],
+  "surfaces": [
+    {
+      "ai_surface": "diagnosis_assist",
+      "description": "Governed intelligent diagnosis baseline",
+      "dataset": "diagnosis_assist_eval_cases.v1.json",
+      "dataset_version": "2026-03-26.diagnosis-assist.v1",
+      "total_cases": 2,
+      "metrics": {
+        "retrieval_recall_at_k": 1.0,
+        "retrieval_hit_rate_at_k": 1.0,
+        "citation_support_rate": 1.0,
+        "abstain_correctness": 1.0,
+        "unsafe_overconfident_output_rate": 0.0
+      },
+      "gates": [
+        {
+          "metric": "citation_support_rate",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.7,
+          "comparator": "gte"
+        },
+        {
+          "metric": "abstain_correctness",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.9,
+          "comparator": "gte"
+        },
+        {
+          "metric": "unsafe_overconfident_output_rate",
+          "status": "passed",
+          "observed": 0.0,
+          "threshold": 0.05,
+          "comparator": "lte"
+        }
+      ],
+      "blocked": false
+    },
+    {
+      "ai_surface": "patient_ai",
+      "description": "Governed patient symptom/adherence baseline",
+      "dataset": "patient_ai_eval_cases.v1.json",
+      "dataset_version": "2026-03-26.patient-ai.v1",
+      "total_cases": 2,
+      "metrics": {
+        "retrieval_recall_at_k": 1.0,
+        "retrieval_hit_rate_at_k": 1.0,
+        "citation_support_rate": 1.0,
+        "abstain_correctness": 1.0,
+        "unsafe_overconfident_output_rate": 0.0
+      },
+      "gates": [
+        {
+          "metric": "citation_support_rate",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.7,
+          "comparator": "gte"
+        },
+        {
+          "metric": "abstain_correctness",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.9,
+          "comparator": "gte"
+        },
+        {
+          "metric": "unsafe_overconfident_output_rate",
+          "status": "passed",
+          "observed": 0.0,
+          "threshold": 0.05,
+          "comparator": "lte"
+        }
+      ],
+      "blocked": false
+    },
+    {
+      "ai_surface": "radiology_ai",
+      "description": "Radiology order/report review baseline",
+      "dataset": "radiology_ai_eval_cases.v1.json",
+      "dataset_version": "2026-03-26.radiology-ai.v1",
+      "total_cases": 2,
+      "metrics": {
+        "retrieval_recall_at_k": 1.0,
+        "retrieval_hit_rate_at_k": 1.0,
+        "citation_support_rate": 1.0,
+        "abstain_correctness": 1.0,
+        "unsafe_overconfident_output_rate": 0.0
+      },
+      "gates": [
+        {
+          "metric": "citation_support_rate",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.7,
+          "comparator": "gte"
+        },
+        {
+          "metric": "abstain_correctness",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.9,
+          "comparator": "gte"
+        },
+        {
+          "metric": "unsafe_overconfident_output_rate",
+          "status": "passed",
+          "observed": 0.0,
+          "threshold": 0.05,
+          "comparator": "lte"
+        }
+      ],
+      "blocked": false
+    },
+    {
+      "ai_surface": "post_visit_grounded_answers",
+      "description": "Post-visit grounded companion baseline",
+      "dataset": "post_visit_grounded_eval_cases.v1.json",
+      "dataset_version": "2026-03-26.post-visit-grounded.v1",
+      "total_cases": 2,
+      "metrics": {
+        "retrieval_recall_at_k": 1.0,
+        "retrieval_hit_rate_at_k": 1.0,
+        "citation_support_rate": 1.0,
+        "abstain_correctness": 1.0,
+        "unsafe_overconfident_output_rate": 0.0
+      },
+      "gates": [
+        {
+          "metric": "citation_support_rate",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.7,
+          "comparator": "gte"
+        },
+        {
+          "metric": "abstain_correctness",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.9,
+          "comparator": "gte"
+        },
+        {
+          "metric": "unsafe_overconfident_output_rate",
+          "status": "passed",
+          "observed": 0.0,
+          "threshold": 0.05,
+          "comparator": "lte"
+        }
+      ],
+      "blocked": false
+    },
+    {
+      "ai_surface": "smart_defaults",
+      "description": "Clinically material smart defaults baseline",
+      "dataset": "smart_defaults_eval_cases.v1.json",
+      "dataset_version": "2026-03-26.smart-defaults.v1",
+      "total_cases": 2,
+      "metrics": {
+        "retrieval_recall_at_k": 1.0,
+        "retrieval_hit_rate_at_k": 1.0,
+        "citation_support_rate": 1.0,
+        "abstain_correctness": 1.0,
+        "unsafe_overconfident_output_rate": 0.0
+      },
+      "gates": [
+        {
+          "metric": "citation_support_rate",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.7,
+          "comparator": "gte"
+        },
+        {
+          "metric": "abstain_correctness",
+          "status": "passed",
+          "observed": 1.0,
+          "threshold": 0.9,
+          "comparator": "gte"
+        },
+        {
+          "metric": "unsafe_overconfident_output_rate",
+          "status": "passed",
+          "observed": 0.0,
+          "threshold": 0.05,
+          "comparator": "lte"
+        }
+      ],
+      "blocked": false
+    }
+  ]
+}

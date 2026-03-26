@@ -1,6 +1,8 @@
 import { ModelMonitoringService } from './model-monitoring.service';
 import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
 import { ModelFairnessReport } from '../entities/model-fairness-report.entity';
+import { AiEvalRun } from '../entities/ai-eval-run.entity';
+import { AiReleaseGateResult } from '../entities/ai-release-gate-result.entity';
 
 describe('ModelMonitoringService', () => {
   beforeEach(() => {
@@ -73,5 +75,82 @@ describe('ModelMonitoringService', () => {
     );
     expect(result.aucRoc).toBe(0.82);
     expect(result.brierScore).toBe(0.14);
+  });
+
+  it('persists offline AI eval runs and release gates with a blocked/ready summary', async () => {
+    const perfRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => value),
+      find: jest.fn(),
+      findOne: jest.fn().mockResolvedValue({
+        modelName: 'readmission',
+        baselineAuc: 0.9,
+        aucRoc: 0.87,
+      }),
+    };
+    const fairnessRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => value),
+      find: jest.fn(),
+      findOne: jest.fn().mockResolvedValue({
+        modelName: 'readmission',
+        maxDisparity: 0.03,
+      }),
+    };
+    const evalRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ id: 'eval-1', ...value })),
+      find: jest.fn(),
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+    const gateRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => value),
+      find: jest.fn(),
+    };
+    const tenantDb = {
+      getRepository: jest.fn((entity) => {
+        if (entity === ModelPerformanceMetric) return perfRepo;
+        if (entity === ModelFairnessReport) return fairnessRepo;
+        if (entity === AiEvalRun) return evalRepo;
+        if (entity === AiReleaseGateResult) return gateRepo;
+        throw new Error(`Unexpected repository ${String(entity)}`);
+      }),
+    } as any;
+    const tenantService = {
+      getTenantDatabase: jest.fn().mockResolvedValue(tenantDb),
+    };
+
+    const service = new ModelMonitoringService(
+      tenantService as any,
+      { initiateRound: jest.fn() } as any,
+      { evaluateModelPerformance: jest.fn() } as any,
+    );
+
+    const result = await service.recordOfflineEvalRun('kids-clinic', {
+      aiSurface: 'patient_ai',
+      modelName: 'readmission',
+      caseSetName: 'moas12.patient_ai.v1',
+      datasetVersion: '2026-03-26.v1',
+      totalCases: 8,
+      reportPath: 'reports/patient-ai.json',
+      metrics: {
+        citationSupportRate: 0.92,
+        abstainCorrectness: 0.97,
+        unsafeOverconfidentOutputRate: 0.01,
+      },
+    });
+
+    expect(result.blocked).toBe(false);
+    expect(result.run.runStatus).toBe('passed');
+    expect(gateRepo.save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ gateName: 'citation_support_rate', gateStatus: 'passed' }),
+        expect.objectContaining({ gateName: 'abstain_correctness', gateStatus: 'passed' }),
+        expect.objectContaining({ gateName: 'unsafe_overconfident_output_rate', gateStatus: 'passed' }),
+        expect.objectContaining({ gateName: 'calibration_drift', gateStatus: 'passed' }),
+        expect.objectContaining({ gateName: 'subgroup_disparities', gateStatus: 'passed' }),
+      ]),
+    );
   });
 });

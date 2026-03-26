@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, TrendingUp, Clock, Bell, X, Droplet, Heart, AlarmClock, CheckCircle2, Download, Video, ClipboardList, Users, Shield, Route, Syringe, Bed, AlertCircle } from 'lucide-react';
-import { useNavigate, Link, useParams } from 'react-router-dom';
+import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, Bell, X, Droplet, Heart, AlarmClock, CheckCircle2, Download, ClipboardList, Users, Shield, Route, Syringe, AlertCircle, Bot } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
 import { useNotifications } from '../hooks/useNotifications';
 import { useTenantSlug } from '../hooks/useTenantSlug';
@@ -77,10 +77,12 @@ const PatientDashboard: React.FC = () => {
     { icon: Shield, label: 'My Consents', path: '/consents', color: 'from-indigo-500 to-indigo-600', bgColor: 'bg-indigo-50', textColor: 'text-indigo-600' },
     { icon: FileText, label: 'Medical Records', path: '/records', color: 'from-green-500 to-green-600', bgColor: 'bg-green-50', textColor: 'text-green-600' },
     { icon: Route, label: 'My Care Pathways', path: '/pathways', color: 'from-cyan-500 to-cyan-600', bgColor: 'bg-cyan-50', textColor: 'text-cyan-600' },
+    { icon: MessageSquare, label: 'Post-Visit Companion', path: '/post-visit', color: 'from-violet-500 to-fuchsia-600', bgColor: 'bg-violet-50', textColor: 'text-violet-600' },
     { icon: Pill, label: 'Prescriptions', path: '/prescriptions', color: 'from-purple-500 to-purple-600', bgColor: 'bg-purple-50', textColor: 'text-purple-600' },
     { icon: Syringe, label: 'Immunizations', path: '/immunizations', color: 'from-emerald-500 to-emerald-600', bgColor: 'bg-emerald-50', textColor: 'text-emerald-600' },
     { icon: AlarmClock, label: 'Medication Reminders', path: '/medication-reminders', color: 'from-orange-500 to-orange-600', bgColor: 'bg-orange-50', textColor: 'text-orange-600' },
     { icon: CheckCircle2, label: 'Adherence Tracking', path: '/medication-adherence', color: 'from-teal-500 to-teal-600', bgColor: 'bg-teal-50', textColor: 'text-teal-600' },
+    { icon: Bot, label: 'AI Follow-Ups', path: '/ai-followups', color: 'from-sky-500 to-indigo-600', bgColor: 'bg-sky-50', textColor: 'text-sky-600' },
     { icon: CreditCard, label: 'Bills & Payments', path: '/bills', color: 'from-yellow-500 to-yellow-600', bgColor: 'bg-yellow-50', textColor: 'text-yellow-600' },
     { icon: MessageSquare, label: 'Messages', path: '/messages', color: 'from-indigo-500 to-indigo-600', bgColor: 'bg-indigo-50', textColor: 'text-indigo-600' },
     { icon: Activity, label: 'Vitals Monitoring', path: '/vitals', color: 'from-red-500 to-red-600', bgColor: 'bg-red-50', textColor: 'text-red-600' },
@@ -268,6 +270,15 @@ const PatientDashboard: React.FC = () => {
           </div>
 
           <Link
+            to={`/${tenantSlug}/ai-followups`}
+            className="bg-gradient-to-br from-sky-500 to-indigo-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer"
+          >
+            <Bot className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-sky-100 text-xs mb-1">AI Follow-Ups</p>
+            <p className="text-2xl font-bold">{dashboardData?.aiFollowups?.activeCount || 0}</p>
+          </Link>
+
+          <Link
             to={`/${tenantSlug}/prescriptions`}
             className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer"
           >
@@ -336,6 +347,38 @@ const PatientDashboard: React.FC = () => {
               >
                 View All Appointments →
               </Link>
+            </div>
+          </div>
+        )}
+
+        {(dashboardData?.aiFollowups?.activeCount || 0) > 0 && (
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-sky-600 to-indigo-600 rounded-2xl shadow-lg p-6 text-white">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+                    <Bot className="w-5 h-5" />
+                    AI follow-up actions waiting
+                  </h3>
+                  <p className="text-sky-100">
+                    {dashboardData.aiFollowups.activeCount} active follow-up
+                    {dashboardData.aiFollowups.activeCount === 1 ? '' : 's'}
+                    {dashboardData.aiFollowups.urgentCount > 0 ? `, including ${dashboardData.aiFollowups.urgentCount} urgent` : ''}
+                    .
+                  </p>
+                  {dashboardData.aiFollowups.nextDueAt && (
+                    <p className="text-sky-200 text-sm mt-2">
+                      Next due: {format(new Date(dashboardData.aiFollowups.nextDueAt), 'MMM d, yyyy h:mm a')}
+                    </p>
+                  )}
+                </div>
+                <Link
+                  to={`/${tenantSlug}/ai-followups`}
+                  className="inline-flex items-center justify-center bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-semibold"
+                >
+                  Open AI Follow-Ups
+                </Link>
+              </div>
             </div>
           </div>
         )}
@@ -428,7 +471,7 @@ const PatientDashboard: React.FC = () => {
         {/* Quick Actions */}
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-xl p-8 text-white">
           <h3 className="text-2xl font-bold mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <Link
               to={`/${tenantSlug}/appointments/request`}
               className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
@@ -444,6 +487,22 @@ const PatientDashboard: React.FC = () => {
               <CreditCard className="w-6 h-6 mb-2" />
               <p className="font-semibold">Pay Bill</p>
               <p className="text-sm text-white/80">View and pay bills</p>
+            </Link>
+            <Link
+              to={`/${tenantSlug}/ai-followups`}
+              className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
+            >
+              <Bot className="w-6 h-6 mb-2" />
+              <p className="font-semibold">Review AI Tasks</p>
+              <p className="text-sm text-white/80">Check your next guided steps</p>
+            </Link>
+            <Link
+              to={`/${tenantSlug}/post-visit`}
+              className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
+            >
+              <MessageSquare className="w-6 h-6 mb-2" />
+              <p className="font-semibold">Open Post-Visit Companion</p>
+              <p className="text-sm text-white/80">Review summaries and ask follow-up questions</p>
             </Link>
             <Link
               to={`/${tenantSlug}/messages`}

@@ -60,6 +60,7 @@ export default function ImagingOrderModal({
   const [loading, setLoading] = useState(false);
   const [orderConcept, setOrderConcept] = useState<SnomedConcept | null>(null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+  const [aiReview, setAiReview] = useState<any | null>(null);
   const [selectedPatientContext, setSelectedPatientContext] = useState<any>(null);
   const [loadingPatientContext, setLoadingPatientContext] = useState(false);
   const { showSuccess, showError } = useNotification();
@@ -276,6 +277,7 @@ export default function ImagingOrderModal({
         snomedDefinitionStatus: orderConcept.definitionStatus,
       });
       const insights = response.data?.cdssInsights ?? response.data?.cdss_insights ?? null;
+      const review = response.data?.aiReview ?? null;
 
       const costMessage =
         selectedStudyType.cost != null && Number(selectedStudyType.cost) > 0
@@ -286,7 +288,8 @@ export default function ImagingOrderModal({
       showSuccess(`${selectedStudyType.study_name} order placed.${costMessage}`, '');
       onSuccess?.();
       setCdssInsights(insights);
-      if (!insights) {
+      setAiReview(review);
+      if (!insights && !review) {
         onClose();
       }
     } catch (error) {
@@ -387,6 +390,35 @@ export default function ImagingOrderModal({
                     ))}
                   </ul>
                 </div>
+              )}
+            </div>
+          )}
+
+          {aiReview && (
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-sky-600 rounded-xl">
+                  <Brain className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Radiology Order Review</p>
+                  <p className="text-xs text-slate-500">
+                    Persisted appropriateness and protocol guidance for this imaging order.
+                  </p>
+                </div>
+              </div>
+              <div className="text-xs text-slate-700">
+                <span className="font-semibold uppercase tracking-wide">
+                  {String(aiReview.appropriatenessStatus || 'needs_context').replace(/_/g, ' ')}
+                </span>
+              </div>
+              <p className="text-sm text-slate-700">{aiReview.rationale}</p>
+              {Array.isArray(aiReview.blockingIssues) && aiReview.blockingIssues.length > 0 && (
+                <ul className="text-xs text-slate-700 list-disc list-inside space-y-1">
+                  {aiReview.blockingIssues.slice(0, 3).map((issue: any, idx: number) => (
+                    <li key={`img-review-issue-${idx}`}>{issue?.message || issue?.code}</li>
+                  ))}
+                </ul>
               )}
             </div>
           )}

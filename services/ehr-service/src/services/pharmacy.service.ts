@@ -921,17 +921,7 @@ export class PharmacyService {
   async dispensePrescription(
     tenantDb: DataSource,
     prescriptionId: string,
-    dto: { 
-      items: Array<{ inventoryId: string; quantityDispensed: number }>; 
-      paymentMethod?: string; 
-      notes?: string;
-      discountAmount?: number;
-      amountPaid?: number;
-      medicalAidId?: string;
-      medicalAidName?: string;
-      policyNumber?: string;
-      coveragePercentage?: number;
-    },
+    dto: CreateDispensingDto,
     userId: string,
   ) {
     this.ensureTenantDb(tenantDb);
@@ -950,6 +940,33 @@ export class PharmacyService {
       }
       if (prescription.dispensed_at) {
         throw new BadRequestException('Prescription already dispensed');
+      }
+
+      const openSubstitutionRecommendations = await queryRunner.query(
+        `SELECT id, source_medication_name, generic_alternative, recommendation_status
+         FROM pharmacy_substitution_recommendations
+         WHERE prescription_id = $1
+           AND recommendation_status = 'recommended'
+         ORDER BY created_at DESC`,
+        [prescriptionId],
+      );
+      const openStewardshipReviews = await queryRunner.query(
+        `SELECT id, antibiotic_name, stewardship_recommendation, review_required
+         FROM antimicrobial_stewardship
+         WHERE prescription_id = $1
+           AND review_required = true
+         ORDER BY created_at DESC`,
+        [prescriptionId],
+      );
+      const requiresAiAcknowledgement =
+        Boolean(dto.medicationReviewId) ||
+        openSubstitutionRecommendations.length > 0 ||
+        openStewardshipReviews.length > 0;
+
+      if (requiresAiAcknowledgement && dto.aiReviewAcknowledged !== true) {
+        throw new BadRequestException(
+          'Pharmacy intelligence review must be acknowledged before dispensing this prescription',
+        );
       }
 
       // Generate dispensing number
@@ -986,11 +1003,33 @@ export class PharmacyService {
         });
       }
 
+      const aiReviewSummary = {
+        ...(dto.aiReviewSummary ?? {}),
+        medicationReviewId: dto.medicationReviewId ?? null,
+        selectedSubstitutionRecommendationIds: dto.selectedSubstitutionRecommendationIds ?? [],
+        stewardshipReviewIds: dto.stewardshipReviewIds ?? [],
+        substitutionRecommendations: openSubstitutionRecommendations.map((row: any) => ({
+          id: row.id,
+          sourceMedicationName: row.source_medication_name,
+          genericAlternative: row.generic_alternative,
+        })),
+        stewardshipReviews: openStewardshipReviews.map((row: any) => ({
+          id: row.id,
+          antibioticName: row.antibiotic_name,
+          recommendation: row.stewardship_recommendation,
+        })),
+        acknowledged: Boolean(dto.aiReviewAcknowledged),
+        acknowledgedBy: userId,
+        acknowledgedAt: dto.aiReviewAcknowledged ? new Date().toISOString() : null,
+      };
+
       const [dispensing] = await queryRunner.query(
         `INSERT INTO pharmacy_dispensings (
           prescription_id, patient_id, dispensing_number, dispensing_date, 
-          dispensed_by, status, payment_status, payment_method, total_amount, notes, created_by, created_at, updated_at
-        ) VALUES ($1, $2, $3, CURRENT_DATE, $4, 'dispensed', 'pending', $5, $6, $7, $8, NOW(), NOW())
+          dispensed_by, status, payment_status, payment_method, total_amount,
+          ai_review_acknowledged_at, ai_review_acknowledged_by, ai_review_summary,
+          notes, created_by, created_at, updated_at
+        ) VALUES ($1, $2, $3, CURRENT_DATE, $4, 'dispensed', 'pending', $5, $6, $7, $8, $9::jsonb, $10, $11, NOW(), NOW())
         RETURNING *`,
         [
           prescriptionId,
@@ -999,6 +1038,9 @@ export class PharmacyService {
           userId,
           dto.paymentMethod ?? null,
           totalAmount,
+          dto.aiReviewAcknowledged ? new Date().toISOString() : null,
+          dto.aiReviewAcknowledged ? userId : null,
+          JSON.stringify(aiReviewSummary),
           dto.notes ?? null,
           userId,
         ],

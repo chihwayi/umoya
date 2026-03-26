@@ -41,4 +41,37 @@ export class PatientAiController {
   ) {
     return this.svc.getChatHistory(subdomain, patientId, sessionId);
   }
+
+  @Get('sessions/patient/:patientId')
+  getPatientAiSessions(
+    @Param('patientId') patientId: string,
+    @Query('subdomain') subdomain: string,
+  ) {
+    return this.svc.getPatientAiSessions(subdomain, patientId);
+  }
+
+  @Get('escalations/patient/:patientId')
+  getPatientAiEscalations(
+    @Param('patientId') patientId: string,
+    @Query('subdomain') subdomain: string,
+  ) {
+    return this.svc.getPatientAiEscalations(subdomain, patientId);
+  }
+
+  @Get('followups/patient/:patientId')
+  getPatientFollowups(
+    @Param('patientId') patientId: string,
+    @Query('subdomain') subdomain: string,
+  ) {
+    return this.svc.getPatientFollowupOrchestrations(subdomain, patientId);
+  }
+
+  @Patch('followups/:id')
+  updateFollowupOrchestration(
+    @Param('id') id: string,
+    @Query('subdomain') subdomain: string,
+    @Body() body: { status?: string; reminderState?: string },
+  ) {
+    return this.svc.updateFollowupOrchestration(subdomain, id, body);
+  }
 }

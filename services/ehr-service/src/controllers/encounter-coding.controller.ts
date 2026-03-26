@@ -48,6 +48,7 @@ export class EncounterCodingController {
       null,
       patientId,
       userId,
+      req.tenantId,
     );
   }
 
@@ -72,6 +73,7 @@ export class EncounterCodingController {
       appointmentId,
       patientId,
       userId,
+      req.tenantId,
     );
   }
 

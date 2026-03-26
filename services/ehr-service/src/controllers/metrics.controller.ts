@@ -33,6 +33,15 @@ export class MetricsController {
     return this.metricsService.getWorkflowHealthSnapshot(req.tenantDb);
   }
 
+  @Get('ai-ops')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get AI operations snapshot for release-gate and observability baselines' })
+  @ApiResponse({ status: 200, description: 'AI operations snapshot returned' })
+  getAiOpsSnapshot(@Request() req: RequestWithTenant) {
+    return this.metricsService.getAiOpsSnapshot(req.tenantDb);
+  }
+
   @Get('health-report')
   @ApiOperation({ summary: 'Minimal platform health/SLA report for ops or tenant reporting' })
   @ApiResponse({ status: 200, description: 'Health report with status and metrics hint' })

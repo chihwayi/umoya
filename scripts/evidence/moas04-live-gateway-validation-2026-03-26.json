@@ -1,0 +1,72 @@
+{
+  "ok": true,
+  "generatedAt": "2026-03-26T20:52:13.837Z",
+  "tenants": [
+    {
+      "tenant": "kids-clinic",
+      "database": "clinic_kids-clinic_db",
+      "providers": [
+        {
+          "providerType": "ecocash",
+          "initiationStatus": "PENDING",
+          "refreshStatus": "COMPLETED",
+          "verificationStatus": "VERIFIED",
+          "verified": true,
+          "reference": "REF_ECO_1774558333596_1BFBF8D6"
+        },
+        {
+          "providerType": "onemoney",
+          "initiationStatus": "PENDING",
+          "refreshStatus": "COMPLETED",
+          "verificationStatus": "VERIFIED",
+          "verified": true,
+          "reference": "REF_ONE_1774558333631_D84623D9"
+        }
+      ]
+    },
+    {
+      "tenant": "testghost",
+      "database": "clinic_testghost_db",
+      "providers": [
+        {
+          "providerType": "ecocash",
+          "initiationStatus": "PENDING",
+          "refreshStatus": "COMPLETED",
+          "verificationStatus": "VERIFIED",
+          "verified": true,
+          "reference": "REF_ECO_1774558333721_8CE7A048"
+        },
+        {
+          "providerType": "onemoney",
+          "initiationStatus": "PENDING",
+          "refreshStatus": "COMPLETED",
+          "verificationStatus": "VERIFIED",
+          "verified": true,
+          "reference": "REF_ONE_1774558333738_9E063BD5"
+        }
+      ]
+    },
+    {
+      "tenant": "testghost2",
+      "database": "clinic_testghost2_db",
+      "providers": [
+        {
+          "providerType": "ecocash",
+          "initiationStatus": "PENDING",
+          "refreshStatus": "COMPLETED",
+          "verificationStatus": "VERIFIED",
+          "verified": true,
+          "reference": "REF_ECO_1774558333795_151A7C24"
+        },
+        {
+          "providerType": "onemoney",
+          "initiationStatus": "PENDING",
+          "refreshStatus": "COMPLETED",
+          "verificationStatus": "VERIFIED",
+          "verified": true,
+          "reference": "REF_ONE_1774558333813_270DCB4C"
+        }
+      ]
+    }
+  ]
+}

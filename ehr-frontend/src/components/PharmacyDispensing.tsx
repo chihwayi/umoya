@@ -39,6 +39,34 @@ interface PendingPrescription {
   };
 }
 
+interface DispensePlan {
+  review?: {
+    id: string;
+    discrepancySummary?: Array<{ type?: string; medicationName?: string; message?: string }>;
+    adherenceConcerns?: Array<{ medicationName?: string; adherencePercentage?: number }>;
+    recommendedActions?: Array<{ actionType?: string; message?: string; priority?: string }>;
+  };
+  substitutionRecommendations?: Array<{
+    id: string;
+    sourceMedicationName?: string;
+    genericAlternative?: string;
+    rationale?: string;
+    costImpact?: { savingAmount?: number };
+  }>;
+  highRiskReview?: {
+    stewardshipReviews?: Array<{
+      id: string;
+      antibioticName?: string;
+      stewardshipRecommendation?: string;
+      reviewRequired?: boolean;
+    }>;
+  };
+  reviewChecklist?: {
+    requiresAcknowledgement?: boolean;
+    summary?: string;
+  };
+}
+
 const PharmacyDispensing: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { showSuccess } = useNotification();
@@ -50,6 +78,9 @@ const PharmacyDispensing: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [notes, setNotes] = useState<string>('');
   const [dispensing, setDispensing] = useState(false);
+  const [dispensePlan, setDispensePlan] = useState<DispensePlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,13 +103,22 @@ const PharmacyDispensing: React.FC = () => {
   const handleSelectPrescription = async (prescription: PendingPrescription) => {
     setSelectedPrescription(prescription);
     setError(null);
+    setDispensePlan(null);
+    setReviewAcknowledged(false);
     
-    // Load stock availability
     try {
-      const response = await pharmacyApi.checkPrescriptionStock(prescription.id, token!, tenantSlug!);
-      const stockInfo = response.data;
+      setPlanLoading(true);
+      const [stockResponse, planResponse] = await Promise.all([
+        pharmacyApi.checkPrescriptionStock(prescription.id, token!, tenantSlug!),
+        pharmacyApi.prepareDispensePlan({ prescriptionId: prescription.id }, token!, tenantSlug!),
+      ]);
+      const stockInfo = stockResponse.data;
+      setSelectedPrescription({
+        ...prescription,
+        stockAvailability: stockInfo,
+      });
+      setDispensePlan(planResponse.data || null);
       
-      // Auto-select matching items with sufficient stock
       const availableItems = stockInfo.matchingItems.filter((item: any) => item.hasSufficientStock);
       if (availableItems.length > 0) {
         const selectedItem = availableItems[0]; // Use first available item
@@ -93,7 +133,9 @@ const PharmacyDispensing: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Failed to check stock:', err);
-      setError(err.response?.data?.message || 'Failed to check stock availability');
+      setError(err.response?.data?.message || 'Failed to prepare dispensing plan');
+    } finally {
+      setPlanLoading(false);
     }
   };
 
@@ -111,6 +153,16 @@ const PharmacyDispensing: React.FC = () => {
         {
           items: dispensingItems,
           paymentMethod,
+          medicationReviewId: dispensePlan?.review?.id,
+          selectedSubstitutionRecommendationIds: (dispensePlan?.substitutionRecommendations || []).map((item) => item.id),
+          stewardshipReviewIds: (dispensePlan?.highRiskReview?.stewardshipReviews || []).map((item) => item.id),
+          aiReviewAcknowledged: reviewAcknowledged,
+          aiReviewSummary: {
+            checklist: dispensePlan?.reviewChecklist ?? null,
+            discrepancyCount: dispensePlan?.review?.discrepancySummary?.length ?? 0,
+            substitutionCount: dispensePlan?.substitutionRecommendations?.length ?? 0,
+            stewardshipCount: dispensePlan?.highRiskReview?.stewardshipReviews?.length ?? 0,
+          },
           notes: notes || undefined,
         },
         token!,
@@ -121,6 +173,8 @@ const PharmacyDispensing: React.FC = () => {
       await loadPendingPrescriptions();
       setSelectedPrescription(null);
       setDispensingItems([]);
+      setDispensePlan(null);
+      setReviewAcknowledged(false);
       setPaymentMethod('cash');
       setNotes('');
       showSuccess('Dispensing complete', 'Prescription dispensed successfully.');
@@ -281,6 +335,90 @@ const PharmacyDispensing: React.FC = () => {
                 </div>
               )}
 
+              {planLoading && (
+                <div className="p-4 bg-slate-50 rounded-lg text-sm text-slate-600">
+                  Preparing governed dispense plan...
+                </div>
+              )}
+
+              {dispensePlan && (
+                <div className="space-y-3">
+                  <div className={`p-4 rounded-lg border ${
+                    dispensePlan.reviewChecklist?.requiresAcknowledgement
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-emerald-50 border-emerald-200'
+                  }`}>
+                    <h4 className="font-medium text-gray-800 mb-1">AI Dispense Review</h4>
+                    <p className="text-sm text-gray-700">
+                      {dispensePlan.reviewChecklist?.summary || 'Governed dispense-plan review prepared.'}
+                    </p>
+                  </div>
+
+                  {dispensePlan.review?.recommendedActions?.length ? (
+                    <div className="p-4 bg-white border rounded-lg">
+                      <h4 className="font-medium text-gray-800 mb-2">Recommended Actions</h4>
+                      <ul className="space-y-2 text-sm text-gray-700">
+                        {dispensePlan.review.recommendedActions.slice(0, 4).map((action, index) => (
+                          <li key={`${action.actionType || 'action'}-${index}`} className="flex items-start gap-2">
+                            <span className="mt-1 h-2 w-2 rounded-full bg-blue-500" />
+                            <span>{action.message || action.actionType || 'Review medication issue'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {dispensePlan.substitutionRecommendations?.length ? (
+                    <div className="p-4 bg-white border rounded-lg">
+                      <h4 className="font-medium text-gray-800 mb-2">Substitution Review</h4>
+                      <div className="space-y-2">
+                        {dispensePlan.substitutionRecommendations.slice(0, 3).map((recommendation) => (
+                          <div key={recommendation.id} className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-gray-700">
+                            <div className="font-medium text-gray-800">
+                              {recommendation.sourceMedicationName} → {recommendation.genericAlternative || 'No substitute'}
+                            </div>
+                            {recommendation.rationale && <div>{recommendation.rationale}</div>}
+                            {recommendation.costImpact?.savingAmount ? (
+                              <div className="text-emerald-700">
+                                Estimated saving: ${Number(recommendation.costImpact.savingAmount).toFixed(2)}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {dispensePlan.highRiskReview?.stewardshipReviews?.length ? (
+                    <div className="p-4 bg-white border rounded-lg">
+                      <h4 className="font-medium text-gray-800 mb-2">Stewardship Review</h4>
+                      <div className="space-y-2">
+                        {dispensePlan.highRiskReview.stewardshipReviews.slice(0, 2).map((review) => (
+                          <div key={review.id} className="rounded border border-rose-200 bg-rose-50 p-3 text-sm text-gray-700">
+                            <div className="font-medium text-gray-800">{review.antibioticName || 'Antimicrobial review'}</div>
+                            <div>{review.stewardshipRecommendation || 'Stewardship review generated.'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {dispensePlan.reviewChecklist?.requiresAcknowledgement ? (
+                    <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <input
+                        type="checkbox"
+                        checked={reviewAcknowledged}
+                        onChange={(e) => setReviewAcknowledged(e.target.checked)}
+                        className="mt-1 rounded"
+                      />
+                      <span className="text-sm text-gray-700">
+                        I reviewed the reconciliation, substitution, and stewardship guidance for this dispensing plan.
+                      </span>
+                    </label>
+                  ) : null}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Payment Method
@@ -312,7 +450,12 @@ const PharmacyDispensing: React.FC = () => {
 
               <button
                 onClick={handleDispense}
-                disabled={dispensing || dispensingItems.length === 0}
+                disabled={
+                  dispensing ||
+                  planLoading ||
+                  dispensingItems.length === 0 ||
+                  Boolean(dispensePlan?.reviewChecklist?.requiresAcknowledgement && !reviewAcknowledged)
+                }
                 className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
                 {dispensing ? 'Dispensing...' : 'Dispense Prescription'}

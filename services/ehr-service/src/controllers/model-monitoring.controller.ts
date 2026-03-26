@@ -29,4 +29,47 @@ export class ModelMonitoringController {
   ) {
     return this.svc.getFairnessReports(subdomain, modelName);
   }
+
+  @Post('offline-eval')
+  recordOfflineEval(
+    @Body('subdomain') subdomain: string,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.svc.recordOfflineEvalRun(subdomain, {
+      aiSurface: body.aiSurface,
+      modelName: body.modelName,
+      caseSetName: body.caseSetName,
+      datasetVersion: body.datasetVersion,
+      totalCases: body.totalCases,
+      reportPath: body.reportPath,
+      executedBy: body.executedBy,
+      summary: body.summary,
+      metrics: body.metrics || {},
+      gateInputs: body.gateInputs || {},
+    });
+  }
+
+  @Get('offline-eval/:aiSurface')
+  getOfflineEvalRuns(
+    @Param('aiSurface') aiSurface: string,
+    @Query('subdomain') subdomain: string,
+  ) {
+    return this.svc.getOfflineEvalRuns(subdomain, aiSurface);
+  }
+
+  @Get('release-gates/:aiSurface')
+  getReleaseGates(
+    @Param('aiSurface') aiSurface: string,
+    @Query('subdomain') subdomain: string,
+  ) {
+    return this.svc.getReleaseGateResults(subdomain, aiSurface);
+  }
+
+  @Get('release-readiness/:aiSurface')
+  getReleaseReadiness(
+    @Param('aiSurface') aiSurface: string,
+    @Query('subdomain') subdomain: string,
+  ) {
+    return this.svc.getReleaseReadiness(subdomain, aiSurface);
+  }
 }

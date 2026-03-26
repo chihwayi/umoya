@@ -1144,6 +1144,18 @@ export class PatientPortalService {
     );
     const latestVitals = latestVitalsResult[0] || null;
 
+    const patientAiFollowupSummaryResult = await connection.query(
+      `SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status IN ('open', 'in_progress'))::int AS active_count,
+          COUNT(*) FILTER (WHERE risk_level IN ('urgent', 'emergency') AND status IN ('open', 'in_progress'))::int AS urgent_count,
+          MIN(due_at) FILTER (WHERE status IN ('open', 'in_progress')) AS next_due_at
+        FROM patient_followup_orchestrations
+        WHERE patient_id = $1`,
+      [patientId],
+    );
+    const patientAiFollowupSummary = patientAiFollowupSummaryResult?.[0] || null;
+
     return {
       summary: {
         appointments: parseInt(appointmentsCount || '0', 10),
@@ -1151,6 +1163,7 @@ export class PatientPortalService {
         medicalRecords: parseInt(recordsCount || '0', 10),
         pendingBills: parseInt(billsCount || '0', 10),
         vitalsRecords: parseInt(vitalsCount || '0', 10),
+        aiFollowups: Number(patientAiFollowupSummary?.active_count || 0),
       },
       upcomingAppointment: upcomingAppointment ? {
         id: upcomingAppointment.id,
@@ -1167,6 +1180,159 @@ export class PatientPortalService {
         oxygenSaturation: latestVitals.oxygen_saturation || latestVitals.oxygenSaturation,
         recordedAt: latestVitals.recorded_at || latestVitals.recordedAt,
       } : null,
+      aiFollowups: {
+        total: Number(patientAiFollowupSummary?.total || 0),
+        activeCount: Number(patientAiFollowupSummary?.active_count || 0),
+        urgentCount: Number(patientAiFollowupSummary?.urgent_count || 0),
+        nextDueAt: patientAiFollowupSummary?.next_due_at || null,
+      },
+    };
+  }
+
+  async getPatientAiFollowups(patientId: string, tenantId: string): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const rows = await connection.query(
+      `SELECT
+          f.id,
+          f.patient_ai_session_id as "patientAiSessionId",
+          f.trigger_type as "triggerType",
+          f.risk_level as "riskLevel",
+          f.status,
+          f.reminder_state as "reminderState",
+          f.next_action as "nextAction",
+          f.unresolved_question as "unresolvedQuestion",
+          f.nonadherence_flag as "nonadherenceFlag",
+          f.missed_followup_flag as "missedFollowupFlag",
+          f.route_back_target as "routeBackTarget",
+          f.due_at as "dueAt",
+          f.last_touched_at as "lastTouchedAt",
+          f.completed_at as "completedAt",
+          f.payload,
+          f.created_at as "createdAt",
+          s.session_type as "sessionType",
+          s.guidance_summary as "guidanceSummary",
+          s.urgency,
+          s.latest_message as "latestMessage",
+          s.latest_reply as "latestReply",
+          s.requires_clinician_follow_up as "requiresClinicianFollowUp"
+        FROM patient_followup_orchestrations f
+        LEFT JOIN patient_ai_sessions s ON s.id = f.patient_ai_session_id
+        WHERE f.patient_id = $1
+        ORDER BY
+          CASE WHEN f.status IN ('open', 'in_progress') THEN 0 ELSE 1 END,
+          CASE WHEN f.risk_level = 'emergency' THEN 0 WHEN f.risk_level = 'urgent' THEN 1 ELSE 2 END,
+          COALESCE(f.due_at, f.created_at) ASC`,
+      [patientId],
+    );
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      patientAiSessionId: row.patientAiSessionId,
+      triggerType: row.triggerType,
+      riskLevel: row.riskLevel,
+      status: row.status,
+      reminderState: row.reminderState,
+      nextAction: row.nextAction,
+      unresolvedQuestion: row.unresolvedQuestion,
+      nonadherenceFlag: row.nonadherenceFlag,
+      missedFollowupFlag: row.missedFollowupFlag,
+      routeBackTarget: row.routeBackTarget,
+      dueAt: row.dueAt,
+      lastTouchedAt: row.lastTouchedAt,
+      completedAt: row.completedAt,
+      payload: row.payload || {},
+      createdAt: row.createdAt,
+      session: {
+        type: row.sessionType || null,
+        guidanceSummary: row.guidanceSummary || null,
+        urgency: row.urgency || null,
+        latestMessage: row.latestMessage || null,
+        latestReply: row.latestReply || null,
+        requiresClinicianFollowUp: row.requiresClinicianFollowUp === true,
+      },
+    }));
+  }
+
+  async updatePatientAiFollowup(
+    patientId: string,
+    tenantId: string,
+    followupId: string,
+    updates: { status?: 'open' | 'in_progress' | 'completed' | 'dismissed'; reminderState?: 'pending' | 'sent' | 'acknowledged' },
+  ): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const [existing] = await connection.query(
+      `SELECT * FROM patient_followup_orchestrations WHERE id = $1 AND patient_id = $2 LIMIT 1`,
+      [followupId, patientId],
+    );
+
+    if (!existing) {
+      throw new NotFoundException('AI follow-up not found');
+    }
+
+    const nextStatus = updates.status || existing.status;
+    const nextReminderState = updates.reminderState || existing.reminder_state;
+
+    const [updated] = await connection.query(
+      `UPDATE patient_followup_orchestrations
+       SET status = $3,
+           reminder_state = $4,
+           last_touched_at = NOW(),
+           completed_at = CASE
+             WHEN $3 = 'completed' AND completed_at IS NULL THEN NOW()
+             WHEN $3 != 'completed' THEN NULL
+             ELSE completed_at
+           END,
+           payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object(
+             'patientPortalLastActionAt', NOW(),
+             'patientPortalLastActionStatus', $3,
+             'patientPortalLastReminderState', $4
+           )
+       WHERE id = $1 AND patient_id = $2
+       RETURNING
+         id,
+         patient_ai_session_id as "patientAiSessionId",
+         trigger_type as "triggerType",
+         risk_level as "riskLevel",
+         status,
+         reminder_state as "reminderState",
+         next_action as "nextAction",
+         unresolved_question as "unresolvedQuestion",
+         nonadherence_flag as "nonadherenceFlag",
+         missed_followup_flag as "missedFollowupFlag",
+         route_back_target as "routeBackTarget",
+         due_at as "dueAt",
+         last_touched_at as "lastTouchedAt",
+         completed_at as "completedAt",
+         payload,
+         created_at as "createdAt"`,
+      [followupId, patientId, nextStatus, nextReminderState],
+    );
+
+    return {
+      id: updated.id,
+      patientAiSessionId: updated.patientAiSessionId,
+      triggerType: updated.triggerType,
+      riskLevel: updated.riskLevel,
+      status: updated.status,
+      reminderState: updated.reminderState,
+      nextAction: updated.nextAction,
+      unresolvedQuestion: updated.unresolvedQuestion,
+      nonadherenceFlag: updated.nonadherenceFlag,
+      missedFollowupFlag: updated.missedFollowupFlag,
+      routeBackTarget: updated.routeBackTarget,
+      dueAt: updated.dueAt,
+      lastTouchedAt: updated.lastTouchedAt,
+      completedAt: updated.completedAt,
+      payload: updated.payload || {},
+      createdAt: updated.createdAt,
     };
   }
 

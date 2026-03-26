@@ -54,4 +54,24 @@ describe('MetricsController', () => {
     expect(result).toEqual(workflowSnapshot);
     expect(metricsService.getWorkflowHealthSnapshot).toHaveBeenCalledWith(tenantDb);
   });
+
+  it('returns AI ops snapshot for the current tenant', async () => {
+    const aiOpsSnapshot = {
+      generatedAt: '2026-03-26T11:00:00.000Z',
+      overrideRates: { displayedTotal: 12, overridesTotal: 3, overrideRate: 0.25 },
+    };
+    const tenantDb = { query: jest.fn() } as any;
+    const metricsService = {
+      getMetrics: jest.fn(),
+      getNurseCopilotKpis: jest.fn(),
+      getWorkflowHealthSnapshot: jest.fn(),
+      getAiOpsSnapshot: jest.fn().mockResolvedValue(aiOpsSnapshot),
+    } as any;
+
+    const controller = new MetricsController(metricsService);
+    const result = await controller.getAiOpsSnapshot({ tenantDb } as any);
+
+    expect(result).toEqual(aiOpsSnapshot);
+    expect(metricsService.getAiOpsSnapshot).toHaveBeenCalledWith(tenantDb);
+  });
 });

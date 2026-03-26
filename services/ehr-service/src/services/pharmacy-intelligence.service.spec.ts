@@ -406,4 +406,133 @@ describe('PharmacyIntelligenceService', () => {
       }),
     );
   });
+
+  it('prepares a governed dispense plan with reconciliation, substitution, and stewardship guidance', async () => {
+    const reviewRows: any[] = [];
+    const substitutionRows: any[] = [];
+    const stewardshipRows: any[] = [];
+    const reviewRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => {
+        const row = { id: `review-${reviewRows.length + 1}`, ...value };
+        reviewRows.push(row);
+        return row;
+      }),
+      findOneBy: jest.fn(async ({ id }) => reviewRows.find((row) => row.id === id) ?? null),
+    };
+    const substitutionRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => {
+        if (Array.isArray(value)) {
+          const rows = value.map((item: any, index: number) => ({ id: `sub-${substitutionRows.length + index + 1}`, ...item }));
+          substitutionRows.push(...rows);
+          return rows;
+        }
+        const row = { id: `sub-${substitutionRows.length + 1}`, ...value };
+        substitutionRows.push(row);
+        return row;
+      }),
+      find: jest.fn(async ({ where }: any) => substitutionRows.filter((row) => row.reviewId === where.reviewId)),
+    };
+    const stewardshipRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => {
+        const row = { id: `stew-${stewardshipRows.length + 1}`, ...value };
+        stewardshipRows.push(row);
+        return row;
+      }),
+      findOneBy: jest.fn(async ({ prescriptionId }) =>
+        stewardshipRows.find((row) => row.prescriptionId === prescriptionId) ?? null,
+      ),
+    };
+
+    const tenantDb = {
+      query: jest.fn(async () => ([
+        {
+          id: 'rx-7',
+          patient_id: 'patient-7',
+          doctor_id: 'doctor-1',
+          medication_name: 'Ceftriaxone',
+          generic_name: 'ceftriaxone',
+          dosage: '1g',
+          frequency: 'daily',
+          route: 'iv',
+          indication: 'sepsis',
+          quantity: 7,
+          duration: '7 days',
+          prescribed_date: '2026-03-26T10:00:00.000Z',
+          instructions: 'Administer in ward',
+          status: 'active',
+        },
+      ])),
+      getRepository: jest.fn((entity: any) => {
+        if (entity === MedicationReconciliationAiReview) {
+          return reviewRepo;
+        }
+        if (entity === PharmacySubstitutionRecommendation) {
+          return substitutionRepo;
+        }
+        if (entity === AntimicrobialStewardship) {
+          return stewardshipRepo;
+        }
+        throw new Error(`Unexpected repository request: ${entity?.name}`);
+      }),
+    } as any;
+
+    const service = new PharmacyIntelligenceService(
+      { getMedications: jest.fn().mockResolvedValue([]) } as any,
+      {
+        assessMedicationSafety: jest.fn().mockResolvedValue({
+          pregnancy: { isPregnant: false, riskCategory: null, alerts: [] },
+          renal: { egfr: 90, alerts: [] },
+          hepatic: { suspectedImpairment: false, rationale: null, alerts: [] },
+        }),
+      } as any,
+      {
+        optimizeOnPrescription: jest.fn().mockResolvedValue({
+          genericAlternative: 'ceftriaxone generic',
+          brandedCost: 25,
+          genericCost: 12,
+          savingAmount: 13,
+          aiRecommendation: 'generic',
+          reason: 'Equivalent generic available',
+          evidenceEquivalence: 'A',
+        }),
+      } as any,
+      {
+        generate: jest.fn().mockResolvedValue({ id: 'edu-7' }),
+      } as any,
+      {
+        checkHighRiskMedications: jest.fn().mockResolvedValue({
+          overallRisk: 'high',
+          alerts: [{ medication: 'Ceftriaxone', severity: 'high', message: 'Review broad-spectrum use' }],
+        }),
+      } as any,
+    );
+
+    const result = await service.prepareDispensePlan('kids-clinic', tenantDb, 'rx-7', 'pharm-1');
+
+    expect(result.review.id).toBeDefined();
+    expect(result.substitutionRecommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          prescriptionId: 'rx-7',
+          genericAlternative: 'ceftriaxone generic',
+        }),
+      ]),
+    );
+    expect(result.highRiskReview.stewardshipReviews).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          prescriptionId: 'rx-7',
+          antibioticName: 'Ceftriaxone',
+        }),
+      ]),
+    );
+    expect(result.reviewChecklist).toEqual(
+      expect.objectContaining({
+        requiresAcknowledgement: true,
+      }),
+    );
+  });
 });

@@ -356,6 +356,61 @@ class SettingsProvider:
                     "redaction_required": True,
                 },
             ),
+            (
+                "post_visit_patient_answer",
+                {
+                    "enabled": True,
+                    "purpose": "Grounded patient-facing post-visit answers from approved visit artifacts only.",
+                    "vendor_id": "ollama",
+                    "allowed_model_names": default_allowed_models,
+                    "require_tenant_context": False,
+                    "redaction_required": True,
+                },
+            ),
+            (
+                "post_visit_doctor_polish",
+                {
+                    "enabled": True,
+                    "purpose": "Clinician-facing post-visit summary polishing using grounded recommendation context only.",
+                    "vendor_id": "ollama",
+                    "allowed_model_names": default_allowed_models,
+                    "require_tenant_context": False,
+                    "redaction_required": True,
+                },
+            ),
+            (
+                "post_visit_escalation_classification",
+                {
+                    "enabled": True,
+                    "purpose": "Post-visit escalation classification with governed structured output.",
+                    "vendor_id": "ollama",
+                    "allowed_model_names": default_allowed_models,
+                    "require_tenant_context": False,
+                    "redaction_required": True,
+                },
+            ),
+            (
+                "post_visit_referral_letter",
+                {
+                    "enabled": True,
+                    "purpose": "Grounded referral letter drafting from approved post-visit context only.",
+                    "vendor_id": "ollama",
+                    "allowed_model_names": default_allowed_models,
+                    "require_tenant_context": False,
+                    "redaction_required": True,
+                },
+            ),
+            (
+                "post_visit_clinical_note",
+                {
+                    "enabled": True,
+                    "purpose": "Grounded clinical note drafting from approved post-visit context only.",
+                    "vendor_id": "ollama",
+                    "allowed_model_names": default_allowed_models,
+                    "require_tenant_context": False,
+                    "redaction_required": True,
+                },
+            ),
         ]
 
         for use_case, policy in usecase_seeds:

@@ -39,6 +39,7 @@ export class EncounterCodingService {
     appointmentId: string | null,
     patientId: string,
     actorId: string,
+    tenantId?: string,
   ): Promise<EncounterCodeResult> {
     const clinicalText = await this.gatherClinicalText(tenantDb, sessionId, appointmentId);
 
@@ -74,7 +75,7 @@ export class EncounterCodingService {
     }
 
     // LLM -> keyword fallback
-    const diagnoses = await this.extractDiagnosesAndProcedures(clinicalText);
+    const diagnoses = await this.extractDiagnosesAndProcedures(clinicalText, tenantId);
 
     const icd10Suggestions = await this.resolveIcd10Codes(tenantDb, diagnoses.diagnoses);
     const cptSuggestions = this.deriveCptCodes(diagnoses.procedures, diagnoses.context);
@@ -222,7 +223,7 @@ export class EncounterCodingService {
     return parts.join('\n\n');
   }
 
-  private async extractDiagnosesAndProcedures(clinicalText: string): Promise<{
+  private async extractDiagnosesAndProcedures(clinicalText: string, tenantId?: string): Promise<{
     diagnoses: string[];
     procedures: string[];
     context: ClinicalContext;
@@ -243,6 +244,11 @@ If unsure, return empty arrays. Do NOT fabricate diagnoses.`,
           { role: 'user', content: clinicalText.substring(0, 4000) },
         ],
         0.1,
+        {
+          useCase: 'clinical_code_extraction',
+          templateVersion: 'encounter-coding-extract-v1',
+          tenantId,
+        },
       );
 
       if (llmResult?.json) {

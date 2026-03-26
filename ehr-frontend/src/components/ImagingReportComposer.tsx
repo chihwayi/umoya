@@ -34,6 +34,39 @@ interface ReportTemplate {
   impression_template?: string;
 }
 
+interface ReportDraftArtifact {
+  id: string;
+  draftFindings: string;
+  draftImpression: string;
+  draftRecommendations?: string | null;
+  structuredDraft?: {
+    structured_findings?: StructuredFinding[];
+  };
+  supportingEvidence?: Array<{ type?: string; message?: string; label?: string; region?: string }>;
+}
+
+interface ReportDiscrepancyReview {
+  id: string;
+  discrepancyStatus: string;
+  reviewStatus?: string;
+  resolutionNotes?: string | null;
+  rationale: string;
+  discrepancySummary?: {
+    matchedAiLabels?: string[];
+    unmatchedAiLabels?: string[];
+  };
+}
+
+interface IncidentalFindingFollowupArtifact {
+  id: string;
+  status: string;
+  severity: string;
+  title: string;
+  summary: string;
+  resolutionNotes?: string | null;
+  recommendedAction?: string | null;
+}
+
 type ReportSeverity = 'benign' | 'minor' | 'moderate' | 'significant' | 'critical';
 
 interface StructuredFinding {
@@ -182,7 +215,15 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
   const [currentDiagnosisConcept, setCurrentDiagnosisConcept] = useState<SnomedConcept | null>(null);
+  const [aiDraft, setAiDraft] = useState<ReportDraftArtifact | null>(study?.reportDraft || null);
+  const [discrepancyReviews, setDiscrepancyReviews] = useState<ReportDiscrepancyReview[]>(
+    Array.isArray(study?.discrepancyReviews) ? study.discrepancyReviews : [],
+  );
+  const [incidentalFollowups, setIncidentalFollowups] = useState<IncidentalFindingFollowupArtifact[]>(
+    Array.isArray(study?.incidentalFollowups) ? study.incidentalFollowups : [],
+  );
 
   const existingReport = study?.report || null;
   const isAssignedRadiologist = useMemo(() => {
@@ -294,6 +335,9 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
       });
     }
     setCurrentDiagnosisConcept(null);
+    setAiDraft(study?.reportDraft || null);
+    setDiscrepancyReviews(Array.isArray(study?.discrepancyReviews) ? study.discrepancyReviews : []);
+    setIncidentalFollowups(Array.isArray(study?.incidentalFollowups) ? study.incidentalFollowups : []);
   }, [existingReport, study]);
 
   useEffect(() => {
@@ -378,6 +422,7 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
         imaging_study_id: study.id,
         imaging_order_id: study.imaging_order_id,
         patient_id: study.patient_id,
+        report_draft_id: aiDraft?.id || null,
         clinical_history: reportState.clinical_history,
         technique: reportState.technique,
         findings: reportState.findings,
@@ -414,6 +459,41 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
     }
   };
 
+  const applyAIDraft = (draft: ReportDraftArtifact) => {
+    setReportState((prev) => ({
+      ...prev,
+      findings: draft.draftFindings || prev.findings,
+      impression: draft.draftImpression || prev.impression,
+      recommendations: draft.draftRecommendations || prev.recommendations,
+      structured_findings:
+        Array.isArray(draft.structuredDraft?.structured_findings) &&
+        draft.structuredDraft?.structured_findings.length > 0
+          ? draft.structuredDraft.structured_findings.map((finding) => ({
+              id: finding.id || generateFindingId(),
+              region: finding.region || '',
+              finding: finding.finding || '',
+              significance: (finding.significance as ReportSeverity) || 'moderate',
+              recommendation: finding.recommendation || '',
+            }))
+          : prev.structured_findings,
+    }));
+  };
+
+  const handleGenerateAIDraft = async () => {
+    if (!study?.id || readOnly) return;
+    try {
+      setGeneratingDraft(true);
+      const { data } = await ehrApi.generateImagingReportDraft(tenantSlug, token, study.id);
+      setAiDraft(data || null);
+      showSuccess('AI draft prepared', 'success');
+    } catch (error: any) {
+      console.error('Failed to generate AI report draft', error);
+      showError(error?.response?.data?.message || 'Failed to generate AI draft', 'error');
+    } finally {
+      setGeneratingDraft(false);
+    }
+  };
+
   const handleSignReport = async () => {
     if (!ensureStudyContext()) return;
     if (!existingReport?.id) {
@@ -432,6 +512,54 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
       showError(message, 'error');
     } finally {
       setSigning(false);
+    }
+  };
+
+  const handleResolveDiscrepancyReview = async (reviewId: string, reviewStatus: 'resolved' | 'dismissed' | 'escalated') => {
+    if (!ensureStudyContext()) return;
+
+    try {
+      const { data } = await ehrApi.resolveImagingDiscrepancyReview(tenantSlug, token, reviewId, {
+        review_status: reviewStatus,
+      });
+      setDiscrepancyReviews((prev) =>
+        prev.map((review) => (review.id === reviewId ? { ...review, ...data } : review)),
+      );
+      showSuccess('Discrepancy review updated', 'success');
+
+      if (reviewStatus === 'escalated' && existingReport?.id) {
+        const followupResponse = await ehrApi.getImagingReportIncidentalFollowups(tenantSlug, token, existingReport.id);
+        setIncidentalFollowups(Array.isArray(followupResponse.data) ? followupResponse.data : []);
+      }
+    } catch (error: any) {
+      console.error('Failed to resolve discrepancy review', error);
+      showError(error?.response?.data?.message || 'Failed to update discrepancy review', 'error');
+    }
+  };
+
+  const handleAcknowledgeFollowup = async (followupId: string) => {
+    try {
+      const { data } = await ehrApi.acknowledgeImagingIncidentalFollowup(tenantSlug, token, followupId);
+      setIncidentalFollowups((prev) =>
+        prev.map((followup) => (followup.id === followupId ? { ...followup, ...data } : followup)),
+      );
+      showSuccess('Follow-up acknowledged', 'success');
+    } catch (error: any) {
+      console.error('Failed to acknowledge incidental follow-up', error);
+      showError(error?.response?.data?.message || 'Failed to acknowledge follow-up', 'error');
+    }
+  };
+
+  const handleCompleteFollowup = async (followupId: string) => {
+    try {
+      const { data } = await ehrApi.completeImagingIncidentalFollowup(tenantSlug, token, followupId);
+      setIncidentalFollowups((prev) =>
+        prev.map((followup) => (followup.id === followupId ? { ...followup, ...data } : followup)),
+      );
+      showSuccess('Follow-up completed', 'success');
+    } catch (error: any) {
+      console.error('Failed to complete incidental follow-up', error);
+      showError(error?.response?.data?.message || 'Failed to complete follow-up', 'error');
     }
   };
 
@@ -843,6 +971,132 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
           </div>
         )}
 
+        {aiDraft && (
+          <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-violet-800">
+                <Sparkles className="w-4 h-4" />
+                <p className="text-sm font-semibold">Governed AI Report Draft</p>
+              </div>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => applyAIDraft(aiDraft)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+                >
+                  <NotebookPen className="w-3 h-3" />
+                  Apply AI Draft
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 text-xs text-slate-700">
+              <div className="rounded-lg bg-white px-3 py-3 border border-violet-100">
+                <p className="font-semibold text-slate-900 mb-1">Draft Findings</p>
+                <p>{aiDraft.draftFindings}</p>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-3 border border-violet-100">
+                <p className="font-semibold text-slate-900 mb-1">Draft Impression</p>
+                <p>{aiDraft.draftImpression}</p>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-3 border border-violet-100">
+                <p className="font-semibold text-slate-900 mb-1">Draft Recommendations</p>
+                <p>{aiDraft.draftRecommendations || 'No explicit AI recommendation captured.'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {discrepancyReviews.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 space-y-3">
+            <div className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="w-4 h-4" />
+              <p className="text-sm font-semibold">AI vs Radiologist Discrepancy Review</p>
+            </div>
+            {discrepancyReviews.slice(0, 1).map((review) => (
+              <div key={review.id} className="rounded-lg border border-amber-100 bg-white px-3 py-3 text-xs text-slate-700 space-y-2">
+                <p className="font-semibold text-slate-900">
+                  Status: {review.discrepancyStatus.replace(/_/g, ' ')}
+                </p>
+                {review.reviewStatus && (
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Workflow: {review.reviewStatus.replace(/_/g, ' ')}
+                  </p>
+                )}
+                <p>{review.rationale}</p>
+                {Array.isArray(review.discrepancySummary?.unmatchedAiLabels) &&
+                  review.discrepancySummary!.unmatchedAiLabels!.length > 0 && (
+                    <p>
+                      Unmatched AI labels: {review.discrepancySummary!.unmatchedAiLabels!.join(', ')}
+                    </p>
+                  )}
+                {review.resolutionNotes && <p>Resolution: {review.resolutionNotes}</p>}
+                {!readOnly && review.reviewStatus !== 'resolved' && review.reviewStatus !== 'dismissed' && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleResolveDiscrepancyReview(review.id, 'resolved')}
+                      className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      Resolve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleResolveDiscrepancyReview(review.id, 'escalated')}
+                      className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50"
+                    >
+                      <ShieldAlert className="h-3 w-3" />
+                      Escalate
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {incidentalFollowups.length > 0 && (
+          <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-4 space-y-3">
+            <div className="flex items-center gap-2 text-orange-800">
+              <Clock className="w-4 h-4" />
+              <p className="text-sm font-semibold">Incidental Finding Follow-up</p>
+            </div>
+            {incidentalFollowups.slice(0, 2).map((followup) => (
+              <div key={followup.id} className="rounded-lg border border-orange-100 bg-white px-3 py-3 text-xs text-slate-700">
+                <p className="font-semibold text-slate-900">{followup.title}</p>
+                <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">
+                  Status: {followup.status.replace(/_/g, ' ')}
+                </p>
+                <p className="mt-1">{followup.summary}</p>
+                {followup.recommendedAction && <p className="mt-1">Action: {followup.recommendedAction}</p>}
+                {followup.resolutionNotes && <p className="mt-1">Resolution: {followup.resolutionNotes}</p>}
+                {followup.status !== 'completed' && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {followup.status === 'open' && (
+                      <button
+                        type="button"
+                        onClick={() => handleAcknowledgeFollowup(followup.id)}
+                        className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-orange-700 hover:bg-orange-50"
+                      >
+                        <Clock className="h-3 w-3" />
+                        Acknowledge
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleCompleteFollowup(followup.id)}
+                      className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      Complete
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span>Study:</span>
@@ -852,6 +1106,15 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGenerateAIDraft}
+              disabled={readOnly || generatingDraft}
+              className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-white px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {generatingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {generatingDraft ? 'Generating...' : aiDraft ? 'Refresh AI Draft' : 'Generate AI Draft'}
+            </button>
             <button
               type="button"
               onClick={handleSaveDraft}

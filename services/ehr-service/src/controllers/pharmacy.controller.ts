@@ -195,6 +195,21 @@ export class PharmacyController {
     return this.pharmacyIntelligenceService.getReviewById(req.tenantDb!, id);
   }
 
+  @Post('intelligence/dispense-plan')
+  @ApiOperation({ summary: 'Prepare governed dispense-plan intelligence for a prescription' })
+  async prepareDispensePlan(
+    @Body() body: { prescriptionId: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    const actorUserId = (req.user as any)?.userId ?? (req.user as any)?.id ?? null;
+    return this.pharmacyIntelligenceService.prepareDispensePlan(
+      req.tenantId,
+      req.tenantDb!,
+      body.prescriptionId,
+      actorUserId,
+    );
+  }
+
   @Post('intelligence/inventory-forecast')
   @ApiOperation({ summary: 'Generate persisted inventory shortage forecasts and reorder guidance' })
   async generateInventoryForecasts(
@@ -407,17 +422,7 @@ export class PharmacyController {
   @ApiOperation({ summary: 'Dispense a prescription' })
   async dispensePrescription(
     @Param('id') id: string,
-    @Body() dto: { 
-      items: Array<{ inventoryId: string; quantityDispensed: number }>; 
-      paymentMethod?: string; 
-      notes?: string;
-      discountAmount?: number;
-      amountPaid?: number;
-      medicalAidId?: string;
-      medicalAidName?: string;
-      policyNumber?: string;
-      coveragePercentage?: number;
-    },
+    @Body() dto: CreateDispensingDto,
     @Request() req: RequestWithTenant,
   ) {
     return this.pharmacyService.dispensePrescription(req.tenantDb, id, dto, (req.user as any)?.userId ?? (req.user as any)?.id);

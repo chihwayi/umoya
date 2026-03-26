@@ -599,6 +599,35 @@ export class PatientPortalController {
     return this.patientPortalService.getPatientDashboardSummary(patientId, req.tenantId);
   }
 
+  @Get('patient-ai/followups')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List patient AI follow-ups', description: 'Get active and historical patient-facing AI follow-up tasks for the authenticated patient' })
+  async getPatientAiFollowups(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientAiFollowups(patientId, req.tenantId);
+  }
+
+  @Put('patient-ai/followups/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update patient AI follow-up state', description: 'Allow the authenticated patient to acknowledge or complete an AI-guided follow-up task' })
+  @ApiParam({ name: 'id', description: 'Patient follow-up orchestration ID' })
+  async updatePatientAiFollowup(
+    @Param('id') id: string,
+    @Body() body: { status?: 'open' | 'in_progress' | 'completed' | 'dismissed'; reminderState?: 'pending' | 'sent' | 'acknowledged' },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.updatePatientAiFollowup(patientId, req.tenantId, id, body);
+  }
+
   // Post-Visit AI Companion
   @Get('post-visit/sessions')
   @UseGuards(JwtAuthGuard)

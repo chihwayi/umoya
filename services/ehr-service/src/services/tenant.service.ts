@@ -125,6 +125,11 @@ import { PostVisitCompanionThread } from '../entities/post-visit-companion-threa
 import { PostVisitCompanionMessage } from '../entities/post-visit-companion-message.entity';
 import { PostVisitEscalationEvent } from '../entities/post-visit-escalation-event.entity';
 import { PostVisitCompanionAcknowledgement } from '../entities/post-visit-companion-acknowledgement.entity';
+import { SymptomCheckerSession } from '../entities/symptom-checker-session.entity';
+import { AdherenceChatLog } from '../entities/adherence-chat-log.entity';
+import { PatientAiSession } from '../entities/patient-ai-session.entity';
+import { PatientAiEscalation } from '../entities/patient-ai-escalation.entity';
+import { PatientFollowupOrchestration } from '../entities/patient-followup-orchestration.entity';
 import { ChronicDiseaseRegistry } from '../entities/chronic-disease-registry.entity';
 import { PreventiveCareReminder } from '../entities/preventive-care-reminder.entity';
 import { RecallList } from '../entities/recall-list.entity';
@@ -223,6 +228,8 @@ import { VasopressorRecord } from '../entities/vasopressor-record.entity';
 import { ModelRegistry } from '../entities/model-registry.entity';
 import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
 import { ModelFairnessReport } from '../entities/model-fairness-report.entity';
+import { AiEvalRun } from '../entities/ai-eval-run.entity';
+import { AiReleaseGateResult } from '../entities/ai-release-gate-result.entity';
 import { ModelPromotionReview } from '../entities/model-promotion-review.entity';
 import { ModelCard } from '../entities/model-card.entity';
 import { ModelShadowEvaluation } from '../entities/model-shadow-evaluation.entity';
@@ -241,6 +248,12 @@ import { EncounterCopilotSession } from '../entities/encounter-copilot-session.e
 import { OrderAppropriatenessReview } from '../entities/order-appropriateness-review.entity';
 import { ResultFollowupTask } from '../entities/result-followup-task.entity';
 import { TreatmentPathwayInstance } from '../entities/treatment-pathway-instance.entity';
+import { DicomStudy } from '../entities/dicom-study.entity';
+import { RadiologyAiFinding } from '../entities/radiology-ai-finding.entity';
+import { ImagingOrderAiReview } from '../entities/imaging-order-ai-review.entity';
+import { RadiologyReportDraft } from '../entities/radiology-report-draft.entity';
+import { RadiologyDiscrepancyReview } from '../entities/radiology-discrepancy-review.entity';
+import { IncidentalFindingFollowup } from '../entities/incidental-finding-followup.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface TenantDhis2Config {
@@ -543,6 +556,11 @@ export class TenantService {
         PostVisitCompanionMessage,
         PostVisitEscalationEvent,
         PostVisitCompanionAcknowledgement,
+        SymptomCheckerSession,
+        AdherenceChatLog,
+        PatientAiSession,
+        PatientAiEscalation,
+        PatientFollowupOrchestration,
         ChronicDiseaseRegistry,
         PreventiveCareReminder,
         RecallList,
@@ -636,6 +654,8 @@ export class TenantService {
         ModelRegistry,
         ModelPerformanceMetric,
         ModelFairnessReport,
+        AiEvalRun,
+        AiReleaseGateResult,
         ModelPromotionReview,
         ModelCard,
         ModelShadowEvaluation,
@@ -654,6 +674,12 @@ export class TenantService {
         OrderAppropriatenessReview,
         ResultFollowupTask,
         TreatmentPathwayInstance,
+        DicomStudy,
+        RadiologyAiFinding,
+        ImagingOrderAiReview,
+        RadiologyReportDraft,
+        RadiologyDiscrepancyReview,
+        IncidentalFindingFollowup,
         MalariaCase,
         MalariaTest,
         MalariaTreatment,

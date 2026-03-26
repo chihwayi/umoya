@@ -190,6 +190,13 @@ export interface RegistrationDocumentAnalysisResponse {
   abstainReason?: string | null;
 }
 
+export interface GovernedJsonCompletionResponse {
+  json: Record<string, any>;
+  model: string;
+  audit?: Record<string, any>;
+  governance?: Record<string, any>;
+}
+
 export interface CareGapDetectionOptions {
   tenantId?: string;
   tenantDb?: DataSource;
@@ -1445,6 +1452,62 @@ export class CdssService {
       governance: responseData?.governance || {},
       abstained: responseData?.abstained === true,
       abstainReason: responseData?.abstain_reason || null,
+    };
+  }
+
+  async requestGovernedJson(
+    payload: {
+      useCase: string;
+      schemaDescription: string;
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+      templateVersion?: string;
+      temperature?: number;
+      sessionId?: string;
+      patientId?: string;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<GovernedJsonCompletionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      `governed_json_${payload.useCase}`,
+      '/governed/json',
+      {
+        use_case: payload.useCase,
+        schema_description: payload.schemaDescription,
+        messages: payload.messages,
+        template_version: payload.templateVersion || 'governed-json-v1',
+        temperature: payload.temperature ?? 0.1,
+        session_id: payload.sessionId || null,
+        patient_id: payload.patientId || null,
+      },
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: payload.useCase,
+      source: 'cdss_service',
+      model: String(responseData?.model || 'governed_json_proxy'),
+      patientId: payload.patientId || null,
+      encounterId: payload.sessionId || null,
+      requestBody: {
+        messageCount: payload.messages.length,
+        schemaLength: payload.schemaDescription.length,
+        templateVersion: payload.templateVersion || 'governed-json-v1',
+      },
+      responseSummary: {
+        jsonKeys: Object.keys(responseData?.json || {}).length,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return {
+      json: responseData?.json || {},
+      model: String(responseData?.model || 'governed_json_proxy'),
+      audit: responseData?.audit || {},
+      governance: responseData?.governance || {},
     };
   }
 

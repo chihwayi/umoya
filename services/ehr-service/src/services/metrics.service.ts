@@ -808,6 +808,199 @@ export class MetricsService {
     };
   }
 
+  async getAiOpsSnapshot(tenantDb: DataSource) {
+    this.ensureTenantDb(tenantDb);
+
+    const [
+      overrideSummary,
+      abstentionSummary,
+      escalationSummary,
+      patientSafetySummary,
+      vendorUsageSummary,
+    ] = await Promise.all([
+      this.safeSnapshotRow(
+        tenantDb,
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE displayed_to_user = TRUE)::int AS displayed_total,
+          COUNT(*) FILTER (WHERE override_logged = TRUE)::int AS overrides_total,
+          COALESCE(
+            ROUND(
+              (
+                COUNT(*) FILTER (WHERE override_logged = TRUE)::numeric
+                / NULLIF(COUNT(*) FILTER (WHERE displayed_to_user = TRUE), 0)
+              ),
+              4
+            ),
+            0
+          ) AS override_rate
+        FROM ai_recommendation_audits
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+        `,
+        {
+          displayed_total: 0,
+          overrides_total: 0,
+          override_rate: 0,
+        },
+        'ai recommendation overrides',
+      ),
+      this.safeSnapshotRow(
+        tenantDb,
+        `
+        SELECT
+          COUNT(*)::int AS total_prompts,
+          COUNT(*) FILTER (
+            WHERE safety_gate_triggered = TRUE
+               OR COALESCE((metadata->'responseSummary'->>'abstained')::boolean, FALSE) = TRUE
+          )::int AS abstentions_total,
+          COALESCE(
+            ROUND(
+              (
+                COUNT(*) FILTER (
+                  WHERE safety_gate_triggered = TRUE
+                     OR COALESCE((metadata->'responseSummary'->>'abstained')::boolean, FALSE) = TRUE
+                )::numeric
+                / NULLIF(COUNT(*), 0)
+              ),
+              4
+            ),
+            0
+          ) AS abstention_rate
+        FROM prompt_audit_log
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+        `,
+        {
+          total_prompts: 0,
+          abstentions_total: 0,
+          abstention_rate: 0,
+        },
+        'ai prompt abstentions',
+      ),
+      this.safeSnapshotRow(
+        tenantDb,
+        `
+        WITH escalations AS (
+          SELECT status, created_at
+          FROM clinical_escalation_tasks
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+          UNION ALL
+          SELECT status, created_at
+          FROM patient_ai_escalations
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+        )
+        SELECT
+          COUNT(*)::int AS total_escalations,
+          COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) IN ('resolved', 'completed', 'closed'))::int AS resolved_total,
+          COALESCE(
+            ROUND(
+              (
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) IN ('resolved', 'completed', 'closed'))::numeric
+                / NULLIF(COUNT(*), 0)
+              ),
+              4
+            ),
+            0
+          ) AS follow_through_rate
+        FROM escalations
+        `,
+        {
+          total_escalations: 0,
+          resolved_total: 0,
+          follow_through_rate: 0,
+        },
+        'ai escalation follow-through',
+      ),
+      this.safeSnapshotRow(
+        tenantDb,
+        `
+        SELECT
+          (
+            SELECT COUNT(*)::int
+            FROM patient_early_warning_scores
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+              AND alert_triggered = TRUE
+          ) AS early_warning_alerts_7d,
+          (
+            SELECT COUNT(*)::int
+            FROM remote_monitoring_alerts
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+          ) AS remote_monitoring_alerts_7d,
+          (
+            SELECT COUNT(*)::int
+            FROM radiology_ai_findings
+            WHERE alerted = TRUE
+              AND created_at >= NOW() - INTERVAL '7 days'
+          ) AS radiology_alerts_7d
+        `,
+        {
+          early_warning_alerts_7d: 0,
+          remote_monitoring_alerts_7d: 0,
+          radiology_alerts_7d: 0,
+        },
+        'patient safety alerts',
+      ),
+      this.safeSnapshotRow(
+        tenantDb,
+        `
+        SELECT COALESCE(
+          json_agg(
+            json_build_object(
+              'modelId', usage.model_id,
+              'modelName', usage.model_name,
+              'provider', usage.provider,
+              'promptCount', usage.prompt_count
+            )
+            ORDER BY usage.prompt_count DESC, usage.model_name ASC
+          ),
+          '[]'::json
+        ) AS vendors
+        FROM (
+          SELECT
+            m.model_id,
+            m.model_name,
+            m.provider,
+            COUNT(*)::int AS prompt_count
+          FROM prompt_audit_log p
+          INNER JOIN ai_model_audit_registry m ON m.model_id = p.model_id
+          WHERE p.created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY m.model_id, m.model_name, m.provider
+          ORDER BY prompt_count DESC, m.model_name ASC
+          LIMIT 10
+        ) usage
+        `,
+        {
+          vendors: [],
+        },
+        'ai vendor usage',
+      ),
+    ]);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      overrideRates: {
+        displayedTotal: Number(overrideSummary.displayed_total || 0),
+        overridesTotal: Number(overrideSummary.overrides_total || 0),
+        overrideRate: Number(overrideSummary.override_rate || 0),
+      },
+      abstentionRates: {
+        totalPrompts: Number(abstentionSummary.total_prompts || 0),
+        abstentionsTotal: Number(abstentionSummary.abstentions_total || 0),
+        abstentionRate: Number(abstentionSummary.abstention_rate || 0),
+      },
+      escalationFollowThrough: {
+        totalEscalations: Number(escalationSummary.total_escalations || 0),
+        resolvedTotal: Number(escalationSummary.resolved_total || 0),
+        followThroughRate: Number(escalationSummary.follow_through_rate || 0),
+      },
+      patientSafetyAlerts: {
+        earlyWarningAlerts7d: Number(patientSafetySummary.early_warning_alerts_7d || 0),
+        remoteMonitoringAlerts7d: Number(patientSafetySummary.remote_monitoring_alerts_7d || 0),
+        radiologyAlerts7d: Number(patientSafetySummary.radiology_alerts_7d || 0),
+      },
+      vendorModelUsage: Array.isArray(vendorUsageSummary.vendors) ? vendorUsageSummary.vendors : [],
+    };
+  }
+
   // Provisioning Metrics
   recordProvisioning(bundleId: string, status: 'success' | 'error', durationSeconds?: number) {
     this.provisioningCounter.inc({ bundle_id: bundleId, status });

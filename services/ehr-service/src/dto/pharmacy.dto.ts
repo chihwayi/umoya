@@ -448,6 +448,33 @@ export class CreateDispensingDto {
   @IsOptional()
   coveragePercentage?: number;
 
+  @ApiPropertyOptional({ description: 'Prepared medication review ID used for this dispensing' })
+  @IsUUID()
+  @IsOptional()
+  medicationReviewId?: string;
+
+  @ApiPropertyOptional({ description: 'Selected substitution recommendation IDs', type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  selectedSubstitutionRecommendationIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Selected stewardship review IDs', type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  stewardshipReviewIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Whether the pharmacist explicitly reviewed the AI guidance before dispensing' })
+  @IsBoolean()
+  @IsOptional()
+  aiReviewAcknowledged?: boolean;
+
+  @ApiPropertyOptional({ description: 'Persisted AI review summary captured at dispense time' })
+  @IsObject()
+  @IsOptional()
+  aiReviewSummary?: Record<string, any>;
+
   @ApiPropertyOptional({ description: 'Notes' })
   @IsString()
   @IsOptional()
@@ -935,5 +962,4 @@ export class UpdateAlertDto {
   @IsOptional()
   notes?: string;
 }
-
 

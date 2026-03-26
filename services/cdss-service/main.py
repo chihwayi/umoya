@@ -8679,6 +8679,25 @@ class RegistrationDocumentAnalyzeReq(BaseModel):
     patient_id: Optional[str] = None
     document_context: Optional[Dict[str, Any]] = None
 
+
+class GovernedJsonMessage(BaseModel):
+    role: str
+    content: str
+
+
+class GovernedJsonReq(BaseModel):
+    use_case: str
+    schema_description: str
+    messages: List[GovernedJsonMessage]
+    template_version: Optional[str] = None
+    temperature: Optional[float] = 0.1
+    session_id: Optional[str] = None
+    patient_id: Optional[str] = None
+
+
+def _approximate_token_count(text: str) -> int:
+    return max(1, int((len(str(text or "")) + 3) / 4))
+
 COMMON_ICD10_PATTERNS = [
     ("hypertension", "I10", "Essential hypertension"),
     ("type 2 diabetes", "E11.9", "Type 2 diabetes mellitus without complications"),
@@ -8904,6 +8923,74 @@ async def registration_document_analyze(
             "llm_enhanced": bool(llm_structured),
         },
     }
+
+
+@app.post("/governed/json")
+async def governed_json(
+    req: GovernedJsonReq,
+    http_req: Request = None,
+    ai_policy: Dict[str, Any] = Depends(get_ai_policy),
+):
+    if not req.messages:
+        raise HTTPException(status_code=400, detail="messages are required")
+    if not str(req.schema_description or "").strip():
+        raise HTTPException(status_code=400, detail="schema_description is required")
+
+    effective_ai_policy = _resolve_ai_policy(ai_policy, http_req)
+    if effective_ai_policy.get("ai_enabled") is False:
+        raise HTTPException(status_code=403, detail="AI is disabled by policy")
+    if LLMProvider is None:
+        raise HTTPException(status_code=503, detail="LLM provider is unavailable")
+
+    prompt = "\n\n".join(
+        f"{str(message.role or 'user').strip().upper()}:\n{str(message.content or '').strip()[:12000]}"
+        for message in req.messages
+        if str(message.content or "").strip()
+    ).strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="At least one non-empty message is required")
+
+    tenant_context = _tenant_cache_key_from_request(http_req) if http_req else None
+    llm = LLMProvider()
+    started_at = time.time()
+    generated = await llm.generate_json(
+        prompt=prompt,
+        schema_description=req.schema_description,
+        temperature=max(0.0, min(float(req.temperature or 0.1), 1.0)),
+        use_case=req.use_case,
+        tenant_id=tenant_context,
+    )
+    latency_ms = int((time.time() - started_at) * 1000)
+    response_json = generated if isinstance(generated, dict) else {}
+    response_text = json.dumps(response_json, sort_keys=True)
+    template_version = str(req.template_version or "governed-json-v1")
+
+    return {
+        "json": response_json,
+        "model": getattr(llm, "model_name", None) or os.getenv("LLM_MODEL_NAME", "governed_json"),
+        "audit": {
+            "promptHash": compute_request_hash(
+                {
+                    "use_case": req.use_case,
+                    "template_version": template_version,
+                    "messages": [message.model_dump() for message in req.messages],
+                }
+            ),
+            "templateVersion": template_version,
+            "inputTokenCount": _approximate_token_count(prompt),
+            "outputTokenCount": _approximate_token_count(response_text),
+            "latencyMs": latency_ms,
+            "safetyGateTriggered": False,
+        },
+        "governance": {
+            "governed_path": True,
+            "use_case": req.use_case,
+            "vendor_id": "ollama",
+            "tenant_context_present": bool(tenant_context),
+            "template_version": template_version,
+        },
+    }
+
 
 @app.post("/nlp/extract-codes")
 async def nlp_extract_codes(req: NlpExtractReq, http_req: Request = None, ai_policy: Dict[str, Any] = Depends(get_ai_policy)):

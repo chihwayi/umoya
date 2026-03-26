@@ -181,4 +181,45 @@ describe('MetricsService', () => {
     expect(snapshot.revenueCycle.claims.total).toBe(0);
     expect(snapshot.revenueCycle.quality.averageResponseDays).toBe(0);
   });
+
+  it('builds an AI ops snapshot from tenant governance and workflow data', async () => {
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM ai_recommendation_audits')) {
+          return [{ displayed_total: '12', overrides_total: '3', override_rate: '0.25' }];
+        }
+        if (sql.includes('FROM prompt_audit_log') && sql.includes('abstentions_total')) {
+          return [{ total_prompts: '20', abstentions_total: '4', abstention_rate: '0.2' }];
+        }
+        if (sql.includes('WITH escalations AS')) {
+          return [{ total_escalations: '10', resolved_total: '8', follow_through_rate: '0.8' }];
+        }
+        if (sql.includes('FROM patient_early_warning_scores')) {
+          return [{
+            early_warning_alerts_7d: '6',
+            remote_monitoring_alerts_7d: '4',
+            radiology_alerts_7d: '2',
+          }];
+        }
+        if (sql.includes('FROM prompt_audit_log p') && sql.includes('ai_model_audit_registry')) {
+          return [{
+            vendors: [
+              { modelId: 'gpt-5.4', modelName: 'gpt-5.4', provider: 'openai', promptCount: 14 },
+              { modelId: 'local-rag', modelName: 'local-rag', provider: 'local', promptCount: 6 },
+            ],
+          }];
+        }
+        throw new Error(`Unexpected SQL: ${sql}`);
+      }),
+    } as any;
+
+    const snapshot = await service.getAiOpsSnapshot(tenantDb);
+
+    expect(snapshot.overrideRates.overrideRate).toBe(0.25);
+    expect(snapshot.abstentionRates.abstentionRate).toBe(0.2);
+    expect(snapshot.escalationFollowThrough.followThroughRate).toBe(0.8);
+    expect(snapshot.patientSafetyAlerts.earlyWarningAlerts7d).toBe(6);
+    expect(snapshot.vendorModelUsage).toHaveLength(2);
+    expect(snapshot.vendorModelUsage[0].provider).toBe('openai');
+  });
 });

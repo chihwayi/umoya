@@ -163,6 +163,91 @@ export class PharmacyIntelligenceService {
     };
   }
 
+  async prepareDispensePlan(
+    tenantId: string,
+    tenantDb: DataSource,
+    prescriptionId: string,
+    actorUserId?: string | null,
+  ) {
+    const prescription = await this.getPrescriptionContext(tenantDb, prescriptionId);
+    if (!prescription) {
+      throw new BadRequestException(`Prescription ${prescriptionId} not found`);
+    }
+
+    const reviewBundle = await this.generateMedicationReview(
+      tenantId,
+      tenantDb,
+      {
+        patientId: prescription.patient_id,
+        reportedMedications: [
+          {
+            name: prescription.medication_name,
+            genericName: prescription.generic_name ?? null,
+            dosage: prescription.dosage ?? null,
+            frequency: prescription.frequency ?? null,
+            route: prescription.route ?? null,
+            prescriptionId: prescription.id,
+            source: 'prescription_queue',
+          },
+        ],
+      },
+      actorUserId,
+    );
+
+    const prescriptionSubstitutionRecommendations = await this.generatePrescriptionSubstitutionRecommendations(
+      tenantId,
+      tenantDb,
+      reviewBundle.review.id,
+      prescription,
+    );
+
+    const highRiskReview = await this.generateHighRiskMedicationReview(
+      tenantDb,
+      {
+        prescriptionId,
+        route: prescription.route ?? undefined,
+        indication: prescription.indication ?? undefined,
+      },
+      actorUserId,
+    );
+
+    const substitutionRecommendations = this.mergePrescriptionSubstitutionRecommendations(
+      reviewBundle.substitutionRecommendations,
+      prescriptionSubstitutionRecommendations,
+    );
+
+    const reviewChecklist = this.buildDispenseReviewChecklist({
+      review: reviewBundle.review,
+      substitutionRecommendations,
+      stewardshipReviews: highRiskReview.stewardshipReviews,
+    });
+
+    return {
+      prescription: {
+        id: prescription.id,
+        patientId: prescription.patient_id,
+        medicationName: prescription.medication_name,
+        genericName: prescription.generic_name ?? null,
+        dosage: prescription.dosage ?? null,
+        frequency: prescription.frequency ?? null,
+        route: prescription.route ?? null,
+        instructions: prescription.instructions ?? null,
+        indication: prescription.indication ?? null,
+        quantity: prescription.quantity ?? null,
+      },
+      review: reviewBundle.review,
+      substitutionRecommendations,
+      counselingMaterial: reviewBundle.counselingMaterial,
+      highRiskReview,
+      reviewChecklist,
+      governance: {
+        governedPath: true,
+        workstream: 'MOAS-07',
+        preparedAt: new Date().toISOString(),
+      },
+    };
+  }
+
   async generateInventoryForecasts(
     tenantDb: DataSource,
     payload?: {
@@ -635,6 +720,113 @@ export class PharmacyIntelligenceService {
     return repo.save(rows);
   }
 
+  private async generatePrescriptionSubstitutionRecommendations(
+    tenantId: string,
+    tenantDb: DataSource,
+    reviewId: string,
+    prescription: Record<string, any>,
+  ) {
+    const repo = tenantDb.getRepository(PharmacySubstitutionRecommendation);
+    const suggestion = await this.formularyOptimizationService.optimizeOnPrescription(
+      tenantId,
+      prescription.id,
+      prescription.patient_id,
+      prescription.medication_name,
+    );
+
+    if (!suggestion?.genericAlternative && !suggestion?.savingAmount) {
+      return [];
+    }
+
+    const row = repo.create({
+      reviewId,
+      patientId: prescription.patient_id,
+      prescriptionId: prescription.id,
+      sourceMedicationName: prescription.medication_name,
+      sourceGenericName: prescription.generic_name ?? null,
+      genericAlternative: suggestion.genericAlternative ?? null,
+      recommendationStatus: suggestion.aiRecommendation === 'no_substitute' ? 'no_substitute' : 'recommended',
+      recommendationType: 'dispense_plan_substitution',
+      costImpact: {
+        brandedCost: suggestion.brandedCost ?? null,
+        genericCost: suggestion.genericCost ?? null,
+        savingAmount: suggestion.savingAmount ?? null,
+        medicalAidCoverage: suggestion.medicalAidCoverage ?? null,
+        medicalAidTier: suggestion.medicalAidTier ?? null,
+      },
+      evidence: {
+        equivalence: suggestion.evidenceEquivalence ?? null,
+        accepted: suggestion.accepted ?? null,
+      },
+      rationale: suggestion.reason ?? null,
+      governance: {
+        governedPath: true,
+        source: 'dispense_plan',
+        workstream: 'MOAS-07',
+      },
+    });
+
+    return [await repo.save(row)];
+  }
+
+  private mergePrescriptionSubstitutionRecommendations(
+    existing: PharmacySubstitutionRecommendation[],
+    generated: PharmacySubstitutionRecommendation[],
+  ) {
+    const results = [...existing];
+    for (const row of generated) {
+      const duplicate = results.find(
+        (item) =>
+          item.prescriptionId === row.prescriptionId &&
+          this.normalizeText(item.sourceMedicationName) === this.normalizeText(row.sourceMedicationName) &&
+          this.normalizeText(item.genericAlternative) === this.normalizeText(row.genericAlternative),
+      );
+      if (!duplicate) {
+        results.push(row);
+      }
+    }
+    return results;
+  }
+
+  private buildDispenseReviewChecklist(input: {
+    review: MedicationReconciliationAiReview;
+    substitutionRecommendations: PharmacySubstitutionRecommendation[];
+    stewardshipReviews: AntimicrobialStewardship[];
+  }) {
+    const discrepancyCount = Array.isArray(input.review?.discrepancySummary)
+      ? input.review.discrepancySummary.length
+      : 0;
+    const adherenceConcernCount = Array.isArray(input.review?.adherenceConcerns)
+      ? input.review.adherenceConcerns.length
+      : 0;
+    const duplicateTherapyCount = Array.isArray(input.review?.duplicateTherapySignals)
+      ? input.review.duplicateTherapySignals.length
+      : 0;
+    const substitutionCount = input.substitutionRecommendations.filter(
+      (item) => item.recommendationStatus === 'recommended',
+    ).length;
+    const stewardshipCount = input.stewardshipReviews.filter((item) => item.reviewRequired).length;
+
+    const requiresAcknowledgement =
+      discrepancyCount > 0 ||
+      adherenceConcernCount > 0 ||
+      duplicateTherapyCount > 0 ||
+      substitutionCount > 0 ||
+      stewardshipCount > 0;
+
+    return {
+      requiresAcknowledgement,
+      discrepancyCount,
+      adherenceConcernCount,
+      duplicateTherapyCount,
+      substitutionCount,
+      stewardshipCount,
+      summary: requiresAcknowledgement
+        ? 'Pharmacist acknowledgment is required before dispensing because AI review signals were generated.'
+        : 'No blocking AI review signals were generated for this dispense plan.',
+    };
+  }
+
   private buildDiscrepancySummary(currentMedications: Array<any>, reportedMedications: PharmacyMedicationInput[]) {
     const currentKeys = new Set(currentMedications.map((med) => this.normalizeMedicationKey(med)));
     const reportedKeys = new Set(reportedMedications.map((med) => this.normalizeMedicationKey(med)));
@@ -998,8 +1190,12 @@ export class PharmacyIntelligenceService {
          patient_id,
          doctor_id,
          medication_name,
+         generic_name,
          dosage,
          frequency,
+         route,
+         indication,
+         quantity,
          duration,
          prescribed_date,
          instructions,

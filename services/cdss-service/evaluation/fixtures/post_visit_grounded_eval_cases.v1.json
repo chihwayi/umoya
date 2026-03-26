@@ -1,0 +1,40 @@
+{
+  "dataset_version": "2026-03-26.post-visit-grounded.v1",
+  "description": "Post-visit grounded answer release-gate baseline dataset.",
+  "k": 3,
+  "cases": [
+    {
+      "id": "pv-001",
+      "query": "When should I return after discharge for uncontrolled blood sugars?",
+      "expected": {
+        "relevant_citation_ids": ["diabetes-follow-up-window"],
+        "supporting_citation_ids": ["diabetes-follow-up-window"],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [{ "id": "diabetes-follow-up-window", "title": "Diabetes follow-up timing guidance" }],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Return within the documented follow-up window and seek urgent review if red-flag symptoms develop."
+        }
+      }
+    },
+    {
+      "id": "pv-002",
+      "query": "Can I stop the new medication if I feel fine now?",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to a clinician because medication changes require review of the discharge plan."
+        }
+      }
+    }
+  ]
+}
