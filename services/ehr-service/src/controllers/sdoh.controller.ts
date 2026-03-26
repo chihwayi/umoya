@@ -59,13 +59,13 @@ export class SdohController {
   // ── CDSS ───────────────────────────────────────────────────────────────────
 
   @Post('cdss/screen')
-  screenSdoh(@Body() dto: any) {
-    return this.svc.screenSdoh(dto);
+  screenSdoh(@Headers() h: Record<string, string>, @Body() dto: any) {
+    return this.svc.screenSdoh(this.tenant(h), dto);
   }
 
   @Post('cdss/resource/match')
-  matchResources(@Body() dto: any) {
-    return this.svc.matchResources(dto);
+  matchResources(@Headers() h: Record<string, string>, @Body() dto: any) {
+    return this.svc.matchResources(this.tenant(h), dto);
   }
 
   // ── FHIR Export ───────────────────────────────────────────────────────────

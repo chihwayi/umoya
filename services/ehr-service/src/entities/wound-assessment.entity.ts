@@ -25,6 +25,18 @@ export class WoundAssessment {
   @Column({ name: 'dressing_used', type: 'text', nullable: true }) dressingUsed: string;
   @Column({ name: 'review_date', type: 'date', nullable: true }) reviewDate: string;
   @Column({ name: 'wound_photograph', type: 'text', nullable: true }) woundPhotograph: string;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'admission_id', type: 'uuid', nullable: true })
+  admissionId?: string;
+
+  @Column({ name: 'braden_score', type: 'int', nullable: true })
+  bradenScore?: number;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  stage?: string;
+
+  @Column({ name: 'wound_location', type: 'varchar', length: 255 })
+  woundLocation: string;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

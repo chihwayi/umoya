@@ -132,6 +132,7 @@ import { AiExplainabilityController } from './controllers/ai-explainability.cont
 import { StreamingDiagnosisController } from './controllers/streaming-diagnosis.controller';
 import { SmartSchedulingController } from './controllers/smart-scheduling.controller';
 import { SmartDefaultsController } from './controllers/smart-defaults.controller';
+import { EncounterCopilotController } from './controllers/encounter-copilot.controller';
 import { FormularyOptimizationController } from './controllers/formulary-optimization.controller';
 import { PredictiveRiskController } from './controllers/predictive-risk.controller';
 import { FederatedLearningController } from './controllers/federated-learning.controller';
@@ -148,6 +149,7 @@ import { ClinicalTrialMatchingController } from './controllers/clinical-trial-ma
 import { SupplyChainAiController } from './controllers/supply-chain-ai.controller';
 import { ModelRegistryController } from './controllers/model-registry.controller';
 import { StaffNotificationsController } from './controllers/staff-notifications.controller';
+import { RegistrationIntelligenceController } from './controllers/registration-intelligence.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -335,6 +337,7 @@ import { AiExplainabilityService } from './services/ai-explainability.service';
 import { StreamingDiagnosisService } from './services/streaming-diagnosis.service';
 import { SmartSchedulingService } from './services/smart-scheduling.service';
 import { SmartDefaultsService } from './services/smart-defaults.service';
+import { EncounterCopilotService } from './services/encounter-copilot.service';
 import { FormularyOptimizationService } from './services/formulary-optimization.service';
 import { PredictiveRiskService } from './services/predictive-risk.service';
 import { FederatedLearningService } from './services/federated-learning.service';
@@ -354,6 +357,7 @@ import { TelemedicineGateway } from './gateways/telemedicine.gateway';
 import { ModelRegistryService } from './services/model-registry.service';
 import { TelemedicinePostVisitBridgeService } from './services/telemedicine-postvisit-bridge.service';
 import { StaffNotificationsService } from './services/staff-notifications.service';
+import { RegistrationIntelligenceService } from './services/registration-intelligence.service';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -506,6 +510,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     StreamingDiagnosisController,
     SmartSchedulingController,
     SmartDefaultsController,
+    EncounterCopilotController,
     FormularyOptimizationController,
     PredictiveRiskController,
     FederatedLearningController,
@@ -522,6 +527,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     SupplyChainAiController,
     ModelRegistryController,
     StaffNotificationsController,
+    RegistrationIntelligenceController,
   ],
   providers: [
     AuthService,
@@ -711,6 +717,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     StreamingDiagnosisService,
     SmartSchedulingService,
     SmartDefaultsService,
+    EncounterCopilotService,
     FormularyOptimizationService,
     PredictiveRiskService,
     FederatedLearningService,
@@ -727,6 +734,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     SupplyChainAiService,
     ModelRegistryService,
     StaffNotificationsService,
+    RegistrationIntelligenceService,
     CriticalAlertGateway,
     VoiceTranscriptionGateway,
     RolesGuard,

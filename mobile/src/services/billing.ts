@@ -35,6 +35,19 @@ export interface ApiPayment {
   paidAt?: string;
 }
 
+export interface ApiBillQuote {
+  billId: string;
+  quoteStatus: string;
+  totalCharge: number;
+  estimatedPayerAmount: number;
+  estimatedPatientResponsibility: number;
+  copayAmount: number;
+  deductibleRemaining: number;
+  quoteConfidence: string;
+  blockers: Array<{ code?: string; message?: string } | string>;
+  recommendedNextStep: string;
+}
+
 export const BillingService = {
   forPatient: (patientId: string) =>
     api.get<ApiBill[]>(`/billing/bills?patientId=${patientId}`).then(r => r.data),
@@ -43,6 +56,9 @@ export const BillingService = {
     const qs = new URLSearchParams(query).toString();
     return api.get<ApiBill[]>(`/billing/bills${qs ? '?' + qs : ''}`).then(r => r.data);
   },
+
+  getQuote: (billId: string) =>
+    api.get<ApiBillQuote>(`/patient-portal/bills/${billId}/quote`).then(r => r.data),
 
   addPayment: (billId: string, dto: { amount: number; method: string; phone?: string }) =>
     api.post<ApiPayment>(`/billing/bills/${billId}/payments`, dto).then(r => r.data),

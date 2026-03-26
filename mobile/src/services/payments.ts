@@ -3,13 +3,19 @@ import { api } from './api';
 export interface MobileMoneyPaymentDto {
   billId: string;
   amount: number;
-  phone: string;
+  phoneNumber: string;
   currency?: string;
 }
 
 export interface PaymentResult {
   transactionId: string;
-  status: 'pending' | 'completed' | 'failed';
+  status:
+    | 'PENDING'
+    | 'COMPLETED'
+    | 'FAILED'
+    | 'EXPIRED'
+    | 'CONFIGURATION_REQUIRED'
+    | 'PROVIDER_UNAVAILABLE';
   message?: string;
   reference?: string;
 }

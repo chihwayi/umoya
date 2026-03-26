@@ -49,6 +49,24 @@ export class MalariaTreatment {
 
   @Column({ name: 'treatment_outcome', type: 'text', nullable: true })
   treatmentOutcome: string | null;
+  @Column({ name: 'artemisinin_doses', type: 'jsonb', nullable: true, default: [] })
+  artemisininDoses: any = [];
+
+  @Column({ name: 'case_id', type: 'uuid', nullable: true })
+  caseId?: string;
+
+  @Column({ name: 'end_date', type: 'date', nullable: true })
+  endDate?: Date;
+
+  @Column({ name: 'iv_artesunate_used', type: 'boolean', nullable: true, default: false })
+  ivArtesunateUsed: boolean = false;
+
+  @Column({ nullable: true })
+  notes?: string;
+
+  @Column({ name: 'weight_kg', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  weightKg?: number;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

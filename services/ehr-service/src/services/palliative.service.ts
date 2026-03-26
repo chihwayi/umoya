@@ -5,13 +5,14 @@ import { SymptomBurdenScore } from '../entities/symptom-burden-score.entity';
 import { GoalsOfCare } from '../entities/goals-of-care.entity';
 import { AdvanceDirectiveRecord } from '../entities/advance-directive-record.entity';
 import { PalliativeMedicationReview } from '../entities/palliative-medication-review.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class PalliativeService {
-  constructor(private readonly tenantService: TenantService) {}
-
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Palliative Assessment ──────────────────────────────────────────────────
 
@@ -110,18 +111,15 @@ export class PalliativeService {
 
   // ── CDSS ───────────────────────────────────────────────────────────────────
 
-  async calcPrognosis(body: any) {
-    const res = await axios.post(`${this.cdssUrl}/palliative/prognosis`, body);
-    return res.data;
+  async calcPrognosis(body: any, tenantId?: string, tenantDb?: any) {
+    return this.cdssService.palliativePrognosis(body, tenantId, tenantDb);
   }
 
-  async convertOpioid(body: any) {
-    const res = await axios.post(`${this.cdssUrl}/palliative/opioid/convert`, body);
-    return res.data;
+  async convertOpioid(body: any, tenantId?: string, tenantDb?: any) {
+    return this.cdssService.palliativeOpioidConvert(body, tenantId, tenantDb);
   }
 
-  async manageSymptom(body: any) {
-    const res = await axios.post(`${this.cdssUrl}/palliative/symptom/manage`, body);
-    return res.data;
+  async manageSymptom(body: any, tenantId?: string, tenantDb?: any) {
+    return this.cdssService.palliativeSymptomManage(body, tenantId, tenantDb);
   }
 }

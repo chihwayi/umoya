@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { DataSource } from 'typeorm';
 import { CreateFinanceTransactionDto, FinanceLineItemDto, RecordPaymentDto } from '../dto/finance.dto';
 import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
+import { FinancialQuoteAssessment } from '../entities/financial-quote-assessment.entity';
 
 @Injectable()
 export class FinanceService {
@@ -15,6 +16,25 @@ export class FinanceService {
       return PAYMENT_STATUS.CANCELLED;
     }
     return PAYMENT_STATUS.AWAITING_PAYMENT;
+  }
+
+  private toNumber(value: any, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : fallback;
+  }
+
+  private parseJsonObject<T = Record<string, any>>(value: any, fallback: T): T {
+    if (value === null || value === undefined) {
+      return fallback;
+    }
+    if (typeof value === 'object') {
+      return value as T;
+    }
+    try {
+      return JSON.parse(String(value)) as T;
+    } catch {
+      return fallback;
+    }
   }
 
   async getDashboardSummary(tenantDb: DataSource) {
@@ -348,6 +368,234 @@ export class FinanceService {
       payments,
       claims,
       reconciliationLogs,
+    };
+  }
+
+  async generatePatientQuote(tenantDb: DataSource, transactionId: string) {
+    const detail = await this.getTransactionDetail(tenantDb, transactionId);
+    const transaction = detail.transaction;
+    const lineItems = Array.isArray(detail.lineItems) ? detail.lineItems : [];
+    const totalCharge = lineItems.length
+      ? Number(
+          lineItems
+            .reduce((sum: number, item: any) => sum + Number(item.total || 0), 0)
+            .toFixed(2),
+        )
+      : this.toNumber(transaction.amount || 0);
+
+    const [bill] = transaction?.source_reference_id
+      ? await tenantDb.query(
+          `
+            SELECT id, appointment_id
+            FROM billing
+            WHERE id::text = $1 OR appointment_id::text = $1
+            ORDER BY created_at DESC
+            LIMIT 1
+          `,
+          [transaction.source_reference_id],
+        )
+      : [];
+
+    const billId = bill?.id || (transaction.source_module === 'billing' ? transaction.source_reference_id : null);
+    const appointmentId =
+      bill?.appointment_id ||
+      (transaction.source_module === 'appointments' ? transaction.source_reference_id : null);
+
+    const [latestClaim] = billId
+      ? await tenantDb.query(
+          `
+            SELECT id, billing_id, patient_id, claim_amount, medical_aid_name, member_number, created_at
+            FROM medical_aid_claims
+            WHERE billing_id = $1
+            ORDER BY created_at DESC
+            LIMIT 1
+          `,
+          [billId],
+        )
+      : [];
+
+    const [latestVerification] = transaction.patient_id
+      ? await tenantDb.query(
+          `
+            SELECT *
+            FROM insurance_verifications
+            WHERE patient_id = $1
+              AND ($2::uuid IS NULL OR appointment_id = $2::uuid OR appointment_id IS NULL)
+            ORDER BY verified_at DESC NULLS LAST, created_at DESC
+            LIMIT 1
+          `,
+          [transaction.patient_id, appointmentId || null],
+        )
+      : [];
+
+    let latestClearance: any = null;
+    if (latestClaim?.id) {
+      [latestClearance] = await tenantDb.query(
+        `
+          SELECT *
+          FROM financial_clearance_assessments
+          WHERE claim_id = $1::uuid
+          ORDER BY assessed_at DESC, created_at DESC
+          LIMIT 1
+        `,
+        [latestClaim.id],
+      );
+    } else if (billId) {
+      [latestClearance] = await tenantDb.query(
+        `
+          SELECT *
+          FROM financial_clearance_assessments
+          WHERE bill_id = $1::uuid
+          ORDER BY assessed_at DESC, created_at DESC
+          LIMIT 1
+        `,
+        [billId],
+      );
+    }
+
+    const coverageDetails = this.parseJsonObject<Record<string, any>>(
+      latestVerification?.coverage_details,
+      {},
+    );
+    const verificationStatus = String(
+      latestVerification?.verification_status ||
+        latestClearance?.eligibility_status ||
+        transaction.payer_type ||
+        '',
+    )
+      .trim()
+      .toLowerCase();
+
+    const explicitCoveragePercent = Number(
+      coverageDetails.coveredPercentage ??
+        coverageDetails.coveragePercent ??
+        coverageDetails.payerCoveragePercent ??
+        coverageDetails.covered_percent ??
+        NaN,
+    );
+    const coveragePercent = Number.isFinite(explicitCoveragePercent)
+      ? explicitCoveragePercent
+      : verificationStatus.startsWith('verified')
+        ? 80
+        : transaction.payer_type === 'medical_aid'
+          ? 60
+          : 0;
+
+    const copayAmount =
+      latestClearance?.assessment_data?.copayAmount != null
+        ? this.toNumber(latestClearance.assessment_data.copayAmount)
+        : latestVerification?.copay_amount != null
+          ? this.toNumber(latestVerification.copay_amount)
+          : this.toNumber(coverageDetails.copayAmount ?? coverageDetails.copay ?? 0);
+    const deductibleRemaining =
+      latestVerification?.deductible_remaining != null
+        ? this.toNumber(latestVerification.deductible_remaining)
+        : this.toNumber(coverageDetails.deductibleRemaining ?? 0);
+    const deductibleApplied =
+      transaction.payer_type === 'medical_aid' ? Math.min(totalCharge, deductibleRemaining) : 0;
+
+    const fallbackPayerAmount =
+      transaction.payer_type === 'self'
+        ? 0
+        : Math.max(totalCharge - copayAmount - deductibleApplied, 0) * (coveragePercent / 100);
+    const estimatedPayerAmount =
+      latestClearance?.payer_estimated_amount != null
+        ? this.toNumber(latestClearance.payer_estimated_amount)
+        : this.toNumber(fallbackPayerAmount);
+    const estimatedPatientResponsibility =
+      latestClearance?.estimated_responsibility != null
+        ? this.toNumber(latestClearance.estimated_responsibility)
+        : this.toNumber(
+            transaction.payer_type === 'self'
+              ? totalCharge
+              : Math.max(totalCharge - estimatedPayerAmount, 0),
+          );
+
+    const blockers = Array.isArray(latestClearance?.blockers)
+      ? latestClearance.blockers
+      : this.parseJsonObject<Array<Record<string, any>>>(latestClearance?.blockers, []);
+    if (transaction.payer_type === 'medical_aid' && !verificationStatus.startsWith('verified')) {
+      blockers.push({
+        code: 'insurance_verification_pending',
+        message: 'Insurance verification is not yet confirmed for this transaction.',
+      });
+    }
+
+    const quoteStatus =
+      transaction.payer_type === 'self'
+        ? 'self_pay'
+        : verificationStatus.startsWith('verified')
+          ? 'verified_quote'
+          : blockers.length > 0
+            ? 'blocked_quote'
+            : 'estimate_only';
+    const quoteConfidence =
+      quoteStatus === 'verified_quote' ? 'high' : quoteStatus === 'blocked_quote' ? 'low' : 'medium';
+    const recommendedNextStep =
+      latestClearance?.recommended_next_step ||
+      (quoteStatus === 'self_pay'
+        ? 'Collect patient payment or offer instalment options before service.'
+        : quoteStatus === 'verified_quote'
+          ? 'Proceed with service using the verified payer estimate and collect the expected patient portion.'
+          : 'Verify coverage and confirm any deductible/copay obligations before service.');
+
+    const repository = tenantDb.getRepository(FinancialQuoteAssessment);
+    const saved = await repository.save(
+      repository.create({
+        transactionId,
+        patientId: transaction.patient_id || null,
+        billId: billId || null,
+        appointmentId: appointmentId || null,
+        payerType: transaction.payer_type || 'self',
+        quoteStatus,
+        totalCharge,
+        estimatedPayerAmount,
+        estimatedPatientResponsibility,
+        copayAmount,
+        deductibleRemaining,
+        quoteConfidence,
+        blockers,
+        recommendedNextStep,
+        quoteData: {
+          transactionAmount: this.toNumber(transaction.amount || 0),
+          coveragePercent,
+          deductibleApplied,
+          lineItems: lineItems.map((item: any) => ({
+            description: item.description,
+            billingCode: item.billing_code,
+            total: this.toNumber(item.total || 0),
+          })),
+          sourceSignals: {
+            insuranceVerificationId: latestVerification?.id || null,
+            financialClearanceAssessmentId: latestClearance?.id || null,
+            claimId: latestClaim?.id || null,
+          },
+          payerContext: {
+            medicalAidName: latestClaim?.medical_aid_name || latestVerification?.payer_name || null,
+            memberNumber: latestClaim?.member_number || latestVerification?.policy_number || null,
+          },
+        },
+      }),
+    );
+
+    return {
+      id: saved.id,
+      transactionId,
+      patientId: saved.patientId,
+      billId: saved.billId,
+      appointmentId: saved.appointmentId,
+      payerType: saved.payerType,
+      quoteStatus: saved.quoteStatus,
+      totalCharge: this.toNumber(saved.totalCharge),
+      estimatedPayerAmount: this.toNumber(saved.estimatedPayerAmount),
+      estimatedPatientResponsibility: this.toNumber(saved.estimatedPatientResponsibility),
+      copayAmount: this.toNumber(saved.copayAmount),
+      deductibleRemaining: this.toNumber(saved.deductibleRemaining),
+      quoteConfidence: saved.quoteConfidence,
+      blockers: saved.blockers,
+      recommendedNextStep: saved.recommendedNextStep,
+      quotedAt: saved.quotedAt,
+      quoteData: saved.quoteData,
     };
   }
 
@@ -1028,4 +1276,3 @@ export class FinanceService {
     };
   }
 }
-

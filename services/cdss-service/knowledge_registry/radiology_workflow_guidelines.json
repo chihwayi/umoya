@@ -1,0 +1,71 @@
+[
+  {
+    "knowledge_id": "chest-pain-imaging-2026-01",
+    "condition": "chest_pain_imaging_appropriateness",
+    "aliases": ["chest pain imaging", "acs imaging appropriateness"],
+    "title": "Chest Pain Imaging Appropriateness Guidance",
+    "source_name": "ACR Appropriateness Criteria Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-17",
+    "reviewed_at": "2026-03-01",
+    "specialty": "radiology",
+    "module": "imaging_appropriateness",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["chest pain", "ctpa", "cxr", "acs", "pe"],
+    "recommendation_blocks": [
+      "Select imaging based on the working clinical question rather than ordering broad imaging panels for all chest-pain presentations.",
+      "Confirm hemodynamic stability, ECG findings, and pulmonary embolism risk before escalating to CT angiography.",
+      "Use the lowest-risk study that answers the immediate clinical question and avoids avoidable contrast or radiation exposure."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "incidental-lung-nodule-followup-2026-01",
+    "condition": "incidental_lung_nodule_followup",
+    "aliases": ["lung nodule follow up", "incidental pulmonary nodule"],
+    "title": "Incidental Lung Nodule Follow-up Guidance",
+    "source_name": "Fleischner Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-13",
+    "reviewed_at": "2026-03-01",
+    "specialty": "radiology",
+    "module": "follow_up_tracking",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["lung nodule", "incidental finding", "follow-up imaging"],
+    "recommendation_blocks": [
+      "Document nodule size, risk context, and the recommended follow-up interval in a structured way.",
+      "Trigger follow-up tracking rather than relying on a free-text recommendation alone.",
+      "Escalate sooner when morphology or patient risk context suggests a higher likelihood of malignancy."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "suspected-fracture-imaging-2026-01",
+    "condition": "suspected_fracture_imaging",
+    "aliases": ["fracture imaging", "trauma xray appropriateness"],
+    "title": "Suspected Fracture Imaging Guidance",
+    "source_name": "ACR Trauma Imaging Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-19",
+    "reviewed_at": "2026-03-01",
+    "specialty": "radiology",
+    "module": "imaging_appropriateness",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["fracture", "xray", "ct trauma", "orthopedic imaging"],
+    "recommendation_blocks": [
+      "Start with targeted plain radiography for most suspected fractures unless mechanism or instability justifies advanced imaging first.",
+      "Escalate to CT when complex anatomy, occult fracture concern, or operative planning requires better bony detail.",
+      "Pair imaging requests with the precise injury question so protocol selection is clinically aligned."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

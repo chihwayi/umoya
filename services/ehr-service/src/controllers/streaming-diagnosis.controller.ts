@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Headers, Res, Get, Query } from '@nestjs/common';
+import { Controller, Post, Body, Headers, Res, Get, Query, Request } from '@nestjs/common';
 import { Response } from 'express';
 import { StreamingDiagnosisService } from '../services/streaming-diagnosis.service';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('diagnosis')
 export class StreamingDiagnosisController {
@@ -14,12 +15,13 @@ export class StreamingDiagnosisController {
   async streamDifferential(
     @Body() dto: { text: string; patientId: string; sessionId?: string },
     @Res() res: Response,
+    @Request() req: RequestWithTenant,
   ) {
-    return this.svc.streamDifferential(dto.text, dto.patientId, dto.sessionId || 'anon', res);
+    return this.svc.streamDifferential(dto.text, dto.patientId, dto.sessionId || 'anon', res, req.tenantId);
   }
 
   @Post('suggest')
-  suggestDifferential(@Body() dto: { text: string; patientId: string }) {
-    return this.svc.suggestDifferential(dto.text, dto.patientId);
+  suggestDifferential(@Body() dto: { text: string; patientId: string }, @Request() req: RequestWithTenant) {
+    return this.svc.suggestDifferential(dto.text, dto.patientId, req.tenantId);
   }
 }

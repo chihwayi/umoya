@@ -18,6 +18,21 @@ export class OxygenTherapyRecord {
   @Column({ name: 'paco2_on_therapy', type: 'numeric', precision: 5, scale: 1, nullable: true }) paco2OnTherapy: number;
   @Column({ type: 'text', default: 'active' }) status: string;
   @Column({ name: 'weaning_plan', type: 'text', nullable: true }) weaningPlan: string;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'flow_rate_l_min', type: 'numeric', precision: 4, scale: 1, nullable: true })
+  flowRateLMin?: number;
+
+  @Column({ name: 'hours_per_day', type: 'int', nullable: true })
+  hoursPerDay?: number;
+
+  @Column({ name: 'is_active', type: 'boolean', nullable: true, default: true })
+  isActive: boolean = true;
+
+  @Column({ name: 'prescription_date', type: 'date' })
+  prescriptionDate: Date;
+
+  @Column({ name: 'review_date', type: 'date', nullable: true })
+  reviewDate?: Date;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

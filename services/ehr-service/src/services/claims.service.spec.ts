@@ -20,7 +20,22 @@ describe('ClaimsService', () => {
   }) => {
     const repo = {
       findOne: jest.fn().mockResolvedValue(overrides?.repoClaim || null),
-      save: jest.fn(),
+      create: jest.fn((input) => input),
+      save: jest.fn(async (input) => ({
+        id:
+          Object.prototype.hasOwnProperty.call(input, 'riskScore')
+            ? `prediction-${input.claimId}`
+            : Object.prototype.hasOwnProperty.call(input, 'eligibilityStatus')
+              ? 'assessment-1'
+              : Object.prototype.hasOwnProperty.call(input, 'medicalAidName')
+                ? 'draft-1'
+                : 'entity-1',
+        predictedAt: new Date('2026-03-25T08:00:00.000Z'),
+        assessedAt: new Date('2026-03-25T08:00:00.000Z'),
+        createdAt: new Date('2026-03-25T08:00:00.000Z'),
+        updatedAt: new Date('2026-03-25T08:00:00.000Z'),
+        ...input,
+      })),
     };
 
     const query = jest.fn(async (sql: string, params?: any[]) => {
@@ -50,6 +65,9 @@ describe('ClaimsService', () => {
       }
       if (sql.includes('FROM appointments') && sql.includes('WHERE id = $1')) {
         return overrides?.appointment ? [overrides.appointment] : [];
+      }
+      if (sql.includes('FROM insurance_eligibility_checks')) {
+        return [];
       }
       if (sql.includes('SELECT id, status, created_at, submission_date')) {
         return overrides?.worklistRows || [];
@@ -134,6 +152,16 @@ describe('ClaimsService', () => {
         expect.objectContaining({ code: 'missing_insurance_card' }),
       ]),
     );
+    expect(readiness.denialPrediction).toEqual(
+      expect.objectContaining({
+        riskLevel: 'high',
+      }),
+    );
+    expect(readiness.financialClearance).toEqual(
+      expect.objectContaining({
+        authorizationRequired: true,
+      }),
+    );
   });
 
   it('returns ready readiness when diagnosis, documentation, and documents are present', async () => {
@@ -184,6 +212,16 @@ describe('ClaimsService', () => {
     expect(readiness.readyToSubmit).toBe(true);
     expect(readiness.blockers).toHaveLength(0);
     expect(readiness.missingDocuments).toHaveLength(0);
+    expect(readiness.denialPrediction).toEqual(
+      expect.objectContaining({
+        riskLevel: 'low',
+      }),
+    );
+    expect(readiness.financialClearance).toEqual(
+      expect.objectContaining({
+        recommendedNextStep: 'Ready for claim submission.',
+      }),
+    );
   });
 
   it('blocks enhanced submission when readiness has blockers', async () => {
@@ -209,7 +247,117 @@ describe('ClaimsService', () => {
     await expect(service.submitClaimEnhanced('claim-3', 'manual', tenantDb)).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
 
-    expect(tenantDb.__repo.save).not.toHaveBeenCalled();
+  it('returns financial clearance view with persisted prediction and clearance data', async () => {
+    const service = makeService();
+    const tenantDb = makeTenantDb({
+      claim: {
+        id: 'claim-4',
+        claim_number: 'CLM00000004',
+        patient_id: 'patient-4',
+        billing_id: 'bill-4',
+        medical_aid_name: 'cimas',
+        member_number: 'MEM-4',
+        claim_amount: '320.00',
+        primary_diagnosis_code: 'A01',
+        diagnosis_codes: ['A01'],
+        claim_data: {
+          clinicalNotes: 'Ready to submit.',
+        },
+        created_at: '2026-03-10T08:00:00.000Z',
+      },
+      patient: {
+        id: 'patient-4',
+        first_name: 'Chipo',
+        last_name: 'Mlambo',
+        patient_number: 'P004',
+      },
+      bill: {
+        id: 'bill-4',
+        appointment_id: 'appt-4',
+        notes: 'Clinical note complete',
+      },
+      appointment: {
+        id: 'appt-4',
+        insurance_verified: true,
+        primary_diagnosis_code: 'A01',
+        diagnosis_codes: ['A01'],
+      },
+      patientDocuments: [{ document_type: 'insurance_card', count: 1 }],
+      medicalRecordsCount: 1,
+      nursingNotesCount: 0,
+      history: [],
+    });
+
+    const result = await service.getFinancialClearance('claim-4', tenantDb);
+
+    expect(result.claimId).toBe('claim-4');
+    expect(result.financialClearance).toEqual(
+      expect.objectContaining({
+        eligibilityStatus: expect.any(String),
+      }),
+    );
+    expect(result.denialPrediction).toEqual(
+      expect.objectContaining({
+        riskScore: expect.any(Number),
+      }),
+    );
+  });
+
+  it('generates a persisted prior-authorization draft from claim readiness', async () => {
+    const service = makeService();
+    const tenantDb = makeTenantDb({
+      claim: {
+        id: 'claim-5',
+        claim_number: 'CLM00000005',
+        patient_id: 'patient-5',
+        billing_id: 'bill-5',
+        medical_aid_name: 'cimas',
+        member_number: 'MEM-5',
+        claim_amount: '510.00',
+        primary_diagnosis_code: 'I10',
+        diagnosis_codes: ['I10'],
+        claim_data: {
+          requiresPreAuth: true,
+          procedureType: 'mri',
+          clinicalNotes: 'MRI requested after escalation.',
+        },
+        created_at: '2026-03-10T08:00:00.000Z',
+      },
+      patient: {
+        id: 'patient-5',
+        first_name: 'Tariro',
+        last_name: 'Dube',
+        patient_number: 'P005',
+      },
+      bill: {
+        id: 'bill-5',
+        appointment_id: 'appt-5',
+        notes: 'Imaging note complete',
+      },
+      appointment: {
+        id: 'appt-5',
+        insurance_verified: true,
+        primary_diagnosis_code: 'I10',
+        diagnosis_codes: ['I10'],
+      },
+      patientDocuments: [{ document_type: 'insurance_card', count: 1 }],
+      medicalRecordsCount: 1,
+      nursingNotesCount: 0,
+      history: [],
+    });
+
+    const result = await service.generatePriorAuthorizationDraft('claim-5', tenantDb);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 'draft-1',
+        claimId: 'claim-5',
+        requestType: 'mri',
+        medicalAidName: 'cimas',
+      }),
+    );
+    expect(result.justification).toContain('Claim CLM00000005 requires payer review before submission.');
   });
 });

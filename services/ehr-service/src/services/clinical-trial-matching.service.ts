@@ -36,6 +36,8 @@ export class ClinicalTrialMatchingService {
         patientProfile: profile,
         trials: trials.slice(0, 20),
         context: 'clinical_trial_eligibility',
+        specialty: 'oncology',
+        module: 'clinical_trials',
       }, true);
       scored = (result as any)?.matches || (result as any)?.recommendations || [];
       if (!scored.length) throw new Error('Empty matches');
@@ -102,7 +104,12 @@ export class ClinicalTrialMatchingService {
     this.logger.log('Running weekly clinical trial matching sweep…');
     try {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
-      for (const subdomain of tenants) {
+      for (const tenant of tenants) {
+        const subdomain = typeof tenant === 'string' ? tenant : tenant?.subdomain;
+        if (!subdomain) {
+          this.logger.warn('Skipping trial matching sweep for tenant without subdomain');
+          continue;
+        }
         await this.sweepActivePatients(subdomain).catch(e =>
           this.logger.error(`Trial matching sweep failed for ${subdomain}: ${e?.message}`));
       }

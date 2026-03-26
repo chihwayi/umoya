@@ -552,6 +552,7 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
   }
 
   return (
+    <>
     <div className={embedded ? '' : 'min-h-screen bg-slate-50'}>
       {!embedded && (
         <div className="bg-gradient-to-r from-red-600 to-rose-700 text-white shadow-lg">
@@ -1302,6 +1303,7 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
         </div>
       </ModalPortal>
     )}
+    </>
   );
 };
 

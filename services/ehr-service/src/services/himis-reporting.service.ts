@@ -148,7 +148,14 @@ export class HimisReportingService {
     this.logger.log(`Auto-submitting HIMIS report for ${periodLabel}…`);
     try {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
-      for (const subdomain of tenants) {
+      for (const tenant of tenants) {
+        const subdomain =
+          typeof tenant === 'string'
+            ? tenant
+            : String(tenant?.subdomain || tenant?.databaseName || tenant?.id || '').trim();
+        if (!subdomain) {
+          continue;
+        }
         await this.submitHimisMonthly(subdomain, periodLabel, 'auto').catch(e =>
           this.logger.error(`HIMIS auto-submit failed for ${subdomain}: ${e?.message}`));
       }

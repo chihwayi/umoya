@@ -217,6 +217,7 @@ const SepsisDashboard: React.FC<SepsisDashboardProps> = ({ embedded = false }) =
   );
 
   return (
+    <>
     <div className={embedded ? '' : 'min-h-screen bg-slate-50'}>
       {!embedded && (
         <div className="bg-gradient-to-r from-orange-600 to-red-700 text-white shadow-lg">
@@ -776,6 +777,7 @@ const SepsisDashboard: React.FC<SepsisDashboardProps> = ({ embedded = false }) =
       type="warning"
       multiline
     />
+    </>
   );
 };
 

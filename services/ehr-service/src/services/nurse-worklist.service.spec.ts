@@ -227,6 +227,129 @@ describe('NurseWorklistService', () => {
     });
   });
 
+  it('builds a clinical escalation feed with summary counts', async () => {
+    const { service } = makeService();
+    const tenantDb = {
+      query: jest.fn().mockResolvedValue([
+        {
+          id: 'esc-1',
+          patient_id: 'patient-1',
+          early_warning_score_id: 'ews-1',
+          nurse_task_id: 'task-1',
+          source_module: 'early_warning',
+          source_reference_id: 'vitals-1',
+          escalation_type: 'deterioration_review',
+          severity: 'critical',
+          status: 'open',
+          title: 'NEWS2 escalation',
+          summary: 'Immediate review required',
+          recommended_action: 'Repeat vitals',
+          due_at: new Date().toISOString(),
+          acknowledged_at: null,
+          completed_at: null,
+          evidence: {},
+          metadata: {},
+          first_name: 'Jane',
+          last_name: 'Doe',
+          patient_number: 'P001',
+          early_warning_total_score: 8,
+          early_warning_risk_level: 'high',
+          remote_monitoring_alert_id: 'rma-1',
+          remote_monitoring_alert_type: 'early_warning_deterioration',
+          remote_monitoring_severity: 'critical',
+        },
+      ]),
+    } as any;
+
+    const result = await service.getClinicalEscalationFeed(tenantDb, { includeCompleted: false });
+
+    expect(result.summary).toEqual({
+      total: 1,
+      critical: 1,
+      open: 1,
+      acknowledged: 0,
+      highRiskEarlyWarning: 1,
+      remoteMonitoringLinked: 1,
+    });
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        id: 'esc-1',
+        patientName: 'Jane Doe',
+        earlyWarning: expect.objectContaining({ totalScore: 8, riskLevel: 'high' }),
+        remoteMonitoring: expect.objectContaining({ alertId: 'rma-1' }),
+      }),
+    );
+  });
+
+  it('acknowledges a clinical escalation and updates linked records', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 'esc-1', patient_id: 'patient-1', early_warning_score_id: 'ews-1', nurse_task_id: 'task-1' },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await service.acknowledgeClinicalEscalation(tenantDb, user, 'esc-1', {
+      ipAddress: '127.0.0.1',
+    });
+
+    expect(result).toEqual({ ok: true, escalationTaskId: 'esc-1' });
+    expect(tenantDb.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('UPDATE clinical_escalation_tasks'),
+      ['esc-1', 'user-1'],
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_ALERT_ACKNOWLEDGE,
+        resourceId: 'esc-1',
+        patientId: 'patient-1',
+      }),
+    );
+  });
+
+  it('completes a clinical escalation and resolves linked work items', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 'esc-1', patient_id: 'patient-1', nurse_task_id: 'task-1' },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await service.completeClinicalEscalation(
+      tenantDb,
+      user,
+      'esc-1',
+      { note: 'Patient reassessed and stabilized' },
+      { ipAddress: '127.0.0.1' },
+    );
+
+    expect(result).toEqual({ ok: true, escalationTaskId: 'esc-1' });
+    expect(tenantDb.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('UPDATE clinical_escalation_tasks'),
+      ['esc-1', 'user-1', 'Patient reassessed and stabilized'],
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_TASK_COMPLETE,
+        resourceId: 'esc-1',
+        patientId: 'patient-1',
+      }),
+    );
+  });
+
   it('requires a reason when a nurse overrides an alert recommendation', async () => {
     const { service } = makeService();
     const tenantDb = { query: jest.fn() } as any;

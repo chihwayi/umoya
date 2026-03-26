@@ -23,7 +23,7 @@ export class EncounterPrechartController {
     @Param('appointmentId') appointmentId: string,
     @Request() req: RequestWithTenant,
   ) {
-    return this.precharterService.generateForAppointment(appointmentId, req.tenantDb);
+    return this.precharterService.generateForAppointment(appointmentId, req.tenantDb, req.tenantId);
   }
 
   /** PATCH /precharts/appointment/:appointmentId/reviewed — mark provider reviewed */

@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '
 import { PaymentsService } from '../services/payments.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { Public } from '../decorators/public.decorator';
 
 @ApiTags('Mobile Money Payments (Zimbabwe)')
 @ApiSecurity('tenant-key')
@@ -45,6 +46,14 @@ export class PaymentsController {
   @ApiResponse({ status: 200, description: 'Payment verified' })
   async verifyPayment(@Body() data: { transactionId: string, reference: string }, @Request() req: RequestWithTenant) {
     return this.paymentsService.verifyPayment(data.transactionId, data.reference, req.tenantDb);
+  }
+
+  @Public()
+  @Post('provider-callback')
+  @ApiOperation({ summary: 'Record a provider callback/payment event' })
+  @ApiResponse({ status: 200, description: 'Provider callback processed' })
+  async recordProviderCallback(@Body() data: any, @Request() req: RequestWithTenant) {
+    return this.paymentsService.recordProviderCallback(data, req.tenantDb);
   }
 
   @Get('methods')

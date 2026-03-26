@@ -4,13 +4,14 @@ import { SkinLesion } from '../entities/skin-lesion.entity';
 import { WoundAssessment } from '../entities/wound-assessment.entity';
 import { BurnAssessment } from '../entities/burn-assessment.entity';
 import { DermatologyNote } from '../entities/dermatology-note.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class DermatologyService {
-  constructor(private readonly tenantService: TenantService) {}
-
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Skin Lesions ───────────────────────────────────────────────────────────
 
@@ -92,13 +93,11 @@ export class DermatologyService {
 
   // ── CDSS ───────────────────────────────────────────────────────────────────
 
-  async classifyLesion(body: any) {
-    const res = await axios.post(`${this.cdssUrl}/dermatology/lesion/classify`, body);
-    return res.data;
+  async classifyLesion(body: any, tenantId?: string, tenantDb?: any) {
+    return this.cdssService.classifyDermatologyLesion(body, tenantId, tenantDb);
   }
 
-  async calculateBurnFluid(body: any) {
-    const res = await axios.post(`${this.cdssUrl}/dermatology/burn/fluid`, body);
-    return res.data;
+  async calculateBurnFluid(body: any, tenantId?: string, tenantDb?: any) {
+    return this.cdssService.calculateDermatologyBurnFluid(body, tenantId, tenantDb);
   }
 }

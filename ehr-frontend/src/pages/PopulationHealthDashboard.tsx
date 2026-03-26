@@ -337,6 +337,7 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
   const total = dashboard?.total ?? 0;
 
   return (
+    <>
     <div className={embedded ? '' : 'min-h-screen bg-slate-50'}>
       {!embedded && (
         <div className="bg-gradient-to-r from-teal-600 to-cyan-700 text-white shadow-lg">
@@ -997,6 +998,7 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
         </div>
       </ModalPortal>
     )}
+    </>
   );
 };
 

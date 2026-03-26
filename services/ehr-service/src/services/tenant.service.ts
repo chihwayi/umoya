@@ -105,6 +105,11 @@ import { NurseHandoffWorkflowState } from '../entities/nurse-handoff-workflow-st
 import { NurseCrossModuleWorkflowState } from '../entities/nurse-cross-module-workflow-state.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
 import { PaymentGatewayConfig } from '../entities/payment-gateway-config.entity';
+import { PaymentProviderEvent } from '../entities/payment-provider-event.entity';
+import { PaymentVerificationAttempt } from '../entities/payment-verification-attempt.entity';
+import { BankStatement } from '../entities/bank-statement.entity';
+import { PaymentReconciliation } from '../entities/payment-reconciliation.entity';
+import { PaymentAnomalyFlag } from '../entities/payment-anomaly-flag.entity';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
 import { PostVisitTranscriptSegment } from '../entities/post-visit-transcript-segment.entity';
 import { PostVisitExtractedEntity } from '../entities/post-visit-extracted-entity.entity';
@@ -125,6 +130,10 @@ import { SuperbillTemplate } from '../entities/superbill-template.entity';
 import { InsuranceVerification } from '../entities/insurance-verification.entity';
 import { PriorAuthorization } from '../entities/prior-authorization.entity';
 import { PatientPortalPayment } from '../entities/patient-portal-payment.entity';
+import { ClaimDenialPrediction } from '../entities/claim-denial-prediction.entity';
+import { FinancialClearanceAssessment } from '../entities/financial-clearance-assessment.entity';
+import { FinancialQuoteAssessment } from '../entities/financial-quote-assessment.entity';
+import { PriorAuthorizationDraft } from '../entities/prior-authorization-draft.entity';
 import { HealthEducationContent } from '../entities/health-education-content.entity';
 import { PatientFamilyAccess } from '../entities/patient-family-access.entity';
 import { NotificationCampaign } from '../entities/notification-campaign.entity';
@@ -207,6 +216,27 @@ import { VentilatorSettings } from '../entities/ventilator-settings.entity';
 import { SedationRecord } from '../entities/sedation-record.entity';
 import { CentralLineRecord } from '../entities/central-line-record.entity';
 import { VasopressorRecord } from '../entities/vasopressor-record.entity';
+import { ModelRegistry } from '../entities/model-registry.entity';
+import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
+import { ModelFairnessReport } from '../entities/model-fairness-report.entity';
+import { ModelPromotionReview } from '../entities/model-promotion-review.entity';
+import { ModelCard } from '../entities/model-card.entity';
+import { ModelShadowEvaluation } from '../entities/model-shadow-evaluation.entity';
+import { OutcomeLearningJob } from '../entities/outcome-learning-job.entity';
+import { FlRound } from '../entities/fl-round.entity';
+import { FlParticipationLog } from '../entities/fl-participation-log.entity';
+import { PatientIdentityMatch } from '../entities/patient-identity-match.entity';
+import { RegistrationDocumentExtract } from '../entities/registration-document-extract.entity';
+import { IntakeAssessment } from '../entities/intake-assessment.entity';
+import { InsuranceEligibilityCheck } from '../entities/insurance-eligibility-check.entity';
+import { PatientVitalBaseline } from '../entities/patient-vital-baseline.entity';
+import { ClinicalEscalationTask } from '../entities/clinical-escalation-task.entity';
+import { RemoteMonitoringEvent } from '../entities/remote-monitoring-event.entity';
+import { RemoteMonitoringAlert } from '../entities/remote-monitoring-alert.entity';
+import { EncounterCopilotSession } from '../entities/encounter-copilot-session.entity';
+import { OrderAppropriatenessReview } from '../entities/order-appropriateness-review.entity';
+import { ResultFollowupTask } from '../entities/result-followup-task.entity';
+import { TreatmentPathwayInstance } from '../entities/treatment-pathway-instance.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface TenantDhis2Config {
@@ -489,6 +519,11 @@ export class TenantService {
         NurseCrossModuleWorkflowState,
         SmsGatewayConfig,
         PaymentGatewayConfig,
+        PaymentProviderEvent,
+        PaymentVerificationAttempt,
+        BankStatement,
+        PaymentReconciliation,
+        PaymentAnomalyFlag,
         PostVisitSession,
         PostVisitTranscriptSegment,
         PostVisitExtractedEntity,
@@ -509,6 +544,10 @@ export class TenantService {
         InsuranceVerification,
         PriorAuthorization,
         PatientPortalPayment,
+        ClaimDenialPrediction,
+        FinancialClearanceAssessment,
+        FinancialQuoteAssessment,
+        PriorAuthorizationDraft,
         HealthEducationContent,
         PatientFamilyAccess,
         NotificationCampaign,
@@ -586,6 +625,27 @@ export class TenantService {
         SedationRecord,
         CentralLineRecord,
         VasopressorRecord,
+        ModelRegistry,
+        ModelPerformanceMetric,
+        ModelFairnessReport,
+        ModelPromotionReview,
+        ModelCard,
+        ModelShadowEvaluation,
+        OutcomeLearningJob,
+        FlRound,
+        FlParticipationLog,
+        PatientIdentityMatch,
+        RegistrationDocumentExtract,
+        IntakeAssessment,
+        InsuranceEligibilityCheck,
+        PatientVitalBaseline,
+        ClinicalEscalationTask,
+        RemoteMonitoringEvent,
+        RemoteMonitoringAlert,
+        EncounterCopilotSession,
+        OrderAppropriatenessReview,
+        ResultFollowupTask,
+        TreatmentPathwayInstance,
         MalariaCase,
         MalariaTest,
         MalariaTreatment,

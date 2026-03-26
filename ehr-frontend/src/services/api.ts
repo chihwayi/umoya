@@ -758,6 +758,56 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  assessRegistrationIntake: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/registration-intelligence/assess', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  verifyRegistrationEligibility: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/registration-intelligence/eligibility/verify', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getDuplicateReviewQueue: async (
+    params: { sourceReference?: string; status?: string; limit?: number },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get('/registration-intelligence/duplicates/review', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  reviewDuplicateCandidate: async (
+    matchId: string,
+    payload: { matchStatus: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.patch(`/registration-intelligence/duplicates/review/${matchId}`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   getPatientById: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/patients/${patientId}`, {
       headers: { 
@@ -1314,6 +1364,21 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+
+  getClinicalEscalationFeed: async (
+    token: string,
+    tenantSlug: string,
+    params?: { status?: string; severity?: string; includeCompleted?: boolean; limit?: number },
+  ) => {
+    const response = await ehrAxios.get('/nurse-worklist/clinical-escalations', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params,
     });
     return { data: response.data };
   },
@@ -2651,6 +2716,35 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  acknowledgeClinicalEscalation: async (
+    escalationTaskId: string,
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/nurse-worklist/clinical-escalations/${escalationTaskId}/ack`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  completeClinicalEscalation: async (
+    escalationTaskId: string,
+    payload: { note?: string },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/nurse-worklist/clinical-escalations/${escalationTaskId}/complete`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   getNurseHandoffState: async (
     patientId: string,
     token: string,
@@ -3973,6 +4067,16 @@ export const ehrApi = {
 
   getFinancialTransactionDetail: async (tenantSlug: string, token: string, transactionId: string) => {
     const response = await ehrAxios.get(`/finance/transactions/${transactionId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getFinancialTransactionQuote: async (tenantSlug: string, token: string, transactionId: string) => {
+    const response = await ehrAxios.get(`/finance/transactions/${transactionId}/quote`, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         Authorization: `Bearer ${token}`,
@@ -8192,6 +8296,26 @@ export const claimsApi = {
     return { data: response.data };
   },
 
+  getClaimFinancialClearance: async (tenantSlug: string, token: string, claimId: string) => {
+    const response = await ehrAxios.get(`/claims/${claimId}/financial-clearance`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  generatePriorAuthorizationDraft: async (tenantSlug: string, token: string, claimId: string) => {
+    const response = await ehrAxios.post(`/claims/${claimId}/prior-authorization-draft`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   getClaimReadinessWorklist: async (
     tenantSlug: string,
     token: string,
@@ -10886,3 +11010,46 @@ export const cdssApi = {
     return ehrAxios.post('/icu/cdss/sedation/assess', data, { headers: { Authorization: `Bearer ${token}` } });
   },
 };
+
+export const {
+  getPalliativeAssessments,
+  addPalliativeAssessment,
+  getPalliativeEsas,
+  addPalliativeEsas,
+  getPalliativeGoals,
+  addPalliativeGoals,
+  getPalliativeDirectives,
+  addPalliativeDirective,
+  getPalliativeMedReviews,
+  addPalliativeMedReview,
+  palliativePrognosis,
+  palliativeOpioidConvert,
+  palliativeSymptomManage,
+  getNutritionScreenings,
+  addNutritionScreening,
+  getNutritionAssessments,
+  addNutritionAssessment,
+  getNutritionPrescriptions,
+  addNutritionPrescription,
+  getNutritionMonitoring,
+  addNutritionMonitoring,
+  cdssNutritionScreen,
+  cdssNutritionPrescribe,
+  cdssRefeedingRisk,
+  getIcuAdmissions,
+  addIcuAdmission,
+  updateIcuAdmission,
+  getIcuSofa,
+  addIcuSofa,
+  getIcuVent,
+  addIcuVent,
+  getIcuSedation,
+  addIcuSedation,
+  getIcuLines,
+  addIcuLine,
+  getIcuVasopressors,
+  addIcuVasopressor,
+  cdssIcuSofa,
+  cdssIcuVent,
+  cdssIcuSedation,
+} = cdssApi;

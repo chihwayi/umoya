@@ -1,0 +1,94 @@
+[
+  {
+    "knowledge_id": "frailty-assessment-2026-01",
+    "condition": "frailty_assessment",
+    "aliases": ["frailty assessment", "geriatric frailty assessment"],
+    "title": "Frailty Assessment Guidance",
+    "source_name": "Frailty/CGA Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-16",
+    "reviewed_at": "2026-03-01",
+    "specialty": "geriatrics",
+    "module": "frailty_and_cga",
+    "target_population": "older_adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["frailty", "geriatric", "falls", "CGA", "functional decline"],
+    "recommendation_blocks": [
+      "Use frailty screening to trigger comprehensive geriatric assessment rather than leaving risk scoring as a standalone output.",
+      "Escalate quickly when frailty coexists with weight loss, recurrent falls, delirium, or medication burden.",
+      "Tie frailty assessment to mobility, nutrition, medication review, and caregiver planning."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "fall-risk-2026-01",
+    "condition": "fall_risk",
+    "aliases": ["fall risk", "falls risk assessment"],
+    "title": "Fall Risk Assessment Guidance",
+    "source_name": "Falls Prevention Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-17",
+    "reviewed_at": "2026-03-01",
+    "specialty": "geriatrics",
+    "module": "fall_prevention",
+    "target_population": "older_adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["falls", "balance", "orthostasis", "mobility", "geriatric"],
+    "recommendation_blocks": [
+      "Treat recurrent falls as a multi-factor syndrome requiring medication review, mobility assessment, and orthostatic evaluation.",
+      "Escalate high-risk patients for supervised prevention interventions rather than giving generic safety advice alone.",
+      "Reassess after each fall-related intervention so risk reduction is measured over time."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "chronic-disease-registry-2026-01",
+    "condition": "chronic_disease_registry",
+    "aliases": ["chronic disease registry", "population health registry risk"],
+    "title": "Chronic Disease Registry Risk Stratification Guidance",
+    "source_name": "Primary Care Population Health Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-18",
+    "reviewed_at": "2026-03-01",
+    "specialty": "primary_care",
+    "module": "population_health",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "moderate",
+    "keywords": ["population health", "registry", "care gaps", "chronic care", "risk stratification"],
+    "recommendation_blocks": [
+      "Risk-stratify registry patients using disease burden, missed follow-up, and preventable-utilization signals rather than diagnosis labels alone.",
+      "Upgrade outreach urgency when uncontrolled disease, overdue review, or care-gap clustering is present.",
+      "Document why AI risk overrides a submitted manual risk level so registry changes stay auditable."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "anc-risk-assessment-2026-01",
+    "condition": "anc",
+    "aliases": ["anc", "antenatal care risk assessment", "antenatal visit risk"],
+    "title": "Antenatal Visit Risk Assessment Guidance",
+    "source_name": "WHO ANC Danger Sign Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-19",
+    "reviewed_at": "2026-03-01",
+    "specialty": "obstetrics",
+    "module": "antenatal_care",
+    "target_population": "pregnant_women",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["anc", "antenatal", "pregnancy", "preeclampsia", "maternal risk"],
+    "recommendation_blocks": [
+      "Escalate ANC visits when hypertensive disease, severe anemia, infection, fetal compromise, or danger signs are present.",
+      "Use gestational age, fetal status, blood pressure, and proteinuria together rather than isolated thresholds.",
+      "Link maternal risk flags to immediate action items, alerting, and follow-up timing."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

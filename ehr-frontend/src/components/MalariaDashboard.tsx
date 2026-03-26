@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { AlertTriangle, Plus, FlaskConical, Pill, Users, BarChart3, Activity } from 'lucide-react';
 
 interface Props {
@@ -47,16 +47,16 @@ export default function MalariaDashboard({ patientId, providerId, tenantSubdomai
   const [recDto, setRecDto] = useState<any>({ species: 'falciparum', case_type: 'uncomplicated', pregnant: false });
 
   const loadCases = useCallback(async () => {
-    const data = await ehrApi.listMalariaCases(patientId, tenantSubdomain);
+    const data = await cdssApi.listMalariaCases(patientId, tenantSubdomain);
     setCases(data);
     if (data.length > 0 && !activeCase) setActiveCase(data[0]);
   }, [patientId, tenantSubdomain, activeCase]);
 
   const loadCaseDetails = useCallback(async (caseId: string) => {
     const [t, tx, c] = await Promise.all([
-      ehrApi.getMalariaTests(caseId, tenantSubdomain),
-      ehrApi.getMalariaTreatments(caseId, tenantSubdomain),
-      ehrApi.getMalariaContacts(caseId, tenantSubdomain),
+      cdssApi.getMalariaTests(caseId, tenantSubdomain),
+      cdssApi.getMalariaTreatments(caseId, tenantSubdomain),
+      cdssApi.getMalariaContacts(caseId, tenantSubdomain),
     ]);
     setTests(t);
     setTreatments(tx);
@@ -67,7 +67,7 @@ export default function MalariaDashboard({ patientId, providerId, tenantSubdomai
   useEffect(() => { if (activeCase) loadCaseDetails(activeCase.id); }, [activeCase, loadCaseDetails]);
 
   async function submitCase() {
-    const c = await ehrApi.registerMalariaCase(tenantSubdomain, { ...caseDto, patientId, registeredBy: providerId });
+    const c = await cdssApi.registerMalariaCase(tenantSubdomain, { ...caseDto, patientId, registeredBy: providerId });
     setActiveCase(c);
     setShowCaseForm(false);
     setCaseDto({ caseType: 'uncomplicated', species: 'falciparum' });
@@ -75,33 +75,33 @@ export default function MalariaDashboard({ patientId, providerId, tenantSubdomai
   }
 
   async function submitTest() {
-    await ehrApi.addMalariaTest(activeCase.id, tenantSubdomain, { ...testDto, patientId, performedBy: providerId });
+    await cdssApi.addMalariaTest(activeCase.id, tenantSubdomain, { ...testDto, patientId, performedBy: providerId });
     setShowTestForm(false);
     setTestDto({ testType: 'RDT', result: 'positive', gametocytes: false });
     loadCaseDetails(activeCase.id);
   }
 
   async function submitTreatment() {
-    await ehrApi.startMalariaTreatment(activeCase.id, tenantSubdomain, { ...txDto, patientId, prescribedBy: providerId });
+    await cdssApi.startMalariaTreatment(activeCase.id, tenantSubdomain, { ...txDto, patientId, prescribedBy: providerId });
     setShowTxForm(false);
     setTxDto({ regimen: 'AL', startDate: new Date().toISOString().slice(0, 10), dayOneObserved: false });
     loadCaseDetails(activeCase.id);
   }
 
   async function submitContact() {
-    await ehrApi.addMalariaContact(activeCase.id, tenantSubdomain, contactDto);
+    await cdssApi.addMalariaContact(activeCase.id, tenantSubdomain, contactDto);
     setShowContactForm(false);
     setContactDto({ contactName: '', rdtResult: 'pending', treated: false, itnProvided: false });
     loadCaseDetails(activeCase.id);
   }
 
   async function runSeverityScore() {
-    const result = await ehrApi.scoreMalariaSeverity(sevDto);
+    const result = await cdssApi.scoreMalariaSeverity(sevDto);
     setSeverityResult(result);
   }
 
   async function runTreatmentRec() {
-    const result = await ehrApi.recommendMalariaTreatment(recDto);
+    const result = await cdssApi.recommendMalariaTreatment(recDto);
     setTreatmentRec(result);
   }
 

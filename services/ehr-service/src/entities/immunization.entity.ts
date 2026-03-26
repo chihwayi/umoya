@@ -129,6 +129,24 @@ export class Immunization {
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'created_by' })
   createdByUser: User;
+  @Column({ name: 'cvx_code', type: 'varchar', length: 10, nullable: true })
+  cvxCode?: string;
+
+  @Column({ name: 'refusal_reason', type: 'text', nullable: true })
+  refusalReason?: string;
+
+  @Column({ name: 'registry_status', type: 'varchar', length: 50, nullable: true })
+  registryStatus?: string;
+
+  @Column({ name: 'snomed_vaccine_code', type: 'varchar', length: 20, nullable: true })
+  snomedVaccineCode?: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  status?: string;
+
+  @Column({ name: 'vis_document', type: 'varchar', length: 255, nullable: true })
+  visDocument?: string;
+
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

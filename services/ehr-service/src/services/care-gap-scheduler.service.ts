@@ -1,8 +1,8 @@
 import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import axios from 'axios';
 import { TenantService } from './tenant.service';
 import { NurseTaskService } from './nurse-task.service';
+import { CdssService } from './cdss.service';
 
 /**
  * Nightly proactive care gap engine.
@@ -16,13 +16,12 @@ import { NurseTaskService } from './nurse-task.service';
 @Injectable()
 export class CareGapSchedulerService {
   private readonly logger = new Logger(CareGapSchedulerService.name);
-  private readonly cdssUrl: string;
 
   constructor(
     @Optional() @Inject(TenantService) private readonly tenantService: TenantService,
     @Optional() @Inject(NurseTaskService) private readonly nurseTaskService: NurseTaskService,
+    @Optional() @Inject(CdssService) private readonly cdssService?: CdssService,
   ) {
-    this.cdssUrl = (process.env.CDSS_SERVICE_URL || '').replace(/\/$/, '');
   }
 
   /**
@@ -34,8 +33,8 @@ export class CareGapSchedulerService {
       this.logger.warn('CareGapSchedulerService: dependencies not injected, skipping');
       return;
     }
-    if (!this.cdssUrl) {
-      this.logger.warn('CDSS_SERVICE_URL not configured — skipping care gap detection');
+    if (!this.cdssService) {
+      this.logger.warn('CdssService not injected — skipping care gap detection');
       return;
     }
 
@@ -89,18 +88,20 @@ export class CareGapSchedulerService {
 
               let gapsResponse: any;
               try {
-                const resp = await axios.post(
-                  `${this.cdssUrl}/care-gaps/detect`,
-                  cdssPayload,
+                gapsResponse = await this.cdssService.detectCareGaps(
+                  cdssPayload.patient_age,
+                  cdssPayload.patient_gender,
+                  cdssPayload.visit_history,
+                  cdssPayload.diagnoses,
                   {
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'X-Service-Token': process.env.CDSS_SERVICE_TOKEN || '',
-                    },
-                    timeout: 15_000,
+                    tenantId: tenant.subdomain,
+                    tenantDb,
+                    patientId: row.patient_id,
+                    context: 'scheduled_care_gap_detection',
+                    specialty: 'primary_care',
+                    module: 'population_health',
                   },
                 );
-                gapsResponse = resp.data;
               } catch (cdssErr: any) {
                 this.logger.warn(`CDSS care gap call failed for patient ${row.patient_id}: ${String(cdssErr?.message || cdssErr)}`);
                 continue;

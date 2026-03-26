@@ -6,7 +6,7 @@ import {
   RefreshCw, MailOpen, Filter,
 } from 'lucide-react';
 import { getSocketOriginFromApiUrl, runtimeUrls } from '../../config/runtime';
-import { ehrApi } from '../../services/api';
+import { cdssApi } from '../../services/api';
 
 interface InboxItem {
   id: string;
@@ -80,8 +80,8 @@ const SmartInbox: React.FC<SmartInboxProps> = ({ token, tenantSlug, userId, onCo
     setLoading(true);
     try {
       const [itemsRes, countsRes] = await Promise.all([
-        ehrApi.getInbox(token, tenantSlug, { unreadOnly, priority: filterPriority === 'all' ? undefined : filterPriority }),
-        ehrApi.getInboxCounts(token, tenantSlug),
+        cdssApi.getInbox(token, tenantSlug, { unreadOnly, priority: filterPriority === 'all' ? undefined : filterPriority }),
+        cdssApi.getInboxCounts(token, tenantSlug),
       ]);
       setItems(itemsRes.data || []);
       const c = countsRes.data || {};
@@ -136,18 +136,18 @@ const SmartInbox: React.FC<SmartInboxProps> = ({ token, tenantSlug, userId, onCo
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const handleMarkRead = async (id: string) => {
-    await ehrApi.markInboxRead(id, token, tenantSlug);
+    await cdssApi.markInboxRead(id, token, tenantSlug);
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, isRead: true } : i));
   };
 
   const handleAction = async (id: string) => {
-    await ehrApi.markInboxActioned(id, token, tenantSlug);
+    await cdssApi.markInboxActioned(id, token, tenantSlug);
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, isActioned: true, isRead: true } : i));
     loadInbox();
   };
 
   const handleMarkAllRead = async () => {
-    await ehrApi.markAllInboxRead(token, tenantSlug);
+    await cdssApi.markAllInboxRead(token, tenantSlug);
     setItems((prev) => prev.map((i) => ({ ...i, isRead: true })));
     setCounts({ critical: 0, urgent: 0, routine: 0, informational: 0 });
     onCountsChange?.({ critical: 0, urgent: 0, routine: 0, informational: 0 });

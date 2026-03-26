@@ -114,7 +114,12 @@ export class GeriatricsService {
 
   async assessFrailty(payload: Record<string, any>) {
     try {
-      return await this.cdssService.riskAssessment({ ...payload, context: 'frailty_assessment' });
+      return await this.cdssService.riskAssessment({
+        ...payload,
+        context: 'frailty_assessment',
+        specialty: 'geriatrics',
+        module: 'frailty_and_cga',
+      });
     } catch (err: any) {
       this.logger.warn(`[Geriatrics] CDSS frailty assessment unavailable: ${err?.message}`);
       return this.localFrailtyAssessment(payload);
@@ -133,7 +138,12 @@ export class GeriatricsService {
 
   async assessFallRisk(payload: Record<string, any>) {
     try {
-      return await this.cdssService.riskAssessment({ ...payload, context: 'fall_risk' });
+      return await this.cdssService.riskAssessment({
+        ...payload,
+        context: 'fall_risk',
+        specialty: 'geriatrics',
+        module: 'fall_prevention',
+      });
     } catch (err: any) {
       this.logger.warn(`[Geriatrics] CDSS fall risk assessment unavailable: ${err?.message}`);
       return this.localFallRisk(payload);

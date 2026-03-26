@@ -224,7 +224,13 @@ export class ImmunizationService {
     if (forecasts.length > 0) {
       this.cdssService.getGuidelines(
         'immunization catch-up schedule',
-        { patientId, ageMonths, overdueVaccines: forecasts.map((f) => f.vaccineCode) },
+        {
+          patientId,
+          ageMonths,
+          overdueVaccines: forecasts.map((f) => f.vaccineCode),
+          specialty: 'public_health',
+          module: 'immunization',
+        },
       ).then((cdssGuidance: any) => {
         if (cdssGuidance) {
           this.logger.log(`[Immunization] CDSS catch-up guidance available for patient ${patientId}`);
@@ -309,6 +315,8 @@ export class ImmunizationService {
           hospitalizationRequired: eventData.hospitalizationRequired,
           immunizationId,
           context: 'vaccine_adverse_event',
+          specialty: 'public_health',
+          module: 'immunization',
         },
         true,
       ).then((result: any) => {
@@ -408,4 +416,3 @@ export class ImmunizationService {
     };
   }
 }
-

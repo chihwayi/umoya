@@ -14,6 +14,12 @@ export class RenalBiopsy {
   @Column({ name: 'electron_microscopy', type: 'text', nullable: true }) electronMicroscopy: string;
   @Column({ type: 'text', nullable: true }) diagnosis: string;
   @Column({ type: 'text', nullable: true }) recommendation: string;
-  @Column({ type: 'text', nullable: true }) complications: string;
+  @Column({ type: 'text', nullable: true }) complications: string;  @Column({ name: 'histopathology_result', type: 'text', nullable: true })
+  histopathologyResult?: string;
+
+  @Column({ nullable: true })
+  notes?: string;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

@@ -37,6 +37,23 @@ export class MinioService {
     }
   }
 
+  async uploadBuffer(bucket: string, key: string, buffer: Buffer, mimeType: string): Promise<string> {
+    try {
+      const command = new PutObjectCommand({
+        Bucket: bucket || this.bucketName,
+        Key: key,
+        Body: buffer,
+        ContentType: mimeType,
+      });
+
+      await this.s3Client.send(command);
+      return key;
+    } catch (error) {
+      this.logger.error(`Failed to upload buffer ${key}:`, error);
+      throw error;
+    }
+  }
+
   async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
     try {
       const command = new GetObjectCommand({

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Bell, Heart, LogOut, Menu, Settings, User, Users, X, CheckCheck, ExternalLink, type LucideIcon } from 'lucide-react';
-import { tenantApi, ehrApi } from '../services/api';
+import { tenantApi, cdssApi } from '../services/api';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -118,7 +118,7 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
     if (!token || !tenantSlug) return;
 
     const fetchCount = () => {
-      ehrApi.getStaffNotificationsUnreadCount(token, tenantSlug)
+      cdssApi.getStaffNotificationsUnreadCount(token, tenantSlug)
         .then(({ data }) => setUnreadCount(data?.count ?? 0))
         .catch(() => {});
     };
@@ -147,7 +147,7 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
     if (!token || !tenantSlug) return;
     setNotifLoading(true);
     try {
-      const { data } = await ehrApi.getStaffNotifications(token, tenantSlug, { limit: 20 });
+      const { data } = await cdssApi.getStaffNotifications(token, tenantSlug, { limit: 20 });
       setNotifications(data?.notifications ?? []);
       setUnreadCount(data?.unreadCount ?? 0);
     } catch { /* silent */ } finally {
@@ -159,7 +159,7 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
     const token = localStorage.getItem('ehr_token') || '';
     if (!token || !tenantSlug) return;
     try {
-      await ehrApi.markAllStaffNotificationsRead(token, tenantSlug);
+      await cdssApi.markAllStaffNotificationsRead(token, tenantSlug);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch { /* silent */ }
@@ -169,7 +169,7 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
     const token = localStorage.getItem('ehr_token') || '';
     if (!token || !tenantSlug) return;
     try {
-      await ehrApi.markStaffNotificationRead(id, token, tenantSlug);
+      await cdssApi.markStaffNotificationRead(id, token, tenantSlug);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch { /* silent */ }

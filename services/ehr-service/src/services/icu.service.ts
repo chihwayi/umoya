@@ -141,7 +141,12 @@ export class IcuService {
 
   async calculateSofa(body: any) {
     try {
-      return await this.cdssService.riskAssessment({ ...body, context: 'sofa_score' });
+      return await this.cdssService.riskAssessment({
+        ...body,
+        context: 'sofa_score',
+        specialty: 'acute_care',
+        module: 'critical_care',
+      });
     } catch (err: any) {
       this.logger.warn(`[ICU] CDSS SOFA unavailable: ${err?.message}`);
       return this.localSofaScore(body);
@@ -150,7 +155,11 @@ export class IcuService {
 
   async ventProtocol(body: any) {
     try {
-      return await this.cdssService.getGuidelines('mechanical ventilation lung protective protocol', body);
+      return await this.cdssService.getGuidelines('mechanical ventilation lung protective protocol', {
+        ...body,
+        specialty: 'acute_care',
+        module: 'critical_care',
+      });
     } catch (err: any) {
       this.logger.warn(`[ICU] CDSS vent protocol unavailable: ${err?.message}`);
       return this.localVentProtocol(body);
@@ -159,7 +168,11 @@ export class IcuService {
 
   async assessSedation(body: any) {
     try {
-      return await this.cdssService.getGuidelines('ICU sedation analgesia delirium PADIS', body);
+      return await this.cdssService.getGuidelines('ICU sedation analgesia delirium PADIS', {
+        ...body,
+        specialty: 'acute_care',
+        module: 'critical_care',
+      });
     } catch (err: any) {
       this.logger.warn(`[ICU] CDSS sedation assessment unavailable: ${err?.message}`);
       return this.localSedationAssessment(body);

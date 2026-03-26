@@ -40,6 +40,24 @@ export class MalariaCase {
 
   @Column({ type: 'text', default: 'active' })
   status: string;
+  @Column({ name: 'diagnosed_by', type: 'uuid' })
+  diagnosedBy: string;
+
+  @Column({ name: 'diagnosis_date', type: 'date' })
+  diagnosisDate: Date;
+
+  @Column({ name: 'hb_g_dl', type: 'numeric', precision: 4, scale: 2, nullable: true })
+  hbGDl?: number;
+
+  @Column({ name: 'parasitaemia_percent', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  parasitaemiaPercent?: number;
+
+  @Column({ nullable: true })
+  severity?: string;
+
+  @Column({ name: 'travel_history', type: 'text', nullable: true })
+  travelHistory?: string;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

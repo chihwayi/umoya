@@ -3,19 +3,72 @@ import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { SymptomCheckerSession } from '../entities/symptom-checker-session.entity';
 import { AdherenceChatLog } from '../entities/adherence-chat-log.entity';
-import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import { createHash } from 'crypto';
+import { HipaaAuditService } from './hipaa-audit.service';
 
 @Injectable()
 export class PatientAiService {
   private readonly logger = new Logger(PatientAiService.name);
-  private claudeApiKey = process.env.ANTHROPIC_API_KEY || '';
-  private claudeModel = 'claude-sonnet-4-6';
 
   constructor(
     private readonly tenantService: TenantService,
     private readonly cdssService: CdssService,
+    private readonly hipaaAuditService: HipaaAuditService,
   ) {}
+
+  private async recordPatientAiPromptAudit(
+    subdomain: string,
+    tenantDb: any,
+    payload: {
+      useCase: 'patient_symptom_check' | 'patient_adherence_chat';
+      patientId?: string;
+      model: string;
+      requestBody: Record<string, any>;
+      responseSummary: Record<string, any>;
+      governance?: Record<string, any>;
+      sessionId?: string;
+    },
+  ): Promise<void> {
+    try {
+      const promptHash = createHash('sha256')
+        .update(JSON.stringify(payload.requestBody || {}))
+        .digest('hex');
+      const modelId = String(payload.model || 'unknown_model');
+      const provider = String(payload.governance?.vendor_id || payload.governance?.vendorId || 'local');
+      await this.hipaaAuditService.registerModelEntry(tenantDb, {
+        modelId,
+        modelName: modelId,
+        modelVersion: String(process.env.CDSS_MODEL_VERSION || modelId),
+        provider,
+        status: 'active',
+        metadata: {
+          source: 'patient_ai_service',
+          useCase: payload.useCase,
+          subdomain,
+        },
+      });
+      await this.hipaaAuditService.logPromptAudit(tenantDb, {
+        promptHash,
+        templateVersion: 'sprint111_moas11_v1',
+        modelId,
+        patientId: payload.patientId || null,
+        sessionId: null,
+        requestId: uuidv4(),
+        safetyGateTriggered: payload.responseSummary?.abstained === true,
+        metadata: {
+          source: 'patient_ai_service',
+          subdomain,
+          useCase: payload.useCase,
+          sessionId: payload.sessionId || null,
+          governance: payload.governance || {},
+          responseSummary: payload.responseSummary || {},
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(`Patient AI prompt audit failed for ${payload.useCase}: ${error?.message || error}`);
+    }
+  }
 
   // ── Symptom Checker ────────────────────────────────────────────────────────
 
@@ -32,18 +85,51 @@ export class PatientAiService {
       differential: [],
       triage_level: 'routine',
       recommended_action: 'Schedule appointment with your doctor.',
+      confidence: 0,
+      model: 'symptom_check_rules_v1',
+      governance: { governed_path: false },
     };
 
     try {
-      result = await this.cdssService.diagnosisAssist({
-        symptoms: dto.symptoms,
-        duration_days: dto.durationDays,
-        severity: dto.severity,
-        patient_context: dto.context || {},
-        context: 'symptom_checker',
-      }, true);
+      const routed = await this.cdssService.patientSymptomCheck(
+        {
+          symptoms: dto.symptoms,
+          durationDays: dto.durationDays,
+          severity: dto.severity,
+          patientContext: dto.context || {},
+        },
+        subdomain,
+      );
+      result = {
+        differential: routed.differential,
+        triage_level: routed.triageLevel,
+        recommended_action: routed.recommendedAction,
+        confidence: routed.confidence,
+        model: routed.model,
+        abstained: routed.abstained,
+        abstain_reason: routed.abstainReason,
+        governance: routed.governance,
+      };
+      await this.recordPatientAiPromptAudit(subdomain, ds, {
+        useCase: 'patient_symptom_check',
+        patientId: dto.patientId,
+        model: routed.model,
+        requestBody: {
+          symptoms: dto.symptoms,
+          durationDays: dto.durationDays,
+          severity: dto.severity,
+          patientContextKeys: Object.keys(dto.context || {}).sort(),
+        },
+        responseSummary: {
+          triageLevel: routed.triageLevel,
+          confidence: routed.confidence,
+          abstained: routed.abstained,
+          abstainReason: routed.abstainReason || null,
+        },
+        governance: routed.governance,
+      });
     } catch (e: any) {
-      this.logger.warn(`Symptom check CDSS unavailable: ${e?.message}`);
+      this.logger.warn(`Symptom check governed CDSS path unavailable: ${e?.message}`);
     }
 
     const repo = ds.getRepository(SymptomCheckerSession);
@@ -81,7 +167,19 @@ export class PatientAiService {
     sessionId?: string;
     message: string;
     medications?: string[];
-  }): Promise<{ sessionId: string; reply: string; intent?: string; adherenceConcern: boolean }> {
+  }): Promise<{
+    sessionId: string;
+    reply: string;
+    intent?: string;
+    adherenceConcern: boolean;
+    requiresClinicianFollowUp: boolean;
+    urgency: 'routine' | 'urgent';
+    confidence: number;
+    model: string;
+    abstained: boolean;
+    abstainReason?: string | null;
+    governance?: Record<string, any>;
+  }> {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     const sessionId = dto.sessionId || uuidv4();
     const repo = ds.getRepository(AdherenceChatLog);
@@ -105,37 +203,60 @@ export class PatientAiService {
     const messages = history.map(h => ({ role: h.messageRole as 'user' | 'assistant', content: h.message }));
 
     let reply = 'I understand. Please take your medications as prescribed and contact your healthcare provider if you have concerns.';
-    let intent: string | undefined;
+    let intent: string | undefined = 'general';
     let adherenceConcern = false;
+    let requiresClinicianFollowUp = false;
+    let urgency: 'routine' | 'urgent' = 'routine';
+    let confidence = 0.2;
+    let model = 'cdss_patient_adherence_guardrail';
+    let abstained = false;
+    let abstainReason: string | null = null;
+    let governance: Record<string, any> | undefined;
 
     try {
-      const response = await axios.post('https://api.anthropic.com/v1/messages', {
-        model: this.claudeModel,
-        max_tokens: 512,
-        system: `You are a compassionate medication adherence assistant for a healthcare platform.
-Help patients understand their medications, manage side effects, and stay adherent.
-Medications: ${(dto.medications || []).join(', ') || 'not specified'}.
-Always recommend consulting their doctor for medical decisions.
-Detect if the patient is reporting: skipping doses, side effects, running out of medication, or cost barriers.
-Keep responses concise (2-3 sentences max).`,
-        messages,
-      }, {
-        headers: { 'x-api-key': this.claudeApiKey, 'anthropic-version': '2023-06-01' },
-        timeout: 20000,
+      const response = await this.cdssService.patientAdherenceAssist(
+        {
+          patientId: dto.patientId,
+          sessionId,
+          message: dto.message,
+          medications: dto.medications || [],
+          history: messages,
+        },
+        subdomain,
+      );
+
+      reply = response.reply || reply;
+      intent = response.intent || intent;
+      adherenceConcern = response.adherenceConcern;
+      requiresClinicianFollowUp = response.requiresClinicianFollowUp;
+      urgency = response.urgency;
+      confidence = response.confidence;
+      model = response.model;
+      abstained = response.abstained;
+      abstainReason = response.abstainReason || null;
+      governance = response.governance;
+      await this.recordPatientAiPromptAudit(subdomain, ds, {
+        useCase: 'patient_adherence_chat',
+        patientId: dto.patientId,
+        model: response.model,
+        requestBody: {
+          messageHash: createHash('sha256').update(String(dto.message || '')).digest('hex'),
+          medications: dto.medications || [],
+          historyCount: messages.length,
+        },
+        responseSummary: {
+          intent: response.intent,
+          urgency: response.urgency,
+          confidence: response.confidence,
+          abstained: response.abstained,
+          abstainReason: response.abstainReason || null,
+          requiresClinicianFollowUp: response.requiresClinicianFollowUp,
+        },
+        governance: response.governance,
+        sessionId,
       });
-
-      reply = response.data.content?.[0]?.text || reply;
-
-      // Detect intent from message keywords
-      const lower = dto.message.toLowerCase();
-      if (lower.includes('side effect') || lower.includes('feeling sick')) intent = 'side_effect';
-      else if (lower.includes('refill') || lower.includes('running out')) intent = 'refill_request';
-      else if (lower.includes('skip') || lower.includes('forgot') || lower.includes('miss')) {
-        intent = 'adherence_check';
-        adherenceConcern = true;
-      } else intent = 'general';
     } catch (e: any) {
-      this.logger.warn(`Adherence chat Claude API failed: ${e?.message}`);
+      this.logger.warn(`Adherence chat governed CDSS path failed: ${e?.message}`);
     }
 
     // Save assistant reply
@@ -149,7 +270,19 @@ Keep responses concise (2-3 sentences max).`,
       adherenceConcernFlagged: adherenceConcern,
     }));
 
-    return { sessionId, reply, intent, adherenceConcern };
+    return {
+      sessionId,
+      reply,
+      intent,
+      adherenceConcern,
+      requiresClinicianFollowUp,
+      urgency,
+      confidence,
+      model,
+      abstained,
+      abstainReason,
+      governance,
+    };
   }
 
   async getChatHistory(subdomain: string, patientId: string, sessionId?: string): Promise<AdherenceChatLog[]> {

@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { ScheduledReport } from './scheduled-report.entity';
@@ -34,44 +35,48 @@ export class ReportTemplate {
   description?: string;
 
   @Column({
+    name: 'report_type',
     type: 'varchar',
     length: 50,
     enum: ReportType,
   })
+  @Index('idx_report_templates_report_type')
   reportType: ReportType;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
+  @Index('idx_report_templates_category')
   category?: string;
 
   @Column({ type: 'jsonb', default: {} })
   config: Record<string, any>;
 
-  @Column({ type: 'jsonb', default: {} })
+  @Column({ name: 'query_config', type: 'jsonb', default: {} })
   queryConfig: Record<string, any>;
 
-  @Column({ type: 'jsonb', default: {} })
+  @Column({ name: 'visualization_config', type: 'jsonb', default: {} })
   visualizationConfig: Record<string, any>;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_public', type: 'boolean', default: false })
   isPublic: boolean;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_default', type: 'boolean', default: false })
   isDefault: boolean;
 
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
+  @Index('idx_report_templates_created_by')
   createdById?: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })
   createdBy?: User;
 
-  @Column({ type: 'text', array: true, default: [] })
+  @Column({ name: 'shared_with_roles', type: 'text', array: true, default: [] })
   sharedWithRoles: string[];
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'usage_count', type: 'int', default: 0 })
   usageCount: number;
 
-  @Column({ type: 'timestamptz', nullable: true })
+  @Column({ name: 'last_used', type: 'timestamptz', nullable: true })
   lastUsed?: Date;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
@@ -89,4 +94,3 @@ export class ReportTemplate {
   @OneToMany(() => ReportFavorite, (favorite) => favorite.reportTemplate)
   favorites: ReportFavorite[];
 }
-

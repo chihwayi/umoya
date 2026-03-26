@@ -57,6 +57,8 @@ export class PopulationHealthService {
       diagnoses: [{ code: body.conditionCode, name: body.conditionName }],
       context: 'chronic_disease_registry',
       conditionType,
+      specialty: body.conditionType === 'depression' ? 'mental_health' : 'primary_care',
+      module: 'population_health',
     }).then(async (result: any) => {
       const cdssRisk = String(result?.risk_level || result?.risk || '').toLowerCase();
       const riskOrder = ['low', 'moderate', 'high', 'critical'];
@@ -569,8 +571,17 @@ export class PopulationHealthService {
 
       // CDSS care-gap detection for additional AI-identified gaps beyond static rules
       this.cdssService.detectCareGaps(
-        { patientId: pid, age, gender, context: 'preventive_care' },
-        tenantDb,
+        age,
+        gender,
+        [],
+        [],
+        {
+          tenantDb,
+          patientId: pid,
+          context: 'preventive_care',
+          specialty: 'primary_care',
+          module: 'population_health',
+        },
       ).then(async (cdssGaps: any) => {
         const gaps: any[] = cdssGaps?.gaps || cdssGaps?.care_gaps || [];
         for (const gap of gaps) {

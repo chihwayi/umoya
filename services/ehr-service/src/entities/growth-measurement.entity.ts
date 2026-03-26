@@ -34,6 +34,21 @@ export class GrowthMeasurement {
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'measured_by' }) measuredBy?: User;
 
-  @Column({ type: 'text', nullable: true }) notes?: string;
+  @Column({ type: 'text', nullable: true }) notes?: string;  @Column({ name: 'bmi_for_age_zscore', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  bmiForAgeZscore?: number;
+
+  @Column({ name: 'height_for_age_zscore', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  heightForAgeZscore?: number;
+
+  @Column({ name: 'measurement_date', type: 'date' })
+  measurementDate: Date;
+
+  @Column({ name: 'weight_for_age_zscore', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  weightForAgeZscore?: number;
+
+  @Column({ name: 'weight_for_height_zscore', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  weightForHeightZscore?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

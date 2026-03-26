@@ -1,0 +1,71 @@
+[
+  {
+    "knowledge_id": "asthma-stepup-gina-2026-01",
+    "condition": "asthma_step-up_therapy_gina",
+    "aliases": ["asthma step-up therapy gina"],
+    "title": "Asthma Step-up Therapy Guidance",
+    "source_name": "GINA Step-up Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-28",
+    "reviewed_at": "2026-03-01",
+    "specialty": "pulmonology",
+    "module": "respiratory_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["asthma", "step-up", "ics", "laba", "gina"],
+    "recommendation_blocks": [
+      "Step up treatment only after checking adherence, inhaler technique, trigger exposure, and diagnostic confidence.",
+      "Escalate from low-dose controller therapy in a structured stepwise manner based on control and exacerbation burden.",
+      "De-escalate cautiously only after sustained control and clear follow-up planning."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "ltot-criteria-2026-01",
+    "condition": "long-term_oxygen_therapy_ltot_criteria",
+    "aliases": ["long-term oxygen therapy ltot criteria", "ltot criteria"],
+    "title": "Long-term Oxygen Therapy Guidance",
+    "source_name": "ATS/ERS LTOT Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-29",
+    "reviewed_at": "2026-03-01",
+    "specialty": "pulmonology",
+    "module": "respiratory_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["oxygen therapy", "ltot", "hypoxemia", "copd"],
+    "recommendation_blocks": [
+      "Confirm chronic qualifying hypoxemia with stable measurements before prescribing long-term home oxygen.",
+      "Document flow targets, expected duration, and smoking/fire safety counseling whenever LTOT is prescribed.",
+      "Reassess oxygen requirement after clinical stabilization rather than assuming indefinite need."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "dialysis-adequacy-ktv-2026-01",
+    "condition": "dialysis_adequacy_kt/v",
+    "aliases": ["dialysis adequacy kt/v", "dialysis adequacy ktv"],
+    "title": "Dialysis Adequacy Kt/V Guidance",
+    "source_name": "KDOQI Dialysis Adequacy Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-30",
+    "reviewed_at": "2026-03-01",
+    "specialty": "nephrology",
+    "module": "renal_replacement_therapy",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["dialysis", "kt/v", "adequacy", "hemodialysis"],
+    "recommendation_blocks": [
+      "Assess delivered dialysis dose against target adequacy thresholds rather than using session duration alone.",
+      "Review access function, blood-flow limitations, adherence, and treatment time when adequacy is low.",
+      "Trend adequacy longitudinally so recurrent subtarget dialysis prompts plan adjustment."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

@@ -1,0 +1,28 @@
+[
+  {
+    "release_id": "clinical-knowledge-2026-03-24-core-v1",
+    "version": "2026.03.24.1",
+    "status": "active",
+    "released_at": "2026-03-24",
+    "reviewed_at": "2026-03-24",
+    "summary": "Governed core, acute-care, pharmacy, radiology, and chronic-care knowledge pack with explicit provenance, module routing, and freshness metadata.",
+    "files": [
+      "core_primary_care_guidelines.json",
+      "core_respiratory_cardiometabolic_guidelines.json",
+      "acute_care_high_risk_guidelines.json",
+      "pharmacy_medication_safety_guidelines.json",
+      "radiology_workflow_guidelines.json",
+      "chronic_care_pathways_guidelines.json",
+      "infectious_disease_public_health_guidelines.json",
+      "pulmonology_nephrology_guidelines.json",
+      "pediatrics_guidelines.json",
+      "oncology_broader_guidelines.json",
+      "perioperative_guidelines.json",
+      "neurology_mental_health_guidelines.json",
+      "ntd_trials_guidelines.json",
+      "geriatrics_maternity_population_guidelines.json",
+      "orchestrator_workflow_guidelines.json",
+      "specialty_risk_context_guidelines.json"
+    ]
+  }
+]

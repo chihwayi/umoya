@@ -312,6 +312,9 @@ export class TbService {
         age: payload.age,
         gender: payload.gender,
         vitals: payload.vitals,
+        context: 'tb_screen',
+        specialty: 'infectious_disease',
+        module: 'tuberculosis_care',
       }, false)
       .catch((e: any) => {
         this.logger.warn(`CDSS TB screen diagnosis assist failed: ${e?.message || e}`);
@@ -336,6 +339,8 @@ export class TbService {
         age: payload.age,
         gender: payload.gender,
         comorbidities: payload.hivStatus === 'positive' ? ['HIV'] : [],
+        specialty: 'infectious_disease',
+        module: 'tuberculosis_care',
       })
       .catch((e: any) => {
         this.logger.warn(`CDSS TB regimen guideline failed: ${e?.message || e}`);
@@ -364,6 +369,9 @@ export class TbService {
         gender: payload.gender,
         diagnoses: ['tuberculosis contact'],
         vitals: {},
+        context: 'tuberculosis_contact',
+        specialty: 'infectious_disease',
+        module: 'tuberculosis_care',
       }, null as any, undefined)
       .catch((e: any) => {
         this.logger.warn(`CDSS TB contact risk assessment failed: ${e?.message || e}`);
@@ -427,6 +435,9 @@ export class TbService {
         vitals: payload.vitals,
         age: payload.age,
         gender: payload.gender,
+        context: 'tb_treatment_adherence',
+        specialty: 'infectious_disease',
+        module: 'tuberculosis_care',
       }, false)
       .catch((e: any) => {
         this.logger.warn(`CDSS TB adherence analysis failed: ${e?.message || e}`);

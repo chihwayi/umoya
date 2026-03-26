@@ -14,6 +14,7 @@ import asyncio
 import uvicorn
 import httpx
 import os
+import sqlite3
 import hmac
 import re
 import shlex
@@ -27,6 +28,7 @@ from botocore.exceptions import NoCredentialsError, ClientError
 from fastapi import UploadFile, File, Form
 from drug_interactions import DrugInteractionAnalyzer
 from clinical_guidelines import ClinicalGuidelinesEngine
+from clinical_knowledge_registry import ClinicalKnowledgeRegistry
 from risk_scoring import RiskScoringEngine
 from dosing_calculator import DosingCalculator
 from diagnostic_assistant import DiagnosticAssistant
@@ -55,7 +57,291 @@ from threading import Lock
 
 logger = logging.getLogger(__name__)
 
+try:
+    from ai_models.llm_provider import LLMProvider
+except Exception:  # pragma: no cover - optional dependency path
+    LLMProvider = None  # type: ignore
+
 _DEV_LIKE_ENVIRONMENTS = {"dev", "development", "local", "test"}
+_feedback_store_lock = Lock()
+
+
+def _feedback_store_path() -> pathlib.Path:
+    configured = str(os.getenv("CDSS_FEEDBACK_DB_PATH", "")).strip()
+    path = pathlib.Path(configured).expanduser() if configured else pathlib.Path(tempfile.gettempdir()) / "medicore_cdss_feedback.sqlite3"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _feedback_db() -> sqlite3.Connection:
+    conn = sqlite3.connect(str(_feedback_store_path()))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _init_feedback_store() -> None:
+    with _feedback_store_lock:
+        conn = _feedback_db()
+        try:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS outcome_feedback_batches (
+                    batch_id TEXT PRIMARY KEY,
+                    received_at TEXT NOT NULL,
+                    entry_count INTEGER NOT NULL,
+                    accepted_count INTEGER NOT NULL,
+                    modified_count INTEGER NOT NULL,
+                    overridden_count INTEGER NOT NULL,
+                    ignored_count INTEGER NOT NULL,
+                    with_outcomes_count INTEGER NOT NULL,
+                    storage_status TEXT NOT NULL DEFAULT 'persisted',
+                    review_status TEXT NOT NULL DEFAULT 'pending_review'
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS outcome_feedback_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    batch_id TEXT NOT NULL,
+                    log_id TEXT NOT NULL,
+                    patient_id TEXT NOT NULL,
+                    decision_type TEXT NOT NULL,
+                    top_recommendation TEXT,
+                    confidence_score REAL,
+                    clinician_action TEXT,
+                    override_reason TEXT,
+                    outcome_at_30_days_json TEXT,
+                    outcome_at_90_days_json TEXT,
+                    payload_hash TEXT NOT NULL,
+                    received_at TEXT NOT NULL,
+                    processing_status TEXT NOT NULL DEFAULT 'received',
+                    learning_status TEXT NOT NULL DEFAULT 'pending_review',
+                    review_notes TEXT,
+                    FOREIGN KEY(batch_id) REFERENCES outcome_feedback_batches(batch_id)
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_feedback_entries_batch_id ON outcome_feedback_entries(batch_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_feedback_entries_log_id ON outcome_feedback_entries(log_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_feedback_entries_processing_status ON outcome_feedback_entries(processing_status, learning_status)"
+            )
+            for statement in (
+                "ALTER TABLE outcome_feedback_entries ADD COLUMN tenant_subdomain TEXT",
+                "ALTER TABLE outcome_feedback_entries ADD COLUMN source_model TEXT",
+            ):
+                try:
+                    conn.execute(statement)
+                except sqlite3.OperationalError as exc:
+                    if "duplicate column name" not in str(exc).lower():
+                        raise
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def _persist_outcome_feedback(batch_id: str, received_at: str, entries: List["FeedbackEntry"]) -> None:
+    accepted = sum(1 for e in entries if e.clinicianAction == "accepted")
+    modified = sum(1 for e in entries if e.clinicianAction == "modified")
+    overridden = sum(1 for e in entries if e.clinicianAction == "overridden")
+    ignored = sum(1 for e in entries if e.clinicianAction == "ignored")
+    with_outcomes = sum(1 for e in entries if e.outcomeAt30Days or e.outcomeAt90Days)
+
+    with _feedback_store_lock:
+        conn = _feedback_db()
+        try:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO outcome_feedback_batches (
+                    batch_id, received_at, entry_count, accepted_count, modified_count,
+                    overridden_count, ignored_count, with_outcomes_count, storage_status, review_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'persisted', 'pending_review')
+                """,
+                (
+                    batch_id,
+                    received_at,
+                    len(entries),
+                    accepted,
+                    modified,
+                    overridden,
+                    ignored,
+                    with_outcomes,
+                ),
+            )
+            for entry in entries:
+                payload = entry.model_dump()
+                conn.execute(
+                    """
+                    INSERT INTO outcome_feedback_entries (
+                        batch_id, log_id, patient_id, decision_type, top_recommendation,
+                        confidence_score, clinician_action, override_reason,
+                        outcome_at_30_days_json, outcome_at_90_days_json, payload_hash,
+                        received_at, processing_status, learning_status, tenant_subdomain, source_model
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', 'pending_review', ?, ?)
+                    """,
+                    (
+                        batch_id,
+                        entry.logId,
+                        entry.patientId,
+                        entry.decisionType,
+                        entry.topRecommendation,
+                        entry.confidenceScore,
+                        entry.clinicianAction,
+                        entry.overrideReason,
+                        json.dumps(entry.outcomeAt30Days or {}, sort_keys=True),
+                        json.dumps(entry.outcomeAt90Days or {}, sort_keys=True),
+                        compute_request_hash(payload),
+                        received_at,
+                        entry.tenantSubdomain,
+                        entry.sourceModel,
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def _feedback_store_summary(limit: int = 10) -> Dict[str, Any]:
+    _init_feedback_store()
+    conn = _feedback_db()
+    try:
+        batch_rows = conn.execute(
+            """
+            SELECT batch_id, received_at, entry_count, accepted_count, modified_count,
+                   overridden_count, ignored_count, with_outcomes_count, storage_status, review_status
+            FROM outcome_feedback_batches
+            ORDER BY received_at DESC
+            LIMIT ?
+            """,
+            (max(1, limit),),
+        ).fetchall()
+        counts = conn.execute(
+            """
+            SELECT
+              COUNT(*) AS total_entries,
+              SUM(CASE WHEN processing_status = 'received' THEN 1 ELSE 0 END) AS received_entries,
+              SUM(CASE WHEN learning_status = 'pending_review' THEN 1 ELSE 0 END) AS pending_review_entries
+            FROM outcome_feedback_entries
+            """
+        ).fetchone()
+        return {
+            "batches": [dict(row) for row in batch_rows],
+            "counts": {
+                "total_entries": int((counts["total_entries"] if counts else 0) or 0),
+                "received_entries": int((counts["received_entries"] if counts else 0) or 0),
+                "pending_review_entries": int((counts["pending_review_entries"] if counts else 0) or 0),
+            },
+            "store_path": str(_feedback_store_path()),
+        }
+    finally:
+        conn.close()
+
+
+def _update_feedback_entry_review(entry_id: int, learning_status: str, review_notes: Optional[str]) -> Optional[Dict[str, Any]]:
+    allowed = {"pending_review", "reviewed", "approved_for_learning", "rejected_for_learning"}
+    normalized = str(learning_status or "").strip().lower()
+    if normalized not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported learning_status '{learning_status}'")
+
+    _init_feedback_store()
+    with _feedback_store_lock:
+        conn = _feedback_db()
+        try:
+            existing = conn.execute(
+                "SELECT id, batch_id FROM outcome_feedback_entries WHERE id = ?",
+                (entry_id,),
+            ).fetchone()
+            if existing is None:
+                return None
+
+            processing_status = "reviewed" if normalized != "pending_review" else "received"
+            conn.execute(
+                """
+                UPDATE outcome_feedback_entries
+                SET learning_status = ?, processing_status = ?, review_notes = ?
+                WHERE id = ?
+                """,
+                (normalized, processing_status, review_notes, entry_id),
+            )
+            conn.commit()
+            updated = conn.execute(
+                """
+                SELECT id, batch_id, log_id, patient_id, decision_type, clinician_action,
+                       processing_status, learning_status, review_notes, received_at
+                FROM outcome_feedback_entries
+                WHERE id = ?
+                """,
+                (entry_id,),
+            ).fetchone()
+            return dict(updated) if updated is not None else None
+        finally:
+            conn.close()
+
+
+def _claim_feedback_entries_for_learning(limit: int = 25) -> List[Dict[str, Any]]:
+    _init_feedback_store()
+    normalized_limit = max(1, int(limit))
+    with _feedback_store_lock:
+        conn = _feedback_db()
+        try:
+            rows = conn.execute(
+                """
+                SELECT id, batch_id, log_id, patient_id, decision_type, top_recommendation,
+                       confidence_score, clinician_action, override_reason,
+                       outcome_at_30_days_json, outcome_at_90_days_json,
+                       payload_hash, received_at, processing_status, learning_status, review_notes,
+                       tenant_subdomain, source_model
+                FROM outcome_feedback_entries
+                WHERE learning_status = 'approved_for_learning'
+                  AND processing_status IN ('received', 'reviewed')
+                ORDER BY received_at ASC, id ASC
+                LIMIT ?
+                """,
+                (normalized_limit,),
+            ).fetchall()
+
+            if not rows:
+                return []
+
+            claimed_ids = [int(row["id"]) for row in rows]
+            conn.executemany(
+                """
+                UPDATE outcome_feedback_entries
+                SET processing_status = 'claimed_for_learning'
+                WHERE id = ?
+                """,
+                [(entry_id,) for entry_id in claimed_ids],
+            )
+            conn.commit()
+
+            claimed_rows = conn.execute(
+                """
+                SELECT id, batch_id, log_id, patient_id, decision_type, top_recommendation,
+                       confidence_score, clinician_action, override_reason,
+                       outcome_at_30_days_json, outcome_at_90_days_json,
+                       payload_hash, received_at, processing_status, learning_status, review_notes,
+                       tenant_subdomain, source_model
+                FROM outcome_feedback_entries
+                WHERE id IN ({})
+                ORDER BY received_at ASC, id ASC
+                """.format(",".join("?" for _ in claimed_ids)),
+                tuple(claimed_ids),
+            ).fetchall()
+
+            out: List[Dict[str, Any]] = []
+            for row in claimed_rows:
+                item = dict(row)
+                item["outcome_at_30_days"] = json.loads(item.pop("outcome_at_30_days_json") or "{}")
+                item["outcome_at_90_days"] = json.loads(item.pop("outcome_at_90_days_json") or "{}")
+                out.append(item)
+            return out
+        finally:
+            conn.close()
 
 
 def _is_dev_like_env(env: str) -> bool:
@@ -520,6 +806,23 @@ def _build_guideline_population_filters(patient_context: Optional[Dict[str, Any]
     if gender in {"male", "m", "man", "boy"}:
         return {"target_population": {"$ne": "pregnant_women"}}
     return None
+
+
+def _extract_guideline_scope_filters(
+    patient_context: Optional[Dict[str, Any]],
+    specialty: Optional[str] = None,
+    module: Optional[str] = None,
+) -> Dict[str, str]:
+    context = patient_context if isinstance(patient_context, dict) else {}
+    resolved_specialty = str(specialty or context.get("specialty") or "").strip().lower()
+    resolved_module = str(module or context.get("module") or "").strip().lower()
+
+    filters: Dict[str, str] = {}
+    if resolved_specialty:
+        filters["specialty"] = resolved_specialty
+    if resolved_module:
+        filters["module"] = resolved_module
+    return filters
 
 
 def _filter_guideline_citations_by_population(
@@ -1024,6 +1327,8 @@ class ClinicalGuidelineRequest(BaseModel):
     patient_gender: Optional[str] = None
     comorbidities: Optional[List[str]] = []
     medications: Optional[List[str]] = []
+    specialty: Optional[str] = None
+    module: Optional[str] = None
 
 
 class RiskScoreRequest(BaseModel):
@@ -1034,6 +1339,10 @@ class RiskScoreRequest(BaseModel):
     lab_results: Optional[Dict[str, Any]] = None
     historical_vitals: Optional[List[Dict[str, Any]]] = None
     visit_history: Optional[List[Dict[str, Any]]] = None
+    context: Optional[str] = None
+    specialty: Optional[str] = None
+    module: Optional[str] = None
+    patient_context: Optional[Dict[str, Any]] = None
 
 
 class RiskScoreResponse(BaseModel):
@@ -1062,6 +1371,7 @@ async def health_check():
 # Initialize analyzers
 analyzer = DrugInteractionAnalyzer()
 guidelines_engine = ClinicalGuidelinesEngine()
+knowledge_registry = ClinicalKnowledgeRegistry(fallback_engine=guidelines_engine)
 risk_scoring_engine = RiskScoringEngine()
 dosing_calculator = DosingCalculator()
 diagnostic_assistant = DiagnosticAssistant()  # Now includes AI models if available
@@ -1549,6 +1859,7 @@ def _run_transcribe_job(payload: Dict[str, Any]) -> Dict[str, Any]:
                 voice_scribe.generate_soap_note(
                     transcription_result["text"],
                     transcription_result.get("language"),
+                    tenant_id=tenant_key,
                 )
             )
         return result
@@ -1790,6 +2101,24 @@ class ModelRegistryEntryPayload(BaseModel):
     config: Optional[Dict[str, Any]] = None
 
 
+class AiVendorRegistryEntryPayload(BaseModel):
+    vendor_id: str
+    provider: str
+    display_name: Optional[str] = None
+    status: Optional[str] = "active"
+    config: Optional[Dict[str, Any]] = None
+
+
+class AiUseCasePolicyPayload(BaseModel):
+    use_case: str
+    enabled: Optional[bool] = True
+    purpose: Optional[str] = None
+    vendor_id: Optional[str] = None
+    allowed_model_names: Optional[List[str]] = None
+    require_tenant_context: Optional[bool] = True
+    redaction_required: Optional[bool] = True
+
+
 class TenantAIPolicyPayload(BaseModel):
     ai_enabled: Optional[bool] = None
     max_requests_per_minute: Optional[int] = None
@@ -1862,6 +2191,44 @@ async def admin_models_upsert(payload: ModelRegistryEntryPayload, owner: str = D
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True, "model": saved}
+
+
+@app.get("/admin/ai-vendors")
+async def admin_ai_vendors(owner: str = Depends(require_owner_scope("cdss.admin.settings.read"))):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    return {"vendors": settings_provider.get_ai_vendor_registry(active_only=False)}
+
+
+@app.post("/admin/ai-vendors")
+async def admin_ai_vendors_upsert(payload: AiVendorRegistryEntryPayload, owner: str = Depends(require_owner_scope("cdss.admin.settings.write"))):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    try:
+        saved = settings_provider.upsert_ai_vendor_entry(actor=owner, entry=payload.model_dump(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "vendor": saved}
+
+
+@app.get("/admin/ai-usecases")
+async def admin_ai_usecases(owner: str = Depends(require_owner_scope("cdss.admin.settings.read"))):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    return {"usecases": settings_provider.get_ai_usecase_policies()}
+
+
+@app.post("/admin/ai-usecases")
+async def admin_ai_usecases_upsert(payload: AiUseCasePolicyPayload, owner: str = Depends(require_owner_scope("cdss.admin.settings.write"))):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    data = payload.model_dump(exclude_none=True)
+    use_case = data.pop("use_case", None)
+    try:
+        saved = settings_provider.upsert_ai_usecase_policy(actor=owner, use_case=use_case, policy=data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "use_case": use_case, "policy": saved}
 
 
 @app.post("/admin/encryption/reencrypt")
@@ -2543,12 +2910,14 @@ async def check_clinical_guidelines(request: ClinicalGuidelineRequest):
     
     Returns evidence-based recommendations from WHO, ADA, AHA, IDSA, etc.
     """
-    result = guidelines_engine.check_guidelines(
+    result = knowledge_registry.check_guidelines(
         condition=request.condition,
         patient_age=request.patient_age,
         patient_gender=request.patient_gender,
         comorbidities=request.comorbidities,
-        medications=request.medications
+        medications=request.medications,
+        specialty=request.specialty,
+        module=request.module,
     )
     
     return {
@@ -2557,7 +2926,11 @@ async def check_clinical_guidelines(request: ClinicalGuidelineRequest):
         "contraindications": result.get('contraindications', []),
         "medication_warnings": result.get('medication_warnings', []),
         "evidence_level": result.get('evidence_level', 'moderate'),
-        "matched_condition": result.get('matched_condition', request.condition)
+        "matched_condition": result.get('matched_condition', request.condition),
+        "source": result.get("source", "governed_clinical_knowledge"),
+        "knowledge_metadata": result.get("knowledge_metadata", {}),
+        "abstained": result.get("abstained", False),
+        "abstain_reason": result.get("abstain_reason"),
     }
 
 
@@ -2565,6 +2938,8 @@ class GuidelineSearchRequest(BaseModel):
     query: str = Field(..., description="Search query for clinical guidelines")
     limit: int = Field(5, description="Maximum number of results to return")
     patient_context: Optional[Dict[str, Any]] = Field(None, description="Patient specific data (vitals, age, gender, conditions)")
+    specialty: Optional[str] = Field(None, description="Optional specialty scope hint for governed knowledge retrieval")
+    module: Optional[str] = Field(None, description="Optional module scope hint for governed knowledge retrieval")
 
 
 @app.post("/guidelines/search")
@@ -2577,8 +2952,26 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
     tenant_cache_key = _tenant_cache_key_from_request(req)
     safe_query = redact_text(request.query)
     filters = _build_guideline_population_filters(request.patient_context)
+    scope_filters = _extract_guideline_scope_filters(
+        request.patient_context,
+        specialty=request.specialty,
+        module=request.module,
+    )
     
-    # 1. Retrieve relevant guidelines (RAG)
+    # 1. Search governed clinical knowledge registry first
+    try:
+        governed_citations = knowledge_registry.search(
+            safe_query,
+            limit=request.limit,
+            specialty=scope_filters.get("specialty"),
+            module=scope_filters.get("module"),
+        )
+        if governed_citations:
+            citations.extend(governed_citations)
+    except Exception as e:
+        print(f"[CDSS] Governed knowledge search failed: {e}")
+
+    # 2. Retrieve additional relevant guidelines (RAG)
     if diagnostic_assistant.rag_engine:
         try:
             print("[CDSS] Searching guidelines")
@@ -2586,15 +2979,45 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
             if filters:
                 print(f"[CDSS] Applying RAG population filters: {filters}")
 
-            citations = diagnostic_assistant.rag_engine.query(
+            rag_citations = diagnostic_assistant.rag_engine.query(
                 safe_query,
                 n_results=request.limit,
                 filters=filters if filters else None,
                 tenant_id=tenant_cache_key
             )
-            citations = _filter_guideline_citations_by_population(citations, request.patient_context)
+            citations.extend(rag_citations)
+            deduped = []
+            seen = set()
+            for citation in citations:
+                key = (
+                    str(citation.get("knowledge_id") or ""),
+                    str(citation.get("title") or ""),
+                    str(citation.get("text") or ""),
+                    str(citation.get("source") or ""),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                deduped.append(citation)
+            citations = _filter_guideline_citations_by_population(deduped, request.patient_context)
         except Exception as e:
             print(f"[CDSS] Guideline search failed: {e}")
+
+    if citations:
+        deduped = []
+        seen = set()
+        for citation in citations:
+            key = (
+                str(citation.get("knowledge_id") or ""),
+                str(citation.get("title") or ""),
+                str(citation.get("text") or ""),
+                str(citation.get("source") or ""),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(citation)
+        citations = _filter_guideline_citations_by_population(deduped, request.patient_context)
             
     # 2. Generate Patient-Specific Analysis (LLM) with caching
     if diagnostic_assistant.llm_provider:
@@ -2661,7 +3084,11 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
                     analysis = None
             if analysis is None:
                 print(f"[CDSS] Generating analysis for patient context...")
-                analysis = await diagnostic_assistant.llm_provider.generate_response(prompt)
+                analysis = await diagnostic_assistant.llm_provider.generate_response(
+                    prompt,
+                    use_case="guideline_analysis",
+                    tenant_id=tenant_cache_key,
+                )
                 try:
                     if cache_client:
                         cache_client.incr("metrics:llm:cache_miss")
@@ -2684,7 +3111,19 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
         "analysis": analysis,
         "count": len(citations),
         "applied_filters": filters or {},
+        "applied_governed_filters": scope_filters,
+        "governed_corpus_used": any(bool((c.get("metadata") or {}).get("governed_source")) for c in citations),
     }
+
+
+@app.get("/knowledge/registry/status")
+async def knowledge_registry_status():
+    return knowledge_registry.get_registry_status()
+
+
+@app.get("/knowledge/registry/releases")
+async def knowledge_registry_releases():
+    return {"releases": knowledge_registry.get_release_catalog()}
 
 
 # Risk Scoring Algorithms
@@ -2848,8 +3287,38 @@ async def calculate_risk_score(request: RiskScoreRequest, req: Request):
     
     # RAG-enhanced Guideline Citations
     guideline_citations = []
+    patient_context = request.patient_context or {
+        "age": age,
+        "gender": gender,
+        "specialty": request.specialty,
+        "module": request.module,
+    }
+    governed_scope_filters = _extract_guideline_scope_filters(
+        patient_context,
+        specialty=request.specialty,
+        module=request.module,
+    )
+    governed_query = str(request.context or "").replace("_", " ").strip()
+    if not governed_query:
+        governed_query = str(request.diagnoses[0] if request.diagnoses else "").strip()
+
+    if governed_query:
+        try:
+            governed_hits = knowledge_registry.search(
+                governed_query,
+                limit=3,
+                specialty=governed_scope_filters.get("specialty"),
+                module=governed_scope_filters.get("module"),
+            )
+            governed_hits = _filter_guideline_citations_by_population(governed_hits, patient_context)
+            if governed_hits:
+                guideline_citations.extend(governed_hits)
+                recommendations.append("Review governed clinical guidance for this risk context")
+        except Exception as e:
+            print(f"[CDSS] Governed risk guidance lookup failed: {e}")
+
     tenant_cache_key = _tenant_cache_key_from_request(req)
-    if diagnostic_assistant.rag_engine:
+    if diagnostic_assistant.rag_engine and not guideline_citations:
         # Collect terms to search for based on high risks and diagnoses
         search_terms = []
         # Add high risk diagnoses/conditions
@@ -2902,7 +3371,9 @@ async def calculate_risk_score(request: RiskScoreRequest, req: Request):
         'risk_level': overall_risk_level,
         'factors': factors,
         'recommendations': unique_recommendations,
-        'guideline_citations': guideline_citations
+        'guideline_citations': guideline_citations,
+        'applied_governed_filters': governed_scope_filters,
+        'governed_corpus_used': any(bool((c.get('metadata') or {}).get('governed_source')) for c in guideline_citations),
     }
     
     # Add trend data if available (as additional fields not in response model)
@@ -3221,7 +3692,7 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
 
 
 @app.post("/patient/summarize")
-async def summarize_patient_history(request: PatientSummaryRequest, ai_policy: Dict[str, Any] = Depends(get_ai_policy)):
+async def summarize_patient_history(request: PatientSummaryRequest, req: Request = None, ai_policy: Dict[str, Any] = Depends(get_ai_policy)):
     """
     Generate a concise "One-Liner" summary of the patient's history using LLM.
     Useful for patient headers and quick context.
@@ -3240,6 +3711,7 @@ async def summarize_patient_history(request: PatientSummaryRequest, ai_policy: D
 
     sanitized = _sanitize_summary_payload(request.dict())
     demographics = {"age": sanitized.get("age"), "gender": sanitized.get("gender")}
+    tenant_context = _tenant_cache_key_from_request(req) if req else None
 
     try:
         result = await _run_copilot_with_resilience(
@@ -3248,6 +3720,7 @@ async def summarize_patient_history(request: PatientSummaryRequest, ai_policy: D
                 clinical_notes=sanitized.get("clinical_notes") or [],
                 demographics=demographics,
                 recent_vitals=sanitized.get("recent_vitals"),
+                tenant_id=tenant_context,
             ),
         )
     except Exception as e:
@@ -3399,10 +3872,40 @@ async def detect_care_gaps(request: Dict[str, Any]):
         patient_gender = request.get('patient_gender')
         visit_history = request.get('visit_history', [])
         diagnoses = request.get('diagnoses', [])
+        context = str(request.get('context') or '').strip()
+        patient_context = request.get("patient_context") if isinstance(request.get("patient_context"), dict) else {}
+        governed_scope_filters = _extract_guideline_scope_filters(
+            patient_context,
+            specialty=request.get("specialty"),
+            module=request.get("module"),
+        )
         
         gaps = trend_analysis_engine.detect_care_gaps(
             patient_age, patient_gender, visit_history, diagnoses
         )
+
+        guideline_citations = []
+        governed_query = context.replace("_", " ") if context else str(diagnoses[0] if diagnoses else "").strip()
+        if governed_query:
+            try:
+                governed_hits = knowledge_registry.search(
+                    governed_query,
+                    limit=3,
+                    specialty=governed_scope_filters.get("specialty"),
+                    module=governed_scope_filters.get("module"),
+                )
+                guideline_citations = _filter_guideline_citations_by_population(governed_hits, {
+                    "age": patient_age,
+                    "gender": patient_gender,
+                    **patient_context,
+                })
+            except Exception as e:
+                print(f"Governed care-gap guidance lookup failed: {e}")
+
+        if isinstance(gaps, dict):
+            gaps["guideline_citations"] = guideline_citations
+            gaps["applied_governed_filters"] = governed_scope_filters
+            gaps["governed_corpus_used"] = any(bool((c.get("metadata") or {}).get("governed_source")) for c in guideline_citations)
         
         return gaps
     except Exception as e:
@@ -3587,6 +4090,7 @@ async def transcribe_audio_basic(
             soap_result = await voice_scribe.generate_soap_note(
                 transcription_result["text"],
                 transcription_result.get("language"),
+                tenant_id=tenant_key,
             )
             result["soap_note"] = soap_result
             
@@ -3689,6 +4193,8 @@ class FeedbackEntry(BaseModel):
     logId: str
     patientId: str
     decisionType: str
+    tenantSubdomain: Optional[str] = None
+    sourceModel: Optional[str] = None
     topRecommendation: Optional[str] = None
     confidenceScore: Optional[float] = None
     clinicianAction: Optional[str] = None  # accepted | modified | overridden | ignored
@@ -3700,6 +4206,11 @@ class FeedbackEntry(BaseModel):
 
 class OutcomeFeedbackRequest(BaseModel):
     entries: List[FeedbackEntry]
+
+
+class OutcomeFeedbackReviewRequest(BaseModel):
+    learning_status: str = Field(..., description="pending_review | reviewed | approved_for_learning | rejected_for_learning")
+    review_notes: Optional[str] = None
 
 
 @app.post("/feedback/outcome")
@@ -3714,6 +4225,7 @@ async def receive_outcome_feedback(payload: OutcomeFeedbackRequest):
     lost while a full ML pipeline is wired in.
     """
     received_at = datetime.utcnow().isoformat()
+    batch_id = str(uuid4())
     accepted  = sum(1 for e in payload.entries if e.clinicianAction == "accepted")
     modified  = sum(1 for e in payload.entries if e.clinicianAction == "modified")
     overridden = sum(1 for e in payload.entries if e.clinicianAction == "overridden")
@@ -3722,6 +4234,9 @@ async def receive_outcome_feedback(payload: OutcomeFeedbackRequest):
         1 for e in payload.entries
         if e.outcomeAt30Days or e.outcomeAt90Days
     )
+
+    _init_feedback_store()
+    _persist_outcome_feedback(batch_id, received_at, payload.entries)
 
     # Persist to Redis feedback queue when available (non-blocking)
     try:
@@ -3733,6 +4248,7 @@ async def receive_outcome_feedback(payload: OutcomeFeedbackRequest):
                 "cdss:feedback:queue",
                 json.dumps({
                     **entry.model_dump(),
+                    "batchId": batch_id,
                     "receivedAt": received_at,
                 })
             )
@@ -3747,6 +4263,7 @@ async def receive_outcome_feedback(payload: OutcomeFeedbackRequest):
 
     return {
         "status": "received",
+        "batchId": batch_id,
         "total": len(payload.entries),
         "summary": {
             "accepted": accepted,
@@ -3755,7 +4272,49 @@ async def receive_outcome_feedback(payload: OutcomeFeedbackRequest):
             "ignored": ignored,
             "withOutcomes": with_outcomes,
         },
+        "storage": {
+            "mode": "durable_sqlite",
+            "storePath": str(_feedback_store_path()),
+            "reviewStatus": "pending_review",
+        },
         "receivedAt": received_at,
+    }
+
+
+@app.get("/feedback/outcome/summary")
+async def outcome_feedback_summary(limit: int = 10):
+    summary = _feedback_store_summary(limit=limit)
+    return {
+        "status": "ok",
+        "summary": summary,
+        "generatedAt": datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/feedback/outcome/review/{entry_id}")
+async def outcome_feedback_review(entry_id: int, payload: OutcomeFeedbackReviewRequest):
+    updated = _update_feedback_entry_review(
+        entry_id=entry_id,
+        learning_status=payload.learning_status,
+        review_notes=payload.review_notes,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Feedback entry {entry_id} not found")
+    return {
+        "status": "updated",
+        "entry": updated,
+        "updatedAt": datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/feedback/outcome/learning/claim")
+async def outcome_feedback_claim_for_learning(limit: int = 25):
+    claimed = _claim_feedback_entries_for_learning(limit=limit)
+    return {
+        "status": "ok",
+        "claimedCount": len(claimed),
+        "entries": claimed,
+        "generatedAt": datetime.utcnow().isoformat(),
     }
 
 
@@ -7596,6 +8155,193 @@ def iot_analyze(req: IotAnalyzeReq):
             if v < 35.0 or v >= 39.5: alerts.append({"type": t, "value": v, "severity": "critical", "message": f"Temperature {v}°C — {'hypothermia' if v < 35 else 'high fever'}"})
     return {"alerts": alerts, "reading_count": len(req.readings)}
 
+# ── S94: Scheduling and smart form defaults ──────────────────────────────────
+
+class SchedulingPredictReq(BaseModel):
+    appointmentId: str
+    priorNoShows: Optional[int] = None
+    priorCancellations: Optional[int] = None
+    leadTimeDays: Optional[float] = None
+    travelTimeMinutes: Optional[int] = None
+    waitDays: Optional[float] = None
+    visitType: Optional[str] = None
+    patientAge: Optional[int] = None
+    baselineDurationMinutes: Optional[int] = None
+
+
+@app.post("/scheduling/predict")
+def scheduling_predict(req: SchedulingPredictReq):
+    """Return heuristic no-show/cancel risk and a recommended slot duration."""
+    no_show = 0.08
+    cancel = 0.04
+    duration = req.baselineDurationMinutes or 30
+    feature_importance: Dict[str, float] = {}
+
+    prior_no_shows = max(0, int(req.priorNoShows or 0))
+    prior_cancellations = max(0, int(req.priorCancellations or 0))
+    lead_time = float(req.leadTimeDays or 0)
+    travel_time = max(0, int(req.travelTimeMinutes or 0))
+    wait_days = float(req.waitDays or 0)
+    visit_type = str(req.visitType or "").lower()
+    patient_age = int(req.patientAge or 0) if req.patientAge is not None else 0
+
+    if prior_no_shows:
+        increment = min(0.32, prior_no_shows * 0.12)
+        no_show += increment
+        feature_importance["prior_no_shows"] = round(increment, 3)
+    if prior_cancellations:
+        increment = min(0.24, prior_cancellations * 0.09)
+        cancel += increment
+        feature_importance["prior_cancellations"] = round(increment, 3)
+    if lead_time >= 14:
+        no_show += 0.08
+        feature_importance["lead_time_days"] = round(feature_importance.get("lead_time_days", 0) + 0.08, 3)
+    elif lead_time >= 7:
+        no_show += 0.04
+        feature_importance["lead_time_days"] = round(feature_importance.get("lead_time_days", 0) + 0.04, 3)
+    if travel_time >= 60:
+        no_show += 0.08
+        cancel += 0.03
+        feature_importance["travel_time_minutes"] = 0.08
+    elif travel_time >= 30:
+        no_show += 0.04
+        feature_importance["travel_time_minutes"] = 0.04
+    if wait_days >= 30:
+        cancel += 0.07
+        feature_importance["wait_days"] = 0.07
+    elif wait_days >= 14:
+        cancel += 0.04
+        feature_importance["wait_days"] = 0.04
+    if visit_type in {"new", "consult", "complex"}:
+        duration += 15
+        feature_importance["visit_type_complexity"] = 0.06
+    if patient_age >= 75 or patient_age and patient_age <= 5:
+        duration += 10
+        feature_importance["patient_age_complexity"] = 0.05
+
+    no_show = min(0.95, round(no_show, 4))
+    cancel = min(0.9, round(cancel, 4))
+    confidence = round(min(0.92, 0.55 + (0.05 * len(feature_importance))), 2)
+
+    return {
+        "appointment_id": req.appointmentId,
+        "no_show_probability": no_show,
+        "cancel_probability": cancel,
+        "recommended_duration": duration,
+        "confidence_score": confidence,
+        "model": "scheduling_rules_v1",
+        "feature_importance": feature_importance,
+    }
+
+
+@app.post("/forms/suggest-defaults")
+def forms_suggest_defaults(request: Dict[str, Any]):
+    """Return heuristic smart defaults for dynamic form behavior."""
+    form_name = str(request.get("formName") or request.get("form_name") or "unknown")
+    context = request.get("context") if isinstance(request.get("context"), dict) else request
+
+    defaults: Dict[str, Dict[str, Any]] = {}
+    if int(context.get("age") or 0) and int(context.get("age") or 0) < 18:
+        defaults["weight_based_dosing"] = {"value": True, "confidence": 0.95, "source": "cdss_rule"}
+    if str(context.get("sex") or "").lower() == "female" and 12 <= int(context.get("age") or 0) <= 55:
+        defaults["show_pregnancy_status"] = {"value": True, "confidence": 0.9, "source": "cdss_rule"}
+    diagnoses = [str(item).upper() for item in (context.get("diagnoses") or [])]
+    if any("E11" in item or "T2DM" in item for item in diagnoses):
+        defaults["show_hba1c_trend"] = {"value": True, "confidence": 0.92, "source": "cdss_rule"}
+        defaults["glucose_unit"] = {"value": "mmol/L", "confidence": 0.88, "source": "cdss_rule"}
+    systolic = context.get("vitals", {}).get("systolic") if isinstance(context.get("vitals"), dict) else None
+    if systolic and float(systolic) > 160:
+        defaults["trigger_hypertension_care_gap"] = {"value": True, "confidence": 0.97, "source": "cdss_rule"}
+
+    return {
+        "form_name": form_name,
+        "defaults": defaults,
+        "model": "form_defaults_rules_v1",
+        "confidence_score": round(min(0.95, 0.5 + (0.08 * len(defaults))), 2),
+    }
+
+# ── S94b: Antimicrobial support ───────────────────────────────────────────────
+
+def _normalize_abx_susceptibility(raw: Any) -> Dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: Dict[str, str] = {}
+    for key, value in raw.items():
+        label = str(value.get("interpretation") if isinstance(value, dict) else value or "").strip().upper()
+        if label in {"S", "I", "R"}:
+            normalized[str(key)] = label
+    return normalized
+
+
+@app.post("/antimicrobial/empirical")
+def antimicrobial_empirical(request: Dict[str, Any]):
+    syndrome = str(request.get("syndrome") or request.get("infectionSyndrome") or request.get("infection_site") or "undifferentiated infection")
+    severity = str(request.get("severity") or "moderate").lower()
+    allergies = [str(item).lower() for item in (request.get("allergies") or [])]
+    recent_antibiotics = [str(item) for item in (request.get("recent_antibiotics") or request.get("recentAntibiotics") or [])]
+
+    recommendation = "ceftriaxone"
+    rationale = [f"Empirical coverage for {syndrome}"]
+    avoid = []
+    if "sepsis" in syndrome.lower() or severity in {"high", "severe", "critical"}:
+        recommendation = "piperacillin-tazobactam"
+        rationale.append("Escalated because of sepsis/high-severity presentation")
+    elif "urinary" in syndrome.lower():
+        recommendation = "ceftriaxone"
+        rationale.append("Urinary source pattern")
+    elif "skin" in syndrome.lower() or "wound" in syndrome.lower():
+        recommendation = "cloxacillin"
+        rationale.append("Skin/soft tissue coverage pattern")
+
+    if any("penicillin" in item for item in allergies):
+        avoid.extend(["penicillin", "piperacillin-tazobactam", "amoxicillin-clavulanate"])
+        if recommendation in {"piperacillin-tazobactam", "cloxacillin", "ceftriaxone"}:
+            recommendation = "aztreonam"
+            rationale.append("Shifted because of reported beta-lactam allergy")
+
+    if recent_antibiotics:
+        rationale.append("Recent antibiotic exposure increases resistance risk")
+
+    return {
+        "recommendation": recommendation,
+        "alternatives": ["ceftriaxone", "amoxicillin-clavulanate", "aztreonam"],
+        "avoid": sorted(set(avoid)),
+        "rationale": rationale,
+        "confidence_score": 0.68 if recent_antibiotics else 0.74,
+        "model": "antimicrobial_rules_v1",
+    }
+
+
+@app.post("/antimicrobial/deescalate")
+def antimicrobial_deescalate(request: Dict[str, Any]):
+    organism = str(request.get("organism") or request.get("organism_isolated") or "unknown organism")
+    current_regimen = str(request.get("current_regimen") or request.get("currentRegimen") or "")
+    susceptibility = _normalize_abx_susceptibility(
+        request.get("susceptibility")
+        or request.get("disk_diffusion_results")
+        or request.get("diskDiffusionResults")
+    )
+
+    preferred = next((drug for drug, status in susceptibility.items() if status == "S"), None)
+    resistant = [drug for drug, status in susceptibility.items() if status == "R"]
+    recommendation = preferred or current_regimen or "review microbiology result"
+    action = "deescalate" if preferred and preferred.lower() != current_regimen.lower() else "continue_or_review"
+    rationale = [f"Culture identified {organism}"]
+    if preferred:
+        rationale.append(f"Preferred susceptible agent: {preferred}")
+    if resistant:
+        rationale.append(f"Resistant agents detected: {', '.join(resistant[:4])}")
+
+    return {
+        "recommendation": recommendation,
+        "action": action,
+        "resistant_agents": resistant,
+        "susceptibility": susceptibility,
+        "rationale": rationale,
+        "confidence_score": 0.78 if preferred else 0.55,
+        "model": "antimicrobial_rules_v1",
+    }
+
 # ── S93: Education Generation (Claude API) ────────────────────────────────────
 
 class EducationGenReq(BaseModel):
@@ -7605,8 +8351,12 @@ class EducationGenReq(BaseModel):
     patient_id: Optional[str] = None
 
 @app.post("/education/generate")
-async def education_generate(req: EducationGenReq):
-    """Generate multilingual patient education material using Claude API."""
+async def education_generate(req: EducationGenReq, http_req: Request = None, ai_policy: Dict[str, Any] = Depends(get_ai_policy)):
+    """Generate multilingual patient education material using the governed CDSS LLM path."""
+    effective_ai_policy = _resolve_ai_policy(ai_policy, http_req)
+    if effective_ai_policy.get("ai_enabled") is False:
+        raise HTTPException(status_code=403, detail="AI/LLM use disabled for tenant by policy")
+
     lang_names = {"en": "English", "sn": "Shona", "nd": "Ndebele", "pt": "Portuguese"}
     lang_name = lang_names.get(req.language, "English")
 
@@ -7620,19 +8370,150 @@ async def education_generate(req: EducationGenReq):
 
     content = f"[Education material about {req.topic} in {lang_name} — AI generation pending]"
     try:
-        import anthropic as _anthropic
-        client = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": user_prompt}],
-            system=system_prompt,
+        llm = LLMProvider()
+        tenant_context = _tenant_cache_key_from_request(http_req) if http_req else None
+        generated = await llm.generate_response(
+            user_prompt,
+            system_prompt=system_prompt,
+            use_case="patient_education_generation",
+            tenant_id=tenant_context,
         )
-        content = message.content[0].text if message.content else content
+        if generated:
+            content = generated
     except Exception as e:
         logger.warning(f"Education generation failed: {e}")
 
-    return {"content": content, "topic": req.topic, "language": req.language, "reading_level": req.reading_level}
+    return {
+        "content": content,
+        "topic": req.topic,
+        "language": req.language,
+        "reading_level": req.reading_level,
+        "governance": {
+            "governed_path": True,
+            "use_case": "patient_education_generation",
+            "vendor_id": "ollama",
+        },
+        "model": os.getenv("LLM_MODEL_NAME", "unset"),
+    }
+
+# ── SDOH screening and resource matching ─────────────────────────────────────
+
+_SDOH_DOMAIN_MAP: Dict[str, Dict[str, str]] = {
+    "food": {"domain": "food_insecurity", "category": "food_bank", "z_code": "Z59.41", "action": "Food support referral"},
+    "housing": {"domain": "housing_instability", "category": "shelter", "z_code": "Z59.819", "action": "Housing support referral"},
+    "transport": {"domain": "transportation_barrier", "category": "transport", "z_code": "Z59.82", "action": "Transport assistance referral"},
+    "utility": {"domain": "utility_insecurity", "category": "financial_assistance", "z_code": "Z59.12", "action": "Utility and financial support referral"},
+    "financial": {"domain": "financial_strain", "category": "financial_assistance", "z_code": "Z59.86", "action": "Financial counselling or assistance referral"},
+    "employment": {"domain": "employment_instability", "category": "employment", "z_code": "Z56.9", "action": "Employment support referral"},
+    "violence": {"domain": "interpersonal_safety", "category": "domestic_violence", "z_code": "Z65.8", "action": "Safety planning and domestic violence referral"},
+    "mental": {"domain": "mental_health_support", "category": "mental_health", "z_code": "Z71.1", "action": "Mental health support referral"},
+}
+
+
+def _flatten_sdoh_items(prefix: str, value: Any, out: List[tuple[str, Any]]) -> None:
+    if isinstance(value, dict):
+        for k, v in value.items():
+            child = f"{prefix}.{k}" if prefix else str(k)
+            _flatten_sdoh_items(child, v, out)
+        return
+    out.append((prefix, value))
+
+
+def _sdoh_positive(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value is True
+    if isinstance(value, (int, float)):
+        return value > 0
+    text = str(value or "").strip().lower()
+    return text in {"yes", "positive", "high", "urgent", "often", "sometimes", "unstable", "unsafe", "unmet", "insecure"}
+
+
+@app.post("/sdoh/screen")
+async def sdoh_screen(request: Dict[str, Any]):
+    responses = request.get("responses") if isinstance(request.get("responses"), dict) else request
+    tool_used = str(request.get("tool") or request.get("tool_used") or "custom")
+
+    flattened: List[tuple[str, Any]] = []
+    _flatten_sdoh_items("", responses if isinstance(responses, dict) else {}, flattened)
+
+    positives: Dict[str, Dict[str, Any]] = {}
+    for key, value in flattened:
+        if not _sdoh_positive(value):
+            continue
+        lower_key = key.lower()
+        for needle, config in _SDOH_DOMAIN_MAP.items():
+            if needle in lower_key:
+                positives[config["domain"]] = {
+                    "domain": config["domain"],
+                    "category": config["category"],
+                    "z_code": config["z_code"],
+                    "recommended_action": config["action"],
+                    "severity": "high" if str(value).lower() in {"high", "urgent", "unsafe"} else "moderate",
+                    "reason": f"Positive response detected for {key}",
+                }
+
+    positive_domains = list(positives.values())
+    overall_risk = "high" if any(item["severity"] == "high" for item in positive_domains) else ("moderate" if positive_domains else "low")
+    referral_priority = "urgent" if overall_risk == "high" else ("routine" if positive_domains else "none")
+
+    return {
+        "tool_used": tool_used,
+        "positive_domains": positive_domains,
+        "z_codes": [item["z_code"] for item in positive_domains],
+        "overall_risk": overall_risk,
+        "referral_priority": referral_priority,
+        "screening_complete": True,
+    }
+
+
+@app.post("/sdoh/resource/match")
+async def sdoh_resource_match(request: Dict[str, Any]):
+    positive_domains = request.get("positive_domains") or []
+    requested_categories = request.get("requested_categories") or []
+    available_resources = request.get("available_resources") or []
+    language = str(request.get("language") or "").lower()
+
+    derived_categories = [
+        item.get("category")
+        for item in positive_domains
+        if isinstance(item, dict) and item.get("category")
+    ]
+    categories = list(dict.fromkeys([*(requested_categories or []), *derived_categories]))
+
+    matches = []
+    for resource in available_resources:
+        if not isinstance(resource, dict):
+            continue
+        category = resource.get("category")
+        if categories and category not in categories:
+            continue
+        score = 50
+        if category in categories:
+            score += 30
+        langs = [str(item).lower() for item in (resource.get("languages") or [])]
+        if language and language in langs:
+            score += 10
+        if resource.get("availability"):
+            score += 5
+        matches.append({
+            "resource_id": resource.get("id"),
+            "name": resource.get("name"),
+            "category": category,
+            "score": score,
+            "reason": f"Matches requested support category '{category}'",
+            "phone": resource.get("phone"),
+            "website": resource.get("website"),
+            "address": resource.get("address"),
+            "availability": resource.get("availability"),
+        })
+
+    matches.sort(key=lambda item: item.get("score", 0), reverse=True)
+
+    return {
+        "recommended_categories": categories,
+        "matches": matches[:10],
+        "unmet_categories": [category for category in categories if category not in {item.get('category') for item in matches}],
+    }
 
 # ── S90: Federated Learning Aggregation (FedAvg) ─────────────────────────────
 
@@ -7788,6 +8669,16 @@ class NlpExtractReq(BaseModel):
     patientId: Optional[str] = None
     encounterId: Optional[str] = None
 
+
+class RegistrationDocumentAnalyzeReq(BaseModel):
+    document_type: str
+    extracted_text: str
+    file_name: Optional[str] = None
+    mime_type: Optional[str] = None
+    language: Optional[str] = "en"
+    patient_id: Optional[str] = None
+    document_context: Optional[Dict[str, Any]] = None
+
 COMMON_ICD10_PATTERNS = [
     ("hypertension", "I10", "Essential hypertension"),
     ("type 2 diabetes", "E11.9", "Type 2 diabetes mellitus without complications"),
@@ -7823,9 +8714,200 @@ COMMON_CPT_PATTERNS = [
     ("chest ct", "71250", "CT thorax without contrast"),
 ]
 
+
+def _extract_labeled_registration_value(text: str, labels: List[str]) -> Optional[str]:
+    for label in labels:
+        match = re.search(rf"{re.escape(label)}\s*[:\-]\s*([^\n]+)", text, re.IGNORECASE)
+        if match and match.group(1).strip():
+            return match.group(1).strip()
+    return None
+
+
+def _find_registration_pattern(text: str, pattern: str) -> Optional[str]:
+    match = re.search(pattern, text, re.IGNORECASE)
+    if not match:
+        return None
+    group = match.group(1) if match.groups() else match.group(0)
+    return group.strip() if isinstance(group, str) else None
+
+
+def _find_registration_investigations(text: str) -> List[str]:
+    investigations = []
+    for keyword in ("ultrasound", "biopsy", "mammogram", "ct", "mri", "x-ray", "xray", "ecg", "echo", "fbc", "cbc"):
+        if keyword in text.lower():
+            normalized = "x-ray" if keyword == "xray" else keyword.upper() if keyword in {"ct", "mri", "ecg", "echo", "fbc", "cbc"} else keyword
+            investigations.append(normalized)
+    return list(dict.fromkeys(investigations))
+
+
+def _find_registration_meds(text: str) -> List[str]:
+    candidates = re.findall(
+        r"\b(?:taking|on|medication(?:s)?[:\-]?|drug(?:s)?[:\-]?)\s+([A-Za-z][A-Za-z0-9/\- ]{2,80})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    cleaned = []
+    for candidate in candidates:
+        value = re.split(r"[.;,\n]", candidate, maxsplit=1)[0].strip()
+        if value and len(value.split()) <= 8:
+            cleaned.append(value)
+    return list(dict.fromkeys(cleaned))
+
+
+def _fallback_registration_document_analysis(document_type: str, extracted_text: str) -> Dict[str, Any]:
+    text = str(extracted_text or "").strip()
+    if not text:
+        return {"structured_payload": {}, "summary": None, "flags": ["empty_document_text"], "confidence": 0.0}
+
+    structured_payload: Dict[str, Any]
+    doc_type = str(document_type or "").strip().lower()
+    if doc_type == "insurance_card":
+        structured_payload = {
+            "providerName": _extract_labeled_registration_value(text, ["medical aid", "insurance provider", "provider", "scheme"]),
+            "memberNumber": _extract_labeled_registration_value(text, ["member number", "member no", "policy number", "membership"]),
+            "planName": _extract_labeled_registration_value(text, ["plan", "scheme option"]),
+        }
+    elif doc_type == "referral_letter":
+        structured_payload = {
+            "referredBy": _extract_labeled_registration_value(text, ["referred by", "from"]),
+            "referredTo": _extract_labeled_registration_value(text, ["referred to", "to"]),
+            "referringClinician": _extract_labeled_registration_value(text, ["doctor", "dr", "referring clinician", "consultant"]),
+            "referringFacility": _extract_labeled_registration_value(text, ["facility", "hospital", "clinic"]),
+            "diagnosis": _extract_labeled_registration_value(text, ["diagnosis", "impression"]),
+            "reason": _extract_labeled_registration_value(text, ["reason for referral", "reason", "indication"]),
+            "requestedSpecialty": _extract_labeled_registration_value(text, ["requested specialty", "specialty", "department"]),
+            "urgency": _extract_labeled_registration_value(text, ["urgency", "priority"]) or _find_registration_pattern(text, r"\b(urgent|routine|asap|emergency)\b"),
+            "requestedInvestigations": _find_registration_investigations(text),
+            "requestedFollowUpWindow": _find_registration_pattern(text, r"\b(within\s+\d+\s+(?:day|days|week|weeks|month|months)|in\s+\d+\s+(?:day|days|week|weeks|month|months))\b"),
+            "medicationCandidates": _find_registration_meds(text),
+        }
+    else:
+        structured_payload = {
+            "fullName": _extract_labeled_registration_value(text, ["name", "full name"]),
+            "surname": _extract_labeled_registration_value(text, ["surname", "last name"]),
+            "givenNames": _extract_labeled_registration_value(text, ["given names", "first name"]),
+            "nationalId": _extract_labeled_registration_value(text, ["id number", "national id", "passport number"]),
+            "dateOfBirth": _extract_labeled_registration_value(text, ["date of birth", "dob", "birth date"]),
+            "gender": _extract_labeled_registration_value(text, ["sex", "gender"]),
+        }
+
+    flags = [f"document_type:{doc_type or 'unknown'}"]
+    if not any(value for value in structured_payload.values() if value not in (None, "", [], {})):
+        flags.append("fallback_low_signal")
+
+    return {
+        "structured_payload": structured_payload,
+        "summary": f"Fallback registration-document analysis completed for {doc_type or 'unknown_document'}.",
+        "flags": flags,
+        "confidence": 0.5,
+    }
+
+
+def _merge_registration_document_analysis(
+    fallback_payload: Dict[str, Any],
+    ai_payload: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    merged = dict(fallback_payload or {})
+    incoming = ai_payload or {}
+    for key, value in incoming.items():
+        if value in (None, "", [], {}):
+            continue
+        current = merged.get(key)
+        if isinstance(current, list) and isinstance(value, list):
+            merged[key] = list(dict.fromkeys([*current, *value]))
+        elif isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = {**current, **value}
+        else:
+            merged[key] = value
+    return merged
+
+
+@app.post("/registration/documents/analyze")
+async def registration_document_analyze(
+    req: RegistrationDocumentAnalyzeReq,
+    http_req: Request = None,
+    ai_policy: Dict[str, Any] = Depends(get_ai_policy),
+):
+    fallback = _fallback_registration_document_analysis(req.document_type, req.extracted_text)
+    llm_structured = None
+    llm_summary = None
+    llm_flags: List[str] = []
+    llm_confidence = None
+    abstained = False
+    abstain_reason = None
+
+    try:
+        effective_ai_policy = _resolve_ai_policy(ai_policy, http_req)
+        if effective_ai_policy.get("ai_enabled") is not False and LLMProvider is not None and req.extracted_text.strip():
+            llm = LLMProvider()
+            tenant_context = _tenant_cache_key_from_request(http_req) if http_req else None
+            generated = await llm.generate_json(
+                prompt=(
+                    "Analyze the following registration or referral document text and extract only clearly supported structured fields. "
+                    "Do not invent values.\n\n"
+                    f"Document type: {req.document_type}\n"
+                    f"Language: {req.language or 'en'}\n"
+                    f"File name: {req.file_name or 'unknown'}\n\n"
+                    f"Text:\n{req.extracted_text[:5000]}"
+                ),
+                schema_description=(
+                    "{"
+                    "\"structured_payload\": {\"providerName\": \"string|null\", \"memberNumber\": \"string|null\", "
+                    "\"planName\": \"string|null\", \"referredBy\": \"string|null\", \"referredTo\": \"string|null\", "
+                    "\"referringClinician\": \"string|null\", \"referringFacility\": \"string|null\", "
+                    "\"diagnosis\": \"string|null\", \"reason\": \"string|null\", \"requestedSpecialty\": \"string|null\", "
+                    "\"urgency\": \"string|null\", \"requestedInvestigations\": [\"string\"], "
+                    "\"requestedFollowUpWindow\": \"string|null\", \"medicationCandidates\": [\"string\"], "
+                    "\"allergyCandidates\": [\"string\"], \"fullName\": \"string|null\", \"surname\": \"string|null\", "
+                    "\"givenNames\": \"string|null\", \"nationalId\": \"string|null\", \"dateOfBirth\": \"string|null\", "
+                    "\"gender\": \"string|null\"}, "
+                    "\"summary\": \"string|null\", "
+                    "\"flags\": [\"string\"], "
+                    "\"confidence\": 0.0"
+                    "}"
+                ),
+                use_case="registration_document_intelligence",
+                tenant_id=tenant_context,
+            )
+            if isinstance(generated, dict):
+                llm_structured = generated.get("structured_payload") or {}
+                llm_summary = generated.get("summary")
+                llm_flags = [str(flag) for flag in (generated.get("flags") or []) if str(flag).strip()]
+                try:
+                    llm_confidence = float(generated.get("confidence")) if generated.get("confidence") is not None else None
+                except Exception:
+                    llm_confidence = None
+    except Exception as exc:
+        logger.warning("Registration document intelligence AI enhancement failed: %s", exc)
+        abstained = True
+        abstain_reason = str(exc)
+        llm_flags.append("ai_enhancement_failed")
+
+    merged_payload = _merge_registration_document_analysis(fallback.get("structured_payload") or {}, llm_structured)
+    flags = list(dict.fromkeys([*(fallback.get("flags") or []), *llm_flags]))
+    confidence = llm_confidence if isinstance(llm_confidence, (int, float)) else fallback.get("confidence", 0.0)
+
+    return {
+        "document_type": req.document_type,
+        "structured_payload": merged_payload,
+        "summary": llm_summary or fallback.get("summary"),
+        "flags": flags,
+        "confidence": max(0.0, min(1.0, float(confidence or 0.0))),
+        "model": os.getenv("LLM_MODEL_NAME", "registration_document_fallback"),
+        "abstained": abstained,
+        "abstain_reason": abstain_reason,
+        "governance": {
+            "governed_path": True,
+            "use_case": "registration_document_intelligence",
+            "vendor_id": "ollama",
+            "fallback_rule_engine": True,
+            "llm_enhanced": bool(llm_structured),
+        },
+    }
+
 @app.post("/nlp/extract-codes")
-async def nlp_extract_codes(req: NlpExtractReq):
-    """Extract ICD-10 and CPT codes from clinical note text using pattern matching + Claude API."""
+async def nlp_extract_codes(req: NlpExtractReq, http_req: Request = None, ai_policy: Dict[str, Any] = Depends(get_ai_policy)):
+    """Extract ICD-10 and CPT codes from clinical note text using pattern matching plus the governed LLM path."""
     text_lower = req.noteText.lower()
 
     # Fast pattern matching first
@@ -7838,27 +8920,34 @@ async def nlp_extract_codes(req: NlpExtractReq):
         for pattern, code, desc in COMMON_CPT_PATTERNS if pattern in text_lower
     ]
 
-    # Enhance with Claude API for richer extraction
+    # Enhance with the governed LLM path for richer extraction
     try:
-        import anthropic as _anthropic
-        client = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
-        message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=512,
-            system="""You are a medical coding assistant. Extract ICD-10 and CPT codes from clinical notes.
-Return JSON only: {"icd10": [{"code": "...", "description": "...", "confidence": 0.0-1.0}], "cpt": [...]}
-Only include codes you are confident about. Max 5 ICD-10 and 5 CPT codes.""",
-            messages=[{"role": "user", "content": f"Extract codes from:\n{req.noteText[:2000]}"}],
-        )
-        import json as _json
-        ai_result = _json.loads(message.content[0].text)
-        # Merge AI results, preferring AI over patterns
-        ai_icd_codes = {c["code"] for c in ai_result.get("icd10", [])}
-        ai_cpt_codes = {c["code"] for c in ai_result.get("cpt", [])}
-        pattern_icd = [c for c in icd_candidates if c["code"] not in ai_icd_codes]
-        pattern_cpt = [c for c in cpt_candidates if c["code"] not in ai_cpt_codes]
-        icd_candidates = ai_result.get("icd10", []) + pattern_icd
-        cpt_candidates = ai_result.get("cpt", []) + pattern_cpt
+        effective_ai_policy = _resolve_ai_policy(ai_policy, http_req)
+        if effective_ai_policy.get("ai_enabled") is not False:
+            llm = LLMProvider()
+            tenant_context = _tenant_cache_key_from_request(http_req) if http_req else None
+            generated = await llm.generate_response(
+                (
+                    "Extract likely ICD-10 and CPT codes from the following clinical note. "
+                    "Return JSON only with keys icd10 and cpt.\n\n"
+                    f"{req.noteText[:2000]}"
+                ),
+                system_prompt=(
+                    "You are a medical coding assistant. Return strict JSON only in the form "
+                    "{\"icd10\": [{\"code\": \"...\", \"description\": \"...\", \"confidence\": 0.0}], "
+                    "\"cpt\": [{\"code\": \"...\", \"description\": \"...\", \"confidence\": 0.0}]}. "
+                    "Only include codes you are reasonably confident about. Max 5 ICD-10 and 5 CPT codes."
+                ),
+                use_case="clinical_code_extraction",
+                tenant_id=tenant_context,
+            )
+            ai_result = json.loads(generated or "{}")
+            ai_icd_codes = {c["code"] for c in ai_result.get("icd10", []) if isinstance(c, dict) and c.get("code")}
+            ai_cpt_codes = {c["code"] for c in ai_result.get("cpt", []) if isinstance(c, dict) and c.get("code")}
+            pattern_icd = [c for c in icd_candidates if c["code"] not in ai_icd_codes]
+            pattern_cpt = [c for c in cpt_candidates if c["code"] not in ai_cpt_codes]
+            icd_candidates = ai_result.get("icd10", []) + pattern_icd
+            cpt_candidates = ai_result.get("cpt", []) + pattern_cpt
     except Exception as e:
         logger.warning(f"NLP code extraction AI enhancement failed: {e}")
 
@@ -7866,7 +8955,12 @@ Only include codes you are confident about. Max 5 ICD-10 and 5 CPT codes.""",
         "noteId": req.noteId,
         "suggestedIcd10Codes": icd_candidates[:8],
         "suggestedCptCodes": cpt_candidates[:5],
-        "model": "pattern+claude-haiku",
+        "model": os.getenv("LLM_MODEL_NAME", "pattern-only"),
+        "governance": {
+            "governed_path": True,
+            "use_case": "clinical_code_extraction",
+            "vendor_id": "ollama",
+        },
     }
 
 # ── S96: Radiology AI ─────────────────────────────────────────────────────────
@@ -7990,15 +9084,230 @@ def symptom_check(req: SymptomCheckReq):
         triage_level = severity_boost
 
     recommended = deduped[0]["nextStep"] if deduped else "See your healthcare provider."
+    confidence = round(max((float(item.get("probability", 0.0)) for item in deduped), default=0.5), 3)
 
     return {
         "differential": deduped[:5],
         "triage_level": triage_level,
         "recommended_action": recommended,
+        "confidence": confidence,
+        "abstained": False,
+        "abstain_reason": None,
+        "model": "symptom_check_rules_v1",
+        "evidence": [
+            {"source": "medicore_symptom_checker_policy_v1", "section": "differentials", "strength": "governed_rule"},
+            {"source": "medicore_symptom_checker_policy_v1", "section": "triage", "strength": "governed_rule"},
+        ],
+        "governance": {
+            "governed_path": True,
+            "phi_minimized": True,
+            "requires_human_authorization": triage_level in {"urgent", "emergency"},
+        },
     }
 
 # ── S99: Adherence Chat ────────────────────────────────────────────────────────
-# (Handled via Claude API directly in PatientAiService — no CDSS stub needed)
+
+class PatientAdherenceHistoryItem(BaseModel):
+    role: str
+    content: str
+
+
+class PatientAdherenceChatReq(BaseModel):
+    patient_id: str
+    session_id: Optional[str] = None
+    message: str
+    medications: List[str] = []
+    history: List[PatientAdherenceHistoryItem] = []
+
+
+def _classify_patient_adherence_message(message: str) -> Dict[str, Any]:
+    lower = str(message or "").strip().lower()
+    urgent_terms = [
+        "chest pain",
+        "can't breathe",
+        "cannot breathe",
+        "difficulty breathing",
+        "seizure",
+        "passed out",
+        "fainted",
+        "suicidal",
+        "overdose",
+        "severe allergic",
+        "anaphylaxis",
+    ]
+    if any(term in lower for term in urgent_terms):
+        return {
+            "intent": "urgent",
+            "adherence_concern": True,
+            "requires_clinician_follow_up": True,
+            "urgency": "urgent",
+            "confidence": 0.98,
+            "reasoning": "Urgent red-flag symptom detected in patient message.",
+            "abstained": True,
+            "abstain_reason": "urgent_symptoms",
+        }
+
+    if any(term in lower for term in ["skip", "skipped", "forgot", "missed dose", "miss doses", "not taking"]):
+        return {
+            "intent": "adherence_check",
+            "adherence_concern": True,
+            "requires_clinician_follow_up": False,
+            "urgency": "routine",
+            "confidence": 0.9,
+            "reasoning": "Patient reported missed or skipped medication doses.",
+            "abstained": False,
+            "abstain_reason": None,
+        }
+
+    if any(term in lower for term in ["side effect", "side effects", "feeling sick", "rash", "vomiting", "dizzy"]):
+        return {
+            "intent": "side_effect",
+            "adherence_concern": True,
+            "requires_clinician_follow_up": True,
+            "urgency": "routine",
+            "confidence": 0.88,
+            "reasoning": "Patient reported possible medication side effects requiring follow-up.",
+            "abstained": False,
+            "abstain_reason": None,
+        }
+
+    if any(term in lower for term in ["refill", "running out", "ran out", "no tablets left", "no pills left"]):
+        return {
+            "intent": "refill_request",
+            "adherence_concern": True,
+            "requires_clinician_follow_up": False,
+            "urgency": "routine",
+            "confidence": 0.9,
+            "reasoning": "Patient reported refill or medication supply issue.",
+            "abstained": False,
+            "abstain_reason": None,
+        }
+
+    if any(term in lower for term in ["cost", "expensive", "can't afford", "cannot afford", "money"]):
+        return {
+            "intent": "cost_barrier",
+            "adherence_concern": True,
+            "requires_clinician_follow_up": True,
+            "urgency": "routine",
+            "confidence": 0.86,
+            "reasoning": "Patient reported a financial barrier affecting adherence.",
+            "abstained": False,
+            "abstain_reason": None,
+        }
+
+    return {
+        "intent": "general",
+        "adherence_concern": False,
+        "requires_clinician_follow_up": False,
+        "urgency": "routine",
+        "confidence": 0.72,
+        "reasoning": "General medication support request without explicit safety or adherence red flags.",
+        "abstained": False,
+        "abstain_reason": None,
+    }
+
+
+def _fallback_patient_adherence_reply(classification: Dict[str, Any], medications: List[str]) -> str:
+    meds_text = ", ".join([m for m in medications if str(m).strip()][:3])
+    if classification["intent"] == "urgent":
+        return "Your message may describe an urgent problem. Please seek urgent medical attention now or contact your clinician immediately."
+    if classification["intent"] == "adherence_check":
+        return f"Missing doses can reduce how well your treatment works. Try to resume your medication as prescribed{f' for {meds_text}' if meds_text else ''} and contact your care team if you keep missing doses."
+    if classification["intent"] == "side_effect":
+        return "Side effects can make it hard to stay on treatment. Please contact your clinician or pharmacist soon so they can review your symptoms and your medication plan."
+    if classification["intent"] == "refill_request":
+        return "Running out of medicine can interrupt treatment. Please request a refill as soon as possible and contact your clinic or pharmacy if you may miss doses."
+    if classification["intent"] == "cost_barrier":
+        return "Cost barriers can affect adherence. Please contact your clinic so they can help review lower-cost options, coverage, or refill planning."
+    return "Keep taking your medication as prescribed, and contact your clinician or pharmacist if you have questions or concerns."
+
+
+@app.post("/patient/adherence-chat")
+async def patient_adherence_chat(req: PatientAdherenceChatReq, http_req: Request = None):
+    """Governed patient adherence assistant with deterministic safety classification and optional local LLM phrasing."""
+    classification = _classify_patient_adherence_message(req.message)
+    reply = _fallback_patient_adherence_reply(classification, req.medications)
+    model_name = "patient_adherence_rules_v1"
+
+    safe_history = [
+        {
+            "role": item.role if item.role in {"user", "assistant"} else "user",
+            "content": redact_text(str(item.content or "").strip())[:500],
+        }
+        for item in (req.history or [])[-6:]
+        if str(item.content or "").strip()
+    ]
+    safe_message = redact_text(str(req.message or "").strip())[:800]
+    safe_medications = [redact_text(str(m).strip())[:120] for m in (req.medications or []) if str(m).strip()][:12]
+    tenant_context = _tenant_cache_key_from_request(http_req) if http_req else None
+
+    if classification["intent"] != "urgent" and LLMProvider is not None:
+        try:
+            llm = LLMProvider()
+            if await llm.check_availability():
+                schema = """
+                {
+                  "reply": "A concise, supportive adherence response in 2-3 sentences.",
+                  "clinician_follow_up_needed": "boolean"
+                }
+                """
+                prompt = f"""
+                You are a medication adherence support assistant.
+                Do not diagnose.
+                Do not prescribe.
+                Do not tell the patient to change dose.
+                Keep the answer short and practical.
+                If side effects, refill barriers, or cost barriers appear, tell the patient to contact the clinician or pharmacist.
+
+                STRUCTURED_CLASSIFICATION:
+                {json.dumps(classification, sort_keys=True)}
+
+                MEDICATIONS:
+                {json.dumps(safe_medications)}
+
+                RECENT_HISTORY:
+                {json.dumps(safe_history)}
+
+                CURRENT_MESSAGE:
+                {safe_message}
+                """
+                llm_json = await llm.generate_json(
+                    prompt,
+                    schema,
+                    use_case="patient_adherence_chat",
+                    tenant_id=tenant_context,
+                )
+                if isinstance(llm_json, dict) and str(llm_json.get("reply") or "").strip():
+                    reply = str(llm_json.get("reply")).strip()
+                    model_name = llm.model_name or "local_llm"
+                    if bool(llm_json.get("clinician_follow_up_needed")):
+                        classification["requires_clinician_follow_up"] = True
+        except Exception as exc:
+            logger.warning(f"Patient adherence LLM rewrite failed: {exc}")
+
+    return {
+        "reply": reply,
+        "intent": classification["intent"],
+        "adherence_concern": classification["adherence_concern"],
+        "requires_clinician_follow_up": classification["requires_clinician_follow_up"],
+        "urgency": classification["urgency"],
+        "confidence": classification["confidence"],
+        "abstained": classification["abstained"],
+        "abstain_reason": classification["abstain_reason"],
+        "reasoning": classification["reasoning"],
+        "model": model_name,
+        "evidence": [
+            {"source": "medicore_patient_adherence_policy_v1", "section": "triage", "strength": "governed_rule"},
+            {"source": "medicore_patient_adherence_policy_v1", "section": "patient_messaging", "strength": "governed_rule"},
+        ],
+        "governance": {
+            "governed_path": True,
+            "phi_minimized": True,
+            "history_items_used": len(safe_history),
+            "medications_used": len(safe_medications),
+            "requires_human_authorization": classification["requires_clinician_follow_up"] or classification["intent"] == "urgent",
+        },
+    }
 
 # ── S100: Clinical Trial Matching ─────────────────────────────────────────────
 

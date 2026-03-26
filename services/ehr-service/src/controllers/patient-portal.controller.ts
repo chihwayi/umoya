@@ -68,6 +68,14 @@ export class PatientPortalController {
     return this.patientAuthService.register(registerDto, req.tenantId);
   }
 
+  @Post('register/assess')
+  @ApiOperation({ summary: 'Assess patient portal registration readiness', description: 'Run registration-intelligence checks before creating the portal account' })
+  @ApiResponse({ status: 200, description: 'Registration readiness assessed' })
+  @ApiResponse({ status: 400, description: 'Invalid registration data' })
+  async assessRegistration(@Body() registerDto: PatientRegisterDto, @Req() req: RequestWithTenant) {
+    return this.patientAuthService.assessRegistration(registerDto, req.tenantId);
+  }
+
   @Post('login')
   @ApiOperation({ summary: 'Patient portal login', description: 'Login to patient portal' })
   @ApiResponse({ status: 200, description: 'Login successful' })
@@ -465,6 +473,16 @@ export class PatientPortalController {
   async getBill(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
     const patientId = req.user.sub;
     return this.patientPortalService.getPatientBill(patientId, id, req.tenantId);
+  }
+
+  @Get('bills/:id/quote')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient bill quote', description: 'Get patient-responsibility guidance and quote signals for a specific bill' })
+  @ApiParam({ name: 'id', description: 'Bill ID' })
+  async getBillQuote(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientBillQuote(patientId, id, req.tenantId);
   }
 
   // Vitals

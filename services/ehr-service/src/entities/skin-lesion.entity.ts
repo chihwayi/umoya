@@ -17,6 +17,36 @@ export class SkinLesion {
   @Column({ name: 'photograph_key', type: 'text', nullable: true }) photographKey: string;
   @Column({ name: 'dermoscopy_key', type: 'text', nullable: true }) dermoscopyKey: string;
   @Column({ name: 'ai_classification', type: 'jsonb', nullable: true }) aiClassification: any;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'biopsy_result', type: 'text', nullable: true })
+  biopsyResult?: string;
+
+  @Column({ name: 'dermoscopy_findings', type: 'text', nullable: true })
+  dermoscopyFindings?: string;
+
+  @Column({ nullable: true })
+  diagnosis?: string;
+
+  @Column({ name: 'diameter_mm', type: 'numeric', precision: 5, scale: 1, nullable: true })
+  diameterMm?: number;
+
+  @Column({ name: 'documentation_date', type: 'date' })
+  documentationDate: Date;
+
+  @Column({ name: 'documented_by', type: 'uuid' })
+  documentedBy: string;
+
+  @Column({ type: 'jsonb', nullable: true, default: [] })
+  images: any = [];
+
+  @Column({ nullable: true })
+  location?: string;
+
+  @Column({ name: 'management_plan', type: 'text', nullable: true })
+  managementPlan?: string;
+
+  @Column({ name: 'size_mm', type: 'numeric', precision: 5, scale: 1, nullable: true })
+  sizeMm?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

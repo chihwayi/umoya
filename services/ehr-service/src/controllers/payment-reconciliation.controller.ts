@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import { PaymentReconciliationService, BankStatementEntry, ReconciliationFilters } from '../services/payment-reconciliation.service';
+import { PaymentReconciliationService, BankStatementEntry } from '../services/payment-reconciliation.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @ApiTags('Payment Reconciliation')
@@ -113,7 +113,31 @@ export class PaymentReconciliationController {
       status,
     });
   }
-}
 
+  @Get('anomalies')
+  @ApiOperation({ summary: 'Get reconciliation anomalies and suspicious payment patterns' })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'status', required: false, enum: ['open', 'resolved', 'all'] })
+  @ApiQuery({ name: 'severity', required: false, enum: ['low', 'medium', 'high'] })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiResponse({ status: 200, description: 'Reconciliation anomalies list' })
+  async getAnomalies(
+    @Request() req: RequestWithTenant,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('status') status?: 'open' | 'resolved' | 'all',
+    @Query('severity') severity?: 'low' | 'medium' | 'high',
+    @Query('limit') limit?: string,
+  ) {
+    return this.paymentReconciliationService.getAnomalies(req.tenantDb, {
+      startDate,
+      endDate,
+      status,
+      severity,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+}
 
 

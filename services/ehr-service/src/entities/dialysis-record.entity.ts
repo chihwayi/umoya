@@ -14,7 +14,6 @@ export class DialysisRecord {
   @Column({ name: 'blood_flow_rate', type: 'smallint', nullable: true }) bloodFlowRate: number;
   @Column({ name: 'dialysate_flow_rate', type: 'smallint', nullable: true }) dialysateFlowRate: number;
   @Column({ type: 'numeric', precision: 4, scale: 2, nullable: true }) ktv: number;
-  @Column({ name: 'urrpercent', type: 'numeric', precision: 5, scale: 2, nullable: true }) urrPercent: number;
   @Column({ name: 'access_type', type: 'text', nullable: true }) accessType: string;
   @Column({ name: 'access_site', type: 'text', nullable: true }) accessSite: string;
   @Column({ name: 'pre_bp_systolic', type: 'smallint', nullable: true }) preBpSystolic: number;
@@ -23,6 +22,27 @@ export class DialysisRecord {
   @Column({ name: 'post_bp_diastolic', type: 'smallint', nullable: true }) postBpDiastolic: number;
   @Column({ type: 'jsonb', default: '[]' }) complications: any;
   @Column({ name: 'medications_given', type: 'jsonb', default: '[]' }) medicationsGiven: any;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'blood_flow_ml_min', type: 'numeric', precision: 5, scale: 1, nullable: true })
+  bloodFlowMlMin?: number;
+
+  @Column({ name: 'dialysate_flow_ml_min', type: 'numeric', precision: 5, scale: 1, nullable: true })
+  dialysateFlowMlMin?: number;
+
+  @Column({ name: 'duration_hours', type: 'numeric', precision: 4, scale: 2, nullable: true })
+  durationHours?: number;
+
+  @Column({ name: 'kt_v', type: 'numeric', precision: 5, scale: 3, nullable: true })
+  ktV?: number;
+
+  @Column({ name: 'performed_by', type: 'uuid' })
+  performedBy: string;
+
+  @Column({ name: 'uf_volume_ml', type: 'numeric', precision: 7, scale: 1, nullable: true })
+  ufVolumeMl?: number;
+
+  @Column({ name: 'urr_percent', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  urrPercent?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

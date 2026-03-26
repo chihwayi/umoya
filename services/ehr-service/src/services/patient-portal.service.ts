@@ -9,6 +9,7 @@ import { Prescription } from '../entities/prescription.entity';
 import { Bill } from '../entities/billing.entity';
 import { Patient } from '../entities/patient.entity';
 import { Vitals } from '../entities/vitals.entity';
+import { FinanceService } from './finance.service';
 
 @Injectable()
 export class PatientPortalService {
@@ -17,6 +18,7 @@ export class PatientPortalService {
   constructor(
     private tenantService: TenantService,
     private readonly cdssService: CdssService,
+    private readonly financeService: FinanceService,
   ) {}
 
   private async getPatientRepository(tenantId: string): Promise<Repository<Patient>> {
@@ -566,6 +568,70 @@ export class PatientPortalService {
       items: bill.items || [],
       dueDate: bill.dueDate,
       notes: bill.notes,
+    };
+  }
+
+  async getPatientBillQuote(patientId: string, billId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const billRepository = connection.getRepository(Bill);
+    const bill = await billRepository.findOne({
+      where: { id: billId },
+      relations: ['patient'],
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Bill not found');
+    }
+
+    await this.verifyPatientAccess(patientId, bill.patientId, tenantId);
+
+    const [transaction] = await connection.query(
+      `
+        SELECT id
+        FROM financial_transactions
+        WHERE source_module = 'billing'
+          AND source_reference_id::text = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [billId],
+    );
+
+    if (transaction?.id) {
+      return this.financeService.generatePatientQuote(connection, transaction.id);
+    }
+
+    const totalCharge = Number(bill.totalAmount || 0);
+    return {
+      id: null,
+      transactionId: null,
+      patientId: bill.patientId,
+      billId: bill.id,
+      appointmentId: bill.appointmentId || null,
+      payerType: 'self',
+      quoteStatus: bill.status === 'paid' ? 'settled' : 'self_pay',
+      totalCharge,
+      estimatedPayerAmount: 0,
+      estimatedPatientResponsibility: bill.status === 'paid' ? 0 : totalCharge,
+      copayAmount: 0,
+      deductibleRemaining: 0,
+      quoteConfidence: 'medium',
+      blockers: [],
+      recommendedNextStep:
+        bill.status === 'paid'
+          ? 'No payment action is required for this bill.'
+          : 'Pay the outstanding patient balance or contact the clinic if you expect insurer coverage.',
+      quotedAt: new Date().toISOString(),
+      quoteData: {
+        sourceSignals: {
+          patientPortalFallback: true,
+          financialTransactionFound: false,
+        },
+      },
     };
   }
 
@@ -1678,12 +1744,29 @@ export class PatientPortalService {
       medications: prescriptionRows.map((p: any) => p.medication_name),
       diagnoses: conditionRows.map((c: any) => ({ name: c.condition_name, status: c.status })),
       context: 'patient_portal_health_insights',
+      specialty: 'primary_care',
+      module: 'patient_self_service',
     };
 
     try {
       const [riskResult, careGaps] = await Promise.all([
-        this.cdssService.riskAssessment(patientContext, connection),
-        this.cdssService.detectCareGaps(patientContext, connection).catch(() => null),
+        this.cdssService.riskAssessment(patientContext, connection, tenantId),
+        this.cdssService
+          .detectCareGaps(
+            age,
+            patient.gender,
+            [],
+            conditionRows.map((c: any) => c.condition_name).filter(Boolean),
+            {
+              tenantId,
+              tenantDb: connection,
+              patientId,
+              context: 'patient_portal_health_insights',
+              specialty: 'primary_care',
+              module: 'patient_self_service',
+            },
+          )
+          .catch(() => null),
       ]);
 
       return {

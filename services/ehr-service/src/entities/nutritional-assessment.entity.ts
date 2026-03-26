@@ -16,6 +16,42 @@ export class NutritionalAssessment {
   @Column({ name: 'ideal_weight_kg', type: 'numeric', precision: 6, scale: 2, nullable: true }) idealWeightKg: number;
   @Column({ name: 'height_cm', type: 'numeric', precision: 5, scale: 1, nullable: true }) heightCm: number;
   @Column({ type: 'numeric', precision: 4, scale: 1, nullable: true }) bmi: number;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'admission_id', type: 'uuid', nullable: true })
+  admissionId?: string;
+
+  @Column({ type: 'numeric', precision: 3, scale: 2, nullable: true })
+  albumin?: number;
+
+  @Column({ name: 'assessed_by', type: 'uuid' })
+  assessedBy: string;
+
+  @Column({ name: 'calorie_needs', type: 'int', nullable: true })
+  calorieNeeds?: number;
+
+  @Column({ name: 'dietary_recommendations', type: 'text', nullable: true })
+  dietaryRecommendations?: string;
+
+  @Column({ name: 'malnutrition_diagnosis', type: 'varchar', length: 100, nullable: true })
+  malnutritionDiagnosis?: string;
+
+  @Column({ name: 'nutritional_risk', type: 'varchar', length: 50, nullable: true })
+  nutritionalRisk?: string;
+
+  @Column({ name: 'oral_intake_percentage', type: 'int', nullable: true })
+  oralIntakePercentage?: number;
+
+  @Column({ type: 'numeric', precision: 4, scale: 2, nullable: true })
+  prealbumin?: number;
+
+  @Column({ name: 'protein_needs', type: 'int', nullable: true })
+  proteinNeeds?: number;
+
+  @Column({ name: 'swallowing_difficulty', type: 'boolean', nullable: true, default: false })
+  swallowingDifficulty: boolean = false;
+
+  @Column({ name: 'weight_kg', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  weightKg?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

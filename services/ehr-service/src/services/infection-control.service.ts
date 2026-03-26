@@ -35,6 +35,8 @@ export class InfectionControlService {
         age: undefined,
         gender: undefined,
         comorbidities: infectionData.deviceAssociated ? ['device-associated'] : [],
+        specialty: 'infectious_disease',
+        module: 'infection_control',
       })
       .catch((e: any) => {
         this.logger.warn(`CDSS infection guidance failed: ${e?.message || e}`);
@@ -818,6 +820,8 @@ export class InfectionControlService {
             age: undefined,
             gender: undefined,
             comorbidities: [],
+            specialty: 'pharmacy',
+            module: 'medication_safety',
           })
           .catch((e: any) => {
             this.logger.warn(`CDSS stewardship guidance failed: ${e?.message || e}`);

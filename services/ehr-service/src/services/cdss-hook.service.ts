@@ -86,6 +86,9 @@ export class CdssHookService {
         medications,
         diagnoses: diagnosisTerms,
         medicalHistory,
+        context: 'triage_risk_assessment',
+        specialty: 'acute_care',
+        module: 'emergency_triage',
       };
 
       const [risk, diagnosis] = await Promise.all([
@@ -100,6 +103,9 @@ export class CdssHookService {
             vitals: vitalsPayload,
             age,
             gender,
+            context: 'triage_assessment',
+            specialty: 'acute_care',
+            module: 'emergency_triage',
           }, true, payload.tenantId)
           .catch((error) => {
             this.logger.warn(`CDSS diagnosis hook failed: ${error?.message || error}`);
@@ -223,6 +229,9 @@ export class CdssHookService {
             age,
             gender,
             vitals: formattedVitals,
+            context: 'vital_sign_surveillance',
+            specialty: 'acute_care',
+            module: 'clinical_surveillance',
           },
           tenantDb,
           payload.tenantId,
@@ -261,6 +270,8 @@ export class CdssHookService {
               age,
               gender,
               comorbidities: [],
+              specialty: 'primary_care',
+              module: 'diagnostic_workup',
             }, payload.tenantId)
             .catch((error) => {
               this.logger.warn(`CDSS lab guideline hook failed: ${error?.message || error}`);
@@ -270,7 +281,14 @@ export class CdssHookService {
 
       const careGaps = diagnosisTerms.length
         ? await this.cdssService
-            .detectCareGaps(age, gender, undefined, diagnosisTerms)
+            .detectCareGaps(age, gender, undefined, diagnosisTerms, {
+              tenantId: payload.tenantId,
+              tenantDb,
+              patientId,
+              context: 'lab_order_follow_up',
+              specialty: 'primary_care',
+              module: 'diagnostic_workup',
+            })
             .catch((error) => {
               this.logger.warn(`CDSS lab care-gap hook failed: ${error?.message || error}`);
               return null;
@@ -311,6 +329,8 @@ export class CdssHookService {
               age,
               gender,
               comorbidities: [],
+              specialty: 'radiology',
+              module: 'imaging_appropriateness',
             }, payload.tenantId)
             .catch((error) => {
               this.logger.warn(`CDSS imaging guideline hook failed: ${error?.message || error}`);
@@ -320,7 +340,14 @@ export class CdssHookService {
 
       const careGaps = diagnosisTerms.length
         ? await this.cdssService
-            .detectCareGaps(age, gender, undefined, diagnosisTerms)
+            .detectCareGaps(age, gender, undefined, diagnosisTerms, {
+              tenantId: payload.tenantId,
+              tenantDb,
+              patientId,
+              context: 'imaging_follow_up',
+              specialty: 'radiology',
+              module: 'imaging_appropriateness',
+            })
             .catch((error) => {
               this.logger.warn(`CDSS imaging care-gap hook failed: ${error?.message || error}`);
               return null;
@@ -366,6 +393,9 @@ export class CdssHookService {
               vitals: note.vital_signs ?? note.vitals,
               age,
               gender,
+              context: 'nursing_assessment',
+              specialty: 'nursing_care',
+              module: 'nursing_assessment',
             }, true, payload.tenantId)
             .catch((error) => {
               this.logger.warn(`CDSS nursing-note diagnosis hook failed: ${error?.message || error}`);
@@ -375,7 +405,14 @@ export class CdssHookService {
 
       const careGaps = symptomTerms.length || interventionTerms.length
         ? await this.cdssService
-            .detectCareGaps(age, gender, undefined, symptomTerms)
+            .detectCareGaps(age, gender, undefined, symptomTerms, {
+              tenantId: payload.tenantId,
+              tenantDb,
+              patientId,
+              context: 'nursing_follow_up',
+              specialty: 'nursing_care',
+              module: 'nursing_assessment',
+            })
             .catch((error) => {
               this.logger.warn(`CDSS nursing-note care-gap hook failed: ${error?.message || error}`);
               return null;

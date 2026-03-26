@@ -3,14 +3,16 @@ import { Cron } from '@nestjs/schedule';
 import { TenantService } from './tenant.service';
 import { DeteriorationPrediction } from '../entities/deterioration-prediction.entity';
 import { ReadmissionPrediction } from '../entities/readmission-prediction.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class PredictiveRiskService {
   private readonly logger = new Logger(PredictiveRiskService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Deterioration ─────────────────────────────────────────────────────────
 
@@ -18,8 +20,11 @@ export class PredictiveRiskService {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     let predData: any = { score: 0, event_type: null, timeframe_hours: null, features: {}, model: 'MEWS' };
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/risk/deterioration`, { patientId, admissionId, vitals });
-      predData = data;
+      predData = await this.cdssService.predictDeteriorationRisk(
+        { patientId, admissionId, vitals },
+        subdomain,
+        ds,
+      );
     } catch (e: any) {
       this.logger.warn(`Deterioration prediction failed: ${e?.message}`);
     }
@@ -51,8 +56,11 @@ export class PredictiveRiskService {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     let predData: any = { risk: 0.1, category: 'low', factors: [], followup_days: 30, model: 'LACE+' };
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/risk/readmission`, { patientId, dischargeId, ...clinicalData });
-      predData = data;
+      predData = await this.cdssService.predictReadmissionRisk(
+        { patientId, dischargeId, clinicalData },
+        subdomain,
+        ds,
+      );
     } catch (e: any) {
       this.logger.warn(`Readmission prediction failed: ${e?.message}`);
     }
@@ -93,7 +101,11 @@ export class PredictiveRiskService {
     this.logger.log('Running 4-hourly deterioration prediction sweep…');
     try {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
-      for (const subdomain of tenants) {
+      for (const tenant of tenants) {
+        const subdomain = typeof tenant === 'string' ? tenant : tenant?.subdomain;
+        if (!subdomain) {
+          continue;
+        }
         await this.sweepActiveAdmissions(subdomain).catch(e =>
           this.logger.error(`Deterioration sweep failed for ${subdomain}: ${e?.message}`));
       }

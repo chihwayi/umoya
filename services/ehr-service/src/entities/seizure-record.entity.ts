@@ -49,6 +49,15 @@ export class SeizureRecord {
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+  @Column({ name: 'current_medications', type: 'jsonb', nullable: true, default: [] })
+  currentMedications: any = [];
+
+  @Column({ name: 'eeg_finding', type: 'text', nullable: true })
+  eegFinding?: string;
+
+  @Column({ name: 'mri_finding', type: 'text', nullable: true })
+  mriFinding?: string;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

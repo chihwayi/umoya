@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Patient } from './patient.entity';
 import { User } from './user.entity';
 import { AppointmentSimple } from './appointment-simple.entity';
@@ -20,52 +20,54 @@ export class MedicalRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'record_number', nullable: true })
   recordNumber?: string;
 
-  @Column()
+  @Column({ name: 'patient_id', type: 'uuid' })
+  @Index('idx_medical_records_patient_id')
   patientId: string;
 
   @ManyToOne(() => Patient)
-  @JoinColumn({ name: 'patientId' })
+  @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ nullable: true })
-  appointmentId: string;
+  @Column({ name: 'appointment_id', type: 'uuid', nullable: true })
+  appointmentId?: string | null;
 
-  @ManyToOne(() => AppointmentSimple)
-  @JoinColumn({ name: 'appointmentId' })
-  appointment: AppointmentSimple;
+  @ManyToOne(() => AppointmentSimple, { nullable: true })
+  @JoinColumn({ name: 'appointment_id' })
+  appointment?: AppointmentSimple | null;
 
-  @Column()
-  providerId: string;
+  @Column({ name: 'doctor_id', type: 'uuid', nullable: true })
+  providerId?: string | null;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'providerId' })
-  provider: User;
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'doctor_id' })
+  provider?: User | null;
 
-  @Column({ type: 'enum', enum: RecordType })
+  @Column({ name: 'record_type', type: 'enum', enum: RecordType })
+  @Index('idx_medical_records_type')
   type: RecordType;
 
-  @Column({ type: 'timestamp' })
-  recordDate: Date;
+  @Column({ name: 'visit_date', type: 'timestamptz', nullable: true })
+  recordDate?: Date | null;
 
-  @Column({ type: 'text' })
-  chiefComplaint: string;
+  @Column({ name: 'chief_complaint', type: 'text', nullable: true })
+  chiefComplaint?: string | null;
 
-  @Column({ type: 'text', nullable: true })
-  historyOfPresentIllness: string;
+  @Column({ name: 'history_present_illness', type: 'text', nullable: true })
+  historyOfPresentIllness?: string | null;
 
-  @Column({ type: 'text', nullable: true })
-  physicalExamination: string;
-
-  @Column({ type: 'text', nullable: true })
-  assessment: string;
+  @Column({ name: 'physical_examination', type: 'text', nullable: true })
+  physicalExamination?: string | null;
 
   @Column({ type: 'text', nullable: true })
-  plan: string;
+  assessment?: string | null;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'text', nullable: true })
+  plan?: string | null;
+
+  @Column({ name: 'vital_signs', type: 'jsonb', nullable: true })
   vitalSigns: {
     temperature?: number;
     bloodPressureSystolic?: number;
@@ -78,7 +80,7 @@ export class MedicalRecord {
     bmi?: number;
   };
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   diagnoses: Array<{
     code: string;
     description: string;
@@ -86,7 +88,7 @@ export class MedicalRecord {
     icd10Code?: string;
   }>;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   procedures: Array<{
     code: string;
     description: string;
@@ -94,10 +96,10 @@ export class MedicalRecord {
     provider: string;
   }>;
 
-  @Column({ type: 'text', nullable: true })
-  followUpInstructions: string;
+  @Column({ name: 'follow_up_instructions', type: 'text', nullable: true })
+  followUpInstructions?: string | null;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   attachments: Array<{
     filename: string;
     url: string;
@@ -105,12 +107,37 @@ export class MedicalRecord {
     uploadedAt: Date;
   }>;
 
-  @Column({ default: false })
+  @Column({ name: 'is_confidential', default: false })
   isConfidential: boolean;
 
-  @CreateDateColumn()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  title?: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  content?: string | null;
+
+  @Column({ name: 'file_path', type: 'varchar', length: 500, nullable: true })
+  filePath?: string | null;
+
+  @Column({ name: 'file_type', type: 'varchar', length: 100, nullable: true })
+  fileType?: string | null;
+
+  @Column({ name: 'file_size', type: 'int', nullable: true })
+  fileSize?: number | null;
+
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
+  createdById?: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'created_by' })
+  createdBy?: User | null;
+
+  @Column({ name: 'who_smart_form_data', type: 'jsonb', nullable: true })
+  whoSmartFormData?: Record<string, any> | null;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }

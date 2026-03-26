@@ -3,13 +3,14 @@ import { TenantService } from './tenant.service';
 import { CommunityResource } from '../entities/community-resource.entity';
 import { SdohReferral } from '../entities/sdoh-referral.entity';
 import { SdohScreeningLog } from '../entities/sdoh-screening-log.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class SdohService {
-  constructor(private readonly tenantService: TenantService) {}
-
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Community Resources ────────────────────────────────────────────────────
 
@@ -76,13 +77,34 @@ export class SdohService {
 
   // ── CDSS Proxies ───────────────────────────────────────────────────────────
 
-  async screenSdoh(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/sdoh/screen`, payload);
-    return data;
+  async screenSdoh(subdomain: string, payload: any) {
+    const ds = await this.tenantService.getTenantDatabase(subdomain);
+    return this.cdssService.screenSdohRisk(payload, subdomain, ds);
   }
 
-  async matchResources(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/sdoh/resource/match`, payload);
-    return data;
+  async matchResources(subdomain: string, payload: any) {
+    const ds = await this.tenantService.getTenantDatabase(subdomain);
+    const resources = await ds.getRepository(CommunityResource).find({
+      where: { isActive: true },
+      order: { name: 'ASC' },
+      take: 200,
+    });
+    return this.cdssService.matchSdohResources(
+      {
+        ...payload,
+        available_resources: resources.map((resource) => ({
+          id: resource.id,
+          name: resource.name,
+          category: resource.category,
+          phone: resource.phone,
+          website: resource.website,
+          address: resource.address,
+          languages: resource.languages || [],
+          availability: resource.availability,
+        })),
+      },
+      subdomain,
+      ds,
+    );
   }
 }

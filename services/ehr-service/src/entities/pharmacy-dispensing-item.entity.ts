@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Generated } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { PharmacyDispensing } from './pharmacy-dispensing.entity';
 import { PharmacyInventory } from './pharmacy-inventory.entity';
 // Note: Drug entity removed from imports since drug_id column doesn't exist in DB
@@ -38,6 +38,7 @@ export class PharmacyDispensingItem {
 
   @Column({ name: 'unit_price', type: 'decimal', precision: 12, scale: 2 })
   unitPrice: number;
+
   @Column({ name: 'total_price', type: 'decimal', precision: 12, scale: 2, generatedType: 'STORED', asExpression: 'quantity_dispensed * unit_price' })
   totalPrice: number;
 
@@ -50,5 +51,4 @@ export class PharmacyDispensingItem {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
-
 

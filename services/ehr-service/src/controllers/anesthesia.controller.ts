@@ -55,6 +55,17 @@ export class AnesthesiaController {
     return this.anesthesiaService.updatePreAnesthesiaAssessment(id, updateData, tenantDb);
   }
 
+  @Post('guidance/pre-assessment')
+  @ApiOperation({ summary: 'Get governed pre-anesthesia guidance' })
+  @ApiResponse({ status: 200, description: 'Guidance retrieved' })
+  async getPreAnesthesiaGuidance(
+    @Body() body: any,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.anesthesiaService.getPreAnesthesiaGuidance(body, req.tenantId, tenantDb);
+  }
+
   // ==================== ANESTHESIA RECORD ====================
 
   @Post('record/start')
@@ -211,6 +222,28 @@ export class AnesthesiaController {
     return this.anesthesiaService.dischargePACU(id, dischargeData, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 
+  @Post('guidance/ponv-prophylaxis')
+  @ApiOperation({ summary: 'Get governed PONV prophylaxis guidance' })
+  @ApiResponse({ status: 200, description: 'Guidance retrieved' })
+  async getPonvProphylaxisGuidance(
+    @Body() body: any,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.anesthesiaService.getPonvProphylaxisGuidance(body, req.tenantId, tenantDb);
+  }
+
+  @Post('guidance/postoperative-pain')
+  @ApiOperation({ summary: 'Get governed postoperative pain guidance' })
+  @ApiResponse({ status: 200, description: 'Guidance retrieved' })
+  async getPostoperativePainGuidance(
+    @Body() body: any,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.anesthesiaService.getPostoperativePainGuidance(body, req.tenantId, tenantDb);
+  }
+
   // ==================== BILLING ====================
 
   @Post('billing/calculate')
@@ -250,4 +283,3 @@ export class AnesthesiaController {
     return this.anesthesiaService.markBilled(id, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 }
-

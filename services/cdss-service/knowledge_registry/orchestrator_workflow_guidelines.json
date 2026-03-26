@@ -1,0 +1,117 @@
+[
+  {
+    "knowledge_id": "patient-portal-health-insights-2026-01",
+    "condition": "patient_portal_health_insights",
+    "aliases": ["patient portal health insights", "self service health insights"],
+    "title": "Patient Portal Health Insights Guidance",
+    "source_name": "Primary Care Self-Service Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-20",
+    "reviewed_at": "2026-03-01",
+    "specialty": "primary_care",
+    "module": "patient_self_service",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "moderate",
+    "keywords": ["patient portal", "self service", "care gaps", "home monitoring", "health insights"],
+    "recommendation_blocks": [
+      "Keep patient-facing insights conservative, actionable, and clearly bounded from diagnostic decision-making.",
+      "Escalate clinician follow-up when home-visible risk signals or overdue chronic-care gaps accumulate.",
+      "Prefer stable self-management guidance and scheduled follow-up over speculative interpretation."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "triage-risk-assessment-2026-01",
+    "condition": "triage_risk_assessment",
+    "aliases": ["triage risk assessment", "emergency triage assessment"],
+    "title": "Triage Risk Assessment Guidance",
+    "source_name": "Acute Triage Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-21",
+    "reviewed_at": "2026-03-01",
+    "specialty": "acute_care",
+    "module": "emergency_triage",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["triage", "acuity", "priority", "emergency", "red flags"],
+    "recommendation_blocks": [
+      "Base triage escalation on acuity, vital instability, and red-flag symptom clusters rather than chief complaint alone.",
+      "Surface immediate next steps when triage findings imply emergency evaluation or resuscitation risk.",
+      "Document the complaint and observation terms that drove the urgency recommendation."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "vital-sign-surveillance-2026-01",
+    "condition": "vital_sign_surveillance",
+    "aliases": ["vital sign surveillance", "vitals surveillance"],
+    "title": "Vital Sign Surveillance Guidance",
+    "source_name": "Clinical Surveillance Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-22",
+    "reviewed_at": "2026-03-01",
+    "specialty": "acute_care",
+    "module": "clinical_surveillance",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["vitals", "surveillance", "deterioration", "monitoring", "alerts"],
+    "recommendation_blocks": [
+      "Treat unstable vital patterns as surveillance triggers that require reassessment timing, not just single-score output.",
+      "Escalate quickly when abnormal blood pressure, oxygen saturation, temperature, or respiratory signals cluster together.",
+      "Prefer trend-aware monitoring and clinician review when repeated abnormalities are present."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "previsit-planning-2026-01",
+    "condition": "previsit_planning",
+    "aliases": ["previsit planning", "appointment precharting", "prechart planning"],
+    "title": "Previsit Planning Guidance",
+    "source_name": "Primary Care Previsit Planning Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-23",
+    "reviewed_at": "2026-03-01",
+    "specialty": "primary_care",
+    "module": "previsit_planning",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "moderate",
+    "keywords": ["previsit", "prechart", "planning", "care gaps", "agenda setting"],
+    "recommendation_blocks": [
+      "Use previsit intelligence to surface unresolved problems, overdue care, and likely agenda items before the encounter starts.",
+      "Keep diagnostic suggestions conservative and clearly separated from confirmed diagnoses until the clinician reviews the patient.",
+      "Prioritize actionable preparation items such as missing preventive care, chronic-disease follow-up, and unstable recent symptoms."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "streaming-diagnosis-workup-2026-01",
+    "condition": "streaming_diagnosis",
+    "aliases": ["streaming diagnosis", "live differential", "diagnostic workup streaming"],
+    "title": "Streaming Diagnostic Workup Guidance",
+    "source_name": "General Diagnostic Workup Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-24",
+    "reviewed_at": "2026-03-01",
+    "specialty": "primary_care",
+    "module": "diagnostic_workup",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "moderate",
+    "keywords": ["diagnosis", "differential", "streaming", "workup", "red flags"],
+    "recommendation_blocks": [
+      "Return differential suggestions with explicit uncertainty and preserve escalation cues when red flags or unstable vitals are present.",
+      "Prefer broad, safe differentials and immediate next-step workup guidance over narrow certainty claims in live clinician-facing flows.",
+      "Keep streamed diagnostic support grounded in symptom clusters, vital abnormalities, and current pathway context."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

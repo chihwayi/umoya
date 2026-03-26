@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { usePatientAuth } from '../contexts/PatientAuthContext';
+import { RegistrationAssessment, usePatientAuth } from '../contexts/PatientAuthContext';
 import { UserPlus, Mail, Lock, Calendar, Phone, Hash, Eye, EyeOff, CheckCircle, AlertCircle, Shield } from 'lucide-react';
+
+const DOB_REGEX = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+
+const toFieldLabel = (field: string) =>
+  field
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (value) => value.toUpperCase());
 
 const RegisterPage: React.FC = () => {
   const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { register } = usePatientAuth();
+  const { register, assessRegistration } = usePatientAuth();
   const [formData, setFormData] = useState({
     patientNumber: '',
     email: '',
@@ -22,9 +30,93 @@ const RegisterPage: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [assessment, setAssessment] = useState<RegistrationAssessment | null>(null);
+  const [assessmentError, setAssessmentError] = useState('');
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
+  const [lastAssessmentKey, setLastAssessmentKey] = useState('');
   
   // Use fallback tenant if not in URL
   const effectiveTenantSlug = tenantSlug || 'bulawayo-general';
+
+  const hasValidDob = DOB_REGEX.test(formData.dateOfBirth);
+  const hasAssessableIdentity =
+    formData.patientNumber.trim().length >= 3 &&
+    formData.email.includes('@') &&
+    hasValidDob;
+
+  useEffect(() => {
+    if (!hasAssessableIdentity) {
+      setAssessment(null);
+      setAssessmentError('');
+      setLastAssessmentKey('');
+      setAssessmentLoading(false);
+      return;
+    }
+
+    const assessmentKey = JSON.stringify({
+      patientNumber: formData.patientNumber.trim().toUpperCase(),
+      email: formData.email.trim().toLowerCase(),
+      dateOfBirth: formData.dateOfBirth.trim(),
+      phone: formData.phone.trim(),
+    });
+
+    if (assessmentKey === lastAssessmentKey) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setAssessmentLoading(true);
+
+      try {
+        const result = await assessRegistration(
+          {
+            patientNumber: formData.patientNumber.trim(),
+            email: formData.email.trim(),
+            password: formData.password,
+            dateOfBirth: formData.dateOfBirth.trim(),
+            phone: formData.phone.trim() || undefined,
+          },
+          effectiveTenantSlug,
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setAssessment(result);
+        setAssessmentError('');
+        setLastAssessmentKey(assessmentKey);
+      } catch (err: any) {
+        if (cancelled) {
+          return;
+        }
+
+        setAssessment(null);
+        setAssessmentError(err.message || 'Unable to review your registration details yet.');
+        setLastAssessmentKey(assessmentKey);
+      } finally {
+        if (!cancelled) {
+          setAssessmentLoading(false);
+        }
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    assessRegistration,
+    effectiveTenantSlug,
+    formData.dateOfBirth,
+    formData.email,
+    formData.password,
+    formData.patientNumber,
+    formData.phone,
+    hasAssessableIdentity,
+    lastAssessmentKey,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,8 +133,7 @@ const RegisterPage: React.FC = () => {
     }
 
     // Validate date format (dd/mm/yyyy)
-    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-    if (!dateRegex.test(formData.dateOfBirth)) {
+    if (!DOB_REGEX.test(formData.dateOfBirth)) {
       setError('Please enter date of birth in DD/MM/YYYY format');
       return;
     }
@@ -58,6 +149,28 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
 
     try {
+      const registrationAssessment = await assessRegistration(
+        {
+          patientNumber: formData.patientNumber,
+          email: formData.email,
+          password: formData.password,
+          dateOfBirth: formData.dateOfBirth,
+          phone: formData.phone || undefined,
+        },
+        effectiveTenantSlug,
+      );
+
+      setAssessment(registrationAssessment);
+      setAssessmentError('');
+
+      if (registrationAssessment.portalAccessEnabled) {
+        throw new Error('Portal access is already enabled for this patient.');
+      }
+
+      if (registrationAssessment.emailConflict) {
+        throw new Error('This email is already registered to another patient.');
+      }
+
       await register(
         {
           patientNumber: formData.patientNumber,
@@ -259,6 +372,124 @@ const RegisterPage: React.FC = () => {
                 </div>
               </div>
 
+              {assessmentLoading && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+                  <p className="text-sm font-medium text-indigo-800">Reviewing your registration details against clinic records...</p>
+                </div>
+              )}
+
+              {assessmentError && !assessmentLoading && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-medium text-amber-900">{assessmentError}</p>
+                </div>
+              )}
+
+              {assessment && !assessmentLoading && (
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Registration Readiness</p>
+                      <p className="text-xs text-slate-600">
+                        Match confirmed for {assessment.patient.firstName} {assessment.patient.lastName} ({assessment.patient.patientNumber})
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                      {assessment.intakeAssessment.completenessScore}% complete
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-xl bg-white px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Duplicate risk</p>
+                      <p className="text-sm text-slate-900">
+                        {assessment.intakeAssessment.suspectedDuplicateCount > 0
+                          ? `${assessment.intakeAssessment.suspectedDuplicateCount} candidate match(es)`
+                          : 'No duplicate candidates found'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coverage status</p>
+                      <p className="text-sm text-slate-900">{toFieldLabel(assessment.intakeAssessment.coverageRiskLevel)}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-slate-700">{assessment.intakeAssessment.frontDeskSummary}</p>
+
+                  {assessment.portalAccessEnabled && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                      Portal access is already enabled for this patient record.
+                    </div>
+                  )}
+
+                  {assessment.emailConflict && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                      This email is already linked to another patient portal account.
+                    </div>
+                  )}
+
+                  {assessment.intakeAssessment.missingFields.length > 0 && (
+                    <div className="rounded-xl bg-white px-3 py-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Missing intake fields</p>
+                      <div className="flex flex-wrap gap-2">
+                        {assessment.intakeAssessment.missingFields.map((field) => (
+                          <span key={field} className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">
+                            {toFieldLabel(field)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(assessment.intakeAssessment.coverageFlags.length > 0 || assessment.intakeAssessment.consentMissingItems.length > 0) && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {assessment.intakeAssessment.coverageFlags.length > 0 && (
+                        <div className="rounded-xl bg-white px-3 py-3">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Coverage follow-up</p>
+                          <div className="flex flex-wrap gap-2">
+                            {assessment.intakeAssessment.coverageFlags.map((flag) => (
+                              <span key={flag} className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-900">
+                                {toFieldLabel(flag)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {assessment.intakeAssessment.consentMissingItems.length > 0 && (
+                        <div className="rounded-xl bg-white px-3 py-3">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Consent readiness</p>
+                          <div className="flex flex-wrap gap-2">
+                            {assessment.intakeAssessment.consentMissingItems.map((item) => (
+                              <span key={item} className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-900">
+                                {toFieldLabel(item)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {assessment.intakeAssessment.duplicateCandidates.length > 0 && (
+                    <div className="rounded-xl bg-white px-3 py-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Potential duplicate records</p>
+                      <div className="space-y-2">
+                        {assessment.intakeAssessment.duplicateCandidates.slice(0, 3).map((candidate) => (
+                          <div key={candidate.patientId} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2">
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">
+                                {candidate.firstName} {candidate.lastName} ({candidate.patientNumber})
+                              </p>
+                              <p className="text-xs text-slate-600">{candidate.reasons.map(toFieldLabel).join(', ')}</p>
+                            </div>
+                            <div className="text-sm font-semibold text-slate-700">{Math.round(candidate.matchScore * 100)}%</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Password <span className="text-red-500">*</span>
@@ -313,13 +544,18 @@ const RegisterPage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || assessmentLoading}
                 className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3.5 rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                     <span>Creating Account...</span>
+                  </>
+                ) : assessmentLoading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Reviewing Registration...</span>
                   </>
                 ) : (
                   <>
@@ -345,8 +581,8 @@ const RegisterPage: React.FC = () => {
             <div className="mt-6 pt-6 border-t border-gray-200">
               <p className="text-xs text-center text-gray-500">
                 By registering, you agree to our{' '}
-                <a href="#" className="text-indigo-600 hover:underline">Terms of Service</a> and{' '}
-                <a href="#" className="text-indigo-600 hover:underline">Privacy Policy</a>
+                <button type="button" className="text-indigo-600 hover:underline">Terms of Service</button> and{' '}
+                <button type="button" className="text-indigo-600 hover:underline">Privacy Policy</button>
               </p>
             </div>
           </div>

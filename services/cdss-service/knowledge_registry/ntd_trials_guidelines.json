@@ -1,0 +1,48 @@
+[
+  {
+    "knowledge_id": "ntd-screen-2026-01",
+    "condition": "ntd_screen",
+    "aliases": ["neglected tropical disease screening", "ntd screening"],
+    "title": "Neglected Tropical Disease Screening Guidance",
+    "source_name": "WHO NTD Roadmap Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-14",
+    "reviewed_at": "2026-03-01",
+    "specialty": "infectious_disease",
+    "module": "ntd_and_outbreak_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "moderate",
+    "keywords": ["ntd", "schistosomiasis", "trachoma", "leprosy", "filariasis"],
+    "recommendation_blocks": [
+      "Match chronic symptom clusters to locally prevalent neglected tropical diseases and confirm with the lowest-burden definitive tests available.",
+      "Escalate outbreaks, cluster detection, or severe dehydration/invasive disease features to public-health and inpatient pathways immediately.",
+      "Link diagnosis support to treatment availability, reporting duty, and community follow-up rather than diagnosis alone."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "clinical-trial-eligibility-2026-01",
+    "condition": "clinical_trial_eligibility",
+    "aliases": ["clinical trial eligibility", "trial matching eligibility"],
+    "title": "Clinical Trial Eligibility Guidance",
+    "source_name": "Oncology Trial Matching Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-15",
+    "reviewed_at": "2026-03-01",
+    "specialty": "oncology",
+    "module": "clinical_trials",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "moderate",
+    "keywords": ["clinical trials", "eligibility", "oncology", "precision medicine", "trial matching"],
+    "recommendation_blocks": [
+      "Ground eligibility scoring in disease stage, biomarker status, performance status, and exclusion criteria rather than condition keyword matching alone.",
+      "Escalate uncertain eligibility to research staff review before patient outreach or referral decisions.",
+      "Track inclusion and exclusion rationale transparently so AI scoring remains reviewable and auditable."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

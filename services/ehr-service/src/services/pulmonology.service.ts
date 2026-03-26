@@ -131,7 +131,11 @@ export class PulmonologyService {
 
   async asthmaStepUp(body: any) {
     try {
-      return await this.cdssService.getGuidelines('asthma step-up therapy GINA', body);
+      return await this.cdssService.getGuidelines('asthma step-up therapy GINA', {
+        ...body,
+        specialty: 'pulmonology',
+        module: 'respiratory_care',
+      });
     } catch (err: any) {
       this.logger.warn(`[Pulmonology] CDSS asthma step-up unavailable: ${err?.message}`);
       return this.localAsthmaStepUp(body);
@@ -140,7 +144,11 @@ export class PulmonologyService {
 
   async prescribeOxygen(body: any) {
     try {
-      return await this.cdssService.getGuidelines('long-term oxygen therapy LTOT criteria', body);
+      return await this.cdssService.getGuidelines('long-term oxygen therapy LTOT criteria', {
+        ...body,
+        specialty: 'pulmonology',
+        module: 'respiratory_care',
+      });
     } catch (err: any) {
       this.logger.warn(`[Pulmonology] CDSS oxygen prescription unavailable: ${err?.message}`);
       return this.localOxygenPrescription(body);

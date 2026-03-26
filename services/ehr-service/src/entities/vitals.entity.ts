@@ -98,6 +98,39 @@ export class Vitals {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'recorded_by' })
   recordedByUser?: User;
+  @Column({ name: 'gcs_eye', type: 'int', nullable: true })
+  gcsEye?: number;
+
+  @Column({ name: 'gcs_motor', type: 'int', nullable: true })
+  gcsMotor?: number;
+
+  @Column({ name: 'gcs_verbal', type: 'int', nullable: true })
+  gcsVerbal?: number;
+
+  @Column({ name: 'glasgow_coma_scale', type: 'int', nullable: true })
+  glasgowComaScale?: number;
+
+  @Column({ name: 'hip_cm', type: 'numeric', precision: 5, scale: 1, nullable: true })
+  hipCm?: number;
+
+  @Column({ name: 'pain_score', type: 'int', nullable: true })
+  painScore?: number;
+
+  @Column({ name: 'pupil_left_mm', type: 'numeric', precision: 3, scale: 1, nullable: true })
+  pupilLeftMm?: number;
+
+  @Column({ name: 'pupil_reaction', type: 'text', nullable: true })
+  pupilReaction?: string;
+
+  @Column({ name: 'pupil_right_mm', type: 'numeric', precision: 3, scale: 1, nullable: true })
+  pupilRightMm?: number;
+
+  @Column({ name: 'spo2_percent', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  spo2Percent?: number;
+
+  @Column({ name: 'waist_cm', type: 'numeric', precision: 5, scale: 1, nullable: true })
+  waistCm?: number;
+
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

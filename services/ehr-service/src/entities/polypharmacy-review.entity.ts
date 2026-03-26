@@ -34,6 +34,15 @@ export class PolypharmacyReview {
 
   @Column({ name: 'follow_up_date', type: 'date', nullable: true })
   followUpDate: string | null;
+  @Column({ name: 'drug_interactions', type: 'jsonb', nullable: true, default: [] })
+  drugInteractions: any = [];
+
+  @Column({ nullable: true })
+  notes?: string;
+
+  @Column({ name: 'potentially_inappropriate', type: 'jsonb', nullable: true, default: [] })
+  potentiallyInappropriate: any = [];
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

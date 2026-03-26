@@ -1,0 +1,78 @@
+[
+  {
+    "knowledge_id": "antimicrobial-stewardship-2026-01",
+    "condition": "antimicrobial_stewardship",
+    "aliases": ["antibiotic review", "antibiotic stewardship"],
+    "title": "Antimicrobial Stewardship Review Guidance",
+    "source_name": "WHO Antimicrobial Stewardship Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-16",
+    "reviewed_at": "2026-03-01",
+    "specialty": "pharmacy",
+    "module": "medication_safety",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["antibiotic", "de-escalation", "culture", "stewardship"],
+    "recommendation_blocks": [
+      "Review antimicrobial choice, dose, route, and duration against culture data and likely source within 48 to 72 hours.",
+      "De-escalate or stop therapy promptly when microbiology, source control, or clinical trajectory supports narrowing.",
+      "Check renal function and allergy history before continuing nephrotoxic or high-risk antimicrobial regimens."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "high-risk-anticoagulation-2026-01",
+    "condition": "anticoagulation_management",
+    "aliases": ["warfarin management", "doac review", "high-risk anticoagulation"],
+    "title": "High-Risk Anticoagulation Safety Guidance",
+    "source_name": "ISTH Anticoagulation Safety Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-11",
+    "reviewed_at": "2026-03-01",
+    "specialty": "pharmacy",
+    "module": "medication_safety",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["warfarin", "doac", "bleeding", "anticoagulation"],
+    "recommendation_blocks": [
+      "Review renal function, indication, and interacting drugs before initiating or continuing therapeutic anticoagulation.",
+      "Escalate immediately when active bleeding, severe anemia, or urgent procedure planning changes anticoagulation risk.",
+      "Document indication, monitoring plan, and reversal strategy clearly for high-risk patients."
+    ],
+    "contraindications": [
+      {
+        "label": "active_bleeding",
+        "match_terms": ["active bleeding", "hemorrhage", "gastrointestinal bleeding"],
+        "reason": "Active major bleeding is a major safety concern requiring urgent review before ongoing anticoagulation.",
+        "severity": "major"
+      }
+    ],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "medication-reconciliation-2026-01",
+    "condition": "medication_reconciliation",
+    "aliases": ["med rec", "medication review", "medication reconciliation"],
+    "title": "Medication Reconciliation Guidance",
+    "source_name": "WHO Medication Safety Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-09",
+    "reviewed_at": "2026-03-01",
+    "specialty": "pharmacy",
+    "module": "medication_safety",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["medication reconciliation", "transition of care", "polypharmacy"],
+    "recommendation_blocks": [
+      "Compare prior, inpatient, and discharge medication lists at every transition of care.",
+      "Resolve duplicate therapies, omissions, and route/dose discrepancies before finalizing orders or discharge instructions.",
+      "Prioritize high-alert medicines, insulin, anticoagulants, and renal-dose medications during reconciliation."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

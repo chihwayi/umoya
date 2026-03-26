@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
-import { ModelRegistryService } from '../services/model-registry.service';
+import { ModelRegistryService, ShadowEvaluationReviewRequest } from '../services/model-registry.service';
 import { FederatedLearningService } from '../services/federated-learning.service';
 
 @Controller('model-registry')
@@ -30,12 +30,51 @@ export class ModelRegistryController {
     return this.registry.getHistory(subdomain, modelName);
   }
 
+  @Get('cards')
+  getModelCards(@Query('subdomain') subdomain: string) {
+    return this.registry.getModelCards(subdomain);
+  }
+
+  @Get(':modelName/card')
+  getModelCard(
+    @Param('modelName') modelName: string,
+    @Query('subdomain') subdomain: string,
+  ) {
+    return this.registry.getModelCard(subdomain, modelName);
+  }
+
+  @Get('shadow-evaluations')
+  getShadowEvaluations(
+    @Query('subdomain') subdomain: string,
+    @Query('modelName') modelName?: string,
+  ) {
+    return this.registry.getShadowEvaluations(subdomain, modelName);
+  }
+
+  @Post('shadow-evaluations/:id/review')
+  reviewShadowEvaluation(
+    @Param('id') id: string,
+    @Query('subdomain') subdomain: string,
+    @Body() review: ShadowEvaluationReviewRequest,
+  ) {
+    return this.registry.reviewShadowEvaluation(subdomain, id, review);
+  }
+
   @Post(':id/promote')
   promote(
     @Param('id') id: string,
     @Query('subdomain') subdomain: string,
+    @Body() review: {
+      requestedStage?: 'shadow' | 'canary' | 'production';
+      requestedBy?: string;
+      decisionBy?: string;
+      decisionNotes?: string;
+      shadowValidationPassed?: boolean;
+      rollbackReady?: boolean;
+      clinicalApproval?: boolean;
+    } = {},
   ) {
-    return this.registry.evaluateAndPromote(subdomain, id);
+    return this.registry.evaluateAndPromote(subdomain, id, review);
   }
 
   @Post(':modelName/rollback')

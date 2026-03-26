@@ -16,6 +16,24 @@ export class GoalsOfCare {
   @Column({ name: 'patient_has_capacity', type: 'boolean', default: true }) patientHasCapacity: boolean;
   @Column({ name: 'interpreter_used', type: 'boolean', default: false }) interpreterUsed: boolean;
   @Column({ name: 'review_date', type: 'date', nullable: true }) reviewDate: string;
-  @Column({ name: 'is_active', type: 'boolean', default: true }) isActive: boolean;
+  @Column({ name: 'is_active', type: 'boolean', default: true }) isActive: boolean;  @Column({ name: 'artificial_nutrition_wish', type: 'text', nullable: true })
+  artificialNutritionWish?: string;
+
+  @Column({ name: 'cpr_wish', type: 'text', nullable: true })
+  cprWish?: string;
+
+  @Column({ name: 'documented_by', type: 'uuid' })
+  documentedBy: string;
+
+  @Column({ name: 'hospital_admission_wish', type: 'text', nullable: true })
+  hospitalAdmissionWish?: string;
+
+  @Column({ nullable: true })
+  notes?: string;
+
+  @Column({ name: 'ventilation_wish', type: 'text', nullable: true })
+  ventilationWish?: string;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

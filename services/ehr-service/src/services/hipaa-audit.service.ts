@@ -68,6 +68,10 @@ export enum HipaaAuditAction {
   CDSS_NOTES_DRAFT = 'cdss_notes_draft',
   CDSS_HANDOFF_SUMMARY = 'cdss_handoff_summary',
   CDSS_GUIDELINES_SEARCH = 'cdss_guidelines_search',
+  CDSS_INTELLIGENT_DIAGNOSIS = 'cdss_intelligent_diagnosis',
+  CDSS_PATIENT_SUMMARIZE = 'cdss_patient_summarize',
+  CDSS_PATIENT_ADHERENCE_CHAT = 'cdss_patient_adherence_chat',
+  CDSS_PATIENT_SYMPTOM_CHECK = 'cdss_patient_symptom_check',
   NURSE_TASK_COMPLETE = 'nurse_task_complete',
   NURSE_ALERT_ACKNOWLEDGE = 'nurse_alert_acknowledge',
   NURSE_HANDOFF_FINALIZE = 'nurse_handoff_finalize',
@@ -175,7 +179,7 @@ export class HipaaAuditService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_audit_integrity_generated_at ON audit_integrity_log(generated_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_audit_integrity_date ON audit_integrity_log(audit_date DESC)`,
-      `CREATE TABLE IF NOT EXISTS model_registry (
+      `CREATE TABLE IF NOT EXISTS ai_model_audit_registry (
         model_id TEXT PRIMARY KEY,
         model_name TEXT NOT NULL,
         model_version TEXT NOT NULL,
@@ -190,14 +194,14 @@ export class HipaaAuditService {
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
       )`,
-      `CREATE INDEX IF NOT EXISTS idx_model_registry_status ON model_registry(status)`,
-      `CREATE INDEX IF NOT EXISTS idx_model_registry_model_name ON model_registry(model_name)`,
-      `CREATE INDEX IF NOT EXISTS idx_model_registry_deployed_at ON model_registry(deployed_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_ai_model_audit_registry_status ON ai_model_audit_registry(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_ai_model_audit_registry_model_name ON ai_model_audit_registry(model_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_ai_model_audit_registry_deployed_at ON ai_model_audit_registry(deployed_at DESC)`,
       `CREATE TABLE IF NOT EXISTS prompt_audit_log (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         prompt_hash TEXT NOT NULL,
         template_version TEXT NOT NULL DEFAULT 'v1',
-        model_id TEXT NOT NULL REFERENCES model_registry(model_id) ON DELETE RESTRICT,
+        model_id TEXT NOT NULL REFERENCES ai_model_audit_registry(model_id) ON DELETE RESTRICT,
         session_id UUID REFERENCES post_visit_sessions(id) ON DELETE SET NULL,
         patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
         encounter_id UUID,
@@ -523,7 +527,7 @@ export class HipaaAuditService {
 
     await tenantDb.query(
       `
-        INSERT INTO model_registry (
+        INSERT INTO ai_model_audit_registry (
           model_id,
           model_name,
           model_version,

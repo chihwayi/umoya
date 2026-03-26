@@ -27,7 +27,31 @@ export class DevelopmentalMilestone {
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'assessed_by' }) assessedBy?: User;
 
-  @Column({ type: 'text', nullable: true }) notes?: string;
+  @Column({ type: 'text', nullable: true }) notes?: string;  @Column({ name: 'age_months', type: 'int', nullable: true })
+  ageMonths?: number;
+
+  @Column({ name: 'assessment_date', type: 'date' })
+  assessmentDate: Date;
+
+  @Column({ type: 'jsonb', nullable: true, default: {} })
+  cognitive: any = {};
+
+  @Column({ name: 'fine_motor', type: 'jsonb', nullable: true, default: {} })
+  fineMotor: any = {};
+
+  @Column({ name: 'gross_motor', type: 'jsonb', nullable: true, default: {} })
+  grossMotor: any = {};
+
+  @Column({ name: 'language_communication', type: 'jsonb', nullable: true, default: {} })
+  languageCommunication: any = {};
+
+  @Column({ name: 'overall_status', type: 'text', nullable: true })
+  overallStatus?: string;
+
+  @Column({ name: 'social_emotional', type: 'jsonb', nullable: true, default: {} })
+  socialEmotional: any = {};
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt: Date;
 }

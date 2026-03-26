@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
-import axios from 'axios';
 import { TenantService } from './tenant.service';
 import { EncounterPrechart } from '../entities/encounter-prechart.entity';
+import { CdssService } from './cdss.service';
 
 interface CdssPatientSummary {
   clinical_summary?: string;
@@ -36,11 +36,11 @@ interface CdssDiagnosisSuggestion {
 @Injectable()
 export class AppointmentPrecharterService {
   private readonly logger = new Logger(AppointmentPrecharterService.name);
-  private readonly cdssUrl: string;
 
-  constructor(private readonly tenantService: TenantService) {
-    this.cdssUrl = (process.env.CDSS_SERVICE_URL || '').replace(/\/$/, '');
-  }
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   /** Runs every 30 minutes — finds appointments starting in 25–35 min and pre-charts them. */
   @Cron(process.env.PRECHART_CRON || '*/30 * * * *')
@@ -58,7 +58,7 @@ export class AppointmentPrecharterService {
   }
 
   /** Generate a pre-chart for a specific appointment on demand (provider can trigger manually). */
-  async generateForAppointment(appointmentId: string, tenantDb: DataSource): Promise<EncounterPrechart> {
+  async generateForAppointment(appointmentId: string, tenantDb: DataSource, tenantId?: string): Promise<EncounterPrechart> {
     const repo = tenantDb.getRepository(EncounterPrechart);
 
     const apptRows = await tenantDb.query(
@@ -67,7 +67,7 @@ export class AppointmentPrecharterService {
     );
     if (!apptRows.length) throw new Error(`Appointment ${appointmentId} not found`);
 
-    return this.buildPrechart(apptRows[0], tenantDb, repo);
+    return this.buildPrechart(apptRows[0], tenantDb, repo, tenantId);
   }
 
   async getPrechart(appointmentId: string, tenantDb: DataSource): Promise<EncounterPrechart | null> {
@@ -102,7 +102,7 @@ export class AppointmentPrecharterService {
 
     for (const appt of upcoming) {
       try {
-        await this.buildPrechart(appt, tenantDb, repo);
+        await this.buildPrechart(appt, tenantDb, repo, tenantSlug);
       } catch (err: any) {
         this.logger.warn(`[${tenantSlug}] Prechart failed for appt ${appt.id}: ${String(err?.message || err)}`);
       }
@@ -113,6 +113,7 @@ export class AppointmentPrecharterService {
     appt: { id: string; patient_id: string; start_time: Date },
     tenantDb: DataSource,
     repo: ReturnType<DataSource['getRepository']>,
+    tenantId?: string,
   ): Promise<EncounterPrechart> {
     const patientId = appt.patient_id;
     const appointmentId = appt.id;
@@ -143,81 +144,104 @@ export class AppointmentPrecharterService {
       [patientId],
     );
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-Service-Token': process.env.CDSS_SERVICE_TOKEN || '',
-    };
-    const timeout = 15_000;
-
     // 1. Patient clinical summary
     let summary: CdssPatientSummary = {};
-    if (this.cdssUrl) {
-      try {
-        const r = await axios.post(
-          `${this.cdssUrl}/patient/summarize`,
-          { patient_id: patientId, patient_name: `${patient.first_name} ${patient.last_name}`, dob: patient.date_of_birth, gender: patient.gender },
-          { headers, timeout },
-        );
-        summary = r.data as CdssPatientSummary;
-      } catch (err: any) {
-        this.logger.warn(`CDSS /patient/summarize error: ${String(err?.message || err)}`);
-      }
+    try {
+      summary = await this.cdssService.patientSummarize(
+        {
+          patientId,
+          patientName: `${patient.first_name} ${patient.last_name}`,
+          dob: patient.date_of_birth,
+          gender: patient.gender,
+        },
+        tenantId,
+        tenantDb,
+      ) as CdssPatientSummary;
+    } catch (err: any) {
+      this.logger.warn(`CDSS patient summary error: ${String(err?.message || err)}`);
     }
 
     // 2. Care gap detection
     let careGaps: CdssCareGap[] = [];
-    if (this.cdssUrl) {
-      try {
-        const r = await axios.post(
-          `${this.cdssUrl}/care-gaps/detect`,
-          { patient_id: patientId, diagnoses: problems.map((p: any) => ({ code: p.code, description: p.description })) },
-          { headers, timeout },
-        );
-        careGaps = (r.data?.care_gaps || []) as CdssCareGap[];
-      } catch (err: any) {
-        this.logger.warn(`CDSS /care-gaps/detect error: ${String(err?.message || err)}`);
-      }
+    try {
+      const careGapResult = await this.cdssService.detectCareGaps(
+        this.calcAge(patient.date_of_birth),
+        patient.gender,
+        [],
+        problems.map((p: any) => p.description).filter(Boolean),
+        {
+          tenantId,
+          tenantDb,
+          patientId,
+          context: 'previsit_planning',
+          specialty: 'primary_care',
+          module: 'previsit_planning',
+        },
+      );
+      careGaps = (careGapResult?.care_gaps || careGapResult?.gaps || []) as CdssCareGap[];
+    } catch (err: any) {
+      this.logger.warn(`CDSS care gap detection error: ${String(err?.message || err)}`);
     }
 
     // 3. Intelligent diagnosis suggestions (based on last chief complaints)
     let diagnosisSuggestions: CdssDiagnosisSuggestion[] = [];
-    if (this.cdssUrl && chiefComplaints.length) {
+    if (chiefComplaints.length) {
       try {
-        const r = await axios.post(
-          `${this.cdssUrl}/diagnosis/suggest/intelligent`,
+        const diagnosisResult = await this.cdssService.diagnosisAssist(
           {
-            patient_id: patientId,
-            chief_complaint: chiefComplaints[0],
+            patientId,
+            symptoms: [chiefComplaints[0]],
+            chiefComplaint: chiefComplaints[0],
             age: this.calcAge(patient.date_of_birth),
             gender: patient.gender,
-            prior_complaints: chiefComplaints.slice(1),
+            conditions: problems.map((p: any) => p.description).filter(Boolean),
+            priorComplaints: chiefComplaints.slice(1),
+            context: 'previsit_planning_diagnosis',
+            specialty: 'primary_care',
+            module: 'previsit_planning',
           },
-          { headers, timeout },
+          true,
+          tenantId,
+          tenantDb,
         );
-        diagnosisSuggestions = (r.data?.diagnoses || []) as CdssDiagnosisSuggestion[];
+        diagnosisSuggestions = ((diagnosisResult?.suggested_diagnoses || []) as any[]).map((item: any) => ({
+          text: item.diagnosis || item.text || 'Unspecified condition',
+          icd: item.icd10 || item.icd,
+          confidence: Number(item.confidence || item.probability || 0),
+        }));
       } catch (err: any) {
-        this.logger.warn(`CDSS /diagnosis/suggest/intelligent error: ${String(err?.message || err)}`);
+        this.logger.warn(`CDSS intelligent diagnosis error: ${String(err?.message || err)}`);
       }
     }
 
     // 4. Risk score calculation
     let riskResult: CdssRiskResult = {};
-    if (this.cdssUrl) {
-      try {
-        const r = await axios.post(
-          `${this.cdssUrl}/risk/calculate`,
-          {
-            patient_id: patientId,
-            age: this.calcAge(patient.date_of_birth),
-            gender: patient.gender,
-            diagnoses: problems.map((p: any) => p.description),
-          },
-          { headers, timeout },
-        );
-        riskResult = r.data as CdssRiskResult;
-      } catch (err: any) {
-        this.logger.warn(`CDSS /risk/calculate error: ${String(err?.message || err)}`);
-      }
+    try {
+      const riskAssessment = await this.cdssService.riskAssessment(
+        {
+          patientId,
+          age: this.calcAge(patient.date_of_birth),
+          gender: patient.gender,
+          diagnoses: problems.map((p: any) => p.description).filter(Boolean),
+          context: 'previsit_planning',
+          specialty: 'primary_care',
+          module: 'previsit_planning',
+        },
+        tenantDb,
+        tenantId,
+      );
+      riskResult = {
+        risk_level: riskAssessment?.risk_level,
+        risk_score: riskAssessment?.overall_score,
+        flags: Array.isArray(riskAssessment?.factors)
+          ? riskAssessment.factors.slice(0, 5).map((factor: any) => ({
+              type: String(factor?.impact || riskAssessment?.risk_level || 'risk'),
+              description: String(factor?.factor || factor?.name || factor),
+            }))
+          : [],
+      };
+    } catch (err: any) {
+      this.logger.warn(`CDSS risk calculation error: ${String(err?.message || err)}`);
     }
 
     // Build suggested agenda from care gaps + diagnosis suggestions
@@ -241,7 +265,7 @@ export class AppointmentPrecharterService {
     prechart.lastLabAbnormalities  = summary.last_lab_abnormalities  ?? [];
     prechart.lastImagingFindings   = summary.last_imaging_findings    ?? [];
 
-    return repo.save(prechart);
+    return repo.save(prechart as EncounterPrechart);
   }
 
   private calcAge(dob: string | Date | null): number {

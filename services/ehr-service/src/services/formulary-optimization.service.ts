@@ -1,14 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { FormularyAiSuggestion } from '../entities/formulary-ai-suggestion.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class FormularyOptimizationService {
   private readonly logger = new Logger(FormularyOptimizationService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   /**
    * Called on every new prescription. Fire-and-forget.
@@ -21,7 +23,16 @@ export class FormularyOptimizationService {
     };
 
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/formulary/optimize`, { drug: drugName, patientId });
+      const data = await this.cdssService.optimizeFormulary(
+        {
+          patientId,
+          prescriptionId,
+          brandedDrug: drugName,
+          diagnoses: [],
+        },
+        subdomain,
+        ds,
+      );
       suggestion = {
         ...suggestion,
         genericAlternative: data.generic_alternative,
@@ -58,7 +69,6 @@ export class FormularyOptimizationService {
   }
 
   async cdssOptimize(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/formulary/optimize`, payload);
-    return data;
+    return this.cdssService.optimizeFormulary(payload);
   }
 }

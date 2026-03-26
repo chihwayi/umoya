@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class StreamingDiagnosisService {
   private readonly logger = new Logger(StreamingDiagnosisService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
+
+  constructor(private readonly cdssService: CdssService) {}
 
   /**
    * Stream differential diagnosis via SSE.
@@ -16,6 +17,7 @@ export class StreamingDiagnosisService {
     patientId: string,
     sessionId: string,
     res: Response,
+    tenantId?: string,
   ): Promise<void> {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -24,29 +26,34 @@ export class StreamingDiagnosisService {
     res.flushHeaders();
 
     try {
-      const cdssRes = await axios.post(
-        `${this.cdssUrl}/diagnosis/suggest/stream`,
-        { text, patientId, sessionId },
-        { responseType: 'stream', timeout: 30000 },
+      const diagnosis = await this.cdssService.diagnosisAssist(
+        {
+          patientId,
+          sessionId,
+          symptoms: [text],
+          clinicalNotes: text,
+          context: 'streaming_diagnosis',
+          specialty: 'primary_care',
+          module: 'diagnostic_workup',
+        },
+        true,
+        tenantId,
       );
+      const differential = Array.isArray((diagnosis as any)?.suggested_diagnoses)
+        ? (diagnosis as any).suggested_diagnoses.map((item: any, index: number) => ({
+            rank: index + 1,
+            diagnosis: item?.diagnosis || item?.text || 'Unspecified condition',
+            confidence: Number(item?.confidence || item?.probability || 0),
+            icd10: item?.icd10 || item?.icd || undefined,
+            red_flags: Array.isArray((diagnosis as any)?.red_flags) ? (diagnosis as any).red_flags : [],
+          }))
+        : [];
 
-      cdssRes.data.on('data', (chunk: Buffer) => {
-        res.write(chunk.toString());
-      });
-
-      cdssRes.data.on('end', () => {
-        res.write('event: done\ndata: {}\n\n');
-        res.end();
-      });
-
-      cdssRes.data.on('error', (err: Error) => {
-        this.logger.warn(`CDSS stream error: ${err.message}`);
-        res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
-        res.end();
-      });
+      res.write(`data: ${JSON.stringify({ differential, partial: false })}\n\n`);
+      res.write('event: done\ndata: {}\n\n');
+      res.end();
     } catch (e: any) {
-      // CDSS unavailable — return a mock differential
-      this.logger.warn(`Streaming diagnosis CDSS unavailable: ${e?.message}`);
+      this.logger.warn(`Streaming diagnosis governed CDSS path unavailable: ${e?.message}`);
       const mock = [
         { rank: 1, diagnosis: 'Upper respiratory tract infection', confidence: 0.72, icd10: 'J06.9', red_flags: [] },
         { rank: 2, diagnosis: 'Influenza', confidence: 0.45, icd10: 'J11.1', red_flags: ['fever > 39°C'] },
@@ -61,13 +68,23 @@ export class StreamingDiagnosisService {
   /**
    * Non-streaming version for REST clients.
    */
-  async suggestDifferential(text: string, patientId: string) {
+  async suggestDifferential(text: string, patientId: string, tenantId?: string) {
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/diagnosis/suggest`, { text, patientId });
-      return data;
+      return await this.cdssService.diagnosisAssist(
+        {
+          patientId,
+          symptoms: [text],
+          clinicalNotes: text,
+          context: 'streaming_diagnosis',
+          specialty: 'primary_care',
+          module: 'diagnostic_workup',
+        },
+        true,
+        tenantId,
+      );
     } catch (e: any) {
       this.logger.warn(`Diagnosis suggest failed: ${e?.message}`);
-      return { differential: [], error: 'CDSS unavailable' };
+      return { suggested_diagnoses: [], error: 'CDSS unavailable' };
     }
   }
 }

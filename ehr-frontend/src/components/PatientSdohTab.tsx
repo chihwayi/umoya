@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Home, ShoppingCart, Car, Users, DollarSign, BookOpen, Plus, ChevronDown, ChevronUp, CheckCircle, Clock } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
 interface SdohAssessment {
@@ -76,7 +76,7 @@ const PatientSdohTab: React.FC<PatientSdohTabProps> = ({ patientId, tenantSlug, 
   const load = async () => {
     try {
       setLoading(true);
-      const res = await ehrApi.getPatientSdoh(patientId, token, tenantSlug);
+      const res = await cdssApi.getPatientSdoh(patientId, token, tenantSlug);
       setAssessments(res.data || []);
     } catch {
       // silently keep empty
@@ -98,7 +98,7 @@ const PatientSdohTab: React.FC<PatientSdohTabProps> = ({ patientId, tenantSlug, 
       if (formData.literacyLevel) payload.literacyLevel = formData.literacyLevel;
       if (formData.notes) payload.notes = formData.notes;
 
-      await ehrApi.createPatientSdoh(patientId, payload, token, tenantSlug);
+      await cdssApi.createPatientSdoh(patientId, payload, token, tenantSlug);
       showSuccess('SDOH Saved', 'Social determinants assessment recorded');
       setShowForm(false);
       setFormData(emptyForm);

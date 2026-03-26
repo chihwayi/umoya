@@ -117,6 +117,54 @@ export class Bill {
     claimNumber?: string;
     claimStatus?: 'pending' | 'approved' | 'rejected';
   };
+  @Column({ name: 'billing_date', type: 'date' })
+  billingDate: Date;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  currency?: string;
+
+  @Column({ name: 'diagnosis_codes', type: 'text', array: true, nullable: true })
+  diagnosisCodesId?: string[];
+
+  @Column({ name: 'discount_amount', type: 'numeric', precision: 12, scale: 2, nullable: true, default: 0 })
+  discountAmountId: number = 0;
+
+  @Column({ name: 'due_date', type: 'date', nullable: true })
+  dueDateId?: Date;
+
+  @Column({ name: 'invoice_date', type: 'date', nullable: true })
+  invoiceDateId?: Date;
+
+  @Column({ name: 'notes', type: 'text', nullable: true })
+  notesId?: string;
+
+  @Column({ name: 'payment_method', type: 'varchar', length: 50, nullable: true })
+  paymentMethod?: string;
+
+  @Column({ name: 'payment_reference', type: 'varchar', length: 255, nullable: true })
+  paymentReference?: string;
+
+  @Column({ name: 'primary_diagnosis_code', type: 'varchar', length: 50, nullable: true })
+  primaryDiagnosisCodeId?: string;
+
+  @Column({ name: 'primary_diagnosis_description', type: 'text', nullable: true })
+  primaryDiagnosisDescriptionId?: string;
+
+  @Column({ name: 'status', type: 'varchar', length: 50 })
+  statusId: string;
+
+  @Column({ name: 'subtotal', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  subtotalId?: number;
+
+  @Column({ name: 'tax_amount', type: 'numeric', precision: 12, scale: 2, nullable: true, default: 0 })
+  taxAmountId: number = 0;
+
+  @Column({ name: 'template_id', type: 'uuid', nullable: true })
+  templateId?: string;
+
+  @Column({ name: 'total_amount', type: 'numeric', precision: 10, scale: 2 })
+  totalAmountId: number;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

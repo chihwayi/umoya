@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { FormIntelligenceConfig } from '../entities/form-intelligence-config.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 interface PatientContext {
   age?: number;
@@ -14,9 +14,10 @@ interface PatientContext {
 
 @Injectable()
 export class SmartDefaultsService {
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
-
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Form Intelligence Configs ─────────────────────────────────────────────
 
@@ -87,9 +88,9 @@ export class SmartDefaultsService {
 
   // ── CDSS ──────────────────────────────────────────────────────────────────
 
-  async aiSuggestDefaults(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/forms/suggest-defaults`, payload);
-    return data;
+  async aiSuggestDefaults(subdomain: string, payload: any) {
+    const ds = await this.tenantService.getTenantDatabase(subdomain);
+    return this.cdssService.suggestFormDefaults(payload, subdomain, ds);
   }
 
   private evaluateCondition(condition: any, context: PatientContext): boolean {

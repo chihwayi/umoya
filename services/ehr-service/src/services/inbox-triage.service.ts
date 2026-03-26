@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import axios from 'axios';
 import { InboxItem } from '../entities/inbox-item.entity';
 import { InboxGateway } from '../gateways/inbox.gateway';
+import { CdssService } from './cdss.service';
 
 export interface TriageInput {
   userId: string;       // recipient provider
@@ -25,11 +25,11 @@ interface CdssTriageResult {
 @Injectable()
 export class InboxTriageService {
   private readonly logger = new Logger(InboxTriageService.name);
-  private readonly cdssUrl: string;
 
-  constructor(private readonly inboxGateway: InboxGateway) {
-    this.cdssUrl = (process.env.CDSS_SERVICE_URL || '').replace(/\/$/, '');
-  }
+  constructor(
+    private readonly inboxGateway: InboxGateway,
+    private readonly cdssService: CdssService,
+  ) {}
 
   /**
    * Create a triaged inbox item. Call this from any service that produces
@@ -46,28 +46,20 @@ export class InboxTriageService {
       triage_model:    'fallback',
     };
 
-    if (this.cdssUrl) {
-      try {
-        const resp = await axios.post(
-          `${this.cdssUrl}/inbox/triage`,
-          {
-            source_type: input.sourceType,
-            title:       input.title,
-            content:     input.content,
-            patient_id:  input.patientId,
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Service-Token': process.env.CDSS_SERVICE_TOKEN || '',
-            },
-            timeout: 10_000,
-          },
-        );
-        triageResult = resp.data as CdssTriageResult;
-      } catch (err: any) {
-        this.logger.warn(`CDSS /inbox/triage error: ${String(err?.message || err)}`);
-      }
+    try {
+      triageResult = await this.cdssService.triageInboxItem(
+        {
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          title: input.title,
+          content: input.content,
+          patientId: input.patientId,
+        },
+        undefined,
+        tenantDb,
+      ) as CdssTriageResult;
+    } catch (err: any) {
+      this.logger.warn(`CDSS inbox triage error: ${String(err?.message || err)}`);
     }
 
     const repo = tenantDb.getRepository(InboxItem);

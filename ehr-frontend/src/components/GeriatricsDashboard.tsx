@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { UserCheck, AlertTriangle, Pill, ShieldCheck, FileText, Plus, Activity } from 'lucide-react';
 
 interface Props {
@@ -55,11 +55,11 @@ export default function GeriatricsDashboard({ patientId, providerId, tenantSubdo
   const load = useCallback(async () => {
     try {
       const [a, f, p, pr, acp] = await Promise.all([
-        ehrApi.getGeriatricAssessments(patientId, tenantSubdomain),
-        ehrApi.getFallsAssessments(patientId, tenantSubdomain),
-        ehrApi.getPressureAssessments(patientId, tenantSubdomain),
-        ehrApi.getPolypharmacyReviews(patientId, tenantSubdomain),
-        ehrApi.getAcpDocuments(patientId, tenantSubdomain),
+        cdssApi.getGeriatricAssessments(patientId, tenantSubdomain),
+        cdssApi.getFallsAssessments(patientId, tenantSubdomain),
+        cdssApi.getPressureAssessments(patientId, tenantSubdomain),
+        cdssApi.getPolypharmacyReviews(patientId, tenantSubdomain),
+        cdssApi.getAcpDocuments(patientId, tenantSubdomain),
       ]);
       setAssessments(a);
       setFalls(f);
@@ -76,23 +76,23 @@ export default function GeriatricsDashboard({ patientId, providerId, tenantSubdo
   const latestPressure = pressureAssessments[0];
 
   async function submitAssessment() {
-    const saved = await ehrApi.addGeriatricAssessment(patientId, tenantSubdomain, { ...assessDto, assessedBy: providerId });
+    const saved = await cdssApi.addGeriatricAssessment(patientId, tenantSubdomain, { ...assessDto, assessedBy: providerId });
     setShowAssessForm(false);
     setAssessDto({});
     load();
     // Run frailty CDSS
     if (saved.clinicalFrailtyScale) {
-      const r = await ehrApi.assessGeriatricFrailty({ clinical_frailty_scale: saved.clinicalFrailtyScale, barthel_index: saved.barthelIndex, mmse_score: saved.mmseScore, moca_score: saved.mocaScore });
+      const r = await cdssApi.assessGeriatricFrailty({ clinical_frailty_scale: saved.clinicalFrailtyScale, barthel_index: saved.barthelIndex, mmse_score: saved.mmseScore, moca_score: saved.mocaScore });
       setFrailtyResult(r);
     }
   }
 
   async function submitFalls() {
-    const saved = await ehrApi.addFallsAssessment(patientId, tenantSubdomain, { ...fallsDto, assessedBy: providerId });
+    const saved = await cdssApi.addFallsAssessment(patientId, tenantSubdomain, { ...fallsDto, assessedBy: providerId });
     setShowFallsForm(false);
     load();
     // Run fall risk CDSS
-    const r = await ehrApi.assessGeriatricFallRisk({
+    const r = await cdssApi.assessGeriatricFallRisk({
       fall_history_count: fallsDto.fallHistoryCount,
       secondary_diagnosis: fallsDto.secondaryDiagnosis,
       ambulatory_aid: fallsDto.ambulation === 'uses_aid' ? 'cane' : 'none',
@@ -105,12 +105,12 @@ export default function GeriatricsDashboard({ patientId, providerId, tenantSubdo
     setFallRiskResult(r);
     // Save result back
     if (saved?.id) {
-      await ehrApi.addFallsAssessment(patientId, tenantSubdomain, { ...fallsDto, assessedBy: providerId, morseScore: r.morse_score, riskCategory: r.overall_risk, preventionPlan: r.prevention_plan?.join('\n') });
+      await cdssApi.addFallsAssessment(patientId, tenantSubdomain, { ...fallsDto, assessedBy: providerId, morseScore: r.morse_score, riskCategory: r.overall_risk, preventionPlan: r.prevention_plan?.join('\n') });
     }
   }
 
   async function submitPressure() {
-    await ehrApi.addPressureAssessment(patientId, tenantSubdomain, { ...pressureDto, assessedBy: providerId });
+    await cdssApi.addPressureAssessment(patientId, tenantSubdomain, { ...pressureDto, assessedBy: providerId });
     setShowPressureForm(false);
     load();
   }
@@ -120,10 +120,10 @@ export default function GeriatricsDashboard({ patientId, providerId, tenantSubdo
       const parts = line.split(',');
       return { name: parts[0]?.trim(), drug_class: parts[1]?.trim() || 'unknown', dose_mg: parseFloat(parts[2]) || null };
     });
-    const r = await ehrApi.checkGeriatricPolypharmacy({ medications, age_years: patientAge });
+    const r = await cdssApi.checkGeriatricPolypharmacy({ medications, age_years: patientAge });
     setPolypharmacyResult(r);
     // Save review
-    await ehrApi.addPolypharmacyReview(patientId, tenantSubdomain, {
+    await cdssApi.addPolypharmacyReview(patientId, tenantSubdomain, {
       reviewedBy: providerId,
       totalMedications: medications.length,
       beersCriteriaFlags: r.beers_flags,
@@ -134,7 +134,7 @@ export default function GeriatricsDashboard({ patientId, providerId, tenantSubdo
   }
 
   async function submitAcp() {
-    await ehrApi.addAcpDocument(patientId, tenantSubdomain, { ...acpDto, createdBy: providerId });
+    await cdssApi.addAcpDocument(patientId, tenantSubdomain, { ...acpDto, createdBy: providerId });
     setShowAcpForm(false);
     setAcpDto({ documentType: 'DNACPR', documentDate: new Date().toISOString().slice(0, 10), witnessSigned: false, physicianSigned: false, patientSigned: false, capacityConfirmed: false });
     load();

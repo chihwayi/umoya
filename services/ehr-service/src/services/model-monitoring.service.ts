@@ -5,12 +5,10 @@ import { CdssService } from './cdss.service';
 import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
 import { ModelFairnessReport } from '../entities/model-fairness-report.entity';
 import { FederatedLearningService } from './federated-learning.service';
-import axios from 'axios';
 
 @Injectable()
 export class ModelMonitoringService {
   private readonly logger = new Logger(ModelMonitoringService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
   // AUC baselines — populated on first compute, used to detect drift
   private baselines: Record<string, number> = {};
@@ -32,9 +30,10 @@ export class ModelMonitoringService {
     let metrics: any = { auc_roc: null, brier_score: null, sensitivity: null, specificity: null, ppv: null, calibration: [] };
 
     try {
-      const result = await this.cdssService.getGuidelines(
-        `model performance evaluation ${modelName}`,
+      const result = await this.cdssService.evaluateModelPerformance(
         { modelName, period: evalPeriod, outcomes },
+        subdomain,
+        ds,
       );
       if ((result as any)?.auc_roc !== undefined) {
         metrics = result;
@@ -110,7 +109,11 @@ export class ModelMonitoringService {
     const models = ['deterioration', 'readmission', 'sepsis', 'no_show'];
     try {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
-      for (const subdomain of tenants) {
+      for (const tenant of tenants) {
+        const subdomain = typeof tenant === 'string' ? tenant : tenant?.subdomain;
+        if (!subdomain) {
+          continue;
+        }
         for (const model of models) {
           await this.evaluateModel(subdomain, model, period).catch(e =>
             this.logger.error(`Model eval failed ${model}@${subdomain}: ${e?.message}`));
@@ -168,7 +171,7 @@ export class ModelMonitoringService {
     // Simple AUC approximation via Wilcoxon-Mann-Whitney
     const pos = outcomes.filter(o => o.actual === 1);
     const neg = outcomes.filter(o => o.actual === 0);
-    if (!pos.length || !neg.length) return { auc_roc: null, brier_score };
+    if (!pos.length || !neg.length) return { auc_roc: null, brier_score: brierScore };
     let wins = 0;
     for (const p of pos) for (const n of neg) { if (p.predicted > n.predicted) wins++; }
     const auc_roc = wins / (pos.length * neg.length);

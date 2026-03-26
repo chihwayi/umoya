@@ -15,6 +15,9 @@ const makeService = () => {
   const referralService = {
     createReferral: jest.fn(),
   };
+  const cdssService = {
+    riskAssessment: jest.fn().mockResolvedValue({ risk_level: 'moderate' }),
+  };
 
   return {
     service: new MaternityService(
@@ -22,12 +25,14 @@ const makeService = () => {
       orderService as any,
       labOrderService as any,
       referralService as any,
+      cdssService as any,
     ),
     mocks: {
       terminologyService,
       orderService,
       labOrderService,
       referralService,
+      cdssService,
     },
   };
 };
@@ -102,7 +107,7 @@ describe('MaternityService hardening', () => {
   });
 
   it('creates a maternity care task when ANC escalation is required', async () => {
-    const { service } = makeService();
+    const { service, mocks } = makeService();
     jest.spyOn(service, 'precheckANCVisit').mockResolvedValue({
       blockers: [],
       warnings: [{ code: 'anc.fever_warning', message: 'Maternal fever detected.' }],
@@ -150,6 +155,14 @@ describe('MaternityService hardening', () => {
     );
 
     expect(result.id).toBe('anc-visit-1');
+    expect(mocks.cdssService.riskAssessment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'anc',
+        specialty: 'obstetrics',
+        module: 'antenatal_care',
+      }),
+      tenantDb,
+    );
     const careTaskInsertCall = (tenantDb.query as jest.Mock).mock.calls.find(([sql]) =>
       String(sql).includes('INSERT INTO maternity_care_tasks'),
     );

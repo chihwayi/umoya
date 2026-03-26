@@ -17,6 +17,9 @@ export class ModelRegistry {
   @Column({ default: 'staging' }) // staging | production | retired | rejected
   status: string;
 
+  @Column({ name: 'deployment_stage', default: 'development' })
+  deploymentStage: string;
+
   @Column({ name: 'minio_path' }) // models/deterioration/v3/weights.pkl
   minioPath: string;
 
@@ -41,6 +44,9 @@ export class ModelRegistry {
 
   @Column({ name: 'framework', default: 'sklearn' }) // sklearn | onnx | pytorch
   framework: string;
+
+  @Column({ name: 'promotion_blocked_reason', type: 'text', nullable: true })
+  promotionBlockedReason: string | null;
 
   @Column({ name: 'promoted_at', type: 'timestamptz', nullable: true })
   promotedAt: Date;

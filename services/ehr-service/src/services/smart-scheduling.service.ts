@@ -2,21 +2,26 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TenantService } from './tenant.service';
 import { SchedulingAiPrediction } from '../entities/scheduling-ai-prediction.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class SmartSchedulingService {
   private readonly logger = new Logger(SmartSchedulingService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   async predictAppointment(subdomain: string, appointmentId: string, features: any) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     let predData: any = { no_show_probability: 0.1, cancel_probability: 0.05, recommended_duration: 30, confidence_score: 0.5, model: 'default', feature_importance: {} };
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/scheduling/predict`, { appointmentId, ...features });
-      predData = data;
+      predData = await this.cdssService.predictSchedulingRisk(
+        { appointmentId, ...features },
+        subdomain,
+        ds,
+      );
     } catch (e: any) {
       this.logger.warn(`Scheduling prediction failed for ${appointmentId}: ${e?.message}`);
     }
@@ -69,7 +74,11 @@ export class SmartSchedulingService {
     this.logger.log('Running daily scheduling AI predictions…');
     try {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
-      for (const subdomain of tenants) {
+      for (const tenant of tenants) {
+        const subdomain = typeof tenant === 'string' ? tenant : tenant?.subdomain;
+        if (!subdomain) {
+          continue;
+        }
         await this.predictNextWeek(subdomain).catch(e =>
           this.logger.error(`Scheduling prediction failed for ${subdomain}: ${e?.message}`));
       }

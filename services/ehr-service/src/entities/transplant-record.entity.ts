@@ -15,7 +15,28 @@ export class TransplantRecord {
   @Column({ name: 'latest_biopsy_result', type: 'text', nullable: true }) latestBiopsyResult: string;
   @Column({ name: 'dsas_present', type: 'boolean', default: false }) dsasPresent: boolean;
   @Column({ type: 'jsonb', default: '[]' }) complications: any;
-  @Column({ name: 'transplant_centre', type: 'text', nullable: true }) transplantCentre: string;
+  @Column({ name: 'transplant_centre', type: 'text', nullable: true }) transplantCentre: string;  @Column({ name: 'current_immunosuppression', type: 'jsonb', nullable: true, default: [] })
+  currentImmunosuppression: any = [];
+
+  @Column({ name: 'graft_status', type: 'text', nullable: true })
+  graftStatus?: string;
+
+  @Column({ name: 'hla_mismatch', type: 'text', nullable: true })
+  hlaMismatch?: string;
+
+  @Column({ name: 'initial_function', type: 'text', nullable: true })
+  initialFunction?: string;
+
+  @Column({ name: 'latest_egfr', type: 'numeric', precision: 6, scale: 2, nullable: true })
+  latestEgfr?: number;
+
+  @Column({ nullable: true })
+  notes?: string;
+
+  @Column({ nullable: true })
+  organ?: string;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt: Date;
 }

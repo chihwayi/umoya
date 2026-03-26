@@ -176,7 +176,13 @@ export class NtdService {
   async screenNtd(payload: any) {
     try {
       return await this.cdssService.diagnosisAssist(
-        { symptoms: payload.symptoms || payload, conditions: payload.conditions, context: 'ntd_screen' },
+        {
+          symptoms: payload.symptoms || payload,
+          conditions: payload.conditions,
+          context: 'ntd_screen',
+          specialty: 'infectious_disease',
+          module: 'ntd_and_outbreak_care',
+        },
         true,
       );
     } catch (err: any) {
@@ -187,7 +193,12 @@ export class NtdService {
 
   async choleraRisk(payload: any) {
     try {
-      return await this.cdssService.riskAssessment({ ...payload, context: 'cholera_risk' });
+      return await this.cdssService.riskAssessment({
+        ...payload,
+        context: 'cholera_risk',
+        specialty: 'infectious_disease',
+        module: 'ntd_and_outbreak_care',
+      });
     } catch (err: any) {
       this.logger.warn(`[NTD] CDSS cholera risk unavailable, using local fallback: ${err?.message}`);
       return this.localCholeraRisk(payload);

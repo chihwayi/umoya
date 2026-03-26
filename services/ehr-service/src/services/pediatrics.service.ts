@@ -127,13 +127,18 @@ export class PediatricsService {
   // ── CDSS ──────────────────────────────────────────────────────────────────
 
   async pediatricDosing(payload: Record<string, any>): Promise<any> {
-    return this.callCdss('/dosing/pediatric', payload);
+    return this.cdssService.getDosingRecommendation(payload);
   }
 
   async assessGrowth(payload: Record<string, any>): Promise<any> {
     try {
       return await this.cdssService.diagnosisAssist(
-        { ...payload, context: 'growth_assessment' },
+        {
+          ...payload,
+          context: 'growth_assessment',
+          specialty: 'pediatrics',
+          module: 'growth_and_development',
+        },
         true,
       );
     } catch (err: any) {
@@ -178,7 +183,12 @@ export class PediatricsService {
   async assessMilestones(payload: Record<string, any>): Promise<any> {
     try {
       return await this.cdssService.diagnosisAssist(
-        { ...payload, context: 'developmental_milestone_assessment' },
+        {
+          ...payload,
+          context: 'developmental_milestone_assessment',
+          specialty: 'pediatrics',
+          module: 'growth_and_development',
+        },
         true,
       );
     } catch (err: any) {

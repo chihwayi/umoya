@@ -23,6 +23,7 @@ try:
     from ai_models.fusion_engine import IntelligentFusionEngine
     from ai_models.llm_provider import LLMProvider
     from ai_models.rag_engine import RAGEngine
+    from clinical_knowledge_registry import ClinicalKnowledgeRegistry
     AI_AVAILABLE = True
 except ImportError:
     AI_AVAILABLE = False
@@ -32,6 +33,10 @@ except ImportError:
         from ai_models.llm_provider import LLMProvider
     except ImportError:
         LLMProvider = None
+    try:
+        from clinical_knowledge_registry import ClinicalKnowledgeRegistry
+    except ImportError:
+        ClinicalKnowledgeRegistry = None
 
 # Import terminology mappers
 try:
@@ -53,6 +58,7 @@ class DiagnosticAssistant:
         self.fusion_engine = None
         self.llm_provider = None
         self.rag_engine = None
+        self.knowledge_registry = None
         self.icd10_mapper = None
         self.snomed_mapper = None
         
@@ -67,6 +73,7 @@ class DiagnosticAssistant:
                 # We don't await here because __init__ is sync, but check_availability will be called later
             
             self.rag_engine = RAGEngine() if RAGEngine else None
+            self.knowledge_registry = ClinicalKnowledgeRegistry() if ClinicalKnowledgeRegistry else None
             logger.info("AI models initialized for intelligent diagnostics (lightweight mode + LLM + RAG)")
         except Exception as e:
             logger.warning(f"Failed to initialize AI models: {e}. Using rule-based only.")
@@ -759,11 +766,30 @@ class DiagnosticAssistant:
             try:
                 # RAG: Retrieve relevant guidelines
                 guideline_context = ""
+                retrieved_docs = []
+                safe_notes_for_retrieval = redact_text(clinical_notes) if clinical_notes else None
+                query_terms = symptoms + ([safe_notes_for_retrieval] if safe_notes_for_retrieval else [])
+                query = " ".join(query_terms)[:200] # Limit query length
+                requested_specialty = None
+                requested_module = None
+                if patient_data:
+                    requested_specialty = patient_data.get("specialty")
+                    requested_module = patient_data.get("module")
+
+                if self.knowledge_registry:
+                    try:
+                        governed_docs = self.knowledge_registry.search(
+                            query,
+                            limit=3,
+                            specialty=requested_specialty,
+                            module=requested_module,
+                        )
+                        if governed_docs:
+                            retrieved_docs.extend(governed_docs)
+                    except Exception as e:
+                        logger.warning(f"Governed knowledge retrieval failed: {e}")
+
                 if self.rag_engine:
-                    safe_notes_for_retrieval = redact_text(clinical_notes) if clinical_notes else None
-                    query_terms = symptoms + ([safe_notes_for_retrieval] if safe_notes_for_retrieval else [])
-                    query = " ".join(query_terms)[:200] # Limit query length
-                    
                     # Context-Aware Filtering (Sprint 2)
                     rag_filters = {}
                     if gender and gender.lower() in ['male', 'm']:
@@ -772,17 +798,33 @@ class DiagnosticAssistant:
                         
                     try:
                         # Pass None when no filters to avoid Chroma 'where' validation errors
-                        retrieved_docs = self.rag_engine.query(
+                        rag_docs = self.rag_engine.query(
                             query,
                             filters=rag_filters if rag_filters else None,
                             tenant_id=tenant_id
                         )
-                        if retrieved_docs:
-                            guideline_texts = [f"{doc['text']} (Source: {doc['source']})" for doc in retrieved_docs]
-                            guideline_context = "\n\nRelevant Medical Guidelines:\n" + "\n---\n".join(guideline_texts)
-                            logger.info(f"RAG retrieved {len(retrieved_docs)} guideline chunks with filters: {rag_filters}")
+                        if rag_docs:
+                            existing = {
+                                (str(doc.get('title') or ''), str(doc.get('text') or ''), str(doc.get('source') or ''))
+                                for doc in retrieved_docs
+                            }
+                            for doc in rag_docs:
+                                key = (str(doc.get('title') or ''), str(doc.get('text') or ''), str(doc.get('source') or ''))
+                                if key not in existing:
+                                    existing.add(key)
+                                    retrieved_docs.append(doc)
+                            logger.info(f"RAG retrieved {len(rag_docs)} guideline chunks with filters: {rag_filters}")
                     except Exception as e:
                         logger.warning(f"RAG retrieval failed: {e}")
+
+                if retrieved_docs:
+                    guideline_texts = []
+                    for doc in retrieved_docs:
+                        metadata = doc.get('metadata') or {}
+                        source_version = metadata.get('source_version') or doc.get('source_version')
+                        version_suffix = f" v{source_version}" if source_version else ""
+                        guideline_texts.append(f"{doc['text']} (Source: {doc['source']}{version_suffix})")
+                    guideline_context = "\n\nRelevant Medical Guidelines:\n" + "\n---\n".join(guideline_texts)
 
                 prompt_history = redact_value(patient_data.get('conditions', [])) if patient_data else []
                 prompt_labs = redact_value(patient_data.get('labs', {})) if patient_data else {}
@@ -826,6 +868,8 @@ class DiagnosticAssistant:
                     prompt,
                     schema,
                     model_name=llm_route.get("model_name"),
+                    use_case="intelligent_diagnosis",
+                    tenant_id=tenant_id,
                 )
                 if llm_json:
                     llm_results = llm_json
@@ -863,7 +907,8 @@ class DiagnosticAssistant:
             try:
                 clinicalbert_results = self.clinicalbert.suggest_diagnoses(
                     clinical_text=clinical_notes,
-                    context={'age': age, 'gender': gender}
+                    context={'age': age, 'gender': gender},
+                    tenant_id=tenant_id,
                 )
                 logger.debug(f"ClinicalBERT returned {len(clinicalbert_results.get('suggestions', []))} suggestions")
             except Exception as e:
@@ -977,7 +1022,8 @@ class DiagnosticAssistant:
         self,
         clinical_notes: List[str],
         demographics: Dict[str, Any],
-        recent_vitals: Optional[Dict[str, Any]] = None
+        recent_vitals: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> Dict[str, str]:
         """
         Generate a concise "One-Liner" summary of the patient's history using LLM.
@@ -1004,7 +1050,11 @@ class DiagnosticAssistant:
         Example: "45yo Male with history of T2DM and HTN presenting with acute chest pain and diaphoresis."
         """
         
-        response = await self.llm_provider.generate_response(prompt)
+        response = await self.llm_provider.generate_response(
+            prompt,
+            use_case="patient_summarization",
+            tenant_id=tenant_id,
+        )
         if response:
             return {
                 "summary": response.strip(),

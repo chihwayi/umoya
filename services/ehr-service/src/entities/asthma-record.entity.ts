@@ -19,6 +19,24 @@ export class AsthmaRecord {
   @Column({ name: 'ige_total', type: 'numeric', precision: 7, scale: 1, nullable: true }) igeTotal: number;
   @Column({ name: 'eosinophil_count', type: 'numeric', precision: 6, scale: 3, nullable: true }) eosinophilCount: number;
   @Column({ name: 'biologics_eligible', type: 'boolean', default: false }) biologicsEligible: boolean;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'ace_score', type: 'int', nullable: true })
+  aceScore?: number;
+
+  @Column({ name: 'activity_limitation', type: 'boolean', nullable: true, default: false })
+  activityLimitation: boolean = false;
+
+  @Column({ name: 'current_ics_dose', type: 'text', nullable: true })
+  currentIcsDose?: string;
+
+  @Column({ name: 'gina_control', type: 'text', nullable: true })
+  ginaControl?: string;
+
+  @Column({ name: 'night_waking', type: 'boolean', nullable: true, default: false })
+  nightWaking: boolean = false;
+
+  @Column({ name: 'reliever_use_week', type: 'int', nullable: true })
+  relieverUseWeek?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

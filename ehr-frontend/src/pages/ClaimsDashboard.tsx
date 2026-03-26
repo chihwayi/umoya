@@ -2016,7 +2016,11 @@ const ClaimDetailModal: React.FC<{
   const [statusHistory, setStatusHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [claimReadiness, setClaimReadiness] = useState<any>(null);
+  const [financialClearance, setFinancialClearance] = useState<any>(null);
+  const [priorAuthorizationDraft, setPriorAuthorizationDraft] = useState<any>(null);
   const [loadingReadiness, setLoadingReadiness] = useState(false);
+  const [loadingFinancialClearance, setLoadingFinancialClearance] = useState(false);
+  const [generatingPriorAuthDraft, setGeneratingPriorAuthDraft] = useState(false);
   const [resubmitData, setResubmitData] = useState({
     memberNumber: claim.memberNumber || '',
     memberName: claim.memberName || '',
@@ -2045,14 +2049,27 @@ const ClaimDetailModal: React.FC<{
   useEffect(() => {
     const loadClaimReadiness = async () => {
       setLoadingReadiness(true);
+      setLoadingFinancialClearance(true);
       try {
-        const response = await claimsApi.getClaimReadiness(tenantSlug, token, claim.id);
-        setClaimReadiness(response.data || null);
+        const [readinessResult, clearanceResult] = await Promise.allSettled([
+          claimsApi.getClaimReadiness(tenantSlug, token, claim.id),
+          claimsApi.getClaimFinancialClearance(tenantSlug, token, claim.id),
+        ]);
+        if (readinessResult.status === 'rejected') {
+          throw readinessResult.reason;
+        }
+
+        setClaimReadiness(readinessResult.value.data || null);
+        setFinancialClearance(
+          clearanceResult.status === 'fulfilled' ? clearanceResult.value.data || null : null,
+        );
       } catch (error: any) {
         showError('Failed to load claim readiness', error.response?.data?.message || '');
         setClaimReadiness(null);
+        setFinancialClearance(null);
       } finally {
         setLoadingReadiness(false);
+        setLoadingFinancialClearance(false);
       }
     };
 
@@ -2060,6 +2077,19 @@ const ClaimDetailModal: React.FC<{
       void loadClaimReadiness();
     }
   }, [claim?.id, showError, tenantSlug, token]);
+
+  const handleGeneratePriorAuthorizationDraft = async () => {
+    setGeneratingPriorAuthDraft(true);
+    try {
+      const response = await claimsApi.generatePriorAuthorizationDraft(tenantSlug, token, claim.id);
+      setPriorAuthorizationDraft(response.data || null);
+      showSuccess('Prior-authorization draft generated', 'success');
+    } catch (error: any) {
+      showError('Failed to generate prior-authorization draft', error.response?.data?.message || '');
+    } finally {
+      setGeneratingPriorAuthDraft(false);
+    }
+  };
 
   const readinessStatus = String(claimReadiness?.status || '').toLowerCase();
   const submitBlocked = readinessStatus === 'blocked';
@@ -2179,6 +2209,107 @@ const ClaimDetailModal: React.FC<{
                     {claimReadiness.missingDocuments.map((issue: any) => (
                       <p key={issue.code}>{issue.message}</p>
                     ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-cyan-100 text-sm">Financial clearance</p>
+              <p className="text-white font-medium">
+                {loadingFinancialClearance
+                  ? 'Loading financial clearance...'
+                  : financialClearance?.financialClearance?.assessmentStatus || 'Unavailable'}
+              </p>
+            </div>
+            {financialClearance?.denialPrediction?.riskLevel ? (
+              <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                String(financialClearance.denialPrediction.riskLevel).toLowerCase() === 'high'
+                  ? 'bg-red-500/20 text-red-300'
+                  : String(financialClearance.denialPrediction.riskLevel).toLowerCase() === 'medium'
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'bg-emerald-500/20 text-emerald-300'
+              }`}>
+                Denial risk: {financialClearance.denialPrediction.riskLevel}
+              </span>
+            ) : null}
+          </div>
+
+          {!loadingFinancialClearance && financialClearance && (
+            <div className="mt-4 space-y-3">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-white/60">Recommended action</p>
+                  <p className="text-white">{financialClearance.financialClearance?.recommendedAction || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-white/60">Coverage status</p>
+                  <p className="text-white">{financialClearance.financial?.coverageStatus || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-white/60">Expected patient portion</p>
+                  <p className="text-white">
+                    {formatCurrency(financialClearance.financial?.patientResponsibilityEstimate || 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-white/60">Expected payer amount</p>
+                  <p className="text-white">
+                    {formatCurrency(financialClearance.financial?.expectedPayerAmount || 0)}
+                  </p>
+                </div>
+              </div>
+
+              {financialClearance.financialClearance?.blockers?.length > 0 && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-300">Financial blockers</p>
+                  <div className="mt-2 space-y-1 text-sm text-white/80">
+                    {financialClearance.financialClearance.blockers.map((issue: any) => (
+                      <p key={issue.code || issue.message}>{issue.message || issue.code}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {financialClearance.denialPrediction?.topDrivers?.length > 0 && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">Denial drivers</p>
+                  <div className="mt-2 space-y-1 text-sm text-white/80">
+                    {financialClearance.denialPrediction.topDrivers.map((driver: any) => (
+                      <p key={driver.code || driver.label || driver}>{driver.label || driver.message || driver.code || String(driver)}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                <div>
+                  <p className="text-white text-sm font-medium">Prior-authorization draft</p>
+                  <p className="text-white/60 text-xs">
+                    Generate a payer-ready draft from the current claim readiness evidence.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleGeneratePriorAuthorizationDraft()}
+                  disabled={generatingPriorAuthDraft}
+                  className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-60"
+                >
+                  {generatingPriorAuthDraft ? 'Generating…' : 'Generate draft'}
+                </button>
+              </div>
+
+              {priorAuthorizationDraft && (
+                <div className="rounded-lg border border-cyan-500/20 bg-slate-900/40 p-3 text-sm text-white/80">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-300">Draft summary</p>
+                  <div className="mt-2 space-y-1">
+                    <p><span className="text-white/60">Request type:</span> {priorAuthorizationDraft.requestType || '—'}</p>
+                    <p><span className="text-white/60">Clinical summary:</span> {priorAuthorizationDraft.clinicalSummary || '—'}</p>
+                    <p><span className="text-white/60">Medical necessity:</span> {priorAuthorizationDraft.medicalNecessityStatement || '—'}</p>
                   </div>
                 </div>
               )}

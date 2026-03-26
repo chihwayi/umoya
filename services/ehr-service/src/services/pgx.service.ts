@@ -2,14 +2,46 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { PgxProfile } from '../entities/pgx-profile.entity';
 import { PgxAlert } from '../entities/pgx-alert.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class PgxService {
   private readonly logger = new Logger(PgxService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
+
+  private normalizePhenotype(value?: string | null): string | null {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (['pm', 'poor'].includes(normalized)) return 'PM';
+    if (['im', 'intermediate', 'reduced'].includes(normalized)) return 'IM';
+    if (['nm', 'normal'].includes(normalized)) return 'NM';
+    if (['um', 'ultrarapid', 'ultra_rapid'].includes(normalized)) return 'UM';
+    if (['rm', 'rapid'].includes(normalized)) return 'RM';
+    if (['deficient', 'severe_deficiency'].includes(normalized)) return 'deficient';
+    return value || null;
+  }
+
+  private buildPgxPayload(patientId: string, drug: string, profile: PgxProfile): Record<string, any> {
+    const raw = profile.rawGenotypingData || {};
+    return {
+      patientId,
+      drug,
+      cyp2d6: this.normalizePhenotype(profile.cyp2d6Phenotype),
+      cyp2c19: this.normalizePhenotype(profile.cyp2c19Phenotype),
+      cyp2c9: this.normalizePhenotype(profile.cyp2c9Phenotype),
+      vkorc1: profile.vkorc1Variant || raw.vkorc1 || null,
+      slco1b1: this.normalizePhenotype(profile.slco1b1Variant),
+      tpmt: this.normalizePhenotype(profile.tpmtPhenotype),
+      dpyd: this.normalizePhenotype(raw.dpydPhenotype || raw.dpyd || null),
+      hla_b5701: String(profile.hlaB5701 || '').toLowerCase() === 'positive',
+      hla_b1502: String(profile.hlaB1502 || '').toLowerCase() === 'positive',
+      g6pd: this.normalizePhenotype(profile.g6pdStatus),
+    };
+  }
 
   // ── PGx Profiles ─────────────────────────────────────────────────────────
 
@@ -56,18 +88,23 @@ export class PgxService {
     if (!profile) return null;
 
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/pgx/check`, { drug, profile });
-      if (data.interaction) {
-        const alert = ds.getRepository(PgxAlert).create({
+      const data = await this.cdssService.checkPgx(
+        this.buildPgxPayload(patientId, drug, profile),
+        subdomain,
+        ds,
+      );
+      const topAlert = Array.isArray(data.alerts) ? data.alerts[0] : null;
+      if (topAlert) {
+        const alertEntity = ds.getRepository(PgxAlert).create({
           patientId,
           drug,
-          pgxInteraction: data.interaction,
-          clinicalImplication: data.clinical_implication,
-          alternativeRecommended: data.alternative,
-          severity: data.severity || 'moderate',
-          geneInvolved: data.gene,
+          pgxInteraction: topAlert.interaction,
+          clinicalImplication: topAlert.interaction,
+          alternativeRecommended: topAlert.alternative,
+          severity: topAlert.severity || 'moderate',
+          geneInvolved: topAlert.gene,
         });
-        return ds.getRepository(PgxAlert).save(alert);
+        return ds.getRepository(PgxAlert).save(alertEntity);
       }
     } catch (e: any) {
       this.logger.warn(`PGx check failed for ${drug}/${patientId}: ${e?.message}`);
@@ -78,7 +115,6 @@ export class PgxService {
   // ── CDSS proxy ────────────────────────────────────────────────────────────
 
   async cdssCheck(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/pgx/check`, payload);
-    return data;
+    return this.cdssService.checkPgx(payload);
   }
 }

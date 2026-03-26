@@ -6,6 +6,9 @@ describe('NurseWorklistController', () => {
 
   const nurseWorklistService = {
     getCrossModuleEscalationFeed: jest.fn(),
+    getClinicalEscalationFeed: jest.fn(),
+    acknowledgeClinicalEscalation: jest.fn(),
+    completeClinicalEscalation: jest.fn(),
     getDoctorSynchronizationFeed: jest.fn(),
     getDoctorOutcomeAnalytics: jest.fn(),
     executeLabRecommendationAction: jest.fn(),
@@ -197,5 +200,84 @@ describe('NurseWorklistController', () => {
     const result = await controller.getCrossModuleFeed({ tenantDb: mockTenantDb } as any);
     expect(result).toEqual(expected);
     expect(nurseWorklistService.getCrossModuleEscalationFeed).toHaveBeenCalledWith(mockTenantDb);
+  });
+
+  it('returns clinical escalation feed with parsed filters', async () => {
+    const expected = { summary: { total: 2 } };
+    nurseWorklistService.getClinicalEscalationFeed.mockResolvedValue(expected);
+
+    const result = await controller.getClinicalEscalationFeed(
+      'open',
+      'critical',
+      'true',
+      '25',
+      { tenantDb: mockTenantDb } as any,
+    );
+
+    expect(result).toEqual(expected);
+    expect(nurseWorklistService.getClinicalEscalationFeed).toHaveBeenCalledWith(mockTenantDb, {
+      status: 'open',
+      severity: 'critical',
+      includeCompleted: true,
+      limit: 25,
+    });
+  });
+
+  it('acknowledges a clinical escalation with request metadata', async () => {
+    const expected = { ok: true, escalationTaskId: 'esc-1' };
+    nurseWorklistService.acknowledgeClinicalEscalation.mockResolvedValue(expected);
+
+    const req = {
+      tenantDb: mockTenantDb,
+      user: mockUser,
+      ip: '10.0.0.20',
+      headers: {
+        'user-agent': 'jest-agent',
+        'x-session-id': 'session-escalation-1',
+      },
+    } as any;
+
+    const result = await controller.acknowledgeClinicalEscalation('esc-1', req);
+
+    expect(result).toEqual(expected);
+    expect(nurseWorklistService.acknowledgeClinicalEscalation).toHaveBeenCalledWith(
+      mockTenantDb,
+      mockUser,
+      'esc-1',
+      {
+        ipAddress: '10.0.0.20',
+        userAgent: 'jest-agent',
+        sessionId: 'session-escalation-1',
+      },
+    );
+  });
+
+  it('completes a clinical escalation with forwarded metadata', async () => {
+    const expected = { ok: true, escalationTaskId: 'esc-1' };
+    nurseWorklistService.completeClinicalEscalation.mockResolvedValue(expected);
+
+    const req = {
+      tenantDb: mockTenantDb,
+      user: mockUser,
+      headers: {
+        'x-forwarded-for': '10.0.0.21',
+        'user-agent': 'jest-agent',
+      },
+    } as any;
+
+    const result = await controller.completeClinicalEscalation('esc-1', { note: 'done' }, req);
+
+    expect(result).toEqual(expected);
+    expect(nurseWorklistService.completeClinicalEscalation).toHaveBeenCalledWith(
+      mockTenantDb,
+      mockUser,
+      'esc-1',
+      { note: 'done' },
+      {
+        ipAddress: '10.0.0.21',
+        userAgent: 'jest-agent',
+        sessionId: undefined,
+      },
+    );
   });
 });

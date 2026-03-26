@@ -2410,6 +2410,8 @@ export class MaternityService {
           hiv_status: vitalFields.hiv_status,
         },
         context: 'anc',
+        specialty: 'obstetrics',
+        module: 'antenatal_care',
         gestationalAgeWeeks: gestationalAge,
         complications: complicationsList,
         edema: vitalFields.edema,

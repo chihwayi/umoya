@@ -103,6 +103,9 @@ export class BloodTransfusion {
 
   @Column({ type: 'text', nullable: true })
   notes: string;
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  urgency?: string;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

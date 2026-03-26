@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import {
   Brain,
   AlertTriangle,
@@ -80,11 +80,11 @@ export default function MentalHealthDashboard({ patientId, providerId, tenantSub
   const load = useCallback(async () => {
     try {
       const [sc, enc, cr, sp, meds] = await Promise.all([
-        ehrApi.getMhScreenings(patientId, tenantSubdomain),
-        ehrApi.getMhEncounters(patientId, tenantSubdomain),
-        ehrApi.getMhCrisisEvents(patientId, tenantSubdomain),
-        ehrApi.getActiveSafePlan(patientId, tenantSubdomain),
-        ehrApi.getMhMedications(patientId, tenantSubdomain, true),
+        cdssApi.getMhScreenings(patientId, tenantSubdomain),
+        cdssApi.getMhEncounters(patientId, tenantSubdomain),
+        cdssApi.getMhCrisisEvents(patientId, tenantSubdomain),
+        cdssApi.getActiveSafePlan(patientId, tenantSubdomain),
+        cdssApi.getMhMedications(patientId, tenantSubdomain, true),
       ]);
       setScreenings(sc);
       setEncounters(enc);
@@ -97,7 +97,7 @@ export default function MentalHealthDashboard({ patientId, providerId, tenantSub
       await Promise.all(
         meds.map(async (m: any) => {
           try {
-            const res = await ehrApi.monitorMhMedication({
+            const res = await cdssApi.monitorMhMedication({
               drug_name: m.drugName,
               drug_class: m.drugClass,
               dose_mg: m.doseMg,
@@ -123,10 +123,10 @@ export default function MentalHealthDashboard({ patientId, providerId, tenantSub
   async function runScreening() {
     setScreenLoading(true);
     try {
-      const result = await ehrApi.scoreMhScreening({ tool: screenTool, responses: screenResponses });
+      const result = await cdssApi.scoreMhScreening({ tool: screenTool, responses: screenResponses });
       setScreenResult(result);
       // Save the screening
-      await ehrApi.addMhScreening(patientId, tenantSubdomain, {
+      await cdssApi.addMhScreening(patientId, tenantSubdomain, {
         screenedBy: providerId,
         tool: screenTool,
         responses: screenResponses,
@@ -142,14 +142,14 @@ export default function MentalHealthDashboard({ patientId, providerId, tenantSub
   }
 
   async function submitCrisis() {
-    await ehrApi.addMhCrisisEvent(patientId, tenantSubdomain, { ...crisisDto, reportedBy: providerId });
+    await cdssApi.addMhCrisisEvent(patientId, tenantSubdomain, { ...crisisDto, reportedBy: providerId });
     setShowCrisisForm(false);
     setCrisisDto({ crisisType: 'suicidal_ideation', lethality: 'low', meansAccess: false, priorAttempts: 0 });
     load();
   }
 
   async function submitMed() {
-    await ehrApi.addMhMedication(patientId, tenantSubdomain, { ...medDto, prescribedBy: providerId });
+    await cdssApi.addMhMedication(patientId, tenantSubdomain, { ...medDto, prescribedBy: providerId });
     setShowMedForm(false);
     setMedDto({ drugName: '', drugClass: 'antidepressant', doseMg: '', frequency: '', startDate: new Date().toISOString().slice(0, 10), indication: '' });
     load();
@@ -546,7 +546,7 @@ function SafePlanTab({ patientId, providerId, tenantSubdomain, activePlan, onSav
   });
 
   async function save() {
-    await ehrApi.upsertSafePlan(patientId, tenantSubdomain, {
+    await cdssApi.upsertSafePlan(patientId, tenantSubdomain, {
       createdBy: providerId,
       warningSigns: dto.warningSigns.split('\n').filter(Boolean),
       internalCoping: dto.internalCoping.split('\n').filter(Boolean),

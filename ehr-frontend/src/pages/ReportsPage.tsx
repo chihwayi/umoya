@@ -394,7 +394,7 @@ const ReportsPage: React.FC = () => {
           </div>
 
           {data && (
-            <>
+            <div className="space-y-3">
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={handleExportCSV}

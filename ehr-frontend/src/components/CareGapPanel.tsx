@@ -3,7 +3,7 @@ import {
   AlertTriangle, CheckCircle, Clock, XCircle, ChevronDown, ChevronUp,
   Brain, CalendarDays, ArrowRight, Plus,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
 interface CareGap {
@@ -73,8 +73,8 @@ const CareGapPanel: React.FC<CareGapPanelProps> = ({ patientId, tenantSlug, toke
     setLoading(true);
     try {
       const [gapsRes, tasksRes] = await Promise.all([
-        ehrApi.getPatientCareGaps(patientId, token, tenantSlug),
-        ehrApi.getNurseTasksForPatient(patientId, token, tenantSlug),
+        cdssApi.getPatientCareGaps(patientId, token, tenantSlug),
+        cdssApi.getNurseTasksForPatient(patientId, token, tenantSlug),
       ]);
       setGaps(gapsRes.data || []);
       setTasks((tasksRes.data || []).filter((t: NurseTask) => t.taskType === 'care_gap'));
@@ -88,7 +88,7 @@ const CareGapPanel: React.FC<CareGapPanelProps> = ({ patientId, tenantSlug, toke
   const handleGapStatus = async (gapId: string, status: string) => {
     setUpdatingId(gapId);
     try {
-      await ehrApi.updateCareGapStatus(gapId, status, token, tenantSlug);
+      await cdssApi.updateCareGapStatus(gapId, status, token, tenantSlug);
       showSuccess('Updated', `Care gap marked as ${status.replace('_', ' ')}`);
       await load();
     } catch {
@@ -101,7 +101,7 @@ const CareGapPanel: React.FC<CareGapPanelProps> = ({ patientId, tenantSlug, toke
   const handleCompleteTask = async (taskId: string) => {
     setUpdatingId(taskId);
     try {
-      await ehrApi.updateNurseTask(taskId, { status: 'completed' }, token, tenantSlug);
+      await cdssApi.updateNurseTask(taskId, { status: 'completed' }, token, tenantSlug);
       showSuccess('Task completed', 'Nurse task marked as complete');
       await load();
     } catch {

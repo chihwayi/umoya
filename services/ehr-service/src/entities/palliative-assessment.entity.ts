@@ -17,6 +17,18 @@ export class PalliativeAssessment {
   @Column({ name: 'functional_trajectory', type: 'text', nullable: true }) functionalTrajectory: string;
   @Column({ name: 'ppi_score', type: 'numeric', precision: 5, scale: 2, nullable: true }) ppiScore: number;
   @Column({ name: 'pps_score', type: 'numeric', precision: 5, scale: 2, nullable: true }) ppsScore: number;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'clinician_id', type: 'uuid' })
+  clinicianId: string;
+
+  @Column({ name: 'clinician_notes', type: 'text', nullable: true })
+  clinicianNotes?: string;
+
+  @Column({ name: 'ecog_ps', type: 'int', nullable: true })
+  ecogPs?: number;
+
+  @Column({ type: 'int', nullable: true })
+  kps?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

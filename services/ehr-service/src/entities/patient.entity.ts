@@ -172,6 +172,48 @@ export class Patient {
 
   @Column({ name: 'portal_password_reset_expires', type: 'timestamptz', nullable: true })
   portalPasswordResetExpires?: Date;
+  @Column({ name: 'insurance_number', type: 'text', nullable: true })
+  insuranceNumber?: string;
+
+  @Column({ name: 'insurance_provider', type: 'text', nullable: true })
+  insuranceProvider?: string;
+
+  @Column({ name: 'medical_aid_plan', type: 'varchar', length: 100, nullable: true })
+  medicalAidPlan?: string;
+
+  @Column({ name: 'next_of_kin_name', type: 'text', nullable: true })
+  nextOfKinName?: string;
+
+  @Column({ name: 'next_of_kin_phone', type: 'text', nullable: true })
+  nextOfKinPhone?: string;
+
+  @Column({ name: 'next_of_kin_relationship', type: 'text', nullable: true })
+  nextOfKinRelationship?: string;
+
+  @Column({ name: 'sdoh_education', type: 'text', nullable: true })
+  sdohEducation?: string;
+
+  @Column({ name: 'sdoh_employment', type: 'text', nullable: true })
+  sdohEmployment?: string;
+
+  @Column({ name: 'sdoh_food_security', type: 'text', nullable: true })
+  sdohFoodSecurity?: string;
+
+  @Column({ name: 'sdoh_housing', type: 'text', nullable: true })
+  sdohHousing?: string;
+
+  @Column({ name: 'sdoh_screened_at', type: 'timestamptz', nullable: true })
+  sdohScreenedAt?: Date;
+
+  @Column({ name: 'sdoh_social_support', type: 'text', nullable: true })
+  sdohSocialSupport?: string;
+
+  @Column({ name: 'sdoh_transport', type: 'text', nullable: true })
+  sdohTransport?: string;
+
+  @Column({ name: 'secondary_language', type: 'text', nullable: true })
+  secondaryLanguage?: string;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

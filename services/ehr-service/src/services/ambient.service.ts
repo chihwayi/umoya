@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import axios from 'axios';
 import { AmbientSession } from '../entities/ambient-session.entity';
+import { CdssService } from './cdss.service';
 
 export interface StartSessionDto {
   patientId: string;
@@ -30,11 +30,8 @@ export interface ProcessChunkResult {
 @Injectable()
 export class AmbientService {
   private readonly logger = new Logger(AmbientService.name);
-  private readonly cdssUrl: string;
 
-  constructor() {
-    this.cdssUrl = (process.env.CDSS_SERVICE_URL || '').replace(/\/$/, '');
-  }
+  constructor(private readonly cdssService: CdssService) {}
 
   async startSession(dto: StartSessionDto, tenantDb: DataSource): Promise<AmbientSession> {
     const repo = tenantDb.getRepository(AmbientSession);
@@ -79,23 +76,20 @@ export class AmbientService {
       draftNote: {},
     };
 
-    if (this.cdssUrl) {
-      try {
-        const resp = await axios.post(
-          `${this.cdssUrl}/transcription/stream`,
-          { audio: audioBase64, session_id: sessionId, context: session.structuredOutput },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Service-Token': process.env.CDSS_SERVICE_TOKEN || '',
-            },
-            timeout: 20_000,
-          },
-        );
-        result = resp.data as ProcessChunkResult;
-      } catch (err: any) {
-        this.logger.warn(`CDSS /transcription/stream error: ${String(err?.message || err)}`);
-      }
+    try {
+      result = await this.cdssService.ambientTranscriptionStream(
+        {
+          sessionId,
+          audioBase64,
+          context: session.structuredOutput,
+          patientId: session.patientId,
+          appointmentId: session.appointmentId,
+        },
+        undefined,
+        tenantDb,
+      ) as ProcessChunkResult;
+    } catch (err: any) {
+      this.logger.warn(`CDSS ambient transcription error: ${String(err?.message || err)}`);
     }
 
     // Merge into session

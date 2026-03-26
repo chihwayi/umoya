@@ -44,12 +44,12 @@ export class AntibiogramController {
   }
 
   @Post('cdss/empirical')
-  empirical(@Body() dto: any) {
-    return this.svc.empiricalRecommendation(dto);
+  empirical(@Headers() h: Record<string, string>, @Body() dto: any) {
+    return this.svc.empiricalRecommendation(this.tenant(h), dto);
   }
 
   @Post('cdss/deescalate')
-  deescalate(@Body() dto: any) {
-    return this.svc.deescalateRecommendation(dto);
+  deescalate(@Headers() h: Record<string, string>, @Body() dto: any) {
+    return this.svc.deescalateRecommendation(this.tenant(h), dto);
   }
 }

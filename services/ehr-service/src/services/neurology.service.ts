@@ -107,7 +107,15 @@ export class NeurologyService {
 
   async triageStroke(payload: Record<string, any>) {
     try {
-      return await this.cdssService.diagnosisAssist({ ...payload, context: 'stroke_triage' }, true);
+      return await this.cdssService.diagnosisAssist(
+        {
+          ...payload,
+          context: 'stroke_triage',
+          specialty: 'neurology',
+          module: 'stroke_care',
+        },
+        true,
+      );
     } catch (err: any) {
       this.logger.warn(`[Neurology] CDSS stroke triage unavailable: ${err?.message}`);
       return this.localStrokeTriage(payload);
@@ -116,7 +124,15 @@ export class NeurologyService {
 
   async classifySeizure(payload: Record<string, any>) {
     try {
-      return await this.cdssService.diagnosisAssist({ ...payload, context: 'seizure_classification' }, true);
+      return await this.cdssService.diagnosisAssist(
+        {
+          ...payload,
+          context: 'seizure_classification',
+          specialty: 'neurology',
+          module: 'epilepsy_care',
+        },
+        true,
+      );
     } catch (err: any) {
       this.logger.warn(`[Neurology] CDSS seizure classification unavailable: ${err?.message}`);
       return this.localSeizureClassify(payload);
@@ -125,7 +141,15 @@ export class NeurologyService {
 
   async diagnoseHeadache(payload: Record<string, any>) {
     try {
-      return await this.cdssService.diagnosisAssist({ ...payload, context: 'headache_diagnosis' }, true);
+      return await this.cdssService.diagnosisAssist(
+        {
+          ...payload,
+          context: 'headache_diagnosis',
+          specialty: 'neurology',
+          module: 'headache_care',
+        },
+        true,
+      );
     } catch (err: any) {
       this.logger.warn(`[Neurology] CDSS headache diagnosis unavailable: ${err?.message}`);
       return this.localHeadacheDiagnosis(payload);
@@ -135,7 +159,11 @@ export class NeurologyService {
   /** FAST + Cincinnati Prehospital Stroke Scale + thrombolysis window. */
   private localStrokeTriage(payload: Record<string, any>): Record<string, any> {
     const fastScore = [payload.facial_droop, payload.arm_weakness, payload.speech_difficulty].filter(Boolean).length;
-    const onsetMinutes = Number(payload.onset_minutes ?? payload.onset_hours * 60 ?? NaN);
+    const onsetMinutes = payload.onset_minutes != null
+      ? Number(payload.onset_minutes)
+      : payload.onset_hours != null
+        ? Number(payload.onset_hours) * 60
+        : NaN;
     const flags: string[] = [];
     if (payload.facial_droop)       flags.push('Facial droop');
     if (payload.arm_weakness)       flags.push('Arm weakness');

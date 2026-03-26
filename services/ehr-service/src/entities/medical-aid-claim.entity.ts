@@ -91,6 +91,18 @@ export class MedicalAidClaim {
 
   @Column({ name: 'claim_data', type: 'jsonb', nullable: true })
   claimData?: any;
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @Column({ name: 'original_claim_id', type: 'uuid', nullable: true })
+  originalClaimId?: string;
+
+  @Column({ name: 'pre_authorization_id', type: 'uuid', nullable: true })
+  preAuthorizationId?: string;
+
+  @Column({ name: 'resubmission_count', type: 'int', nullable: true, default: 0 })
+  resubmissionCount: number = 0;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

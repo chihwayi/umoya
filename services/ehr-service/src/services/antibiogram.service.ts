@@ -4,14 +4,16 @@ import { TenantService } from './tenant.service';
 import { AntibiogramEntry } from '../entities/antibiogram-entry.entity';
 import { AntibiogramSummary } from '../entities/antibiogram-summary.entity';
 import { CultureSensitivityResult } from '../entities/culture-sensitivity-result.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class AntibiogramService {
   private readonly logger = new Logger(AntibiogramService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Antibiogram Entries ───────────────────────────────────────────────────
 
@@ -32,8 +34,9 @@ export class AntibiogramService {
 
   async addCultureResult(subdomain: string, dto: any) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
-    const saved = await ds.getRepository(CultureSensitivityResult).save(
-      ds.getRepository(CultureSensitivityResult).create(dto)
+    const repo = ds.getRepository(CultureSensitivityResult);
+    const saved = await repo.save(
+      repo.create(dto) as unknown as CultureSensitivityResult
     );
     // Ingest into antibiogram entries (fire-and-forget)
     this.ingestCultureIntoAntibiogram(subdomain, saved).catch(e =>
@@ -60,14 +63,14 @@ export class AntibiogramService {
 
   // ── CDSS ──────────────────────────────────────────────────────────────────
 
-  async empiricalRecommendation(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/antimicrobial/empirical`, payload);
-    return data;
+  async empiricalRecommendation(subdomain: string, payload: any) {
+    const ds = await this.tenantService.getTenantDatabase(subdomain);
+    return this.cdssService.recommendEmpiricalAntimicrobial(payload, subdomain, ds);
   }
 
-  async deescalateRecommendation(payload: any) {
-    const { data } = await axios.post(`${this.cdssUrl}/antimicrobial/deescalate`, payload);
-    return data;
+  async deescalateRecommendation(subdomain: string, payload: any) {
+    const ds = await this.tenantService.getTenantDatabase(subdomain);
+    return this.cdssService.recommendAntimicrobialDeescalation(payload, subdomain, ds);
   }
 
   // ── Monthly recalculation (background job) ────────────────────────────────
@@ -77,7 +80,11 @@ export class AntibiogramService {
     this.logger.log('Starting monthly antibiogram recalculation…');
     try {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
-      for (const subdomain of tenants) {
+      for (const tenant of tenants) {
+        const subdomain = typeof tenant === 'string' ? tenant : tenant?.subdomain;
+        if (!subdomain) {
+          continue;
+        }
         await this.recalculate(subdomain).catch(e =>
           this.logger.error(`Antibiogram recalc failed for ${subdomain}: ${e?.message}`));
       }

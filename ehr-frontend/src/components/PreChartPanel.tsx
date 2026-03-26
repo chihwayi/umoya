@@ -3,7 +3,7 @@ import {
   Brain, RefreshCw, CheckCircle, AlertTriangle, Pill,
   Stethoscope, ClipboardList, ChevronDown, ChevronUp, Loader,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 
 interface RiskFlag {
   type: string;
@@ -71,7 +71,7 @@ const PreChartPanel: React.FC<PreChartPanelProps> = ({ appointmentId, token, ten
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await ehrApi.getPrechart(appointmentId, token, tenantSlug);
+      const res = await cdssApi.getPrechart(appointmentId, token, tenantSlug);
       if (res.data) {
         setPrechart(res.data);
         setReviewed(res.data.providerReviewed);
@@ -88,7 +88,7 @@ const PreChartPanel: React.FC<PreChartPanelProps> = ({ appointmentId, token, ten
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const res = await ehrApi.generatePrechart(appointmentId, token, tenantSlug);
+      const res = await cdssApi.generatePrechart(appointmentId, token, tenantSlug);
       setPrechart(res.data);
       setReviewed(res.data.providerReviewed);
     } catch {
@@ -100,7 +100,7 @@ const PreChartPanel: React.FC<PreChartPanelProps> = ({ appointmentId, token, ten
 
   const handleMarkReviewed = async () => {
     try {
-      await ehrApi.markPrechartReviewed(appointmentId, token, tenantSlug);
+      await cdssApi.markPrechartReviewed(appointmentId, token, tenantSlug);
       setReviewed(true);
     } catch {
       // swallow

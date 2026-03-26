@@ -327,7 +327,8 @@ class ClinicalBERTDiagnostic:
     def suggest_diagnoses(
         self,
         clinical_text: str,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Suggest diagnoses from clinical text
@@ -377,7 +378,14 @@ class ClinicalBERTDiagnostic:
                     f"Vitals: {vitals_list}\n"
                     "Return JSON only."
                 )
-                llm_results = asyncio.run(self.llm_provider.generate_json(prompt, schema))
+                llm_results = asyncio.run(
+                    self.llm_provider.generate_json(
+                        prompt,
+                        schema,
+                        use_case="intelligent_diagnosis",
+                        tenant_id=tenant_id,
+                    )
+                )
             except Exception as e:
                 logger.debug(f"LLM generation failed: {e}")
                 llm_results = None

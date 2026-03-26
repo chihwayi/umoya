@@ -2678,6 +2678,8 @@ export class OncologyService {
           genomicMarkers: detectedBiomarkers,
           genomicData: genomicRecords.map((r) => r.genomic_data),
           context: 'oncology_targeted_therapy',
+          specialty: 'oncology',
+          module: 'targeted_therapy',
           caseId,
         },
         true,
@@ -2692,7 +2694,7 @@ export class OncologyService {
     // CDSS clinical-trial match (fire-and-forget enrichment)
     this.cdssService.getGuidelines(
       `oncology targeted therapy ${genomicRecords[0]?.cancer_type || 'cancer'}`,
-      { biomarkers: detectedBiomarkers, caseId },
+      { biomarkers: detectedBiomarkers, caseId, specialty: 'oncology', module: 'targeted_therapy' },
     ).then((guidelines: any) => {
       if (guidelines) {
         this.logger.log(`[Oncology] CDSS guideline context retrieved for case ${caseId}`);

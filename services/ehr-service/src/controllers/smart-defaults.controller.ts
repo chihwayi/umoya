@@ -30,7 +30,7 @@ export class SmartDefaultsController {
   }
 
   @Post('ai/suggest')
-  aiSuggestDefaults(@Body() dto: any) {
-    return this.svc.aiSuggestDefaults(dto);
+  aiSuggestDefaults(@Headers() h: Record<string, string>, @Body() dto: any) {
+    return this.svc.aiSuggestDefaults(this.tenant(h), dto);
   }
 }

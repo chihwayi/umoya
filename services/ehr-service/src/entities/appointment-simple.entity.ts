@@ -110,6 +110,33 @@ export class AppointmentSimple {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })
   createdByUser: User;
+  @Column({ name: 'ai_recommended_duration', type: 'int', nullable: true })
+  aiRecommendedDuration?: number;
+
+  @Column({ name: 'diagnosis_codes', type: 'text', array: true, nullable: true })
+  diagnosisCodes?: string[];
+
+  @Column({ name: 'diagnosis_snomed_code', type: 'varchar', length: 50, nullable: true })
+  diagnosisSnomedCode?: string;
+
+  @Column({ name: 'diagnosis_snomed_term', type: 'text', nullable: true })
+  diagnosisSnomedTerm?: string;
+
+  @Column({ name: 'no_show_risk', type: 'varchar', length: 20, nullable: true })
+  noShowRisk?: string;
+
+  @Column({ name: 'overbooking_slot', type: 'boolean', nullable: true, default: false })
+  overbookingSlot: boolean = false;
+
+  @Column({ name: 'primary_diagnosis_code', type: 'varchar', length: 50, nullable: true })
+  primaryDiagnosisCode?: string;
+
+  @Column({ name: 'primary_diagnosis_description', type: 'text', nullable: true })
+  primaryDiagnosisDescription?: string;
+
+  @Column({ name: 'who_smart_form_data', type: 'jsonb', nullable: true })
+  whoSmartFormData?: any;
+
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

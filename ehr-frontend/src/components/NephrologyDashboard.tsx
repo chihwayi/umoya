@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { Droplets, Activity, AlertTriangle, TrendingDown, CheckCircle } from 'lucide-react';
 
 interface Props {
@@ -54,11 +54,11 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
     setLoading(true);
     try {
       const [c, d, f, b, t] = await Promise.all([
-        ehrApi.getNephrologyCkd(patientId, tenantSubdomain),
-        ehrApi.getNephrologyDialysis(patientId, tenantSubdomain),
-        ehrApi.getNephrologyFluid(patientId, tenantSubdomain),
-        ehrApi.getNephrologyBiopsies(patientId, tenantSubdomain),
-        ehrApi.getNephrologyTransplants(patientId, tenantSubdomain),
+        cdssApi.getNephrologyCkd(patientId, tenantSubdomain),
+        cdssApi.getNephrologyDialysis(patientId, tenantSubdomain),
+        cdssApi.getNephrologyFluid(patientId, tenantSubdomain),
+        cdssApi.getNephrologyBiopsies(patientId, tenantSubdomain),
+        cdssApi.getNephrologyTransplants(patientId, tenantSubdomain),
       ]);
       setCkd(c); setDialysis(d); setFluid(f); setBiopsies(b); setTransplants(t);
     } catch { /* ignore */ }
@@ -153,7 +153,7 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
               </div>
             </div>
             <button onClick={async () => {
-              const r = await ehrApi.stageCkd({
+              const r = await cdssApi.stageCkd({
                 egfr: ckdForm.egfr ? +ckdForm.egfr : undefined,
                 acr: ckdForm.acr ? +ckdForm.acr : undefined,
                 serum_potassium: ckdForm.serum_potassium ? +ckdForm.serum_potassium : undefined,
@@ -194,7 +194,7 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
               <div className="flex items-center gap-2 pt-4"><input type="checkbox" checked={drugForm.on_dialysis} onChange={e => setDrugForm(f => ({ ...f, on_dialysis: e.target.checked }))} /><label className="text-sm">On Dialysis</label></div>
             </div>
             <button onClick={async () => {
-              const r = await ehrApi.renalDrugDosing({ drug_name: drugForm.drug_name, egfr: drugForm.egfr ? +drugForm.egfr : undefined, on_dialysis: drugForm.on_dialysis });
+              const r = await cdssApi.renalDrugDosing({ drug_name: drugForm.drug_name, egfr: drugForm.egfr ? +drugForm.egfr : undefined, on_dialysis: drugForm.on_dialysis });
               setDrugResult(r);
             }} className="bg-slate-700 text-white px-4 py-1.5 rounded text-sm font-semibold">Check Dose</button>
             {drugResult && (
@@ -224,7 +224,7 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
             </div>
             <textarea value={ckdForm.notes} onChange={e => setCkdForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes…" rows={2} className="w-full border border-slate-300 rounded px-2 py-1 text-sm mb-3" />
             <button onClick={async () => {
-              await ehrApi.addNephrologyCkd(patientId, tenantSubdomain, {
+              await cdssApi.addNephrologyCkd(patientId, tenantSubdomain, {
                 assessedBy: providerId,
                 assessmentDate: new Date().toISOString(),
                 egfr: ckdForm.egfr ? +ckdForm.egfr : null,
@@ -279,7 +279,7 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
               ))}
             </div>
             <button onClick={async () => {
-              const r = await ehrApi.assessDialysisAdequacy({
+              const r = await cdssApi.assessDialysisAdequacy({
                 dialysis_type: adeqForm.dialysis_type,
                 ktv: adeqForm.ktv ? +adeqForm.ktv : undefined,
                 pre_bun: adeqForm.pre_bun ? +adeqForm.pre_bun : undefined,
@@ -327,7 +327,7 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
             </div>
             <textarea value={dialysisForm.notes} onChange={e => setDialysisForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes / complications…" rows={2} className="w-full border border-slate-300 rounded px-2 py-1 text-sm mb-3" />
             <button onClick={async () => {
-              await ehrApi.addNephrologyDialysis(patientId, tenantSubdomain, {
+              await cdssApi.addNephrologyDialysis(patientId, tenantSubdomain, {
                 recordedBy: providerId,
                 sessionDate: new Date().toISOString(),
                 dialysisType: dialysisForm.dialysis_type,
@@ -375,7 +375,7 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
               ))}
             </div>
             <button onClick={async () => {
-              await ehrApi.addNephrologyFluid(patientId, tenantSubdomain, {
+              await cdssApi.addNephrologyFluid(patientId, tenantSubdomain, {
                 recordedBy: providerId,
                 recordedAt: new Date().toISOString(),
                 intakeOralMl: +fluidForm.intake_oral_ml,
@@ -425,7 +425,7 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
               <div><label className="text-xs text-slate-500">Recommendation</label><input type="text" value={biopsyForm.recommendation} onChange={e => setBiopsyForm(f => ({ ...f, recommendation: e.target.value }))} className="w-full border border-slate-300 rounded px-2 py-1 text-sm" /></div>
             </div>
             <button onClick={async () => {
-              await ehrApi.addNephrologyBiopsy(patientId, tenantSubdomain, {
+              await cdssApi.addNephrologyBiopsy(patientId, tenantSubdomain, {
                 performedBy: providerId,
                 biopsyDate: new Date().toISOString().split('T')[0],
                 indication: biopsyForm.indication,
@@ -473,7 +473,7 @@ export default function NephrologyDashboard({ patientId, providerId, tenantSubdo
               <div><label className="text-xs text-slate-500">Transplant Centre</label><input type="text" value={transplantForm.transplant_centre} onChange={e => setTransplantForm(f => ({ ...f, transplant_centre: e.target.value }))} className="w-full border border-slate-300 rounded px-2 py-1 text-sm" /></div>
             </div>
             <button onClick={async () => {
-              await ehrApi.addNephrologyTransplant(patientId, tenantSubdomain, {
+              await cdssApi.addNephrologyTransplant(patientId, tenantSubdomain, {
                 transplantDate: transplantForm.transplant_date,
                 donorType: transplantForm.donor_type,
                 coldIschaemiaHours: transplantForm.cold_ischaemia_hours ? +transplantForm.cold_ischaemia_hours : null,

@@ -1,0 +1,71 @@
+[
+  {
+    "knowledge_id": "preanesthesia-assessment-2026-01",
+    "condition": "pre_anesthesia_assessment",
+    "aliases": ["pre-anesthesia assessment", "preoperative anesthesia assessment"],
+    "title": "Pre-anesthesia Assessment Guidance",
+    "source_name": "ASA Perioperative Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-05",
+    "reviewed_at": "2026-03-01",
+    "specialty": "perioperative_care",
+    "module": "anesthesia",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["anesthesia", "pre-op", "preoperative", "airway", "asa class"],
+    "recommendation_blocks": [
+      "Assess airway risk, cardiopulmonary status, allergy history, and prior anesthetic complications before finalizing the anesthetic plan.",
+      "Escalate preoperative review when unstable comorbidity, difficult airway risk, or inadequate optimization is present.",
+      "Document fasting status, consent, and medication holds explicitly before surgery."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "postoperative-pain-2026-01",
+    "condition": "postoperative_pain_management",
+    "aliases": ["postoperative pain management", "post-op pain control"],
+    "title": "Postoperative Pain Management Guidance",
+    "source_name": "ASA Acute Pain Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-06",
+    "reviewed_at": "2026-03-01",
+    "specialty": "perioperative_care",
+    "module": "postoperative_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["postoperative pain", "multimodal analgesia", "opioid sparing"],
+    "recommendation_blocks": [
+      "Use multimodal analgesia and procedure-specific planning rather than opioid-only postoperative management.",
+      "Escalate when pain is disproportionate, neurologic deficits emerge, or respiratory depression risk is high.",
+      "Reassess pain control after intervention rather than assuming one-time dosing is adequate."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "ponv-prophylaxis-2026-01",
+    "condition": "postoperative_nausea_vomiting_prophylaxis",
+    "aliases": ["ponv prophylaxis", "postoperative nausea vomiting prophylaxis"],
+    "title": "PONV Prophylaxis Guidance",
+    "source_name": "SAMBA PONV Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-07",
+    "reviewed_at": "2026-03-01",
+    "specialty": "perioperative_care",
+    "module": "anesthesia",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["ponv", "postoperative nausea", "vomiting", "antiemetic"],
+    "recommendation_blocks": [
+      "Match prophylaxis intensity to baseline PONV risk and planned anesthetic exposure.",
+      "Use multimodal antiemetic prophylaxis for higher-risk patients rather than rescue-only strategies.",
+      "Review prior PONV history and opioid exposure when selecting prophylaxis."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

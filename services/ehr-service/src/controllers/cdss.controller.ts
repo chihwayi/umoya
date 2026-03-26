@@ -39,7 +39,7 @@ export class CdssController {
   @ApiOperation({ summary: 'AI-powered diagnostic assistance' })
   @ApiResponse({ status: 200, description: 'Diagnostic suggestions provided' })
   async diagnosisAssist(@Body() symptoms: any, @Request() req: RequestWithTenant) {
-    return this.cdssService.diagnosisAssist(symptoms, true, req.tenantId);
+    return this.cdssService.diagnosisAssist(symptoms, true, req.tenantId, req.tenantDb);
   }
 
   @Post('guidelines')
@@ -49,14 +49,14 @@ export class CdssController {
     @Body() body: { condition: string, patientData?: any },
     @Request() req: RequestWithTenant
   ) {
-    return this.cdssService.getGuidelines(body.condition, body.patientData, req.tenantId);
+    return this.cdssService.getGuidelines(body.condition, body.patientData, req.tenantId, req.tenantDb);
   }
 
   @Post('guidelines/search')
   @ApiOperation({ summary: 'Search clinical guidelines' })
   @ApiResponse({ status: 200, description: 'Guidelines found' })
   async searchGuidelines(@Body() body: { query: string, limit?: number, patient_context?: any }, @Request() req: RequestWithTenant) {
-    return this.cdssService.searchGuidelines(body.query, body.limit, body.patient_context, req.tenantId);
+    return this.cdssService.searchGuidelines(body.query, body.limit, body.patient_context, req.tenantId, req.tenantDb);
   }
 
   @Post('analyze-image')
@@ -216,7 +216,7 @@ export class CdssController {
   @ApiOperation({ summary: 'Generate structured nursing note draft from contextual inputs' })
   @ApiResponse({ status: 200, description: 'Nursing note draft generated' })
   async draftNursingNotes(@Body() body: any, @Request() req: RequestWithTenant) {
-    return this.cdssService.generateNurseNoteDraft(body, req.tenantId);
+    return this.cdssService.generateNurseNoteDraft(body, req.tenantId, req.tenantDb);
   }
 
   @Post('handoff/summary')
@@ -224,7 +224,7 @@ export class CdssController {
   @ApiOperation({ summary: 'Generate nurse handoff summary from patient shift context' })
   @ApiResponse({ status: 200, description: 'Nurse handoff summary generated' })
   async generateHandoffSummary(@Body() body: any, @Request() req: RequestWithTenant) {
-    return this.cdssService.generateNurseHandoffSummary(body, req.tenantId);
+    return this.cdssService.generateNurseHandoffSummary(body, req.tenantId, req.tenantDb);
   }
 
   @Post('copilot/action')

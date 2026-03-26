@@ -65,6 +65,30 @@ export class EncounterPrechart {
 
   @Column({ name: 'provider_reviewed_at', type: 'timestamptz', nullable: true })
   providerReviewedAt?: Date;
+  @Column({ name: 'active_allergies', type: 'jsonb', nullable: true, default: [] })
+  activeAllergies: any = [];
+
+  @Column({ name: 'active_medications', type: 'jsonb', nullable: true, default: [] })
+  activeMedications: any = [];
+
+  @Column({ name: 'chief_complaint', type: 'text', nullable: true })
+  chiefComplaint?: string;
+
+  @Column({ name: 'clinician_reviewed', type: 'boolean', nullable: true, default: false })
+  clinicianReviewed: boolean = false;
+
+  @Column({ name: 'overdue_screenings', type: 'jsonb', nullable: true, default: [] })
+  overdueScreenings: any = [];
+
+  @Column({ name: 'pending_orders', type: 'jsonb', nullable: true, default: [] })
+  pendingOrders: any = [];
+
+  @Column({ name: 'provider_id', type: 'uuid' })
+  providerId: string;
+
+  @Column({ name: 'relevant_history', type: 'jsonb', nullable: true, default: [] })
+  relevantHistory: any = [];
+
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

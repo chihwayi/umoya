@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle, Edit2, XCircle, EyeOff, ChevronDown, Brain, AlertCircle } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
 export type ClinicianAction = 'accepted' | 'modified' | 'overridden' | 'ignored';
@@ -78,7 +78,7 @@ const CdssDecisionFeedback: React.FC<CdssDecisionFeedbackProps> = ({
   const submit = async (action: ClinicianAction, reason: string | undefined) => {
     setSaving(true);
     try {
-      await ehrApi.recordCdssAction(logId, action, reason, token, tenantSlug);
+      await cdssApi.recordCdssAction(logId, action, reason, token, tenantSlug);
       setSaved(action);
       setPending(null);
       setShowReason(false);

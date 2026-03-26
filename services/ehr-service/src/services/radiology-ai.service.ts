@@ -4,12 +4,10 @@ import { CdssService } from './cdss.service';
 import { DicomStudy } from '../entities/dicom-study.entity';
 import { RadiologyAiFinding } from '../entities/radiology-ai-finding.entity';
 import { AlertDeliveryService } from './alert-delivery.service';
-import axios from 'axios';
 
 @Injectable()
 export class RadiologyAiService {
   private readonly logger = new Logger(RadiologyAiService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
   constructor(
     private readonly tenantService: TenantService,
@@ -79,29 +77,17 @@ export class RadiologyAiService {
     await ds.getRepository(DicomStudy).update(study.id, { aiAnalysisStatus: 'processing' });
 
     try {
-      // Route through CdssService for circuit breaker protection;
-      // fall back to direct axios if CdssService has no radiology proxy method.
-      let data: any;
-      try {
-        data = await this.cdssService.getGuidelines(
-          `radiology analysis ${study.modality} ${study.bodyPart}`,
-          { studyId: study.id, patientId: study.patientId, modality: study.modality, bodyPart: study.bodyPart, storageKey: study.storageKey },
-        );
-        if (!data?.findings) {
-          // CdssService returned guidelines, not findings — fall through to direct call
-          throw new Error('No findings in CDSS response');
-        }
-      } catch {
-        // Direct call as last resort (study-level binary analysis endpoint)
-        const res = await axios.post(`${this.cdssUrl}/radiology/analyze`, {
+      const data = await this.cdssService.analyzeRadiologyStudy(
+        {
           studyId: study.id,
           patientId: study.patientId,
           modality: study.modality,
           bodyPart: study.bodyPart,
           storageKey: study.storageKey,
-        }, { timeout: 60000 });
-        data = res.data;
-      }
+        },
+        subdomain,
+        ds,
+      );
 
       const findingRepo = ds.getRepository(RadiologyAiFinding);
       const finding = await findingRepo.save(findingRepo.create({

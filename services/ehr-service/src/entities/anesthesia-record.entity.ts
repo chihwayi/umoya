@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { SurgicalCase } from './surgical-case.entity';
 import { Patient } from './patient.entity';
 import { User } from './user.entity';
@@ -8,14 +8,16 @@ export class AnesthesiaRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'surgical_case_id' })
+  @Column({ name: 'surgical_case_id', type: 'uuid' })
+  @Index('idx_anesthesia_record_case')
   surgicalCaseId: string;
 
   @ManyToOne(() => SurgicalCase)
   @JoinColumn({ name: 'surgical_case_id' })
   surgicalCase: SurgicalCase;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
+  @Index('idx_anesthesia_record_patient')
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -127,14 +129,15 @@ export class AnesthesiaRecord {
   emergenceNotes: string;
 
   // Staff
-  @Column({ name: 'anesthesiologist_id' })
+  @Column({ name: 'anesthesiologist_id', type: 'uuid' })
+  @Index('idx_anesthesia_record_provider')
   anesthesiologistId: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'anesthesiologist_id' })
   anesthesiologist: User;
 
-  @Column({ nullable: true })
+  @Column({ name: 'crna_id', type: 'uuid', nullable: true })
   crnaId: string;
 
   @ManyToOne(() => User)
@@ -150,4 +153,3 @@ export class AnesthesiaRecord {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
-

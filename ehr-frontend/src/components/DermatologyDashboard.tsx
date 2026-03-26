@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { Eye, AlertTriangle, CheckCircle, Scissors, Flame } from 'lucide-react';
 
 interface Props {
@@ -51,10 +51,10 @@ export default function DermatologyDashboard({ patientId, providerId, tenantSubd
     setLoading(true);
     try {
       const [l, w, b, n] = await Promise.all([
-        ehrApi.getDermatologyLesions(patientId, tenantSubdomain),
-        ehrApi.getDermatologyWounds(patientId, tenantSubdomain),
-        ehrApi.getDermatologyBurns(patientId, tenantSubdomain),
-        ehrApi.getDermatologyNotes(patientId, tenantSubdomain),
+        cdssApi.getDermatologyLesions(patientId, tenantSubdomain),
+        cdssApi.getDermatologyWounds(patientId, tenantSubdomain),
+        cdssApi.getDermatologyBurns(patientId, tenantSubdomain),
+        cdssApi.getDermatologyNotes(patientId, tenantSubdomain),
       ]);
       setLesions(l); setWounds(w); setBurns(b); setNotes(n);
     } catch { /* ignore */ }
@@ -159,7 +159,7 @@ export default function DermatologyDashboard({ patientId, providerId, tenantSubd
               ))}
             </div>
             <button onClick={async () => {
-              const r = await ehrApi.classifyDermatologyLesion({
+              const r = await cdssApi.classifyDermatologyLesion({
                 morphology: classifyForm.morphology,
                 colour: classifyForm.colour || undefined,
                 borders: classifyForm.borders,
@@ -220,7 +220,7 @@ export default function DermatologyDashboard({ patientId, providerId, tenantSubd
             </div>
             <textarea value={lesionForm.notes} onChange={e => setLesionForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes…" rows={2} className="w-full border border-slate-300 rounded px-2 py-1 text-sm mb-3" />
             <button onClick={async () => {
-              await ehrApi.addDermatologyLesion(patientId, tenantSubdomain, {
+              await cdssApi.addDermatologyLesion(patientId, tenantSubdomain, {
                 recordedBy: providerId,
                 recordedAt: new Date().toISOString(),
                 lesionType: lesionForm.lesion_type || null,
@@ -282,7 +282,7 @@ export default function DermatologyDashboard({ patientId, providerId, tenantSubd
             </div>
             <textarea value={woundForm.treatment_plan} onChange={e => setWoundForm(f => ({ ...f, treatment_plan: e.target.value }))} placeholder="Treatment plan…" rows={2} className="w-full border border-slate-300 rounded px-2 py-1 text-sm mb-3" />
             <button onClick={async () => {
-              await ehrApi.addDermatologyWound(patientId, tenantSubdomain, {
+              await cdssApi.addDermatologyWound(patientId, tenantSubdomain, {
                 assessedBy: providerId,
                 assessmentDate: new Date().toISOString(),
                 woundType: woundForm.wound_type,
@@ -339,7 +339,7 @@ export default function DermatologyDashboard({ patientId, providerId, tenantSubd
               <div className="flex items-center gap-2 pt-4"><input type="checkbox" checked={burnCdssForm.inhalation_injury} onChange={e => setBurnCdssForm(f => ({ ...f, inhalation_injury: e.target.checked }))} /><label className="text-sm text-amber-800">Inhalation injury</label></div>
             </div>
             <button onClick={async () => {
-              const r = await ehrApi.calculateBurnFluid({
+              const r = await cdssApi.calculateBurnFluid({
                 weight_kg: +burnCdssForm.weight_kg,
                 tbsa_percent: +burnCdssForm.tbsa_percent,
                 burn_depth: burnCdssForm.burn_depth,
@@ -395,7 +395,7 @@ export default function DermatologyDashboard({ patientId, providerId, tenantSubd
               const tbsa = burnForm.estimated_tbsa ? +burnForm.estimated_tbsa : null;
               const wt = burnForm.weight_kg ? +burnForm.weight_kg : null;
               const parkland = tbsa && wt ? 4 * wt * tbsa : null;
-              await ehrApi.addDermatologyBurn(patientId, tenantSubdomain, {
+              await cdssApi.addDermatologyBurn(patientId, tenantSubdomain, {
                 assessedBy: providerId,
                 assessmentDate: new Date().toISOString(),
                 mechanism: burnForm.mechanism,
@@ -445,7 +445,7 @@ export default function DermatologyDashboard({ patientId, providerId, tenantSubd
               </div>
             </div>
             <button onClick={async () => {
-              await ehrApi.addDermatologyNote(patientId, tenantSubdomain, {
+              await cdssApi.addDermatologyNote(patientId, tenantSubdomain, {
                 providerId,
                 noteDate: new Date().toISOString(),
                 presentingComplaint: noteForm.presenting_complaint,

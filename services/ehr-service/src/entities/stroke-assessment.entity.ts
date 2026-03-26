@@ -67,6 +67,24 @@ export class StrokeAssessment {
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+  @Column({ name: 'aspects_score', type: 'int', nullable: true })
+  aspectsScore?: number;
+
+  @Column({ name: 'door_to_needle_minutes', type: 'int', nullable: true })
+  doorToNeedleMinutes?: number;
+
+  @Column({ name: 'mrs_discharge', type: 'int', nullable: true })
+  mrsDischarge?: number;
+
+  @Column({ nullable: true })
+  outcome?: string;
+
+  @Column({ name: 'thrombectomy_given', type: 'boolean', nullable: true, default: false })
+  thrombectomyGiven: boolean = false;
+
+  @Column({ name: 'thrombolysis_given', type: 'boolean', nullable: true, default: false })
+  thrombolysisGiven: boolean = false;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

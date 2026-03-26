@@ -58,6 +58,18 @@ export class GeriatricAssessment {
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+  @Column({ name: 'cga_domains', type: 'jsonb', default: {} })
+  cgaDomains: any = {};
+
+  @Column({ name: 'falls_last_year', type: 'int', nullable: true, default: 0 })
+  fallsLastYear: number = 0;
+
+  @Column({ name: 'functional_status', type: 'text', nullable: true })
+  functionalStatus?: string;
+
+  @Column({ type: 'boolean', nullable: true, default: false })
+  polypharmacy: boolean = false;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

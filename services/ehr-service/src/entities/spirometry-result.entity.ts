@@ -20,6 +20,24 @@ export class SpirometryResult {
   @Column({ name: 'pre_post_bronchodilator', type: 'boolean', default: false }) prePostBronchodilator: boolean;
   @Column({ name: 'reversibility_percent', type: 'numeric', precision: 5, scale: 1, nullable: true }) reversibilityPercent: number;
   @Column({ type: 'text', nullable: true }) quality: string;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'dlco_percent_predicted', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  dlcoPercentPredicted?: number;
+
+  @Column({ name: 'fev1_l', type: 'numeric', precision: 5, scale: 3, nullable: true })
+  fev1L?: number;
+
+  @Column({ name: 'fvc_l', type: 'numeric', precision: 5, scale: 3, nullable: true })
+  fvcL?: number;
+
+  @Column({ name: 'post_bronchodilator_fev1', type: 'numeric', precision: 5, scale: 3, nullable: true })
+  postBronchodilatorFev1?: number;
+
+  @Column({ name: 'reversibility_test', type: 'boolean', nullable: true, default: false })
+  reversibilityTest: boolean = false;
+
+  @Column({ name: 'tlc_l', type: 'numeric', precision: 5, scale: 3, nullable: true })
+  tlcL?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

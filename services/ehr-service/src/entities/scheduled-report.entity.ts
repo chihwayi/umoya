@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { ReportTemplate } from './report-template.entity';
@@ -34,6 +35,7 @@ export class ScheduledReport {
   id: string;
 
   @Column({ name: 'template_id', type: 'uuid', nullable: true })
+  @Index('idx_scheduled_reports_template_id')
   templateId?: string;
 
   @ManyToOne(() => ReportTemplate, { nullable: true })
@@ -44,19 +46,20 @@ export class ScheduledReport {
   name: string;
 
   @Column({
+    name: 'schedule_type',
     type: 'varchar',
     length: 50,
     enum: ScheduleType,
   })
   scheduleType: ScheduleType;
 
-  @Column({ type: 'jsonb', default: {} })
+  @Column({ name: 'schedule_config', type: 'jsonb', default: {} })
   scheduleConfig: Record<string, any>;
 
   @Column({ type: 'text', array: true, default: [] })
   recipients: string[];
 
-  @Column({ type: 'text', array: true, default: [] })
+  @Column({ name: 'recipient_roles', type: 'text', array: true, default: [] })
   recipientRoles: string[];
 
   @Column({
@@ -70,22 +73,24 @@ export class ScheduledReport {
   @Column({ type: 'jsonb', default: {} })
   filters: Record<string, any>;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  @Index('idx_scheduled_reports_is_active')
   isActive: boolean;
 
-  @Column({ type: 'timestamptz', nullable: true })
+  @Column({ name: 'last_run', type: 'timestamptz', nullable: true })
   lastRun?: Date;
 
-  @Column({ type: 'timestamptz', nullable: true })
+  @Column({ name: 'next_run', type: 'timestamptz', nullable: true })
+  @Index('idx_scheduled_reports_next_run')
   nextRun?: Date;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'run_count', type: 'int', default: 0 })
   runCount: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'error_count', type: 'int', default: 0 })
   errorCount: number;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'last_error', type: 'text', nullable: true })
   lastError?: string;
 
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
@@ -104,5 +109,4 @@ export class ScheduledReport {
   @OneToMany(() => ReportExecution, (execution) => execution.scheduledReport)
   executions: ReportExecution[];
 }
-
 

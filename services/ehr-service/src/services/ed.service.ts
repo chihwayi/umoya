@@ -176,6 +176,8 @@ export class EDService {
       },
       esiLevel: triageData.triageLevel,
       context: 'emergency_triage',
+      specialty: 'acute_care',
+      module: 'emergency_triage',
     }).then((result: any) => {
       const aiEsi = result?.recommended_esi || result?.triage_level;
       if (aiEsi && Number(aiEsi) < triageData.triageLevel) {

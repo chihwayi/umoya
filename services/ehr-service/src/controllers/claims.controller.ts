@@ -61,6 +61,20 @@ export class ClaimsController {
     return this.claimsService.getClaimReadiness(id, req.tenantDb);
   }
 
+  @Get(':id/financial-clearance')
+  @ApiOperation({ summary: 'Get financial clearance assessment and denial prediction for a claim' })
+  @ApiResponse({ status: 200, description: 'Financial clearance retrieved' })
+  async getFinancialClearance(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.getFinancialClearance(id, req.tenantDb);
+  }
+
+  @Post(':id/prior-authorization-draft')
+  @ApiOperation({ summary: 'Generate and persist a prior-authorization draft from claim readiness' })
+  @ApiResponse({ status: 201, description: 'Prior-authorization draft generated' })
+  async generatePriorAuthorizationDraft(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.generatePriorAuthorizationDraft(id, req.tenantDb);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get claim by ID' })
   @ApiResponse({ status: 200, description: 'Claim retrieved successfully' })

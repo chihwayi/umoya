@@ -1,9 +1,31 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { RemoteMonitoringEvent } from '../entities/remote-monitoring-event.entity';
+import { RemoteMonitoringAlert } from '../entities/remote-monitoring-alert.entity';
 import { TenantService } from './tenant.service';
 import { VitalsService } from './vitals.service';
 import { PatientNotificationsService } from './patient-notifications.service';
 import { HealthGoalsService } from './health-goals.service';
+
+interface GeneratedMonitoringAlert {
+  alertType: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  title: string;
+  message: string;
+  evidence: Record<string, any>;
+}
+
+interface RemoteMonitoringSourceMetadata {
+  sourceType?: string;
+  sourceName?: string;
+  sourceConfidence?: number;
+  sourceDeviceId?: string;
+  sourceDeviceType?: string;
+  sourceVendor?: string;
+  sourceModel?: string;
+  verificationStatus?: string;
+  measurementCount?: number;
+}
 
 @Injectable()
 export class PatientVitalsSubmissionService {
@@ -119,13 +141,8 @@ export class PatientVitalsSubmissionService {
   /**
    * Check for abnormal vitals and generate alerts
    */
-  private async checkAbnormalVitals(
-    vitals: any,
-    patientId: string,
-    tenantDb: DataSource,
-    tenantId: string,
-  ): Promise<void> {
-    const alerts: string[] = [];
+  private buildThresholdAlerts(vitals: any): GeneratedMonitoringAlert[] {
+    const alerts: GeneratedMonitoringAlert[] = [];
 
     // Check blood pressure
     if (vitals.bloodPressure) {
@@ -134,11 +151,29 @@ export class PatientVitalsSubmissionService {
         const systolic = parseInt(bpMatch[1]);
         const diastolic = parseInt(bpMatch[2]);
         if (systolic >= 180 || diastolic >= 120) {
-          alerts.push('CRITICAL: Very high blood pressure detected. Please seek immediate medical attention.');
+          alerts.push({
+            alertType: 'hypertensive_crisis',
+            severity: 'critical',
+            title: 'Critical blood pressure alert',
+            message: 'Very high blood pressure detected. Seek immediate medical attention.',
+            evidence: { systolic, diastolic },
+          });
         } else if (systolic >= 140 || diastolic >= 90) {
-          alerts.push('WARNING: High blood pressure detected. Please consult your doctor.');
+          alerts.push({
+            alertType: 'high_blood_pressure',
+            severity: 'high',
+            title: 'High blood pressure detected',
+            message: 'High blood pressure detected. Please consult your doctor.',
+            evidence: { systolic, diastolic },
+          });
         } else if (systolic < 90 || diastolic < 60) {
-          alerts.push('WARNING: Low blood pressure detected. Please consult your doctor.');
+          alerts.push({
+            alertType: 'low_blood_pressure',
+            severity: 'high',
+            title: 'Low blood pressure detected',
+            message: 'Low blood pressure detected. Please consult your doctor.',
+            evidence: { systolic, diastolic },
+          });
         }
       }
     }
@@ -146,68 +181,198 @@ export class PatientVitalsSubmissionService {
     // Check heart rate
     if (vitals.heartRate) {
       if (vitals.heartRate > 100) {
-        alerts.push('WARNING: Elevated heart rate detected.');
+        alerts.push({
+          alertType: 'tachycardia',
+          severity: 'medium',
+          title: 'Elevated heart rate detected',
+          message: 'Elevated heart rate detected.',
+          evidence: { heartRate: vitals.heartRate },
+        });
       } else if (vitals.heartRate < 60) {
-        alerts.push('WARNING: Low heart rate detected.');
+        alerts.push({
+          alertType: 'bradycardia',
+          severity: 'medium',
+          title: 'Low heart rate detected',
+          message: 'Low heart rate detected.',
+          evidence: { heartRate: vitals.heartRate },
+        });
       }
     }
 
     // Check temperature
     if (vitals.temperature) {
       if (vitals.temperature > 100.4) {
-        alerts.push('WARNING: Elevated temperature (fever) detected.');
+        alerts.push({
+          alertType: 'fever',
+          severity: 'medium',
+          title: 'Fever detected',
+          message: 'Elevated temperature detected.',
+          evidence: { temperature: vitals.temperature },
+        });
       } else if (vitals.temperature < 95) {
-        alerts.push('WARNING: Low temperature detected.');
+        alerts.push({
+          alertType: 'hypothermia_risk',
+          severity: 'high',
+          title: 'Low temperature detected',
+          message: 'Low temperature detected.',
+          evidence: { temperature: vitals.temperature },
+        });
       }
     }
 
     // Check oxygen saturation
     if (vitals.oxygenSaturation) {
       if (vitals.oxygenSaturation < 95) {
-        alerts.push('WARNING: Low oxygen saturation detected. Please seek medical attention if symptoms persist.');
+        alerts.push({
+          alertType: 'low_oxygen_saturation',
+          severity: vitals.oxygenSaturation < 90 ? 'critical' : 'high',
+          title: 'Low oxygen saturation detected',
+          message: 'Low oxygen saturation detected. Seek medical attention if symptoms persist.',
+          evidence: { oxygenSaturation: vitals.oxygenSaturation },
+        });
       }
     }
 
     // Check blood glucose
     if (vitals.bloodGlucose) {
       if (vitals.bloodGlucose > 250) {
-        alerts.push('WARNING: High blood glucose detected. Please consult your doctor.');
+        alerts.push({
+          alertType: 'hyperglycemia',
+          severity: 'high',
+          title: 'High blood glucose detected',
+          message: 'High blood glucose detected. Please consult your doctor.',
+          evidence: { bloodGlucose: vitals.bloodGlucose },
+        });
       } else if (vitals.bloodGlucose < 70) {
-        alerts.push('CRITICAL: Low blood glucose detected. Please treat immediately.');
+        alerts.push({
+          alertType: 'hypoglycemia',
+          severity: 'critical',
+          title: 'Low blood glucose detected',
+          message: 'Low blood glucose detected. Please treat immediately.',
+          evidence: { bloodGlucose: vitals.bloodGlucose },
+        });
       }
     }
 
+    return alerts;
+  }
+
+  /**
+   * Send patient notifications for generated alerts
+   */
+  private async notifyAlerts(
+    alerts: GeneratedMonitoringAlert[],
+    vitals: any,
+    patientId: string,
+    tenantDb: DataSource,
+    tenantId: string,
+  ): Promise<void> {
     // Send notifications if alerts exist
     if (alerts.length > 0 && this.patientNotificationsService) {
       try {
-        // Get patient info for notification
-        const patientResult = await tenantDb.query(
-          `SELECT first_name, last_name, email FROM patients WHERE id = $1`,
-          [patientId],
-        );
-        const patient = patientResult[0];
-
         // Create notification for patient
         await this.patientNotificationsService.createNotification(
           patientId,
           'vital_alert' as any,
           'Vital Signs Alert',
-          alerts.join(' '),
+          alerts.map((alert) => alert.message).join(' '),
           tenantId,
           {
-            priority: alerts.some((a) => a.includes('CRITICAL')) ? 'high' : 'normal',
+            priority: alerts.some((alert) => alert.severity === 'critical') ? 'high' : 'normal',
             actionUrl: '/vitals',
             actionLabel: 'View Vitals',
             metadata: { alerts, vitals },
           },
         );
-
-        // Note: Clinic staff notifications would need a different service
-        // For now, we only send patient notifications
       } catch (error) {
         this.logger.warn(`Failed to send vital alerts: ${error instanceof Error ? error.message : error}`);
       }
     }
+  }
+
+  private async persistRemoteMonitoringArtifacts(
+    tenantDb: DataSource,
+    patientId: string,
+    vitalsData: any & RemoteMonitoringSourceMetadata,
+    savedVitals: any,
+    generatedAlerts: GeneratedMonitoringAlert[],
+  ) {
+    const eventRepo = tenantDb.getRepository(RemoteMonitoringEvent);
+    const alertRepo = tenantDb.getRepository(RemoteMonitoringAlert);
+
+    const earlyWarningAssessment = savedVitals.earlyWarningAssessment || null;
+    const event = eventRepo.create({
+      patientId,
+      submittedByPatientId: patientId,
+      vitalsId: savedVitals.id ?? null,
+      deviceId: vitalsData.sourceDeviceId ?? null,
+      deviceType: vitalsData.sourceDeviceType ?? null,
+      sourceType: vitalsData.sourceType || 'self_report',
+      sourceName: vitalsData.sourceName || 'patient_portal',
+      sourceVendor: vitalsData.sourceVendor || null,
+      sourceModel: vitalsData.sourceModel || null,
+      eventType: 'vitals_submission',
+      verificationStatus: vitalsData.verificationStatus || (vitalsData.sourceType === 'device' ? 'device_linked' : 'self_reported'),
+      sourceConfidence: vitalsData.sourceConfidence ?? 0.8,
+      measurementCount: vitalsData.measurementCount ?? this.countSubmittedMeasurements(vitalsData),
+      payload: {
+        input: vitalsData,
+        savedVitalsId: savedVitals.id,
+        cdssInsightsPresent: Boolean(savedVitals.cdssInsights),
+      },
+      evaluationSummary:
+        earlyWarningAssessment?.explanationSummary ||
+        (generatedAlerts.length > 0
+          ? generatedAlerts.map((alert) => alert.title).join('; ')
+          : 'No urgent alert conditions detected'),
+      alertCount: generatedAlerts.length,
+      submittedAt: vitalsData.recordedAt ? new Date(vitalsData.recordedAt) : new Date(),
+      processedAt: new Date(),
+    });
+
+    const savedEvent = await eventRepo.save(event);
+
+    for (const alert of generatedAlerts) {
+      const alertRow = alertRepo.create({
+        eventId: savedEvent.id,
+        patientId,
+        vitalsId: savedVitals.id ?? null,
+        linkedEscalationTaskId: earlyWarningAssessment?.escalationTaskId ?? null,
+        alertType: alert.alertType,
+        severity: alert.severity,
+        status: 'open',
+        title: alert.title,
+        message: alert.message,
+        evidence: {
+          ...alert.evidence,
+          earlyWarningScoreId: earlyWarningAssessment?.id ?? null,
+          riskLevel: earlyWarningAssessment?.riskLevel ?? null,
+        },
+        acknowledgedBy: null,
+        acknowledgedAt: null,
+        resolvedAt: null,
+      });
+
+      await alertRepo.save(alertRow);
+    }
+
+    return savedEvent;
+  }
+
+  private countSubmittedMeasurements(vitalsData: Record<string, any>): number {
+    const measurementFields = [
+      'bloodPressure',
+      'heartRate',
+      'temperature',
+      'oxygenSaturation',
+      'respiratoryRate',
+      'weight',
+      'height',
+      'bloodGlucose',
+      'painLevel',
+    ];
+
+    return measurementFields.filter((field) => vitalsData[field] !== undefined && vitalsData[field] !== null).length;
   }
 
   /**
@@ -215,9 +380,9 @@ export class PatientVitalsSubmissionService {
    */
   async submitPatientVitals(
     patientId: string,
-    vitalsData: any,
+    vitalsData: any & RemoteMonitoringSourceMetadata,
     tenantId: string,
-  ): Promise<{ vitals: any; alerts?: string[]; cdssInsights?: any }> {
+  ): Promise<{ vitals: any; alerts?: GeneratedMonitoringAlert[]; cdssInsights?: any; monitoringEvent?: any }> {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
     if (!tenantDb) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
@@ -253,13 +418,36 @@ export class PatientVitalsSubmissionService {
       bloodGlucose: vitalsData.bloodGlucose || null,
       notes: vitalsData.notes || null,
       recordedAt: vitalsData.recordedAt ? new Date(vitalsData.recordedAt) : new Date(),
+      vitalSource: vitalsData.sourceType || 'patient_self_report',
     };
 
     // Record vitals using existing service
     const savedVitals = await this.vitalsService.recordVitals(vitalsToSave, tenantId);
 
-    // Check for abnormal values and generate alerts
-    await this.checkAbnormalVitals(vitalsData, patientId, tenantDb, tenantId);
+    const generatedAlerts = this.buildThresholdAlerts(vitalsData);
+    if (savedVitals.earlyWarningAssessment?.alertTriggered) {
+      generatedAlerts.push({
+        alertType: 'early_warning_deterioration',
+        severity: savedVitals.earlyWarningAssessment?.riskLevel === 'high' ? 'critical' : 'high',
+        title: `Early warning score ${savedVitals.earlyWarningAssessment.totalScore}`,
+        message: savedVitals.earlyWarningAssessment.explanationSummary || 'Early warning score triggered clinical review.',
+        evidence: {
+          scoreId: savedVitals.earlyWarningAssessment.id,
+          totalScore: savedVitals.earlyWarningAssessment.totalScore,
+          riskLevel: savedVitals.earlyWarningAssessment.riskLevel,
+        },
+      });
+    }
+
+    const monitoringEvent = await this.persistRemoteMonitoringArtifacts(
+      tenantDb,
+      patientId,
+      vitalsData,
+      savedVitals,
+      generatedAlerts,
+    );
+
+    await this.notifyAlerts(generatedAlerts, vitalsData, patientId, tenantDb, tenantId);
 
     // Auto-update health goals from vitals
     if (this.healthGoalsService) {
@@ -275,8 +463,9 @@ export class PatientVitalsSubmissionService {
 
     return {
       vitals: savedVitals,
+      alerts: generatedAlerts,
       cdssInsights: savedVitals.cdssInsights || null,
+      monitoringEvent,
     };
   }
 }
-

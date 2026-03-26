@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader } from '../ui';
-import { BillingService } from '../../services/billing';
+import { ApiBillQuote, BillingService } from '../../services/billing';
 import { PaymentsService } from '../../services/payments';
 import { useAuthStore } from '../../stores/useAuthStore';
 
@@ -37,6 +37,7 @@ interface Invoice {
   status: InvoiceStatus;
   items: LineItem[];
   insurer?: string;
+  quote?: ApiBillQuote | null;
 }
 
 // ─── API mapper ───────────────────────────────────────────────────────────────
@@ -152,14 +153,24 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
   const [method, setMethod] = useState<PaymentMethod>('ecocash');
   const [phone, setPhone]   = useState('+263 77 123 4567');
   const [paying, setPaying] = useState(false);
+  const [quote, setQuote]   = useState<ApiBillQuote | null>(invoice?.quote || null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (invoice) {
       setStep('method');
       setPaying(false);
+      setQuote(invoice.quote || null);
+      setQuoteLoading(true);
       Animated.spring(slideAnim, { toValue: 0, tension: 55, friction: 11, useNativeDriver: true }).start();
+      BillingService.getQuote(invoice.id)
+        .then((result) => setQuote(result || null))
+        .catch(() => setQuote(invoice.quote || null))
+        .finally(() => setQuoteLoading(false));
     } else {
       slideAnim.setValue(700);
+      setQuote(null);
+      setQuoteLoading(false);
     }
   }, [invoice]);
 
@@ -171,7 +182,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
   const handleConfirm = async () => {
     setPaying(true);
     try {
-      const dto = { billId: invoice.id, amount: invoice.amount, phone };
+      const dto = { billId: invoice.id, amount: invoice.amount, phoneNumber: phone };
       if (method === 'ecocash')   await PaymentsService.ecocash(dto);
       else if (method === 'onemoney') await PaymentsService.onemoney(dto);
       else await BillingService.addPayment(invoice.id, { amount: invoice.amount, method });
@@ -213,6 +224,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
               <Text style={pmStyles.invoiceId}>{invoice.id}</Text>
               <Text style={pmStyles.invoiceDesc}>{invoice.description}</Text>
               <Text style={pmStyles.invoiceAmount}>USD ${invoice.amount.toFixed(2)}</Text>
+              {quoteLoading ? (
+                <Text style={pmStyles.quoteMeta}>Loading quote guidance...</Text>
+              ) : quote ? (
+                <>
+                  <Text style={pmStyles.quoteMeta}>
+                    Patient responsibility USD ${Number(quote.estimatedPatientResponsibility || invoice.amount).toFixed(2)}
+                    {quote.estimatedPayerAmount > 0 ? ` · Payer est. USD ${Number(quote.estimatedPayerAmount).toFixed(2)}` : ''}
+                  </Text>
+                  <Text style={pmStyles.quoteHint}>{quote.recommendedNextStep}</Text>
+                </>
+              ) : null}
             </Card>
 
             {/* Methods */}
@@ -280,7 +302,30 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
                 <Text style={pmStyles.totalLabel}>Total</Text>
                 <Text style={pmStyles.totalAmt}>${invoice.amount.toFixed(2)}</Text>
               </View>
+              {quote && (
+                <>
+                  <View style={[pmStyles.lineRow, pmStyles.totalRow]}>
+                    <Text style={pmStyles.totalLabel}>Payer estimate</Text>
+                    <Text style={pmStyles.lineAmt}>${Number(quote.estimatedPayerAmount || 0).toFixed(2)}</Text>
+                  </View>
+                  <View style={[pmStyles.lineRow, pmStyles.totalRow]}>
+                    <Text style={pmStyles.totalLabel}>You pay</Text>
+                    <Text style={pmStyles.totalAmt}>${Number(quote.estimatedPatientResponsibility || invoice.amount).toFixed(2)}</Text>
+                  </View>
+                </>
+              )}
             </Card>
+
+            {quote?.blockers && quote.blockers.length > 0 && (
+              <Card style={pmStyles.quoteWarningCard}>
+                <Text style={pmStyles.quoteWarningTitle}>Before you pay</Text>
+                {quote.blockers.map((blocker, index) => (
+                  <Text key={`${index}-${typeof blocker === 'string' ? blocker : blocker.code || blocker.message}`} style={pmStyles.quoteWarningText}>
+                    {typeof blocker === 'string' ? blocker : blocker.message || blocker.code || 'Coverage issue requires review.'}
+                  </Text>
+                ))}
+              </Card>
+            )}
 
             {/* Method summary */}
             <Card style={pmStyles.methodSummaryCard}>
@@ -371,6 +416,8 @@ const pmStyles = StyleSheet.create({
   invoiceId: { fontFamily: FONT.mono, fontSize: 11, color: C.textMuted },
   invoiceDesc: { fontFamily: FONT.uiBd, fontSize: 15, color: C.textPrimary },
   invoiceAmount: { fontFamily: FONT.uiBk, fontSize: 26, color: C.amber, letterSpacing: -0.5, marginTop: 4 },
+  quoteMeta: { fontFamily: FONT.uiMd, fontSize: 12, color: C.textSecondary, marginTop: 6 },
+  quoteHint: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, lineHeight: 17, marginTop: 2 },
   methodList: { gap: 8 },
   methodRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -402,6 +449,9 @@ const pmStyles = StyleSheet.create({
   totalRow: { marginTop: 4 },
   totalLabel: { fontFamily: FONT.uiBk, fontSize: 14, color: C.textPrimary },
   totalAmt: { fontFamily: FONT.uiBk, fontSize: 18, color: C.amber, letterSpacing: -0.3 },
+  quoteWarningCard: { gap: 6, borderWidth: 1, borderColor: C.red + '33', backgroundColor: C.red + '12' },
+  quoteWarningTitle: { fontFamily: FONT.uiBd, fontSize: 13, color: C.red },
+  quoteWarningText: { fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, lineHeight: 18 },
   methodSummaryCard: { gap: 8 },
   methodSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   methodSummaryLabel: { flex: 1, fontFamily: FONT.uiBd, fontSize: 14, color: C.textPrimary },

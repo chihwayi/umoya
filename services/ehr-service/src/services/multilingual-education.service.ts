@@ -1,14 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { PatientEducationMaterial } from '../entities/patient-education-material.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class MultilingualEducationService {
   private readonly logger = new Logger(MultilingualEducationService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   /**
    * Generate AI patient education material. Called after diagnosis/prescription save.
@@ -17,9 +19,17 @@ export class MultilingualEducationService {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     let content = '';
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/education/generate`, {
-        topic, language, reading_level: readingLevel, patient_id: patientId,
-      });
+      const data = await this.cdssService.generatePatientEducation(
+        {
+          topic,
+          language,
+          reading_level: readingLevel,
+          patient_id: patientId,
+          encounterId,
+        },
+        subdomain,
+        ds,
+      );
       content = data.content || '';
     } catch (e: any) {
       this.logger.warn(`Education generation failed for ${topic}/${language}: ${e?.message}`);

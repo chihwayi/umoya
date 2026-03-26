@@ -98,6 +98,8 @@ export class MalariaService {
       patientId: (dto as any).contactPatientId || (dto as any).contactId,
       context: 'malaria_contact',
       exposureDetails: dto,
+      specialty: 'infectious_disease',
+      module: 'malaria_care',
     }).catch((e: any) => this.logger.warn(`[Malaria] CDSS contact risk failed: ${e?.message}`));
     return saved;
   }
@@ -145,7 +147,11 @@ export class MalariaService {
 
   async recommendTreatment(payload: Record<string, any>) {
     try {
-      return await this.cdssService.getGuidelines('malaria treatment protocol', payload);
+      return await this.cdssService.getGuidelines('malaria treatment protocol', {
+        ...payload,
+        specialty: 'infectious_disease',
+        module: 'malaria_care',
+      });
     } catch (err: any) {
       this.logger.warn(`[Malaria] CDSS treatment recommendation unavailable, using local fallback: ${err?.message}`);
       return this.localMalariaTreatment(payload);
@@ -157,6 +163,8 @@ export class MalariaService {
       return await this.cdssService.riskAssessment({
         ...payload,
         context: 'malaria_severity',
+        specialty: 'infectious_disease',
+        module: 'malaria_care',
       });
     } catch (err: any) {
       this.logger.warn(`[Malaria] CDSS severity scoring unavailable, using local fallback: ${err?.message}`);

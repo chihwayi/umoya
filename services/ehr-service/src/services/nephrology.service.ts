@@ -116,7 +116,12 @@ export class NephrologyService {
 
   async stageCkd(body: any) {
     try {
-      return await this.cdssService.riskAssessment({ ...body, context: 'ckd_staging' });
+      return await this.cdssService.riskAssessment({
+        ...body,
+        context: 'ckd_staging',
+        specialty: 'nephrology',
+        module: 'chronic_kidney_disease',
+      });
     } catch (err: any) {
       this.logger.warn(`[Nephrology] CDSS CKD staging unavailable: ${err?.message}`);
       return this.localCkdStaging(body);
@@ -125,7 +130,11 @@ export class NephrologyService {
 
   async assessDialysisAdequacy(body: any) {
     try {
-      return await this.cdssService.getGuidelines('dialysis adequacy Kt/V', body);
+      return await this.cdssService.getGuidelines('dialysis adequacy Kt/V', {
+        ...body,
+        specialty: 'nephrology',
+        module: 'renal_replacement_therapy',
+      });
     } catch (err: any) {
       this.logger.warn(`[Nephrology] CDSS dialysis adequacy unavailable: ${err?.message}`);
       return this.localDialysisAdequacy(body);

@@ -83,6 +83,15 @@ export class AmbientSession {
 
   @Column({ name: 'session_ended_at', type: 'timestamptz', nullable: true })
   sessionEndedAt?: Date;
+  @Column({ name: 'duration_seconds', type: 'int', nullable: true })
+  durationSeconds?: number;
+
+  @Column({ name: 'ended_at', type: 'timestamptz', nullable: true })
+  endedAt?: Date;
+
+  @Column({ name: 'started_at', type: 'timestamptz' })
+  startedAt: Date;
+
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

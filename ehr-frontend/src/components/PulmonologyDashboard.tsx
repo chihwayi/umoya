@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { Wind, Activity, TrendingUp, Droplets, AlertTriangle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Props {
@@ -56,11 +56,11 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
     setLoading(true);
     try {
       const [sp, cp, as_, pf, ox] = await Promise.all([
-        ehrApi.getPulmonologySpirometry(patientId, tenantSubdomain),
-        ehrApi.getPulmonologyCopd(patientId, tenantSubdomain),
-        ehrApi.getPulmonologyAsthma(patientId, tenantSubdomain),
-        ehrApi.getPulmonologyPeakFlow(patientId, tenantSubdomain),
-        ehrApi.getPulmonologyOxygen(patientId, tenantSubdomain),
+        cdssApi.getPulmonologySpirometry(patientId, tenantSubdomain),
+        cdssApi.getPulmonologyCopd(patientId, tenantSubdomain),
+        cdssApi.getPulmonologyAsthma(patientId, tenantSubdomain),
+        cdssApi.getPulmonologyPeakFlow(patientId, tenantSubdomain),
+        cdssApi.getPulmonologyOxygen(patientId, tenantSubdomain),
       ]);
       setSpirometry(sp); setCopd(cp); setAsthma(as_); setPeakFlow(pf); setOxygen(ox);
     } catch { /* ignore */ }
@@ -175,7 +175,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
               </div>
             </div>
             <button onClick={async () => {
-              const r = await ehrApi.interpretPulmonologySpirometry({
+              const r = await cdssApi.interpretPulmonologySpirometry({
                 fev1: spiroForm.fev1 ? +spiroForm.fev1 : undefined,
                 fvc: spiroForm.fvc ? +spiroForm.fvc : undefined,
                 fev1_fvc_ratio: spiroForm.fev1_fvc_ratio ? +spiroForm.fev1_fvc_ratio : undefined,
@@ -226,7 +226,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
             <textarea value={spiroForm.notes} onChange={e => setSpiroForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes…" rows={2}
               className="w-full border border-slate-300 rounded px-2 py-1 text-sm mb-3" />
             <button onClick={async () => {
-              await ehrApi.addPulmonologySpirometry(patientId, tenantSubdomain, {
+              await cdssApi.addPulmonologySpirometry(patientId, tenantSubdomain, {
                 performedBy: providerId,
                 testDate: new Date().toISOString(),
                 fev1: spiroForm.fev1 ? +spiroForm.fev1 : null,
@@ -312,7 +312,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
             <textarea value={copdForm.notes} onChange={e => setCopdForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes…" rows={2}
               className="w-full border border-slate-300 rounded px-2 py-1 text-sm mb-3" />
             <button onClick={async () => {
-              await ehrApi.addPulmonologyCopd(patientId, tenantSubdomain, {
+              await cdssApi.addPulmonologyCopd(patientId, tenantSubdomain, {
                 assessedBy: providerId,
                 assessmentDate: new Date().toISOString(),
                 catScore: copdForm.cat_score ? +copdForm.cat_score : null,
@@ -379,7 +379,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
               </div>
             </div>
             <button onClick={async () => {
-              const r = await ehrApi.pulmonologyAsthmaStepUp({
+              const r = await cdssApi.pulmonologyAsthmaStepUp({
                 current_gina_step: stepCdssForm.current_gina_step,
                 control: stepCdssForm.control,
                 act_score: stepCdssForm.act_score ? +stepCdssForm.act_score : undefined,
@@ -436,7 +436,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
               <div><label className="text-xs text-slate-500">Eos (×10⁹/L)</label><input type="number" step="0.01" value={asthmaForm.eosinophil_count} onChange={e => setAsthmaForm(f => ({ ...f, eosinophil_count: e.target.value }))} className="w-full border border-slate-300 rounded px-2 py-1 text-sm" /></div>
             </div>
             <button onClick={async () => {
-              await ehrApi.addPulmonologyAsthma(patientId, tenantSubdomain, {
+              await cdssApi.addPulmonologyAsthma(patientId, tenantSubdomain, {
                 assessedBy: providerId,
                 assessmentDate: new Date().toISOString(),
                 actScore: asthmaForm.act_score ? +asthmaForm.act_score : null,
@@ -478,7 +478,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
               <div><label className="text-xs text-slate-500">Medication Taken</label><input type="text" value={pefForm.medication_taken} onChange={e => setPefForm(f => ({ ...f, medication_taken: e.target.value }))} className="w-full border border-slate-300 rounded px-2 py-1 text-sm" /></div>
             </div>
             <button onClick={async () => {
-              await ehrApi.addPulmonologyPeakFlow(patientId, tenantSubdomain, {
+              await cdssApi.addPulmonologyPeakFlow(patientId, tenantSubdomain, {
                 recordedBy: providerId,
                 recordedAt: new Date().toISOString(),
                 pefValue: +pefForm.pef_value,
@@ -531,7 +531,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
               <div className="flex items-center gap-2 pt-4"><input type="checkbox" checked={o2CdssForm.type2_respiratory_failure} onChange={e => setO2CdssForm(f => ({ ...f, type2_respiratory_failure: e.target.checked }))} /><label className="text-sm">Type II RF</label></div>
             </div>
             <button onClick={async () => {
-              const r = await ehrApi.prescribePulmonologyOxygen({
+              const r = await cdssApi.prescribePulmonologyOxygen({
                 indication: o2CdssForm.indication,
                 spo2_resting: o2CdssForm.spo2_resting ? +o2CdssForm.spo2_resting : undefined,
                 copd_diagnosis: o2CdssForm.copd_diagnosis,
@@ -573,7 +573,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
               </div>
             </div>
             <button onClick={async () => {
-              await ehrApi.addPulmonologyOxygen(patientId, tenantSubdomain, {
+              await cdssApi.addPulmonologyOxygen(patientId, tenantSubdomain, {
                 prescribedBy: providerId,
                 startDate: new Date().toISOString().split('T')[0],
                 deliveryDevice: o2Form.delivery_device,

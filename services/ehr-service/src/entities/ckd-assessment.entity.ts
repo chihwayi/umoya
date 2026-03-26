@@ -22,6 +22,36 @@ export class CkdAssessment {
   @Column({ name: 'bp_systolic', type: 'smallint', nullable: true }) bpSystolic: number;
   @Column({ name: 'bp_diastolic', type: 'smallint', nullable: true }) bpDiastolic: number;
   @Column({ type: 'jsonb', default: '[]' }) complications: any;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'acr_mg_mmol', type: 'numeric', precision: 7, scale: 3, nullable: true })
+  acrMgMmol?: number;
+
+  @Column({ name: 'bicarbonate_mmol', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  bicarbonateMmol?: number;
+
+  @Column({ name: 'creatinine_umol', type: 'numeric', precision: 7, scale: 2, nullable: true })
+  creatinineUmol?: number;
+
+  @Column({ name: 'egfr_formula', type: 'text', nullable: true })
+  egfrFormula?: string;
+
+  @Column({ name: 'egfr_ml_min', type: 'numeric', precision: 6, scale: 2, nullable: true })
+  egfrMlMin?: number;
+
+  @Column({ name: 'haemoglobin_g_dl', type: 'numeric', precision: 4, scale: 2, nullable: true })
+  haemoglobinGDl?: number;
+
+  @Column({ name: 'kdigo_risk', type: 'text', nullable: true })
+  kdigoRisk?: string;
+
+  @Column({ name: 'phosphate_mmol', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  phosphateMmol?: number;
+
+  @Column({ name: 'potassium_mmol', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  potassiumMmol?: number;
+
+  @Column({ name: 'urea_mmol', type: 'numeric', precision: 6, scale: 2, nullable: true })
+  ureaMmol?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

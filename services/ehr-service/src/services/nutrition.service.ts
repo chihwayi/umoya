@@ -4,13 +4,14 @@ import { NutritionalScreening } from '../entities/nutritional-screening.entity';
 import { NutritionalAssessment } from '../entities/nutritional-assessment.entity';
 import { DietaryPrescription } from '../entities/dietary-prescription.entity';
 import { NutritionMonitoring } from '../entities/nutrition-monitoring.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class NutritionService {
-  constructor(private readonly tenantService: TenantService) {}
-
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Screening ──────────────────────────────────────────────────────────────
 
@@ -87,18 +88,15 @@ export class NutritionService {
 
   // ── CDSS ───────────────────────────────────────────────────────────────────
 
-  async screenNutrition(body: any) {
-    const res = await axios.post(`${this.cdssUrl}/nutrition/screen`, body);
-    return res.data;
+  async screenNutrition(body: any, tenantId?: string, tenantDb?: any) {
+    return this.cdssService.screenNutritionRisk(body, tenantId, tenantDb);
   }
 
-  async prescribeNutrition(body: any) {
-    const res = await axios.post(`${this.cdssUrl}/nutrition/prescribe`, body);
-    return res.data;
+  async prescribeNutrition(body: any, tenantId?: string, tenantDb?: any) {
+    return this.cdssService.prescribeNutritionPlan(body, tenantId, tenantDb);
   }
 
-  async refeedingRisk(body: any) {
-    const res = await axios.post(`${this.cdssUrl}/nutrition/refeeding-risk`, body);
-    return res.data;
+  async refeedingRisk(body: any, tenantId?: string, tenantDb?: any) {
+    return this.cdssService.assessNutritionRefeedingRisk(body, tenantId, tenantDb);
   }
 }

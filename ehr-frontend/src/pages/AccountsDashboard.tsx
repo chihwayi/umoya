@@ -80,6 +80,21 @@ type TransactionDetail = {
   reconciliationLogs: any[];
 };
 
+type TransactionQuote = {
+  quoteStatus: string;
+  estimatedPayerAmount: number;
+  estimatedPatientResponsibility: number;
+  copayAmount: number;
+  deductibleRemaining: number;
+  quoteConfidence: string;
+  blockers: string[];
+  recommendedNextStep: string;
+  quoteData?: {
+    sourceSignals?: string[];
+  };
+  quotedAt?: string;
+};
+
 type PaymentFormState = {
   amount: string;
   paymentMethod: string;
@@ -182,6 +197,7 @@ const AccountsDashboard: React.FC = () => {
   const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
   const [transactionDetail, setTransactionDetail] = useState<TransactionDetail | null>(null);
+  const [transactionQuote, setTransactionQuote] = useState<TransactionQuote | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>({
@@ -265,10 +281,21 @@ const AccountsDashboard: React.FC = () => {
         setDetailLoading(true);
         const token = localStorage.getItem('ehr_token');
         if (!token) return;
-        const { data } = await ehrApi.getFinancialTransactionDetail(tenantSlug, token, transactionId);
-        setTransactionDetail(data);
+        const [detailResult, quoteResult] = await Promise.allSettled([
+          ehrApi.getFinancialTransactionDetail(tenantSlug, token, transactionId),
+          ehrApi.getFinancialTransactionQuote(tenantSlug, token, transactionId),
+        ]);
+        if (detailResult.status === 'rejected') {
+          throw detailResult.reason;
+        }
+
+        setTransactionDetail(detailResult.value.data);
+        setTransactionQuote(
+          quoteResult.status === 'fulfilled' ? quoteResult.value.data || null : null,
+        );
       } catch (error: any) {
         console.error('Failed to load transaction detail', error);
+        setTransactionQuote(null);
         showError('Error', error.response?.data?.message || 'Failed to load transaction detail');
       } finally {
         setDetailLoading(false);
@@ -1100,6 +1127,90 @@ const AccountsDashboard: React.FC = () => {
                           : '—'}
                       </div>
                     </div>
+                  </div>
+
+                  <div className="p-4 border border-emerald-200 rounded-xl bg-emerald-50/70">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-700">Patient Quote</h3>
+                        <p className="text-xs text-slate-500">
+                          Expected payer and patient responsibility for this transaction.
+                        </p>
+                      </div>
+                      {transactionQuote ? (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                          transactionQuote.quoteStatus === 'verified_quote'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : transactionQuote.quoteStatus === 'blocked_quote'
+                              ? 'bg-rose-100 text-rose-700'
+                              : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {transactionQuote.quoteStatus.replace(/_/g, ' ')}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">
+                          Unavailable
+                        </span>
+                      )}
+                    </div>
+
+                    {transactionQuote ? (
+                      <div className="mt-4 space-y-3">
+                        <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
+                          <div>
+                            <span className="font-medium text-slate-700">Estimated payer:</span>{' '}
+                            ${Number(transactionQuote.estimatedPayerAmount || 0).toLocaleString()}
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-700">Patient responsibility:</span>{' '}
+                            ${Number(transactionQuote.estimatedPatientResponsibility || 0).toLocaleString()}
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-700">Copay:</span>{' '}
+                            ${Number(transactionQuote.copayAmount || 0).toLocaleString()}
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-700">Deductible remaining:</span>{' '}
+                            ${Number(transactionQuote.deductibleRemaining || 0).toLocaleString()}
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-700">Confidence:</span>{' '}
+                            {transactionQuote.quoteConfidence || '—'}
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-700">Quoted:</span>{' '}
+                            {transactionQuote.quotedAt ? new Date(transactionQuote.quotedAt).toLocaleString() : '—'}
+                          </div>
+                        </div>
+
+                        {transactionQuote.blockers?.length > 0 && (
+                          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Quote blockers</p>
+                            <div className="mt-2 space-y-1 text-sm text-rose-900">
+                              {transactionQuote.blockers.map((blocker) => (
+                                <p key={blocker}>{blocker}</p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="rounded-lg border border-emerald-200 bg-white/80 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Recommended next step</p>
+                          <p className="mt-2 text-sm text-slate-700">
+                            {transactionQuote.recommendedNextStep || 'No recommendation available.'}
+                          </p>
+                          {transactionQuote.quoteData?.sourceSignals?.length ? (
+                            <p className="mt-2 text-xs text-slate-500">
+                              Signals: {transactionQuote.quoteData.sourceSignals.join(', ')}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-slate-500">
+                        Quote generation is not available for this transaction yet.
+                      </p>
+                    )}
                   </div>
 
                   <div>

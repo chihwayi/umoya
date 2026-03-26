@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
   Pill, Baby,
-  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad, MonitorHeart
+  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -74,6 +74,14 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const { tenantSlug, patientId } = useParams<{ tenantSlug: string; patientId: string }>();
   const navigate = useNavigate();
   const { showError } = useNotification();
+  const currentUser = (() => {
+    try {
+      const userData = localStorage.getItem('ehr_user');
+      return userData ? JSON.parse(userData) : null;
+    } catch {
+      return null;
+    }
+  })();
   
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -169,9 +177,6 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
       if (!token) return;
 
       // Get current user to filter appointments by doctor
-      const userData = localStorage.getItem('ehr_user');
-      const currentUser = userData ? JSON.parse(userData) : null;
-      
       if (!currentUser) return;
 
       // Fetch appointments for the last 30 days
@@ -681,7 +686,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
-              <MonitorHeart className="w-4 h-4 inline mr-2" />
+              <Activity className="w-4 h-4 inline mr-2" />
               ICU
             </button>
           </nav>
@@ -1197,7 +1202,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
         {activeTab === 'icu' && patientId && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <MonitorHeart className="w-5 h-5" /> ICU / Critical Care
+              <Activity className="w-5 h-5" /> ICU / Critical Care
             </h2>
             <IcuDashboard
               patientId={patientId}

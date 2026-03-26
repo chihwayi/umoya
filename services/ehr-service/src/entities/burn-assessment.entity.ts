@@ -18,6 +18,24 @@ export class BurnAssessment {
   @Column({ name: 'first_8h_ml', type: 'numeric', precision: 10, scale: 2, nullable: true }) first8hMl: number;
   @Column({ name: 'next_16h_ml', type: 'numeric', precision: 10, scale: 2, nullable: true }) next16hMl: number;
   @Column({ name: 'referral_burns_unit', type: 'boolean', default: false }) referralBurnsUnit: boolean;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'admission_required', type: 'boolean', nullable: true, default: false })
+  admissionRequired: boolean = false;
+
+  @Column({ name: 'areas_affected', type: 'jsonb', nullable: true, default: [] })
+  areasAffected: any = [];
+
+  @Column({ name: 'depth_classification', type: 'text', nullable: true })
+  depthClassification?: string;
+
+  @Column({ name: 'fluid_resuscitation_ml', type: 'numeric', precision: 8, scale: 2, nullable: true })
+  fluidResuscitationMl?: number;
+
+  @Column({ name: 'referral_to_burns_unit', type: 'boolean', nullable: true, default: false })
+  referralToBurnsUnit: boolean = false;
+
+  @Column({ name: 'tbsa_percent', type: 'numeric', precision: 5, scale: 2, nullable: true })
+  tbsaPercent?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

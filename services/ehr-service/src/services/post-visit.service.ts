@@ -331,6 +331,36 @@ export class PostVisitService {
     @Optional() private readonly draftService?: PostVisitDraftService,
   ) {}
 
+  private isTrialMatcherEnabled(): boolean {
+    const configured = (config as any)?.features?.postVisitTrialMatcher;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_TRIAL_MATCHER || 'false').toLowerCase() === 'true';
+  }
+
+  private getTrialDecisionSlaHours(): number {
+    const configured = Number(
+      (config as any)?.features?.postVisitTrialDecisionSlaHours
+        ?? process.env.POSTVISIT_TRIAL_DECISION_SLA_HOURS
+        ?? 72,
+    );
+    return Number.isFinite(configured) && configured > 0 ? configured : 72;
+  }
+
+  private getTrialDecisionEscalationRouteTarget(): 'doctor' | 'nurse' | 'emergency' {
+    const configured = String(
+      (config as any)?.features?.postVisitTrialDecisionEscalationRouteTarget
+        ?? process.env.POSTVISIT_TRIAL_DECISION_ROUTE_TARGET
+        ?? 'doctor',
+    )
+      .trim()
+      .toLowerCase();
+    return ['doctor', 'nurse', 'emergency'].includes(configured)
+      ? (configured as 'doctor' | 'nurse' | 'emergency')
+      : 'doctor';
+  }
+
   // S108: Schema is now authoritative in provisioning scripts (sprint48–sprint58).
   // This method verifies the core table exists and logs a clear error if not,
   // instead of silently creating it inline (which caused drift with migrations).

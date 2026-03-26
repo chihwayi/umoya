@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 import { Zap, AlertTriangle, BookOpen, Brain, ClipboardList, Plus } from 'lucide-react';
 
 interface Props {
@@ -47,10 +47,10 @@ export default function NeurologyDashboard({ patientId, providerId, tenantSubdom
   const load = useCallback(async () => {
     try {
       const [s, st, h, c] = await Promise.all([
-        ehrApi.getNeurologySeizures(patientId, tenantSubdomain),
-        ehrApi.getNeurologyStrokes(patientId, tenantSubdomain),
-        ehrApi.getNeurologyHeadaches(patientId, tenantSubdomain),
-        ehrApi.getNeurologyCognitive(patientId, tenantSubdomain),
+        cdssApi.getNeurologySeizures(patientId, tenantSubdomain),
+        cdssApi.getNeurologyStrokes(patientId, tenantSubdomain),
+        cdssApi.getNeurologyHeadaches(patientId, tenantSubdomain),
+        cdssApi.getNeurologyCognitive(patientId, tenantSubdomain),
       ]);
       setSeizures(s);
       setStrokes(st);
@@ -62,8 +62,8 @@ export default function NeurologyDashboard({ patientId, providerId, tenantSubdom
   useEffect(() => { load(); }, [load]);
 
   async function submitSeizure() {
-    await ehrApi.addNeurologySeizure(patientId, tenantSubdomain, { ...seizureDto, recordedBy: providerId, seizureDate: new Date().toISOString() });
-    const result = await ehrApi.classifyNeurologySeizure({
+    await cdssApi.addNeurologySeizure(patientId, tenantSubdomain, { ...seizureDto, recordedBy: providerId, seizureDate: new Date().toISOString() });
+    const result = await cdssApi.classifyNeurologySeizure({
       seizure_type: seizureDto.seizureType,
       status_epilepticus: seizureDto.statusEpilepticus,
       cluster_event: seizureDto.clusterEvent,
@@ -75,23 +75,23 @@ export default function NeurologyDashboard({ patientId, providerId, tenantSubdom
   }
 
   async function submitStroke() {
-    await ehrApi.addNeurologyStroke(patientId, tenantSubdomain, { ...strokeDto, assessedBy: providerId });
-    const result = await ehrApi.triageNeurologyStroke({ ...strokeTriagePayload });
+    await cdssApi.addNeurologyStroke(patientId, tenantSubdomain, { ...strokeDto, assessedBy: providerId });
+    const result = await cdssApi.triageNeurologyStroke({ ...strokeTriagePayload });
     setStrokeCdss(result);
     setShowStrokeForm(false);
     load();
   }
 
   async function submitHeadache() {
-    await ehrApi.addNeurologyHeadache(patientId, tenantSubdomain, headacheDto);
-    const result = await ehrApi.diagnoseNeurologyHeadache(headacheDiagnosePayload);
+    await cdssApi.addNeurologyHeadache(patientId, tenantSubdomain, headacheDto);
+    const result = await cdssApi.diagnoseNeurologyHeadache(headacheDiagnosePayload);
     setHeadacheCdss(result);
     setShowHeadacheForm(false);
     load();
   }
 
   async function submitCognitive() {
-    await ehrApi.addNeurologyCognitive(patientId, tenantSubdomain, { ...cogDto, assessedBy: providerId });
+    await cdssApi.addNeurologyCognitive(patientId, tenantSubdomain, { ...cogDto, assessedBy: providerId });
     setShowCogForm(false);
     load();
   }

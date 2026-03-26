@@ -1,14 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { AutoCodingSuggestion } from '../entities/auto-coding-suggestion.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class AutoCodingService {
   private readonly logger = new Logger(AutoCodingService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   /**
    * Called after a clinical note is saved. Fire-and-forget from MedicalRecordService.
@@ -22,11 +24,18 @@ export class AutoCodingService {
     };
 
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/nlp/extract-codes`, {
-        text: noteText, patientId, noteId,
-      });
-      suggestion.suggestedIcd10Codes = data.icd10_codes || [];
-      suggestion.suggestedCptCodes = data.cpt_codes || [];
+      const data = await this.cdssService.extractClinicalCodes(
+        {
+          noteText,
+          patientId,
+          noteId,
+          encounterId,
+        },
+        subdomain,
+        ds,
+      );
+      suggestion.suggestedIcd10Codes = data.suggestedIcd10Codes || data.icd10_codes || [];
+      suggestion.suggestedCptCodes = data.suggestedCptCodes || data.cpt_codes || [];
       suggestion.codingModel = data.model || 'medspacy-v1';
     } catch (e: any) {
       this.logger.warn(`NLP extract-codes failed for note ${noteId}: ${e?.message}`);

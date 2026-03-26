@@ -96,7 +96,8 @@ export class FederatedLearningService {
     this.logger.log(`Running local training for ${tenants.length} tenants (round ${roundId}, model ${modelType})`);
 
     let submitted = 0;
-    for (const subdomain of tenants) {
+    for (const tenant of tenants) {
+      const subdomain = tenant.subdomain;
       try {
         await this.trainLocalModel(subdomain, roundId, modelType);
         submitted++;
@@ -241,9 +242,13 @@ export class FederatedLearningService {
       featureNames: aggregateData.featureNames || [],
     });
 
-    // Auto-promote if better than current production
-    const result = await this.modelRegistry.evaluateAndPromote(subdomain, registered.id);
-    this.logger.log(`Model ${round.modelType} promotion: ${result.promoted ? '✓' : '✗'} — ${result.reason}`);
+    // Never auto-promote FL candidates to production. Stage them for governed shadow review first.
+    const result = await this.modelRegistry.evaluateAndPromote(subdomain, registered.id, {
+      requestedStage: 'shadow',
+      requestedBy: 'federated-learning',
+      decisionNotes: 'Federated aggregation completed. Candidate staged for governed shadow evaluation before canary or production.',
+    });
+    this.logger.log(`Model ${round.modelType} governance staging: ${result.promoted ? '✓' : '…'} — ${result.reason}`);
   }
 
   // ── Outcome fetching (training data) ──────────────────────────────────────
@@ -333,7 +338,8 @@ export class FederatedLearningService {
     try {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
       if (!tenants.length) return;
-      const coordinator = tenants[0];
+      const coordinator = tenants[0]?.subdomain;
+      if (!coordinator) return;
       for (const modelType of MODEL_TYPES) {
         await this.initiateRound(coordinator, modelType).catch(e =>
           this.logger.error(`Weekly FL round failed for ${modelType}: ${e?.message}`));

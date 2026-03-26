@@ -5,12 +5,13 @@ import { AnesthesiaRecord } from '../entities/anesthesia-record.entity';
 import { AnesthesiaVitals } from '../entities/anesthesia-vitals.entity';
 import { PacuRecord } from '../entities/pacu-record.entity';
 import { AnesthesiaBilling } from '../entities/anesthesia-billing.entity';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class AnesthesiaService {
   private readonly logger = new Logger(AnesthesiaService.name);
 
-  constructor() {}
+  constructor(private readonly cdssService: CdssService) {}
 
   private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
     const [row] = await tenantDb.query(`SELECT to_regclass($1) as table_name`, [`public.${tableName}`]);
@@ -29,6 +30,28 @@ export class AnesthesiaService {
   }
 
   // ==================== PRE-ANESTHESIA ASSESSMENT ====================
+
+  async getPreAnesthesiaGuidance(
+    assessmentData: any,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<any> {
+    try {
+      return await this.cdssService.getGuidelines(
+        'pre-anesthesia assessment',
+        {
+          ...assessmentData,
+          specialty: 'perioperative_care',
+          module: 'anesthesia',
+        },
+        tenantId,
+        tenantDb,
+      );
+    } catch (err: any) {
+      this.logger.warn(`[Anesthesia] CDSS pre-anesthesia guidance unavailable: ${err?.message}`);
+      return this.localPreAnesthesiaGuidance(assessmentData);
+    }
+  }
 
   async createPreAnesthesiaAssessment(
     assessmentData: any,
@@ -225,6 +248,50 @@ export class AnesthesiaService {
   }
 
   // ==================== PACU ====================
+
+  async getPonvProphylaxisGuidance(
+    body: any,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<any> {
+    try {
+      return await this.cdssService.getGuidelines(
+        'ponv prophylaxis',
+        {
+          ...body,
+          specialty: 'perioperative_care',
+          module: 'anesthesia',
+        },
+        tenantId,
+        tenantDb,
+      );
+    } catch (err: any) {
+      this.logger.warn(`[Anesthesia] CDSS PONV guidance unavailable: ${err?.message}`);
+      return this.localPonvGuidance(body);
+    }
+  }
+
+  async getPostoperativePainGuidance(
+    body: any,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<any> {
+    try {
+      return await this.cdssService.getGuidelines(
+        'postoperative pain management',
+        {
+          ...body,
+          specialty: 'perioperative_care',
+          module: 'postoperative_care',
+        },
+        tenantId,
+        tenantDb,
+      );
+    } catch (err: any) {
+      this.logger.warn(`[Anesthesia] CDSS postoperative pain guidance unavailable: ${err?.message}`);
+      return this.localPostoperativePainGuidance(body);
+    }
+  }
 
   async admitToPACU(
     pacuData: any,
@@ -435,5 +502,83 @@ export class AnesthesiaService {
     billing.billedById = userId;
 
     return await repository.save(billing);
+  }
+
+  private localPreAnesthesiaGuidance(body: any): Record<string, any> {
+    const comorbidities = Array.isArray(body?.comorbidities) ? body.comorbidities : [];
+    const difficultAirwayRisk = Boolean(body?.difficultAirwayRisk || body?.mallampatiClass === 'III' || body?.mallampatiClass === 'IV');
+    const unstableComorbidity = comorbidities.some((item: string) =>
+      ['heart failure', 'copd exacerbation', 'unstable angina', 'severe asthma'].includes(String(item).toLowerCase()),
+    );
+
+    return {
+      source: 'local_fallback',
+      matched_condition: 'pre_anesthesia_assessment',
+      recommendations: [
+        'Confirm airway history, cardiopulmonary risk, allergies, fasting status, and perioperative medication holds before finalizing the anesthetic plan.',
+        difficultAirwayRisk || unstableComorbidity
+          ? 'Escalate senior anesthetic review before surgery because elevated perioperative risk is present.'
+          : 'Proceed with standard pre-anesthesia review and document optimization status clearly.',
+      ],
+      contraindications: [],
+      medication_warnings: [],
+      evidence_level: 'moderate',
+      knowledge_metadata: {
+        source_name: 'local_perioperative_fallback',
+        source_version: '2026.03',
+        fallback_used: true,
+      },
+    };
+  }
+
+  private localPonvGuidance(body: any): Record<string, any> {
+    const riskFactors = [
+      body?.historyOfPonv,
+      body?.motionSickness,
+      body?.plannedPostoperativeOpioids,
+      body?.nonSmoker,
+    ].filter(Boolean).length;
+
+    return {
+      source: 'local_fallback',
+      matched_condition: 'postoperative_nausea_vomiting_prophylaxis',
+      recommendations: [
+        riskFactors >= 2
+          ? 'Use multimodal antiemetic prophylaxis because baseline PONV risk is elevated.'
+          : 'Consider single-agent prophylaxis when overall PONV risk is low.',
+        'Review prior PONV history and expected opioid exposure before finalizing prophylaxis.',
+      ],
+      contraindications: [],
+      medication_warnings: [],
+      evidence_level: 'moderate',
+      knowledge_metadata: {
+        source_name: 'local_perioperative_fallback',
+        source_version: '2026.03',
+        fallback_used: true,
+      },
+    };
+  }
+
+  private localPostoperativePainGuidance(body: any): Record<string, any> {
+    const highRespiratoryRisk = Boolean(body?.obstructiveSleepApnea || body?.opioidNaive === false || body?.copd);
+
+    return {
+      source: 'local_fallback',
+      matched_condition: 'postoperative_pain_management',
+      recommendations: [
+        'Use multimodal analgesia and procedure-specific planning rather than opioid-only postoperative pain control.',
+        highRespiratoryRisk
+          ? 'Escalate respiratory monitoring and favor opioid-sparing strategies because respiratory depression risk is elevated.'
+          : 'Reassess pain response after each intervention instead of assuming a one-time dose is sufficient.',
+      ],
+      contraindications: [],
+      medication_warnings: [],
+      evidence_level: 'moderate',
+      knowledge_metadata: {
+        source_name: 'local_perioperative_fallback',
+        source_version: '2026.03',
+        fallback_used: true,
+      },
+    };
   }
 }

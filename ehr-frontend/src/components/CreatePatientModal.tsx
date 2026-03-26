@@ -14,55 +14,210 @@ interface CreatePatientModalProps {
 
 const inputCls = 'w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20';
 
+const initialFormData = {
+  firstName: '',
+  lastName: '',
+  dateOfBirth: '',
+  gender: 'male',
+  nationalId: '',
+  phone: '',
+  email: '',
+  address: '',
+  city: '',
+  emergencyContactName: '',
+  emergencyContactPhone: '',
+  emergencyContactRelationship: '',
+  medicalAidProvider: '',
+  medicalAidNumber: '',
+  bloodType: '',
+  allergies: '',
+  medicalHistory: '',
+  preferredLanguage: 'en',
+  ethnicity: '',
+  race: '',
+  nationality: '',
+  countryOfBirth: '',
+  religion: '',
+  interpreterRequired: false,
+  maritalStatus: '',
+  occupation: '',
+  employmentStatus: '',
+  educationLevel: '',
+  disabilityStatus: false,
+  disabilityType: '',
+  smokingStatus: '',
+  packYears: '',
+  alcoholUse: '',
+  substanceUse: false,
+  substanceUseDetails: '',
+  pregnancyStatus: '',
+  advanceDirectiveOnFile: false,
+};
+
+const toBadgeLabel = (value: string) =>
+  value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (part) => part.toUpperCase());
+
 const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose, onPatientCreated, tenantSlug }) => {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    dateOfBirth: '',
-    gender: 'male',
-    nationalId: '',
-    phone: '',
-    email: '',
-    address: '',
-    city: '',
-    emergencyContactName: '',
-    emergencyContactPhone: '',
-    emergencyContactRelationship: '',
-    medicalAidProvider: '',
-    medicalAidNumber: '',
-    bloodType: '',
-    allergies: '',
-    medicalHistory: '',
-    // ── Extended demographics (Sprint 60) ───────────────────────────────
-    preferredLanguage: 'en',
-    ethnicity: '',
-    race: '',
-    nationality: '',
-    countryOfBirth: '',
-    religion: '',
-    interpreterRequired: false,
-    maritalStatus: '',
-    occupation: '',
-    employmentStatus: '',
-    educationLevel: '',
-    disabilityStatus: false,
-    disabilityType: '',
-    smokingStatus: '',
-    packYears: '',
-    alcoholUse: '',
-    substanceUse: false,
-    substanceUseDetails: '',
-    pregnancyStatus: '',
-    advanceDirectiveOnFile: false,
-  });
+  const [formData, setFormData] = useState(initialFormData);
   const [showExtended, setShowExtended] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { showSuccess, showError } = useNotification();
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
+  const [duplicateReviewLoading, setDuplicateReviewLoading] = useState<string | null>(null);
+  const [eligibilityLoading, setEligibilityLoading] = useState(false);
+  const [assessmentResult, setAssessmentResult] = useState<any>(null);
+  const [duplicateQueue, setDuplicateQueue] = useState<any[]>([]);
+  const [eligibilityResult, setEligibilityResult] = useState<any>(null);
+  const [assessmentSignature, setAssessmentSignature] = useState('');
+  const { showSuccess, showError, showWarning, showInfo } = useNotification();
 
   const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
   const medicalAids = ['CIMAS', 'Premier Service Medical Aid', 'Econet Health', 'First Mutual Health', 'Other'];
 
-  const set = (field: string, value: any) => setFormData(prev => ({ ...prev, [field]: value }));
+  const set = (field: string, value: any) => {
+    resetIntelligenceState();
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const buildAssessmentPayload = () => ({
+    firstName: formData.firstName.trim(),
+    lastName: formData.lastName.trim(),
+    dateOfBirth: formatDateForAPI(formData.dateOfBirth),
+    gender: formData.gender,
+    nationalId: formData.nationalId.trim() || undefined,
+    phone: formData.phone.trim() || undefined,
+    email: formData.email.trim() || undefined,
+    address: formData.address.trim() || undefined,
+    city: formData.city.trim() || undefined,
+    emergencyContactName: formData.emergencyContactName.trim() || undefined,
+    emergencyContactPhone: formData.emergencyContactPhone.trim() || undefined,
+    nextOfKinName: formData.emergencyContactName.trim() || undefined,
+    nextOfKinPhone: formData.emergencyContactPhone.trim() || undefined,
+    insuranceProvider: formData.medicalAidProvider.trim() || undefined,
+    insuranceNumber: formData.medicalAidNumber.trim() || undefined,
+  });
+
+  const buildAssessmentSignature = () => JSON.stringify(buildAssessmentPayload());
+
+  const resetIntelligenceState = () => {
+    setAssessmentResult(null);
+    setDuplicateQueue([]);
+    setEligibilityResult(null);
+    setAssessmentSignature('');
+  };
+
+  const runEligibilityVerification = async (token: string) => {
+    if (!formData.medicalAidProvider.trim() || !formData.medicalAidNumber.trim()) {
+      setEligibilityResult(null);
+      return;
+    }
+
+    setEligibilityLoading(true);
+    try {
+      const response = await ehrApi.verifyRegistrationEligibility(
+        {
+          insuranceProvider: formData.medicalAidProvider.trim(),
+          insuranceNumber: formData.medicalAidNumber.trim(),
+          medicalAidPlan: undefined,
+          patientId: null,
+          sourceAssessmentId: assessmentResult?.id || null,
+        },
+        token,
+        tenantSlug,
+      );
+      setEligibilityResult(response.data);
+    } catch (error: any) {
+      setEligibilityResult({
+        responsePayload: { valid: false },
+        error: error.response?.data?.message || 'Medical aid verification failed',
+      });
+    } finally {
+      setEligibilityLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    setFormData(initialFormData);
+    setShowExtended(false);
+    resetIntelligenceState();
+    onClose();
+  };
+
+  const runRegistrationReview = async () => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token) {
+      showError('Authentication required', 'Sign in again before running registration review.');
+      return false;
+    }
+
+    if (!isValidDate(formData.dateOfBirth)) {
+      showError('Invalid Date', 'Please enter date in dd/mm/yyyy format');
+      return false;
+    }
+
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.phone.trim() || !formData.address.trim() || !formData.city.trim()) {
+      showWarning('Registration review needs core demographics', 'Capture name, date of birth, phone, address, and city before running duplicate and eligibility checks.');
+      return false;
+    }
+
+    setAssessmentLoading(true);
+
+    try {
+      const payload = buildAssessmentPayload();
+      const signature = JSON.stringify(payload);
+      const response = await ehrApi.assessRegistrationIntake(payload, token, tenantSlug);
+      setAssessmentResult(response.data);
+      setAssessmentSignature(signature);
+
+      if (response.data?.id) {
+        const queue = await ehrApi.getDuplicateReviewQueue(
+          { sourceReference: response.data.id, limit: 10 },
+          token,
+          tenantSlug,
+        );
+        setDuplicateQueue(queue.data || []);
+      } else {
+        setDuplicateQueue([]);
+      }
+
+      await runEligibilityVerification(token);
+
+      if ((response.data?.suspectedDuplicateCount || 0) > 0) {
+        showWarning('Potential duplicates detected', 'Review the duplicate queue below before creating a new patient record.');
+      } else {
+        showInfo('Registration review complete', 'No high-confidence duplicate candidates were detected.');
+      }
+
+      return true;
+    } catch (error: any) {
+      showError('Review failed', error.response?.data?.message || 'Failed to review registration intelligence');
+      return false;
+    } finally {
+      setAssessmentLoading(false);
+    }
+  };
+
+  const reviewDuplicate = async (matchId: string, matchStatus: string) => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token) {
+      showError('Authentication required', 'Sign in again before reviewing duplicate suggestions.');
+      return;
+    }
+
+    setDuplicateReviewLoading(matchId);
+    try {
+      const response = await ehrApi.reviewDuplicateCandidate(matchId, { matchStatus }, token, tenantSlug);
+      setDuplicateQueue((current) =>
+        current.map((item) => (item.id === matchId ? response.data : item)),
+      );
+      showSuccess('Duplicate review updated', `Marked duplicate suggestion as ${toBadgeLabel(matchStatus)}.`);
+    } catch (error: any) {
+      showError('Duplicate review failed', error.response?.data?.message || 'Could not update duplicate review status');
+    } finally {
+      setDuplicateReviewLoading(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +229,26 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
 
       if (!isValidDate(formData.dateOfBirth)) {
         showError('Invalid Date', 'Please enter date in dd/mm/yyyy format');
-        setLoading(false);
+        return;
+      }
+
+      const currentSignature = buildAssessmentSignature();
+      if (!assessmentResult || assessmentSignature !== currentSignature) {
+        const reviewCompleted = await runRegistrationReview();
+        if (!reviewCompleted) {
+          return;
+        }
+      }
+
+      const hasUnreviewedDuplicates = duplicateQueue.some((item) => item.matchStatus === 'suggested');
+      if (hasUnreviewedDuplicates) {
+        showWarning('Review duplicate suggestions first', 'Resolve each duplicate candidate before creating the patient record.');
+        return;
+      }
+
+      const hasConfirmedDuplicate = duplicateQueue.some((item) => item.matchStatus === 'confirmed_duplicate' || item.matchStatus === 'merged');
+      if (hasConfirmedDuplicate) {
+        showError('Duplicate patient confirmed', 'A matching patient record has already been confirmed. Do not create another patient until the duplicate is resolved.');
         return;
       }
 
@@ -103,21 +277,7 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
       await ehrApi.createPatient(patientData, token, tenantSlug);
       showSuccess('Patient Created', 'Patient registered successfully');
       onPatientCreated();
-      onClose();
-      setFormData({
-        firstName: '', lastName: '', dateOfBirth: '', gender: 'male',
-        nationalId: '', phone: '', email: '', address: '', city: '',
-        emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelationship: '',
-        medicalAidProvider: '', medicalAidNumber: '', bloodType: '',
-        allergies: '', medicalHistory: '',
-        preferredLanguage: 'en', ethnicity: '', race: '', nationality: '',
-        countryOfBirth: '', religion: '', interpreterRequired: false,
-        maritalStatus: '', occupation: '', employmentStatus: '', educationLevel: '',
-        disabilityStatus: false, disabilityType: '', smokingStatus: '', packYears: '',
-        alcoholUse: '', substanceUse: false, substanceUseDetails: '',
-        pregnancyStatus: '', advanceDirectiveOnFile: false,
-      });
-      setShowExtended(false);
+      handleClose();
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to create patient');
     } finally {
@@ -133,7 +293,7 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-slate-800">Register New Patient</h2>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
+            <button onClick={handleClose} className="p-2 hover:bg-slate-100 rounded-lg">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -269,6 +429,152 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
                   <input type="text" value={formData.medicalAidNumber} onChange={(e) => set('medicalAidNumber', e.target.value)} className={inputCls} />
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-violet-700" />
+                    Registration Intelligence Review
+                  </h3>
+                  <p className="text-sm text-slate-600">
+                    Run duplicate detection, intake completeness, and medical-aid verification before creating the patient.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={runRegistrationReview}
+                  disabled={assessmentLoading || loading}
+                  className="px-4 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                >
+                  {assessmentLoading ? 'Reviewing…' : 'Review Registration'}
+                </button>
+              </div>
+
+              {assessmentResult && (
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Completeness</p>
+                      <p className="text-lg font-semibold text-slate-900">{assessmentResult.completenessScore}%</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Duplicate candidates</p>
+                      <p className="text-lg font-semibold text-slate-900">{assessmentResult.suspectedDuplicateCount || 0}</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Coverage risk</p>
+                      <p className="text-lg font-semibold text-slate-900">{toBadgeLabel(assessmentResult.coverageRiskLevel || 'unknown')}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-white p-3 text-sm text-slate-700">
+                    {assessmentResult.frontDeskSummary}
+                  </div>
+
+                  {assessmentResult.missingFields?.length > 0 && (
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Missing intake items</p>
+                      <div className="flex flex-wrap gap-2">
+                        {assessmentResult.missingFields.map((field: string) => (
+                          <span key={field} className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">
+                            {toBadgeLabel(field)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {assessmentResult.consentMissingItems?.length > 0 && (
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Consent readiness gaps</p>
+                      <div className="flex flex-wrap gap-2">
+                        {assessmentResult.consentMissingItems.map((field: string) => (
+                          <span key={field} className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-900">
+                            {toBadgeLabel(field)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(eligibilityLoading || eligibilityResult) && (
+                    <div className="rounded-lg bg-white p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Medical aid verification</p>
+                          {eligibilityLoading ? (
+                        <p className="text-sm text-slate-600">Checking configured medical-aid provider endpoint…</p>
+                      ) : (
+                        <div className="space-y-1 text-sm">
+                          <p className={`font-medium ${eligibilityResult?.responsePayload?.valid ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {eligibilityResult?.responsePayload?.valid ? 'Eligibility verified' : eligibilityResult?.responsePayload?.error || eligibilityResult?.error || 'Verification returned a non-eligible response'}
+                          </p>
+                          {eligibilityResult?.responsePayload?.memberDetails?.memberName && <p className="text-slate-700">Member: {eligibilityResult.responsePayload.memberDetails.memberName}</p>}
+                          {eligibilityResult?.responsePayload?.memberDetails?.scheme && <p className="text-slate-700">Scheme: {eligibilityResult.responsePayload.memberDetails.scheme}</p>}
+                          {eligibilityResult?.planName && <p className="text-slate-700">Plan: {eligibilityResult.planName}</p>}
+                          <p className="text-xs text-slate-500">Status: {toBadgeLabel(eligibilityResult?.status || 'unknown')}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {duplicateQueue.length > 0 && (
+                    <div className="rounded-lg bg-white p-3 space-y-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Duplicate review queue</p>
+                        <p className="text-sm text-slate-600">Resolve each suggested match before creating the patient record.</p>
+                      </div>
+                      {duplicateQueue.map((item) => (
+                        <div key={item.id} className="rounded-lg border border-slate-200 p-3">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <p className="font-medium text-slate-900">
+                                {item.candidatePatient?.firstName} {item.candidatePatient?.lastName} ({item.candidatePatient?.patientNumber || 'Unknown MRN'})
+                              </p>
+                              <p className="text-sm text-slate-600">
+                                Score: {Math.round((item.matchScore || 0) * 100)}% • {Array.isArray(item.matchReasons) ? item.matchReasons.map(toBadgeLabel).join(', ') : ''}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">Status: {toBadgeLabel(item.matchStatus || 'suggested')}</p>
+                            </div>
+                            {item.matchStatus === 'suggested' ? (
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={duplicateReviewLoading === item.id}
+                                  onClick={() => reviewDuplicate(item.id, 'rejected')}
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50"
+                                >
+                                  Not a duplicate
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={duplicateReviewLoading === item.id}
+                                  onClick={() => reviewDuplicate(item.id, 'needs_follow_up')}
+                                  className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
+                                >
+                                  Needs follow-up
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={duplicateReviewLoading === item.id}
+                                  onClick={() => reviewDuplicate(item.id, 'confirmed_duplicate')}
+                                  className="px-3 py-1.5 rounded-lg bg-rose-100 text-rose-800 hover:bg-rose-200 disabled:opacity-50"
+                                >
+                                  Confirm duplicate
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                                Reviewed
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Medical Information */}

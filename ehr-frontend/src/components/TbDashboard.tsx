@@ -3,7 +3,7 @@ import {
   Activity, Plus, ChevronDown, ChevronUp, CheckCircle,
   AlertTriangle, ClipboardList, Users, FlaskConical, Calendar,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 
 interface TbPatient {
   id: string;
@@ -83,14 +83,14 @@ const TbDashboard: React.FC<TbDashboardProps> = ({ patientId, token, tenantSlug 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await ehrApi.getTbPatientByPatient(patientId, token, tenantSlug);
+      const res = await cdssApi.getTbPatientByPatient(patientId, token, tenantSlug);
       if (res.data) {
         setTbRecord(res.data);
-        const dotRes = await ehrApi.getTbDotRecords(res.data.id, token, tenantSlug);
+        const dotRes = await cdssApi.getTbDotRecords(res.data.id, token, tenantSlug);
         const records = dotRes.data || [];
         setDotRecords(records);
         if (records.length) {
-          const adhRes = await ehrApi.analyseTbAdherence(
+          const adhRes = await cdssApi.analyseTbAdherence(
             { tb_patient_id: res.data.id, dot_records: records },
             token, tenantSlug,
           );
@@ -109,7 +109,7 @@ const TbDashboard: React.FC<TbDashboardProps> = ({ patientId, token, tenantSlug 
   const handleRegister = async () => {
     setSubmitting(true);
     try {
-      await ehrApi.registerTbPatient({ ...registerForm, patientId }, token, tenantSlug);
+      await cdssApi.registerTbPatient({ ...registerForm, patientId }, token, tenantSlug);
       setShowForm(false);
       load();
     } catch {
@@ -123,7 +123,7 @@ const TbDashboard: React.FC<TbDashboardProps> = ({ patientId, token, tenantSlug 
     if (!tbRecord || !dotForm.dotDate) return;
     setSubmitting(true);
     try {
-      await ehrApi.recordTbDot(tbRecord.id, {
+      await cdssApi.recordTbDot(tbRecord.id, {
         ...dotForm,
         patientId,
         observed: Boolean(dotForm.observed),

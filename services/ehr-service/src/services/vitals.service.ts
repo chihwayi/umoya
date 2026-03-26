@@ -1,9 +1,11 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Vitals } from '../entities/vitals.entity';
+import { PatientVitalBaseline } from '../entities/patient-vital-baseline.entity';
 import { TenantService } from './tenant.service';
 import { CdssHookService } from './cdss-hook.service';
 import { ClinicalWorkflowService } from './clinical-workflow.service';
+import { EarlyWarningService } from './early-warning.service';
 
 // ── NEWS2 scoring ────────────────────────────────────────────────────────────
 // Royal College of Physicians NEWS2 (2017).
@@ -83,11 +85,27 @@ function news2RiskLabel(score: number | null): string {
 @Injectable()
 export class VitalsService {
   private readonly logger = new Logger(VitalsService.name);
+  private readonly baselineWindowDays = 14;
+  private readonly baselineMetricDefinitions: Array<{
+    metricName: string;
+    extractor: (vitals: Vitals) => number | null;
+    minimumTolerance: number;
+  }> = [
+    { metricName: 'systolicBp', extractor: (vitals) => vitals.systolicBp ?? null, minimumTolerance: 12 },
+    { metricName: 'diastolicBp', extractor: (vitals) => vitals.diastolicBp ?? null, minimumTolerance: 8 },
+    { metricName: 'heartRate', extractor: (vitals) => vitals.heartRate ?? null, minimumTolerance: 10 },
+    { metricName: 'respiratoryRate', extractor: (vitals) => vitals.respiratoryRate ?? null, minimumTolerance: 3 },
+    { metricName: 'spo2', extractor: (vitals) => vitals.oxygenSaturation ?? null, minimumTolerance: 2 },
+    { metricName: 'temperature', extractor: (vitals) => vitals.temperature != null ? Number(vitals.temperature) : null, minimumTolerance: 0.5 },
+    { metricName: 'bmi', extractor: (vitals) => vitals.bmi != null ? Number(vitals.bmi) : null, minimumTolerance: 1 },
+    { metricName: 'bloodGlucose', extractor: (vitals) => vitals.bloodGlucose != null ? Number(vitals.bloodGlucose) : null, minimumTolerance: 20 },
+  ];
 
   constructor(
     private tenantService: TenantService,
     private cdssHookService: CdssHookService,
     @Optional() private workflowService?: ClinicalWorkflowService,
+    @Optional() private earlyWarningService?: EarlyWarningService,
   ) {}
 
   private async getRepository(tenantId: string): Promise<Repository<Vitals>> {
@@ -102,7 +120,79 @@ export class VitalsService {
     return parsed.toISOString().split('T')[0];
   }
 
-  async recordVitals(data: Partial<Vitals> & Record<string, any>, tenantId: string): Promise<Vitals & { cdssInsights?: any }> {
+  private average(values: number[]): number {
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  private stddev(values: number[], mean: number): number {
+    if (values.length <= 1) return 0;
+    const variance = values.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / values.length;
+    return Math.sqrt(variance);
+  }
+
+  private async refreshPatientBaselines(tenantId: string, savedVitals: Vitals): Promise<void> {
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) return;
+
+    const vitalsRepo = tenantDb.getRepository(Vitals);
+    const baselineRepo = tenantDb.getRepository(PatientVitalBaseline);
+
+    const recentVitals = await vitalsRepo
+      .createQueryBuilder('vitals')
+      .where('vitals.patientId = :patientId', { patientId: savedVitals.patientId })
+      .andWhere('vitals.recordedAt >= NOW() - INTERVAL \'14 days\'')
+      .orderBy('vitals.recordedAt', 'DESC')
+      .limit(25)
+      .getMany();
+
+    for (const definition of this.baselineMetricDefinitions) {
+      const values = recentVitals
+        .map((row) => definition.extractor(row))
+        .filter((value): value is number => value != null && !Number.isNaN(Number(value)))
+        .map((value) => Number(value));
+
+      if (values.length < 3) {
+        continue;
+      }
+
+      const mean = Number(this.average(values).toFixed(2));
+      const stddev = this.stddev(values, mean);
+      const tolerance = Math.max(definition.minimumTolerance, stddev * 1.5);
+      const lowerBound = Number((mean - tolerance).toFixed(2));
+      const upperBound = Number((mean + tolerance).toFixed(2));
+
+      let baseline = await baselineRepo.findOne({
+        where: { patientId: savedVitals.patientId, metricName: definition.metricName },
+      });
+
+      if (!baseline) {
+        baseline = baselineRepo.create({
+          patientId: savedVitals.patientId,
+          metricName: definition.metricName,
+        });
+      }
+
+      baseline.baselineValue = mean;
+      baseline.lowerBound = lowerBound;
+      baseline.upperBound = upperBound;
+      baseline.sampleCount = values.length;
+      baseline.baselineWindowDays = this.baselineWindowDays;
+      baseline.source = 'rolling_recent';
+      baseline.lastVitalsId = savedVitals.id;
+      baseline.lastRecordedAt = savedVitals.recordedAt ?? savedVitals.createdAt ?? new Date();
+      baseline.metadata = {
+        recentValueCount: values.length,
+        tolerance: Number(tolerance.toFixed(2)),
+      };
+
+      await baselineRepo.save(baseline);
+    }
+  }
+
+  async recordVitals(
+    data: Partial<Vitals> & Record<string, any>,
+    tenantId: string,
+  ): Promise<Vitals & { cdssInsights?: any; earlyWarningAssessment?: any }> {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
     const repo     = tenantDb.getRepository(Vitals);
     const vitalsData: any = { ...data };
@@ -152,6 +242,25 @@ export class VitalsService {
 
     const entity = repo.create(vitalsData as Vitals);
     const saved  = await repo.save(entity);
+
+    let earlyWarningAssessment: any = null;
+    if (this.earlyWarningService) {
+      try {
+        earlyWarningAssessment = await this.earlyWarningService.recordNews2Score(tenantDb, {
+          patientId: saved.patientId,
+          vitalsId: saved.id,
+          respiratoryRate: saved.respiratoryRate ?? null,
+          spo2: saved.oxygenSaturation ?? null,
+          onSupplementalOxygen: Boolean(vitalsData.onSupplementalOxygen),
+          temperature: saved.temperature != null ? Number(saved.temperature) : null,
+          systolicBp: saved.systolicBp ?? null,
+          heartRate: saved.heartRate ?? null,
+          consciousness: saved.glasgowComaScale != null && saved.glasgowComaScale < 15 ? 'confused' : 'alert',
+        });
+      } catch (error) {
+        this.logger.warn(`Early warning scoring failed for vitals: ${error instanceof Error ? error.message : error}`);
+      }
+    }
 
     // ── qSOFA sepsis screen ──────────────────────────────────────────────────
     try {
@@ -212,7 +321,13 @@ export class VitalsService {
       }
     }
 
-    return { ...saved, cdssInsights };
+    try {
+      await this.refreshPatientBaselines(tenantId, saved);
+    } catch (error) {
+      this.logger.warn(`Baseline refresh failed for vitals ${saved.id}: ${error instanceof Error ? error.message : error}`);
+    }
+
+    return { ...saved, cdssInsights, earlyWarningAssessment };
   }
 
   private async checkQsofaAndAlertSepsis(tenantDb: any, vitals: Vitals): Promise<void> {

@@ -386,6 +386,7 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
   }
 
   return (
+    <>
     <div className={embedded ? '' : 'min-h-screen bg-slate-50'}>
       {!embedded && (
         <div className="bg-gradient-to-r from-green-600 to-emerald-700 text-white shadow-lg">
@@ -1357,6 +1358,7 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
       type="warning"
       confirmText="Discontinue"
     />
+    </>
   );
 };
 

@@ -17,6 +17,15 @@ export class CopdAssessment {
   @Column({ name: 'smoking_status', type: 'text', nullable: true }) smokingStatus: string;
   @Column({ name: 'oxygen_at_home', type: 'boolean', default: false }) oxygenAtHome: boolean;
   @Column({ name: 'pulmonary_rehab_completed', type: 'boolean', default: false }) pulmonaryRehabCompleted: boolean;
-  @Column({ type: 'text', nullable: true }) notes: string;
+  @Column({ type: 'text', nullable: true }) notes: string;  @Column({ name: 'current_medications', type: 'jsonb', nullable: true, default: [] })
+  currentMedications: any = [];
+
+  @Column({ name: 'gold_group', type: 'text', nullable: true })
+  goldGroup?: string;
+
+  @Column({ name: 'mmrc_dyspnoea', type: 'int', nullable: true })
+  mmrcDyspnoea?: number;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt: Date;
 }

@@ -3,6 +3,9 @@ import { DataSource } from 'typeorm';
 import { MedicalAidClaim, ClaimStatus, MedicalAidProvider } from '../entities/medical-aid-claim.entity';
 import { Bill } from '../entities/billing.entity';
 import { MedicalAidApiService } from './medical-aid-api.service';
+import { ClaimDenialPrediction } from '../entities/claim-denial-prediction.entity';
+import { FinancialClearanceAssessment } from '../entities/financial-clearance-assessment.entity';
+import { PriorAuthorizationDraft } from '../entities/prior-authorization-draft.entity';
 
 export interface ClaimReadinessIssue {
   code: string;
@@ -100,6 +103,285 @@ export class ClaimsService {
 
   private buildClaimIssue(code: string, message: string): ClaimReadinessIssue {
     return { code, message };
+  }
+
+  private toCurrencyAmount(value: any): number {
+    const parsed = Number(value || 0);
+    return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0;
+  }
+
+  private classifyDenialRisk(score: number) {
+    if (score >= 70) {
+      return 'high';
+    }
+    if (score >= 40) {
+      return 'medium';
+    }
+    return 'low';
+  }
+
+  private buildDenialPrediction(args: {
+    claimId: string;
+    blockers: ClaimReadinessIssue[];
+    warnings: ClaimReadinessIssue[];
+    missingDocuments: ClaimReadinessIssue[];
+    latestRejection?: { change_reason?: string | null } | null;
+    preAuthStatus?: string | null;
+    insuranceVerified?: boolean | null;
+  }) {
+    const drivers: Array<Record<string, any>> = [];
+    for (const blocker of args.blockers) {
+      drivers.push({ severity: 'blocker', code: blocker.code, message: blocker.message });
+    }
+    for (const warning of args.warnings.slice(0, 5)) {
+      drivers.push({ severity: 'warning', code: warning.code, message: warning.message });
+    }
+
+    let riskScore = args.blockers.length * 24 + args.warnings.length * 9 + args.missingDocuments.length * 11;
+    if (args.latestRejection) {
+      riskScore += 12;
+    }
+    if (args.preAuthStatus && args.preAuthStatus.toLowerCase() !== 'approved') {
+      riskScore += 10;
+    }
+    if (args.insuranceVerified === false) {
+      riskScore += 8;
+    }
+    riskScore = Math.min(100, Math.max(0, Number(riskScore.toFixed(2))));
+
+    const recommendedActions = Array.from(
+      new Set(
+        [
+          ...args.blockers.map((issue) => `Resolve ${issue.code.replace(/_/g, ' ')}.`),
+          ...args.missingDocuments.map((issue) => `Attach ${issue.code.replace(/^missing_/, '').replace(/_/g, ' ')}.`),
+          args.latestRejection ? 'Review the previous denial reason before submission.' : null,
+          args.preAuthStatus && args.preAuthStatus.toLowerCase() !== 'approved'
+            ? 'Obtain approved pre-authorization before submission.'
+            : null,
+          args.insuranceVerified === false ? 'Complete front-desk eligibility verification.' : null,
+        ].filter(Boolean) as string[],
+      ),
+    ).slice(0, 8);
+
+    return {
+      claimId: args.claimId,
+      riskScore,
+      riskLevel: this.classifyDenialRisk(riskScore),
+      blockersCount: args.blockers.length,
+      warningsCount: args.warnings.length,
+      missingDocumentsCount: args.missingDocuments.length,
+      drivers,
+      recommendedActions,
+      modelVersion: 'rules.v1',
+    };
+  }
+
+  private async persistClaimDenialPrediction(
+    tenantDb: DataSource,
+    prediction: {
+      claimId: string;
+      riskScore: number;
+      riskLevel: string;
+      blockersCount: number;
+      warningsCount: number;
+      missingDocumentsCount: number;
+      drivers: Array<Record<string, any>>;
+      recommendedActions: string[];
+      modelVersion: string;
+    },
+  ) {
+    const repository = tenantDb.getRepository(ClaimDenialPrediction);
+    return repository.save(
+      repository.create({
+        blockersCount: prediction.blockersCount,
+        claimId: prediction.claimId,
+        drivers: prediction.drivers,
+        missingDocumentsCount: prediction.missingDocumentsCount,
+        modelVersion: prediction.modelVersion,
+        recommendedActions: prediction.recommendedActions,
+        riskLevel: prediction.riskLevel,
+        riskScore: prediction.riskScore,
+        warningsCount: prediction.warningsCount,
+      }),
+    );
+  }
+
+  private async getLatestEligibilitySignal(
+    tenantDb: DataSource,
+    patientId: string | null,
+    medicalAidName: string,
+    memberNumber: string,
+  ) {
+    if (!patientId && !medicalAidName && !memberNumber) {
+      return null;
+    }
+
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+        SELECT
+          status,
+          confidence,
+          coverage_flags,
+          response_payload,
+          checked_at
+        FROM insurance_eligibility_checks
+        WHERE ($1::uuid IS NULL OR patient_id = $1::uuid)
+          AND ($2::text = '' OR LOWER(COALESCE(provider_name, '')) = LOWER($2))
+          AND ($3::text = '' OR COALESCE(member_number, '') = $3)
+        ORDER BY checked_at DESC, created_at DESC
+        LIMIT 1
+      `,
+      [patientId || null, medicalAidName || '', memberNumber || ''],
+    );
+
+    return rows[0] || null;
+  }
+
+  private deriveFinancialClearance(args: {
+    claimId: string;
+    patientId: string | null;
+    billId: string | null;
+    appointmentId: string | null;
+    claimAmount: number;
+    blockers: ClaimReadinessIssue[];
+    readinessStatus: string;
+    preAuth: any | null;
+    claimData: Record<string, any>;
+    appointment: any | null;
+    insuranceSignal: any | null;
+  }) {
+    const insuranceStatus = String(args.insuranceSignal?.status || '').toLowerCase();
+    const eligibilityStatus =
+      insuranceStatus ||
+      (args.appointment?.insurance_verified === true
+        ? 'verified_active'
+        : args.appointment?.insurance_verified === false
+          ? 'verification_required'
+          : 'unknown');
+
+    const authorizationRequired = Boolean(
+      args.claimData.requiresPreauthorization ||
+        args.claimData.requiresPreAuth ||
+        args.preAuth ||
+        ['mri', 'ct', 'surgery', 'procedure'].includes(String(args.claimData.procedureType || '').toLowerCase()),
+    );
+    const authorizationStatus = args.preAuth ? String(args.preAuth.status || '').toLowerCase() : null;
+
+    let coverageRatio = 0;
+    const responsePayload = this.parseJsonObject<Record<string, any>>(args.insuranceSignal?.response_payload, {});
+    const memberDetails = this.parseJsonObject<Record<string, any>>(responsePayload?.memberDetails, {});
+    const rawCoverage =
+      memberDetails.coveragePercentage ??
+      memberDetails.coverage_percent ??
+      args.claimData.coveragePercentage ??
+      args.claimData.coveragePercent ??
+      null;
+    const parsedCoverage = Number(rawCoverage);
+
+    if (Number.isFinite(parsedCoverage) && parsedCoverage > 0) {
+      coverageRatio = parsedCoverage > 1 ? parsedCoverage / 100 : parsedCoverage;
+    } else if (eligibilityStatus === 'verified_active') {
+      coverageRatio = 0.8;
+    }
+
+    if (authorizationRequired && authorizationStatus && authorizationStatus !== 'approved') {
+      coverageRatio = Math.min(coverageRatio, 0.5);
+    }
+    if (eligibilityStatus === 'verification_failed' || eligibilityStatus === 'ineligible') {
+      coverageRatio = 0;
+    }
+
+    const payerEstimatedAmount = Number((args.claimAmount * coverageRatio).toFixed(2));
+    const estimatedResponsibility = Number((args.claimAmount - payerEstimatedAmount).toFixed(2));
+
+    const blockers = args.blockers
+      .filter((issue) =>
+        issue.code.includes('preauthorization') ||
+        issue.code.includes('payer') ||
+        issue.code.includes('member_number') ||
+        issue.code.includes('insurance') ||
+        issue.code.includes('clinical_documentation') ||
+        issue.code.includes('diagnosis'),
+      )
+      .map((issue) => ({ code: issue.code, message: issue.message }));
+
+    let recommendedNextStep = 'Ready for claim submission.';
+    if (eligibilityStatus === 'verification_required' || eligibilityStatus === 'unknown') {
+      recommendedNextStep = 'Complete payer eligibility verification before submission.';
+    } else if (eligibilityStatus === 'verification_failed' || eligibilityStatus === 'ineligible') {
+      recommendedNextStep = 'Resolve eligibility failure or collect self-pay deposit before submission.';
+    } else if (authorizationRequired && authorizationStatus !== 'approved') {
+      recommendedNextStep = 'Obtain approved pre-authorization before submission.';
+    } else if (args.readinessStatus === 'blocked') {
+      recommendedNextStep = 'Resolve readiness blockers before financial clearance.';
+    }
+
+    return {
+      patientId: args.patientId || null,
+      billId: args.billId || null,
+      claimId: args.claimId,
+      appointmentId: args.appointmentId || null,
+      eligibilityStatus,
+      estimatedResponsibility,
+      payerEstimatedAmount,
+      authorizationRequired,
+      authorizationStatus,
+      blockers,
+      recommendedNextStep,
+      assessmentData: {
+        claimAmount: args.claimAmount,
+        readinessStatus: args.readinessStatus,
+        coverageRatio,
+        insuranceSignal: args.insuranceSignal
+          ? {
+              status: args.insuranceSignal.status,
+              checkedAt: args.insuranceSignal.checked_at || null,
+              confidence:
+                args.insuranceSignal.confidence === null || args.insuranceSignal.confidence === undefined
+                  ? null
+                  : Number(args.insuranceSignal.confidence),
+              coverageFlags: args.insuranceSignal.coverage_flags || [],
+            }
+          : null,
+      },
+    };
+  }
+
+  private async persistFinancialClearanceAssessment(
+    tenantDb: DataSource,
+    assessment: {
+      patientId: string | null;
+      billId: string | null;
+      claimId: string | null;
+      appointmentId: string | null;
+      eligibilityStatus: string;
+      estimatedResponsibility: number | null;
+      payerEstimatedAmount: number | null;
+      authorizationRequired: boolean;
+      authorizationStatus: string | null;
+      blockers: Array<Record<string, any>>;
+      recommendedNextStep: string | null;
+      assessmentData: Record<string, any>;
+    },
+  ) {
+    const repository = tenantDb.getRepository(FinancialClearanceAssessment);
+    return repository.save(
+      repository.create({
+        assessmentData: assessment.assessmentData,
+        authorizationRequired: assessment.authorizationRequired,
+        authorizationStatus: assessment.authorizationStatus,
+        billId: assessment.billId,
+        blockers: assessment.blockers,
+        claimId: assessment.claimId,
+        eligibilityStatus: assessment.eligibilityStatus,
+        estimatedResponsibility: assessment.estimatedResponsibility,
+        patientId: assessment.patientId,
+        payerEstimatedAmount: assessment.payerEstimatedAmount,
+        appointmentId: assessment.appointmentId,
+        recommendedNextStep: assessment.recommendedNextStep,
+      }),
+    );
   }
 
   async getClaimReadiness(id: string, tenantDb: DataSource) {
@@ -353,6 +635,39 @@ export class ClaimsService {
 
     const status = blockers.length > 0 ? 'blocked' : warnings.length > 0 ? 'at_risk' : 'ready';
     const readinessScore = Math.max(0, 100 - blockers.length * 25 - warnings.length * 8);
+    const denialPrediction = this.buildDenialPrediction({
+      claimId: id,
+      blockers,
+      warnings,
+      missingDocuments,
+      latestRejection,
+      preAuthStatus: preAuth?.status || null,
+      insuranceVerified: appointment?.insurance_verified ?? null,
+    });
+    const persistedDenialPrediction = await this.persistClaimDenialPrediction(tenantDb, denialPrediction);
+    const insuranceSignal = await this.getLatestEligibilitySignal(
+      tenantDb,
+      patientId || null,
+      String(claimRow.medical_aid_name || ''),
+      String(claimRow.member_number || ''),
+    );
+    const financialClearance = this.deriveFinancialClearance({
+      claimId: id,
+      patientId: patientId || null,
+      billId: billingId,
+      appointmentId,
+      claimAmount: this.toCurrencyAmount(claimRow.claim_amount),
+      blockers,
+      readinessStatus: status,
+      preAuth,
+      claimData,
+      appointment,
+      insuranceSignal,
+    });
+    const persistedFinancialClearance = await this.persistFinancialClearanceAssessment(
+      tenantDb,
+      financialClearance,
+    );
 
     return {
       claimId: id,
@@ -402,6 +717,37 @@ export class ClaimsService {
         memberNumber: claimRow.member_number,
         createdAt: claimRow.created_at,
         submissionDate: claimRow.submission_date,
+      },
+      denialPrediction: {
+        id: persistedDenialPrediction.id,
+        riskScore: Number(persistedDenialPrediction.riskScore),
+        riskLevel: persistedDenialPrediction.riskLevel,
+        blockersCount: persistedDenialPrediction.blockersCount,
+        warningsCount: persistedDenialPrediction.warningsCount,
+        missingDocumentsCount: persistedDenialPrediction.missingDocumentsCount,
+        drivers: persistedDenialPrediction.drivers || [],
+        recommendedActions: persistedDenialPrediction.recommendedActions || [],
+        modelVersion: persistedDenialPrediction.modelVersion,
+        predictedAt: persistedDenialPrediction.predictedAt,
+      },
+      financialClearance: {
+        id: persistedFinancialClearance.id,
+        eligibilityStatus: persistedFinancialClearance.eligibilityStatus,
+        estimatedResponsibility:
+          persistedFinancialClearance.estimatedResponsibility === null ||
+          persistedFinancialClearance.estimatedResponsibility === undefined
+            ? null
+            : Number(persistedFinancialClearance.estimatedResponsibility),
+        payerEstimatedAmount:
+          persistedFinancialClearance.payerEstimatedAmount === null ||
+          persistedFinancialClearance.payerEstimatedAmount === undefined
+            ? null
+            : Number(persistedFinancialClearance.payerEstimatedAmount),
+        authorizationRequired: persistedFinancialClearance.authorizationRequired,
+        authorizationStatus: persistedFinancialClearance.authorizationStatus || null,
+        blockers: persistedFinancialClearance.blockers || [],
+        recommendedNextStep: persistedFinancialClearance.recommendedNextStep || null,
+        assessedAt: persistedFinancialClearance.assessedAt,
       },
     };
   }
@@ -470,6 +816,121 @@ export class ClaimsService {
       },
       summary,
       items,
+    };
+  }
+
+  async getFinancialClearance(id: string, tenantDb: DataSource) {
+    const readiness = await this.getClaimReadiness(id, tenantDb);
+    return {
+      claimId: readiness.claimId,
+      claimNumber: readiness.claimNumber,
+      status: readiness.status,
+      readyToSubmit: readiness.readyToSubmit,
+      financialClearance: readiness.financialClearance,
+      denialPrediction: readiness.denialPrediction,
+      blockers: readiness.blockers,
+      warnings: readiness.warnings,
+      missingDocuments: readiness.missingDocuments,
+      financial: readiness.financial,
+    };
+  }
+
+  async generatePriorAuthorizationDraft(id: string, tenantDb: DataSource) {
+    const readiness = await this.getClaimReadiness(id, tenantDb);
+    const [claimRow] = await tenantDb.query(`SELECT * FROM medical_aid_claims WHERE id = $1`, [id]);
+
+    if (!claimRow) {
+      throw new NotFoundException('Claim not found');
+    }
+
+    const claimData = this.parseJsonObject<Record<string, any>>(claimRow.claim_data, {});
+    const requestType = String(
+      claimData.requestType || claimData.procedureType || claimData.appointmentType || 'consultation',
+    )
+      .trim()
+      .toLowerCase();
+    const diagnosisSummary = [
+      readiness.evidence?.primaryDiagnosisCode || null,
+      ...(Array.isArray(readiness.evidence?.diagnosisCodes) ? readiness.evidence.diagnosisCodes : []),
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const procedureSummary = Array.from(
+      new Set(
+        [
+          claimData.procedureType,
+          claimData.procedureId ? `procedure:${claimData.procedureId}` : null,
+          claimData.appointmentType,
+        ].filter(Boolean),
+      ),
+    ).join(', ');
+    const supportingDocuments = Object.entries(readiness.evidence?.supportingDocuments || {})
+      .map(([documentType, count]) => ({
+        documentType,
+        count: Number(count || 0),
+      }))
+      .filter((item) => item.count > 0);
+
+    const justificationParts = [
+      `Claim ${readiness.claimNumber} requires payer review before submission.`,
+      diagnosisSummary ? `Diagnosis context: ${diagnosisSummary}.` : null,
+      procedureSummary ? `Service context: ${procedureSummary}.` : null,
+      readiness.financial?.claimAmount
+        ? `Requested amount: ${this.toCurrencyAmount(readiness.financial.claimAmount).toFixed(2)}.`
+        : null,
+      readiness.blockers.length > 0
+        ? `Current blockers: ${readiness.blockers.map((issue) => issue.code).join(', ')}.`
+        : null,
+      readiness.financialClearance?.recommendedNextStep
+        ? `Financial clearance next step: ${readiness.financialClearance.recommendedNextStep}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const repository = tenantDb.getRepository(PriorAuthorizationDraft);
+    const draft = await repository.save(
+      repository.create({
+        appointmentId: readiness.evidence?.appointmentId || null,
+        billId: readiness.evidence?.billId || null,
+        claimId: id,
+        diagnosisSummary: diagnosisSummary || null,
+        draftData: {
+          claimReadinessStatus: readiness.status,
+          denialPrediction: readiness.denialPrediction,
+          financialClearance: readiness.financialClearance,
+          evidence: readiness.evidence,
+        },
+        justification: justificationParts || null,
+        medicalAidName: String(claimRow.medical_aid_name || '').trim() || 'unknown',
+        memberNumber: String(claimRow.member_number || '').trim() || null,
+        patientId: String(claimRow.patient_id || '').trim() || null,
+        procedureSummary: procedureSummary || null,
+        requestType,
+        requestedAmount: this.toCurrencyAmount(claimRow.claim_amount),
+        status: 'draft',
+        supportingDocuments,
+      }),
+    );
+
+    return {
+      id: draft.id,
+      claimId: draft.claimId,
+      patientId: draft.patientId,
+      billId: draft.billId,
+      appointmentId: draft.appointmentId,
+      medicalAidName: draft.medicalAidName,
+      memberNumber: draft.memberNumber,
+      requestType: draft.requestType,
+      requestedAmount: draft.requestedAmount === null || draft.requestedAmount === undefined ? null : Number(draft.requestedAmount),
+      diagnosisSummary: draft.diagnosisSummary || null,
+      procedureSummary: draft.procedureSummary || null,
+      justification: draft.justification || null,
+      supportingDocuments: draft.supportingDocuments || [],
+      status: draft.status,
+      createdAt: draft.createdAt,
+      updatedAt: draft.updatedAt,
+      draftData: draft.draftData || {},
     };
   }
   

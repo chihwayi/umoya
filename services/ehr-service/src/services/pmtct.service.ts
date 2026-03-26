@@ -22,7 +22,8 @@ export class PmtctService {
   async enrollMother(subdomain: string, dto: any) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(PmtctEnrollment);
-    const saved = await repo.save(repo.create(dto));
+    const enrollment = repo.create(dto as Partial<PmtctEnrollment>);
+    const saved = await repo.save(enrollment) as PmtctEnrollment;
     // Push PMTCT enrollment event to DHIS2 tracker (fire-and-forget)
     this.dhis2Service.sendEvent(
       {
@@ -151,6 +152,8 @@ export class PmtctService {
         diagnoses: payload.diagnoses,
         labResults: payload.lab_results || payload.labResults,
         context: 'pmtct',
+        specialty: 'obstetrics',
+        module: 'pmtct',
         pmtct: payload,
       });
     } catch (err: any) {
@@ -161,7 +164,11 @@ export class PmtctService {
 
   async merCalculate(payload: any) {
     try {
-      const guidelines = await this.cdssService.getGuidelines('PEPFAR MER indicators PMTCT', payload);
+      const guidelines = await this.cdssService.getGuidelines('PEPFAR MER indicators PMTCT', {
+        ...payload,
+        specialty: 'obstetrics',
+        module: 'pmtct',
+      });
       return { source: 'cdss_guidelines', payload, guidelines };
     } catch (err: any) {
       this.logger.warn(`[PMTCT] CDSS MER calculate unavailable, using local fallback: ${err?.message}`);

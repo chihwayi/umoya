@@ -146,7 +146,16 @@ export class MentalHealthService {
 
   async scoreScreening(tool: string, responses: Record<string, number>) {
     try {
-      return await this.cdssService.diagnosisAssist({ tool, responses, context: 'mental_health_screening' }, true);
+      return await this.cdssService.diagnosisAssist(
+        {
+          tool,
+          responses,
+          context: 'mental_health_screening',
+          specialty: 'mental_health',
+          module: 'screening_and_crisis',
+        },
+        true,
+      );
     } catch (err: any) {
       this.logger.warn(`[MentalHealth] CDSS screening score unavailable: ${err?.message}`);
       return this.localScreeningScore(tool, responses);
@@ -155,7 +164,12 @@ export class MentalHealthService {
 
   async assessSuicideRisk(payload: Record<string, any>) {
     try {
-      return await this.cdssService.riskAssessment({ ...payload, context: 'suicide_risk' });
+      return await this.cdssService.riskAssessment({
+        ...payload,
+        context: 'suicide_risk',
+        specialty: 'mental_health',
+        module: 'screening_and_crisis',
+      });
     } catch (err: any) {
       this.logger.warn(`[MentalHealth] CDSS suicide risk assessment unavailable: ${err?.message}`);
       return this.localSuicideRisk(payload);

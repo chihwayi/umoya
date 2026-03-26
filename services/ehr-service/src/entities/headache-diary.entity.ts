@@ -40,6 +40,21 @@ export class HeadacheDiary {
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+  @Column({ name: 'associated_symptoms', type: 'jsonb', nullable: true, default: [] })
+  associatedSymptoms: any = [];
+
+  @Column({ name: 'headache_date', type: 'date' })
+  headacheDate: Date;
+
+  @Column({ name: 'recorded_by', type: 'uuid' })
+  recordedBy: string;
+
+  @Column({ name: 'relief_obtained', type: 'boolean', nullable: true })
+  reliefObtained?: boolean;
+
+  @Column({ name: 'severity_nrs', type: 'int', nullable: true })
+  severityNrs?: number;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

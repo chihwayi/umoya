@@ -5,6 +5,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 
 export enum MedicationType {
@@ -42,23 +43,25 @@ export class PatientMedication {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('uuid')
+  @Column('uuid', { name: 'patient_id' })
   @Index('idx_patient_medications_patient_id')
   patientId: string;
 
-  @Column({ length: 255 })
+  @Column({ name: 'medication_name', length: 255 })
   medicationName: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ name: 'generic_name', length: 255, nullable: true })
   genericName?: string;
 
-  @Column({ length: 50, nullable: true })
+  @Column({ name: 'snomed_concept_id', length: 50, nullable: true })
+  @Index('idx_patient_medications_snomed_concept_id')
   snomedConceptId?: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'snomed_term', type: 'text', nullable: true })
   snomedTerm?: string;
 
   @Column({
+    name: 'medication_type',
     type: 'enum',
     enum: MedicationType,
     default: MedicationType.CURRENT,
@@ -69,7 +72,7 @@ export class PatientMedication {
   @Column({ length: 100 })
   dosage: string;
 
-  @Column({ length: 50, nullable: true })
+  @Column({ name: 'dosage_unit', length: 50, nullable: true })
   dosageUnit?: string;
 
   @Column({ length: 100 })
@@ -81,19 +84,22 @@ export class PatientMedication {
   @Column({ length: 100, nullable: true })
   duration?: string;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'start_date', type: 'date', nullable: true })
+  @Index('idx_patient_medications_start_date')
   startDate?: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'end_date', type: 'date', nullable: true })
+  @Index('idx_patient_medications_end_date')
   endDate?: Date;
 
-  @Column('uuid', { nullable: true })
+  @Column('uuid', { name: 'prescribed_by', nullable: true })
   prescribedBy?: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ name: 'prescribing_physician_name', length: 255, nullable: true })
   prescribingPhysicianName?: string;
 
-  @Column('uuid', { nullable: true })
+  @Column('uuid', { name: 'prescription_id', nullable: true })
+  @Index('idx_patient_medications_prescription_id')
   prescriptionId?: string;
 
   @Column({
@@ -104,19 +110,20 @@ export class PatientMedication {
   @Index('idx_patient_medications_status')
   status: MedicationStatus;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'reason_for_discontinuation', type: 'text', nullable: true })
   reasonForDiscontinuation?: string;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ name: 'adherence_percentage', type: 'int', nullable: true })
   adherencePercentage?: number;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'last_taken_date', type: 'date', nullable: true })
   lastTakenDate?: Date;
 
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
   @Column({
+    name: 'reconciliation_status',
     type: 'enum',
     enum: ReconciliationStatus,
     default: ReconciliationStatus.VERIFIED,
@@ -124,52 +131,56 @@ export class PatientMedication {
   @Index('idx_patient_medications_reconciliation_status')
   reconciliationStatus: ReconciliationStatus;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'reconciliation_notes', type: 'text', nullable: true })
   reconciliationNotes?: string;
 
-  @Column('uuid', { nullable: true })
+  @Column('uuid', { name: 'created_by', nullable: true })
   createdById?: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
 
 @Entity('medication_adherence')
+@Unique('medication_adherence_medication_id_adherence_date_key', ['medicationId', 'adherenceDate'])
 export class MedicationAdherence {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('uuid')
+  @Column('uuid', { name: 'medication_id' })
   @Index('idx_medication_adherence_medication_id')
   medicationId: string;
 
-  @Column('uuid')
+  @Column('uuid', { name: 'patient_id' })
   @Index('idx_medication_adherence_patient_id')
   patientId: string;
 
-  @Column({ type: 'date' })
+  @Column({ name: 'adherence_date', type: 'date' })
   @Index('idx_medication_adherence_adherence_date')
   adherenceDate: Date;
 
   @Column({ type: 'boolean', default: false })
   taken: boolean;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ name: 'missed_reason', length: 255, nullable: true })
   missedReason?: string;
 
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
-  @Column('uuid', { nullable: true })
+  @Column('uuid', { name: 'recorded_by', nullable: true })
   recordedById?: string;
 
-  @CreateDateColumn()
+  @Column({ name: 'recorded_at', type: 'timestamptz', nullable: true, default: () => 'NOW()' })
+  recordedAt?: Date;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
 
@@ -178,18 +189,19 @@ export class MedicationReconciliationLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('uuid')
+  @Column('uuid', { name: 'patient_id' })
   @Index('idx_medication_reconciliation_log_patient_id')
   patientId: string;
 
-  @Column({ type: 'timestamp with time zone', default: () => 'NOW()' })
+  @Column({ name: 'reconciliation_date', type: 'timestamp with time zone', default: () => 'NOW()' })
   @Index('idx_medication_reconciliation_log_reconciliation_date')
   reconciliationDate: Date;
 
-  @Column('uuid', { nullable: true })
+  @Column('uuid', { name: 'reconciled_by', nullable: true })
   reconciledById?: string;
 
   @Column({
+    name: 'reconciliation_type',
     type: 'enum',
     enum: ReconciliationType,
   })
@@ -199,19 +211,18 @@ export class MedicationReconciliationLog {
   @Column({ length: 100, nullable: true })
   source?: string;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'discrepancies_found', type: 'int', default: 0 })
   discrepanciesFound: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'discrepancies_resolved', type: 'int', default: 0 })
   discrepanciesResolved: number;
 
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
-

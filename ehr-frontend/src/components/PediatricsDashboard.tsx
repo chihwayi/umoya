@@ -3,7 +3,7 @@ import {
   Baby, TrendingUp, Brain, Plus, AlertTriangle, CheckCircle,
   RefreshCw, ChevronDown, ChevronUp, Scale, Ruler,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { cdssApi } from '../services/api';
 
 interface GrowthMeasurement {
   id: string;
@@ -108,8 +108,8 @@ const PediatricsDashboard: React.FC<PediatricsDashboardProps> = ({
     setLoading(true);
     try {
       const [gRes, mRes] = await Promise.all([
-        ehrApi.getPediatricGrowth(patientId, token, tenantSlug),
-        ehrApi.getPediatricMilestones(patientId, token, tenantSlug),
+        cdssApi.getPediatricGrowth(patientId, token, tenantSlug),
+        cdssApi.getPediatricMilestones(patientId, token, tenantSlug),
       ]);
       setGrowth(gRes.data || []);
       setMilestones(mRes.data || []);
@@ -117,7 +117,7 @@ const PediatricsDashboard: React.FC<PediatricsDashboardProps> = ({
       // If we have recent growth data, get AI assessment
       const latest = (gRes.data || [])[0];
       if (latest && ageMonths != null) {
-        const aRes = await ehrApi.assessPediatricGrowth({
+        const aRes = await cdssApi.assessPediatricGrowth({
           patient_id: patientId,
           age_months: ageMonths,
           weight_kg:  latest.weightKg,
@@ -139,7 +139,7 @@ const PediatricsDashboard: React.FC<PediatricsDashboardProps> = ({
   const handleAddGrowth = async () => {
     setSubmitting(true);
     try {
-      await ehrApi.addPediatricGrowth(patientId, {
+      await cdssApi.addPediatricGrowth(patientId, {
         measuredAt:          growthForm.measuredAt || undefined,
         weightKg:            growthForm.weightKg ? Number(growthForm.weightKg) : undefined,
         heightCm:            growthForm.heightCm ? Number(growthForm.heightCm) : undefined,
@@ -160,7 +160,7 @@ const PediatricsDashboard: React.FC<PediatricsDashboardProps> = ({
   const handleAddMilestone = async () => {
     setSubmitting(true);
     try {
-      await ehrApi.upsertPediatricMilestone(patientId, {
+      await cdssApi.upsertPediatricMilestone(patientId, {
         ...milestoneForm,
         expectedAgeMonths: milestoneForm.expectedAgeMonths ? Number(milestoneForm.expectedAgeMonths) : undefined,
         achievedDate: milestoneForm.status === 'achieved' ? new Date().toISOString().split('T')[0] : undefined,
