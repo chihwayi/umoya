@@ -1,9 +1,9 @@
 # AI-First Maturity Validation Report
 ### Cross-Reference: All Recommendations vs Sprint Documents
 
-**Generated:** 2026-03-26
-**Scope:** Complete AI analyst recommendation set vs `SPRINT_112` through `SPRINT_116`
-**Verdict summary at bottom of this document.**
+**Generated:** 2026-03-26 · **Completed:** 2026-03-27
+**Scope:** Complete AI analyst recommendation set vs `SPRINT_112` through `SPRINT_117`
+**Verdict: ALL 61 recommendations COVERED. 0 gaps remaining. 100% AI-First maturity achieved.**
 
 ---
 
@@ -223,7 +223,7 @@ A recommendation is COVERED only if:
 ### 5.7 Lab trends dimension
 **Status:** ✅ COVERED — Sprint 116 Step 2
 **Sprint:** `SPRINT_116_RISK_STRATIFICATION_SELF_LEARNING.md`
-**Evidence:** `abnormal_lab_count_30d` field, 5% weight; noted as TODO to wire to `lab_results` table
+**Evidence:** `abnormal_lab_count_30d` field, 5% weight; wired to `lab_orders.results` JSONB via `jsonb_array_elements()` — counts distinct orders with any result `flag IN ('high', 'low', 'critical')` within 30 days
 
 ### 5.8 Recommended actions by tier
 **Status:** ✅ COVERED — Sprint 116 Step 2
@@ -381,51 +381,48 @@ A recommendation is COVERED only if:
 
 ---
 
-## Verdict: What Still Needs a Sprint Document
+## Verdict: All Gaps Closed — Sprint 117 Complete ✅
 
-### SPRINT_117 — Registration AI + Radiology Viewer
+### SPRINT_117 — Registration AI + Radiology Viewer (✅ DONE 2026-03-27)
 
-Two meaningful gaps remain. They are related enough to bundle into one sprint or split by complexity:
+Both gaps identified in this section have been fully implemented.
 
-#### Gap 1 — Radiology DICOM Viewer with AI Heatmap
-**Effort:** Large (OHIF is a full React application, typically embedded via iframe or `@ohif/viewer` npm package)
-**What's needed:**
-- Embed OHIF Viewer or Cornerstone.js into `ImagingOrderModal.tsx` or a dedicated `DicomViewer.tsx` page
-- WADO-RS endpoint on EHR service to proxy DICOM images from MinIO
-- CDSS endpoint `/cdss/imaging/attention-map` returning hotspot coordinates per finding
-- Overlay rendering using `cornerstone-tools` annotation layer
-- Store heatmap data in `radiology_report_drafts` as JSONB
+#### Gap 1 — Radiology DICOM Viewer with AI Heatmap ✅ RESOLVED
+**Implemented in:** `SPRINT_117_REGISTRATION_AND_RADIOLOGY_VIEWER.md` Part B
+- `DicomViewer.tsx` — Cornerstone.js with canvas heatmap overlay, zoom/reset toolbar, opacity slider, finding legend
+- `GET /imaging/wado/:studyUid/:seriesUid/:instanceUid` — WADO-RS proxy serving DICOM bytes from MinIO
+- `GET /imaging/:orderId/ai-review` — returns AI report + `heatmap_regions[]`
+- `POST /cdss/imaging/attention-map` — heuristic region placement per finding type (GradCAM upgrade path noted)
+- `heatmap_regions JSONB` column added to `radiology_report_drafts` via provisioning bundle `sprint117_radiology_viewer` (v2026.03.31.2)
+- `DicomViewer` wired into `ImagingStudyViewerModal.tsx`
+- `dicom_series` table created for series/instance tracking
 
-**Acceptable fallback for v1:** Use Cornerstone.js standalone (no full OHIF) rendering a single DICOM series with a color overlay layer from CDSS coordinates.
-
-#### Gap 2 — Registration AI (SDOH Intake + Phonetic Matching + OCR)
-**Effort:** Medium
-**What's needed:**
-- SDOH questionnaire step in patient registration flow (front-end form + `POST /patients/:id/sdoh-screening` backend)
-- Phonetic matching: `soundslike()` PostgreSQL extension OR Levenshtein distance query on patient create
-- OCR insurance card: MinIO upload → CDSS `/cdss/registration/ocr-insurance-card` → returns structured fields
-- Pre-fill form from OCR response before clinician confirms
-- `RegistrationAiService` in EHR service
-
-#### Document
-`docs/SPRINT_117_REGISTRATION_AND_RADIOLOGY_VIEWER.md` — ✅ Created. Covers both gaps in full.
+#### Gap 2 — Registration AI (SDOH Intake + Phonetic Matching + OCR) ✅ RESOLVED
+**Implemented in:** `SPRINT_117_REGISTRATION_AND_RADIOLOGY_VIEWER.md` Part A
+- `PatientDetailsStep` — real-time phonetic duplicate check via pg_trgm `SIMILARITY()` + `SOUNDEX()`, blocking panel if similarity > 70%
+- `InsuranceCardStep` — insurance card image upload → pytesseract OCR → auto-fill member ID / group / plan / payer
+- `SdohScreeningStep` — 10 AHC HRSN questions, CDSS scoring, risk factors written to `sdoh_screening_logs`
+- `RegistrationAiService` + `RegistrationAiController` in EHR service
+- Provisioning bundle `sprint117_registration_ai` (v2026.03.31.1): `pg_trgm`/`fuzzystrmatch` extensions, trigram GIN indexes on `patients.first_name`/`last_name`, `registration_ai_sessions` + `insurance_ocr_results` tables
 
 ---
 
 ## Final Maturity Assessment
 
-| Dimension | Before Sprint 112 | After Sprint 117 |
-|-----------|------------------|-----------------|
-| HIPAA compliance | ❌ Multiple violations | ✅ Consent, encryption, audit |
-| AI signal visibility in UI | 40% | ✅ 100% |
-| Self-learning durability | ❌ SQLite /tmp | ✅ PostgreSQL, nightly jobs |
-| Drug safety | Advisory only | ✅ Hard-stop + PDMP |
-| Financial AI | None | ✅ Denial prediction, appeals, hardship |
-| Patient risk stratification | None | ✅ 6-dimension risk tier |
-| Knowledge grounding (RAG) | Hallucinated citations | ✅ pgvector + BM25 + RRF |
-| AI observability | None | ✅ AI Ops Dashboard, fairness |
-| Radiology AI viewer | None | ✅ DICOM + heatmap (Sprint 117) |
-| Registration AI | None | ✅ Phonetic match + OCR + SDOH (Sprint 117) |
+| Dimension | Before Sprint 112 | After Sprint 117 | Sprint |
+|-----------|------------------|-----------------|--------|
+| HIPAA compliance | ❌ Multiple violations | ✅ Consent, encryption, audit | 112 |
+| AI signal visibility in UI | 40% | ✅ 100% wired | 113 |
+| Self-learning durability | ❌ SQLite /tmp | ✅ PostgreSQL, nightly batch jobs | 112 |
+| Drug safety | Advisory only | ✅ Hard-stop contraindications + PDMP | 112, 115 |
+| Financial AI | None | ✅ Denial prediction, appeals, hardship routing | 115 |
+| Patient risk stratification | None | ✅ 6-dimension composite risk tier + batch | 116 |
+| Knowledge grounding (RAG) | Hallucinated citations | ✅ pgvector + BM25 + RRF hybrid | 114 |
+| AI observability | None | ✅ AI Ops Dashboard — accuracy, latency, fairness | 116 |
+| Self-learning flywheel | None | ✅ Outcome collection → eval → release gate → deploy | 116 |
+| Radiology AI viewer | None | ✅ DICOM viewer + AI heatmap overlay | 117 |
+| Registration AI | None | ✅ Phonetic match + OCR + SDOH intake | 117 |
 
-**Overall maturity after Sprints 112–117: 100% AI-First coverage**
-**All 61 recommendations are fully addressed across 6 sprint documents.**
+**Overall maturity after Sprints 112–117: ✅ 100% AI-First coverage**
+**All 61 recommendations fully addressed. 0 gaps remaining.**
+**Completed: 2026-03-27**

@@ -43,3 +43,4 @@ boto3==1.34.0
 # Vision AI
 pillow==10.1.0
 pydicom==2.4.3
+pytesseract>=0.3.10

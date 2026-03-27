@@ -7,6 +7,7 @@ import { TerminologyService, SnomedMapping } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
 import { StorageService } from './storage.service';
 import { CdssService } from './cdss.service';
+import { MinioService } from './minio.service';
 import { ImagingOrderAiReview } from '../entities/imaging-order-ai-review.entity';
 import { RadiologyReportDraft } from '../entities/radiology-report-draft.entity';
 import { RadiologyDiscrepancyReview } from '../entities/radiology-discrepancy-review.entity';
@@ -23,6 +24,7 @@ export class ImagingService {
     private readonly cdssHookService: CdssHookService,
     private readonly storageService: StorageService,
     private readonly cdssService: CdssService,
+    private readonly minioService: MinioService,
   ) {
     const ttlCandidate = Number(process.env.IMAGING_SIGNED_URL_TTL ?? 300);
     this.signedUrlTtlSeconds = Number.isFinite(ttlCandidate) && ttlCandidate > 0 ? ttlCandidate : 300;
@@ -2679,5 +2681,51 @@ export class ImagingService {
         'Payment confirmation required before continuing this imaging order',
       );
     }
+  }
+
+  // ─── Sprint 117: DICOM Viewer + AI Heatmap ───────────────────────────────
+
+  async getAiDraftForOrder(tenantDb: DataSource, orderId: string): Promise<{
+    patientId?: string;
+    reportText?: string;
+    findings?: any[];
+    confidence?: number | null;
+    heatmapRegions?: any[];
+  } | null> {
+    const rows = await tenantDb.query(
+      `SELECT patient_id, draft_findings, draft_impression, structured_draft, heatmap_regions
+       FROM radiology_report_drafts
+       WHERE imaging_order_id = $1
+       ORDER BY created_at DESC LIMIT 1`,
+      [orderId],
+    );
+    if (rows.length === 0) return null;
+    const structured = rows[0].structured_draft ?? {};
+    return {
+      patientId: rows[0].patient_id,
+      reportText: [rows[0].draft_findings, rows[0].draft_impression].filter(Boolean).join('\n\n'),
+      findings: structured.findings ?? [],
+      confidence: structured.confidence != null ? Number(structured.confidence) : null,
+      heatmapRegions: rows[0].heatmap_regions ?? [],
+    };
+  }
+
+  async saveHeatmapRegions(tenantDb: DataSource, orderId: string, regions: unknown[]): Promise<void> {
+    await tenantDb.query(
+      `UPDATE radiology_report_drafts
+       SET heatmap_regions = $1
+       WHERE imaging_order_id = $2`,
+      [JSON.stringify(regions), orderId],
+    );
+  }
+
+  async uploadDicomToMinio(objectKey: string, buffer: Buffer, contentType: string): Promise<void> {
+    const bucket = process.env.MINIO_BUCKET ?? 'medicore-dicom';
+    await this.minioService.uploadBuffer(bucket, objectKey, buffer, contentType);
+  }
+
+  async getDicomBuffer(objectKey: string): Promise<Buffer> {
+    const bucket = process.env.MINIO_BUCKET ?? 'medicore-dicom';
+    return this.minioService.getObjectBuffer(bucket, objectKey);
   }
 }

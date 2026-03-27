@@ -4185,6 +4185,83 @@ export class CdssService {
     return this.postWithPolicy<any>('risk_stratification', '/cdss/risk/stratify', { payload }, 15000, tenantId);
   }
 
+  async ocrInsuranceCard(
+    imageBase64: string,
+    tenantId?: string,
+  ): Promise<{
+    member_id: string | null;
+    group_number: string | null;
+    plan_name: string | null;
+    payer_name: string | null;
+    effective_date: string | null;
+    expiry_date: string | null;
+    confidence: number;
+    raw_ocr_text: string;
+  }> {
+    return this.postWithPolicy<any>(
+      'insurance_ocr',
+      '/cdss/registration/ocr-insurance-card',
+      { image_base64: imageBase64 },
+      30000,
+      tenantId,
+    );
+  }
+
+  async getSdohQuestions(tenantId?: string): Promise<{ questions: unknown[] }> {
+    return this.postWithPolicy<any>(
+      'sdoh_questions',
+      '/cdss/registration/sdoh-questions',
+      {},
+      10000,
+      tenantId,
+    );
+  }
+
+  async scoreSdoh(
+    payload: { patient_id?: string; answers: Record<string, number> },
+    tenantId?: string,
+  ): Promise<{
+    risk_factors: string[];
+    overall_risk_level: string;
+    total_risk_domains: number;
+    domain_scores: Record<string, unknown>;
+    referrals: unknown[];
+    model_version: string;
+  }> {
+    return this.postWithPolicy<any>(
+      'sdoh_risk_score',
+      '/cdss/registration/sdoh-score',
+      payload,
+      15000,
+      tenantId,
+    );
+  }
+
+  async generateAttentionMap(
+    payload: {
+      imaging_order_id: string;
+      draft_report_text: string;
+      findings: unknown[];
+      image_width?: number;
+      image_height?: number;
+    },
+    tenantId?: string,
+  ): Promise<{
+    heatmap_regions: Array<{
+      x: number; y: number; width: number; height: number;
+      confidence: number; finding_label: string; finding_type: string; color: string;
+    }>;
+    model_version: string;
+  }> {
+    return this.postWithPolicy<any>(
+      'radiology_attention_map',
+      '/cdss/imaging/attention-map',
+      { payload },
+      15000,
+      tenantId,
+    );
+  }
+
   async ingestKnowledgeDocument(payload: {
     documentId: string;
     tenantId: string;

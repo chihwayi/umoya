@@ -1152,6 +1152,20 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint113UiCompletenessStatements(),
       },
       {
+        id: 'sprint117_radiology_viewer',
+        label: 'Sprint 117 - Radiology DICOM Viewer with AI Heatmap',
+        version: '2026.03.31.2',
+        description: 'heatmap_regions on radiology_report_drafts, dicom_series table',
+        statements: () => this.getSprint117RadiologyViewerStatements(),
+      },
+      {
+        id: 'sprint117_registration_ai',
+        label: 'Sprint 117 - Registration AI (Phonetic Match, OCR, SDOH)',
+        version: '2026.03.31.1',
+        description: 'registration_ai_sessions, insurance_ocr_results, pg_trgm + trigram indexes on patients',
+        statements: () => this.getSprint117RegistrationAiStatements(),
+      },
+      {
         id: 'sprint116_risk_stratification_self_learning',
         label: 'Sprint 116 - Risk Stratification + Self-Learning Loop',
         version: '2026.03.30.1',
@@ -17688,6 +17702,87 @@ RECOMMENDATIONS:
         UNIQUE(surface, metric_date)
       )`,
       `CREATE INDEX IF NOT EXISTS idx_ai_ops_metrics_surface_date ON ai_ops_metrics(surface, metric_date DESC)`,
+    ];
+  }
+
+  private getSprint117RegistrationAiStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pg_trgm`,
+      `CREATE EXTENSION IF NOT EXISTS fuzzystrmatch`,
+
+      `CREATE TABLE IF NOT EXISTS registration_ai_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID,
+        session_token VARCHAR(100) NOT NULL UNIQUE,
+        phonetic_matches_found INT NOT NULL DEFAULT 0,
+        duplicate_dismissed BOOLEAN NOT NULL DEFAULT FALSE,
+        ocr_attempted BOOLEAN NOT NULL DEFAULT FALSE,
+        ocr_success BOOLEAN NOT NULL DEFAULT FALSE,
+        ocr_fields_accepted JSONB NOT NULL DEFAULT '[]',
+        sdoh_screening_completed BOOLEAN NOT NULL DEFAULT FALSE,
+        sdoh_screening_id UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_reg_ai_sessions_patient_id ON registration_ai_sessions(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_reg_ai_sessions_token ON registration_ai_sessions(session_token)`,
+
+      `CREATE TABLE IF NOT EXISTS insurance_ocr_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID,
+        session_token VARCHAR(100) NOT NULL,
+        minio_object_key VARCHAR(500) NOT NULL,
+        member_id VARCHAR(100),
+        group_number VARCHAR(100),
+        plan_name VARCHAR(200),
+        payer_name VARCHAR(200),
+        effective_date VARCHAR(20),
+        expiry_date VARCHAR(20),
+        raw_ocr_json JSONB NOT NULL DEFAULT '{}',
+        confidence DECIMAL(5,4) NOT NULL DEFAULT 0,
+        manually_corrected BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_insurance_ocr_patient_id ON insurance_ocr_results(patient_id)`,
+
+      `DO $$
+       BEGIN
+         IF EXISTS (
+           SELECT 1 FROM information_schema.columns
+           WHERE table_name = 'patients' AND column_name = 'first_name'
+         ) THEN
+           EXECUTE 'CREATE INDEX IF NOT EXISTS idx_patients_trgm_first ON patients USING gin(first_name gin_trgm_ops)';
+           EXECUTE 'CREATE INDEX IF NOT EXISTS idx_patients_trgm_last ON patients USING gin(last_name gin_trgm_ops)';
+         END IF;
+       END $$`,
+    ];
+  }
+
+  private getSprint117RadiologyViewerStatements(): string[] {
+    return [
+      `ALTER TABLE radiology_report_drafts
+       ADD COLUMN IF NOT EXISTS heatmap_regions JSONB NOT NULL DEFAULT '[]'`,
+
+      `ALTER TABLE radiology_report_drafts
+       ADD COLUMN IF NOT EXISTS dicom_study_uid VARCHAR(200)`,
+
+      `ALTER TABLE radiology_report_drafts
+       ADD COLUMN IF NOT EXISTS dicom_series_uid VARCHAR(200)`,
+
+      `CREATE TABLE IF NOT EXISTS dicom_series (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        imaging_order_id UUID NOT NULL,
+        patient_id UUID NOT NULL,
+        study_instance_uid VARCHAR(200) NOT NULL,
+        series_instance_uid VARCHAR(200) NOT NULL,
+        modality VARCHAR(20) NOT NULL DEFAULT 'CT',
+        series_description TEXT,
+        instance_count INT NOT NULL DEFAULT 0,
+        minio_prefix VARCHAR(500) NOT NULL,
+        uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_dicom_series_order_id ON dicom_series(imaging_order_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_dicom_series_study_uid ON dicom_series(study_instance_uid)`,
     ];
   }
 }

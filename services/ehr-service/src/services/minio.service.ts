@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'stream';
 
 @Injectable()
 export class MinioService {
@@ -80,6 +81,22 @@ export class MinioService {
       this.logger.error(`Failed to delete file ${key}:`, error);
       throw error;
     }
+  }
+
+  async getObjectBuffer(bucket: string, key: string): Promise<Buffer> {
+    const command = new GetObjectCommand({
+      Bucket: bucket || this.bucketName,
+      Key: key,
+    });
+    const result = await this.s3Client.send(command);
+    if (!result.Body) {
+      throw new Error(`Object not found: ${key}`);
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of result.Body as Readable) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 
   generateFileKey(tenantId: string, patientId: string, fileName: string): string {

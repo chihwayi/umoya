@@ -266,6 +266,9 @@ import { RadiologyReportDraft } from '../entities/radiology-report-draft.entity'
 import { RadiologyDiscrepancyReview } from '../entities/radiology-discrepancy-review.entity';
 import { IncidentalFindingFollowup } from '../entities/incidental-finding-followup.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
+import { RegistrationAiSession } from '../entities/registration-ai-session.entity';
+import { InsuranceOcrResult } from '../entities/insurance-ocr-result.entity';
+import { DicomSeries } from '../entities/dicom-series.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -707,6 +710,9 @@ export class TenantService {
         RiskStratificationBatch,
         ModelDeployment,
         AiOpsMetric,
+        RegistrationAiSession,
+        InsuranceOcrResult,
+        DicomSeries,
       ],
       logging: false,
     });

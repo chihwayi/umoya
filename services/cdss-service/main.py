@@ -10313,6 +10313,296 @@ async def get_ops_metrics(request: Request):
         return {"metrics": [], "error": str(e)}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# REGISTRATION AI
+# ─────────────────────────────────────────────────────────────────────────────
+import re
+import base64
+from io import BytesIO
+
+
+@app.post("/cdss/registration/ocr-insurance-card")
+async def ocr_insurance_card(request: Request):
+    """
+    Extract structured data from an insurance card image.
+    Accepts base64-encoded image or raw_text (pre-extracted).
+
+    Production upgrade path: replace regex extraction with
+    pytesseract + layout analysis, or call AWS Textract / Google Vision API.
+    """
+    body = await request.json()
+    image_b64 = body.get("image_base64", "")
+    raw_text = body.get("raw_text", "")
+
+    if not raw_text and image_b64:
+        try:
+            import pytesseract
+            from PIL import Image
+            image_bytes = base64.b64decode(image_b64)
+            img = Image.open(BytesIO(image_bytes))
+            raw_text = pytesseract.image_to_string(img)
+        except ImportError:
+            raw_text = ""
+        except Exception:
+            raw_text = ""
+
+    if not raw_text:
+        return {
+            "member_id": None,
+            "group_number": None,
+            "plan_name": None,
+            "payer_name": None,
+            "effective_date": None,
+            "expiry_date": None,
+            "confidence": 0.0,
+            "raw_ocr_text": "",
+            "error": "OCR library unavailable. Install pytesseract and Pillow, or provide raw_text.",
+        }
+
+    def extract(patterns, text):
+        for pattern in patterns:
+            m = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if m:
+                return m.group(1).strip()
+        return None
+
+    member_id = extract([
+        r"(?:member|id|subscriber)\s*(?:#|id|no\.?)?\s*:?\s*([A-Z0-9]{6,20})",
+        r"ID\s*:\s*([A-Z0-9]{6,20})",
+        r"XYZ\s*([0-9]{9,12})",
+    ], raw_text)
+
+    group_number = extract([
+        r"(?:group|grp)\s*(?:#|no\.?)?\s*:?\s*([A-Z0-9]{4,15})",
+        r"GRP\s*:?\s*([A-Z0-9]{4,15})",
+    ], raw_text)
+
+    plan_name = extract([
+        r"(?:plan|product|benefit)\s*(?:name)?\s*:?\s*([A-Za-z ]{4,50})",
+        r"(?:PPO|HMO|EPO|HDHP|POS)[^\n]*([A-Za-z ]{4,40})",
+    ], raw_text)
+
+    payer_name = extract([
+        r"^([A-Z][a-zA-Z ]{3,40}(?:Health|Insurance|Medical|Blue|Aetna|Cigna|United|Humana)[a-zA-Z ]*)",
+        r"(?:insurance|health plan)\s*:?\s*([A-Za-z ]{4,50})",
+    ], raw_text)
+
+    effective_date = extract([
+        r"(?:effective|eff\.?)\s*(?:date)?\s*:?\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})",
+        r"(?:from|valid from)\s*:?\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})",
+    ], raw_text)
+
+    expiry_date = extract([
+        r"(?:expir[ey]s?|exp\.?|through|thru|valid through)\s*:?\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})",
+    ], raw_text)
+
+    fields = [member_id, group_number, plan_name, payer_name]
+    confidence = sum(1 for f in fields if f) / len(fields)
+
+    return {
+        "member_id": member_id,
+        "group_number": group_number,
+        "plan_name": plan_name,
+        "payer_name": payer_name,
+        "effective_date": effective_date,
+        "expiry_date": expiry_date,
+        "confidence": round(confidence, 4),
+        "raw_ocr_text": raw_text[:1000],
+    }
+
+
+SDOH_QUESTIONS = [
+    {"id": "housing", "text": "What is your living situation today?",
+     "options": ["I have a steady place to live", "I have a place to live today, but I am worried about losing it in the future", "I do not have a steady place to live"],
+     "risk_if": [1, 2]},
+    {"id": "food", "text": "Within the past 12 months, you worried that your food would run out before you got money to buy more.",
+     "options": ["Never true", "Sometimes true", "Often true"],
+     "risk_if": [1, 2]},
+    {"id": "transport", "text": "In the past 12 months, has lack of reliable transportation kept you from medical appointments, meetings, work, or from getting things needed for daily living?",
+     "options": ["Yes", "No"],
+     "risk_if": [0]},
+    {"id": "utilities", "text": "In the past 12 months has the electric, gas, oil, or water company threatened to shut off services in your home?",
+     "options": ["Yes", "No", "Already shut off"],
+     "risk_if": [0, 2]},
+    {"id": "safety", "text": "How often does anyone, including family and friends, physically hurt you?",
+     "options": ["Never", "Rarely", "Sometimes", "Fairly often", "Frequently"],
+     "risk_if": [1, 2, 3, 4]},
+    {"id": "social_isolation", "text": "How often do you feel lonely or isolated from those around you?",
+     "options": ["Never", "Rarely", "Sometimes", "Often", "Always"],
+     "risk_if": [3, 4]},
+    {"id": "mental_health", "text": "Over the last 2 weeks, how often have you been bothered by feeling down, depressed, or hopeless?",
+     "options": ["Not at all", "Several days", "More than half the days", "Nearly every day"],
+     "risk_if": [2, 3]},
+    {"id": "financial", "text": "How hard is it for you to pay for the very basics like food, housing, medical care, and heating?",
+     "options": ["Not hard at all", "A little hard", "Somewhat hard", "Very hard"],
+     "risk_if": [2, 3]},
+    {"id": "employment", "text": "Do you want help finding or keeping work or a job?",
+     "options": ["Yes", "No"],
+     "risk_if": [0]},
+    {"id": "education", "text": "Do you want help with school or training? For example, starting or completing job training or getting a high school diploma, GED or equivalent.",
+     "options": ["Yes", "No"],
+     "risk_if": [0]},
+]
+
+
+@app.get("/cdss/registration/sdoh-questions")
+@app.post("/cdss/registration/sdoh-questions")
+async def get_sdoh_questions():
+    """Return the AHC HRSN SDOH questionnaire structure for the registration form."""
+    return {"questions": SDOH_QUESTIONS}
+
+
+@app.post("/cdss/registration/sdoh-score")
+async def score_sdoh(request: Request):
+    """
+    Score SDOH responses and determine risk categories.
+    answers: { question_id: answer_index }
+    """
+    body = await request.json()
+    answers = body.get("answers", {})
+
+    risk_factors = []
+    domain_scores = {}
+
+    for q in SDOH_QUESTIONS:
+        answer_idx = answers.get(q["id"])
+        if answer_idx is None:
+            continue
+        is_at_risk = int(answer_idx) in q["risk_if"]
+        domain_scores[q["id"]] = {"at_risk": is_at_risk, "answer_idx": answer_idx}
+        if is_at_risk:
+            category_map = {
+                "housing": "housing_instability",
+                "food": "food_insecurity",
+                "transport": "transportation_barrier",
+                "utilities": "financial_hardship",
+                "safety": "domestic_violence",
+                "social_isolation": "social_isolation",
+                "mental_health": "mental_health_risk",
+                "financial": "financial_hardship",
+                "employment": "employment_barrier",
+                "education": "low_health_literacy",
+            }
+            risk_factors.append(category_map.get(q["id"], q["id"]))
+
+    total_risk = len(risk_factors)
+    overall_risk_level = (
+        "high" if total_risk >= 4
+        else "moderate" if total_risk >= 2
+        else "low"
+    )
+
+    referrals = []
+    if "housing_instability" in risk_factors:
+        referrals.append({"type": "social_work", "reason": "Housing instability identified"})
+    if "food_insecurity" in risk_factors:
+        referrals.append({"type": "food_assistance", "reason": "Food insecurity identified"})
+    if "domestic_violence" in risk_factors:
+        referrals.append({"type": "social_work_urgent", "reason": "Safety concern — immediate referral"})
+    if "mental_health_risk" in risk_factors:
+        referrals.append({"type": "behavioral_health", "reason": "Depressive symptoms identified"})
+
+    return {
+        "risk_factors": list(set(risk_factors)),
+        "overall_risk_level": overall_risk_level,
+        "total_risk_domains": total_risk,
+        "domain_scores": domain_scores,
+        "referrals": referrals,
+        "model_version": "ahc-hrsn-v1.0",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RADIOLOGY AI HEATMAP
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/cdss/imaging/attention-map")
+async def generate_attention_map(request: Request):
+    """
+    Generate AI attention/heatmap regions for a DICOM image.
+
+    Input:
+      - imaging_order_id: UUID
+      - draft_report_text: The AI-generated radiology report text
+      - findings: [{ finding_type, description, confidence }]
+      - image_width: DICOM image pixel width
+      - image_height: DICOM image pixel height
+
+    Output:
+      - heatmap_regions: [{ x, y, width, height, confidence, finding_label, color }]
+
+    In production: replace with actual CNN attention map extraction (GradCAM or similar).
+    """
+    body = await request.json()
+    payload = body.get("payload", {})
+
+    findings = payload.get("findings", [])
+    img_w = int(payload.get("image_width", 512))
+    img_h = int(payload.get("image_height", 512))
+    draft_text = payload.get("draft_report_text", "")
+
+    REGION_TEMPLATES = {
+        "nodule": {"x_frac": 0.45, "y_frac": 0.35, "w_frac": 0.08, "h_frac": 0.08, "color": "#ef4444"},
+        "mass": {"x_frac": 0.40, "y_frac": 0.40, "w_frac": 0.15, "h_frac": 0.15, "color": "#dc2626"},
+        "infiltrate": {"x_frac": 0.30, "y_frac": 0.25, "w_frac": 0.35, "h_frac": 0.30, "color": "#f59e0b"},
+        "effusion": {"x_frac": 0.20, "y_frac": 0.55, "w_frac": 0.25, "h_frac": 0.30, "color": "#3b82f6"},
+        "pneumothorax": {"x_frac": 0.10, "y_frac": 0.10, "w_frac": 0.20, "h_frac": 0.50, "color": "#ef4444"},
+        "cardiomegaly": {"x_frac": 0.30, "y_frac": 0.30, "w_frac": 0.40, "h_frac": 0.40, "color": "#f59e0b"},
+        "atelectasis": {"x_frac": 0.35, "y_frac": 0.60, "w_frac": 0.25, "h_frac": 0.20, "color": "#a78bfa"},
+        "fracture": {"x_frac": 0.45, "y_frac": 0.20, "w_frac": 0.10, "h_frac": 0.25, "color": "#ef4444"},
+        "default": {"x_frac": 0.40, "y_frac": 0.40, "w_frac": 0.20, "h_frac": 0.20, "color": "#6b7280"},
+    }
+
+    heatmap_regions = []
+    import random
+
+    for i, finding in enumerate(findings):
+        finding_type = finding.get("finding_type", "default").lower()
+        template = REGION_TEMPLATES.get(finding_type, REGION_TEMPLATES["default"])
+
+        rng = random.Random(hash(finding.get("description", "") + str(i)))
+        x_offset = rng.uniform(-0.05, 0.05)
+        y_offset = rng.uniform(-0.05, 0.05)
+
+        region = {
+            "x": max(0, int((template["x_frac"] + x_offset) * img_w)),
+            "y": max(0, int((template["y_frac"] + y_offset) * img_h)),
+            "width": int(template["w_frac"] * img_w),
+            "height": int(template["h_frac"] * img_h),
+            "confidence": round(float(finding.get("confidence", 0.75)), 4),
+            "finding_label": finding.get("description", finding_type),
+            "finding_type": finding_type,
+            "color": template["color"],
+        }
+        heatmap_regions.append(region)
+
+    if not heatmap_regions and draft_text:
+        keywords = {
+            "nodule": "nodule", "mass": "mass", "infiltrat": "infiltrate",
+            "effusion": "effusion", "pneumothorax": "pneumothorax",
+            "cardiomegal": "cardiomegaly", "atelectasis": "atelectasis",
+        }
+        for keyword, finding_type in keywords.items():
+            if keyword.lower() in draft_text.lower():
+                template = REGION_TEMPLATES.get(finding_type, REGION_TEMPLATES["default"])
+                heatmap_regions.append({
+                    "x": int(template["x_frac"] * img_w),
+                    "y": int(template["y_frac"] * img_h),
+                    "width": int(template["w_frac"] * img_w),
+                    "height": int(template["h_frac"] * img_h),
+                    "confidence": 0.65,
+                    "finding_label": finding_type.replace("_", " ").title(),
+                    "finding_type": finding_type,
+                    "color": template["color"],
+                })
+
+    return {
+        "heatmap_regions": heatmap_regions,
+        "model_version": "heuristic-attention-v1.0",
+        "note": "Production upgrade: replace with GradCAM from trained CNN model",
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

@@ -365,6 +365,9 @@ import { KnowledgeIngestService } from './services/knowledge-ingest.service';
 import { ClaimsAiService } from './services/claims-ai.service';
 import { RiskStratificationService } from './services/risk-stratification.service';
 import { OutcomeCollectionService } from './services/outcome-collection.service';
+import { RegistrationAiService } from './services/registration-ai.service';
+import { RegistrationAiController } from './controllers/registration-ai.controller';
+import { DicomController } from './controllers/dicom.controller';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -537,6 +540,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RegistrationIntelligenceController,
     KnowledgeController,
     ClaimsAiController,
+    RegistrationAiController,
+    DicomController,
   ],
   providers: [
     AuthService,
@@ -749,6 +754,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClaimsAiService,
     RiskStratificationService,
     OutcomeCollectionService,
+    RegistrationAiService,
     CriticalAlertGateway,
     VoiceTranscriptionGateway,
     RolesGuard,

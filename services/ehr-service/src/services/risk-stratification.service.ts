@@ -121,7 +121,7 @@ export class RiskStratificationService {
   }
 
   private async gatherPatientFeatures(patientId: string, tenantDb: any): Promise<Record<string, unknown>> {
-    const [conditions, vitals, prescriptions, sdoh, appointments] = await Promise.allSettled([
+    const [conditions, vitals, prescriptions, sdoh, appointments, abnormalLabs] = await Promise.allSettled([
       tenantDb.query(
         `SELECT description FROM problems WHERE patient_id = $1 AND status = 'active' LIMIT 20`,
         [patientId],
@@ -144,6 +144,16 @@ export class RiskStratificationService {
       tenantDb.query(
         `SELECT COUNT(*) as total, SUM(CASE WHEN status = 'no_show' THEN 1 ELSE 0 END) as no_shows
          FROM appointments WHERE patient_id = $1 AND appointment_date > NOW() - INTERVAL '180 days'`,
+        [patientId],
+      ),
+      tenantDb.query(
+        `SELECT COUNT(DISTINCT lo.id)::int AS abnormal_count
+         FROM lab_orders lo,
+              jsonb_array_elements(lo.results) AS r
+         WHERE lo.patient_id = $1
+           AND lo.created_at > NOW() - INTERVAL '30 days'
+           AND lo.status = 'resulted'
+           AND r->>'flag' IN ('high', 'low', 'critical')`,
         [patientId],
       ),
     ]);
@@ -174,7 +184,8 @@ export class RiskStratificationService {
       medication_adherence_pct: adherencePct,
       sdoh_risk_factors: sdohFactors,
       appointment_no_show_rate: noShowRate,
-      abnormal_lab_count_30d: 0,
+      abnormal_lab_count_30d: (abnormalLabs.status === 'fulfilled' && abnormalLabs.value.length > 0)
+        ? Number(abnormalLabs.value[0].abnormal_count) : 0,
     };
   }
 }
