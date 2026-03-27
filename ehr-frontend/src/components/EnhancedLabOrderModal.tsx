@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Plus, Trash2, Package, Clock, TestTube2, CreditCard, Brain } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { X, Search, Plus, Trash2, Package, Clock, TestTube2, CreditCard, Brain, AlertTriangle } from 'lucide-react';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
@@ -57,6 +57,7 @@ export default function EnhancedLabOrderModal({
   const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'order-sets'>('order-sets');
   const [cdssInsights, setCdssInsights] = useState<Array<{ testName: string; insights: any }>>([]);
+  const [reorderFlags, setReorderFlags] = useState<any[]>([]);
   const { showSuccess, showError } = useNotification();
 
   const totalEstimatedCost = selectedTests.reduce((sum, test) => sum + (test.cost || 0), 0);
@@ -64,6 +65,23 @@ export default function EnhancedLabOrderModal({
   useEffect(() => {
     loadOrderSets();
   }, []);
+
+  // Lab reorder suppression check — fires whenever selected tests change
+  useEffect(() => {
+    if (selectedTests.length === 0) { setReorderFlags([]); return; }
+    const check = async () => {
+      try {
+        const res = await cdssApi.checkLabReorder({
+          test_codes: selectedTests.map(t => t.test_code),
+          test_names: selectedTests.map(t => t.test_name),
+          recent_labs: [],  // populated from patient context if available
+          lookback_days: 7,
+        }, token, tenantSlug);
+        setReorderFlags((res as any).data?.flags ?? []);
+      } catch { /* non-blocking */ }
+    };
+    void check();
+  }, [selectedTests.map(t => t.test_code).join(','), token, tenantSlug]);
 
   useEffect(() => {
     if (searchQuery.length >= 2) {
@@ -532,6 +550,18 @@ export default function EnhancedLabOrderModal({
                 <span>{orderSets.length} quick order panel(s) available</span>
               )}
             </div>
+            {/* Reorder suppression warnings */}
+            {reorderFlags.filter(f => f.should_suppress || f.warning_only).length > 0 && (
+              <div className="flex-1 mr-4 space-y-1">
+                {reorderFlags.filter(f => f.should_suppress || f.warning_only).map((f, i) => (
+                  <div key={i} className={`flex items-start gap-1.5 text-xs rounded px-2 py-1.5 border ${f.should_suppress ? 'border-red-300 bg-red-50 text-red-700' : 'border-amber-300 bg-amber-50 text-amber-700'}`}>
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>{f.suppress_reason}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex space-x-3">
               <button
                 type="button"

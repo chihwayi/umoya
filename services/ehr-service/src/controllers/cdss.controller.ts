@@ -234,4 +234,99 @@ export class CdssController {
   async recordCopilotAction(@Body() body: any, @Request() req: RequestWithTenant) {
     return this.cdssService.recordCopilotAction(body, req.tenantId);
   }
+
+  // ── Sprint 119: Clinical Order Intelligence ──────────────────────────
+  @Post('order/suggest-sets')
+  @Roles('nurse', 'doctor', 'admin')
+  async suggestOrderSets(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.suggestOrderSets(body, req.tenantId);
+  }
+
+  @Post('order/imaging-appropriateness')
+  @Roles('nurse', 'doctor', 'admin')
+  async checkImagingAppropriateness(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.checkImagingAppropriateness(body, req.tenantId);
+  }
+
+  @Post('order/prior-auth-predict')
+  @Roles('nurse', 'doctor', 'admin')
+  async predictPriorAuth(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.predictPriorAuth(body, req.tenantId);
+  }
+
+  @Post('lab/reorder-check')
+  @Roles('nurse', 'doctor', 'admin')
+  async checkLabReorder(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.checkLabReorder(body, req.tenantId);
+  }
+
+  // ── Sprint 120: Nursing Intelligence Suite ────────────────────────────
+  @Post('nursing/care-plan')
+  @Roles('nurse', 'doctor', 'admin')
+  async generateNursingCarePlan(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.generateNursingCarePlan(body, req.tenantId);
+  }
+
+  @Post('nursing/sbar')
+  @Roles('nurse', 'doctor', 'admin')
+  async generateSBAR(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.generateSBAR(body, req.tenantId);
+  }
+
+  @Post('nursing/fall-risk')
+  @Roles('nurse', 'doctor', 'admin')
+  async assessFallRisk(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.assessFallRisk(body, req.tenantId);
+  }
+
+  @Post('nursing/wound-staging')
+  @Roles('nurse', 'doctor', 'admin')
+  async stageWound(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.stageWound(body, req.tenantId);
+  }
+
+  // ── Sprint 121: Medication Reconciliation AI ──────────────────────────
+  @Post('medication/reconciliation')
+  @Roles('nurse', 'doctor', 'admin')
+  async reconcileMedications(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.reconcileMedications(body, req.tenantId);
+  }
+
+  @Post('medication/pdmp-check')
+  @Roles('nurse', 'doctor', 'admin')
+  async checkPDMP(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.checkPDMP(body, req.tenantId);
+  }
+
+  // ── Sprint 122: Discharge Intelligence ───────────────────────────────
+  @Post('discharge/intelligence')
+  @Roles('nurse', 'doctor', 'admin')
+  async getDischargeIntelligence(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.getDischargeIntelligence(body, req.tenantId);
+  }
+
+  @Post('discharge/follow-up-timing')
+  @Roles('nurse', 'doctor', 'admin')
+  async getFollowUpTiming(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.getFollowUpTiming(body, req.tenantId);
+  }
+
+  // ── Sprint 123: AI Self-Learning Hardening ────────────────────────────
+  @Post('self-learning/shadow-eval')
+  @Roles('nurse', 'doctor', 'admin')
+  async runShadowEval(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.runShadowEval(body, req.tenantId);
+  }
+
+  @Post('self-learning/bias-audit')
+  @Roles('nurse', 'doctor', 'admin')
+  async runBiasAudit(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.runBiasAudit(body, req.tenantId);
+  }
+
+  @Post('self-learning/audit-anomaly')
+  @Roles('nurse', 'doctor', 'admin')
+  async detectAuditAnomalies(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.detectAuditAnomalies(body, req.tenantId);
+  }
 }

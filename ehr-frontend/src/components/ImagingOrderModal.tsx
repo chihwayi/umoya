@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Camera, AlertCircle, CreditCard, Brain, Search, ChevronDown, ChevronUp } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { X, Camera, AlertCircle, CreditCard, Brain, Search, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { AiOutputWrapper } from './AiOutputWrapper';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import {
   buildSharedContextTags,
@@ -61,6 +62,7 @@ export default function ImagingOrderModal({
   const [orderConcept, setOrderConcept] = useState<SnomedConcept | null>(null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
   const [aiReview, setAiReview] = useState<any | null>(null);
+  const [appropriateness, setAppropriateness] = useState<any | null>(null);
   const [selectedPatientContext, setSelectedPatientContext] = useState<any>(null);
   const [loadingPatientContext, setLoadingPatientContext] = useState(false);
   const { showSuccess, showError } = useNotification();
@@ -169,6 +171,26 @@ export default function ImagingOrderModal({
   useEffect(() => {
     void loadSelectedPatientContext();
   }, [loadSelectedPatientContext]);
+
+  // Pre-submission appropriateness check (debounced 800ms)
+  useEffect(() => {
+    if (!selectedModality || !clinicalIndication || clinicalIndication.length < 10) {
+      setAppropriateness(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const res = await cdssApi.checkImagingAppropriateness({
+          modality: modalities.find(m => m.id === selectedModality)?.modality_code ?? selectedModality,
+          study_type: selectedStudyType?.study_name ?? selectedModality,
+          clinical_indication: clinicalIndication,
+          diagnoses: suspectedDiagnosis ? [suspectedDiagnosis] : [],
+        }, token, tenantSlug);
+        setAppropriateness((res as any).data);
+      } catch { /* non-blocking */ }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [selectedModality, selectedStudyType, clinicalIndication, suspectedDiagnosis]);
 
   const selectedPatientContextTags = useMemo(
     () => buildSharedContextTags(selectedPatientContext),
@@ -692,6 +714,32 @@ export default function ImagingOrderModal({
               {selectedStudyType && `Selected: ${selectedStudyType.study_name}`}
             </div>
             <div className="flex space-x-3">
+              {/* Pre-submission appropriateness result */}
+              {appropriateness && (
+                <div className="flex-1 mr-4">
+                  <AiOutputWrapper
+                    label="Imaging Appropriateness"
+                    confidence={appropriateness.confidence}
+                    abstained={appropriateness.abstained}
+                    model_id={appropriateness.model_id}
+                    citations={appropriateness.citations}
+                    compact
+                  >
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {(appropriateness.acr_score ?? 0) >= 7
+                        ? <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                        : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                      <span className={`font-semibold capitalize ${(appropriateness.acr_score ?? 0) >= 7 ? 'text-green-700' : (appropriateness.acr_score ?? 0) >= 4 ? 'text-amber-700' : 'text-red-700'}`}>
+                        ACR {appropriateness.acr_score}/9 — {(appropriateness.appropriateness_status ?? '').replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    {(appropriateness.blocking_issues ?? []).map((issue: string, i: number) => (
+                      <p key={i} className="text-[10px] text-amber-700 mt-0.5">{issue}</p>
+                    ))}
+                  </AiOutputWrapper>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={onClose}

@@ -4262,6 +4262,116 @@ export class CdssService {
     );
   }
 
+  // ── Sprint 119: Clinical Order Intelligence ─────────────────────────────
+  async suggestOrderSets(payload: {
+    diagnoses?: string[];
+    active_medications?: string[];
+    chief_complaint?: string;
+    vitals_flags?: string[];
+    patient_age?: number;
+    encounter_type?: string;
+  }, tenantId?: string): Promise<any> {
+    try {
+      return await this.postWithPolicy<any>('order_intelligence', '/order/suggest-sets', payload, 6000, tenantId);
+    } catch { return { suggestions: [], abstained: true, abstain_reason: 'safety_gate_triggered' }; }
+  }
+
+  async checkImagingAppropriateness(payload: {
+    modality: string;
+    study_type: string;
+    clinical_indication: string;
+    diagnoses?: string[];
+    patient_age?: number;
+    prior_imaging?: string[];
+  }, tenantId?: string): Promise<any> {
+    try {
+      return await this.postWithPolicy<any>('order_intelligence', '/order/imaging-appropriateness', payload, 5000, tenantId);
+    } catch { return { appropriateness_status: 'needs_context', blocking_issues: [], abstained: true }; }
+  }
+
+  async predictPriorAuth(payload: {
+    order_type: string;
+    order_name: string;
+    cpt_code?: string;
+    icd10_codes?: string[];
+    payer_name?: string;
+    patient_age?: number;
+  }, tenantId?: string): Promise<any> {
+    try {
+      return await this.postWithPolicy<any>('order_intelligence', '/order/prior-auth-predict', payload, 4000, tenantId);
+    } catch { return { requires_prior_auth: false, likelihood: 0, abstained: true }; }
+  }
+
+  async checkLabReorder(payload: {
+    test_codes: string[];
+    test_names: string[];
+    recent_labs: any[];
+    lookback_days?: number;
+  }, tenantId?: string): Promise<any> {
+    try {
+      return await this.postWithPolicy<any>('order_intelligence', '/lab/reorder-check', payload, 4000, tenantId);
+    } catch { return { flags: [], abstained: true }; }
+  }
+
+  // ── Sprint 120: Nursing Intelligence Suite ────────────────────────────
+  async generateNursingCarePlan(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('nursing_intelligence', '/nursing/care-plan', payload, 6000, tenantId); }
+    catch { return { care_plan: [], abstained: true, abstain_reason: 'safety_gate_triggered' }; }
+  }
+
+  async generateSBAR(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('nursing_intelligence', '/nursing/sbar', payload, 5000, tenantId); }
+    catch { return { sbar: {}, abstained: true, abstain_reason: 'safety_gate_triggered' }; }
+  }
+
+  async assessFallRisk(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('nursing_intelligence', '/nursing/fall-risk', payload, 4000, tenantId); }
+    catch { return { total_score: 0, risk_level: 'unknown', abstained: true }; }
+  }
+
+  async stageWound(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('nursing_intelligence', '/nursing/wound-staging', payload, 5000, tenantId); }
+    catch { return { stage: null, care_recommendations: [], abstained: true }; }
+  }
+
+  // ── Sprint 121: Medication Reconciliation AI ──────────────────────────
+  async reconcileMedications(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('medication_reconciliation', '/medication/reconciliation', payload, 6000, tenantId); }
+    catch { return { discrepancies: [], abstained: true, abstain_reason: 'safety_gate_triggered' }; }
+  }
+
+  async checkPDMP(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('medication_reconciliation', '/medication/pdmp-check', payload, 4000, tenantId); }
+    catch { return { detected_controlled: [], pdmp_query_required: false, abstained: true }; }
+  }
+
+  // ── Sprint 122: Discharge Intelligence ───────────────────────────────
+  async getDischargeIntelligence(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('discharge_intelligence', '/discharge/intelligence', payload, 7000, tenantId); }
+    catch { return { readmission_risk: 'unknown', discharge_summary: {}, abstained: true }; }
+  }
+
+  async getFollowUpTiming(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('discharge_intelligence', '/discharge/follow-up-timing', payload, 5000, tenantId); }
+    catch { return { follow_up_appointments: [], abstained: true }; }
+  }
+
+  // ── Sprint 123: AI Self-Learning Hardening ────────────────────────────
+  async runShadowEval(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('self_learning', '/self-learning/shadow-eval', payload, 5000, tenantId); }
+    catch { return { divergence_flagged: false, abstained: true }; }
+  }
+
+  async runBiasAudit(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('self_learning', '/self-learning/bias-audit', payload, 6000, tenantId); }
+    catch { return { bias_report: [], abstained: true }; }
+  }
+
+  async detectAuditAnomalies(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('self_learning', '/self-learning/audit-anomaly', payload, 5000, tenantId); }
+    catch { return { anomalies: [], abstained: true }; }
+  }
+
   async getModelVersions(tenantId?: string): Promise<Record<string, any>> {
     try {
       const res = await this.postWithPolicy<any>('ops', '/fl/model-version', { surface: 'all' }, 5000, tenantId);

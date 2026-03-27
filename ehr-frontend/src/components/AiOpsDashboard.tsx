@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Brain, Activity, TrendingUp, AlertTriangle, RefreshCw, Cpu } from 'lucide-react';
-import { ehrAxios } from '../services/api';
+import { Brain, Activity, TrendingUp, AlertTriangle, RefreshCw, Cpu, ShieldAlert } from 'lucide-react';
+import { ehrAxios, cdssApi } from '../services/api';
 
 interface AiOpsMetric {
   surface: string;
@@ -28,6 +28,7 @@ export const AiOpsDashboard: React.FC<AiOpsDashboardProps> = ({ tenantSlug, toke
   const [metrics, setMetrics] = useState<AiOpsMetric[]>([]);
   const [modelVersions, setModelVersions] = useState<Record<string, ModelVersion>>({});
   const [loading, setLoading] = useState(true);
+  const [anomalies, setAnomalies] = useState<Record<string, any[]>>({});
 
   const headers = { 'x-tenant-slug': tenantSlug, Authorization: `Bearer ${token}` };
 
@@ -40,7 +41,21 @@ export const AiOpsDashboard: React.FC<AiOpsDashboardProps> = ({ tenantSlug, toke
       ]);
 
       if (metricsRes.status === 'fulfilled') {
-        setMetrics((metricsRes.value.data as any)?.metrics ?? []);
+        const m: AiOpsMetric[] = (metricsRes.value.data as any)?.metrics ?? [];
+        setMetrics(m);
+        // Run anomaly detection per surface
+        const surfaces = Array.from(new Set(m.map(r => r.surface)));
+        const anomalyResults: Record<string, any[]> = {};
+        await Promise.all(surfaces.map(async surface => {
+          try {
+            const surfaceMetrics = m.filter(r => r.surface === surface)
+              .map(r => ({ metric_date: r.metric_date, accuracy: r.accuracy, abstention_rate: r.abstention_count / Math.max(r.total_calls, 1), avg_latency_ms: r.avg_latency_ms, fairness_sdoh_parity: r.fairness_sdoh_parity }));
+            const res = await cdssApi.detectAuditAnomalies({ surface, recent_metrics: surfaceMetrics }, token, tenantSlug);
+            const a = (res as any).data?.anomalies ?? [];
+            if (a.length > 0) anomalyResults[surface] = a;
+          } catch { /* non-blocking */ }
+        }));
+        setAnomalies(anomalyResults);
       }
       if (versionsRes.status === 'fulfilled') {
         setModelVersions((versionsRes.value.data as any)?.versions ?? {});
@@ -106,6 +121,26 @@ export const AiOpsDashboard: React.FC<AiOpsDashboardProps> = ({ tenantSlug, toke
           </div>
         )}
       </div>
+
+      {/* Anomaly alerts */}
+      {Object.keys(anomalies).length > 0 && (
+        <div className="rounded-lg border border-red-700 bg-red-900/10 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-red-400 font-semibold text-xs">
+            <ShieldAlert className="h-4 w-4" /> AI Anomalies Detected
+          </div>
+          {Object.entries(anomalies).map(([surface, alerts]) =>
+            alerts.map((a, i) => (
+              <div key={`${surface}-${i}`} className="text-xs">
+                <span className={`font-semibold mr-1 ${a.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`}>
+                  [{surface.replace(/_/g, ' ')}]
+                </span>
+                <span className="text-gray-300">{a.message}</span>
+                <p className="text-gray-500 mt-0.5 pl-2">{a.action}</p>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Per-surface AI metrics */}
       {loading ? (

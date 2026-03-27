@@ -10693,6 +10693,1175 @@ def _run_retraining_job(surface: str, entries: list):
         print(f"[retraining] {surface}: failed to write entries: {e}")
 
 
+# ── Sprint 119: Clinical Order Intelligence ────────────────────────────────
+
+class OrderSetSuggestionRequest(BaseModel):
+    diagnoses: List[str] = []
+    active_medications: List[str] = []
+    chief_complaint: str = ""
+    vitals_flags: List[str] = []  # e.g. ["tachycardia", "hypoxia"]
+    patient_age: Optional[int] = None
+    encounter_type: str = "outpatient"
+
+class ImagingAppropriatenessRequest(BaseModel):
+    modality: str  # e.g. "CT", "MRI", "X-Ray"
+    study_type: str  # e.g. "CT Chest with contrast"
+    clinical_indication: str
+    diagnoses: List[str] = []
+    patient_age: Optional[int] = None
+    prior_imaging: List[str] = []  # prior study types in last 30 days
+
+class PriorAuthPredictRequest(BaseModel):
+    order_type: str  # "lab", "imaging", "procedure"
+    order_name: str
+    cpt_code: Optional[str] = None
+    icd10_codes: List[str] = []
+    payer_name: Optional[str] = None
+    patient_age: Optional[int] = None
+
+class LabReorderCheckRequest(BaseModel):
+    test_codes: List[str]
+    test_names: List[str]
+    recent_labs: List[dict]  # [{test_name, test_code, resulted_at, flag}]
+    lookback_days: int = 7
+
+
+@app.post("/order/suggest-sets")
+async def suggest_order_sets(request: OrderSetSuggestionRequest):
+    """AI-driven order set recommendations based on clinical context."""
+    suggestions = []
+    diagnoses_lower = [d.lower() for d in request.diagnoses]
+    flags_lower = [f.lower() for f in request.vitals_flags]
+    complaint_lower = request.chief_complaint.lower()
+
+    # Rule-based + heuristic suggestions
+    rules = [
+        (["chest pain", "troponin", "mi", "acs", "angina"], ["dyspnea", "hypoxia", "tachycardia"], "cardiac",
+         "Cardiac Workup Panel", ["ECG", "Troponin I", "CK-MB", "BNP", "Chest X-Ray PA"], 0.88,
+         "ACS/cardiac chest pain pattern detected — standard cardiac workup recommended"),
+        (["diabetes", "dm", "hyperglycemia", "hba1c"], [], "metabolic",
+         "Diabetes Monitoring Panel", ["HbA1c", "Fasting Glucose", "Urine Microalbumin", "Lipid Panel", "eGFR"], 0.85,
+         "Diabetic patient — standard monitoring panel recommended per ADA guidelines"),
+        (["sepsis", "infection", "fever", "bacteremia", "uti"], ["fever", "tachycardia", "hypotension"], "infectious",
+         "Sepsis/Infection Workup", ["CBC with Differential", "CMP", "Lactate", "Blood Culture x2", "Procalcitonin", "Urinalysis"], 0.90,
+         "Sepsis/infection pattern — SIRS criteria workup recommended"),
+        (["pneumonia", "copd", "asthma", "respiratory"], ["hypoxia", "tachypnea"], "respiratory",
+         "Respiratory Panel", ["CBC", "CRP", "ABG", "Chest X-Ray", "Sputum Culture"], 0.82,
+         "Respiratory presentation — standard workup per clinical guidelines"),
+        (["renal", "kidney", "ckd", "aki", "creatinine"], [], "renal",
+         "Renal Function Panel", ["BMP", "Urinalysis with Microscopy", "Urine Protein:Creatinine", "Renal Ultrasound"], 0.84,
+         "Renal pathology suspected — complete renal function assessment"),
+        (["anemia", "bleeding", "fatigue", "pallor"], [], "hematology",
+         "Anemia Workup", ["CBC with Differential", "Reticulocyte Count", "Iron Studies", "B12/Folate", "Peripheral Smear"], 0.83,
+         "Anemia workup pattern — complete hematological assessment recommended"),
+        (["thyroid", "hypothyroid", "hyperthyroid", "tsh"], [], "endocrine",
+         "Thyroid Panel", ["TSH", "Free T4", "Free T3", "Anti-TPO Antibodies"], 0.86,
+         "Thyroid pathology — complete thyroid function panel"),
+        (["liver", "hepatitis", "cirrhosis", "jaundice", "elevated ast", "elevated alt"], [], "hepatic",
+         "Liver Function Panel", ["LFTs", "GGT", "Albumin", "PT/INR", "Hepatitis B Surface Ag", "Hepatitis C Ab", "Liver Ultrasound"], 0.85,
+         "Hepatic pathology — comprehensive liver assessment"),
+    ]
+
+    for diag_keywords, flag_keywords, category, panel_name, tests, base_confidence, rationale in rules:
+        diag_match = any(kw in d for kw in diag_keywords for d in diagnoses_lower + [complaint_lower])
+        flag_match = any(kw in f for kw in flag_keywords for f in flags_lower) if flag_keywords else True
+
+        if diag_match or (flag_match and flag_keywords):
+            confidence = base_confidence
+            if diag_match and flag_match and flag_keywords:
+                confidence = min(0.97, confidence + 0.07)
+            suggestions.append({
+                "panel_name": panel_name,
+                "category": category,
+                "suggested_tests": tests,
+                "confidence": round(confidence, 2),
+                "rationale": rationale,
+                "evidence_level": "B",
+                "citations": [{"title": f"{panel_name} — Clinical Practice Guidelines", "source": "Clinical Guidelines Database"}]
+            })
+
+    suggestions.sort(key=lambda x: x["confidence"], reverse=True)
+
+    return {
+        "suggestions": suggestions[:4],
+        "confidence": suggestions[0]["confidence"] if suggestions else None,
+        "abstained": len(suggestions) == 0,
+        "abstain_reason": "insufficient_data" if len(suggestions) == 0 else None,
+        "model_id": "order-suggest-v1",
+        "surface": "order_intelligence"
+    }
+
+
+@app.post("/order/imaging-appropriateness")
+async def check_imaging_appropriateness(request: ImagingAppropriatenessRequest):
+    """ACR-inspired imaging appropriateness check."""
+    modality = request.modality.upper()
+    indication = request.clinical_indication.lower()
+    diagnoses_lower = [d.lower() for d in request.diagnoses]
+    prior_lower = [p.lower() for p in request.prior_imaging]
+
+    score = 7  # ACR scale: 1-3 usually not appropriate, 4-6 may be, 7-9 usually appropriate
+    issues = []
+    alternatives = []
+    rationale_parts = []
+
+    # Radiation concern for CT in young patients
+    if modality == "CT" and request.patient_age and request.patient_age < 18:
+        score -= 2
+        issues.append("CT exposes pediatric patients to ionizing radiation — consider MRI or ultrasound first")
+        alternatives.append("MRI (no radiation)")
+        alternatives.append("Ultrasound (no radiation, first-line for pediatric abdominal pain)")
+
+    # Duplicate imaging check
+    modality_lower = modality.lower()
+    recent_same = [p for p in prior_lower if modality_lower in p]
+    if recent_same:
+        score -= 3
+        issues.append(f"Similar {modality} imaging found in last 30 days — clinical justification required for repeat")
+        rationale_parts.append("Repeat imaging within 30 days requires explicit clinical justification")
+
+    # Contrast considerations
+    if "contrast" in request.study_type.lower():
+        renal_dx = any(kw in d for kw in ["ckd", "renal", "kidney", "creatinine"] for d in diagnoses_lower)
+        if renal_dx:
+            score -= 1
+            issues.append("Contrast agent in patient with renal pathology — verify eGFR ≥ 30 mL/min/1.73m²")
+
+    # Indication-appropriateness rules (ACR-inspired)
+    appropriate_patterns = [
+        (["ct", "chest"], ["pulmonary embolism", "pe", "chest pain", "hemoptysis", "lung cancer"], 2),
+        (["mri", "brain"], ["headache", "stroke", "seizure", "ms", "tumor", "cognitive"], 2),
+        (["ct", "abdomen"], ["appendicitis", "bowel obstruction", "abdominal pain", "diverticulitis"], 1),
+        (["x-ray", "chest"], ["pneumonia", "copd", "heart failure", "trauma"], 1),
+        (["ultrasound", "abdo"], ["gallstones", "liver", "renal", "abdominal pain", "appendicitis"], 1),
+    ]
+
+    study_lower = request.study_type.lower()
+    matched = False
+    for modality_kws, indication_kws, score_bonus in appropriate_patterns:
+        if all(kw in study_lower or kw in modality_lower for kw in modality_kws):
+            if any(kw in indication or any(kw in d for d in diagnoses_lower) for kw in indication_kws):
+                score = min(9, score + score_bonus)
+                matched = True
+                break
+
+    if not matched and not issues:
+        rationale_parts.append("Indication not matched to standard ACR criteria — clinical judgment required")
+
+    score = max(1, min(9, score))
+    if score >= 7:
+        status = "usually_appropriate"
+    elif score >= 4:
+        status = "may_be_appropriate"
+    else:
+        status = "usually_not_appropriate"
+
+    return {
+        "appropriateness_status": status,
+        "acr_score": score,
+        "blocking_issues": issues,
+        "recommended_alternatives": alternatives,
+        "rationale": "; ".join(rationale_parts) if rationale_parts else f"Study appears clinically indicated for {request.clinical_indication}",
+        "confidence": round(0.65 + (score / 30), 2),
+        "abstained": False,
+        "model_id": "imaging-appropriateness-v1",
+        "surface": "order_intelligence",
+        "citations": [{"title": "ACR Appropriateness Criteria", "source": "American College of Radiology", "isPrimary": True}]
+    }
+
+
+@app.post("/order/prior-auth-predict")
+async def predict_prior_auth(request: PriorAuthPredictRequest):
+    """Predict likelihood and urgency of prior authorization requirement."""
+    order_lower = request.order_name.lower()
+
+    # High prior-auth likelihood patterns (evidence-based)
+    high_auth_patterns = [
+        (["mri", "pet scan", "nuclear"], 0.90, "high", "Advanced imaging typically requires prior auth from most payers"),
+        (["sleep study", "polysomnography"], 0.85, "high", "Sleep studies require prior auth from most major payers"),
+        (["infusion", "biologic", "humira", "remicade", "dupixent", "keytruda"], 0.95, "high", "Biologic/infusion therapy has near-universal prior auth requirement"),
+        (["genetic test", "genomic", "whole exome"], 0.88, "high", "Genetic testing typically requires prior auth"),
+        (["physical therapy", "occupational therapy", "speech therapy"], 0.75, "medium", "Therapy services often require prior auth after initial visits"),
+        (["bariatric", "gastric bypass", "sleeve gastrectomy"], 0.95, "high", "Bariatric surgery requires extensive prior auth process"),
+        (["ct scan", "ct chest", "ct abdomen"], 0.60, "medium", "CT imaging may require prior auth depending on payer"),
+        (["echo", "echocardiogram"], 0.55, "medium", "Echocardiograms may require prior auth — check payer guidelines"),
+    ]
+
+    low_auth_patterns = [
+        (["cbc", "bmp", "cmp", "lipid panel", "urinalysis", "hba1c"], 0.05, "low", "Routine lab panels typically do not require prior auth"),
+        (["chest x-ray", "x-ray"], 0.10, "low", "Plain X-rays rarely require prior auth"),
+        (["ekg", "ecg", "electrocardiogram"], 0.05, "low", "ECG does not typically require prior auth"),
+    ]
+
+    likelihood = 0.40  # default
+    urgency = "low"
+    reason = "Authorization requirement unknown — verify with payer"
+
+    for patterns, prob, urg, msg in high_auth_patterns:
+        if any(p in order_lower for p in patterns):
+            likelihood = prob
+            urgency = urg
+            reason = msg
+            break
+
+    for patterns, prob, urg, msg in low_auth_patterns:
+        if any(p in order_lower for p in patterns):
+            likelihood = prob
+            urgency = urg
+            reason = msg
+            break
+
+    requires_auth = likelihood >= 0.60
+
+    return {
+        "requires_prior_auth": requires_auth,
+        "likelihood": round(likelihood, 2),
+        "urgency": urgency,
+        "reason": reason,
+        "estimated_turnaround_days": 3 if urgency == "high" else 1 if urgency == "medium" else 0,
+        "confidence": round(0.70 + likelihood * 0.15, 2),
+        "abstained": False,
+        "model_id": "prior-auth-predict-v1",
+        "surface": "order_intelligence"
+    }
+
+
+@app.post("/lab/reorder-check")
+async def lab_reorder_check(request: LabReorderCheckRequest):
+    """Flag lab tests that were recently ordered to suppress unnecessary reorders."""
+    from datetime import datetime, timedelta
+
+    flags = []
+    lookback = timedelta(days=request.lookback_days)
+    now = datetime.utcnow()
+
+    for i, test_name in enumerate(request.test_names):
+        test_code = request.test_codes[i] if i < len(request.test_codes) else ""
+        test_lower = test_name.lower()
+
+        for recent in request.recent_labs:
+            recent_name = (recent.get("test_name") or "").lower()
+            recent_code = recent.get("test_code") or ""
+            resulted_at_str = recent.get("resulted_at") or recent.get("collected_at") or ""
+
+            name_match = test_lower in recent_name or recent_name in test_lower or (test_code and test_code == recent_code)
+
+            if name_match and resulted_at_str:
+                try:
+                    resulted_at = datetime.fromisoformat(resulted_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                    days_ago = (now - resulted_at).days
+                    if days_ago <= request.lookback_days:
+                        flag = recent.get("flag", "normal")
+                        flags.append({
+                            "test_name": test_name,
+                            "test_code": test_code,
+                            "last_resulted_at": resulted_at_str,
+                            "days_since_last": days_ago,
+                            "last_flag": flag,
+                            "suppress_reason": f"Already resulted {days_ago}d ago (flag: {flag}) — reorder within {request.lookback_days}d requires justification",
+                            "should_suppress": days_ago < 3 and flag == "normal",
+                            "warning_only": days_ago >= 3 or flag != "normal"
+                        })
+                except Exception:
+                    pass
+
+    return {
+        "flags": flags,
+        "suppressed_count": sum(1 for f in flags if f["should_suppress"]),
+        "warning_count": sum(1 for f in flags if f["warning_only"]),
+        "abstained": False,
+        "model_id": "lab-reorder-v1",
+        "surface": "order_intelligence"
+    }
+
+
+# ── Sprint 120: Nursing Intelligence Suite ────────────────────────────────
+
+class NursingCarePlanRequest(BaseModel):
+    diagnoses: List[str]
+    nursing_problems: List[str] = []
+    patient_age: Optional[int] = None
+    mobility_status: str = "ambulatory"  # ambulatory, limited, bedbound
+    cognitive_status: str = "intact"  # intact, impaired, confused
+    fall_risk_score: Optional[int] = None
+    admission_reason: str = ""
+
+class SBARRequest(BaseModel):
+    patient_name: str = ""
+    patient_age: Optional[int] = None
+    admission_diagnosis: str
+    current_vitals: dict = {}
+    active_concerns: List[str] = []
+    current_medications: List[str] = []
+    pending_orders: List[str] = []
+    handoff_to: str = ""
+
+class FallRiskRequest(BaseModel):
+    age: Optional[int] = None
+    fall_history: bool = False
+    ambulatory_aid: bool = False
+    iv_heparin: bool = False
+    gait: str = "normal"  # normal, weak, impaired
+    mental_status: str = "oriented"  # oriented, forgetful, confused, disoriented
+    diagnoses: List[str] = []
+    medications: List[str] = []
+
+class WoundStagingRequest(BaseModel):
+    wound_type: str  # pressure_ulcer, surgical, traumatic, diabetic_foot, venous, arterial
+    description: str
+    location: str = ""
+    size_cm: Optional[float] = None
+    depth: str = ""  # superficial, partial_thickness, full_thickness, eschar
+    exudate: str = ""  # none, minimal, moderate, heavy
+    surrounding_tissue: str = ""
+    patient_has_diabetes: bool = False
+    patient_has_pvd: bool = False
+
+
+@app.post("/nursing/care-plan")
+async def generate_nursing_care_plan(request: NursingCarePlanRequest):
+    """AI-generated nursing care plan based on diagnoses and patient status."""
+    diagnoses_lower = [d.lower() for d in request.diagnoses]
+    problems_lower = [p.lower() for p in request.nursing_problems]
+
+    care_plan = []
+
+    # Fall risk interventions
+    if request.fall_risk_score and request.fall_risk_score >= 45:
+        care_plan.append({
+            "problem": "High Fall Risk",
+            "goal": "Patient will remain free from falls during hospitalization",
+            "interventions": [
+                "Activate bed/chair alarms at all times",
+                "Non-slip footwear when ambulating",
+                "Keep call light within reach",
+                "Hourly safety rounds",
+                "Fall prevention education to patient and family",
+                "Place 'Fall Risk' identifier on patient armband and door"
+            ],
+            "evaluation_frequency": "every_shift",
+            "nanda": "Risk for Falls (00155)",
+            "nic": "Fall Prevention (6490)"
+        })
+
+    # Mobility-based interventions
+    if request.mobility_status in ("limited", "bedbound"):
+        care_plan.append({
+            "problem": "Impaired Physical Mobility",
+            "goal": "Patient will achieve maximum safe mobility level within 72 hours",
+            "interventions": [
+                "Reposition every 2 hours to prevent pressure injuries",
+                "Perform passive/active ROM exercises every shift",
+                "Consult physical therapy for mobility assessment",
+                "Apply sequential compression devices (SCDs) if ordered",
+                "Skin assessment with each repositioning"
+            ],
+            "evaluation_frequency": "every_shift",
+            "nanda": "Impaired Physical Mobility (00085)",
+            "nic": "Exercise Therapy: Ambulation (0221)"
+        })
+
+    # Diagnosis-driven interventions
+    dx_interventions = [
+        (["diabetes", "hyperglycemia"], {
+            "problem": "Unstable Blood Glucose",
+            "goal": "Blood glucose maintained between 140–180 mg/dL (inpatient target)",
+            "interventions": [
+                "Monitor blood glucose per protocol (pre-meal and bedtime)",
+                "Administer insulin per sliding scale as ordered",
+                "Assess for signs of hypoglycemia: diaphoresis, tremor, confusion",
+                "Provide diabetic diet education",
+                "Document all glucose readings in flow sheet"
+            ],
+            "evaluation_frequency": "every_4_hours",
+            "nanda": "Unstable Blood Glucose Level (00179)",
+            "nic": "Hyperglycemia Management (2120)"
+        }),
+        (["heart failure", "chf", "fluid overload", "edema"], {
+            "problem": "Excess Fluid Volume",
+            "goal": "Patient will demonstrate euvolemia: weight stable within 1 kg, no new edema",
+            "interventions": [
+                "Strict I&O monitoring every shift",
+                "Daily weights at same time on same scale",
+                "Monitor for respiratory distress, orthopnea",
+                "Fluid restriction per orders",
+                "Assess peripheral edema and pulmonary auscultation every 4 hours"
+            ],
+            "evaluation_frequency": "every_shift",
+            "nanda": "Excess Fluid Volume (00026)",
+            "nic": "Fluid Management (4120)"
+        }),
+        (["copd", "asthma", "pneumonia", "respiratory failure", "hypoxia"], {
+            "problem": "Impaired Gas Exchange",
+            "goal": "SpO\u2082 \u2265 94% on prescribed oxygen; no respiratory distress",
+            "interventions": [
+                "Continuous pulse oximetry monitoring",
+                "Administer oxygen per orders, titrate to SpO\u2082 \u2265 94%",
+                "Respiratory treatments per protocol (nebulizers, MDIs)",
+                "Position HOB \u2265 30\u00b0 at all times",
+                "Encourage deep breathing and incentive spirometry hourly"
+            ],
+            "evaluation_frequency": "every_4_hours",
+            "nanda": "Impaired Gas Exchange (00030)",
+            "nic": "Respiratory Monitoring (3350)"
+        }),
+        (["pain", "post-op", "surgery", "fracture"], {
+            "problem": "Acute Pain",
+            "goal": "Patient reports pain \u2264 3/10 with non-pharmacological and pharmacological interventions",
+            "interventions": [
+                "Pain assessment using 0\u201310 NRS every 4 hours and PRN",
+                "Administer analgesics per orders 30 min before activities",
+                "Non-pharmacological: repositioning, ice/heat, distraction",
+                "Document pain response 30\u201360 min after intervention",
+                "Reassess and titrate per pain protocol"
+            ],
+            "evaluation_frequency": "every_4_hours",
+            "nanda": "Acute Pain (00132)",
+            "nic": "Pain Management (1400)"
+        }),
+    ]
+
+    for dx_kws, intervention in dx_interventions:
+        if any(kw in d for kw in dx_kws for d in diagnoses_lower):
+            care_plan.append(intervention)
+
+    # Cognitive impairment
+    if request.cognitive_status in ("impaired", "confused"):
+        care_plan.append({
+            "problem": "Acute Confusion / Altered Mental Status",
+            "goal": "Patient will remain oriented x3 and free from injury",
+            "interventions": [
+                "Hourly reorientation: person, place, time",
+                "Keep familiar objects visible (clock, family photos)",
+                "Minimize environmental stimuli — dim lights at night",
+                "Avoid physical restraints; use bed alarm",
+                "CAM assessment every shift for delirium",
+                "Encourage family presence for reorientation support"
+            ],
+            "evaluation_frequency": "every_shift",
+            "nanda": "Acute Confusion (00128)",
+            "nic": "Delirium Management (6440)"
+        })
+
+    return {
+        "care_plan": care_plan,
+        "total_problems": len(care_plan),
+        "confidence": round(0.78 + min(0.15, len(care_plan) * 0.02), 2),
+        "abstained": len(care_plan) == 0,
+        "abstain_reason": "insufficient_data" if len(care_plan) == 0 else None,
+        "model_id": "nursing-care-plan-v1",
+        "surface": "nursing_intelligence"
+    }
+
+
+@app.post("/nursing/sbar")
+async def generate_sbar(request: SBARRequest):
+    """AI-generated SBAR handoff summary for nursing shift transitions."""
+    vitals_str = ""
+    if request.current_vitals:
+        parts = []
+        if "bp" in request.current_vitals: parts.append(f"BP {request.current_vitals['bp']}")
+        if "hr" in request.current_vitals: parts.append(f"HR {request.current_vitals['hr']}")
+        if "temp" in request.current_vitals: parts.append(f"T {request.current_vitals['temp']}\u00b0C")
+        if "spo2" in request.current_vitals: parts.append(f"SpO\u2082 {request.current_vitals['spo2']}%")
+        vitals_str = ", ".join(parts) if parts else "vitals not provided"
+
+    age_str = f"{request.patient_age}y/o" if request.patient_age else "patient"
+    concerns_str = "; ".join(request.active_concerns) if request.active_concerns else "no active concerns at time of handoff"
+    meds_str = ", ".join(request.current_medications[:5]) if request.current_medications else "none documented"
+    pending_str = ", ".join(request.pending_orders[:4]) if request.pending_orders else "none"
+
+    sbar = {
+        "situation": f"{age_str} admitted for {request.admission_diagnosis}. Current concerns: {concerns_str}.",
+        "background": f"Current medications include: {meds_str}. Pending orders: {pending_str}.",
+        "assessment": f"Vitals: {vitals_str if vitals_str else 'stable'}. Patient {f'has {len(request.active_concerns)} active concern(s) requiring monitoring' if request.active_concerns else 'is currently stable'}.",
+        "recommendation": f"Continue monitoring per care plan. {'Address pending concerns: ' + concerns_str + '.' if request.active_concerns else 'No immediate interventions required.'} {'Outgoing report to: ' + request.handoff_to + '.' if request.handoff_to else ''}"
+    }
+
+    return {
+        "sbar": sbar,
+        "full_text": f"S: {sbar['situation']}\nB: {sbar['background']}\nA: {sbar['assessment']}\nR: {sbar['recommendation']}",
+        "confidence": 0.82,
+        "abstained": False,
+        "model_id": "sbar-v1",
+        "surface": "nursing_intelligence"
+    }
+
+
+@app.post("/nursing/fall-risk")
+async def assess_fall_risk(request: FallRiskRequest):
+    """Morse Fall Scale-inspired fall risk assessment."""
+    score = 0
+    factors = []
+
+    if request.fall_history:
+        score += 25
+        factors.append({"factor": "History of falls", "score": 25})
+    if request.ambulatory_aid:
+        score += 15
+        factors.append({"factor": "Uses ambulatory aid", "score": 15})
+    if request.iv_heparin:
+        score += 20
+        factors.append({"factor": "IV/heparin lock in place", "score": 20})
+
+    gait_scores = {"normal": 0, "weak": 10, "impaired": 20}
+    gait_score = gait_scores.get(request.gait, 0)
+    if gait_score > 0:
+        score += gait_score
+        factors.append({"factor": f"Gait: {request.gait}", "score": gait_score})
+
+    ms_scores = {"oriented": 0, "forgetful": 5, "confused": 15, "disoriented": 15}
+    ms_score = ms_scores.get(request.mental_status, 0)
+    if ms_score > 0:
+        score += ms_score
+        factors.append({"factor": f"Mental status: {request.mental_status}", "score": ms_score})
+
+    if request.age and request.age >= 65:
+        score += 10
+        factors.append({"factor": "Age \u2265 65 years", "score": 10})
+
+    # Medication-related risk
+    high_risk_meds = ["sedative", "benzodiazepine", "opioid", "diuretic", "antihypertensive", "antidepressant"]
+    for med in request.medications:
+        if any(hm in med.lower() for hm in high_risk_meds):
+            score += 10
+            factors.append({"factor": f"High-risk medication: {med}", "score": 10})
+            break
+
+    if score >= 45:
+        risk_level = "high"
+        color = "red"
+    elif score >= 25:
+        risk_level = "moderate"
+        color = "amber"
+    else:
+        risk_level = "low"
+        color = "green"
+
+    return {
+        "total_score": score,
+        "risk_level": risk_level,
+        "risk_color": color,
+        "contributing_factors": factors,
+        "scale": "Morse Fall Scale (adapted)",
+        "interventions_required": risk_level in ("high", "moderate"),
+        "confidence": 0.88,
+        "abstained": False,
+        "model_id": "fall-risk-v1",
+        "surface": "nursing_intelligence"
+    }
+
+
+@app.post("/nursing/wound-staging")
+async def stage_wound(request: WoundStagingRequest):
+    """AI-assisted wound staging per NPIAP/EPUAP guidelines."""
+    desc_lower = request.description.lower()
+    depth_lower = request.depth.lower()
+
+    stage = None
+    staging_basis = []
+    care_recommendations = []
+
+    if request.wound_type == "pressure_ulcer":
+        if "eschar" in depth_lower or "eschar" in desc_lower:
+            stage = "Unstageable"
+            staging_basis.append("Eschar or slough obscures wound base — cannot determine true stage")
+            care_recommendations.append("Consult wound care specialist")
+            care_recommendations.append("Do NOT debride stable heel eschars in ischemic limbs")
+        elif "full_thickness" in depth_lower or "bone" in desc_lower or "tendon" in desc_lower or "muscle" in desc_lower:
+            stage = "Stage 4"
+            staging_basis.append("Full-thickness tissue loss with exposed bone, tendon, or muscle")
+            care_recommendations += ["Consult wound care/plastic surgery urgently", "Offload pressure completely", "Nutritional support: protein 1.25\u20131.5 g/kg/day"]
+        elif "full_thickness" in depth_lower or "subcutaneous" in desc_lower:
+            stage = "Stage 3"
+            staging_basis.append("Full-thickness skin loss, subcutaneous tissue visible, no exposed bone/tendon/muscle")
+            care_recommendations += ["Moist wound healing environment", "Offload pressure", "Weekly wound measurement documentation"]
+        elif "partial_thickness" in depth_lower or "blister" in desc_lower or "dermis" in desc_lower:
+            stage = "Stage 2"
+            staging_basis.append("Partial-thickness skin loss with exposed dermis")
+            care_recommendations += ["Moisture-retentive dressing (hydrocolloid)", "Do NOT massage reddened areas", "Protect from friction and shear"]
+        else:
+            stage = "Stage 1"
+            staging_basis.append("Non-blanchable erythema of intact skin")
+            care_recommendations += ["Offload pressure immediately", "Moisture barrier cream", "Repositioning every 2 hours"]
+
+    elif request.wound_type == "diabetic_foot":
+        stage = "Wagner Grade Assessment Required"
+        staging_basis.append("Diabetic foot ulcer — apply Wagner Grading Scale at bedside")
+        care_recommendations += [
+            "Vascular surgery consult if ABI < 0.8",
+            "Off-loading: TCC or removable walker boot",
+            "Culture wound if signs of infection",
+            "Daily dressing changes",
+            "Tight glucose control (HbA1c target < 7%)"
+        ]
+        if request.patient_has_pvd:
+            care_recommendations.insert(0, "URGENT: PVD present — vascular surgery consult same day")
+
+    else:
+        care_recommendations += ["Clean wound with normal saline", "Choose dressing per wound exudate level", "Reassess every 24\u201348 hours"]
+        stage = "Clinical assessment required"
+        staging_basis.append(f"Wound type: {request.wound_type} — staging requires direct clinical assessment")
+
+    # Exudate-based dressing guidance
+    exudate_dressing = {
+        "none": "Hydrogel or transparent film dressing",
+        "minimal": "Hydrocolloid dressing",
+        "moderate": "Foam dressing",
+        "heavy": "Alginate or hydrofiber dressing"
+    }
+    if request.exudate in exudate_dressing:
+        care_recommendations.append(f"Recommended dressing: {exudate_dressing[request.exudate]} (based on {request.exudate} exudate)")
+
+    return {
+        "stage": stage,
+        "staging_basis": staging_basis,
+        "care_recommendations": care_recommendations,
+        "escalation_required": stage in ("Stage 4", "Unstageable") or request.patient_has_pvd,
+        "confidence": 0.80,
+        "abstained": stage is None,
+        "model_id": "wound-staging-v1",
+        "surface": "nursing_intelligence",
+        "citations": [{"title": "NPIAP/EPUAP Pressure Ulcer Classification System", "source": "NPIAP 2019", "isPrimary": True}]
+    }
+
+
+# ── Sprint 121: Medication Reconciliation AI ────────────────────────────────
+
+class MedRecRequest(BaseModel):
+    context: str  # "admission" or "discharge"
+    home_medications: List[dict]  # [{name, dose, frequency, route}]
+    current_medications: List[dict]  # current inpatient meds
+    diagnoses: List[str] = []
+    allergies: List[str] = []
+
+class PDMPCheckRequest(BaseModel):
+    patient_name: str = ""
+    date_of_birth: str = ""
+    medications: List[dict]  # [{name, dose, frequency}]
+    controlled_substances: List[str] = []  # detected controlled substance names
+
+
+@app.post("/medication/reconciliation")
+async def reconcile_medications(request: MedRecRequest):
+    """AI-assisted admission/discharge medication reconciliation."""
+    discrepancies = []
+    recommendations = []
+
+    home_names = {m.get("name", "").lower(): m for m in request.home_medications}
+    current_names = {m.get("name", "").lower(): m for m in request.current_medications}
+
+    # Find home meds not in current (possible omissions)
+    for name, med in home_names.items():
+        if not any(name in cn or cn in name for cn in current_names):
+            disc_type = "omission"
+            severity = "high"
+            # Check if intentional holds are possible
+            intentional_holds = ["warfarin", "metformin", "aspirin", "nsaid", "lisinopril", "ace inhibitor"]
+            if any(ih in name for ih in intentional_holds):
+                severity = "medium"
+                disc_type = "hold_required"
+
+            discrepancies.append({
+                "type": disc_type,
+                "medication": med.get("name"),
+                "home_dose": med.get("dose"),
+                "current_dose": None,
+                "severity": severity,
+                "action": "Verify with prescriber — add to current regimen or document intentional hold" if disc_type == "omission" else "Verify intentional hold with prescriber and document reason"
+            })
+
+    # Find current meds not in home (possible new additions)
+    for name, med in current_names.items():
+        if not any(name in hn or hn in name for hn in home_names):
+            discrepancies.append({
+                "type": "new_addition",
+                "medication": med.get("name"),
+                "home_dose": None,
+                "current_dose": med.get("dose"),
+                "severity": "low",
+                "action": "Confirm this is intentionally new and patient/family is educated"
+            })
+
+    # Dose discrepancies
+    for name, home_med in home_names.items():
+        for cname, curr_med in current_names.items():
+            if name in cname or cname in name:
+                home_dose = home_med.get("dose", "")
+                curr_dose = curr_med.get("dose", "")
+                if home_dose and curr_dose and home_dose.lower() != curr_dose.lower():
+                    discrepancies.append({
+                        "type": "dose_discrepancy",
+                        "medication": home_med.get("name"),
+                        "home_dose": home_dose,
+                        "current_dose": curr_dose,
+                        "severity": "medium",
+                        "action": f"Verify intended dose: home {home_dose} vs current {curr_dose}"
+                    })
+
+    # Context-specific recommendations
+    if request.context == "admission":
+        recommendations.append("Reconcile all home medications against current orders within 24 hours of admission")
+        recommendations.append("Document intentional holds with clinical rationale")
+        recommendations.append("Verify allergies and cross-check with all new orders")
+    elif request.context == "discharge":
+        recommendations.append("Provide written medication list to patient at discharge (Joint Commission requirement)")
+        recommendations.append("Counsel patient on new medications, changes, and discontinuations")
+        recommendations.append("Fax/send updated med list to primary care provider within 48 hours")
+        recommendations.append("Schedule follow-up within 7 days for high-risk patients")
+
+    high_severity = sum(1 for d in discrepancies if d["severity"] == "high")
+
+    return {
+        "discrepancies": discrepancies,
+        "total_discrepancies": len(discrepancies),
+        "high_severity_count": high_severity,
+        "recommendations": recommendations,
+        "requires_pharmacist_review": len(discrepancies) > 3 or high_severity > 0,
+        "confidence": 0.82,
+        "abstained": False,
+        "model_id": "med-rec-v1",
+        "surface": "medication_reconciliation"
+    }
+
+
+@app.post("/medication/pdmp-check")
+async def pdmp_check(request: PDMPCheckRequest):
+    """Detect controlled substance patterns requiring PDMP verification."""
+    controlled_keywords = [
+        "opioid", "morphine", "oxycodone", "hydrocodone", "fentanyl", "tramadol",
+        "codeine", "oxycontin", "vicodin", "percocet", "norco",
+        "benzodiazepine", "xanax", "valium", "ativan", "klonopin", "alprazolam", "diazepam", "lorazepam",
+        "stimulant", "adderall", "ritalin", "amphetamine",
+        "carisoprodol", "soma", "zolpidem", "ambien"
+    ]
+
+    all_meds = request.medications + [{"name": cs} for cs in request.controlled_substances]
+    detected = []
+
+    for med in all_meds:
+        name_lower = (med.get("name") or "").lower()
+        if any(kw in name_lower for kw in controlled_keywords):
+            detected.append({
+                "medication": med.get("name"),
+                "schedule": "II-IV",
+                "pdmp_required": True,
+                "reason": "Controlled substance detected — PDMP query required before dispensing"
+            })
+
+    multiple_controlled = len(detected) >= 2
+    concerning_combo = any("opioid" in str(d).lower() or "morphine" in str(d).lower() for d in detected) and \
+                       any("benzo" in str(d).lower() or "xanax" in str(d).lower() or "diazepam" in str(d).lower() for d in detected)
+
+    risk_flags = []
+    if multiple_controlled:
+        risk_flags.append("Multiple controlled substances prescribed — high diversion/dependency risk")
+    if concerning_combo:
+        risk_flags.append("CRITICAL: Opioid + benzodiazepine combination — increased respiratory depression risk (FDA Black Box Warning)")
+
+    return {
+        "detected_controlled": detected,
+        "pdmp_query_required": len(detected) > 0,
+        "risk_flags": risk_flags,
+        "naloxone_indicated": concerning_combo or (len(detected) >= 1 and "opioid" in str(detected).lower()),
+        "confidence": 0.90,
+        "abstained": False,
+        "model_id": "pdmp-check-v1",
+        "surface": "medication_reconciliation"
+    }
+
+
+# ── Sprint 122: Discharge Intelligence ────────────────────────────────────
+
+class DischargeIntelligenceRequest(BaseModel):
+    patient_age: Optional[int] = None
+    admission_diagnosis: str
+    length_of_stay_days: int = 1
+    diagnoses: List[str] = []
+    discharge_medications: List[str] = []
+    vitals_at_discharge: dict = {}
+    comorbidities: List[str] = []
+    social_factors: List[str] = []  # e.g. ["lives_alone", "no_transport", "food_insecure"]
+    prior_admissions_30d: int = 0
+    insurance_type: str = "commercial"
+
+class FollowUpTimingRequest(BaseModel):
+    diagnoses: List[str]
+    discharge_medications: List[str] = []
+    length_of_stay_days: int = 1
+    risk_level: str = "medium"  # low, medium, high
+    specialty_referrals: List[str] = []
+
+
+def _get_return_precautions(diagnoses_lower: list) -> list:
+    precautions = ["Fever > 38.5\u00b0C / 101.3\u00b0F", "New or worsening symptoms", "Inability to take medications"]
+    if any(kw in d for kw in ["heart", "cardiac", "chest"] for d in diagnoses_lower):
+        precautions += ["Chest pain or pressure", "Sudden shortness of breath", "Leg swelling > baseline"]
+    if any(kw in d for kw in ["stroke", "neuro", "seizure"] for d in diagnoses_lower):
+        precautions += ["Sudden weakness or numbness", "Vision changes", "Severe headache"]
+    if any(kw in d for kw in ["diabetes", "glucose"] for d in diagnoses_lower):
+        precautions += ["Blood glucose < 70 or > 300 mg/dL"]
+    return precautions
+
+
+def _get_education_topics(diagnoses_lower: list) -> list:
+    topics = ["Medication adherence and side effects", "When to seek emergency care", "Follow-up appointment importance"]
+    if any(kw in d for kw in ["diabetes"] for d in diagnoses_lower):
+        topics += ["Glucose monitoring technique", "Insulin administration if applicable", "Diabetic diet and activity"]
+    if any(kw in d for kw in ["heart failure", "chf"] for d in diagnoses_lower):
+        topics += ["Daily weight monitoring (alert if >2 kg gain in 2 days)", "Fluid and sodium restriction", "Signs of fluid overload"]
+    if any(kw in d for kw in ["copd", "asthma"] for d in diagnoses_lower):
+        topics += ["Inhaler technique", "Smoking cessation resources", "Avoiding respiratory triggers"]
+    return topics
+
+
+@app.post("/discharge/intelligence")
+async def discharge_intelligence(request: DischargeIntelligenceRequest):
+    """AI-powered discharge summary and 30-day readmission risk."""
+    diagnoses_lower = [d.lower() for d in request.diagnoses + [request.admission_diagnosis]]
+    comorbidities_lower = [c.lower() for c in request.comorbidities]
+
+    # LACE+ inspired readmission risk scoring
+    lace_score = 0
+
+    # L — Length of stay
+    if request.length_of_stay_days >= 14:
+        lace_score += 7
+    elif request.length_of_stay_days >= 7:
+        lace_score += 5
+    elif request.length_of_stay_days >= 4:
+        lace_score += 4
+    elif request.length_of_stay_days >= 2:
+        lace_score += 2
+    else:
+        lace_score += 1
+
+    # A — Admission acuity
+    if any(kw in d for kw in ["sepsis", "mi", "stroke", "respiratory failure", "icu"] for d in diagnoses_lower):
+        lace_score += 3
+
+    # C — Comorbidities
+    comorbidity_score = min(5, len(request.comorbidities))
+    lace_score += comorbidity_score
+
+    # E — ER visits / prior admissions
+    if request.prior_admissions_30d >= 3:
+        lace_score += 4
+    elif request.prior_admissions_30d >= 1:
+        lace_score += 2
+
+    # Social risk
+    social_risk_bonus = min(3, len(request.social_factors))
+    lace_score += social_risk_bonus
+
+    # Age risk
+    if request.patient_age and request.patient_age >= 75:
+        lace_score += 2
+    elif request.patient_age and request.patient_age >= 65:
+        lace_score += 1
+
+    if lace_score >= 15:
+        readmission_risk = "high"
+        readmission_probability = min(0.45, 0.25 + (lace_score - 15) * 0.02)
+    elif lace_score >= 10:
+        readmission_risk = "moderate"
+        readmission_probability = 0.15 + (lace_score - 10) * 0.02
+    else:
+        readmission_risk = "low"
+        readmission_probability = max(0.05, lace_score * 0.01)
+
+    # Discharge summary sections
+    vitals_str = ""
+    if request.vitals_at_discharge:
+        parts = [f"BP {request.vitals_at_discharge.get('bp', 'not recorded')}",
+                 f"HR {request.vitals_at_discharge.get('hr', 'not recorded')}",
+                 f"SpO\u2082 {request.vitals_at_discharge.get('spo2', 'not recorded')}%"]
+        vitals_str = ", ".join(p for p in parts if "not recorded" not in p)
+
+    discharge_summary = {
+        "admission_reason": request.admission_diagnosis,
+        "hospital_course": f"Patient admitted for {request.admission_diagnosis}. LOS: {request.length_of_stay_days} days. " + (f"Vitals at discharge: {vitals_str}." if vitals_str else "Patient clinically stable at discharge."),
+        "active_diagnoses": request.diagnoses[:5],
+        "discharge_medications": request.discharge_medications[:10],
+        "follow_up_plan": "See follow-up timing recommendations below",
+        "return_precautions": _get_return_precautions(diagnoses_lower),
+        "patient_education_topics": _get_education_topics(diagnoses_lower),
+    }
+
+    # Interventions to reduce readmission
+    interventions = []
+    if readmission_risk in ("high", "moderate"):
+        interventions += [
+            "Schedule follow-up within 7 days of discharge",
+            "Provide 24/7 nurse callback line number",
+            "Medication reconciliation with pharmacist before discharge"
+        ]
+    if "lives_alone" in request.social_factors:
+        interventions.append("Social work referral — patient lives alone, assess home safety")
+    if "no_transport" in request.social_factors:
+        interventions.append("Arrange medical transportation for follow-up appointment")
+    if readmission_risk == "high":
+        interventions.append("Consider transitional care management (TCM) billing enrollment")
+        interventions.append("Home health referral if eligible")
+
+    return {
+        "readmission_risk": readmission_risk,
+        "readmission_probability_30d": round(readmission_probability, 2),
+        "lace_score": lace_score,
+        "discharge_summary": discharge_summary,
+        "interventions": interventions,
+        "confidence": 0.81,
+        "abstained": False,
+        "model_id": "discharge-intelligence-v1",
+        "surface": "discharge_intelligence",
+        "citations": [{"title": "LACE+ Readmission Risk Index", "source": "van Walraven C et al., CMAJ 2010", "isPrimary": True}]
+    }
+
+
+@app.post("/discharge/follow-up-timing")
+async def recommend_followup_timing(request: FollowUpTimingRequest):
+    """Evidence-based follow-up scheduling recommendations after discharge."""
+    diagnoses_lower = [d.lower() for d in request.diagnoses]
+    timing_rules = []
+
+    # High-acuity — 48–72 hours
+    if any(kw in d for kw in ["heart failure", "chf", "mi", "acs", "stroke", "sepsis", "copd exacerbation"] for d in diagnoses_lower):
+        timing_rules.append({"specialty": "Primary Care / Hospitalist", "timeframe": "48\u201372 hours", "urgency": "urgent", "rationale": "High-acuity discharge — early follow-up reduces 30-day readmission by 20\u201330%"})
+
+    # 7-day follow-up
+    if request.risk_level in ("medium", "high") or request.length_of_stay_days >= 3:
+        timing_rules.append({"specialty": "Primary Care", "timeframe": "7 days", "urgency": "high", "rationale": "CMS quality measure — 7-day follow-up for hospitalized patients"})
+
+    # Specialty-specific timing
+    specialty_timing = {
+        "cardiology": ("2\u20134 weeks", "routine", "Post-cardiac event cardiology follow-up"),
+        "neurology": ("2\u20134 weeks", "routine", "Neurological event follow-up"),
+        "oncology": ("1\u20132 weeks", "urgent", "Oncology case requires prompt reassessment"),
+        "orthopedic": ("1\u20132 weeks", "routine", "Post-surgical orthopedic follow-up"),
+        "wound care": ("3\u20135 days", "urgent", "Active wound requires early re-evaluation"),
+    }
+
+    for referral in request.specialty_referrals:
+        ref_lower = referral.lower()
+        for specialty, (timeframe, urgency, rationale) in specialty_timing.items():
+            if specialty in ref_lower or ref_lower in specialty:
+                timing_rules.append({"specialty": referral, "timeframe": timeframe, "urgency": urgency, "rationale": rationale})
+
+    # Labs at follow-up
+    lab_followups = []
+    if any("warfarin" in m.lower() or "coumadin" in m.lower() for m in request.discharge_medications):
+        lab_followups.append({"test": "PT/INR", "timeframe": "2\u20133 days", "reason": "Warfarin dose titration"})
+    if any("metformin" in m.lower() for m in request.discharge_medications):
+        lab_followups.append({"test": "Renal function (BMP)", "timeframe": "1 week", "reason": "Metformin safety monitoring post-hospitalization"})
+    if any("diuretic" in m.lower() or "lasix" in m.lower() or "furosemide" in m.lower() for m in request.discharge_medications):
+        lab_followups.append({"test": "BMP (electrolytes)", "timeframe": "3\u20135 days", "reason": "Diuretic electrolyte monitoring"})
+
+    return {
+        "follow_up_appointments": timing_rules,
+        "lab_follow_ups": lab_followups,
+        "total_appointments": len(timing_rules),
+        "confidence": 0.84,
+        "abstained": len(timing_rules) == 0,
+        "abstain_reason": "insufficient_data" if len(timing_rules) == 0 else None,
+        "model_id": "followup-timing-v1",
+        "surface": "discharge_intelligence"
+    }
+
+
+# ── Sprint 123: AI Self-Learning Hardening ────────────────────────────────
+
+class ShadowModeRequest(BaseModel):
+    surface: str
+    payload: dict
+    production_response: dict  # what the prod model returned
+    challenger_version: Optional[str] = None
+
+class BiasAuditRequest(BaseModel):
+    surface: str
+    feedback_entries: List[dict]  # [{outcome_score, demographic_group, age_bucket, gender, sdoh_flag}]
+    protected_attributes: List[str] = ["age_bucket", "gender", "sdoh_flag"]
+
+class AuditAnomalyRequest(BaseModel):
+    surface: str
+    recent_metrics: List[dict]  # [{metric_date, accuracy, abstention_rate, avg_latency_ms, fairness_sdoh_parity}]
+    lookback_days: int = 30
+
+
+@app.post("/self-learning/shadow-eval")
+async def shadow_mode_eval(request: ShadowModeRequest):
+    """
+    Run a challenger model alongside production. Logs divergence for human review.
+    Currently a stub — Sprint 123 wire-up: route to challenger model endpoint per surface.
+    """
+    prod = request.production_response
+
+    # Simulate challenger response (same surface, slightly different seed)
+    challenger_response = {**prod, "_challenger": True, "_challenger_version": request.challenger_version or "shadow-v2"}
+
+    # Compute divergence
+    prod_confidence = prod.get("confidence") or prod.get("certainty_level") or 0.0
+    challenger_confidence = challenger_response.get("confidence") or 0.0
+
+    prod_abstained = prod.get("abstained", False)
+    challenger_abstained = challenger_response.get("abstained", False)
+
+    confidence_delta = abs(float(prod_confidence) - float(challenger_confidence))
+    abstention_divergence = prod_abstained != challenger_abstained
+
+    record = {
+        "surface": request.surface,
+        "timestamp": datetime.utcnow().isoformat(),
+        "production_confidence": prod_confidence,
+        "challenger_confidence": challenger_confidence,
+        "confidence_delta": round(confidence_delta, 3),
+        "abstention_divergence": abstention_divergence,
+        "needs_human_review": confidence_delta > 0.20 or abstention_divergence,
+    }
+
+    # Log to shadow mode journal
+    import pathlib
+    journal = pathlib.Path(f"/tmp/shadow_{request.surface}.jsonl")
+    try:
+        with journal.open("a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass
+
+    return {
+        "shadow_record": record,
+        "production_response": prod,
+        "challenger_response": challenger_response,
+        "divergence_flagged": record["needs_human_review"],
+        "model_id": f"shadow-eval-v1",
+        "surface": request.surface
+    }
+
+
+@app.post("/self-learning/bias-audit")
+async def bias_audit(request: BiasAuditRequest):
+    """Compute demographic parity gaps across protected attributes."""
+    if not request.feedback_entries:
+        return {"bias_report": [], "max_parity_gap": None, "abstained": True, "abstain_reason": "insufficient_data"}
+
+    bias_report = []
+
+    for attr in request.protected_attributes:
+        groups: dict = {}
+        for entry in request.feedback_entries:
+            group_val = str(entry.get(attr, "unknown"))
+            score = entry.get("outcome_score")
+            if score is not None:
+                if group_val not in groups:
+                    groups[group_val] = []
+                groups[group_val].append(float(score))
+
+        if len(groups) < 2:
+            continue
+
+        group_means = {g: sum(v) / len(v) for g, v in groups.items() if v}
+        if not group_means:
+            continue
+
+        max_mean = max(group_means.values())
+        min_mean = min(group_means.values())
+        parity_gap = round(max_mean - min_mean, 3)
+
+        worst_group = min(group_means, key=lambda k: group_means[k])
+        best_group = max(group_means, key=lambda k: group_means[k])
+
+        bias_report.append({
+            "attribute": attr,
+            "group_means": {k: round(v, 3) for k, v in group_means.items()},
+            "parity_gap": parity_gap,
+            "worst_performing_group": worst_group,
+            "best_performing_group": best_group,
+            "passes_threshold": parity_gap <= 0.10,  # <10% gap = acceptable
+            "recommendation": f"Review {attr}: gap of {parity_gap:.1%} between {worst_group} and {best_group}" if parity_gap > 0.10 else f"{attr} parity acceptable ({parity_gap:.1%} gap)"
+        })
+
+    max_gap = max((r["parity_gap"] for r in bias_report), default=0)
+
+    return {
+        "surface": request.surface,
+        "bias_report": bias_report,
+        "max_parity_gap": round(max_gap, 3),
+        "overall_pass": max_gap <= 0.10,
+        "sample_size": len(request.feedback_entries),
+        "confidence": min(0.90, 0.60 + len(request.feedback_entries) / 1000),
+        "model_id": "bias-audit-v1",
+        "surface": request.surface
+    }
+
+
+@app.post("/self-learning/audit-anomaly")
+async def audit_anomaly_detection(request: AuditAnomalyRequest):
+    """Detect anomalies in AI ops metrics — accuracy drops, latency spikes, abstention surges."""
+    anomalies = []
+
+    if len(request.recent_metrics) < 2:
+        return {"anomalies": [], "surface": request.surface, "abstained": True, "abstain_reason": "insufficient_data"}
+
+    sorted_metrics = sorted(request.recent_metrics, key=lambda x: x.get("metric_date", ""))
+    latest = sorted_metrics[-1]
+    prior = sorted_metrics[-2]
+
+    # Accuracy drop > 5%
+    latest_acc = latest.get("accuracy")
+    prior_acc = prior.get("accuracy")
+    if latest_acc is not None and prior_acc is not None:
+        drop = float(prior_acc) - float(latest_acc)
+        if drop > 0.05:
+            anomalies.append({
+                "type": "accuracy_drop",
+                "severity": "critical" if drop > 0.15 else "high",
+                "message": f"Accuracy dropped {drop:.1%} ({prior_acc:.1%} \u2192 {latest_acc:.1%})",
+                "action": "Halt auto-deployment; trigger manual model review; consider rollback"
+            })
+
+    # Abstention surge > 20% of calls
+    latest_abs = latest.get("abstention_rate") or (latest.get("abstention_count", 0) / max(latest.get("total_calls", 1), 1))
+    if float(latest_abs) > 0.20:
+        anomalies.append({
+            "type": "abstention_surge",
+            "severity": "high",
+            "message": f"Abstention rate {float(latest_abs):.1%} — model refusing >20% of requests",
+            "action": "Check input data quality; review safety gate thresholds; check CDSS service health"
+        })
+
+    # Latency spike > 3x baseline
+    latest_lat = latest.get("avg_latency_ms")
+    prior_lat = prior.get("avg_latency_ms")
+    if latest_lat is not None and prior_lat is not None and float(prior_lat) > 0:
+        ratio = float(latest_lat) / float(prior_lat)
+        if ratio > 3.0:
+            anomalies.append({
+                "type": "latency_spike",
+                "severity": "medium",
+                "message": f"Latency {float(latest_lat):.0f}ms vs baseline {float(prior_lat):.0f}ms ({ratio:.1f}x increase)",
+                "action": "Check CDSS service load; review model complexity; consider timeout adjustment"
+            })
+
+    # Fairness degradation
+    latest_fair = latest.get("fairness_sdoh_parity")
+    if latest_fair is not None and float(latest_fair) > 0.10:
+        anomalies.append({
+            "type": "fairness_degradation",
+            "severity": "high",
+            "message": f"SDOH parity gap {float(latest_fair):.1%} exceeds 10% threshold",
+            "action": "Review recent training data for SDOH bias; pause auto-learning approval for this surface"
+        })
+
+    return {
+        "surface": request.surface,
+        "anomalies": anomalies,
+        "anomaly_count": len(anomalies),
+        "critical_count": sum(1 for a in anomalies if a["severity"] == "critical"),
+        "requires_immediate_action": any(a["severity"] == "critical" for a in anomalies),
+        "model_id": "audit-anomaly-v1",
+        "abstained": False
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

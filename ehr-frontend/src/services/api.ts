@@ -11205,6 +11205,41 @@ export const cdssApi = {
     const token = localStorage.getItem('token') || '';
     return ehrAxios.post('/icu/cdss/sedation/assess', data, { headers: { Authorization: `Bearer ${token}` } });
   },
+  // ── Sprint 119: Clinical Order Intelligence ─────────────────────────
+  suggestOrderSets: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/order/suggest-sets', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  checkImagingAppropriateness: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/order/imaging-appropriateness', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  predictPriorAuth: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/order/prior-auth-predict', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  checkLabReorder: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/lab/reorder-check', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  // ── Sprint 120: Nursing Intelligence Suite ────────────────────────────
+  generateNursingCarePlan: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/nursing/care-plan', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  generateSBAR: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/nursing/sbar', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  assessFallRisk: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/nursing/fall-risk', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  stageWound: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/nursing/wound-staging', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  // ── Sprint 121: Medication Reconciliation AI ──────────────────────────
+  reconcileMedications: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/medication/reconciliation', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  checkPDMP: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/medication/pdmp-check', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  // ── Sprint 122: Discharge Intelligence ───────────────────────────────
+  getDischargeIntelligence: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/discharge/intelligence', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  getFollowUpTiming: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/discharge/follow-up-timing', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  // ── Sprint 123: AI Self-Learning Hardening ────────────────────────────
+  runShadowEval: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/self-learning/shadow-eval', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  runBiasAudit: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/self-learning/bias-audit', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  detectAuditAnomalies: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/self-learning/audit-anomaly', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
 };
 
 export const {
