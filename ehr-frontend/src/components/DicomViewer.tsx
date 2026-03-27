@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Brain, ZoomIn, ZoomOut, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import { ehrAxios } from '../services/api';
+import { runtimeUrls } from '../config/runtime';
 
 // Dynamic import of cornerstone to avoid SSR issues
 let cs: any = null;
@@ -68,7 +69,7 @@ export const DicomViewer: React.FC<DicomViewerProps> = ({
 
     initCornerstone().then(() => {
       const element = canvasRef.current!;
-      const baseUrl = (window as any).__EHR_API_BASE__ ?? 'http://localhost:3013';
+      const baseUrl = (window as any).__EHR_API_BASE__ ?? runtimeUrls.ehrApi ?? '';
       const wadoUrl = `${baseUrl}/imaging/wado/${studyUid}/${seriesUid}/${instanceUid}`;
       const imageId = `wadouri:${wadoUrl}`;
 

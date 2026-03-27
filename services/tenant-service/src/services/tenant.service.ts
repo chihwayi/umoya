@@ -316,11 +316,9 @@ export class TenantService implements OnModuleInit {
 
     const ehrBase = (
       process.env.PUBLIC_EHR_BASE_URL ||
-      process.env.REACT_APP_EHR_API_URL ||
       (process.env.SERVER_HOST ? `http://${process.env.SERVER_HOST}:${process.env.PORT_EHR_SERVICE || '3013'}/api` : '') ||
-      `http://localhost:${process.env.PORT_EHR_SERVICE || '3013'}/api` ||
       process.env.SERVICE_EHR_URL ||
-      'http://localhost:3013/api'
+      `http://localhost:${process.env.PORT_EHR_SERVICE || '3013'}/api`
     ).replace(/\/$/, '');
 
     const publicEhrBase = ehrBase.endsWith('/api') ? ehrBase : `${ehrBase}/api`;
