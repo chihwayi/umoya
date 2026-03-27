@@ -129,6 +129,21 @@ export const GuidelineRecommendationCard: React.FC<GuidelineRecommendationCardPr
           </ul>
         </div>
       )}
+
+      {/* References / Citations (Sprint 113) */}
+      {data.references && data.references.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-slate-100 ml-8">
+          <p className="text-xs font-semibold text-slate-500 mb-1">Sources</p>
+          <ul className="space-y-0.5">
+            {data.references.map((ref: any, i: number) => (
+              <li key={i} className="text-xs text-slate-500 flex items-start gap-1">
+                <span className="mt-0.5">📖</span>
+                <span>{typeof ref === 'string' ? ref : (ref.text || ref.title || ref.source)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

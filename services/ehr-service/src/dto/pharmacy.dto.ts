@@ -11,6 +11,7 @@ import {
   IsUUID,
   Max,
   Min,
+  MinLength,
   ValidateIf,
   IsArray,
   ValidateNested,
@@ -961,5 +962,60 @@ export class UpdateAlertDto {
   @IsString()
   @IsOptional()
   notes?: string;
+}
+
+export class ContraindicationOverrideDto {
+  @IsUUID()
+  patientId: string;
+
+  @IsString()
+  @MinLength(20, { message: 'Override reason must be at least 20 characters for audit purposes' })
+  overrideReason: string;
+
+  @IsString()
+  drugName: string;
+
+  @IsString()
+  interactingDrug: string;
+
+  @IsString()
+  @IsOptional()
+  medicationName?: string;
+
+  @IsString()
+  @IsOptional()
+  genericName?: string;
+
+  @IsString()
+  @IsOptional()
+  strength?: string;
+
+  @IsString()
+  @IsOptional()
+  form?: string;
+
+  @IsString()
+  @IsOptional()
+  dosage?: string;
+
+  @IsString()
+  @IsOptional()
+  frequency?: string;
+
+  @IsString()
+  @IsOptional()
+  route?: string;
+
+  @IsString()
+  @IsOptional()
+  quantity?: string;
+
+  @IsString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsString()
+  @IsOptional()
+  instructions?: string;
 }
 

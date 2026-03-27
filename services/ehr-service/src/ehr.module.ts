@@ -79,6 +79,8 @@ import { HipaaAuditController } from './controllers/hipaa-audit.controller';
 import { AdminAuditController } from './controllers/admin-audit.controller';
 import { QualityMeasuresController } from './controllers/quality-measures.controller';
 import { PharmacyController } from './controllers/pharmacy.controller';
+import { KnowledgeController } from './controllers/knowledge.controller';
+import { ClaimsAiController } from './controllers/claims-ai.controller';
 import { DoctorAvailabilityController } from './controllers/doctor-availability.controller';
 import { TelemedicineController } from './controllers/telemedicine.controller';
 import { AnalyticsController } from './controllers/analytics.controller';
@@ -359,6 +361,10 @@ import { ModelRegistryService } from './services/model-registry.service';
 import { TelemedicinePostVisitBridgeService } from './services/telemedicine-postvisit-bridge.service';
 import { StaffNotificationsService } from './services/staff-notifications.service';
 import { RegistrationIntelligenceService } from './services/registration-intelligence.service';
+import { KnowledgeIngestService } from './services/knowledge-ingest.service';
+import { ClaimsAiService } from './services/claims-ai.service';
+import { RiskStratificationService } from './services/risk-stratification.service';
+import { OutcomeCollectionService } from './services/outcome-collection.service';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -529,6 +535,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ModelRegistryController,
     StaffNotificationsController,
     RegistrationIntelligenceController,
+    KnowledgeController,
+    ClaimsAiController,
   ],
   providers: [
     AuthService,
@@ -737,6 +745,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ModelRegistryService,
     StaffNotificationsService,
     RegistrationIntelligenceService,
+    KnowledgeIngestService,
+    ClaimsAiService,
+    RiskStratificationService,
+    OutcomeCollectionService,
     CriticalAlertGateway,
     VoiceTranscriptionGateway,
     RolesGuard,

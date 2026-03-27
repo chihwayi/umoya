@@ -14,9 +14,9 @@ export interface TriageInput {
 }
 
 interface CdssTriageResult {
-  priority: 'critical' | 'urgent' | 'routine' | 'informational';
+  priority: 'critical' | 'urgent' | 'routine' | 'informational' | 'pending_review';
   priority_reason: string;
-  triage_score: number;
+  triage_score: number | null;
   triage_model: string;
   due_by_hours?: number;
   draft_reply?: string;
@@ -40,9 +40,9 @@ export class InboxTriageService {
     const preview = input.content.slice(0, 200);
 
     let triageResult: CdssTriageResult = {
-      priority:        'routine',
-      priority_reason: 'Default triage — CDSS unavailable',
-      triage_score:    30,
+      priority:        'pending_review',
+      priority_reason: 'CDSS unavailable — manual review required',
+      triage_score:    null,
       triage_model:    'fallback',
     };
 
@@ -75,14 +75,24 @@ export class InboxTriageService {
       aiDraftReply:     triageResult.draft_reply,
       triageScore:      triageResult.triage_score,
       triageModel:      triageResult.triage_model,
-      dueBy:            triageResult.due_by_hours
+      dueBy: triageResult.due_by_hours
         ? new Date(Date.now() + triageResult.due_by_hours * 3_600_000)
-        : undefined,
+        : triageResult.priority === 'pending_review'
+          ? new Date(Date.now() + 30 * 60 * 1000)
+          : undefined,
       isRead:     false,
       isActioned: false,
     });
 
     const saved = await repo.save(item);
+
+    // Notify staff if item requires manual review (Sprint 112 P0-5)
+    if (saved.aiPriority === 'pending_review') {
+      this.logger.warn(
+        `Inbox item ${saved.id} requires manual triage (CDSS unavailable). ` +
+        `Due: ${saved.dueBy?.toISOString() ?? 'immediately'}`,
+      );
+    }
 
     // WebSocket push to the recipient
     this.inboxGateway.pushToUser(input.userId, saved);

@@ -50,6 +50,21 @@ export class PatientEarlyWarningScore {
   @Column({ name: 'alert_acknowledged_at', type: 'timestamptz', nullable: true })
   alertAcknowledgedAt: Date | null;
 
+  @Column({ name: 'news2_components', type: 'jsonb', nullable: true })
+  news2Components: Record<string, number> | null;
+
+  @Column({ name: 'deterioration_probability', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  deteriorationProbability: number | null;
+
+  @Column({ name: 'deterioration_risk_horizon', type: 'int', nullable: true })
+  deteriorationRiskHorizon: number | null;
+
+  @Column({ name: 'ml_interventions', type: 'jsonb', default: '[]' })
+  mlInterventions: any[];
+
+  @Column({ name: 'ml_confidence', type: 'numeric', precision: 5, scale: 4, nullable: true })
+  mlConfidence: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

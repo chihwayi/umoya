@@ -23,6 +23,7 @@ const PatientDashboard: React.FC = () => {
   });
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [healthSummary, setHealthSummary] = useState<{ summary: string; riskLevel: string; pendingActions: number } | null>(null);
 
   useEffect(() => {
     loadStats();
@@ -35,6 +36,8 @@ const PatientDashboard: React.FC = () => {
       
       if (summary) {
         setDashboardData(summary);
+        // Load health summary (non-blocking)
+        patientPortalApi.getHealthSummary(token!, tenantSlug).then(setHealthSummary).catch(() => null);
         setStats({
           upcomingAppointments: summary.summary?.appointments || summary.appointmentCount || 0,
           pendingBills: summary.summary?.pendingBills || summary.pendingBillCount || 0,
@@ -242,6 +245,33 @@ const PatientDashboard: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* AI Health Summary Banner (Sprint 113) */}
+        {healthSummary && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 mb-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-800 flex items-center gap-1">
+                  <Bot size={14} /> Your Health Summary
+                </p>
+                <p className="text-sm text-blue-700 mt-1">{healthSummary.summary}</p>
+              </div>
+              {healthSummary.riskLevel && healthSummary.riskLevel !== 'low' && (
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                  healthSummary.riskLevel === 'high' || healthSummary.riskLevel === 'critical'
+                    ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {healthSummary.riskLevel.toUpperCase()}
+                </span>
+              )}
+            </div>
+            {healthSummary.pendingActions > 0 && (
+              <p className="text-xs text-blue-600 mt-2">
+                You have <span className="font-bold">{healthSummary.pendingActions}</span> pending action(s) that need your attention.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Quick Stats */}
         {/* Compact Statistics Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">

@@ -616,6 +616,25 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                   {typeof cdssInsights.risk.overall_score === 'number' && (
                     <p className="text-xs text-slate-500">Score: {cdssInsights.risk.overall_score.toFixed(1)}</p>
                   )}
+                  {/* ML Deterioration Probability (Sprint 113) */}
+                  {cdssInsights.risk.deteriorationProbability != null && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-slate-500">ML Deterioration Risk:</span>
+                      <span className={`text-sm font-bold ${
+                        cdssInsights.risk.deteriorationProbability > 0.7 ? 'text-red-600' :
+                        cdssInsights.risk.deteriorationProbability > 0.4 ? 'text-amber-600' :
+                        'text-green-600'
+                      }`}>
+                        {(cdssInsights.risk.deteriorationProbability * 100).toFixed(0)}%
+                      </span>
+                      {cdssInsights.risk.deteriorationRiskHorizon && (
+                        <span className="text-xs text-slate-400">within {cdssInsights.risk.deteriorationRiskHorizon}h</span>
+                      )}
+                      {cdssInsights.risk.mlConfidence && (
+                        <span className="text-xs text-slate-400">({(cdssInsights.risk.mlConfidence * 100).toFixed(0)}% conf)</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 space-y-2">
@@ -671,6 +690,21 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                       />
                     );
                   })}
+                </div>
+              )}
+
+              {/* Interventions Section (Sprint 113) */}
+              {(cdssInsights?.risk?.interventions?.length > 0 || cdssInsights?.risk?.mlInterventions?.length > 0) && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-slate-600 mb-1">Recommended Interventions</p>
+                  <ul className="space-y-1">
+                    {[...(cdssInsights?.risk?.interventions || []), ...(cdssInsights?.risk?.mlInterventions || [])].map((item: any, i: number) => (
+                      <li key={i} className="text-xs text-slate-700 flex items-start gap-1">
+                        <span className="text-blue-500 mt-0.5">•</span>
+                        <span>{typeof item === 'string' ? item : item.action || item.text}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

@@ -5,6 +5,7 @@ import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
 import * as FormData from 'form-data';
 import { config as envConfig } from '@medicore/config';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
+import { PatientConsentService } from './patient-consent.service';
 import { createHash, createHmac, randomUUID } from 'crypto';
 import { MetricsService } from './metrics.service';
 import { HipaaAuditService } from './hipaa-audit.service';
@@ -232,6 +233,8 @@ export class CdssService {
     private readonly metricsService?: MetricsService,
     @Optional() @Inject(HipaaAuditService)
     private readonly hipaaAuditService?: HipaaAuditService,
+    @Optional() @Inject(PatientConsentService)
+    private readonly patientConsentService?: PatientConsentService,
   ) {
     this.cdssServiceUrl = String(process.env.CDSS_SERVICE_URL || envConfig.urls.cdssService || '').trim();
     this.cdssServiceToken = process.env.CDSS_SERVICE_TOKEN;
@@ -636,6 +639,33 @@ export class CdssService {
       this.logger.warn(`CDSS service unavailable, using basic checking: ${error.message}`);
       // Fallback to basic checking
       return this.basicDrugInteractionCheck(drugIds);
+    }
+  }
+
+  async checkDrugInteractionsAdvanced(params: {
+    patientId: string;
+    newDrug: string;
+    currentMedications: string[];
+    allergies: string[];
+  }): Promise<{ interactions: Array<{ severity: string; severity_score: number; interactingDrug: string; clinical_significance: string; [key: string]: any }> }> {
+    try {
+      const responseData = await this.postWithPolicy<any>(
+        'drug_interactions_advanced',
+        '/drugs/interactions/advanced',
+        {
+          patient_id: params.patientId,
+          new_drug: params.newDrug,
+          current_medications: params.currentMedications,
+          allergies: params.allergies,
+        },
+        15000,
+      );
+      return {
+        interactions: responseData.interactions || [],
+      };
+    } catch (error: any) {
+      this.logger.warn(`checkDrugInteractionsAdvanced failed: ${error.message}`);
+      return { interactions: [] };
     }
   }
 
@@ -1468,6 +1498,11 @@ export class CdssService {
     tenantId?: string,
     tenantDb?: DataSource,
   ): Promise<GovernedJsonCompletionResponse> {
+    // Consent check — only for direct patient-context calls
+    if (payload.patientId && tenantDb && this.patientConsentService) {
+      await this.patientConsentService.requireAiConsent(payload.patientId, 'cdss_ai_processing', tenantDb);
+    }
+
     const responseData = await this.postWithPolicy<any>(
       `governed_json_${payload.useCase}`,
       '/governed/json',
@@ -4094,5 +4129,91 @@ export class CdssService {
     });
 
     return responseData;
+  }
+
+  async predictClaimDenial(payload: Record<string, any>, tenantId?: string): Promise<{
+    risk_score: number;
+    confidence: number;
+    threshold_action: 'allow' | 'warn' | 'block';
+    top_reasons: Array<{ code: string; description: string; weight: number }>;
+    model_version: string;
+    feature_snapshot: Record<string, any>;
+  }> {
+    return this.postWithPolicy<any>('denial_prediction', '/cdss/claims/denial-prediction', { payload }, 15000, tenantId);
+  }
+
+  async generateAppealTemplateCdss(payload: Record<string, any>, tenantId?: string): Promise<{
+    draft_letter: string;
+    denial_reason_code: string;
+    rag_sources: Array<{ documentId: string; title: string; excerpt: string; relevanceScore: number }>;
+    model_version: string;
+  }> {
+    return this.postWithPolicy<any>('appeal_template', '/cdss/claims/appeal-template', { payload }, 20000, tenantId);
+  }
+
+  async checkPdmpDrug(payload: {
+    drug_name: string;
+    dea_schedule: string | null;
+    daily_dose_mg: number;
+    other_active_controlled_prescriptions: any[];
+    prior_substance_abuse_flags: any[];
+  }, tenantId?: string): Promise<{
+    risk_level: string;
+    risk_score: number;
+    morphine_milligram_equivalent: number | null;
+    dispensing_blocked: boolean;
+    prescriber_alerts: any[];
+    other_active_prescriptions: any[];
+    cdss_recommendation: string;
+  }> {
+    return this.postWithPolicy<any>('pdmp_check', '/cdss/pharmacy/pdmp-check', { payload }, 10000, tenantId);
+  }
+
+  async stratifyPatientRisk(payload: Record<string, unknown>, tenantId?: string): Promise<{
+    tier: string;
+    composite_score: number;
+    chronic_condition_score: number;
+    vitals_trend_score: number;
+    adherence_score: number;
+    sdoh_score: number;
+    no_show_rate: number;
+    lab_trend_score: number;
+    contributing_factors: Array<{ factor: string; weight: number; value: string }>;
+    recommended_actions: Array<{ action: string; priority: number; dueWithinDays: number }>;
+    model_version: string;
+  }> {
+    return this.postWithPolicy<any>('risk_stratification', '/cdss/risk/stratify', { payload }, 15000, tenantId);
+  }
+
+  async ingestKnowledgeDocument(payload: {
+    documentId: string;
+    tenantId: string;
+    fileBase64: string;
+    mimeType: string;
+    metadata: Record<string, any>;
+  }): Promise<{ chunkCount: number; embeddingModel: string }> {
+    const response = await this.postWithPolicy<any>('knowledge_ingest', '/knowledge/ingest', {
+      document_id: payload.documentId,
+      tenant_id: payload.tenantId,
+      file_base64: payload.fileBase64,
+      mime_type: payload.mimeType,
+      metadata: payload.metadata,
+    }, 120000, payload.tenantId);
+    return { chunkCount: response.chunk_count, embeddingModel: response.embedding_model };
+  }
+
+  async searchKnowledge(query: string, tenantId: string, filters?: {
+    specialty?: string;
+    documentType?: string;
+    topK?: number;
+  }): Promise<any[]> {
+    await this.recordGovernedPromptAudit({ useCase: 'knowledge_search', source: 'rag_retrieval', tenantId });
+    const response = await this.postWithPolicy<any>('knowledge_search', '/knowledge/search', {
+      query,
+      tenant_id: tenantId,
+      filters: filters || {},
+      top_k: filters?.topK || 5,
+    }, 15000, tenantId);
+    return response.results || [];
   }
 }

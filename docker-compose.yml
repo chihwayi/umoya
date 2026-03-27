@@ -1,7 +1,7 @@
 services:
   # Databases
   postgres-master:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: medicore-postgres-master
     environment:
       POSTGRES_DB: ${POSTGRES_DB}

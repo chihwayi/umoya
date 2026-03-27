@@ -989,6 +989,22 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
                 </button>
               )}
             </div>
+            {/* Confidence Badge (Sprint 113) */}
+            {(aiDraft as any).confidence !== undefined && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">AI Draft Quality:</span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  (aiDraft as any).confidence >= 0.8 ? 'bg-green-100 text-green-700' :
+                  (aiDraft as any).confidence >= 0.6 ? 'bg-amber-100 text-amber-700' :
+                  'bg-red-100 text-red-700'
+                }`}>
+                  {((aiDraft as any).confidence * 100).toFixed(0)}% confidence
+                </span>
+                {(aiDraft as any).confidence < 0.6 && (
+                  <span className="text-xs text-red-600">⚠ Low confidence — review carefully</span>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3 text-xs text-slate-700">
               <div className="rounded-lg bg-white px-3 py-3 border border-violet-100">
                 <p className="font-semibold text-slate-900 mb-1">Draft Findings</p>
@@ -1067,6 +1083,16 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
                 <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">
                   Status: {followup.status.replace(/_/g, ' ')}
                 </p>
+                {(followup as any).followupDueDate && (
+                  <p className={`mt-0.5 text-xs font-medium ${
+                    Math.ceil((new Date((followup as any).followupDueDate).getTime() - Date.now()) / 86400000) <= 7
+                      ? 'text-red-600' : 'text-amber-600'
+                  }`}>
+                    {Math.ceil((new Date((followup as any).followupDueDate).getTime() - Date.now()) / 86400000) <= 0
+                      ? 'OVERDUE'
+                      : `Due in ${Math.ceil((new Date((followup as any).followupDueDate).getTime() - Date.now()) / 86400000)}d`}
+                  </p>
+                )}
                 <p className="mt-1">{followup.summary}</p>
                 {followup.recommendedAction && <p className="mt-1">Action: {followup.recommendedAction}</p>}
                 {followup.resolutionNotes && <p className="mt-1">Resolution: {followup.resolutionNotes}</p>}

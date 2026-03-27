@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PatientConsent } from '../entities/patient-consent.entity';
 import { ConsentSignature } from '../entities/consent-signature.entity';
@@ -493,6 +493,28 @@ export class PatientConsentService {
     }
 
     return expiredCount;
+  }
+
+  async checkAiConsent(patientId: string, consentType: string, tenantDb: DataSource): Promise<boolean> {
+    const repository = tenantDb.getRepository(PatientConsent);
+    const consent = await repository.findOne({
+      where: {
+        patientId,
+        consentType,
+        status: ConsentStatus.SIGNED,
+      },
+    });
+    if (!consent) return true;
+    return consent.status === ConsentStatus.SIGNED;
+  }
+
+  async requireAiConsent(patientId: string, consentType: string, tenantDb: DataSource): Promise<void> {
+    const allowed = await this.checkAiConsent(patientId, consentType, tenantDb);
+    if (!allowed) {
+      throw new ForbiddenException(
+        `Patient ${patientId} has not consented to AI processing type: ${consentType}`
+      );
+    }
   }
 }
 

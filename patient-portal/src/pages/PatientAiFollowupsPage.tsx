@@ -19,6 +19,7 @@ type Followup = {
   missedFollowupFlag?: boolean;
   routeBackTarget?: string | null;
   dueAt?: string | null;
+  checklistItems?: Array<{ id: string; text: string; completed?: boolean }> | null;
   lastTouchedAt?: string | null;
   completedAt?: string | null;
   session?: {
@@ -78,6 +79,25 @@ const PatientAiFollowupsPage: React.FC = () => {
       showSuccess('AI follow-up updated', successMessage);
     } catch (err: any) {
       showError('Update failed', err.message || 'Failed to update AI follow-up');
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleFollowupOutcome = async (followupId: string, outcome: 'completed' | 'unable') => {
+    try {
+      setActioningId(followupId);
+      const statusUpdate = outcome === 'completed' ? 'completed' : 'in_progress';
+      const updated = await patientPortalApi.updateAiFollowup(
+        followupId,
+        { status: statusUpdate as any },
+        token!,
+        tenantSlug
+      );
+      setFollowups((current) => current.map((item) => (item.id === followupId ? { ...item, ...updated } : item)));
+      showSuccess('Updated', outcome === 'completed' ? 'Follow-up marked complete!' : 'Follow-up noted — a clinician will reach out.');
+    } catch (err: any) {
+      showError('Update failed', err.message || 'Failed to update');
     } finally {
       setActioningId(null);
     }
@@ -185,6 +205,45 @@ const PatientAiFollowupsPage: React.FC = () => {
                   <span className="line-clamp-2">Latest reply: {followup.session.latestReply}</span>
                 </div>
               )}
+            {/* Checklist Items (Sprint 113) */}
+            {followup.checklistItems && followup.checklistItems.length > 0 && (
+              <div className="mt-2 mb-2">
+                <p className="text-xs font-semibold text-gray-600 mb-1">Your Action Items:</p>
+                {followup.checklistItems.map((item) => (
+                  <div key={item.id} className="flex items-start gap-2 mb-1">
+                    <input
+                      type="checkbox"
+                      checked={item.completed || false}
+                      readOnly
+                      className="mt-0.5"
+                    />
+                    <span className={`text-xs ${item.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                      {item.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Outcome Capture Buttons (Sprint 113) */}
+            {followup.status === 'in_progress' && (
+              <div className="mt-3 flex gap-2 flex-wrap">
+                <button
+                  onClick={() => handleFollowupOutcome(followup.id, 'completed')}
+                  disabled={actioningId === followup.id}
+                  className="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 disabled:opacity-50"
+                >
+                  ✓ I completed this
+                </button>
+                <button
+                  onClick={() => handleFollowupOutcome(followup.id, 'unable')}
+                  disabled={actioningId === followup.id}
+                  className="text-xs bg-slate-200 text-slate-600 px-3 py-1 rounded hover:bg-slate-300 disabled:opacity-50"
+                >
+                  I wasn't able to
+                </button>
+              </div>
+            )}
             </div>
           </div>
 

@@ -2,6 +2,7 @@ import {
   Entity, PrimaryGeneratedColumn, Column,
   CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn,
 } from 'typeorm';
+import { encryptionTransformer } from '../transformers/encryption.transformer';
 import { Patient } from './patient.entity';
 import { User } from './user.entity';
 
@@ -42,7 +43,7 @@ export class AmbientSession {
   audioStorageKey?: string;
 
   /** Full raw transcript assembled from all chunks */
-  @Column({ name: 'transcript_raw', type: 'text', nullable: true })
+  @Column({ name: 'transcript_raw', type: 'text', nullable: true, transformer: encryptionTransformer })
   transcriptRaw?: string;
 
   /**

@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { encryptionTransformer } from '../transformers/encryption.transformer';
 
 @Entity('post_visit_draft_artifacts')
 export class PostVisitDraftArtifact {
@@ -16,8 +17,8 @@ export class PostVisitDraftArtifact {
   @Column({ name: 'artifact_status', type: 'varchar', length: 20, default: 'draft' })
   artifactStatus: 'draft' | 'reviewed' | 'published';
 
-  @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
-  content: Record<string, any>;
+  @Column({ type: 'text', nullable: true, transformer: encryptionTransformer })
+  content: string | null;
 
   @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
   citations: Array<Record<string, any>>;

@@ -36,6 +36,8 @@ const ClaimsDashboard = lazy(() => import('./pages/ClaimsDashboard'));
 const TelemedicineDashboard = lazy(() => import('./pages/TelemedicineDashboard'));
 const TelemedicineConsultationPage = lazy(() => import('./pages/TelemedicineConsultationPage'));
 const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'));
+const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then(m => ({ default: m.KnowledgeBasePage })));
+const AiOpsDashboard = lazy(() => import('./pages/AiOpsDashboard').then(m => ({ default: m.AiOpsDashboard })));
 const EDDashboard = lazy(() => import('./pages/EDDashboard'));
 const BedManagementDashboard = lazy(() => import('./pages/BedManagementDashboard'));
 const AdmittedPatientPage = lazy(() => import('./pages/AdmittedPatientPage'));
@@ -885,6 +887,22 @@ function App() {
               }
             />
               <Route path="/ehr/:tenantSlug/settings" element={<ProfileSettings />} />
+            <Route
+              path="/ehr/:tenantSlug/knowledge-base"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor', 'senior_clinician']}>
+                  <KnowledgeBasePage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/ai-ops"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <AiOpsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
             </Routes>
           </Suspense>
         </Router>

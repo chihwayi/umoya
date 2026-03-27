@@ -419,6 +419,42 @@ const PharmacyDispensing: React.FC = () => {
                 </div>
               )}
 
+              {/* Adherence Concerns (Sprint 113) */}
+              {dispensePlan?.adherenceConcerns && dispensePlan.adherenceConcerns.length > 0 && (
+                <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 mt-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-2">⚠ Adherence Concerns ({dispensePlan.adherenceConcerns.length})</p>
+                  {dispensePlan.adherenceConcerns.map((concern: any, i: number) => (
+                    <div key={i} className="text-xs text-amber-700 mb-1">
+                      <span className="font-medium">{concern.medicationName}:</span>{' '}
+                      {concern.adherencePercent !== undefined && (
+                        <span className="font-bold">{concern.adherencePercent}% adherence</span>
+                      )}{' '}
+                      — {concern.concernDescription || concern.reason}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Dispensing Anomalies (Sprint 113) */}
+              {dispensePlan?.dispensingAnomalies && dispensePlan.dispensingAnomalies.length > 0 && (
+                <div className="border border-red-200 bg-red-50 rounded-lg p-3 mt-3">
+                  <p className="text-xs font-semibold text-red-800 mb-2">Dispensing Anomalies Detected</p>
+                  {dispensePlan.dispensingAnomalies.map((anomaly: any, i: number) => (
+                    <div key={i} className={`text-xs mb-1 p-2 rounded ${
+                      anomaly.severity === 'high' ? 'bg-red-100 text-red-800' :
+                      anomaly.severity === 'medium' ? 'bg-amber-100 text-amber-800' :
+                      'bg-slate-100 text-slate-700'
+                    }`}>
+                      <span className="font-medium capitalize">{anomaly.anomalyType?.replace(/_/g, ' ')}:</span>{' '}
+                      {anomaly.description}
+                      <span className="ml-2 text-xs opacity-70">
+                        Severity: {anomaly.severity} · Confidence: {anomaly.confidence !== undefined ? `${(anomaly.confidence * 100).toFixed(0)}%` : 'N/A'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Payment Method

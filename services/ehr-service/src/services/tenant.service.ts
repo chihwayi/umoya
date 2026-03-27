@@ -192,10 +192,21 @@ import { PressureInjuryAssessment } from '../entities/pressure-injury-assessment
 import { PolypharmacyReview } from '../entities/polypharmacy-review.entity';
 import { AdvanceCarePlanning } from '../entities/advance-care-planning.entity';
 import { MalariaCase } from '../entities/malaria-case.entity';
+import { CdssFeedbackBatch } from '../entities/cdss-feedback-batch.entity';
+import { CdssFeedbackEntry } from '../entities/cdss-feedback-entry.entity';
 import { MalariaTest } from '../entities/malaria-test.entity';
 import { MalariaTreatment } from '../entities/malaria-treatment.entity';
 import { MalariaContactTracing } from '../entities/malaria-contact-tracing.entity';
 import { MalariaSurveillanceReport } from '../entities/malaria-surveillance-report.entity';
+import { ClinicalKnowledgeDocument } from '../entities/clinical-knowledge-document.entity';
+import { ClaimRiskScore } from '../entities/claim-risk-score.entity';
+import { ClaimAppeal } from '../entities/claim-appeal.entity';
+import { FinancialHardshipReferral } from '../entities/financial-hardship-referral.entity';
+import { PdmpCheck } from '../entities/pdmp-check.entity';
+import { PatientRiskTier } from '../entities/patient-risk-tier.entity';
+import { RiskStratificationBatch } from '../entities/risk-stratification-batch.entity';
+import { ModelDeployment } from '../entities/model-deployment.entity';
+import { AiOpsMetric } from '../entities/ai-ops-metric.entity';
 import { SpirometryResult } from '../entities/spirometry-result.entity';
 import { CopdAssessment } from '../entities/copd-assessment.entity';
 import { AsthmaRecord } from '../entities/asthma-record.entity';
@@ -685,6 +696,17 @@ export class TenantService {
         MalariaTreatment,
         MalariaContactTracing,
         MalariaSurveillanceReport,
+        CdssFeedbackBatch,
+        CdssFeedbackEntry,
+        ClinicalKnowledgeDocument,
+        ClaimRiskScore,
+        ClaimAppeal,
+        FinancialHardshipReferral,
+        PdmpCheck,
+        PatientRiskTier,
+        RiskStratificationBatch,
+        ModelDeployment,
+        AiOpsMetric,
       ],
       logging: false,
     });

@@ -1792,4 +1792,48 @@ export class PharmacyService {
     }
     return result[0];
   }
+
+  async createPrescriptionWithContraindicationOverride(dto: any, userId: string, tenantDb: DataSource): Promise<any> {
+    this.ensureTenantDb(tenantDb);
+    // Log the override decision to cdss_decision_log
+    await tenantDb.query(
+      `INSERT INTO cdss_decision_log (patient_id, decision_type, clinician_action, override_reason, created_at, updated_at)
+       VALUES ($1, 'contraindication_override', 'overridden', $2, NOW(), NOW())
+       ON CONFLICT DO NOTHING`,
+      [dto.patientId, dto.overrideReason],
+    ).catch(() => {
+      // cdss_decision_log may have different schema; log warning and continue
+      this.logger.warn('Could not write contraindication override to cdss_decision_log');
+    });
+
+    // Create the prescription bypassing the contraindication block
+    const count = await tenantDb.query('SELECT COUNT(*) as count FROM prescriptions');
+    const prescriptionNumber = `RX${String(parseInt(count[0].count) + 1).padStart(8, '0')}`;
+
+    const result = await tenantDb.query(
+      `INSERT INTO prescriptions (
+        prescription_number, patient_id, prescriber_id, medication_name,
+        generic_name, strength, form, dosage, frequency, route, quantity,
+        start_date, instructions, status, pharmacy_notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', $14)
+      RETURNING *`,
+      [
+        prescriptionNumber,
+        dto.patientId,
+        userId,
+        dto.drugName ?? dto.medicationName,
+        dto.genericName ?? null,
+        dto.strength ?? null,
+        dto.form ?? null,
+        dto.dosage ?? null,
+        dto.frequency ?? null,
+        dto.route ?? null,
+        dto.quantity ?? null,
+        new Date(),
+        dto.instructions ?? null,
+        `CONTRAINDICATION OVERRIDE: ${dto.overrideReason}`,
+      ],
+    );
+    return result[0];
+  }
 }

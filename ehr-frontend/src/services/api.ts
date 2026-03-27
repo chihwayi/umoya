@@ -8993,6 +8993,27 @@ export const analyticsApi = {
   },
 };
 
+export const knowledgeBaseApi = {
+  uploadDocument: (formData: FormData, token: string, tenantSlug: string) =>
+    ehrAxios.post('/knowledge/documents', formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-ID': tenantSlug,
+        'Content-Type': 'multipart/form-data',
+      },
+    }).then(r => r.data),
+
+  listDocuments: (token: string, tenantSlug: string) =>
+    ehrAxios.get('/knowledge/documents', {
+      headers: { Authorization: `Bearer ${token}`, 'X-Tenant-ID': tenantSlug },
+    }).then(r => r.data),
+
+  deleteDocument: (id: string, token: string, tenantSlug: string) =>
+    ehrAxios.delete(`/knowledge/documents/${id}`, {
+      headers: { Authorization: `Bearer ${token}`, 'X-Tenant-ID': tenantSlug },
+    }).then(r => r.data),
+};
+
 export const patientPortalApi = {
   // ==================== PATIENT PORTAL ====================
   

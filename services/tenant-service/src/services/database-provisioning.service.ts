@@ -1131,6 +1131,48 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint111EntityCompletenessStatements(),
       },
       {
+        id: 'sprint112_p0_safety',
+        label: 'Sprint 112 - P0 Safety Foundations',
+        version: '2026.03.27.1',
+        description: 'consent_type index + encryption_key_versions tracking + audit enhancements',
+        statements: () => this.getSprint112P0SafetyStatements(),
+      },
+      {
+        id: 'sprint112_feedback_persistence',
+        label: 'Sprint 112 - CDSS Feedback Persistence',
+        version: '2026.03.27.2',
+        description: 'cdss_feedback_batches and cdss_feedback_entries tables — durable outcome feedback replacing SQLite /tmp storage',
+        statements: () => this.getSprint112FeedbackPersistenceStatements(),
+      },
+      {
+        id: 'sprint113_ui_completeness',
+        label: 'Sprint 113 - UI Completeness Schema',
+        version: '2026.03.27.3',
+        description: 'New columns for UI completeness: deterioration ML fields on early warning scores, followup resolution tracking',
+        statements: () => this.getSprint113UiCompletenessStatements(),
+      },
+      {
+        id: 'sprint116_risk_stratification_self_learning',
+        label: 'Sprint 116 - Risk Stratification + Self-Learning Loop',
+        version: '2026.03.30.1',
+        description: 'patient_risk_tiers, risk_stratification_batches, model_deployments, ai_ops_metrics',
+        statements: () => this.getSprint116RiskStratSelfLearningStatements(),
+      },
+      {
+        id: 'sprint115_denial_prediction',
+        label: 'Sprint 115 - Denial Prediction ML + Financial AI',
+        version: '2026.03.29.1',
+        description: 'claim_risk_scores, claim_appeals, financial_hardship_referrals, pdmp_checks',
+        statements: () => this.getSprint115DenialPredictionStatements(),
+      },
+      {
+        id: 'sprint114_clinical_rag',
+        label: 'Sprint 114 - Clinical RAG Knowledge Base',
+        version: '2026.03.28.1',
+        description: 'clinical_knowledge_documents + clinical_knowledge_chunks (pgvector) for grounded RAG',
+        statements: () => this.getSprint114ClinicalRagStatements(),
+      },
+      {
         id: 'tenant_entity_alignment',
         label: 'Tenant Entity Alignment',
         version: TENANT_ENTITY_ALIGNMENT_BUNDLE_VERSION,
@@ -17350,6 +17392,302 @@ RECOMMENDATIONS:
       )`,
       `CREATE INDEX IF NOT EXISTS idx_sdoh_screen_patient ON sdoh_screening_logs (patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sdoh_screen_date ON sdoh_screening_logs (screening_date)`,
+    ];
+  }
+
+  private getSprint112P0SafetyStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS encryption_key_versions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        key_version VARCHAR(20) NOT NULL UNIQUE,
+        activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deprecated_at TIMESTAMPTZ,
+        is_current BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_enc_key_current ON encryption_key_versions (is_current)`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_consents_type ON patient_consents (patient_id, consent_type, status)`,
+      `INSERT INTO consent_templates (consent_type, title, description, version, is_active, created_at, updated_at)
+       VALUES (
+         'cdss_ai_processing',
+         'AI-Assisted Clinical Decision Support Consent',
+         'Consent for use of AI/CDSS tools to analyze health information for care improvement. All AI recommendations are reviewed by a qualified clinician.',
+         '1.0',
+         true,
+         NOW(),
+         NOW()
+       ) ON CONFLICT DO NOTHING`,
+    ];
+  }
+
+  private getSprint112FeedbackPersistenceStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS cdss_feedback_batches (
+        batch_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(100) NOT NULL,
+        submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        feedback_count INT NOT NULL DEFAULT 0,
+        status VARCHAR(30) NOT NULL DEFAULT 'pending_review',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_cdss_fb_batch_tenant ON cdss_feedback_batches (tenant_id, status)`,
+      `CREATE INDEX IF NOT EXISTS idx_cdss_fb_batch_status ON cdss_feedback_batches (status, submitted_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS cdss_feedback_entries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        batch_id UUID NOT NULL REFERENCES cdss_feedback_batches(batch_id) ON DELETE CASCADE,
+        tenant_id VARCHAR(100) NOT NULL,
+        log_id VARCHAR(255),
+        patient_id UUID,
+        decision_type VARCHAR(60) NOT NULL,
+        top_recommendation TEXT,
+        confidence_score NUMERIC(5,4),
+        clinician_action VARCHAR(20),
+        override_reason TEXT,
+        outcome_at_30_days JSONB,
+        outcome_at_90_days JSONB,
+        feedback_status VARCHAR(30) NOT NULL DEFAULT 'pending_review',
+        review_notes TEXT,
+        claimed_for_learning BOOLEAN NOT NULL DEFAULT FALSE,
+        claimed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_cdss_fb_entry_batch ON cdss_feedback_entries (batch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_cdss_fb_entry_tenant ON cdss_feedback_entries (tenant_id, feedback_status)`,
+      `CREATE INDEX IF NOT EXISTS idx_cdss_fb_entry_decision ON cdss_feedback_entries (decision_type, clinician_action)`,
+      `CREATE INDEX IF NOT EXISTS idx_cdss_fb_entry_claim ON cdss_feedback_entries (claimed_for_learning, feedback_status)`,
+    ];
+  }
+
+  private getSprint113UiCompletenessStatements(): string[] {
+    return [
+      `ALTER TABLE patient_early_warning_scores ADD COLUMN IF NOT EXISTS news2_components JSONB`,
+      `ALTER TABLE patient_early_warning_scores ADD COLUMN IF NOT EXISTS deterioration_probability NUMERIC(5,4)`,
+      `ALTER TABLE patient_early_warning_scores ADD COLUMN IF NOT EXISTS deterioration_risk_horizon INT`,
+      `ALTER TABLE patient_early_warning_scores ADD COLUMN IF NOT EXISTS ml_interventions JSONB NOT NULL DEFAULT '[]'`,
+      `ALTER TABLE patient_early_warning_scores ADD COLUMN IF NOT EXISTS ml_confidence NUMERIC(5,4)`,
+      `ALTER TABLE patient_followup_orchestrations ADD COLUMN IF NOT EXISTS resolution_status VARCHAR(30)`,
+      `ALTER TABLE patient_followup_orchestrations ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ`,
+      `ALTER TABLE patient_followup_orchestrations ADD COLUMN IF NOT EXISTS checklist_items JSONB NOT NULL DEFAULT '[]'`,
+      `CREATE INDEX IF NOT EXISTS idx_pfo_resolution ON patient_followup_orchestrations (resolution_status, resolved_at DESC)`,
+    ];
+  }
+
+  private getSprint114ClinicalRagStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS vector`,
+
+      `CREATE TABLE IF NOT EXISTS clinical_knowledge_documents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(100) NOT NULL,
+        title TEXT NOT NULL,
+        document_type VARCHAR(50) NOT NULL,
+        specialty VARCHAR(100),
+        source_organization VARCHAR(255),
+        version VARCHAR(50),
+        effective_date DATE,
+        expiry_date DATE,
+        language VARCHAR(10) NOT NULL DEFAULT 'en',
+        minio_bucket VARCHAR(100) NOT NULL,
+        minio_key TEXT NOT NULL,
+        file_size_bytes INT,
+        mime_type VARCHAR(100),
+        chunk_count INT NOT NULL DEFAULT 0,
+        embedding_model VARCHAR(100),
+        ingestion_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+        ingestion_error TEXT,
+        ingested_at TIMESTAMPTZ,
+        uploaded_by UUID NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ckd_tenant ON clinical_knowledge_documents (tenant_id, is_active)`,
+      `CREATE INDEX IF NOT EXISTS idx_ckd_type ON clinical_knowledge_documents (document_type, specialty)`,
+      `CREATE INDEX IF NOT EXISTS idx_ckd_status ON clinical_knowledge_documents (ingestion_status)`,
+
+      `CREATE TABLE IF NOT EXISTS clinical_knowledge_chunks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        document_id UUID NOT NULL REFERENCES clinical_knowledge_documents(id) ON DELETE CASCADE,
+        tenant_id VARCHAR(100) NOT NULL,
+        chunk_index INT NOT NULL,
+        chunk_text TEXT NOT NULL,
+        chunk_tokens INT NOT NULL,
+        embedding vector(384),
+        metadata JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ckc_document ON clinical_knowledge_chunks (document_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ckc_tenant ON clinical_knowledge_chunks (tenant_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_ckc_embedding ON clinical_knowledge_chunks
+       USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
+
+      `CREATE TABLE IF NOT EXISTS rag_search_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(100) NOT NULL,
+        query_text TEXT NOT NULL,
+        query_embedding_model VARCHAR(100),
+        surface VARCHAR(100),
+        patient_id UUID,
+        top_chunk_ids UUID[],
+        retrieval_latency_ms INT,
+        chunks_returned INT,
+        user_clicked_citation BOOLEAN,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_rsl_tenant ON rag_search_logs (tenant_id, created_at DESC)`,
+    ];
+  }
+
+  private getSprint115DenialPredictionStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS claim_risk_scores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        claim_id UUID NOT NULL,
+        patient_id UUID NOT NULL,
+        encounter_id UUID,
+        risk_score DECIMAL(5,4) NOT NULL,
+        confidence DECIMAL(5,4) NOT NULL DEFAULT 0,
+        top_reasons JSONB NOT NULL DEFAULT '[]',
+        model_version VARCHAR(50) NOT NULL DEFAULT 'v1.0.0',
+        feature_snapshot JSONB NOT NULL DEFAULT '{}',
+        threshold_action VARCHAR(20) NOT NULL DEFAULT 'allow',
+        override_reason TEXT,
+        override_user_id UUID,
+        actual_outcome VARCHAR(30),
+        feedback_recorded_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_claim_risk_scores_claim_id ON claim_risk_scores(claim_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_claim_risk_scores_patient_id ON claim_risk_scores(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_claim_risk_scores_risk_score ON claim_risk_scores(risk_score DESC)`,
+
+      `CREATE TABLE IF NOT EXISTS claim_appeals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        claim_id UUID NOT NULL,
+        patient_id UUID NOT NULL,
+        denial_reason_code VARCHAR(50) NOT NULL,
+        denial_reason_description TEXT NOT NULL,
+        draft_letter TEXT NOT NULL,
+        rag_sources JSONB NOT NULL DEFAULT '[]',
+        status VARCHAR(30) NOT NULL DEFAULT 'draft',
+        submitted_at TIMESTAMPTZ,
+        outcome_at TIMESTAMPTZ,
+        outcome_notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_claim_appeals_claim_id ON claim_appeals(claim_id)`,
+
+      `CREATE TABLE IF NOT EXISTS financial_hardship_referrals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        claim_id UUID,
+        trigger_reason VARCHAR(100) NOT NULL,
+        household_size INT,
+        estimated_income_band VARCHAR(30),
+        programs_matched JSONB NOT NULL DEFAULT '[]',
+        assigned_to_user_id UUID,
+        status VARCHAR(30) NOT NULL DEFAULT 'pending',
+        ai_recommendation TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_financial_hardship_patient_id ON financial_hardship_referrals(patient_id)`,
+
+      `CREATE TABLE IF NOT EXISTS pdmp_checks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        prescriber_id UUID NOT NULL,
+        drug_name VARCHAR(200) NOT NULL,
+        dea_schedule VARCHAR(10),
+        morphine_milligram_equivalent DECIMAL(8,2),
+        risk_level VARCHAR(20) NOT NULL DEFAULT 'low',
+        prescriber_alerts JSONB NOT NULL DEFAULT '[]',
+        other_active_prescriptions JSONB NOT NULL DEFAULT '[]',
+        dispensing_blocked BOOLEAN NOT NULL DEFAULT FALSE,
+        block_override_reason TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_pdmp_checks_patient_id ON pdmp_checks(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_pdmp_checks_risk_level ON pdmp_checks(risk_level)`,
+    ];
+  }
+
+  private getSprint116RiskStratSelfLearningStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS patient_risk_tiers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        tier VARCHAR(20) NOT NULL DEFAULT 'minimal',
+        composite_score DECIMAL(5,4) NOT NULL DEFAULT 0,
+        chronic_condition_score DECIMAL(5,4) NOT NULL DEFAULT 0,
+        vitals_trend_score DECIMAL(5,4) NOT NULL DEFAULT 0,
+        adherence_score DECIMAL(5,4) NOT NULL DEFAULT 0,
+        sdoh_score DECIMAL(5,4) NOT NULL DEFAULT 0,
+        no_show_rate DECIMAL(5,4) NOT NULL DEFAULT 0,
+        lab_trend_score DECIMAL(5,4) NOT NULL DEFAULT 0,
+        contributing_factors JSONB NOT NULL DEFAULT '[]',
+        recommended_actions JSONB NOT NULL DEFAULT '[]',
+        model_version VARCHAR(50) NOT NULL DEFAULT 'v1.0.0',
+        batch_run_id UUID,
+        valid_until TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_risk_tiers_patient_id ON patient_risk_tiers(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_risk_tiers_tier ON patient_risk_tiers(tier)`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_risk_tiers_composite ON patient_risk_tiers(composite_score DESC)`,
+
+      `CREATE TABLE IF NOT EXISTS risk_stratification_batches (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(100) NOT NULL,
+        total_patients INT NOT NULL DEFAULT 0,
+        processed_patients INT NOT NULL DEFAULT 0,
+        critical_count INT NOT NULL DEFAULT 0,
+        high_count INT NOT NULL DEFAULT 0,
+        status VARCHAR(20) NOT NULL DEFAULT 'running',
+        error_log TEXT,
+        completed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS model_deployments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surface VARCHAR(100) NOT NULL,
+        model_version VARCHAR(50) NOT NULL,
+        previous_version VARCHAR(50),
+        eval_run_id UUID NOT NULL,
+        release_gate_id UUID NOT NULL,
+        accuracy_before DECIMAL(5,4),
+        accuracy_after DECIMAL(5,4),
+        deployed_by_user_id UUID,
+        deployment_method VARCHAR(50) NOT NULL DEFAULT 'auto',
+        status VARCHAR(20) NOT NULL DEFAULT 'deployed',
+        rollback_reason TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_model_deployments_surface ON model_deployments(surface)`,
+
+      `CREATE TABLE IF NOT EXISTS ai_ops_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surface VARCHAR(100) NOT NULL,
+        metric_date DATE NOT NULL,
+        total_calls INT NOT NULL DEFAULT 0,
+        abstention_count INT NOT NULL DEFAULT 0,
+        circuit_breaker_trips INT NOT NULL DEFAULT 0,
+        avg_latency_ms DECIMAL(8,2),
+        p95_latency_ms DECIMAL(8,2),
+        accuracy DECIMAL(5,4),
+        fairness_age_parity DECIMAL(5,4),
+        fairness_gender_parity DECIMAL(5,4),
+        fairness_sdoh_parity DECIMAL(5,4),
+        consent_block_count INT NOT NULL DEFAULT 0,
+        override_count INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(surface, metric_date)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_ai_ops_metrics_surface_date ON ai_ops_metrics(surface, metric_date DESC)`,
     ];
   }
 }

@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, Logger, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, Optional, BadRequestException, Inject } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Prescription, PrescriptionStatus } from '../entities/prescription.entity';
 import { TerminologyService } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
 import { ClinicalWorkflowService } from './clinical-workflow.service';
+import { CdssService } from './cdss.service';
+import { HipaaAuditService } from './hipaa-audit.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -20,6 +22,8 @@ export class PrescriptionService {
     private readonly terminologyService: TerminologyService,
     private readonly cdssHookService: CdssHookService,
     @Optional() private workflowService?: ClinicalWorkflowService,
+    @Optional() @Inject(CdssService) private readonly cdssService?: CdssService,
+    @Optional() @Inject(HipaaAuditService) private readonly hipaaAuditService?: HipaaAuditService,
   ) {}
   
   private extractConceptId(candidate: any): string | null {
@@ -104,7 +108,53 @@ export class PrescriptionService {
     const prescriptionCount = await tenantDb.query('SELECT COUNT(*) as count FROM prescriptions');
     const count = parseInt(prescriptionCount[0].count) + 1;
     const prescriptionNumber = `RX${String(count).padStart(8, '0')}`;
-    
+
+    // Hard-stop contraindication check (Sprint 112 P0-4)
+    if (this.cdssService && createDto.patientId) {
+      const currentMeds = await tenantDb.query(
+        `SELECT medication_name FROM prescriptions WHERE patient_id = $1 AND status = 'active'`,
+        [createDto.patientId],
+      );
+      const allergies = await tenantDb.query(
+        `SELECT allergen FROM allergies WHERE patient_id = $1`,
+        [createDto.patientId],
+      );
+      const interactions = await this.cdssService.checkDrugInteractionsAdvanced({
+        patientId: createDto.patientId,
+        newDrug: createDto.medicationName,
+        currentMedications: currentMeds.map((m: any) => m.medication_name),
+        allergies: allergies.map((a: any) => a.allergen),
+      });
+      const hardStop = interactions.interactions?.find(
+        (i: any) => i.severity === 'contraindicated' || (i.severity_score != null && i.severity_score >= 5),
+      );
+      if (hardStop) {
+        if (this.hipaaAuditService) {
+          await this.hipaaAuditService.logPhiAccess(
+            tenantDb,
+            prescriberId,
+            '',
+            '',
+            'prescription_contraindication_blocked' as any,
+            'prescription',
+            null,
+            createDto.patientId,
+            undefined,
+            undefined,
+            undefined,
+            { fields: ['drug_name', 'contraindication'] },
+          );
+        }
+        throw new BadRequestException({
+          code: 'CONTRAINDICATION_HARD_STOP',
+          message: `Cannot prescribe ${createDto.medicationName}: CONTRAINDICATED interaction with ${hardStop.interactingDrug}. ${hardStop.clinical_significance}`,
+          interaction: hardStop,
+          requiresOverride: true,
+          overrideEndpoint: '/pharmacy/prescriptions/override-contraindication',
+        });
+      }
+    }
+
     // Resolve SNOMED concept for medication_name
     const medicationConcept = await this.resolveConcept(tenantDb, createDto.medication_name_snomed || createDto.medicationNameSnomed);
 

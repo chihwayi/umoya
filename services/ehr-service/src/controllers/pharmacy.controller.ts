@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PharmacyService } from '../services/pharmacy.service';
@@ -19,7 +19,10 @@ import {
   UpdatePricingRuleDto,
   CreateFormularyDto,
   UpdateFormularyDto,
+  ContraindicationOverrideDto,
 } from '../dto/pharmacy.dto';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { PaginationQueryDto } from 'src/dto/diabetes.dto';
 
 @ApiTags('Pharmacy Management')
@@ -436,5 +439,20 @@ export class PharmacyController {
     @Request() req: RequestWithTenant,
   ) {
     return this.pharmacyService.processDispensingPayment(req.tenantDb, id, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
+  }
+
+  @Post('prescriptions/override-contraindication')
+  @UseGuards(RolesGuard)
+  @Roles('doctor', 'senior_clinician')
+  @ApiOperation({ summary: 'Override contraindication hard-stop (senior clinician only)' })
+  async overrideContraindication(
+    @Body() dto: ContraindicationOverrideDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    if (!dto.overrideReason || dto.overrideReason.length < 20) {
+      throw new BadRequestException('Override reason must be at least 20 characters');
+    }
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
+    return this.pharmacyService.createPrescriptionWithContraindicationOverride(dto, userId, req.tenantDb);
   }
 }

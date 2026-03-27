@@ -16,7 +16,7 @@ interface InboxItem {
   sourceId?: string;
   title: string;
   preview?: string;
-  aiPriority: 'critical' | 'urgent' | 'routine' | 'informational';
+  aiPriority: 'critical' | 'urgent' | 'routine' | 'informational' | 'pending_review';
   aiPriorityReason?: string;
   aiDraftReply?: string;
   isRead: boolean;
@@ -27,7 +27,7 @@ interface InboxItem {
   createdAt: string;
 }
 
-interface Counts { critical: number; urgent: number; routine: number; informational: number }
+interface Counts { critical: number; urgent: number; routine: number; informational: number; pending_review?: number }
 
 interface SmartInboxProps {
   token: string;
@@ -41,6 +41,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; bg: string; border: strin
   urgent:        { label: 'Urgent',        bg: 'bg-orange-50', border: 'border-orange-300', text: 'text-orange-800', dot: 'bg-orange-500' },
   routine:       { label: 'Routine',       bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-800',   dot: 'bg-blue-400' },
   informational: { label: 'Info',          bg: 'bg-slate-50',  border: 'border-slate-200',  text: 'text-slate-700',  dot: 'bg-slate-400' },
+  pending_review: { label: '⚠ Needs Triage', bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', dot: 'bg-amber-500' },
 };
 
 const SOURCE_ICON: Record<string, React.ReactNode> = {

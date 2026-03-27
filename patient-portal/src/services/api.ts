@@ -947,4 +947,15 @@ export const patientPortalApi = {
     _ensureOk(response, 'Failed to fetch ED visit details');
     return response.json();
   },
+
+  getHealthSummary: async (token: string, tenantSlug: string): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/health-summary`, {
+      headers: _withRid({
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-ID': tenantSlug,
+      }),
+    });
+    if (!response.ok) return null;
+    return response.json();
+  },
 };

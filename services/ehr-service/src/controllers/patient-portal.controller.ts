@@ -2316,4 +2316,38 @@ export class PatientPortalController {
     const tenantId: string = req.tenantId || req.headers?.['x-tenant-id'];
     return this.patientPortalService.getPatientHealthInsights(patientId, tenantId);
   }
+
+  // ── AI Health Summary (Sprint 113) ────────────────────────────────────────
+
+  @Get('health-summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get AI health summary for the logged-in patient' })
+  async getHealthSummary(@Req() req: any) {
+    const patientId: string = req.user?.patientId || req.user?.id || req.user?.sub;
+    const tenantId: string = req.tenantId || req.headers?.['x-tenant-id'];
+    const insights = await this.patientPortalService.getPatientHealthInsights(patientId, tenantId);
+    return {
+      summary: insights?.summary || insights?.clinical_summary || 'Your health is being monitored by our AI system.',
+      riskLevel: insights?.riskLevel || insights?.risk_level || 'low',
+      pendingActions: insights?.pendingActions || 0,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  @Put('followups/:id/outcome')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Record patient outcome for an AI followup' })
+  async recordFollowupOutcome(
+    @Req() req: any,
+    @Param('id') followupId: string,
+    @Body() dto: { outcome: string; notes?: string },
+  ) {
+    const patientId: string = req.user?.patientId || req.user?.id || req.user?.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    await tenantDb.query(
+      `UPDATE patient_followup_orchestrations SET resolution_status = $1, resolved_at = NOW() WHERE id = $2 AND patient_id = $3`,
+      [dto.outcome, followupId, patientId],
+    );
+    return { status: 'updated', followupId, outcome: dto.outcome };
+  }
 }
