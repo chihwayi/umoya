@@ -11240,6 +11240,9 @@ export const cdssApi = {
     ehrAxios.post('/cdss/self-learning/bias-audit', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
   detectAuditAnomalies: (payload: any, token: string, tenantSlug: string) =>
     ehrAxios.post('/cdss/self-learning/audit-anomaly', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+
+  generateAppealLetter: (payload: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/cdss/claims/appeal-letter', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
 };
 
 export const {

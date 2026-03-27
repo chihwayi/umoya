@@ -33,7 +33,8 @@ import {
   ChevronUp,
   Upload,
 } from 'lucide-react';
-import { claimsApi, billingApi, ehrApi, tenantApi } from '../services/api';
+import { claimsApi, billingApi, ehrApi, tenantApi, cdssApi } from '../services/api';
+import { AppealLetterPanel } from '../components/AppealLetterPanel';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import { GuidelineResult } from '../types/guidelines';
@@ -97,6 +98,8 @@ const ClaimsDashboard: React.FC = () => {
   const [apiConfigurations, setApiConfigurations] = useState<any[]>([]);
   const [selectedClaims, setSelectedClaims] = useState<Set<string>>(new Set());
   const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [appealClaimId, setAppealClaimId] = useState<string | null>(null);
+  const [appealData, setAppealData] = useState<Record<string, { letter: string; sources: any[] }>>({});
   // const [showApiConfigModal, setShowApiConfigModal] = useState(false);
   // const [showPreAuthModal, setShowPreAuthModal] = useState(false);
 
@@ -765,6 +768,33 @@ const ClaimsDashboard: React.FC = () => {
                                 Submit
                               </button>
                             )}
+                            {claim.status === 'denied' && (
+                              <button
+                                onClick={async () => {
+                                  if (appealClaimId === claim.id) {
+                                    setAppealClaimId(null);
+                                    return;
+                                  }
+                                  setAppealClaimId(claim.id);
+                                  if (!appealData[claim.id]) {
+                                    try {
+                                      const res = await cdssApi.generateAppealLetter(
+                                        { claim_id: claim.id, denial_reason: claim.denialReason || claim.status_reason || 'Claim denied', clinical_notes: claim.notes || '' },
+                                        localStorage.getItem('ehr_token') || '',
+                                        tenantSlug!,
+                                      );
+                                      setAppealData(prev => ({ ...prev, [claim.id]: { letter: (res as any).data?.draft_letter || `Dear Insurance Provider,\n\nWe respectfully appeal the denial of Claim ${claim.claimNumber || claim.id}.\n\nReason for appeal: The services provided were medically necessary.\n\nSincerely,\nClinical Team`, sources: (res as any).data?.sources || [] } }));
+                                    } catch {
+                                      setAppealData(prev => ({ ...prev, [claim.id]: { letter: `Dear Insurance Provider,\n\nWe respectfully appeal the denial of Claim ${claim.claimNumber || claim.id}.\n\nThe services rendered were medically necessary and clinically indicated.\n\nSincerely,\nClinical Team`, sources: [] } }));
+                                    }
+                                  }
+                                }}
+                                className="px-3 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 text-sm"
+                                title="Generate AI Appeal Letter"
+                              >
+                                Appeal
+                              </button>
+                            )}
                             {claim.status === 'submitted' || claim.status === 'processing' ? (
                               <button
                                 onClick={async () => {
@@ -786,6 +816,17 @@ const ClaimsDashboard: React.FC = () => {
                           </div>
                         </div>
                       </div>
+                      {appealClaimId === claim.id && appealData[claim.id] && (
+                        <div className="mt-3 border-t border-white/10 pt-3">
+                          <AppealLetterPanel
+                            claimId={claim.id}
+                            denialReasonCode={claim.denialReason || claim.status_reason || 'DENIED'}
+                            draftLetter={appealData[claim.id].letter}
+                            ragSources={appealData[claim.id].sources}
+                            onSubmit={() => { setAppealClaimId(null); showSuccess('Appeal submitted', 'success'); }}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}

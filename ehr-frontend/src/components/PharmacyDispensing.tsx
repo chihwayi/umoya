@@ -65,6 +65,18 @@ interface DispensePlan {
     requiresAcknowledgement?: boolean;
     summary?: string;
   };
+  adherenceConcerns?: Array<{
+    medicationName?: string;
+    adherencePercent?: number;
+    concernDescription?: string;
+    reason?: string;
+  }>;
+  dispensingAnomalies?: Array<{
+    anomalyType?: string;
+    description?: string;
+    severity?: string;
+    confidence?: number;
+  }>;
 }
 
 const PharmacyDispensing: React.FC = () => {

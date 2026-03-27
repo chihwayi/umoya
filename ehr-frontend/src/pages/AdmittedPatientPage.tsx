@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Activity, FileText, Heart, ArrowRightLeft, LogOut,
-  User, Bed, Calendar, Clock, Pill, TestTube
+  User, Bed, Calendar, Clock, Pill, TestTube, Brain
 } from 'lucide-react';
+import { DischargeIntelligencePanel } from '../components/DischargeIntelligencePanel';
+import { MedicationReconciliationAI } from '../components/MedicationReconciliationAI';
+import { NursingIntelligencePanel } from '../components/NursingIntelligencePanel';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import ClinicalNotesModal from '../components/ClinicalNotesModal';
@@ -395,6 +398,18 @@ const AdmittedPatientPage: React.FC = () => {
                 </span>
               )}
             </button>
+
+            <button
+              onClick={() => setActiveTab('ai-insights')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap font-medium ${
+                activeTab === 'ai-insights'
+                  ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white shadow-lg scale-105'
+                  : 'bg-white/60 backdrop-blur-sm text-slate-700 hover:bg-white/80 hover:shadow-md'
+              }`}
+            >
+              <Brain className={`w-5 h-5 ${activeTab === 'ai-insights' ? 'text-white' : 'text-purple-600'}`} />
+              <span>AI Insights</span>
+            </button>
           </div>
         </div>
       </div>
@@ -554,32 +569,63 @@ const AdmittedPatientPage: React.FC = () => {
         )}
 
         {activeTab === 'nursing' && (
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 hover:shadow-2xl transition-all duration-300">
-            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-              Nursing Notes
-            </h3>
-            {notes.length > 0 ? (
-              <div className="space-y-4">
-                {notes.map((note: any, index: number) => (
-                  <div key={index} className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-medium text-green-900">{note.note_type || 'General Note'}</div>
-                      <div className="text-xs text-green-600">{formatDateToDDMMYYYY(note.created_at)}</div>
+          <div className="space-y-6">
+            <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 hover:shadow-2xl transition-all duration-300">
+              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                Nursing Notes
+              </h3>
+              {notes.length > 0 ? (
+                <div className="space-y-4">
+                  {notes.map((note: any, index: number) => (
+                    <div key={index} className="bg-green-50 rounded-lg p-4 border border-green-200">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-medium text-green-900">{note.note_type || 'General Note'}</div>
+                        <div className="text-xs text-green-600">{formatDateToDDMMYYYY(note.created_at)}</div>
+                      </div>
+                      <p className="text-slate-700 text-sm whitespace-pre-wrap">{note.note_content}</p>
+                      <div className="text-xs text-green-600 mt-2">by {note.nurse_name}</div>
                     </div>
-                    <p className="text-slate-700 text-sm whitespace-pre-wrap">{note.note_content}</p>
-                    <div className="text-xs text-green-600 mt-2">by {note.nurse_name}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-500">No nursing notes yet</p>
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                  <p className="text-slate-500">No nursing notes yet</p>
+                </div>
+              )}
+            </div>
+            {isNurse && (
+              <NursingIntelligencePanel
+                patientId={String(admission.patient_id)}
+                diagnoses={admission.primary_diagnosis ? [admission.primary_diagnosis] : []}
+                admissionReason={admission.admission_reason || ''}
+                token={token}
+                tenantSlug={tenantSlug!}
+              />
             )}
+          </div>
+        )}
+
+        {activeTab === 'ai-insights' && (
+          <div className="space-y-6">
+            <MedicationReconciliationAI
+              homeMedications={[]}
+              currentMedications={[]}
+              diagnoses={admission.primary_diagnosis ? [admission.primary_diagnosis] : []}
+              context="admission"
+              token={token}
+              tenantSlug={tenantSlug!}
+            />
+            <DischargeIntelligencePanel
+              admissionDiagnosis={admission.primary_diagnosis || 'Not specified'}
+              diagnoses={admission.primary_diagnosis ? [admission.primary_diagnosis] : []}
+              lengthOfStayDays={getDaysAdmitted()}
+              token={token}
+              tenantSlug={tenantSlug!}
+            />
           </div>
         )}
       </div>

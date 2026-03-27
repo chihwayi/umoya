@@ -209,7 +209,7 @@ const SmartInbox: React.FC<SmartInboxProps> = ({ token, tenantSlug, userId, onCo
             }`}
           >
             {p === 'all' ? 'All' : PRIORITY_CONFIG[p].label}
-            {p !== 'all' && counts[p as keyof Counts] > 0 && (
+            {p !== 'all' && (counts[p as keyof Counts] ?? 0) > 0 && (
               <span className="ml-1 font-bold">{counts[p as keyof Counts]}</span>
             )}
           </button>

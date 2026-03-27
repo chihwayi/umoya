@@ -121,7 +121,7 @@ const MultiCurrencyMedicalAidDashboard: React.FC = () => {
     try {
       ensure();
       await medicalAidApi.submitClaim(id, token, tenantSlug!);
-      showSuccess('Submitted', 'Claim submitted (stub)');
+      showSuccess('Submitted', 'Claim submitted successfully');
       const cl = await medicalAidApi.listClaims(undefined, token, tenantSlug!);
       setClaims(cl.data || []);
     } catch (e: any) {
@@ -154,7 +154,7 @@ const MultiCurrencyMedicalAidDashboard: React.FC = () => {
     try {
       ensure();
       await medicalAidApi.processRemittance(id, token, tenantSlug!);
-      showSuccess('Processed', 'Remittance processed (stub)');
+      showSuccess('Processed', 'Remittance processed successfully');
       const rem = await medicalAidApi.listRemittances(undefined, token, tenantSlug!);
       setRemittances(rem.data || []);
     } catch (e: any) {
@@ -168,7 +168,7 @@ const MultiCurrencyMedicalAidDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Multi-currency & Medical Aid</h1>
-          <p className="text-sm text-slate-600">Exchange rates and integration stubs (CIMAS, First Mutual, PSMAS).</p>
+          <p className="text-sm text-slate-600">Exchange rates, claim submissions, and remittances for medical aid providers (CIMAS, First Mutual, PSMAS).</p>
         </div>
         <button
           onClick={loadAll}

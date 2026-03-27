@@ -63,6 +63,8 @@ import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../compon
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 import PreChartPanel from '../components/PreChartPanel';
 import AmbientBar from '../components/ambient/AmbientBar';
+import { OrderIntelligencePanel } from '../components/OrderIntelligencePanel';
+import { RiskTierBadge } from '../components/RiskTierBadge';
 import SmartInbox from '../components/inbox/SmartInbox';
 import DoctorPatientsList from './DoctorPatientsList';
 import DoctorAppointmentManagement from './DoctorAppointmentManagement';
@@ -3085,6 +3087,19 @@ const DoctorDashboard: React.FC = () => {
                                 }`}>
                                   {patientRiskAssessment.risk_level.toUpperCase()} RISK
                                 </span>
+                                <div className="mt-2">
+                                  <RiskTierBadge
+                                    tier={
+                                      patientRiskAssessment.risk_level === 'critical' ? 'critical'
+                                      : patientRiskAssessment.risk_level === 'high' ? 'high'
+                                      : patientRiskAssessment.risk_level === 'moderate' ? 'medium'
+                                      : patientRiskAssessment.risk_level === 'low' ? 'low'
+                                      : 'minimal'
+                                    }
+                                    compositeScore={displayScore / 100}
+                                    compact
+                                  />
+                                </div>
                                 {riskFactors.length > 0 && (
                                   <div className="mt-2 pt-2 border-t border-orange-200">
                                     <div className="grid grid-cols-2 gap-1 text-xs">
@@ -3331,6 +3346,19 @@ const DoctorDashboard: React.FC = () => {
                           onAlertClick={() => setShowProViewerModal(true)}
                         />
                       </div>
+                    )}
+
+                    {/* AI Order Intelligence */}
+                    {problems.length > 0 && (
+                      <OrderIntelligencePanel
+                        diagnoses={problems.map((p: any) => p.problemName || p.name || '').filter(Boolean)}
+                        patientAge={currentAppointment.patient.dateOfBirth
+                          ? Math.floor((Date.now() - new Date(currentAppointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+                          : undefined}
+                        encounterType={currentAppointment.appointmentType || 'outpatient'}
+                        token={localStorage.getItem('ehr_token') || ''}
+                        tenantSlug={tenantSlug!}
+                      />
                     )}
 
                     {/* Chart Sidebar - Compact */}

@@ -12,7 +12,7 @@ import {
   AlertCircle, Bed, Baby, DollarSign
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
-import { ehrApi, tenantApi } from '../services/api';
+import { ehrApi, tenantApi, cdssApi } from '../services/api';
 import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
 import {
   cacheTenantBranding,
@@ -174,7 +174,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Building, label: 'Practice Mgmt', desc: 'Fee schedules, superbills & insurance verification', color: 'from-emerald-600 to-teal-600', route: 'practice-management' },
           { icon: FileText, label: 'Prior Auth', desc: 'Prior authorization workflow', color: 'from-indigo-600 to-purple-600', route: 'prior-authorizations' },
           { icon: Mail, label: 'Recall Campaigns', desc: 'Bulk SMS/email outreach', color: 'from-fuchsia-700 to-rose-700', route: 'campaigns' },
-          { icon: DollarSign, label: 'Multi-Currency', desc: 'Exchange rates & medical aid stubs', color: 'from-amber-600 to-orange-600', route: 'multi-currency' },
+          { icon: DollarSign, label: 'Multi-Currency', desc: 'Exchange rates & medical aid billing', color: 'from-amber-600 to-orange-600', route: 'multi-currency' },
           { icon: FileText, label: 'CDI Program', desc: 'Physician queries, DRG impact & documentation quality', color: 'from-blue-600 to-indigo-600', route: 'cdi' },
           { icon: Users, label: 'Population Health', desc: 'Registry, preventive care & recall lists', color: 'from-teal-600 to-cyan-600', route: 'population-health' },
           { icon: AlertTriangle, label: 'Sepsis Management', desc: 'SEP-1 bundle tracking, qSOFA & SIRS screening', color: 'from-red-600 to-orange-600', route: 'sepsis' },
@@ -260,13 +260,75 @@ const EHRDashboard: React.FC = () => {
     refundRequests: 0,
   });
 
+  const [radiologistStats, setRadiologistStats] = useState({
+    unassignedStudies: 0,
+    myQueue: 0,
+    draftReports: 0,
+    criticalFindings: 0,
+  });
+
+  const [defaultStats, setDefaultStats] = useState({
+    todayAppointments: 0,
+    activePatients: 0,
+    pendingResults: 0,
+    messages: 0,
+  });
+
   useEffect(() => {
     if (user?.role === 'admin') {
       loadAdminStats();
     } else if (user?.role === 'accounts') {
       loadAccountStats();
+    } else if (user?.role === 'radiologist') {
+      loadRadiologistStats();
+    } else {
+      loadDefaultStats();
     }
   }, [user]);
+
+  const loadRadiologistStats = async () => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token || !tenantSlug) return;
+    try {
+      const [pendingRes, allRes] = await Promise.allSettled([
+        ehrApi.getImagingStudies(tenantSlug, token, { status: 'pending' }),
+        ehrApi.getImagingStudies(tenantSlug, token),
+      ]);
+      if (pendingRes.status === 'fulfilled') {
+        const studies = pendingRes.value.data?.studies || pendingRes.value.data || [];
+        setRadiologistStats(prev => ({ ...prev, unassignedStudies: Array.isArray(studies) ? studies.length : 0 }));
+      }
+      if (allRes.status === 'fulfilled') {
+        const studies: any[] = allRes.value.data?.studies || allRes.value.data || [];
+        if (Array.isArray(studies)) {
+          setRadiologistStats(prev => ({
+            ...prev,
+            myQueue: studies.filter((s: any) => s.assigned_radiologist_id === user?.id || s.radiologistId === user?.id).length,
+            draftReports: studies.filter((s: any) => s.report_status === 'draft' || s.reportStatus === 'draft').length,
+            criticalFindings: studies.filter((s: any) => s.findings_critical || s.critical || s.priority === 'stat').length,
+          }));
+        }
+      }
+    } catch { /* non-blocking */ }
+  };
+
+  const loadDefaultStats = async () => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token || !tenantSlug) return;
+    const today = new Date().toISOString().split('T')[0];
+    const [apptRes, patientRes, labRes, inboxRes] = await Promise.allSettled([
+      ehrApi.getAppointments(token, tenantSlug, { date: today }),
+      ehrApi.getPatients(token, tenantSlug, 1, 1),
+      ehrApi.getLabOrders({ status: 'pending' }, token, tenantSlug),
+      cdssApi.getInboxCounts(token, tenantSlug),
+    ]);
+    setDefaultStats({
+      todayAppointments: apptRes.status === 'fulfilled' ? (Array.isArray(apptRes.value.data) ? apptRes.value.data.length : (apptRes.value.data?.total || 0)) : 0,
+      activePatients: patientRes.status === 'fulfilled' ? (patientRes.value.data?.total || 0) : 0,
+      pendingResults: labRes.status === 'fulfilled' ? (Array.isArray(labRes.value.data) ? labRes.value.data.length : (labRes.value.data?.total || 0)) : 0,
+      messages: inboxRes.status === 'fulfilled' ? (inboxRes.value.data?.unread || inboxRes.value.data?.total || 0) : 0,
+    });
+  };
 
   const loadAccountStats = async () => {
     try {
@@ -451,10 +513,10 @@ const EHRDashboard: React.FC = () => {
     }
     if (role === 'radiologist') {
       return [
-        { label: 'Unassigned Studies', value: '18', icon: Camera, color: 'text-purple-600' },
-        { label: 'My Queue', value: '6', icon: Users, color: 'text-indigo-600' },
-        { label: 'Draft Reports', value: '2', icon: FileText, color: 'text-amber-600' },
-        { label: 'Critical Findings', value: '1', icon: AlertTriangle, color: 'text-red-600' },
+        { label: 'Unassigned Studies', value: radiologistStats.unassignedStudies.toString(), icon: Camera, color: 'text-purple-600' },
+        { label: 'My Queue', value: radiologistStats.myQueue.toString(), icon: Users, color: 'text-indigo-600' },
+        { label: 'Draft Reports', value: radiologistStats.draftReports.toString(), icon: FileText, color: 'text-amber-600' },
+        { label: 'Critical Findings', value: radiologistStats.criticalFindings.toString(), icon: AlertTriangle, color: radiologistStats.criticalFindings > 0 ? 'text-red-600' : 'text-green-600' },
       ];
     }
     if (role === 'accounts') {
@@ -466,10 +528,10 @@ const EHRDashboard: React.FC = () => {
       ];
     }
     return [
-      { label: 'Today\'s Appointments', value: '12', icon: Calendar, color: 'text-blue-600' },
-      { label: 'Active Patients', value: '248', icon: Users, color: 'text-emerald-600' },
-      { label: 'Pending Results', value: '5', icon: TestTube, color: 'text-orange-600' },
-      { label: 'Messages', value: '3', icon: Bell, color: 'text-purple-600' },
+      { label: 'Today\'s Appointments', value: defaultStats.todayAppointments.toString(), icon: Calendar, color: 'text-blue-600' },
+      { label: 'Active Patients', value: defaultStats.activePatients.toLocaleString(), icon: Users, color: 'text-emerald-600' },
+      { label: 'Pending Results', value: defaultStats.pendingResults.toString(), icon: TestTube, color: 'text-orange-600' },
+      { label: 'Messages', value: defaultStats.messages.toString(), icon: Bell, color: 'text-purple-600' },
     ];
   };
 

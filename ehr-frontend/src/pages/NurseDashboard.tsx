@@ -19,6 +19,7 @@ import VitalsPanel from '../components/VitalsPanel';
 import TriageQueue from '../components/TriageQueue';
 import PatientAssessment from '../components/PatientAssessment';
 import NursingNotes from '../components/NursingNotes';
+import { NursingIntelligencePanel } from '../components/NursingIntelligencePanel';
 import TaskManagement from '../components/TaskManagement';
 import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
 import HIVNursePanel from '../components/HIVNursePanel';
@@ -4631,6 +4632,14 @@ const NurseDashboard: React.FC = () => {
                 copilotProvenance={notesCopilotProvenance}
                 copilotDraftPatientId={selectedPatient?.id}
               />
+              {selectedPatient && (
+                <NursingIntelligencePanel
+                  patientId={selectedPatient.id}
+                  diagnoses={[]}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug || ''}
+                />
+              )}
             </div>
           );
         })()}

@@ -467,8 +467,8 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
       recommendations: draft.draftRecommendations || prev.recommendations,
       structured_findings:
         Array.isArray(draft.structuredDraft?.structured_findings) &&
-        draft.structuredDraft?.structured_findings.length > 0
-          ? draft.structuredDraft.structured_findings.map((finding) => ({
+        (draft.structuredDraft?.structured_findings?.length ?? 0) > 0
+          ? draft.structuredDraft!.structured_findings!.map((finding) => ({
               id: finding.id || generateFindingId(),
               region: finding.region || '',
               finding: finding.finding || '',
