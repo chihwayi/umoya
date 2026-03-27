@@ -67,11 +67,13 @@ const categoryLabel = (c: NotifCategory) =>
 
 export const NotificationCentre: React.FC<Props> = ({ visible, onClose }) => {
   const [notifs, setNotifs] = React.useState<Notification[]>([]);
+  const [hidden, setHidden] = React.useState(true);
   const slideAnim = useRef(new Animated.Value(-480)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
+      setHidden(false);
       StaffNotificationsService.list({ limit: 30 })
         .then(data => setNotifs(data.map(mapApiNotif)))
         .catch(() => {});
@@ -83,7 +85,7 @@ export const NotificationCentre: React.FC<Props> = ({ visible, onClose }) => {
       Animated.parallel([
         Animated.spring(slideAnim, { toValue: -480, useNativeDriver: true, tension: 70, friction: 12 }),
         Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-      ]).start();
+      ]).start(() => setHidden(true));
     }
   }, [visible]);
 
@@ -100,7 +102,7 @@ export const NotificationCentre: React.FC<Props> = ({ visible, onClose }) => {
   const unread = notifs.filter(n => !n.read).length;
   const categories: NotifCategory[] = ['critical', 'message', 'system'];
 
-  if (!visible && slideAnim._value === -480) return null;
+  if (!visible && hidden) return null;
 
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>

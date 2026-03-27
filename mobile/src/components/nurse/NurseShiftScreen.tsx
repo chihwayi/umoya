@@ -12,12 +12,14 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  Share,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, AiPulse, Dot } from '../ui';
 import { NurseWorklistService } from '../../services/nurseWorklist';
+import { CdssService, SbarResult, FallRiskResult } from '../../services/cdss';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,36 +89,7 @@ function mapApiTriage(t: any): TriagePatient {
   };
 }
 
-// ─── Placeholder mock data (used as fallback before API loads) ────────────────
-
-const MOCK_TASKS: ShiftTask[] = [
-  { id: 't1', patientName: 'Fatima Al-Rashid', bed: 'C-301', ward: 'Obs & Gynae', priority: 'URGENT', task: 'BP recheck + CTG strip (pre-eclampsia monitoring)', dueTime: '08:15', done: false, escalated: false, escalatable: true },
-  { id: 't2', patientName: 'Cardiology Patient', bed: 'A-204', ward: 'Cardiology', priority: 'URGENT', task: '12-lead ECG — bradycardia follow-up', dueTime: '08:30', done: false, escalated: false, escalatable: true },
-  { id: 't3', patientName: 'Amelia Chen',      bed: 'B-108', ward: 'Gen Medicine', priority: 'HIGH',   task: 'SpO₂ hourly check — pneumonia, target >94%', dueTime: '08:45', done: false, escalated: false, escalatable: true },
-  { id: 't4', patientName: 'Thomas Ndlovu',    bed: 'A-211', ward: 'Cardiology',  priority: 'HIGH',   task: 'IV furosemide 80mg — check fluid balance first', dueTime: '09:00', done: false, escalated: false, escalatable: false },
-  { id: 't5', patientName: 'Samuel Park',      bed: 'B-115', ward: 'Gen Medicine', priority: 'HIGH',   task: 'BGL check + insulin dose per sliding scale', dueTime: '09:00', done: false, escalated: false, escalatable: false },
-  { id: 't6', patientName: 'Moira Zulu',       bed: 'D-104', ward: 'Surgical',    priority: 'MED',    task: 'Wound dressing change (post-appendicectomy day 2)', dueTime: '10:00', done: false, escalated: false, escalatable: false },
-  { id: 't7', patientName: 'Joseph Dlamini',   bed: 'B-112', ward: 'Gen Medicine', priority: 'MED',    task: 'Oral medications — metformin, lisinopril, atorvastatin', dueTime: '08:00', done: true,  escalated: false, escalatable: false },
-  { id: 't8', patientName: 'Agnes Moyo',       bed: 'C-205', ward: 'Obs & Gynae', priority: 'LOW',    task: 'Post-partum vitals check (6h)', dueTime: '11:00', done: false, escalated: false, escalatable: false },
-];
-
-const MOCK_TRIAGE: TriagePatient[] = [
-  { id: 'tr1', name: 'Michael Tonde',  age: 58, complaint: 'Chest pain, radiating to jaw, diaphoresis', esi: 1, waitMins: 0,  arrived: '07:48' },
-  { id: 'tr2', name: 'Linda Mwangi',   age: 34, complaint: 'Acute asthma attack — audible wheeze, SpO₂ 90%', esi: 2, waitMins: 6,  arrived: '07:52' },
-  { id: 'tr3', name: 'Kenneth Siwela', age: 72, complaint: 'Sudden onset confusion + fall', esi: 2, waitMins: 9,  arrived: '07:55' },
-  { id: 'tr4', name: 'Patricia Nhamo', age: 28, complaint: 'Abdominal pain, nausea, vomiting — 12h duration', esi: 3, waitMins: 22, arrived: '08:00' },
-  { id: 'tr5', name: 'David Chirwa',   age: 45, complaint: 'Lower back pain — unable to walk', esi: 3, waitMins: 35, arrived: '07:38' },
-  { id: 'tr6', name: 'Rose Sithole',   age: 19, complaint: 'Fever 38.9°C, sore throat, headache', esi: 4, waitMins: 48, arrived: '07:25' },
-];
-
-const MOCK_DOCTORS: Doctor[] = [
-  { id: 'd1', name: 'On-call Doctor', role: 'Ward Lead',  available: true  },
-  { id: 'd2', name: 'Dr. Patel',   role: 'On-Call',      available: true  },
-  { id: 'd3', name: 'Dr. Osei',    role: 'Cardiologist', available: false },
-  { id: 'd4', name: 'Dr. Hassan',  role: 'Registrar',    available: true  },
-];
-
-const AI_HANDOFF = `End-of-shift AI summary will be generated from live patient data when you complete handover.`;
+const AI_HANDOFF_DEFAULT = `End-of-shift AI summary will be generated from live patient data when you complete handover.`;
 
 // ─── Priority helpers ─────────────────────────────────────────────────────────
 
@@ -126,6 +99,19 @@ const PRIORITY_COLOR: Record<TaskPriority, string> = {
   MED:    C.blue,
   LOW:    C.textMuted,
 };
+
+function isOverdue(dueTime: string): boolean {
+  if (!dueTime || dueTime === '—') return false;
+  // dueTime may be HH:mm or ISO string
+  const now = new Date();
+  const ref = dueTime.includes('T') ? new Date(dueTime) : (() => {
+    const [h, m] = dueTime.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  })();
+  return ref < now;
+}
 
 const ESI_COLOR: Record<ESILevel, string> = {
   1: C.red,
@@ -148,6 +134,7 @@ const ESI_LABEL: Record<ESILevel, string> = {
 interface EscalateModalProps {
   visible: boolean;
   patientName: string;
+  doctors: Doctor[];
   onClose: () => void;
   onSend: (severity: EscalateSeverity, doctorId: string, finding: string) => void;
 }
@@ -155,13 +142,14 @@ interface EscalateModalProps {
 export const EscalateModal: React.FC<EscalateModalProps> = ({
   visible,
   patientName,
+  doctors,
   onClose,
   onSend,
 }) => {
   const insets     = useSafeAreaInsets();
   const slideAnim  = useRef(new Animated.Value(500)).current;
   const [severity, setSeverity] = useState<EscalateSeverity>('HIGH');
-  const [doctor, setDoctor]     = useState<Doctor>(MOCK_DOCTORS[0]);
+  const [doctor, setDoctor]     = useState<Doctor | null>(doctors[0] ?? null);
   const [finding, setFinding]   = useState('');
   const [sending, setSending]   = useState(false);
   const [sent, setSent]         = useState(false);
@@ -170,11 +158,12 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
     if (visible) {
       setSent(false);
       setFinding('');
+      setDoctor(doctors[0] ?? null);
       Animated.spring(slideAnim, { toValue: 0, tension: 60, friction: 12, useNativeDriver: true }).start();
     } else {
       slideAnim.setValue(500);
     }
-  }, [visible]);
+  }, [visible, doctors]);
 
   const handleClose = () => {
     Animated.timing(slideAnim, { toValue: 500, duration: 220, useNativeDriver: true }).start(onClose);
@@ -183,6 +172,10 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
   const handleSend = async () => {
     if (!finding.trim()) {
       Alert.alert('Required', 'Enter the clinical finding before escalating.');
+      return;
+    }
+    if (!doctor) {
+      Alert.alert('No Doctor', 'No available doctors to escalate to.');
       return;
     }
     setSending(true);
@@ -218,7 +211,7 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
             </View>
             <Text style={escStyles.sentTitle}>Escalation Sent</Text>
             <Text style={escStyles.sentSub}>
-              {doctor.name} has been notified. SLA timer started.
+              {doctor?.name ?? 'Doctor'} has been notified. SLA timer started.
             </Text>
           </View>
         ) : (
@@ -253,12 +246,14 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
             {/* Doctor */}
             <SectionHeader>Notify Doctor</SectionHeader>
             <View style={escStyles.doctorList}>
-              {MOCK_DOCTORS.map((d) => (
+              {doctors.length === 0 ? (
+                <Text style={escStyles.noDoctors}>No doctors available at this time.</Text>
+              ) : doctors.map((d) => (
                 <TouchableOpacity
                   key={d.id}
                   style={[
                     escStyles.doctorRow,
-                    doctor.id === d.id && { borderColor: C.teal + '60', backgroundColor: C.teal + '10' },
+                    doctor?.id === d.id && { borderColor: C.teal + '60', backgroundColor: C.teal + '10' },
                     !d.available && { opacity: 0.5 },
                   ]}
                   onPress={() => d.available && setDoctor(d)}
@@ -274,7 +269,7 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
                     <Text style={escStyles.doctorRole}>{d.role}</Text>
                   </View>
                   <Dot color={d.available ? C.green : C.textMuted} size={8} />
-                  {doctor.id === d.id && <Icon name="check" size={14} color={C.teal} />}
+                  {doctor?.id === d.id && <Icon name="check" size={14} color={C.teal} />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -357,6 +352,7 @@ const escStyles = StyleSheet.create({
   doctorInitials: { fontFamily: FONT.uiBd, fontSize: 12, color: C.teal },
   doctorName: { fontFamily: FONT.uiBd, fontSize: 13, color: C.textPrimary },
   doctorRole: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
+  noDoctors: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textMuted, textAlign: 'center', paddingVertical: 16 },
   findingCard: { gap: 8 },
   findingInput: {
     fontFamily: FONT.uiMd, fontSize: 13, color: C.textPrimary,
@@ -401,9 +397,11 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onToggle, onEscalate }) => {
     onToggle(task.id);
   };
 
+  const overdue = !task.done && isOverdue(task.dueTime);
+
   return (
     <Animated.View style={{ opacity: task.done ? 0.55 : fadeAnim }}>
-      <View style={[taskStyles.card, { borderLeftColor: task.done ? C.textMuted : accentColor, borderLeftWidth: 3 }]}>
+      <View style={[taskStyles.card, { borderLeftColor: task.done ? C.textMuted : accentColor, borderLeftWidth: 3 }, overdue && { borderColor: C.red + '80' }]}>
         <View style={taskStyles.topRow}>
           <View style={{ flex: 1, gap: 2 }}>
             <View style={taskStyles.nameRow}>
@@ -431,8 +429,10 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onToggle, onEscalate }) => {
         <View style={taskStyles.footerRow}>
           <Badge color={accentColor} size="xs">{task.priority}</Badge>
           <View style={taskStyles.timeRow}>
-            <Icon name="calendar" size={11} color={C.textMuted} />
-            <Text style={taskStyles.dueTime}>Due {task.dueTime}</Text>
+            <Icon name="calendar" size={11} color={overdue ? C.red : C.textMuted} />
+            <Text style={[taskStyles.dueTime, overdue && { color: C.red }]}>
+              {overdue ? 'OVERDUE' : `Due ${task.dueTime}`}
+            </Text>
           </View>
           {task.escalatable && !task.done && !task.escalated && (
             <TouchableOpacity
@@ -487,9 +487,10 @@ interface WorklistProps {
   tasks: ShiftTask[];
   onToggle: (id: string) => void;
   onEscalate: (task: ShiftTask) => void;
+  aiSummary: string;
 }
 
-const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate }) => {
+const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate, aiSummary }) => {
   const pending = tasks.filter((t) => !t.done);
   const done    = tasks.filter((t) => t.done);
   const urgent  = tasks.filter((t) => t.priority === 'URGENT' && !t.done).length;
@@ -524,12 +525,18 @@ const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate }) => {
       </Card>
 
       {/* Pending tasks */}
-      {pending.length > 0 && (
+      {pending.length > 0 ? (
         <View>
           <SectionHeader action={`${pending.length} remaining`}>Worklist</SectionHeader>
           {pending.map((t) => (
             <TaskCard key={t.id} task={t} onToggle={onToggle} onEscalate={onEscalate} />
           ))}
+        </View>
+      ) : (
+        <View style={wlStyles.emptyState}>
+          <Icon name="check" size={28} color={C.teal} />
+          <Text style={wlStyles.emptyTitle}>All tasks complete</Text>
+          <Text style={wlStyles.emptyText}>No pending shift tasks.</Text>
         </View>
       )}
 
@@ -552,7 +559,7 @@ const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate }) => {
             <Text style={wlStyles.generateBtnText}>Generate Full Report</Text>
           </TouchableOpacity>
         </View>
-        <Text style={wlStyles.handoffText}>{AI_HANDOFF}</Text>
+        <Text style={wlStyles.handoffText}>{aiSummary || AI_HANDOFF_DEFAULT}</Text>
       </Card>
     </ScrollView>
   );
@@ -575,6 +582,9 @@ const wlStyles = StyleSheet.create({
   generateBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   generateBtnText: { fontFamily: FONT.uiBd, fontSize: 12, color: C.teal },
   handoffText: { fontFamily: FONT.uiMd, fontSize: 12, color: C.textSecondary, lineHeight: 20 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 32, gap: 8 },
+  emptyTitle: { fontFamily: FONT.uiBd, fontSize: 15, color: C.textPrimary },
+  emptyText: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textMuted },
 });
 
 // ─── Triage sub-tab ───────────────────────────────────────────────────────────
@@ -582,9 +592,11 @@ const wlStyles = StyleSheet.create({
 interface TriageProps {
   onEscalate: (name: string) => void;
   patients: TriagePatient[];
+  onSbar: (p: AiSheetPatient) => void;
+  onFallRisk: (p: AiSheetPatient) => void;
 }
 
-const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients }) => {
+const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients, onSbar, onFallRisk }) => {
   const [assessing, setAssessing] = useState<TriagePatient | null>(null);
   const [aiESI, setAiESI]         = useState<ESILevel | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -606,6 +618,18 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients }) => {
     setAiESI(assessing!.esi);
     setAiLoading(false);
   };
+
+  if (patients.length === 0) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32 }}>
+        <Icon name="pulse" size={28} color={C.textMuted} />
+        <Text style={{ fontFamily: FONT.uiBd, fontSize: 15, color: C.textPrimary }}>No triage patients</Text>
+        <Text style={{ fontFamily: FONT.uiMd, fontSize: 13, color: C.textMuted, textAlign: 'center' }}>
+          No patients are currently awaiting triage.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={triStyles.content}>
@@ -636,8 +660,26 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients }) => {
               <Text style={triStyles.waitText}>
                 {p.esi <= 2 ? 'Immediate' : `Wait ${p.waitMins} min`}
               </Text>
-              <TouchableOpacity onPress={() => openAssess(p)} activeOpacity={0.8}>
-                <Text style={triStyles.assessLink}>Start Assessment →</Text>
+            </View>
+            <View style={triStyles.aiActions}>
+              <TouchableOpacity
+                style={triStyles.aiActionBtn}
+                onPress={() => onSbar({ id: p.id, name: p.name, age: p.age, complaint: p.complaint })}
+                activeOpacity={0.8}
+              >
+                <Icon name="book" size={12} color={C.blue} />
+                <Text style={[triStyles.aiActionText, { color: C.blue }]}>SBAR</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={triStyles.aiActionBtn}
+                onPress={() => onFallRisk({ id: p.id, name: p.name, age: p.age, complaint: p.complaint })}
+                activeOpacity={0.8}
+              >
+                <Icon name="escalate" size={12} color={C.amber} />
+                <Text style={[triStyles.aiActionText, { color: C.amber }]}>Fall Risk</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => openAssess(p)} activeOpacity={0.8} style={{ marginLeft: 'auto' }}>
+                <Text style={triStyles.assessLink}>Assess →</Text>
               </TouchableOpacity>
             </View>
           </Card>
@@ -702,7 +744,10 @@ const triStyles = StyleSheet.create({
   },
   triageMeta: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   waitText: { fontFamily: FONT.mono, fontSize: 11, color: C.textMuted },
-  assessLink: { fontFamily: FONT.uiBd, fontSize: 12, color: C.teal, marginLeft: 'auto' },
+  assessLink: { fontFamily: FONT.uiBd, fontSize: 12, color: C.teal },
+  aiActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  aiActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bg },
+  aiActionText: { fontFamily: FONT.uiBd, fontSize: 11 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
   assessSheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -734,26 +779,73 @@ const triStyles = StyleSheet.create({
 
 type ShiftTab = 'worklist' | 'triage';
 
+interface AiSheetPatient {
+  id: string;
+  name: string;
+  age: number;
+  complaint: string;
+}
+
 export const NurseShiftScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [activeTab,  setActiveTab]  = useState<ShiftTab>('worklist');
   const [tasks,      setTasks]      = useState<ShiftTask[]>([]);
   const [triage,     setTriage]     = useState<TriagePatient[]>([]);
+  const [doctors,    setDoctors]    = useState<Doctor[]>([]);
+  const [aiSummary,  setAiSummary]  = useState<string>('');
   const [loading,    setLoading]    = useState(true);
   const [escalating, setEscalating] = useState<{ name: string } | null>(null);
 
+  // SBAR sheet
+  const [sbarPatient,  setSbarPatient]  = useState<AiSheetPatient | null>(null);
+  const [sbarResult,   setSbarResult]   = useState<SbarResult | null | 'loading' | 'unavailable'>('loading');
+
+  // Fall Risk sheet
+  const [frPatient,    setFrPatient]    = useState<AiSheetPatient | null>(null);
+  const [frResult,     setFrResult]     = useState<FallRiskResult | null | 'loading' | 'unavailable'>('loading');
+
   useEffect(() => {
-    NurseWorklistService.state()
+    const loadWorklist = NurseWorklistService.state()
       .then(state => {
         setTasks((state.tasks ?? []).map(mapApiTask));
         setTriage((state.triage ?? []).map(mapApiTriage));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    const loadDoctors = CdssService.getAvailableDoctors()
+      .then(result => {
+        if (result.length > 0) {
+          setDoctors(result.map(d => ({
+            id:        d.id,
+            name:      d.name,
+            role:      d.role ?? d.specialty ?? 'Physician',
+            available: d.available,
+          })));
+        }
+      })
+      .catch(() => {});
+
+    const loadSummary = CdssService.getAiShiftSummary()
+      .then(result => {
+        if (!result.abstained && result.summary) {
+          setAiSummary(result.summary);
+        }
+      })
+      .catch(() => {});
+
+    Promise.allSettled([loadWorklist, loadDoctors, loadSummary]);
   }, []);
 
   const toggleTask = useCallback((id: string) => {
-    setTasks((prev) => prev.map((t) => t.id === id ? { ...t, done: !t.done } : t));
+    setTasks((prev) => {
+      const updated = prev.map((t) => t.id === id ? { ...t, done: !t.done } : t);
+      const task = updated.find(t => t.id === id);
+      if (task?.done) {
+        NurseWorklistService.completeTask(id).catch(() => {});
+      }
+      return updated;
+    });
   }, []);
 
   const openEscalate = useCallback((nameOrTask: string | ShiftTask) => {
@@ -770,6 +862,40 @@ export const NurseShiftScreen: React.FC = () => {
   }, [escalating]);
 
   const pendingCount = tasks.filter((t) => !t.done).length;
+
+  const openSbar = useCallback(async (p: AiSheetPatient) => {
+    setSbarPatient(p);
+    setSbarResult('loading');
+    const res = await CdssService.generateSBAR({
+      patientId:          p.id,
+      admissionDiagnosis: p.complaint,
+      currentVitals:      {},
+      medications:        [],
+      patientAge:         p.age,
+    });
+    setSbarResult(res ?? 'unavailable');
+  }, []);
+
+  const openFallRisk = useCallback(async (p: AiSheetPatient) => {
+    setFrPatient(p);
+    setFrResult('loading');
+    const res = await CdssService.assessFallRisk({
+      patientId:    p.id,
+      age:          p.age,
+      diagnoses:    p.complaint ? [p.complaint] : [],
+      medications:  [],
+      gait:         'normal',
+      mentalStatus: 'oriented',
+    });
+    setFrResult(res ?? 'unavailable');
+  }, []);
+
+  const shareSbar = useCallback((sbar: SbarResult) => {
+    const text = `SBAR HANDOFF\n\nS – Situation:\n${sbar.S}\n\nB – Background:\n${sbar.B}\n\nA – Assessment:\n${sbar.A}\n\nR – Recommendation:\n${sbar.R}`;
+    Share.share({ message: text }).catch(() => {});
+  }, []);
+
+  const FALL_COLOR: Record<string, string> = { HIGH: C.red, MODERATE: C.amber, LOW: C.green };
 
   return (
     <View style={[mainStyles.container, { paddingTop: insets.top }]}>
@@ -803,16 +929,110 @@ export const NurseShiftScreen: React.FC = () => {
       </View>
 
       {activeTab === 'worklist'
-        ? <Worklist tasks={tasks} onToggle={toggleTask} onEscalate={openEscalate} />
-        : <TriageTab onEscalate={(name) => openEscalate(name)} patients={triage} />
+        ? <Worklist tasks={tasks} onToggle={toggleTask} onEscalate={openEscalate} aiSummary={aiSummary} />
+        : <TriageTab onEscalate={(name) => openEscalate(name)} patients={triage} onSbar={openSbar} onFallRisk={openFallRisk} />
       }
 
       <EscalateModal
         visible={!!escalating}
         patientName={escalating?.name ?? ''}
+        doctors={doctors}
         onClose={() => setEscalating(null)}
         onSend={handleEscalateSent}
       />
+
+      {/* ── SBAR Sheet ─────────────────────────────────────────────────────── */}
+      <Modal visible={!!sbarPatient} transparent animationType="slide" onRequestClose={() => setSbarPatient(null)}>
+        <View style={aiSheetStyles.backdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSbarPatient(null)} />
+          <View style={[aiSheetStyles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={aiSheetStyles.handle} />
+            <Text style={aiSheetStyles.title}>SBAR Handoff</Text>
+            <Text style={aiSheetStyles.subtitle}>{sbarPatient?.name ?? ''}</Text>
+
+            {sbarResult === 'loading' ? (
+              <View style={aiSheetStyles.center}><ActivityIndicator color={C.teal} size="large" /></View>
+            ) : sbarResult === 'unavailable' || sbarResult === null ? (
+              <View style={aiSheetStyles.center}>
+                <Icon name="sparkle" size={24} color={C.textMuted} />
+                <Text style={aiSheetStyles.unavail}>SBAR unavailable — complete manually</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 8 }}>
+                {(['S', 'B', 'A', 'R'] as const).map(key => {
+                  const labels = { S: 'Situation', B: 'Background', A: 'Assessment', R: 'Recommendation' };
+                  const colors = { S: C.red, B: C.blue, A: C.amber, R: C.teal };
+                  return (
+                    <View key={key} style={[aiSheetStyles.sbarSection, { borderLeftColor: colors[key] }]}>
+                      <Text style={[aiSheetStyles.sbarKey, { color: colors[key] }]}>{key} — {labels[key]}</Text>
+                      <Text style={aiSheetStyles.sbarText}>{sbarResult[key]}</Text>
+                    </View>
+                  );
+                })}
+                <TouchableOpacity style={aiSheetStyles.shareBtn} onPress={() => shareSbar(sbarResult)} activeOpacity={0.85}>
+                  <Icon name="upload" size={16} color="#fff" />
+                  <Text style={aiSheetStyles.shareBtnText}>Share / Copy</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Fall Risk Sheet ─────────────────────────────────────────────────── */}
+      <Modal visible={!!frPatient} transparent animationType="slide" onRequestClose={() => setFrPatient(null)}>
+        <View style={aiSheetStyles.backdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setFrPatient(null)} />
+          <View style={[aiSheetStyles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={aiSheetStyles.handle} />
+            <Text style={aiSheetStyles.title}>Fall Risk Assessment</Text>
+            <Text style={aiSheetStyles.subtitle}>{frPatient?.name ?? ''}</Text>
+
+            {frResult === 'loading' ? (
+              <View style={aiSheetStyles.center}><ActivityIndicator color={C.amber} size="large" /></View>
+            ) : frResult === 'unavailable' || frResult === null ? (
+              <View style={aiSheetStyles.center}>
+                <Icon name="escalate" size={24} color={C.textMuted} />
+                <Text style={aiSheetStyles.unavail}>Fall risk assessment unavailable</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingVertical: 8 }}>
+                {/* Risk level */}
+                <View style={[aiSheetStyles.riskBadge, { backgroundColor: (FALL_COLOR[frResult.riskLevel] ?? C.textMuted) + '18', borderColor: (FALL_COLOR[frResult.riskLevel] ?? C.textMuted) + '50' }]}>
+                  <Text style={[aiSheetStyles.riskLevel, { color: FALL_COLOR[frResult.riskLevel] ?? C.textMuted }]}>
+                    {frResult.riskLevel} RISK
+                  </Text>
+                  <Text style={aiSheetStyles.riskScore}>Score: {frResult.score}</Text>
+                </View>
+                {/* Factors */}
+                {frResult.factors.length > 0 && (
+                  <View>
+                    <Text style={aiSheetStyles.listHeader}>RISK FACTORS</Text>
+                    {frResult.factors.map((f, i) => (
+                      <View key={i} style={aiSheetStyles.listRow}>
+                        <Icon name="escalate" size={11} color={C.amber} />
+                        <Text style={aiSheetStyles.listText}>{f}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {/* Interventions */}
+                {frResult.interventions.length > 0 && (
+                  <View>
+                    <Text style={aiSheetStyles.listHeader}>RECOMMENDED INTERVENTIONS</Text>
+                    {frResult.interventions.map((v, i) => (
+                      <View key={i} style={aiSheetStyles.listRow}>
+                        <Text style={aiSheetStyles.listNum}>{i + 1}.</Text>
+                        <Text style={aiSheetStyles.listText}>{v}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -830,4 +1050,32 @@ const mainStyles = StyleSheet.create({
     borderWidth: 1, borderColor: C.border,
   },
   tabLabel: { fontFamily: FONT.uiBd, fontSize: 13, color: C.textMuted },
+});
+
+const aiSheetStyles = StyleSheet.create({
+  backdrop:     { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet: {
+    backgroundColor: C.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    borderTopWidth: 1, borderColor: C.border, maxHeight: '80%', padding: 20, gap: 12,
+  },
+  handle:       { width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 4 },
+  title:        { fontFamily: FONT.uiBd, fontSize: 18, color: C.text },
+  subtitle:     { fontFamily: FONT.ui, fontSize: 13, color: C.textMuted, marginTop: -6 },
+  center:       { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 10 },
+  unavail:      { fontFamily: FONT.ui, fontSize: 14, color: C.textMuted, textAlign: 'center' },
+  sbarSection:  { borderLeftWidth: 3, paddingLeft: 12, gap: 4 },
+  sbarKey:      { fontFamily: FONT.uiBd, fontSize: 12, letterSpacing: 0.5 },
+  sbarText:     { fontFamily: FONT.ui, fontSize: 13, color: C.text, lineHeight: 20 },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: C.teal, borderRadius: RADIUS.md, padding: 13, marginTop: 4,
+  },
+  shareBtnText: { fontFamily: FONT.uiBd, fontSize: 14, color: '#fff' },
+  riskBadge:    { borderRadius: RADIUS.md, borderWidth: 1, padding: 16, alignItems: 'center', gap: 4 },
+  riskLevel:    { fontFamily: FONT.uiBk, fontSize: 22, letterSpacing: 1 },
+  riskScore:    { fontFamily: FONT.ui, fontSize: 13, color: C.textMuted },
+  listHeader:   { fontFamily: FONT.uiBd, fontSize: 11, color: C.textMuted, letterSpacing: 0.8, marginBottom: 6 },
+  listRow:      { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 4 },
+  listNum:      { fontFamily: FONT.uiBd, fontSize: 13, color: C.textMuted, minWidth: 18 },
+  listText:     { fontFamily: FONT.ui, fontSize: 13, color: C.text, flex: 1, lineHeight: 19 },
 });

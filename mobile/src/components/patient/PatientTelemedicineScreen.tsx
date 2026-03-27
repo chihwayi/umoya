@@ -138,8 +138,6 @@ const CallView: React.FC<{
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled
         domStorageEnabled
-        cameraAccessEnabled
-        microphoneAccessEnabled
         allowsProtectedMedia
         originWhitelist={['*']}
         onError={() => Alert.alert('Connection Error', 'Could not connect to the call. Please try again.')}

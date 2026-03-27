@@ -37,4 +37,7 @@ export const NurseWorklistService = {
 
   crossModuleFeed: () =>
     api.get<any>('/nurse-worklist/cross-module-feed').then(r => r.data),
+
+  completeTask: (id: string) =>
+    api.patch<{ success: boolean }>(`/nurse-worklist/tasks/${id}/complete`, {}).then(r => r.data),
 };

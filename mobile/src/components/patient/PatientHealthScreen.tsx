@@ -12,6 +12,7 @@ import { LabOrdersService } from '../../services/labOrders';
 import { DocumentsService } from '../../services/documents';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { PatientProfileService, ApiPatientProfile, ApiCondition, ApiAllergy } from '../../services/patientProfile';
+import { CdssService } from '../../services/cdss';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,24 +75,7 @@ interface Allergy {
   severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_VITALS: VitalEntry[] = [
-  { label: 'Systolic BP',   unit: 'mmHg', values: [145, 138, 130, 128, 122, 118, 115], dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [90,120],  warn: [121,139], icon: 'pulse',  accent: C.teal   },
-  { label: 'Heart Rate',    unit: 'bpm',  values: [88, 82, 78, 76, 74, 72, 71],        dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [60,100],  warn: [100,110], icon: 'pulse',  accent: C.blue   },
-  { label: 'SpO₂',          unit: '%',    values: [96, 97, 97, 98, 98, 98, 99],        dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [95,100],  warn: [90,94],   icon: 'pulse',  accent: C.green  },
-  { label: 'Temperature',   unit: '°C',   values: [37.2,37.1,37.0,36.9,36.8,36.8,36.7], dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [36.1,37.2], warn: [37.3,38], icon: 'pulse', accent: C.amber  },
-  { label: 'Weight',        unit: 'kg',   values: [85, 84.8, 84.5, 84.2, 84.0, 83.8, 83.6], dates: ['15 Mar','16 Mar','17 Mar','18 Mar','19 Mar','20 Mar','21 Mar'], normal: [60,90], warn: [90,100], icon: 'pulse', accent: C.purple },
-];
-
-const MOCK_LABS: LabResult[] = [
-  { id: 'l1', name: 'Troponin I',    value: 0.02, unit: 'ng/mL',  refLow: 0,   refHigh: 0.04, date: '18 Mar', panel: 'Cardiac',  trend: [0.85,0.42,0.18,0.08,0.04,0.02], flag: 'normal',   aiNote: 'Troponin trending down well — cardiac biomarker normalisation on track post-PCI.' },
-  { id: 'l2', name: 'LDL Cholesterol', value: 3.1, unit: 'mmol/L', refLow: 0,  refHigh: 2.6,  date: '18 Mar', panel: 'Lipids',   trend: [4.8,4.1,3.8,3.5,3.3,3.1],      flag: 'high',     aiNote: 'LDL above target for post-ACS patients (<1.8 mmol/L). Atorvastatin dose may need review.' },
-  { id: 'l3', name: 'HbA1c',          value: 5.9, unit: '%',       refLow: 0,  refHigh: 6.4,  date: '18 Mar', panel: 'Metabolic', trend: [6.4,6.2,6.1,6.0,5.9],          flag: 'normal',   aiNote: 'Pre-diabetic range but trending down — dietary changes are working.' },
-  { id: 'l4', name: 'eGFR',           value: 72,  unit: 'mL/min',  refLow: 60, refHigh: 120,  date: '18 Mar', panel: 'Renal',    trend: [68,69,70,71,72],                 flag: 'normal'    },
-  { id: 'l5', name: 'Haemoglobin',    value: 13.8, unit: 'g/dL',   refLow: 13.0, refHigh: 17.5, date: '18 Mar', panel: 'FBC',  trend: [11.2,12.0,12.8,13.4,13.8],         flag: 'normal',   aiNote: 'Haemoglobin recovering well after post-surgical anaemia.' },
-  { id: 'l6', name: 'BNP',            value: 420, unit: 'pg/mL',   refLow: 0,  refHigh: 100,  date: '18 Mar', panel: 'Cardiac',  trend: [820,650,540,480,420],            flag: 'critical',  aiNote: 'BNP elevated — heart failure monitoring required. Downtrend is encouraging.' },
-];
+// ─── (No mock data — all data comes from API) ─────────────────────────────────
 
 const WEARABLES: WearableService[] = [
   { id: 'apple',   name: 'Apple Health',   icon: 'heart',   connected: true,  lastSync: '2 min ago', metrics: ['Steps','Heart Rate','Sleep','ECG','Blood Oxygen'],         accentColor: '#FF3B30' },
@@ -102,32 +86,11 @@ const WEARABLES: WearableService[] = [
   { id: 'withings',name: 'Withings',       icon: 'pulse',   connected: false, metrics: ['BP','Weight','Sleep','ECG','SpO₂'],                                               accentColor: '#00A59B' },
 ];
 
-const MOCK_DOCUMENTS: MedDocument[] = [
-  { id: 'd1', title: 'Discharge Summary — NSTEMI', type: 'discharge',    date: '14 Mar 2026', doctor: 'Dr. T. Chikwanda', size: '248 KB' },
-  { id: 'd2', title: 'Cardiac Lab Panel',           type: 'lab',         date: '18 Mar 2026', doctor: 'MediCore Labs',     size: '84 KB'  },
-  { id: 'd3', title: 'Aspirin 100mg Prescription',  type: 'prescription', date: '14 Mar 2026', doctor: 'Dr. T. Chikwanda', size: '32 KB'  },
-  { id: 'd4', title: 'Cardiology Outpatient Referral', type: 'referral', date: '14 Mar 2026', doctor: 'Dr. T. Chikwanda', size: '56 KB'  },
-  { id: 'd5', title: 'Coronary Angiogram Report',   type: 'imaging',     date: '13 Mar 2026', doctor: 'Dr. B. Moyo',      size: '1.4 MB' },
-  { id: 'd6', title: 'Procedure Consent Form',      type: 'consent',     date: '13 Mar 2026', doctor: 'Dr. B. Moyo',      size: '44 KB'  },
-];
-
-const MOCK_CONDITIONS: Condition[] = [
-  { name: 'NSTEMI (post-PCI)',         icd: 'I21.4', since: 'Mar 2026', severity: 'severe'   },
-  { name: 'Hypertension Stage 1',      icd: 'I10',   since: 'Jan 2024', severity: 'moderate' },
-  { name: 'Hypercholesterolaemia',     icd: 'E78.0', since: 'Jun 2023', severity: 'moderate' },
-  { name: 'Pre-diabetes',              icd: 'R73.0', since: 'Jun 2023', severity: 'mild'     },
-];
-
-const MOCK_ALLERGIES: Allergy[] = [
-  { substance: 'Penicillin',      reaction: 'Anaphylaxis',      severity: 'life-threatening' },
-  { substance: 'Sulfonamides',    reaction: 'Rash / urticaria', severity: 'moderate'         },
-  { substance: 'Contrast dye',    reaction: 'Nausea / flushing', severity: 'mild'            },
-];
 
 // ─── API Mappers ──────────────────────────────────────────────────────────────
 
 function mapApiConditions(raw: ApiCondition[]): Condition[] {
-  if (!raw?.length) return MOCK_CONDITIONS;
+  if (!raw?.length) return [];
   return raw.map(c => ({
     name:     c.name ?? c.diagnosisName ?? 'Unknown condition',
     icd:      c.icdCode ?? c.icd10Code ?? '—',
@@ -139,7 +102,7 @@ function mapApiConditions(raw: ApiCondition[]): Condition[] {
 }
 
 function mapApiAllergies(raw: ApiAllergy[]): Allergy[] {
-  if (!raw?.length) return MOCK_ALLERGIES;
+  if (!raw?.length) return [];
   return raw.map(a => ({
     substance: a.substance ?? a.allergen ?? 'Unknown',
     reaction:  Array.isArray(a.reactions) ? a.reactions.join(', ') : (a.reaction ?? 'Unknown reaction'),
@@ -148,24 +111,25 @@ function mapApiAllergies(raw: ApiAllergy[]): Allergy[] {
   }));
 }
 
+const VITAL_ACCENT_COLORS = [C.teal, C.blue, C.green, C.amber, C.purple, C.red];
+
 function mapApiVitals(apiVitals: VitalTrend[]): VitalEntry[] {
-  if (!apiVitals?.length) return MOCK_VITALS;
-  return apiVitals.map(av => {
+  if (!apiVitals?.length) return [];
+  return apiVitals.map((av, idx) => {
     const readings = av.readings.slice(-7);
     const values = readings.map(r => r.value);
     const dates = readings.map(r =>
       new Date(r.recordedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
     );
-    const base = MOCK_VITALS.find(v =>
-      v.label.toLowerCase().includes(av.label.toLowerCase().split(' ')[0]) ||
-      av.vital.toLowerCase().includes(v.label.toLowerCase().split(' ')[0])
-    ) ?? MOCK_VITALS[0];
     return {
-      ...base,
       label: av.label,
-      unit: av.unit,
-      values: values.length > 0 ? values : base.values,
-      dates: dates.length > 0 ? dates : base.dates,
+      unit:  av.unit,
+      values: values.length > 0 ? values : [0],
+      dates:  dates.length > 0 ? dates : ['—'],
+      normal: [av.normalLow ?? 0, av.normalHigh ?? 999] as [number, number],
+      warn:   [av.warnLow   ?? 0, av.warnHigh   ?? 999] as [number, number],
+      icon:   'pulse',
+      accent: VITAL_ACCENT_COLORS[idx % VITAL_ACCENT_COLORS.length],
     };
   });
 }
@@ -193,11 +157,11 @@ function mapApiLabs(orders: any[]): LabResult[] {
       });
     });
   });
-  return results.length > 0 ? results : MOCK_LABS;
+  return results;
 }
 
 function mapApiDocuments(docs: any[]): MedDocument[] {
-  if (!docs?.length) return MOCK_DOCUMENTS;
+  if (!docs?.length) return [];
   const validTypes = ['discharge', 'lab', 'prescription', 'referral', 'imaging', 'consent'];
   return docs.map((d: any) => ({
     id: String(d.id ?? Math.random()),
@@ -289,7 +253,8 @@ const ProfileTab: React.FC<{
   allergies: Allergy[];
   profile: ApiPatientProfile | null;
   userName: string;
-}> = ({ conditions, allergies, profile, userName }) => {
+  loading: boolean;
+}> = ({ conditions, allergies, profile, userName, loading }) => {
   const initials = (profile?.firstName && profile?.lastName)
     ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase()
     : userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
@@ -344,6 +309,7 @@ const ProfileTab: React.FC<{
 
     {/* Conditions */}
     <Text style={styles.sectionTitle}>Active Conditions</Text>
+    {loading && conditions.length === 0 ? <SkeletonRows /> : conditions.length === 0 ? <EmptyState /> : (
     <Card style={styles.listCard}>
       {conditions.map((c, i) => (
         <View key={c.icd} style={[styles.listRow, i < conditions.length - 1 && styles.listRowBorder]}>
@@ -357,10 +323,11 @@ const ProfileTab: React.FC<{
           </Text>
         </View>
       ))}
-    </Card>
+    </Card>)}
 
     {/* Allergies */}
     <Text style={styles.sectionTitle}>Allergies & Reactions</Text>
+    {loading && allergies.length === 0 ? <SkeletonRows /> : allergies.length === 0 ? <EmptyState /> : (
     <Card style={styles.listCard}>
       {allergies.map((a, i) => (
         <View key={a.substance} style={[styles.listRow, i < allergies.length - 1 && styles.listRowBorder]}>
@@ -376,7 +343,7 @@ const ProfileTab: React.FC<{
           </Text>
         </View>
       ))}
-    </Card>
+    </Card>)}
 
     {/* Emergency contact */}
     <Text style={styles.sectionTitle}>Emergency Contact</Text>
@@ -404,7 +371,7 @@ const ProfileTab: React.FC<{
 
 // ── Vitals Tab ────────────────────────────────────────────────────────────────
 
-const VitalsTab: React.FC<{ vitals: VitalEntry[] }> = ({ vitals }) => {
+const VitalsTab: React.FC<{ vitals: VitalEntry[]; loading: boolean }> = ({ vitals, loading }) => {
   const [expanded, setExpanded] = useState<string | null>(null);
   return (
     <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
@@ -412,6 +379,8 @@ const VitalsTab: React.FC<{ vitals: VitalEntry[] }> = ({ vitals }) => {
         <AiBadge text="7-DAY TREND" />
         <Text style={styles.vitalsSubtitle}>Tap any card to see full history</Text>
       </View>
+      {loading && vitals.length === 0 && <SkeletonRows />}
+      {!loading && vitals.length === 0 && <EmptyState />}
       {vitals.map(v => {
         const latest = v.values[v.values.length - 1];
         const status = vitalStatus(v, latest);
@@ -429,7 +398,7 @@ const VitalsTab: React.FC<{ vitals: VitalEntry[] }> = ({ vitals }) => {
                   <Text style={styles.vitalRef}>Normal: {v.normal[0]}–{v.normal[1]} {v.unit}</Text>
                 </View>
                 <View style={{ width: 80, height: 40 }}>
-                  <Sparkline data={v.values} color={v.accent} />
+                  <Sparkline data={v.values.map((n: number) => ({ v: n }))} color={v.accent} />
                 </View>
               </View>
               {isOpen && (
@@ -460,7 +429,11 @@ const VitalsTab: React.FC<{ vitals: VitalEntry[] }> = ({ vitals }) => {
 
 // ── Labs Tab ──────────────────────────────────────────────────────────────────
 
-const LabsTab: React.FC<{ labs: LabResult[] }> = ({ labs }) => {
+const LabsTab: React.FC<{
+  labs: LabResult[];
+  loading: boolean;
+  labInterpretations: Record<string, string>;
+}> = ({ labs, loading, labInterpretations }) => {
   const [selected, setSelected] = useState<LabResult | null>(null);
   const slideAnim = useRef(new Animated.Value(400)).current;
   const openSheet = (lab: LabResult) => {
@@ -478,12 +451,15 @@ const LabsTab: React.FC<{ labs: LabResult[] }> = ({ labs }) => {
       <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
         <View style={styles.vitalsHeader}>
           <AiBadge text="AI-INTERPRETED" />
-          <Text style={styles.vitalsSubtitle}>Results from 18 Mar 2026</Text>
         </View>
+        {loading && labs.length === 0 && <SkeletonRows />}
+        {!loading && labs.length === 0 && <EmptyState />}
         {panels.map(panel => (
           <View key={panel}>
             <Text style={styles.panelTitle}>{panel}</Text>
-            {labs.filter(l => l.panel === panel).map(lab => (
+            {labs.filter(l => l.panel === panel).map(lab => {
+              const aiInterp = lab.aiNote || labInterpretations[lab.id];
+              return (
               <TouchableOpacity key={lab.id} onPress={() => openSheet(lab)} activeOpacity={0.85}>
                 <Card style={[styles.labCard, { borderLeftColor: flagColor(lab.flag), borderLeftWidth: 3 }]}>
                   <View style={styles.labCardRow}>
@@ -500,15 +476,16 @@ const LabsTab: React.FC<{ labs: LabResult[] }> = ({ labs }) => {
                       </Text>
                     </View>
                   </View>
-                  {lab.aiNote && (
+                  {aiInterp && (
                     <View style={styles.labAiRow}>
                       <Icon name="sparkle" size={11} color={C.teal} />
-                      <Text style={styles.labAiText} numberOfLines={1}>{lab.aiNote}</Text>
+                      <Text style={styles.labAiText} numberOfLines={2}>{aiInterp}</Text>
                     </View>
                   )}
                 </Card>
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         ))}
       </ScrollView>
@@ -544,7 +521,7 @@ const LabsTab: React.FC<{ labs: LabResult[] }> = ({ labs }) => {
             <View style={styles.sheetTrendRow}>
               <Text style={styles.sheetSectionLabel}>TREND</Text>
               <View style={{ flex: 1, height: 48 }}>
-                <Sparkline data={selected.trend} color={flagColor(selected.flag)} />
+                <Sparkline data={selected.trend.map((n: number) => ({ v: n }))} color={flagColor(selected.flag)} />
               </View>
             </View>
 
@@ -629,12 +606,14 @@ const ServicesTab: React.FC = () => {
 
 // ── Documents Tab ─────────────────────────────────────────────────────────────
 
-const DocumentsTab: React.FC<{ docs: MedDocument[] }> = ({ docs }) => (
+const DocumentsTab: React.FC<{ docs: MedDocument[]; loading: boolean }> = ({ docs, loading }) => (
   <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
     <View style={styles.vitalsHeader}>
       <AiBadge text="MEDICAL RECORDS" />
       <Text style={styles.vitalsSubtitle}>{docs.length} documents on file</Text>
     </View>
+    {loading && docs.length === 0 && <SkeletonRows />}
+    {!loading && docs.length === 0 && <EmptyState />}
     {docs.map(doc => (
       <TouchableOpacity key={doc.id} activeOpacity={0.85}>
         <Card style={styles.docCard}>
@@ -675,49 +654,87 @@ const DocumentsTab: React.FC<{ docs: MedDocument[] }> = ({ docs }) => (
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
+// ─── Loading skeleton row ──────────────────────────────────────────────────────
+
+const SkeletonRows: React.FC = () => (
+  <View style={{ gap: 8, opacity: 0.4 }}>
+    {[1, 2, 3].map(i => (
+      <View
+        key={i}
+        style={{ height: 56, backgroundColor: C.card, borderRadius: RADIUS.card, borderWidth: 1, borderColor: C.border, justifyContent: 'center', paddingHorizontal: 14 }}
+      >
+        <Text style={{ fontFamily: FONT.ui, fontSize: 12, color: C.textMuted }}>Loading...</Text>
+      </View>
+    ))}
+  </View>
+);
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+const EmptyState: React.FC<{ message?: string }> = ({ message = 'No data available' }) => (
+  <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+    <Text style={{ fontFamily: FONT.uiMd, fontSize: 13, color: C.textMuted }}>{message}</Text>
+  </View>
+);
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export const PatientHealthScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<SubTab>('profile');
   const { user } = useAuthStore();
 
-  const [profile,    setProfile]    = useState<ApiPatientProfile | null>(null);
-  const [vitals,     setVitals]     = useState<VitalEntry[]>(MOCK_VITALS);
-  const [labs,       setLabs]       = useState<LabResult[]>(MOCK_LABS);
-  const [docs,       setDocs]       = useState<MedDocument[]>(MOCK_DOCUMENTS);
-  const [conditions, setConditions] = useState<Condition[]>(MOCK_CONDITIONS);
-  const [allergies,  setAllergies]  = useState<Allergy[]>(MOCK_ALLERGIES);
+  const [profile,           setProfile]           = useState<ApiPatientProfile | null>(null);
+  const [vitals,            setVitals]            = useState<VitalEntry[]>([]);
+  const [labs,              setLabs]              = useState<LabResult[]>([]);
+  const [docs,              setDocs]              = useState<MedDocument[]>([]);
+  const [conditions,        setConditions]        = useState<Condition[]>([]);
+  const [allergies,         setAllergies]         = useState<Allergy[]>([]);
+  const [loading,           setLoading]           = useState(true);
+  const [labInterpretations, setLabInterpretations] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const id = user?.patientMrn ?? user?.id;
+    setLoading(true);
 
     PatientProfileService.getProfile().then(p => setProfile(p)).catch(() => {});
 
-    if (!id) return;
+    if (!id) { setLoading(false); return; }
 
-    PatientProfileService.getConditions(id).then(raw => {
-      const mapped = mapApiConditions(raw ?? []);
-      if (mapped !== MOCK_CONDITIONS) setConditions(mapped);
-    }).catch(() => {});
+    PatientProfileService.getConditions(id)
+      .then(raw => setConditions(mapApiConditions(raw ?? [])))
+      .catch(() => setConditions([]));
 
-    PatientProfileService.getAllergies(id).then(raw => {
-      const mapped = mapApiAllergies(raw ?? []);
-      if (mapped !== MOCK_ALLERGIES) setAllergies(mapped);
-    }).catch(() => {});
+    PatientProfileService.getAllergies(id)
+      .then(raw => setAllergies(mapApiAllergies(raw ?? [])))
+      .catch(() => setAllergies([]));
 
-    VitalsService.trends(id).then(data => {
-      const mapped = mapApiVitals(data ?? []);
-      if (mapped !== MOCK_VITALS) setVitals(mapped);
-    }).catch(() => {});
+    VitalsService.trends(id)
+      .then(data => setVitals(mapApiVitals(data ?? [])))
+      .catch(() => setVitals([]));
 
-    LabOrdersService.results(id).then(orders => {
-      const mapped = mapApiLabs(orders ?? []);
-      if (mapped !== MOCK_LABS) setLabs(mapped);
-    }).catch(() => {});
+    LabOrdersService.results(id)
+      .then(orders => {
+        const mapped = mapApiLabs(orders ?? []);
+        setLabs(mapped);
+        setLoading(false);
+        // For each flagged lab without an AI note, fetch CDSS interpretation
+        mapped.forEach(lab => {
+          if (lab.flag !== 'normal' && !lab.aiNote) {
+            CdssService.interpretLab(lab.name, String(lab.value), lab.unit)
+              .then(res => {
+                if (!res.abstained && res.interpretation) {
+                  setLabInterpretations(prev => ({ ...prev, [lab.id]: res.interpretation }));
+                }
+              });
+          }
+        });
+      })
+      .catch(() => { setLabs([]); setLoading(false); });
 
-    DocumentsService.forPatient(id).then(data => {
-      const mapped = mapApiDocuments(data ?? []);
-      if (mapped !== MOCK_DOCUMENTS) setDocs(mapped);
-    }).catch(() => {});
+    DocumentsService.forPatient(id)
+      .then(data => setDocs(mapApiDocuments(data ?? [])))
+      .catch(() => setDocs([]));
   }, [user?.id]);
 
   return (
@@ -736,11 +753,11 @@ export const PatientHealthScreen: React.FC = () => {
 
       {/* Content */}
       <View style={styles.body}>
-        {tab === 'profile'   && <ProfileTab conditions={conditions} allergies={allergies} profile={profile} userName={user?.name ?? ''} />}
-        {tab === 'vitals'    && <VitalsTab vitals={vitals} />}
-        {tab === 'labs'      && <LabsTab labs={labs} />}
+        {tab === 'profile'   && <ProfileTab conditions={conditions} allergies={allergies} profile={profile} userName={user?.name ?? ''} loading={loading} />}
+        {tab === 'vitals'    && <VitalsTab vitals={vitals} loading={loading} />}
+        {tab === 'labs'      && <LabsTab labs={labs} loading={loading} labInterpretations={labInterpretations} />}
         {tab === 'services'  && <ServicesTab />}
-        {tab === 'documents' && <DocumentsTab docs={docs} />}
+        {tab === 'documents' && <DocumentsTab docs={docs} loading={loading} />}
       </View>
     </View>
   );

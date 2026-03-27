@@ -35,6 +35,8 @@ import { PatientBillsScreen } from '../components/patient/PatientBillsScreen';
 import { PatientHealthScreen } from '../components/patient/PatientHealthScreen';
 // Patient screens — S118 (Telemedicine)
 import { PatientTelemedicineScreen } from '../components/patient/PatientTelemedicineScreen';
+// Patient screens — S124
+import { PatientAppointmentsScreen } from '../components/patient/PatientAppointmentsScreen';
 
 const Stack  = createNativeStackNavigator();
 const DoctorTabs  = createBottomTabNavigator();
@@ -83,12 +85,13 @@ const NurseNavigator = () => (
 
 // ── Patient Navigator ─────────────────────────────────────────────────────────
 const PATIENT_TABS = [
-  { icon: 'home'      as const, label: 'Home'       },
-  { icon: 'sparkle'   as const, label: 'PostVisit'  },
-  { icon: 'pill'      as const, label: 'Meds'       },
-  { icon: 'wallet'    as const, label: 'Bills'       },
-  { icon: 'heart'     as const, label: 'Health'     },
-  { icon: 'telehealth' as const, label: 'Telehealth' },
+  { icon: 'home'       as const, label: 'Home'        },
+  { icon: 'calendar'   as const, label: 'Appointments' },
+  { icon: 'sparkle'    as const, label: 'PostVisit'   },
+  { icon: 'pill'       as const, label: 'Meds'        },
+  { icon: 'wallet'     as const, label: 'Bills'        },
+  { icon: 'heart'      as const, label: 'Health'      },
+  { icon: 'telehealth' as const, label: 'Telehealth'  },
 ];
 
 const PatientNavigator = () => (
@@ -96,10 +99,11 @@ const PatientNavigator = () => (
     tabBar={(props) => <CustomTabBar {...props} accent={C.teal} tabs={PATIENT_TABS} />}
     screenOptions={{ headerShown: false }}
   >
-    <PatientTabs.Screen name="PHHome"      component={PatientHomeScreen}      />
-    <PatientTabs.Screen name="PHPostVisit" component={PatientPostVisitScreen} />
-    <PatientTabs.Screen name="PHMeds"      component={PatientMedsScreen}      />
-    <PatientTabs.Screen name="PHBills"     component={PatientBillsScreen}     />
+    <PatientTabs.Screen name="PHHome"         component={PatientHomeScreen}         />
+    <PatientTabs.Screen name="PHAppointments" component={PatientAppointmentsScreen} />
+    <PatientTabs.Screen name="PHPostVisit"    component={PatientPostVisitScreen}    />
+    <PatientTabs.Screen name="PHMeds"         component={PatientMedsScreen}         />
+    <PatientTabs.Screen name="PHBills"        component={PatientBillsScreen}        />
     <PatientTabs.Screen name="PHHealth"       component={PatientHealthScreen}       />
     <PatientTabs.Screen name="PHTelemedicine" component={PatientTelemedicineScreen} />
   </PatientTabs.Navigator>

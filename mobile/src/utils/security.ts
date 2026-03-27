@@ -123,19 +123,16 @@ export const flushAuditLog = (): AuditEntry[] => {
  * Android: recent-apps thumbnail is taken at 'background' → we cover before that.
  */
 export const useScreenPrivacy = (): boolean => {
-  const appState = useRef<AppStateStatus>(AppState.currentState);
-  const [isPrivate, setIsPrivate] = [
-    useRef(false),
-    (v: boolean) => { isPrivateRef.current = v; forceUpdate.current?.(); },
-  ] as unknown as [never, never]; // replaced below
+  const [isPrivate, setIsPrivate] = _useState(false);
 
-  // Simple boolean state without importing useState to keep this util-only
-  const isPrivateRef = useRef(false);
-  const listeners    = useRef<Set<() => void>>(new Set());
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      setIsPrivate(next === 'inactive' || next === 'background');
+    });
+    return () => sub.remove();
+  }, []);
 
-  // We expose a stable getter — App.tsx polls via its own useState
-  // This is intentionally a thin signal rather than a full store.
-  return isPrivateRef.current;
+  return isPrivate;
 };
 
 /**

@@ -21,6 +21,9 @@ import { PatientsService, patientName, patientAge } from '../../services/patient
 import { VitalsService } from '../../services/vitals';
 import { EscalationsService } from '../../services/escalations';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { CdssService } from '../../services/cdss';
+import { DoctorImagingReportScreen } from './DoctorImagingReportScreen';
+import { DoctorMedRecScreen } from './DoctorMedRecScreen';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +63,8 @@ interface Patient {
   alerts: Alert[];
   aiSummary: string;
   postVisitPending: boolean;
+  mlRisk: number | null;          // 0–1 deterioration probability from CDSS
+  riskTier: string | null;        // 'Critical' | 'High' | 'Medium' | 'Low' | 'Minimal'
 }
 
 // ─── API → screen type mapper ─────────────────────────────────────────────────
@@ -110,138 +115,11 @@ function mapApiToPatient(p: any, vitals: any[] = [], alerts: any[] = []): Patien
     alerts:          mappedAlerts,
     aiSummary:       p.aiSummary ?? '',
     postVisitPending: false,
+    mlRisk:           null,
+    riskTier:         null,
   };
 }
 
-// ─── Placeholder patients array (shown while API loads) ──────────────────────
-
-const EMPTY_PATIENTS: Patient[] = [
-  {
-    id: 'p1',
-    name: 'Loading...',
-    age: 67,
-    mrn: 'MRN-004821',
-    bed: 'A-204',
-    ward: 'Cardiology',
-    diagnosis: 'Acute MI, post-PCI day 2',
-    severity: 'critical',
-    admittedDays: 2,
-    lastRound: '06:40',
-    slaMins: 18,
-    slaMax: 60,
-    postVisitPending: true,
-    aiSummary: 'Troponin peaked at 12.4 and trending down. BP stabilised on metoprolol. Watch for AV block — ECG at 10:00.',
-    alerts: [
-      { id: 'a1', type: 'lab', message: 'Troponin-I 12.4 μg/L ↑ (ref <0.04)', severity: 'critical', time: '07:12' },
-      { id: 'a2', type: 'vitals', message: 'HR 48 bpm — bradycardia threshold', severity: 'high', time: '07:31' },
-    ],
-    vitals: [
-      { label: 'HR', value: '48', unit: 'bpm', trend: [72, 68, 61, 55, 51, 48], ref: [60, 100], status: 'critical' },
-      { label: 'BP', value: '108/72', unit: 'mmHg', trend: [130, 124, 118, 114, 110, 108], ref: [90, 140], status: 'warning' },
-      { label: 'SpO₂', value: '97', unit: '%', trend: [96, 97, 97, 96, 97, 97], ref: [95, 100], status: 'stable' },
-      { label: 'Temp', value: '37.1', unit: '°C', trend: [37.0, 37.2, 37.3, 37.1, 37.0, 37.1], ref: [36.1, 37.5], status: 'stable' },
-    ],
-  },
-  {
-    id: 'p2',
-    name: 'Amelia Chen',
-    age: 34,
-    mrn: 'MRN-009214',
-    bed: 'B-108',
-    ward: 'General Medicine',
-    diagnosis: 'Community-acquired pneumonia',
-    severity: 'high',
-    admittedDays: 1,
-    lastRound: '05:20',
-    slaMins: 42,
-    slaMax: 120,
-    postVisitPending: false,
-    aiSummary: 'CRP 182, WBC 14.2. Responding to co-amoxiclav. SpO₂ improved from 91% on admission to 96% on 2L O₂. Escalation threshold: SpO₂ <94%.',
-    alerts: [
-      { id: 'a3', type: 'lab', message: 'CRP 182 mg/L ↑ (improving from 218)', severity: 'warning', time: '06:00' },
-    ],
-    vitals: [
-      { label: 'HR', value: '96', unit: 'bpm', trend: [110, 108, 104, 100, 98, 96], ref: [60, 100], status: 'warning' },
-      { label: 'RR', value: '20', unit: '/min', trend: [26, 24, 23, 22, 21, 20], ref: [12, 20], status: 'stable' },
-      { label: 'SpO₂', value: '96', unit: '%', trend: [91, 92, 93, 94, 95, 96], ref: [95, 100], status: 'warning' },
-      { label: 'Temp', value: '38.2', unit: '°C', trend: [39.1, 38.9, 38.7, 38.5, 38.3, 38.2], ref: [36.1, 37.5], status: 'high' },
-    ],
-  },
-  {
-    id: 'p3',
-    name: 'Thomas Ndlovu',
-    age: 52,
-    mrn: 'MRN-001573',
-    bed: 'A-211',
-    ward: 'Cardiology',
-    diagnosis: 'Heart failure (EF 28%), decompensated',
-    severity: 'high',
-    admittedDays: 4,
-    lastRound: '07:00',
-    slaMins: 87,
-    slaMax: 120,
-    postVisitPending: true,
-    aiSummary: 'Responding to IV furosemide. Net fluid balance −1.8 L over 24h. Daily weight dropped 1.4 kg. BNP still 980 — watch for electrolyte imbalance.',
-    alerts: [
-      { id: 'a4', type: 'lab', message: 'K⁺ 3.1 mmol/L ↓ — supplement ordered', severity: 'warning', time: '06:50' },
-    ],
-    vitals: [
-      { label: 'HR', value: '88', unit: 'bpm', trend: [100, 98, 94, 92, 90, 88], ref: [60, 100], status: 'stable' },
-      { label: 'BP', value: '118/78', unit: 'mmHg', trend: [140, 136, 130, 126, 122, 118], ref: [90, 140], status: 'stable' },
-      { label: 'SpO₂', value: '95', unit: '%', trend: [92, 93, 94, 94, 95, 95], ref: [95, 100], status: 'warning' },
-      { label: 'Weight', value: '84.2', unit: 'kg', trend: [86.1, 85.8, 85.5, 85.0, 84.7, 84.2], ref: [80, 88], status: 'stable' },
-    ],
-  },
-  {
-    id: 'p4',
-    name: 'Fatima Al-Rashid',
-    age: 29,
-    mrn: 'MRN-012001',
-    bed: 'C-301',
-    ward: 'Obs & Gynae',
-    diagnosis: 'Pre-eclampsia, 36 weeks',
-    severity: 'critical',
-    admittedDays: 1,
-    lastRound: '07:15',
-    slaMins: 8,
-    slaMax: 30,
-    postVisitPending: false,
-    aiSummary: 'BP 156/101 on labetalol 200mg QID. Fetal CTG reactive. Proteinuria +++ (3.2 g/24h). Delivery threshold: sustained BP >160/110 or neurological symptoms.',
-    alerts: [
-      { id: 'a5', type: 'vitals', message: 'BP 156/101 mmHg — above treatment threshold', severity: 'critical', time: '07:45' },
-      { id: 'a6', type: 'lab', message: 'Urine protein 3.2 g/24h ↑↑', severity: 'high', time: '06:30' },
-    ],
-    vitals: [
-      { label: 'BP', value: '156/101', unit: 'mmHg', trend: [148, 150, 153, 155, 157, 156], ref: [90, 140], status: 'critical' },
-      { label: 'HR', value: '84', unit: 'bpm', trend: [80, 82, 83, 85, 86, 84], ref: [60, 100], status: 'stable' },
-      { label: 'SpO₂', value: '99', unit: '%', trend: [99, 99, 99, 99, 99, 99], ref: [95, 100], status: 'stable' },
-      { label: 'RR', value: '16', unit: '/min', trend: [16, 16, 17, 16, 16, 16], ref: [12, 20], status: 'stable' },
-    ],
-  },
-  {
-    id: 'p5',
-    name: 'Samuel Park',
-    age: 74,
-    mrn: 'MRN-007744',
-    bed: 'B-115',
-    ward: 'General Medicine',
-    diagnosis: 'DKA, insulin-dependent T2DM',
-    severity: 'warning',
-    admittedDays: 1,
-    lastRound: '06:00',
-    slaMins: 65,
-    slaMax: 120,
-    postVisitPending: false,
-    aiSummary: 'Ketones cleared (0.3 mmol/L). pH corrected to 7.38. Transitioned to subcutaneous insulin protocol at 14:00. Watch for rebound hyperglycaemia overnight.',
-    alerts: [],
-    vitals: [
-      { label: 'BGL', value: '9.2', unit: 'mmol/L', trend: [32, 24, 18, 14, 11, 9.2], ref: [4, 11], status: 'warning' },
-      { label: 'pH', value: '7.38', unit: '', trend: [7.11, 7.18, 7.24, 7.30, 7.35, 7.38], ref: [7.35, 7.45], status: 'stable' },
-      { label: 'HR', value: '78', unit: 'bpm', trend: [102, 98, 92, 88, 82, 78], ref: [60, 100], status: 'stable' },
-      { label: 'SpO₂', value: '98', unit: '%', trend: [97, 97, 98, 98, 98, 98], ref: [95, 100], status: 'stable' },
-    ],
-  },
-];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -337,8 +215,7 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, onPress }) => {
           </View>
           <View style={pCardStyles.slaBlock}>
             <SlaTimer
-              totalMins={patient.slaMax}
-              remainingMins={patient.slaMins}
+              totalSeconds={patient.slaMax * 60}
               size={44}
             />
           </View>
@@ -355,6 +232,19 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, onPress }) => {
               <Icon name="alert" size={12} color={C.red} />
               <Text style={pCardStyles.alertCountText}>{patient.alerts.length} alert{patient.alerts.length > 1 ? 's' : ''}</Text>
             </View>
+          )}
+          {patient.mlRisk !== null && (
+            <View style={pCardStyles.mlBadge}>
+              <AiBadge text={`ML ${(patient.mlRisk * 100).toFixed(0)}%`} />
+            </View>
+          )}
+          {patient.riskTier && (
+            <Badge
+              color={patient.riskTier === 'Critical' ? C.red : patient.riskTier === 'High' ? C.amber : C.blue}
+              size="xs"
+            >
+              {patient.riskTier}
+            </Badge>
           )}
           <Text style={pCardStyles.lastRound}>Last round {patient.lastRound}</Text>
         </View>
@@ -393,6 +283,7 @@ const pCardStyles = StyleSheet.create({
   alertCountText: { fontFamily: FONT.uiBd, fontSize: 11, color: C.red },
   lastRound: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, marginLeft: 'auto' },
   vitalsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  mlBadge: {},
 });
 
 // ─── Patient Detail Modal ──────────────────────────────────────────────────────
@@ -400,9 +291,11 @@ const pCardStyles = StyleSheet.create({
 interface PatientDetailProps {
   patient: Patient | null;
   onClose: () => void;
+  onOpenImaging: (patient: Patient) => void;
+  onOpenMedRec: (patient: Patient) => void;
 }
 
-const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose }) => {
+const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose, onOpenImaging, onOpenMedRec }) => {
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(600)).current;
 
@@ -492,8 +385,9 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose }) => {
                     {v.value} <Text style={detailStyles.vitalUnit}>{v.unit}</Text>
                   </Text>
                   <Sparkline
-                    data={v.trend}
-                    refRange={v.ref}
+                    data={v.trend.map((n: number) => ({ v: n }))}
+                    refLow={v.ref[0]}
+                    refHigh={v.ref[1]}
                     width={130}
                     height={36}
                     color={SEVERITY_COLOR[v.status]}
@@ -519,6 +413,22 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose }) => {
 
           {/* Actions */}
           <View style={detailStyles.actions}>
+            <TouchableOpacity
+              style={[detailStyles.actionBtn, { backgroundColor: C.blue + '20', borderColor: C.blue + '40' }]}
+              activeOpacity={0.8}
+              onPress={() => { handleClose(); setTimeout(() => onOpenImaging(patient), 300); }}
+            >
+              <Icon name="book" size={16} color={C.blue} />
+              <Text style={[detailStyles.actionBtnText, { color: C.blue }]}>Imaging Reports</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[detailStyles.actionBtn, { backgroundColor: C.orange + '20', borderColor: C.orange + '40' }]}
+              activeOpacity={0.8}
+              onPress={() => { handleClose(); setTimeout(() => onOpenMedRec(patient), 300); }}
+            >
+              <Icon name="pill" size={16} color={C.orange} />
+              <Text style={[detailStyles.actionBtnText, { color: C.orange }]}>Med Rec</Text>
+            </TouchableOpacity>
             {patient.postVisitPending && (
               <TouchableOpacity style={[detailStyles.actionBtn, { backgroundColor: C.purple + '20', borderColor: C.purple + '40' }]} activeOpacity={0.8}>
                 <Icon name="sparkle" size={16} color={C.purple} />
@@ -688,8 +598,10 @@ export const DoctorRoundsScreen: React.FC = () => {
   const [loading,    setLoading]    = useState(true);
   const [filter,     setFilter]     = useState<FilterKey>('all');
   const [search,     setSearch]     = useState('');
-  const [selected,   setSelected]   = useState<Patient | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [selected,    setSelected]    = useState<Patient | null>(null);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [imagingPatient, setImagingPatient] = useState<Patient | null>(null);
+  const [medRecPatient,  setMedRecPatient]  = useState<Patient | null>(null);
 
   const loadPatients = useCallback(async () => {
     try {
@@ -711,6 +623,26 @@ export const DoctorRoundsScreen: React.FC = () => {
         })
       );
       setPatients(enriched);
+
+      // Enrich with CDSS ML risk scores — non-blocking, fire and forget
+      enriched.forEach(patient => {
+        Promise.allSettled([
+          CdssService.getDeteriorationRisk(patient.id),
+          CdssService.getPatientRiskTier(patient.id),
+        ]).then(([detResult, tierResult]) => {
+          const mlRisk = detResult.status === 'fulfilled' && detResult.value
+            ? detResult.value.probability
+            : null;
+          const riskTier = tierResult.status === 'fulfilled' && tierResult.value
+            ? tierResult.value.tier
+            : null;
+          if (mlRisk !== null || riskTier !== null) {
+            setPatients(prev => prev.map(p =>
+              p.id === patient.id ? { ...p, mlRisk, riskTier } : p
+            ));
+          }
+        });
+      });
     } catch {
       // keep previous data on error
     } finally {
@@ -846,7 +778,34 @@ export const DoctorRoundsScreen: React.FC = () => {
       />
 
       {/* Patient detail sheet */}
-      <PatientDetail patient={selected} onClose={() => setSelected(null)} />
+      <PatientDetail
+        patient={selected}
+        onClose={() => setSelected(null)}
+        onOpenImaging={p => setImagingPatient(p)}
+        onOpenMedRec={p => setMedRecPatient(p)}
+      />
+
+      {/* Imaging sub-screen overlay */}
+      {imagingPatient && (
+        <Modal visible animationType="slide" onRequestClose={() => setImagingPatient(null)}>
+          <DoctorImagingReportScreen
+            patientId={imagingPatient.id}
+            patientName={imagingPatient.name}
+            onBack={() => setImagingPatient(null)}
+          />
+        </Modal>
+      )}
+
+      {/* Med Rec sub-screen overlay */}
+      {medRecPatient && (
+        <Modal visible animationType="slide" onRequestClose={() => setMedRecPatient(null)}>
+          <DoctorMedRecScreen
+            patientId={medRecPatient.id}
+            patientName={medRecPatient.name}
+            onBack={() => setMedRecPatient(null)}
+          />
+        </Modal>
+      )}
     </View>
   );
 };
