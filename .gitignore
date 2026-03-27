@@ -10,6 +10,9 @@ dist/
 *.tgz
 *.tar.gz
 
+# TypeScript compiler cache
+*.tsbuildinfo
+
 # Environment variables
 .env
 .env.local
