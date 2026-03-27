@@ -4262,6 +4262,15 @@ export class CdssService {
     );
   }
 
+  async getModelVersions(tenantId?: string): Promise<Record<string, any>> {
+    try {
+      const res = await this.postWithPolicy<any>('ops', '/fl/model-version', { surface: 'all' }, 5000, tenantId);
+      return (res as any)?.versions ?? {};
+    } catch {
+      return {};
+    }
+  }
+
   async ingestKnowledgeDocument(payload: {
     documentId: string;
     tenantId: string;

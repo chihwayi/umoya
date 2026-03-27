@@ -698,6 +698,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                         ? 'Analyzing...'
                         : 'AI Suggest + Open'}
                     </button>
+                    <span className="text-[10px] text-slate-400">AI-generated · clinician review required</span>
                     {onViewVitalsHistory && (
                       <button
                         type="button"

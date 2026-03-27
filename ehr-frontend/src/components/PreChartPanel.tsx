@@ -4,6 +4,8 @@ import {
   Stethoscope, ClipboardList, ChevronDown, ChevronUp, Loader,
 } from 'lucide-react';
 import { cdssApi } from '../services/api';
+import { useNotification } from './GlobalNotification';
+import { AiOutputWrapper } from './AiOutputWrapper';
 
 interface RiskFlag {
   type: string;
@@ -67,6 +69,7 @@ const PreChartPanel: React.FC<PreChartPanelProps> = ({ appointmentId, token, ten
   const [generating, setGenerating] = useState(false);
   const [reviewed, setReviewed]     = useState(false);
   const [expanded, setExpanded]     = useState(true);
+  const { showError } = useNotification();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,7 +95,7 @@ const PreChartPanel: React.FC<PreChartPanelProps> = ({ appointmentId, token, ten
       setPrechart(res.data);
       setReviewed(res.data.providerReviewed);
     } catch {
-      // swallow
+      showError('Pre-chart failed', 'AI pre-chart generation failed. Please retry or proceed manually.');
     } finally {
       setGenerating(false);
     }
@@ -103,11 +106,11 @@ const PreChartPanel: React.FC<PreChartPanelProps> = ({ appointmentId, token, ten
       await cdssApi.markPrechartReviewed(appointmentId, token, tenantSlug);
       setReviewed(true);
     } catch {
-      // swallow
+      showError('Error', 'Failed to mark pre-chart as reviewed.');
     }
   };
 
-  const hasRisk = prechart && prechart.riskFlags.length > 0;
+  const hasRisk = prechart && (prechart.riskFlags?.length ?? 0) > 0;
 
   return (
     <div className={`rounded-xl border shadow-sm transition-all ${

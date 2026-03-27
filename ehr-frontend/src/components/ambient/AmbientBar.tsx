@@ -272,10 +272,11 @@ const AmbientBar: React.FC<AmbientBarProps> = ({
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {diagnoses.map((d, i) => {
-                  const key = `diagnoses:${i}`;
+                  const stableId = `${d.text}:${d.icd ?? i}`;
+                  const key = `diagnoses:${stableId}`;
                   const state = accepted[key];
                   return (
-                    <div key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-all ${
+                    <div key={stableId} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-all ${
                       state === 'accepted' ? 'bg-green-100 border-green-300 text-green-800' :
                       state === 'dismissed' ? 'bg-slate-100 border-slate-200 text-slate-400 line-through' :
                       'bg-white border-indigo-200 text-indigo-800'
@@ -285,10 +286,10 @@ const AmbientBar: React.FC<AmbientBarProps> = ({
                       <span className="text-slate-400">{Math.round(d.confidence * 100)}%</span>
                       {!state && (
                         <>
-                          <button onClick={() => handleAction('diagnoses', String(i), 'accepted')} className="text-green-600 hover:text-green-800">
+                          <button onClick={() => handleAction('diagnoses', stableId, 'accepted')} className="text-green-600 hover:text-green-800">
                             <CheckCircle className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleAction('diagnoses', String(i), 'dismissed')} className="text-slate-400 hover:text-red-500">
+                          <button onClick={() => handleAction('diagnoses', stableId, 'dismissed')} className="text-slate-400 hover:text-red-500">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </>

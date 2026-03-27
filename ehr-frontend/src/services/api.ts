@@ -2,6 +2,8 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { handleAutoLogout, isOnProtectedRoute } from '../utils/autoLogout';
 import { runtimeUrls } from '../config/runtime';
+// Re-export CDSS types so consumers can import from one place
+export type { CdssBaseResponse, CdssCitation, CdssConfidenceBand, CdssAbstentionReason } from '../types/cdss';
 
 type RetriableAxiosConfig = {
   __retryCount?: number;

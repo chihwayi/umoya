@@ -42,13 +42,26 @@ export const AppealLetterPanel: React.FC<AppealLetterPanelProps> = ({
       {ragSources.length > 0 && (
         <div className="bg-blue-50 rounded p-3">
           <p className="text-xs font-medium text-blue-700 mb-2">Evidence used from knowledge base:</p>
-          <ul className="space-y-1">
-            {ragSources.map((s, i) => (
-              <li key={i} className="text-xs text-blue-600 flex items-start gap-1">
-                <ExternalLink className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                <span><strong>{s.title}</strong> — {s.excerpt}</span>
-              </li>
-            ))}
+          <ul className="space-y-1.5">
+            {[...ragSources]
+              .sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0))
+              .map((s, i) => (
+                <li key={i} className="text-xs text-blue-600 flex items-start gap-1.5">
+                  <ExternalLink className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {i === 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-200 text-blue-800 font-semibold">
+                          Primary
+                        </span>
+                      )}
+                      <strong>{s.title}</strong>
+                      <span className="text-blue-400">{Math.round((s.relevanceScore ?? 0) * 100)}% relevant</span>
+                    </div>
+                    <span className="text-blue-500">{s.excerpt}</span>
+                  </div>
+                </li>
+              ))}
           </ul>
         </div>
       )}

@@ -9,12 +9,23 @@ interface ContributingFactor {
   value: string;
 }
 
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = Math.floor(diff / 3_600_000);
+  if (hours < 1) return 'just now';
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 interface RiskTierBadgeProps {
   tier: RiskTier;
   compositeScore: number;
   contributingFactors?: ContributingFactor[];
   recommendedActions?: Array<{ action: string; priority: number; dueWithinDays: number }>;
   compact?: boolean;
+  /** ISO timestamp when this score was computed — shows staleness */
+  computedAt?: string;
 }
 
 const TIER_CONFIG: Record<RiskTier, {
@@ -47,6 +58,7 @@ export const RiskTierBadge: React.FC<RiskTierBadgeProps> = ({
   contributingFactors = [],
   recommendedActions = [],
   compact = false,
+  computedAt,
 }) => {
   const config = TIER_CONFIG[tier] ?? TIER_CONFIG.minimal;
   const pct = Math.round(compositeScore * 100);
@@ -68,6 +80,14 @@ export const RiskTierBadge: React.FC<RiskTierBadgeProps> = ({
         <config.Icon className={`h-5 w-5 ${config.text}`} />
         <span className={`font-bold text-lg ${config.text}`}>{config.label}</span>
         <span className={`ml-auto text-2xl font-black ${config.text}`}>{pct}%</span>
+        {computedAt && (
+          <span
+            className="text-xs text-gray-400 font-normal ml-1 self-end mb-0.5"
+            title={`Computed ${new Date(computedAt).toLocaleString()}`}
+          >
+            · {formatRelativeTime(computedAt)}
+          </span>
+        )}
       </div>
 
       {contributingFactors.length > 0 && (
@@ -85,6 +105,11 @@ export const RiskTierBadge: React.FC<RiskTierBadgeProps> = ({
               </div>
             </div>
           ))}
+          {contributingFactors.length > 4 && (
+            <p className="text-xs text-gray-400 mt-1">
+              +{contributingFactors.length - 4} more factor{contributingFactors.length - 4 !== 1 ? 's' : ''}
+            </p>
+          )}
         </div>
       )}
 
@@ -101,6 +126,11 @@ export const RiskTierBadge: React.FC<RiskTierBadgeProps> = ({
                 <span className="ml-auto text-gray-400">within {a.dueWithinDays}d</span>
               </li>
             ))}
+            {recommendedActions.length > 3 && (
+              <li className="text-xs text-gray-400">
+                +{recommendedActions.length - 3} more action{recommendedActions.length - 3 !== 1 ? 's' : ''}
+              </li>
+            )}
           </ul>
         </div>
       )}

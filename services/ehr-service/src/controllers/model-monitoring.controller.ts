@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Body, Param, Query, Request } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Request, Headers } from '@nestjs/common';
 import { ModelMonitoringService } from '../services/model-monitoring.service';
 import { RiskStratificationService } from '../services/risk-stratification.service';
 import { OutcomeCollectionService } from '../services/outcome-collection.service';
+import { CdssService } from '../services/cdss.service';
 
 @Controller('model-monitoring')
 export class ModelMonitoringController {
@@ -9,6 +10,7 @@ export class ModelMonitoringController {
     private readonly svc: ModelMonitoringService,
     private readonly riskStratService: RiskStratificationService,
     private readonly outcomeService: OutcomeCollectionService,
+    private readonly cdssService: CdssService,
   ) {}
 
   @Post('evaluate')
@@ -120,5 +122,15 @@ export class ModelMonitoringController {
       ORDER BY surface, metric_date DESC
     `);
     return { metrics: rows };
+  }
+
+  @Get('model-versions')
+  async getModelVersions(@Headers('x-tenant-slug') tenantSlug: string) {
+    try {
+      const versions = await this.cdssService.getModelVersions(tenantSlug);
+      return { versions };
+    } catch {
+      return { versions: {}, error: 'Could not fetch model versions from CDSS' };
+    }
   }
 }

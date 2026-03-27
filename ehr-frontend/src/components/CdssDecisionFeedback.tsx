@@ -140,8 +140,15 @@ const CdssDecisionFeedback: React.FC<CdssDecisionFeedbackProps> = ({
                   Cancel
                 </button>
                 <button
-                  disabled={!overrideReason.trim() || saving}
-                  onClick={() => submit('overridden', overrideReason.trim())}
+                  disabled={overrideReason.trim().length < 10 || saving}
+                  onClick={() => {
+                    const trimmed = overrideReason.trim();
+                    if (trimmed.length < 10) {
+                      showError('Reason too short', 'Override reason must be at least 10 characters.');
+                      return;
+                    }
+                    submit('overridden', trimmed);
+                  }}
                   className="px-2.5 py-1 text-xs text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : 'Submit Override'}

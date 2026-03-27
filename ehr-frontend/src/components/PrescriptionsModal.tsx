@@ -375,8 +375,11 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
             genericName: rx.foundDrug?.genericName || rx.name,
             dosage: rx.dosage,
             frequency: rx.frequency,
-            route: 'oral', // Default, can be enhanced
-            quantity: 30, // Default, can be calculated from duration
+            route: rx.instructions?.toLowerCase().includes('inject') ? 'injection'
+              : rx.instructions?.toLowerCase().includes('topical') ? 'topical'
+              : rx.instructions?.toLowerCase().includes('inhal') ? 'inhalation'
+              : 'oral',
+            quantity: (() => { const m = (rx.duration || '').match(/(\d+)/); return m ? parseInt(m[1], 10) : 30; })(),
             refills: 0,
             startDate: new Date().toISOString().split('T')[0],
             instructions: rx.instructions || `Dosage: ${rx.dosage}, Frequency: ${rx.frequency}, Duration: ${rx.duration}`,

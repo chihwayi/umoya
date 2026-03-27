@@ -6,6 +6,7 @@ import {
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { ehrApi } from '../services/api';
 import { GuidelineRecommendationCard, ClinicalRecommendation } from './GuidelineRecommendationCard';
+import { AiOutputWrapper } from './AiOutputWrapper';
 import { useNotification } from '../components/GlobalNotification';
 import {
   ResponsiveContainer,
@@ -597,6 +598,15 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
           })()}
 
           {cdssInsights?.risk && (
+            <AiOutputWrapper
+              label="Vitals Risk Insight"
+              confidence={cdssInsights.confidence}
+              abstained={cdssInsights.abstained}
+              abstain_reason={cdssInsights.abstain_reason}
+              certainty_level={cdssInsights.certainty_level}
+              citations={cdssInsights.citations}
+              model_id={cdssInsights.model_id}
+            >
             <div ref={insightsRef} className="p-5 rounded-2xl border border-indigo-200 bg-white shadow-sm">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
@@ -743,6 +753,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                 </div>
               )}
             </div>
+            </AiOutputWrapper>
           )}
 
           {/* Guideline Search Section */}

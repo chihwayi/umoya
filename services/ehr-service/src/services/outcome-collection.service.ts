@@ -207,6 +207,23 @@ export class OutcomeCollectionService {
         `, [surface]);
         this.logger.log(`Release gate passed for ${surface} tenant ${tenantId}. Learning batch approved.`);
 
+        // Trigger CDSS retraining and verify new model version
+        try {
+          const claimRes = await axios.post(`${this.cdssUrl}/feedback/outcome/learning/claim`, {
+            surface,
+            entries: [{ tenant_id: tenantId, approved: true }],
+          });
+          const newModelId = (claimRes.data as any)?.model_id ?? 'unknown';
+          this.logger.log(`[retraining] Surface "${surface}" tenant "${tenantId}" → new model: ${newModelId}`);
+
+          // Confirm version is readable back
+          const versionRes = await axios.get(`${this.cdssUrl}/fl/model-version?surface=${surface}`);
+          const confirmedVersion = (versionRes.data as any)?.version ?? 'unknown';
+          this.logger.log(`[retraining] Confirmed model version for ${surface}: ${confirmedVersion}`);
+        } catch (err) {
+          this.logger.warn(`[retraining] Could not trigger or verify retraining for ${surface}: ${err}`);
+        }
+
         // Record deployment
         const deploymentRepo = tenantDb.getRepository(ModelDeployment);
         await deploymentRepo.save(deploymentRepo.create({

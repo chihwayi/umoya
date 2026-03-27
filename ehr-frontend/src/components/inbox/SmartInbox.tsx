@@ -310,7 +310,7 @@ const SmartInbox: React.FC<SmartInboxProps> = ({ token, tenantSlug, userId, onCo
                   {/* AI draft reply for messages */}
                   {item.aiDraftReply && item.sourceType === 'patient_message' && (
                     <div>
-                      <p className="text-xs font-semibold text-slate-500 mb-1">AI Draft Reply</p>
+                      <p className="text-xs font-semibold text-slate-500 mb-1">AI Draft Reply <span className="font-normal text-slate-400">· AI-generated · clinician review required</span></p>
                       <textarea
                         value={replyDraft[item.id] ?? item.aiDraftReply}
                         onChange={(e) => setReplyDraft((prev) => ({ ...prev, [item.id]: e.target.value }))}

@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
+import { useNotification } from './GlobalNotification';
+import { AiOutputWrapper } from './AiOutputWrapper';
 
 interface LabResult {
   testCode: string;
@@ -52,6 +54,7 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [cdssAnalysis, setCdssAnalysis] = useState<any>(null);
   const [loadingCdss, setLoadingCdss] = useState(false);
+  const { showError } = useNotification();
 
   useEffect(() => {
     const loadResults = async () => {
@@ -204,8 +207,8 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
         tenantSlug
       );
       setCdssAnalysis(response.data);
-    } catch (error) {
-      console.error('Failed to get CDSS analysis:', error);
+    } catch {
+      showError('CDSS Analysis Failed', 'Could not interpret lab results. Please try again.');
     } finally {
       setLoadingCdss(false);
     }
@@ -440,7 +443,7 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
 
             {/* CDSS Analysis Section */}
             {labOrders.indexOf(order) === 0 && (
-              <div className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+              <div className="mt-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Brain className="w-5 h-5 text-blue-600" />
@@ -456,6 +459,15 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
                   </button>
                 </div>
 
+                <AiOutputWrapper
+                  label="Lab Interpretation"
+                  confidence={cdssAnalysis?.confidence}
+                  abstained={cdssAnalysis?.abstained}
+                  abstain_reason={cdssAnalysis?.abstain_reason}
+                  certainty_level={cdssAnalysis?.certainty_level}
+                  citations={cdssAnalysis?.citations}
+                  model_id={cdssAnalysis?.model_id}
+                >
                 {cdssAnalysis && (
                   <div className="space-y-4 mt-4">
                     {/* Summary */}
@@ -564,6 +576,7 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
                 {!cdssAnalysis && !loadingCdss && (
                   <p className="text-sm text-slate-600">Click "Run CDSS Analysis" to get intelligent interpretation of lab results</p>
                 )}
+                </AiOutputWrapper>
               </div>
             )}
           </div>

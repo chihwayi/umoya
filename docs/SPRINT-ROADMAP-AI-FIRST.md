@@ -1456,9 +1456,24 @@ Executed to close every remaining gap identified in `docs/SPRINT_VALIDATION_AI_F
 
 ---
 
+## Post-Maturity Hardening Sprints (118+)
+
+> Identified via full AI/CDSS system audit (2026-03-27). These sprints improve AI display quality, compliance, and clinical coverage beyond the initial maturity baseline.
+
+| Sprint | Focus | Doc | Description | Status |
+|--------|-------|-----|-------------|--------|
+| 118 | Frontend AI Transparency | `SPRINT_118_FRONTEND_AI_TRANSPARENCY.md` | Universal AiOutputWrapper, useCdssResponse hook, abstention handling, confidence bands, 6 P0 crash fixes, FDA SaMD disclosure compliance | 🔜 NEXT |
+| 119 | Clinical Order Intelligence | TBD | Order set suggestions, imaging appropriateness (ACR), prior auth prediction, lab reorder suppression | 📋 PLANNED |
+| 120 | Nursing Intelligence Suite | TBD | Nursing care plan AI, SBAR handoff, wound/burn staging, universal fall risk | 📋 PLANNED |
+| 121 | Medication Reconciliation AI | TBD | Admission + discharge med rec, PDMP auto-trigger, discrepancy detection | 📋 PLANNED |
+| 122 | Discharge Intelligence | TBD | Discharge summary AI, readmission risk at discharge screen, follow-up timing | 📋 PLANNED |
+| 123 | AI Self-Learning Hardening | TBD | A/B shadow mode, demographic bias metrics, de-identification for FL, audit anomaly alerts | 📋 PLANNED |
+
+---
+
 ## 🏁 Final State — 2026-03-27
 
-**59 sprints executed. 0 remaining.**
+**59 sprints executed. Sprint 118 queued.**
 
 Every clinical surface in MediCore now has:
 - AI assistance powered by the governed CDSS gateway
