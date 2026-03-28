@@ -110,7 +110,7 @@ export class TenantController {
   @ApiResponse({ status: 200, description: 'Matching tenants' })
   async searchTenants(
     @Query('q') q: string,
-  ): Promise<Array<{ slug: string; name: string; baseUrl: string; logoUrl?: string }>> {
+  ): Promise<Array<{ id: string; slug: string; name: string; baseUrl: string; logoUrl?: string }>> {
     if (!q || q.trim().length < 2) return [];
     return this.tenantService.searchTenants(q.trim());
   }

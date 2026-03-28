@@ -7,15 +7,38 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, Camera } from 'expo-camera';
 import axios from 'axios';
-import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
-import { Icon, AiPulse, Card } from '../ui';
+import { C, FONT, RADIUS } from '../../design/tokens';
+import { Icon, Card } from '../ui';
 import { useAuthStore, Tenant } from '../../stores/useAuthStore';
 import { buildApiClient } from '../../services/api';
 import { TENANT_DISCOVERY_URL, ensurePublicApiBaseUrl } from '../../config/env';
 
+const MEDICORE_LOGO = require('../../../assets/medicore-logo.png');
+
 interface TenantSelectScreenProps {
   onSelected: () => void;
 }
+
+const TenantLogo: React.FC<{ item: Tenant }> = ({ item }) => {
+  const [errored, setErrored] = useState(false);
+  const logoUri = item.id
+    ? `${TENANT_DISCOVERY_URL}/${item.id}/logo`
+    : item.logoUrl;
+  return (
+    <View style={styles.clinicIcon}>
+      {logoUri && !errored ? (
+        <Image
+          source={{ uri: logoUri }}
+          style={styles.tenantLogoImg}
+          resizeMode="cover"
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <Icon name="stethoscope" size={20} color={C.teal} />
+      )}
+    </View>
+  );
+};
 
 export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelected }) => {
   const insets = useSafeAreaInsets();
@@ -146,8 +169,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
       >
         {/* Hero */}
         <View style={styles.hero}>
-          <AiPulse size={64} active />
-          <Text style={styles.brand}>MEDICORE</Text>
+          <Image source={MEDICORE_LOGO} style={styles.medicareLogo} resizeMode="contain" />
           <Text style={styles.headline}>Select Your Clinic</Text>
           <Text style={styles.sub}>
             Your clinic stays saved — you'll only see this screen once.
@@ -189,17 +211,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
               >
                 <Card style={styles.resultCard}>
                   <View style={styles.resultRow}>
-                    <View style={styles.clinicIcon}>
-                      {item.logoUrl ? (
-                        <Image
-                          source={{ uri: item.logoUrl }}
-                          style={styles.tenantLogoImg}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Icon name="stethoscope" size={20} color={C.teal} />
-                      )}
-                    </View>
+                    <TenantLogo item={item} />
                     <View style={styles.clinicInfo}>
                       <Text style={styles.clinicName}>{item.name}</Text>
                       <Text style={styles.clinicSlug}>{item.slug}</Text>
@@ -250,13 +262,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 28,
   },
-  brand: {
-    fontFamily: FONT.uiBk,
-    fontSize: 11,
-    color: C.teal,
-    letterSpacing: 4,
-    marginTop: 20,
-    marginBottom: 8,
+  medicareLogo: {
+    width: 220,
+    height: 80,
+    marginBottom: 20,
   },
   headline: {
     fontFamily: FONT.uiBk,

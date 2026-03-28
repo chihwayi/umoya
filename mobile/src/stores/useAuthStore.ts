@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 export type UserRole = 'doctor' | 'nurse' | 'patient';
 
 export interface Tenant {
+  id?: string;
   slug: string;
   name: string;
   logoUrl?: string;

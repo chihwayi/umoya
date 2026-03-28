@@ -304,7 +304,7 @@ export class TenantService implements OnModuleInit {
     });
   }
 
-  async searchTenants(q: string): Promise<Array<{ slug: string; name: string; baseUrl: string; logoUrl?: string }>> {
+  async searchTenants(q: string): Promise<Array<{ id: string; slug: string; name: string; baseUrl: string; logoUrl?: string }>> {
     const term = `%${q.toLowerCase()}%`;
     const tenants = await this.tenantRepository
       .createQueryBuilder('t')
@@ -324,6 +324,7 @@ export class TenantService implements OnModuleInit {
     const publicEhrBase = ehrBase.endsWith('/api') ? ehrBase : `${ehrBase}/api`;
 
     return tenants.map(t => ({
+      id: t.id,
       slug: t.subdomain,
       name: t.clinicName,
       baseUrl: publicEhrBase,
