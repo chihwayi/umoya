@@ -5,36 +5,30 @@ import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import {
   Heart,
-  TrendingUp,
-  TrendingDown,
   Activity,
   Calendar,
-  AlertCircle,
   ArrowLeft,
   BarChart3,
-  Clock,
   Stethoscope,
-  CheckCircle,
-  XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const CardiologyManagementPage: React.FC = () => {
   const navigate = useNavigate();
-  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const { tenantSlug: _tenantSlug } = useParams<{ tenantSlug: string }>();
   const effectiveTenantSlug = useTenantSlug();
   const { token } = usePatientAuth();
   const [loading, setLoading] = useState(true);
   const [encounters, setEncounters] = useState<any[]>([]);
   const [bpTrends, setBpTrends] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'encounters' | 'trends'>('overview');
-  const [error, setError] = useState<string>('');
+  const [_error, setError] = useState<string>('');
 
   useEffect(() => {
     if (token && effectiveTenantSlug) {
       loadData();
     }
-  }, [token, effectiveTenantSlug]);
+  }, [token, effectiveTenantSlug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     try {

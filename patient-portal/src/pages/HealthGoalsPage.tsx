@@ -5,10 +5,9 @@ import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Target, TrendingUp, Calendar, Award, Plus, Edit, Trash2, ArrowLeft, CheckCircle, Clock, XCircle, BarChart3
+  Target, Calendar, Award, Plus, Edit, Trash2, ArrowLeft, CheckCircle, Clock, XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface Goal {
   id: string;
@@ -38,7 +37,7 @@ const HealthGoalsPage: React.FC = () => {
 
   useEffect(() => {
     loadGoals();
-  }, [activeTab]);
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadGoals = async () => {
     try {

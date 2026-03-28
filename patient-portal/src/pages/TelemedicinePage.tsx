@@ -6,10 +6,10 @@ import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
 import { useConfirmation } from '../hooks/useConfirmation';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
-import { Video, Phone, Mic, MicOff, VideoOff, X, AlertCircle, CheckCircle, User, Clock, Activity, FileText, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, Save, ChevronDown, ChevronUp } from 'lucide-react';
+import { Video, Phone, Mic, MicOff, VideoOff, X, AlertCircle, CheckCircle, User, Clock, Activity, FileText, Save, ChevronDown, ChevronUp } from 'lucide-react';
 
 const TelemedicinePage: React.FC = () => {
-  const { consultationId, tenantSlug: urlTenantSlug } = useParams<{ consultationId: string; tenantSlug: string }>();
+  const { consultationId, tenantSlug: _urlTenantSlug } = useParams<{ consultationId: string; tenantSlug: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { token } = usePatientAuth();
@@ -53,7 +53,7 @@ const TelemedicinePage: React.FC = () => {
     if (consultationId) {
       loadConsultation();
     }
-  }, [consultationId]);
+  }, [consultationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadConsultation = async () => {
     try {
@@ -133,7 +133,7 @@ const TelemedicinePage: React.FC = () => {
     if (consultation?.status === 'completed') {
       loadConsultationSummary();
     }
-  }, [consultation]);
+  }, [consultation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEndCall = async () => {
     const confirmed = await confirm({

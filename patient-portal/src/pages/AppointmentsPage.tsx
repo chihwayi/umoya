@@ -5,12 +5,12 @@ import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
 import { useConfirmation } from '../hooks/useConfirmation';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
-import { Calendar, Clock, User, X, Plus, AlertCircle, ArrowLeft, CheckCircle, MapPin, FileText, Video, Phone } from 'lucide-react';
+import { Calendar, Clock, User, X, Plus, AlertCircle, ArrowLeft, CheckCircle, FileText, Video } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const AppointmentsPage: React.FC = () => {
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const { showError, showSuccess } = useNotification();
   const { confirmation, confirm, cancel } = useConfirmation();
@@ -21,7 +21,7 @@ const AppointmentsPage: React.FC = () => {
 
   useEffect(() => {
     loadAppointments();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAppointments = async () => {
     try {

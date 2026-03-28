@@ -4,7 +4,7 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
-import { ArrowLeft, Target, TrendingUp, Calendar, Award, Plus, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Target, TrendingUp, Award, Plus, Edit, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -31,7 +31,7 @@ const GoalDetailPage: React.FC = () => {
       loadGoal();
       loadProgressLogs();
     }
-  }, [goalId]);
+  }, [goalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadGoal = async () => {
     try {

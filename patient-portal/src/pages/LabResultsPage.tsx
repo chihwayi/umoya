@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
-import { FlaskConical, Calendar, ArrowLeft, AlertCircle, CheckCircle, XCircle, TrendingUp, FileDown } from 'lucide-react';
+import { FlaskConical, Calendar, ArrowLeft, AlertCircle, CheckCircle, XCircle, FileDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -15,7 +15,7 @@ const LabResultsPage: React.FC = () => {
 
   useEffect(() => {
     loadResults();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadResults = async () => {
     try {

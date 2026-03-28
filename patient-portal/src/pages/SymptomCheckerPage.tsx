@@ -11,7 +11,7 @@ const SymptomCheckerPage: React.FC = () => {
   const navigate = useNavigate();
   const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
-  const { showError, showSuccess } = useNotification();
+  const { showError } = useNotification();
 
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [currentSymptom, setCurrentSymptom] = useState('');

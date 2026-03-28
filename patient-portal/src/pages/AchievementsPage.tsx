@@ -40,7 +40,7 @@ const AchievementsPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     try {
@@ -228,7 +228,7 @@ const AchievementsPage: React.FC = () => {
                     <div className="flex items-start gap-4 mb-4">
                       <div
                         className="w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: achievement.badge_color || '#8b5cf6' + '20' }}
+                        style={{ backgroundColor: achievement.badge_color || '#8b5cf620' }}
                       >
                         <BadgeIcon
                           className="w-8 h-8"

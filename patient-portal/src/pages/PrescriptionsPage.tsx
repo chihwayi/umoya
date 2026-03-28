@@ -3,12 +3,12 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
-import { Pill, Calendar, User, ArrowLeft, AlertCircle, Filter, CheckCircle, Clock, RefreshCw, AlertTriangle, Download, X, Send, Share2, Mail, MessageCircle, Camera, Upload } from 'lucide-react';
+import { Pill, Calendar, User, ArrowLeft, AlertCircle, Clock, RefreshCw, AlertTriangle, Download, X, Send, Share2, Mail, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const PrescriptionsPage: React.FC = () => {
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const { showSuccess } = useNotification();
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
@@ -26,15 +26,11 @@ const PrescriptionsPage: React.FC = () => {
   const [shareMethod, setShareMethod] = useState<'email' | 'whatsapp' | 'link'>('email');
   const [shareEmail, setShareEmail] = useState('');
   const [sharing, setSharing] = useState(false);
-  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
-  const [selectedPrescriptionForPhoto, setSelectedPrescriptionForPhoto] = useState<any>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     loadPrescriptions();
     loadRefillRequests();
-  }, [activeOnly]);
+  }, [activeOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadPrescriptions = async () => {
     try {
@@ -73,7 +69,7 @@ const PrescriptionsPage: React.FC = () => {
     }
   };
 
-  const handleSharePrescription = (prescription: any) => {
+  const _handleSharePrescription = (prescription: any) => {
     setSelectedPrescriptionForShare(prescription);
     setShowShareModal(true);
   };
@@ -85,9 +81,7 @@ const PrescriptionsPage: React.FC = () => {
       setSharing(true);
       
       if (shareMethod === 'email' && shareEmail) {
-        // In a real implementation, this would call an API to email the prescription
-        // For now, we'll simulate it
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await patientPortalApi.sharePrescription(selectedPrescriptionForShare.id, shareEmail, token!, tenantSlug);
         showSuccess('Success', `Prescription shared to ${shareEmail}`);
       } else if (shareMethod === 'whatsapp') {
         // Generate WhatsApp share link
@@ -111,35 +105,6 @@ const PrescriptionsPage: React.FC = () => {
     }
   };
 
-  const handlePhotoUpload = (prescription: any) => {
-    setSelectedPrescriptionForPhoto(prescription);
-    setShowPhotoUpload(true);
-  };
-
-  const handlePhotoSubmit = async () => {
-    if (!photoFile || !selectedPrescriptionForPhoto) return;
-
-    try {
-      setUploadingPhoto(true);
-      // In a real implementation, this would upload to a file storage service
-      // and link it to the prescription for verification
-      const formData = new FormData();
-      formData.append('photo', photoFile);
-      formData.append('prescriptionId', selectedPrescriptionForPhoto.id);
-      
-      // Simulate upload
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      showSuccess('Success', 'Medication photo uploaded successfully for verification');
-      setShowPhotoUpload(false);
-      setSelectedPrescriptionForPhoto(null);
-      setPhotoFile(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to upload photo');
-    } finally {
-      setUploadingPhoto(false);
-    }
-  };
 
   const handleRequestRefill = (prescription: any) => {
     setSelectedPrescription(prescription);
@@ -589,100 +554,6 @@ const PrescriptionsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Medication Photo Upload Modal */}
-      {showPhotoUpload && selectedPrescriptionForPhoto && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Upload Medication Photo</h2>
-              <button
-                onClick={() => {
-                  setShowPhotoUpload(false);
-                  setSelectedPrescriptionForPhoto(null);
-                  setPhotoFile(null);
-                }}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-200">
-              <p className="text-sm font-semibold text-purple-900 mb-1">Medication</p>
-              <p className="text-lg font-bold text-purple-900">{selectedPrescriptionForPhoto.medicationName}</p>
-              <p className="text-xs text-purple-700 mt-1">Upload a photo of your medication for verification</p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Photo</label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-400 transition-colors cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                    id="photo-upload"
-                  />
-                  <label htmlFor="photo-upload" className="cursor-pointer">
-                    {photoFile ? (
-                      <div className="space-y-2">
-                        <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
-                        <p className="text-sm font-medium text-gray-700">{photoFile.name}</p>
-                        <p className="text-xs text-gray-500">Click to change</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Upload className="w-12 h-12 text-gray-400 mx-auto" />
-                        <p className="text-sm font-medium text-gray-700">Click to upload</p>
-                        <p className="text-xs text-gray-500">JPG, PNG up to 5MB</p>
-                      </div>
-                    )}
-                  </label>
-                </div>
-              </div>
-
-              {photoFile && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-xs text-blue-800">
-                    <strong>Note:</strong> This photo will be reviewed by your healthcare provider to verify medication compliance.
-                  </p>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handlePhotoSubmit}
-                  disabled={uploadingPhoto || !photoFile}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {uploadingPhoto ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      Upload Photo
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowPhotoUpload(false);
-                    setSelectedPrescriptionForPhoto(null);
-                    setPhotoFile(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
-import { ArrowLeft, Activity, Link as LinkIcon, CheckCircle, X, AlertCircle, TrendingUp, Heart, Footprints, Zap } from 'lucide-react';
+import { patientPortalApi } from '../services/api';
+import { ArrowLeft, Activity, Link as LinkIcon, CheckCircle, AlertCircle, Heart, Footprints, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const FitnessIntegrationPage: React.FC = () => {
@@ -25,13 +25,13 @@ const FitnessIntegrationPage: React.FC = () => {
 
   useEffect(() => {
     loadIntegrations();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadIntegrations = async () => {
     try {
       setLoading(true);
-      // Mock data - would call API
-      setIntegrations([]);
+      const data = await patientPortalApi.listFitnessIntegrations(token!, tenantSlug);
+      setIntegrations(data);
     } catch (err: any) {
       showError(err.message || 'Failed to load integrations', 'error');
     } finally {
@@ -40,11 +40,12 @@ const FitnessIntegrationPage: React.FC = () => {
   };
 
   const handleConnect = async (appId: string) => {
+    const app = availableApps.find(a => a.id === appId);
+    if (!app) return;
     try {
       setSyncing(appId);
-      // Would initiate OAuth flow
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      showSuccess(`${availableApps.find(a => a.id === appId)?.name} connected successfully`, 'success');
+      await patientPortalApi.connectFitnessIntegration(appId, app.name, token!, tenantSlug);
+      showSuccess(`${app.name} connected successfully`, 'success');
       loadIntegrations();
     } catch (err: any) {
       showError(err.message || 'Failed to connect app', 'error');
@@ -55,7 +56,7 @@ const FitnessIntegrationPage: React.FC = () => {
 
   const handleDisconnect = async (appId: string) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await patientPortalApi.disconnectFitnessIntegration(appId, token!, tenantSlug);
       showSuccess('App disconnected successfully', 'success');
       loadIntegrations();
     } catch (err: any) {
@@ -66,7 +67,7 @@ const FitnessIntegrationPage: React.FC = () => {
   const handleSync = async (appId: string) => {
     try {
       setSyncing(appId);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await patientPortalApi.syncFitnessIntegration(appId, token!, tenantSlug);
       showSuccess('Data synced successfully', 'success');
     } catch (err: any) {
       showError(err.message || 'Failed to sync data', 'error');
@@ -105,9 +106,15 @@ const FitnessIntegrationPage: React.FC = () => {
           </div>
         </div>
 
+        {loading && (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mx-auto mb-3"></div>
+            <p className="text-gray-600">Loading integrations...</p>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {availableApps.map((app) => {
-            const isConnected = integrations.some(i => i.appId === app.id);
+            const isConnected = integrations.some(i => i.app_id === app.id);
             const isSyncing = syncing === app.id;
 
             return (

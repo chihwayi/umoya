@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
-import { Calendar, Clock, User, ArrowLeft, CreditCard, Phone, DollarSign, AlertCircle, CheckCircle, Loader2, Stethoscope, Search, ChevronDown, X, FileText } from 'lucide-react';
+import { Calendar, Clock, ArrowLeft, CreditCard, Phone, DollarSign, AlertCircle, CheckCircle, Loader2, Stethoscope, Search, ChevronDown, X, FileText } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -28,13 +28,13 @@ const RequestAppointmentPage: React.FC = () => {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [slotStates, setSlotStates] = useState<SlotState[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [_loading, _setLoading] = useState(false);
   const [loadingDoctors, setLoadingDoctors] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
+  const [_createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
   const [pendingQuestionnaires, setPendingQuestionnaires] = useState<any[]>([]);
   const [showQuestionnairePrompt, setShowQuestionnairePrompt] = useState(false);
   
@@ -42,7 +42,7 @@ const RequestAppointmentPage: React.FC = () => {
   const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
-  const [selectedDoctorDisplay, setSelectedDoctorDisplay] = useState('');
+  const [_selectedDoctorDisplay, setSelectedDoctorDisplay] = useState('');
   const doctorDropdownRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
@@ -65,7 +65,7 @@ const RequestAppointmentPage: React.FC = () => {
 
   useEffect(() => {
     loadDoctors();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (formData.doctorId && formData.appointmentDate) {
@@ -74,7 +74,7 @@ const RequestAppointmentPage: React.FC = () => {
       setAvailableSlots([]);
       setSlotStates([]);
     }
-  }, [formData.doctorId, formData.appointmentDate]);
+  }, [formData.doctorId, formData.appointmentDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter doctors based on search term
   useEffect(() => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
-import { FileText, Calendar, User, ArrowLeft, AlertCircle, Filter, Search, Stethoscope, Activity, Heart, Eye } from 'lucide-react';
+import { FileText, Calendar, User, ArrowLeft, AlertCircle, Filter, Search, Stethoscope, Activity, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -17,7 +17,7 @@ const MedicalRecordsPage: React.FC = () => {
 
   useEffect(() => {
     loadRecords();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadRecords = async () => {
     try {
@@ -59,7 +59,7 @@ const MedicalRecordsPage: React.FC = () => {
 
   useEffect(() => {
     loadRecords();
-  }, [typeFilter]);
+  }, [typeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredRecords = records.filter((record) => {
     if (!searchTerm) return true;

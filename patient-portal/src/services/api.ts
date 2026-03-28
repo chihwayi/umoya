@@ -958,4 +958,79 @@ export const patientPortalApi = {
     if (!response.ok) return null;
     return response.json();
   },
+
+  // ==================== FAMILY ACCESS ====================
+
+  listFamilyAccess: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/family-access`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch family access');
+    return response.json();
+  },
+
+  createFamilyAccess: async (body: { proxyName: string; proxyEmail: string; proxyPhone?: string; relationship?: string; accessLevel?: string }, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/family-access`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: JSON.stringify(body),
+    });
+    _ensureOk(response, 'Failed to create family access');
+    return response.json();
+  },
+
+  revokeFamilyAccess: async (id: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/family-access/${id}`, {
+      method: 'DELETE',
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to revoke family access');
+    return response.json();
+  },
+
+  // ==================== FITNESS INTEGRATIONS ====================
+
+  listFitnessIntegrations: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/fitness-integrations`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch fitness integrations');
+    return response.json();
+  },
+
+  connectFitnessIntegration: async (appId: string, appName: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/fitness-integrations`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: JSON.stringify({ appId, appName }),
+    });
+    _ensureOk(response, 'Failed to connect fitness integration');
+    return response.json();
+  },
+
+  disconnectFitnessIntegration: async (appId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/fitness-integrations/${appId}`, {
+      method: 'DELETE',
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to disconnect fitness integration');
+    return response.json();
+  },
+
+  syncFitnessIntegration: async (appId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/fitness-integrations/${appId}/sync`, {
+      method: 'POST',
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to sync fitness integration');
+    return response.json();
+  },
+
+  // ==================== PRESCRIPTION SHARE ====================
+
+  sharePrescription: async (prescriptionId: string, recipientEmail: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/${prescriptionId}/share`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: JSON.stringify({ recipientEmail }),
+    });
+    _ensureOk(response, 'Failed to share prescription');
+    return response.json();
+  },
 };

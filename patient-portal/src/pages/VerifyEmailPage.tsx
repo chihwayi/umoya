@@ -63,7 +63,7 @@ const VerifyEmailPage: React.FC = () => {
     };
 
     verifyEmail();
-  }, [searchParams, navigate, tenantSlug]);
+  }, [searchParams, navigate, tenantSlug, urlTenantSlug]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-indigo-50">

@@ -4,7 +4,7 @@ import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
 import {
-  Calendar, Clock, Repeat, ArrowLeft, AlertCircle, CheckCircle, X, Plus, Edit, Trash2
+  Calendar, Clock, Repeat, ArrowLeft, CheckCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
@@ -29,13 +29,13 @@ interface Schedule {
 const ProSchedulesPage: React.FC = () => {
   const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
-  const { showError, showSuccess } = useNotification();
+  const { showError } = useNotification();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadSchedules();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadSchedules = async () => {
     try {

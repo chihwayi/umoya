@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { 
-  Bed, Calendar, User, Building, Clock, ArrowLeft, CheckCircle,
-  AlertCircle, TrendingUp, Activity
+import {
+  Bed, Calendar, User, Clock, ArrowLeft,
+  Activity
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
@@ -33,7 +33,7 @@ interface Admission {
 }
 
 const AdmissionStatusPage: React.FC = () => {
-  const { patient, token } = usePatientAuth();
+  const { token } = usePatientAuth();
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { showError } = useNotification();
@@ -43,7 +43,7 @@ const AdmissionStatusPage: React.FC = () => {
 
   useEffect(() => {
     loadAdmissionData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAdmissionData = async () => {
     try {

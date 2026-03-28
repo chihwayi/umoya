@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { 
-  FileText, CheckCircle, XCircle, Clock, Download, AlertTriangle,
-  Eye, Edit3, Calendar, User, Shield, ArrowLeft
+import {
+  CheckCircle, XCircle, Clock, Download, AlertTriangle,
+  Eye, Edit3, Calendar, Shield, ArrowLeft
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
@@ -38,12 +38,12 @@ const PatientConsentsPage: React.FC = () => {
   const [selectedConsent, setSelectedConsent] = useState<Consent | null>(null);
   const [showSigningModal, setShowSigningModal] = useState(false);
   const [signature, setSignature] = useState('');
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [canvasRef, setCanvasRef] = useState<HTMLCanvasElement | null>(null);
+  const [_isDrawing, _setIsDrawing] = useState(false);
+  const [_canvasRef, _setCanvasRef] = useState<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     loadConsents();
-  }, [filter]);
+  }, [filter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadConsents = async () => {
     try {

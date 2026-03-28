@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { Response } from 'express';
 import { DataSource } from 'typeorm';
@@ -28,6 +28,7 @@ import { ADTService } from '../services/adt.service';
 import { EDService } from '../services/ed.service';
 import { TenantService } from '../services/tenant.service';
 import { PatientPortalH3Service } from '../services/patient-portal-h3.service';
+import { EmailService } from '../services/email.service';
 
 import { SignerRole, SignatureType } from '../dto/consent.dto';
 
@@ -58,6 +59,7 @@ export class PatientPortalController {
     private readonly edService: EDService,
     private readonly tenantService: TenantService,
     private readonly patientPortalH3Service: PatientPortalH3Service,
+    private readonly emailService: EmailService,
   ) {}
 
   @Post('register')
@@ -314,6 +316,84 @@ export class PatientPortalController {
   async revokeFamilyAccess(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
     const patientId = req.user?.sub || req.user?.id;
     return this.patientPortalH3Service.revokeFamilyAccess(patientId, id, req.tenantDb);
+  }
+
+  // ==================== FITNESS INTEGRATIONS ====================
+
+  @Get('fitness-integrations')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List connected fitness app integrations' })
+  async listFitnessIntegrations(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalH3Service.listFitnessIntegrations(patientId, req.tenantDb);
+  }
+
+  @Post('fitness-integrations')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Connect a fitness app integration' })
+  async connectFitnessIntegration(
+    @Body() body: { appId: string; appName: string },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalH3Service.connectFitnessIntegration(patientId, body, req.tenantDb);
+  }
+
+  @Delete('fitness-integrations/:appId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disconnect a fitness app integration' })
+  async disconnectFitnessIntegration(@Param('appId') appId: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    await this.patientPortalH3Service.disconnectFitnessIntegration(patientId, appId, req.tenantDb);
+    return { message: 'Integration disconnected' };
+  }
+
+  @Post('fitness-integrations/:appId/sync')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Trigger a sync for a fitness app integration' })
+  async syncFitnessIntegration(@Param('appId') appId: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalH3Service.syncFitnessIntegration(patientId, appId, req.tenantDb);
+  }
+
+  // ==================== PRESCRIPTION SHARE ====================
+
+  @Post('prescriptions/:id/share')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Share a prescription via email' })
+  @ApiParam({ name: 'id', description: 'Prescription ID' })
+  async sharePrescription(
+    @Param('id') id: string,
+    @Body() body: { recipientEmail: string },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!body.recipientEmail?.trim()) {
+      throw new BadRequestException('recipientEmail is required');
+    }
+    const prescriptions = await this.patientPortalService.getPatientPrescriptions(patientId, req.tenantId, {});
+    const prescription = prescriptions.find((p: any) => p.id === id);
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found');
+    }
+    await this.emailService.sendEmail({
+      to: body.recipientEmail.trim(),
+      subject: `Prescription: ${prescription.medicationName}`,
+      html: `
+        <h2>Prescription Details</h2>
+        <p><strong>Medication:</strong> ${prescription.medicationName}</p>
+        <p><strong>Dosage:</strong> ${prescription.dosage}</p>
+        <p><strong>Frequency:</strong> ${prescription.frequency}</p>
+        ${prescription.instructions ? `<p><strong>Instructions:</strong> ${prescription.instructions}</p>` : ''}
+        <p><em>Shared via MediCore Patient Portal</em></p>
+      `,
+    });
+    return { message: `Prescription shared to ${body.recipientEmail.trim()}` };
   }
 
 

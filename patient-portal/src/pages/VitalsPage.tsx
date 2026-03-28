@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
-import { Activity, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, AlertCircle, Calendar, User, ArrowLeft, TrendingUp, TrendingDown, Plus, X, Save, CheckCircle } from 'lucide-react';
+import { Activity, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, AlertCircle, Calendar, User, ArrowLeft, Plus, X, Save, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 
 const VitalsPage: React.FC = () => {
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const [vitals, setVitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +31,7 @@ const VitalsPage: React.FC = () => {
 
   useEffect(() => {
     loadVitals();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadVitals = async () => {
     try {

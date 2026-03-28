@@ -5,7 +5,7 @@ import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
 import { useConfirmation } from '../hooks/useConfirmation';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
-import { Bell, ArrowLeft, Plus, Edit, Trash2, Clock, Calendar, X, Save, AlertCircle, CheckCircle } from 'lucide-react';
+import { Bell, ArrowLeft, Plus, Edit, Trash2, Clock, Calendar, X, Save, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -20,7 +20,7 @@ const DAYS_OF_WEEK = [
 ];
 
 const MedicationRemindersPage: React.FC = () => {
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const { showError, showSuccess } = useNotification();
   const { confirmation, confirm, cancel } = useConfirmation();
@@ -40,7 +40,7 @@ const MedicationRemindersPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     try {

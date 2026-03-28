@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const MedicationAdherencePage: React.FC = () => {
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const [adherenceSummary, setAdherenceSummary] = useState<any[]>([]);
   const [adherenceLogs, setAdherenceLogs] = useState<any[]>([]);
@@ -27,7 +27,7 @@ const MedicationAdherencePage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [selectedPrescription]);
+  }, [selectedPrescription]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     try {

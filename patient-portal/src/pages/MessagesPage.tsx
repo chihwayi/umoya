@@ -3,12 +3,12 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
-import { MessageSquare, ArrowLeft, Send, Paperclip, AlertCircle, CheckCircle, Clock, User, Plus, Loader2 } from 'lucide-react';
+import { MessageSquare, ArrowLeft, Send, Paperclip, AlertCircle, User, Plus, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const MessagesPage: React.FC = () => {
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const { showError, showSuccess, showWarning } = useNotification();
   const [messages, setMessages] = useState<any[]>([]);
@@ -29,7 +29,7 @@ const MessagesPage: React.FC = () => {
 
   useEffect(() => {
     loadMessages();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMessages = async () => {
     try {

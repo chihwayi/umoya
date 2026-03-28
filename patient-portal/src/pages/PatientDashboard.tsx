@@ -22,12 +22,12 @@ const PatientDashboard: React.FC = () => {
     vitalsRecords: 0,
   });
   const [dashboardData, setDashboardData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [healthSummary, setHealthSummary] = useState<{ summary: string; riskLevel: string; pendingActions: number } | null>(null);
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadStats = async () => {
     try {

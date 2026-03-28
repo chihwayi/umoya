@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { 
-  AlertCircle, Calendar, Clock, User, FileText, ArrowLeft,
-  Activity, TrendingUp, Heart
+import {
+  AlertCircle, ArrowLeft,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
@@ -28,17 +27,17 @@ interface EDVisit {
 }
 
 const EDVisitsPage: React.FC = () => {
-  const { patient, token } = usePatientAuth();
+  const { token } = usePatientAuth();
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { showError } = useNotification();
   const [visits, setVisits] = useState<EDVisit[]>([]);
-  const [selectedVisit, setSelectedVisit] = useState<EDVisit | null>(null);
+  const [_selectedVisit, _setSelectedVisit] = useState<EDVisit | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadEDVisits();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadEDVisits = async () => {
     try {

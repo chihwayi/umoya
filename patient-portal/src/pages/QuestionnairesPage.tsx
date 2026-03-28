@@ -26,7 +26,7 @@ interface Questionnaire {
 }
 
 const QuestionnairesPage: React.FC = () => {
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const { showInfo, showError } = useNotification();
   const [questionnaires, setQuestionnaires] = useState<Questionnaire[]>([]);
@@ -43,14 +43,14 @@ const QuestionnairesPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reload data when navigating back to this page (e.g., after submitting a questionnaire)
   useEffect(() => {
     if (location.pathname.includes('/questionnaires') && !location.pathname.includes('/questionnaires/')) {
       loadData();
     }
-  }, [location.pathname]);
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeTab === 'trends') {
@@ -58,7 +58,7 @@ const QuestionnairesPage: React.FC = () => {
     } else if (activeTab === 'schedules') {
       loadSchedules();
     }
-  }, [activeTab, selectedQuestionnaireCode]);
+  }, [activeTab, selectedQuestionnaireCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadTrends = async (questionnaireCode?: string) => {
     try {

@@ -164,11 +164,9 @@ describe('PostVisitEscalationService', () => {
     });
 
     it('throws NotFoundException when escalation is not found', async () => {
-      const query = makeQuery(
-        undefined, // SELECT → destructures as [undefined] = not found
-      );
-      (query as jest.Mock).mockResolvedValueOnce([{ tbl: 'post_visit_sessions' }]);
-      (query as jest.Mock).mockResolvedValueOnce([]); // empty → not found
+      const query = jest.fn()
+        .mockResolvedValueOnce([{ tbl: 'post_visit_sessions' }]) // schema check
+        .mockResolvedValueOnce([]);                              // SELECT → empty → not found
 
       const tenantDb = makeTenantDb(query);
 

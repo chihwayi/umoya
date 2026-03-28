@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { 
-  Syringe, Download, Calendar, User, Shield, AlertCircle,
-  ArrowLeft, CheckCircle, Clock, TrendingUp
+import {
+  Syringe, Download, Calendar, Shield,
+  ArrowLeft, Clock,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
@@ -41,12 +41,12 @@ const ImmunizationsPage: React.FC = () => {
   const [immunizations, setImmunizations] = useState<Immunization[]>([]);
   const [forecast, setForecast] = useState<ForecastVaccine[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingForecast, setLoadingForecast] = useState(false);
+  const [_loadingForecast, setLoadingForecast] = useState(false);
 
   useEffect(() => {
     loadImmunizations();
     loadForecast();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadImmunizations = async () => {
     try {

@@ -104,5 +104,72 @@ export class PatientPortalH3Service {
     existing.isActive = false;
     return repo.save(existing);
   }
+
+  // ==================== FITNESS INTEGRATIONS ====================
+
+  private async ensureFitnessIntegrationsTable(tenantDb: DataSource): Promise<void> {
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS patient_fitness_integrations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        app_id VARCHAR(50) NOT NULL,
+        app_name VARCHAR(100) NOT NULL,
+        is_connected BOOLEAN DEFAULT true,
+        last_synced_at TIMESTAMP WITH TIME ZONE,
+        connected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+  }
+
+  async listFitnessIntegrations(patientId: string, tenantDb: DataSource): Promise<any[]> {
+    await this.ensureFitnessIntegrationsTable(tenantDb);
+    const rows = await tenantDb.query(
+      `SELECT * FROM patient_fitness_integrations WHERE patient_id = $1 AND is_connected = true ORDER BY connected_at DESC`,
+      [patientId],
+    );
+    return rows;
+  }
+
+  async connectFitnessIntegration(
+    patientId: string,
+    body: { appId: string; appName: string },
+    tenantDb: DataSource,
+  ): Promise<any> {
+    if (!body.appId?.trim()) throw new BadRequestException('appId is required');
+    if (!body.appName?.trim()) throw new BadRequestException('appName is required');
+    await this.ensureFitnessIntegrationsTable(tenantDb);
+    // Upsert: disconnect previous record for same app if any, then insert fresh
+    await tenantDb.query(
+      `UPDATE patient_fitness_integrations SET is_connected = false WHERE patient_id = $1 AND app_id = $2`,
+      [patientId, body.appId],
+    );
+    const rows = await tenantDb.query(
+      `INSERT INTO patient_fitness_integrations (patient_id, app_id, app_name, is_connected, connected_at)
+       VALUES ($1, $2, $3, true, NOW()) RETURNING *`,
+      [patientId, body.appId, body.appName],
+    );
+    return rows[0];
+  }
+
+  async disconnectFitnessIntegration(patientId: string, appId: string, tenantDb: DataSource): Promise<void> {
+    await this.ensureFitnessIntegrationsTable(tenantDb);
+    await tenantDb.query(
+      `UPDATE patient_fitness_integrations SET is_connected = false
+       WHERE patient_id = $1 AND app_id = $2 AND is_connected = true`,
+      [patientId, appId],
+    );
+  }
+
+  async syncFitnessIntegration(patientId: string, appId: string, tenantDb: DataSource): Promise<any> {
+    await this.ensureFitnessIntegrationsTable(tenantDb);
+    const rows = await tenantDb.query(
+      `UPDATE patient_fitness_integrations SET last_synced_at = NOW()
+       WHERE patient_id = $1 AND app_id = $2 AND is_connected = true RETURNING *`,
+      [patientId, appId],
+    );
+    if (!rows.length) throw new NotFoundException('Integration not found or not connected');
+    return rows[0];
+  }
 }
 

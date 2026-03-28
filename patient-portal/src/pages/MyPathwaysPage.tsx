@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { 
-  Route, CheckCircle, Clock, AlertCircle, TrendingUp, BarChart3,
+import {
+  Route, CheckCircle, Clock, BarChart3,
   ArrowLeft, Eye, Calendar, Target, Activity, Zap, Award
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -39,10 +39,10 @@ interface PathwayStep {
 }
 
 const MyPathwaysPage: React.FC = () => {
-  const { patient, token } = usePatientAuth();
+  const { token } = usePatientAuth();
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showSuccess, showError } = useNotification();
+  const { showError } = useNotification();
   const [pathways, setPathways] = useState<PathwayEnrollment[]>([]);
   const [selectedPathway, setSelectedPathway] = useState<PathwayEnrollment | null>(null);
   const [pathwaySteps, setPathwaySteps] = useState<PathwayStep[]>([]);
@@ -51,7 +51,7 @@ const MyPathwaysPage: React.FC = () => {
 
   useEffect(() => {
     loadPathways();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadPathways = async () => {
     try {

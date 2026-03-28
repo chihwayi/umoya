@@ -79,6 +79,7 @@ describe('ImagingService', () => {
           governed_corpus_used: true,
         }),
       } as any,
+      {} as any,
     );
 
     const result = await service.prepareOrderAiReview(tenantDb, 'order-1', 'kids-clinic', 'user-1');
@@ -179,6 +180,7 @@ describe('ImagingService', () => {
           governed_corpus_used: true,
         }),
       } as any,
+      {} as any,
     );
 
     const draft = await service.generateReportDraft(tenantDb, 'study-1', 'kids-clinic', 'rad-1');
@@ -305,6 +307,7 @@ describe('ImagingService', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
     const signed = await service.signReport(tenantDb, 'report-1', 'rad-1');
@@ -369,6 +372,7 @@ describe('ImagingService', () => {
     } as any;
 
     const service = new ImagingService(
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

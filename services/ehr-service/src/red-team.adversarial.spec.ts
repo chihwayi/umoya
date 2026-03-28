@@ -112,6 +112,7 @@ describe('Red-team adversarial suite', () => {
 
     it('SIGN_AND_PUBLISH requires confirmSignAndPublish', async () => {
       const tenantDb = { query: jest.fn(async (sql: string) => {
+        if (sql.includes('to_regclass')) return [{ tbl: 'post_visit_sessions' }];
         if (sql.includes('post_visit_sessions')) return [{ id: 's1', patient_id: 'p1' }];
         return [];
       }) } as any;
@@ -267,6 +268,7 @@ describe('Red-team adversarial suite', () => {
     it('logFhirSyncAttempt uses parameterized insert', async () => {
       let insertParams: any[] | null = null;
       const tenantDb = { query: jest.fn(async (sql: string, params?: any[]) => {
+        if (sql.includes('to_regclass')) return [{ tbl: 'post_visit_sessions' }];
         if (sql.includes('fhir_sync_log') && sql.includes('INSERT') && params?.length) insertParams = params;
         return [{ id: 'log-1', status: 'pending' }];
       }) } as any;
@@ -432,6 +434,7 @@ describe('Red-team adversarial suite', () => {
     it('logFhirSyncAttempt caps max_attempts at 20', async () => {
       let maxAttemptsValue: number | null = null;
       const tenantDb = { query: jest.fn(async (sql: string, params?: any[]) => {
+        if (sql.includes('to_regclass')) return [{ tbl: 'post_visit_sessions' }];
         if (sql.includes('fhir_sync_log') && sql.includes('INSERT') && params && params.length > 8) maxAttemptsValue = params[8];
         return [{ id: 'l1' }];
       }) } as any;

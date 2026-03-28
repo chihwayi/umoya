@@ -4,9 +4,8 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import {
-  FileText, CheckCircle, AlertCircle, ArrowLeft, ArrowRight, Save, Loader, Check
+  FileText, CheckCircle, AlertCircle, ArrowLeft, ArrowRight, Loader, Check
 } from 'lucide-react';
-import { format } from 'date-fns';
 
 interface Question {
   number: number;
@@ -30,9 +29,9 @@ interface Questionnaire {
 }
 
 const QuestionnaireCompletionPage: React.FC = () => {
-  const { questionnaireId, tenantSlug: urlTenantSlug } = useParams<{ questionnaireId: string; tenantSlug: string }>();
+  const { questionnaireId, tenantSlug: _urlTenantSlug } = useParams<{ questionnaireId: string; tenantSlug: string }>();
   const navigate = useNavigate();
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +45,7 @@ const QuestionnaireCompletionPage: React.FC = () => {
     if (questionnaireId) {
       loadQuestionnaire();
     }
-  }, [questionnaireId]);
+  }, [questionnaireId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadQuestionnaire = async () => {
     try {
@@ -177,7 +176,7 @@ const QuestionnaireCompletionPage: React.FC = () => {
                     name={`question-${question.number}`}
                     value={option.value}
                     checked={currentValue === option.value}
-                    onChange={(e) => handleResponseChange(question.number, option.value)}
+                    onChange={(_e) => handleResponseChange(question.number, option.value)}
                     className="w-5 h-5 text-purple-600 focus:ring-purple-500"
                   />
                   <span className="flex-1 font-medium text-gray-900">{option.label}</span>
@@ -231,7 +230,7 @@ const QuestionnaireCompletionPage: React.FC = () => {
                 name={`question-${question.number}`}
                 value="true"
                 checked={currentValue === 'true' || currentValue === true}
-                onChange={(e) => handleResponseChange(question.number, true)}
+                onChange={(_e) => handleResponseChange(question.number, true)}
                 className="w-5 h-5 text-purple-600 focus:ring-purple-500"
               />
               <span className="font-medium text-gray-900">Yes</span>
@@ -242,7 +241,7 @@ const QuestionnaireCompletionPage: React.FC = () => {
                 name={`question-${question.number}`}
                 value="false"
                 checked={currentValue === 'false' || currentValue === false}
-                onChange={(e) => handleResponseChange(question.number, false)}
+                onChange={(_e) => handleResponseChange(question.number, false)}
                 className="w-5 h-5 text-purple-600 focus:ring-purple-500"
               />
               <span className="font-medium text-gray-900">No</span>

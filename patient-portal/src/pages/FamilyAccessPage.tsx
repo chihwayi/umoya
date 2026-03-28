@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
-import { ArrowLeft, Users, UserPlus, Mail, Phone, Shield, CheckCircle, X, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { patientPortalApi } from '../services/api';
+import { ArrowLeft, Users, UserPlus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const FamilyAccessPage: React.FC = () => {
@@ -26,13 +26,13 @@ const FamilyAccessPage: React.FC = () => {
 
   useEffect(() => {
     loadFamilyMembers();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFamilyMembers = async () => {
     try {
       setLoading(true);
-      // Mock data for now - would call API
-      setFamilyMembers([]);
+      const data = await patientPortalApi.listFamilyAccess(token!, tenantSlug);
+      setFamilyMembers(data);
     } catch (err: any) {
       showError(err.message || 'Failed to load family members', 'error');
     } finally {
@@ -48,8 +48,17 @@ const FamilyAccessPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      // Would call API to add family member
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await patientPortalApi.createFamilyAccess(
+        {
+          proxyName: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
+          proxyEmail: formData.email,
+          proxyPhone: formData.phone || undefined,
+          relationship: formData.relationship || undefined,
+          accessLevel: formData.accessLevel === 'view' ? 'view_only' : 'full',
+        },
+        token!,
+        tenantSlug,
+      );
       showSuccess('Family member added successfully', 'success');
       setShowAddModal(false);
       setFormData({ firstName: '', lastName: '', email: '', phone: '', relationship: '', accessLevel: 'view' });
@@ -63,8 +72,7 @@ const FamilyAccessPage: React.FC = () => {
 
   const handleRemoveMember = async (memberId: string) => {
     try {
-      // Would call API to remove access
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await patientPortalApi.revokeFamilyAccess(memberId, token!, tenantSlug);
       showSuccess('Access removed successfully', 'success');
       loadFamilyMembers();
     } catch (err: any) {
@@ -102,7 +110,12 @@ const FamilyAccessPage: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20">
-          {familyMembers.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading family members...</p>
+            </div>
+          ) : familyMembers.length === 0 ? (
             <div className="text-center py-12">
               <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-gray-900 mb-2">No Family Members</h3>
@@ -120,13 +133,13 @@ const FamilyAccessPage: React.FC = () => {
                 <div key={member.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                      {member.firstName.charAt(0)}{member.lastName.charAt(0)}
+                      {(member.proxyName || '?').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">{member.firstName} {member.lastName}</p>
-                      <p className="text-sm text-gray-600">{member.relationship} • {member.email}</p>
+                      <p className="font-semibold text-gray-900">{member.proxyName}</p>
+                      <p className="text-sm text-gray-600">{member.relationship} • {member.proxyEmail}</p>
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full mt-1 inline-block">
-                        {member.accessLevel === 'view' ? 'View Only' : 'Full Access'}
+                        {member.accessLevel === 'view_only' ? 'View Only' : member.accessLevel === 'full' ? 'Full Access' : member.accessLevel}
                       </span>
                     </div>
                   </div>

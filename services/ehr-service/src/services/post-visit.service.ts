@@ -2041,6 +2041,10 @@ export class PostVisitService {
     payload: GeneratePostVisitAdminDocumentsDto = {},
     options: { actorUserId?: string | null } = {},
   ) {
+    if (!options.actorUserId) {
+      throw new BadRequestException('Authenticated doctor user is required to sign admin documents');
+    }
+
     await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
 
@@ -2051,10 +2055,6 @@ export class PostVisitService {
         documents: [],
         message: 'Post-visit admin document generation is disabled by feature flag.',
       };
-    }
-
-    if (!options.actorUserId) {
-      throw new BadRequestException('Authenticated doctor user is required to sign admin documents');
     }
 
     const allowedTypes: PostVisitAdminDocumentType[] = ['referral_letter', 'sick_note', 'return_to_work'];
@@ -3745,9 +3745,6 @@ export class PostVisitService {
     payload: ReviewPostVisitTrialMatchDto,
     options: { actorUserId?: string | null } = {},
   ) {
-    await this.ensurePostVisitSchema(tenantDb);
-    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
-
     const statusMap: Record<PostVisitTrialReviewAction, PostVisitTrialMatchStatus> = {
       consider: 'considered',
       defer: 'deferred',
@@ -3759,6 +3756,9 @@ export class PostVisitService {
     if (!nextStatus) {
       throw new BadRequestException('Invalid trial review action');
     }
+
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
 
     const existingRows = await tenantDb.query(
       `
@@ -4068,10 +4068,10 @@ export class PostVisitService {
     sessionId: string,
     options: { actorUserId?: string | null } = {},
   ) {
-    await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPeerConsultEnabled()) {
       throw new BadRequestException('Peer consultation is disabled by feature flag');
     }
+    await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
     const requestSummary = await this.buildDeidentifiedPeerConsultSummary(tenantDb, sessionId);
     const [row] = await tenantDb.query(
@@ -4431,15 +4431,15 @@ export class PostVisitService {
     if (this.companionMemoryService) {
       return this.companionMemoryService.curateCompanionMemory(tenantDb, sessionId, memoryId, payload, options);
     }
+    const action = String(payload.action || '').toLowerCase() as PostVisitCompanionMemoryCurationAction;
+    if (!['promote', 'retire', 'reactivate'].includes(action)) {
+      throw new BadRequestException('Invalid companion memory curation action');
+    }
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isCompanionMemoryEnabled()) {
       throw new BadRequestException('Companion memory is disabled by feature flag');
     }
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
-    const action = String(payload.action || '').toLowerCase() as PostVisitCompanionMemoryCurationAction;
-    if (!['promote', 'retire', 'reactivate'].includes(action)) {
-      throw new BadRequestException('Invalid companion memory curation action');
-    }
 
     const existingRows = await tenantDb.query(
       `

@@ -6,7 +6,7 @@ import { Link, Shield, Calendar, Hash, Phone, User, AlertCircle, CheckCircle, Sp
 
 const LinkAccountPage: React.FC = () => {
   const navigate = useNavigate();
-  const { linkAccount, patient } = usePatientAuth();
+  const { linkAccount } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const [formData, setFormData] = useState({
     patientNumber: '',

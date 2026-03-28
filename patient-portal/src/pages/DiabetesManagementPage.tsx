@@ -5,27 +5,22 @@ import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import {
   Activity,
-  TrendingUp,
-  TrendingDown,
   Droplet,
   Pill,
-  Calendar,
   CheckCircle,
   XCircle,
   AlertCircle,
   ArrowLeft,
-  Heart,
   Target,
   BarChart3,
-  Clock,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const DiabetesManagementPage: React.FC = () => {
   const navigate = useNavigate();
-  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const { tenantSlug: _tenantSlug } = useParams<{ tenantSlug: string }>();
   const effectiveTenantSlug = useTenantSlug();
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const [loading, setLoading] = useState(true);
   const [registry, setRegistry] = useState<any>(null);
   const [glucoseHistory, setGlucoseHistory] = useState<any[]>([]);
@@ -38,7 +33,7 @@ const DiabetesManagementPage: React.FC = () => {
     if (token && effectiveTenantSlug) {
       loadData();
     }
-  }, [token, effectiveTenantSlug]);
+  }, [token, effectiveTenantSlug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     try {
