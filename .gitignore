@@ -48,6 +48,7 @@ jspm_packages/
 .eslintcache
 .login
 .postvisitai
+docs/medicore-ad.html
 
 # Optional REPL history
 .node_repl_history
