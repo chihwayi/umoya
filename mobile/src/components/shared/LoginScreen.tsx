@@ -8,12 +8,34 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
+import { C, FONT, RADIUS } from '../../design/tokens';
+import { TENANT_DISCOVERY_URL } from '../../config/env';
 import { Icon, Badge } from '../ui';
 import { useAuthStore, UserRole } from '../../stores/useAuthStore';
 import { api } from '../../services/api';
 
 type LoginMode = 'staff' | 'patient_otp' | 'patient_pin';
+
+const ClinicLogo: React.FC<{ tenant: any; accent: string }> = ({ tenant, accent }) => {
+  const [errored, setErrored] = useState(false);
+  const logoUri = tenant?.id
+    ? `${TENANT_DISCOVERY_URL}/${tenant.id}/logo`
+    : tenant?.logoUrl;
+  return (
+    <View style={[styles.clinicLogo, { borderColor: accent + '44' }]}>
+      {logoUri && !errored ? (
+        <Image
+          source={{ uri: logoUri }}
+          style={styles.clinicLogoImg}
+          resizeMode="cover"
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <Icon name="stethoscope" size={30} color={accent} />
+      )}
+    </View>
+  );
+};
 
 interface LoginScreenProps {
   onLoggedIn: () => void;
@@ -185,23 +207,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Clinic branding */}
-          <View style={styles.clinicRow}>
-            <View style={[styles.clinicLogo, { borderColor: accent + '44' }]}>
-              {tenant?.logoUrl ? (
-                <Image source={{ uri: tenant.logoUrl }} style={styles.clinicLogoImg} resizeMode="cover" />
-              ) : (
-                <Icon name="stethoscope" size={26} color={accent} />
-              )}
-            </View>
-            <View style={styles.clinicText}>
-              <Text style={styles.clinicName}>{tenant?.name ?? 'MediCore'}</Text>
-              <Text style={styles.clinicSlug}>{tenant?.slug}</Text>
-            </View>
+          {/* Clinic branding — centred hero */}
+          <View style={styles.heroSection}>
+            <ClinicLogo tenant={tenant} accent={accent} />
+            <Text style={styles.clinicName}>{tenant?.name ?? 'MediCore'}</Text>
+            {tenant?.slug ? <Text style={styles.clinicSlug}>{tenant.slug}</Text> : null}
+            <Text style={styles.headline}>Welcome back</Text>
+            <Text style={styles.sub}>Sign in to continue</Text>
           </View>
-
-          <Text style={styles.headline}>Welcome back</Text>
-          <Text style={styles.sub}>Sign in to continue</Text>
 
           {/* Role picker */}
           <View style={styles.rolePicker}>
@@ -401,39 +414,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  scroll: { paddingHorizontal: 20, paddingTop: 24 },
-  clinicRow: {
-    flexDirection: 'row',
+  scroll: { paddingHorizontal: 24, paddingTop: 16 },
+  heroSection: {
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 28,
-    backgroundColor: C.card,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: 14,
+    paddingVertical: 32,
+    gap: 6,
   },
   clinicLogo: {
-    width: 48,
-    height: 48,
-    borderRadius: RADIUS.md,
+    width: 80,
+    height: 80,
+    borderRadius: 24,
     backgroundColor: C.surface,
-    borderWidth: 1,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 8,
+    overflow: 'hidden',
   },
-  clinicLogoImg: { width: 48, height: 48, borderRadius: 10 },
-  clinicText: { flex: 1 },
-  clinicName: { fontFamily: FONT.uiBd, fontSize: 15, color: C.textPrimary },
-  clinicSlug: { fontFamily: FONT.mono, fontSize: 11, color: C.textMuted, marginTop: 2 },
+  clinicLogoImg: { width: 80, height: 80 },
+  clinicName: {
+    fontFamily: FONT.uiBd,
+    fontSize: 20,
+    color: C.textPrimary,
+    textAlign: 'center',
+  },
+  clinicSlug: {
+    fontFamily: FONT.mono,
+    fontSize: 11,
+    color: C.textMuted,
+    textAlign: 'center',
+  },
   headline: {
     fontFamily: FONT.uiBk,
-    fontSize: 30,
+    fontSize: 28,
     color: C.textPrimary,
     letterSpacing: -0.5,
-    marginBottom: 4,
+    textAlign: 'center',
+    marginTop: 12,
   },
-  sub: { fontFamily: FONT.ui, fontSize: 14, color: C.textSecondary, marginBottom: 24 },
+  sub: {
+    fontFamily: FONT.ui,
+    fontSize: 14,
+    color: C.textSecondary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
   rolePicker: {
     flexDirection: 'row',
     backgroundColor: C.card,
