@@ -97,6 +97,10 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
       });
       setWorkflows(response.data || []);
     } catch (error: any) {
+      if (error?.response?.status === 504) {
+        setWorkflows([]);
+        return;
+      }
       console.error('Failed to load workflows:', error);
       showError('Error', 'Failed to load workflows. Please try again.');
     } finally {
@@ -241,16 +245,16 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-slate-200 max-h-[90vh] flex flex-col">
+    <div className="bg-gradient-to-br from-white via-slate-50 to-indigo-50 rounded-xl shadow-lg border border-slate-200 max-h-[90vh] flex flex-col">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6 rounded-t-xl">
+      <div className="bg-gradient-to-r from-slate-100 via-indigo-100 to-violet-100 p-6 rounded-t-xl border-b border-indigo-200/70">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold flex items-center gap-3">
-              <Activity className="w-6 h-6" />
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <Activity className="w-6 h-6 text-indigo-600" />
               Clinical Workflows
             </h2>
-            <p className="text-blue-100 text-sm mt-1">Automate care processes and streamline workflows</p>
+            <p className="text-slate-600 text-sm mt-1">Automate care processes and streamline workflows</p>
           </div>
           <div className="flex gap-3">
             <button
@@ -258,7 +262,7 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
                 setAnalyticsWorkflowId(undefined);
                 setShowAnalytics(true);
               }}
-              className="px-4 py-2 bg-white/10 text-white border border-white/30 rounded-lg hover:bg-white/20 transition-colors flex items-center gap-2 text-sm font-semibold"
+              className="px-4 py-2 bg-indigo-600 text-white border border-indigo-500 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm font-semibold shadow-sm"
               title="View Analytics"
             >
               <BarChart3 className="w-4 h-4" />
@@ -269,14 +273,18 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
                 setSelectedWorkflow(null);
                 setShowBuilder(true);
               }}
-              className="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-2 text-sm font-semibold"
+              className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2 text-sm font-semibold shadow-sm"
             >
               <Plus className="w-4 h-4" />
               Create Workflow
             </button>
             {onClose && (
-              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
-                <X className="w-5 h-5" />
+              <button
+                onClick={onClose}
+                className="p-2 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Close workflows"
+              >
+                <X className="w-5 h-5 text-slate-700" />
               </button>
             )}
           </div>
@@ -284,7 +292,7 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
       </div>
 
       {/* Filters */}
-      <div className="p-4 border-b border-slate-200 bg-slate-50">
+      <div className="p-4 border-b border-slate-200 bg-white/80">
         <div className="flex flex-wrap gap-4">
           <div className="flex-1 min-w-[200px]">
             <div className="relative">
@@ -301,7 +309,7 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
           <select
             value={selectedTrigger}
             onChange={(e) => setSelectedTrigger(e.target.value)}
-            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
             <option value="">All Triggers</option>
             {TRIGGER_EVENTS.map(event => (
@@ -311,7 +319,7 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
           <select
             value={showActiveOnly === undefined ? '' : showActiveOnly ? 'active' : 'inactive'}
             onChange={(e) => setShowActiveOnly(e.target.value === '' ? undefined : e.target.value === 'active')}
-            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
             <option value="">All Status</option>
             <option value="active">Active Only</option>
@@ -597,4 +605,3 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
 };
 
 export default WorkflowList;
-

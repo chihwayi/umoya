@@ -112,7 +112,12 @@ class VoiceScribe:
             logger.error(f"Transcription failed: {e}")
             return {"error": str(e)}
 
-    async def generate_soap_note(self, transcript: str, detected_language: Optional[str] = None) -> Dict[str, Any]:
+    async def generate_soap_note(
+        self,
+        transcript: str,
+        detected_language: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Convert transcript to SOAP note using LLM.
         Handles English, Shona, and Ndebele by asking LLM to translate/summarize in English.
@@ -149,7 +154,12 @@ class VoiceScribe:
         4. Format the output as a structured JSON object.
         """
         
-        result = await self.llm_provider.generate_json(prompt, schema)
+        result = await self.llm_provider.generate_json(
+            prompt,
+            schema,
+            use_case="voice_soap_generation",
+            tenant_id=tenant_id,
+        )
         normalized_lang = self._normalize_language_code(detected_language, "en")
         if not result:
             return self._normalize_soap_payload({}, normalized_lang)

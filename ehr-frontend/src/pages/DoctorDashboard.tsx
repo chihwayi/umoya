@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Calendar, Clock, User, Stethoscope, CheckCircle, AlertCircle, AlertTriangle,
   Play, FileText, Pill, TestTube,
@@ -7,7 +7,7 @@ import {
   Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, XCircle,
   LogOut, Menu, X, BarChart3, Users, ChevronDown, ChevronUp,
   Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail, Shield, Syringe, Route,
-  Bed, Home, Droplet, DollarSign, Brain, BookOpen,
+  Bed, Home, Droplet, DollarSign, Brain, BookOpen, LayoutDashboard, Package,
   Mic
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
@@ -61,6 +61,43 @@ import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptP
 import VoiceConsultationPanel from '../components/VoiceConsultation/VoiceConsultationPanel';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
+import PreChartPanel from '../components/PreChartPanel';
+import AmbientBar from '../components/ambient/AmbientBar';
+import { OrderIntelligencePanel } from '../components/OrderIntelligencePanel';
+import { RiskTierBadge } from '../components/RiskTierBadge';
+import SmartInbox from '../components/inbox/SmartInbox';
+import DoctorPatientsList from './DoctorPatientsList';
+import DoctorAppointmentManagement from './DoctorAppointmentManagement';
+import DoctorTreatmentHistory from './DoctorTreatmentHistory';
+import DoctorPatientDetail from './DoctorPatientDetail';
+import DoctorTreatmentHistoryDetail from './DoctorTreatmentHistoryDetail';
+import BedManagementDashboard from './BedManagementDashboard';
+import EDDashboard from './EDDashboard';
+import ORDashboard from './ORDashboard';
+import PACUDashboard from './PACUDashboard';
+import MARDashboard from './MARDashboard';
+import BloodBankDashboard from './BloodBankDashboard';
+import SepsisDashboard from './SepsisDashboard';
+import InfectionControlDashboard from './InfectionControlDashboard';
+import RevenueCycleDashboard from './RevenueCycleDashboard';
+import CdiDashboard from './CdiDashboard';
+import PopulationHealthDashboard from './PopulationHealthDashboard';
+import HIVDoctorDashboard from './HIVDoctorDashboard';
+import MaternityDoctorDashboard from './MaternityDoctorDashboard';
+import OncologyDashboard from './OncologyDashboard';
+import CardiologyDashboard from './CardiologyDashboard';
+import OphthalmologyDashboard from './OphthalmologyDashboard';
+import {
+  cacheTenantBranding,
+  formatTenantDisplayName,
+  getBrandInitials,
+  readCachedTenantBranding,
+} from '../utils/tenantBranding';
+import {
+  getBillingToneClasses,
+  isTenantRouteAvailable,
+  notifyTenantSubscriptionStatus,
+} from '../utils/tenantSubscription';
 
 interface Appointment {
   id: string;
@@ -161,25 +198,6 @@ interface DoctorOutcomeAnalyticsSnapshot {
   };
 }
 
-const DOCTOR_SYNC_SCOPE_MODULES = new Set([
-  'maternity',
-  'hiv',
-  'oncology',
-  'nursing',
-  'cardiology',
-  'ophthalmology',
-  'ed',
-  'sepsis',
-  'blood_bank',
-  'telemedicine',
-  'lab',
-  'pharmacy',
-  'accounts',
-  'billing',
-  'claims',
-  'revenue_cycle',
-]);
-
 const ACCOUNTS_SYNC_MODULES = new Set(['accounts', 'billing', 'claims', 'revenue_cycle']);
 const SPECIALTY_SYNC_MODULES = new Set([
   'cardiology',
@@ -202,10 +220,14 @@ type PatientVitalsWithUser = PatientVitals & {
 const DoctorDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
-  const { showError, showSuccess } = useNotification();
+  const location = useLocation();
+  const { showError, showSuccess, showWarning } = useNotification();
   
   // State
-  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [tenantInfo, setTenantInfo] = useState<any>(() => {
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    return cachedBranding ? { clinicName: cachedBranding.clinicName, logoUrl: cachedBranding.logoUrl } : null;
+  });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState(getTodayFormatted());
   const [, setLoading] = useState(true);
@@ -482,7 +504,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open ED Dashboard',
         buttonTextColor: 'text-red-700',
         buttonHover: 'hover:bg-red-50',
-        route: tenantPath('/emergency'),
+        route: tenantPath('/doctor/emergency'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -496,7 +518,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open Bed Management',
         buttonTextColor: 'text-blue-700',
         buttonHover: 'hover:bg-blue-50',
-        route: tenantPath('/bed-management'),
+        route: tenantPath('/doctor/bed-management'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -510,7 +532,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open OR Dashboard',
         buttonTextColor: 'text-indigo-700',
         buttonHover: 'hover:bg-indigo-50',
-        route: tenantPath('/operating-room'),
+        route: tenantPath('/doctor/operating-room'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -524,7 +546,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open PACU Dashboard',
         buttonTextColor: 'text-purple-700',
         buttonHover: 'hover:bg-purple-50',
-        route: tenantPath('/pacu'),
+        route: tenantPath('/doctor/pacu'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -538,7 +560,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open MAR Dashboard',
         buttonTextColor: 'text-cyan-700',
         buttonHover: 'hover:bg-cyan-50',
-        route: tenantPath('/mar'),
+        route: tenantPath('/doctor/mar'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -552,7 +574,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open Blood Bank',
         buttonTextColor: 'text-red-700',
         buttonHover: 'hover:bg-red-50',
-        route: tenantPath('/blood-bank'),
+        route: tenantPath('/doctor/blood-bank'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -566,7 +588,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open Sepsis Dashboard',
         buttonTextColor: 'text-orange-700',
         buttonHover: 'hover:bg-orange-50',
-        route: tenantPath('/sepsis'),
+        route: tenantPath('/doctor/sepsis'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -580,7 +602,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open Infection Control',
         buttonTextColor: 'text-green-700',
         buttonHover: 'hover:bg-green-50',
-        route: tenantPath('/infection-control'),
+        route: tenantPath('/doctor/infection-control'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -594,7 +616,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open Revenue Dashboard',
         buttonTextColor: 'text-emerald-700',
         buttonHover: 'hover:bg-emerald-50',
-        route: tenantPath('/revenue-cycle'),
+        route: tenantPath('/doctor/revenue-cycle'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -608,7 +630,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open CDI Dashboard',
         buttonTextColor: 'text-blue-700',
         buttonHover: 'hover:bg-blue-50',
-        route: tenantPath('/cdi'),
+        route: tenantPath('/doctor/cdi'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -622,7 +644,7 @@ const DoctorDashboard: React.FC = () => {
         buttonLabel: 'Open Population Health',
         buttonTextColor: 'text-teal-700',
         buttonHover: 'hover:bg-teal-50',
-        route: tenantPath('/population-health'),
+        route: tenantPath('/doctor/population-health'),
         requiresPaymentClearance: false,
         paymentLockedMessage: '',
       },
@@ -703,7 +725,7 @@ const DoctorDashboard: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isUpdating, setIsUpdating] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'schedule' | 'current-appointment' | 'critical-alerts' | 'imaging' | 'my-patients'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'queue' | 'schedule' | 'current-appointment' | 'critical-alerts' | 'imaging' | 'my-patients'>('queue');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [criticalAlertCount, setCriticalAlertCount] = useState(0);
   const [criticalImagingCount, setCriticalImagingCount] = useState(0);
@@ -717,6 +739,9 @@ const DoctorDashboard: React.FC = () => {
     total: 0,
     critical: 0,
     high: 0,
+    pending: 0,
+    acknowledged: 0,
+    doctorReviewRecommended: 0,
     maternity: 0,
     hiv: 0,
     oncology: 0,
@@ -733,12 +758,23 @@ const DoctorDashboard: React.FC = () => {
     specialty: 0,
     handoff: 0,
     medication: 0,
+    critical_results: 0,
+    triage: 0,
+    orders: 0,
+    coordination: 0,
   });
   const [doctorSyncLoading, setDoctorSyncLoading] = useState(false);
   const [doctorSyncMaternityAcknowledgeId, setDoctorSyncMaternityAcknowledgeId] = useState<string | null>(null);
   const [doctorSyncWorkflowItemId, setDoctorSyncWorkflowItemId] = useState<string | null>(null);
   const [doctorSyncRecommendationKey, setDoctorSyncRecommendationKey] = useState<string | null>(null);
   const [doctorOutcomeAnalytics, setDoctorOutcomeAnalytics] = useState<DoctorOutcomeAnalyticsSnapshot | null>(null);
+  const [doctorSyncFocus, setDoctorSyncFocus] = useState<'all' | 'handoff' | 'critical_results' | 'triage' | 'orders' | 'coordination'>('all');
+  const [doctorSyncIncludeAcknowledged, setDoctorSyncIncludeAcknowledged] = useState(false);
+  const routeNormalizedPath = useMemo(() => location.pathname.replace(/\/+$/, ''), [location.pathname]);
+  const routeDoctorBasePath = useMemo(() => `/ehr/${tenantSlug}/doctor`, [tenantSlug]);
+  const isDoctorDashboardShellRoute = routeNormalizedPath === routeDoctorBasePath;
+  const isDoctorCoordinationShellRoute = routeNormalizedPath === `${routeDoctorBasePath}/coordination`;
+  const isDoctorDataPollingRoute = isDoctorDashboardShellRoute || isDoctorCoordinationShellRoute;
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -769,13 +805,17 @@ const DoctorDashboard: React.FC = () => {
 
   // Load admitted patients when My Patients tab is active
   useEffect(() => {
-    if (activeTab === 'my-patients') {
+    if (isDoctorDashboardShellRoute && activeTab === 'my-patients') {
       fetchAdmittedPatients();
     }
-  }, [activeTab, fetchAdmittedPatients]);
+  }, [activeTab, fetchAdmittedPatients, isDoctorDashboardShellRoute]);
 
   // Load critical alert count on mount and refresh every 2 minutes
   useEffect(() => {
+    if (!isDoctorDataPollingRoute || !tenantSlug) {
+      return undefined;
+    }
+
     const loadAlertCount = async () => {
       try {
         const token = localStorage.getItem('ehr_token');
@@ -803,10 +843,14 @@ const DoctorDashboard: React.FC = () => {
     loadAlertCount();
     const interval = setInterval(loadAlertCount, 120000); // Every 2 minutes
     return () => clearInterval(interval);
-  }, [tenantSlug]);
+  }, [isDoctorDataPollingRoute, tenantSlug]);
 
   // Load unread message count
   useEffect(() => {
+    if (!isDoctorDataPollingRoute || !tenantSlug) {
+      return undefined;
+    }
+
     const loadUnreadCount = async () => {
       try {
         const token = localStorage.getItem('ehr_token') || '';
@@ -823,15 +867,31 @@ const DoctorDashboard: React.FC = () => {
     // Refresh every 30 seconds
     const interval = setInterval(loadUnreadCount, 30000);
     return () => clearInterval(interval);
-  }, [tenantSlug]);
+  }, [isDoctorDataPollingRoute, tenantSlug]);
 
   // Fetch tenant info
+  useEffect(() => {
+    if (!tenantSlug) return;
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    if (cachedBranding) {
+      setTenantInfo((prev: any) => ({
+        ...(prev || {}),
+        clinicName: prev?.clinicName || cachedBranding.clinicName,
+        logoUrl: prev?.logoUrl || cachedBranding.logoUrl,
+      }));
+    }
+  }, [tenantSlug]);
+
   useEffect(() => {
     const fetchTenantInfo = async () => {
       try {
         const response = await tenantApi.getTenantBySlug(tenantSlug!);
         if (response.data) {
           setTenantInfo(response.data);
+          cacheTenantBranding(tenantSlug!, {
+            clinicName: response.data.clinicName,
+            logoUrl: response.data.logoUrl,
+          });
         }
       } catch (error) {
         console.error('Error fetching tenant info:', error);
@@ -988,8 +1048,7 @@ const DoctorDashboard: React.FC = () => {
         try {
           const vitals = await ehrApi.getVitals(appointment.patient.id, token, tenantSlug!);
           return { patientId: appointment.patient.id, vitals: vitals.data.vitals || [] };
-        } catch (error) {
-          console.log(`No vitals found for patient ${appointment.patient.id}:`, error);
+        } catch {
           return { patientId: appointment.patient.id, vitals: [] };
         }
       });
@@ -1004,7 +1063,6 @@ const DoctorDashboard: React.FC = () => {
       });
 
       setVitalsData(vitalsMap);
-      console.log('🔍 DoctorDashboard - Fetched vitals data:', vitalsMap);
     } catch (error) {
       console.error('Error fetching vitals data:', error);
     }
@@ -1015,38 +1073,17 @@ const DoctorDashboard: React.FC = () => {
       setLoading(true);
       const token = localStorage.getItem('ehr_token');
       if (!token || !currentUser) {
-        console.log('🔍 DoctorDashboard - Missing token or currentUser:', { token: !!token, currentUser });
         return;
       }
-
-      console.log('🔍 DoctorDashboard - Fetching appointments for date:', selectedDate);
-      console.log('🔍 DoctorDashboard - Current user:', currentUser);
-      console.log('🔍 DoctorDashboard - Tenant slug:', tenantSlug);
-      console.log('🔍 DoctorDashboard - Formatted date for API:', formatDateForAPI(selectedDate));
 
       const response = await ehrApi.getAppointments(token, tenantSlug!, {
         date: formatDateForAPI(selectedDate)
       });
-      
-      console.log('🔍 DoctorDashboard - API response:', response.data);
-      console.log('🔍 DoctorDashboard - All appointments:', response.data.appointments);
-      
+
       // Filter appointments for current doctor
       const doctorAppointments = response.data.appointments.filter(
-        (apt: Appointment) => {
-          console.log('🔍 DoctorDashboard - Checking appointment:', {
-            appointmentId: apt.id,
-            patientName: `${apt.patient.firstName} ${apt.patient.lastName}`,
-            appointmentDate: apt.appointmentDate,
-            doctorId: apt.doctor.id,
-            currentUserId: currentUser?.id,
-            matches: apt.doctor.id === currentUser?.id
-          });
-          return apt.doctor.id === currentUser?.id;
-        }
+        (apt: Appointment) => apt.doctor.id === currentUser?.id
       );
-      
-      console.log('🔍 DoctorDashboard - Filtered doctor appointments:', doctorAppointments);
       setAppointments(doctorAppointments);
       // Select current in-progress appointment for this doctor
       const inProgress = doctorAppointments.filter((a: any) => {
@@ -1093,6 +1130,11 @@ const DoctorDashboard: React.FC = () => {
     total: items.length,
     critical: items.filter((item) => item.severity === 'critical').length,
     high: items.filter((item) => item.severity === 'high').length,
+    pending: items.filter((item) => String(item.workflow_status || '').toLowerCase() === 'pending').length,
+    acknowledged: items.filter((item) => String(item.workflow_status || '').toLowerCase() === 'acknowledged').length,
+    doctorReviewRecommended: items.filter((item) =>
+      String(item.doctor_sync_status || '').toLowerCase().includes('doctor_review'),
+    ).length,
     maternity: items.filter((item) => item.module === 'maternity').length,
     hiv: items.filter((item) => item.module === 'hiv').length,
     oncology: items.filter((item) => item.module === 'oncology').length,
@@ -1109,6 +1151,10 @@ const DoctorDashboard: React.FC = () => {
     specialty: items.filter((item) => SPECIALTY_SYNC_MODULES.has(String(item.module || '').toLowerCase())).length,
     handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
     medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
+    critical_results: items.filter((item) => item.metadata?.coordination_focus === 'critical_results').length,
+    triage: items.filter((item) => item.metadata?.coordination_focus === 'triage').length,
+    orders: items.filter((item) => item.metadata?.coordination_focus === 'orders').length,
+    coordination: items.filter((item) => item.metadata?.coordination_focus === 'coordination').length,
   }), []);
 
   const loadDoctorSyncPanel = useCallback(async () => {
@@ -1123,41 +1169,29 @@ const DoctorDashboard: React.FC = () => {
       }
 
       const [feedResponse, analyticsResponse] = await Promise.all([
-        ehrApi.getNurseCrossModuleFeed(token, tenantSlug),
+        ehrApi.getDoctorSyncFeed(token, tenantSlug, {
+          focus: doctorSyncFocus === 'all' ? undefined : doctorSyncFocus,
+          includeAcknowledged: doctorSyncIncludeAcknowledged,
+        }),
         ehrApi.getDoctorOutcomeAnalytics(30, token, tenantSlug),
       ]);
       const feedItems: NurseCrossModuleFeedItem[] = Array.isArray(feedResponse.data?.items)
         ? feedResponse.data.items
         : [];
-      const filteredItems = feedItems.filter((item) => {
-        const moduleKey = String(item.module || '').toLowerCase();
-        const destinationRole = String(item.destination_role || '').toLowerCase();
-        const destinationService = String(item.destination_service || '').toLowerCase();
-        const doctorSyncStatus = String(item.doctor_sync_status || '').toLowerCase();
-        const accountsSyncStatus =
-          String(
-            item.metadata?.accounts_sync_status ||
-              item.metadata?.workflow_context?.accounts_sync_status ||
-              item.metadata?.workflow_context?.payment_status ||
-              item.metadata?.workflow_context?.claim_status ||
-              item.metadata?.workflow_context?.billing_status ||
-              '',
-          ).toLowerCase();
-        return (
-          destinationRole === 'doctor' ||
-          DOCTOR_SYNC_SCOPE_MODULES.has(moduleKey) ||
-          destinationService === 'accounts' ||
-          destinationService === 'billing' ||
-          destinationService === 'claims' ||
-          destinationService === 'revenue_cycle' ||
-          destinationService === 'payment_clearance' ||
-          doctorSyncStatus.includes('doctor') ||
-          accountsSyncStatus.length > 0
-        );
-      });
+      const normalizedItems = feedItems.map((item) => ({
+        ...item,
+        metadata: {
+          ...(item.metadata || {}),
+          coordination_focus: (item as any).coordination_focus || item.metadata?.coordination_focus || 'coordination',
+        },
+      }));
+      const fallbackSummary = buildDoctorSyncSummary(normalizedItems);
 
-      setDoctorSyncItems(filteredItems);
-      setDoctorSyncSummary(buildDoctorSyncSummary(filteredItems));
+      setDoctorSyncItems(normalizedItems);
+      setDoctorSyncSummary({
+        ...fallbackSummary,
+        ...(feedResponse.data?.summary || {}),
+      });
       setDoctorOutcomeAnalytics(analyticsResponse.data || null);
     } catch (error) {
       console.error('Failed to load doctor sync panel:', error);
@@ -1167,15 +1201,31 @@ const DoctorDashboard: React.FC = () => {
     } finally {
       setDoctorSyncLoading(false);
     }
-  }, [buildDoctorSyncSummary, tenantSlug]);
+  }, [buildDoctorSyncSummary, doctorSyncFocus, doctorSyncIncludeAcknowledged, tenantSlug]);
 
   useEffect(() => {
-    if (currentUser) {
-      fetchTodayAppointments();
-      fetchAuthorizedOrders();
-      loadDoctorSyncPanel();
+    if (!currentUser || !isDoctorDashboardShellRoute) {
+      return;
     }
-  }, [currentUser, fetchAuthorizedOrders, fetchTodayAppointments, loadDoctorSyncPanel]);
+    fetchTodayAppointments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, isDoctorDashboardShellRoute, selectedDate, tenantSlug]);
+
+  useEffect(() => {
+    if (!currentUser || !isDoctorDataPollingRoute) {
+      return;
+    }
+    fetchAuthorizedOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, isDoctorDataPollingRoute, tenantSlug]);
+
+  useEffect(() => {
+    if (!currentUser || !isDoctorDataPollingRoute) {
+      return;
+    }
+    loadDoctorSyncPanel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, isDoctorDataPollingRoute, tenantSlug, doctorSyncFocus, doctorSyncIncludeAcknowledged]);
 
   const handleDoctorOpenCrossModuleWorkflow = (item: NurseCrossModuleFeedItem) => {
     if (!tenantSlug) {
@@ -1209,19 +1259,29 @@ const DoctorDashboard: React.FC = () => {
         message: 'Review ophthalmology tasks and complete remaining doctor follow-through.',
       },
       ed: {
-        path: `/ehr/${tenantSlug}/emergency`,
+        path: `/ehr/${tenantSlug}/doctor/emergency`,
         title: 'Opened emergency workspace',
         message: 'Review ED escalation details and update emergency care actions.',
       },
+      pacu: {
+        path: `/ehr/${tenantSlug}/doctor/pacu`,
+        title: 'Opened PACU workspace',
+        message: 'Review post-anesthesia recovery status and discharge readiness.',
+      },
       sepsis: {
-        path: `/ehr/${tenantSlug}/sepsis`,
+        path: `/ehr/${tenantSlug}/doctor/sepsis`,
         title: 'Opened sepsis workspace',
         message: 'Review sepsis bundle follow-through and unresolved checklist items.',
       },
       blood_bank: {
-        path: `/ehr/${tenantSlug}/blood-bank`,
+        path: `/ehr/${tenantSlug}/doctor/blood-bank`,
         title: 'Opened blood-bank workspace',
         message: 'Review transfusion safety bundle actions and close pending blood-bank checkpoints.',
+      },
+      operating_room: {
+        path: `/ehr/${tenantSlug}/doctor/operating-room`,
+        title: 'Opened operating-room workspace',
+        message: 'Review OR scheduling, room utilization, and pending surgical coordination tasks.',
       },
       telemedicine: {
         path: `/ehr/${tenantSlug}/telemedicine`,
@@ -1244,7 +1304,7 @@ const DoctorDashboard: React.FC = () => {
         message: 'Review claims synchronization and complete pending doctor items.',
       },
       revenue_cycle: {
-        path: `/ehr/${tenantSlug}/revenue-cycle`,
+        path: `/ehr/${tenantSlug}/doctor/revenue-cycle`,
         title: 'Opened revenue-cycle workspace',
         message: 'Review outstanding financial workflow checkpoints tied to doctor actions.',
       },
@@ -1756,21 +1816,15 @@ const DoctorDashboard: React.FC = () => {
 
   const getDoctorActions = () => {
     return [
+      { icon: LayoutDashboard, label: 'Dashboard', desc: 'Doctor overview', color: 'from-blue-500 to-indigo-500', route: 'doctor' },
+      { icon: Route, label: 'Coordination', desc: 'Doctor sync and follow-through', color: 'from-indigo-500 to-blue-500', route: 'doctor/coordination' },
+      { icon: Package, label: 'Modules', desc: 'Open specialty modules', color: 'from-cyan-500 to-blue-500', route: 'doctor/modules' },
       { icon: Users, label: 'Patients', desc: 'Patient management', color: 'from-emerald-500 to-teal-500', route: 'doctor/patients' },
       { icon: Activity, label: 'Workflows', desc: 'Automate care processes', color: 'from-violet-500 to-purple-500', action: 'workflows' },
       { icon: Mail, label: 'Messages', desc: 'Provider messaging & inbox', color: 'from-indigo-500 to-purple-500', action: 'messages' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
       { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
-      { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board & triage', color: 'from-red-500 to-orange-600', route: 'emergency' },
-      { icon: Activity, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', route: 'bed-management' },
-      { icon: Activity, label: 'HIV/AIDS Care', desc: 'HIV patient management & ARV', color: 'from-red-500 to-orange-500', route: 'doctor/hiv' },
-      { icon: Baby, label: 'Maternity & Obstetrics', desc: 'High-risk pregnancies & deliveries', color: 'from-pink-500 to-rose-500', route: 'doctor/maternity' },
-      { icon: Heart, label: 'Oncology', desc: 'Cancer care & treatment', color: 'from-violet-500 to-purple-500', route: 'doctor/oncology' },
-      { icon: Heart, label: 'Cardiology', desc: 'Heart & cardiovascular care', color: 'from-red-500 to-pink-500', route: 'doctor/cardiology' },
-      { icon: Eye, label: 'Ophthalmology', desc: 'Eye care & vision', color: 'from-blue-500 to-cyan-500', route: 'doctor/ophthalmology' },
-      { icon: Users, label: 'Population Health', desc: 'Registry, preventive care & recall', color: 'from-teal-500 to-cyan-500', route: 'population-health' },
-      { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-green-500 to-emerald-500' },
-    ];
+    ].filter((action) => isTenantRouteAvailable(tenantInfo, action.route));
   };
 
   const inProgressCount = getCurrentAppointments().length;
@@ -1783,9 +1837,207 @@ const DoctorDashboard: React.FC = () => {
     { label: 'Waiting', value: waitingCount.toString(), icon: Clock, color: 'text-purple-600' },
   ];
 
+  useEffect(() => {
+    notifyTenantSubscriptionStatus(tenantInfo, { showWarning, showError });
+  }, [tenantInfo, showWarning, showError]);
+
   if (!currentUser) return null;
 
   const modalOpen = showVitalsModal || showComprehensiveNotes || showReferralModal || showCarePlanModal;
+  const billingSummary = tenantInfo?.billingSummary;
+  const billingTone = getBillingToneClasses(billingSummary);
+  const tenantDisplayName = formatTenantDisplayName(tenantSlug, tenantInfo?.clinicName);
+  const tenantInitials = getBrandInitials(tenantDisplayName);
+  const subscriptionMiniLabel = (() => {
+    if (!billingSummary) return null;
+    const days = billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining;
+    const ends = billingSummary.accessEndsAt
+      ? new Date(billingSummary.accessEndsAt).toLocaleDateString('en-GB')
+      : null;
+    if (days !== null && days !== undefined && ends) return `${days}d · ends ${ends}`;
+    if (days !== null && days !== undefined) return `${days}d remaining`;
+    if (ends) return `ends ${ends}`;
+    return null;
+  })();
+  const normalizedPath = location.pathname.replace(/\/+$/, '');
+  const doctorBasePath = `/ehr/${tenantSlug}/doctor`;
+  const isDoctorDashboardRoute = normalizedPath === doctorBasePath;
+  const isDoctorCoordinationRoute = normalizedPath === `${doctorBasePath}/coordination`;
+  const isDoctorModulesRoute = normalizedPath === `${doctorBasePath}/modules`;
+  const isDoctorPatientsRoute = normalizedPath === `${doctorBasePath}/patients`;
+  const isDoctorAppointmentsRoute = normalizedPath === `${doctorBasePath}/appointments`;
+  const isDoctorTreatmentsRoute = normalizedPath === `${doctorBasePath}/treatments`;
+  const isDoctorEmergencyRoute = normalizedPath === `${doctorBasePath}/emergency`;
+  const isDoctorOperatingRoomRoute = normalizedPath === `${doctorBasePath}/operating-room`;
+  const isDoctorPACURoute = normalizedPath === `${doctorBasePath}/pacu`;
+  const isDoctorBedManagementRoute = normalizedPath === `${doctorBasePath}/bed-management`;
+  const isDoctorMARRoute = normalizedPath === `${doctorBasePath}/mar`;
+  const isDoctorBloodBankRoute = normalizedPath === `${doctorBasePath}/blood-bank`;
+  const isDoctorSepsisRoute = normalizedPath === `${doctorBasePath}/sepsis`;
+  const isDoctorInfectionControlRoute = normalizedPath === `${doctorBasePath}/infection-control`;
+  const isDoctorRevenueCycleRoute = normalizedPath === `${doctorBasePath}/revenue-cycle`;
+  const isDoctorCDIRoute = normalizedPath === `${doctorBasePath}/cdi`;
+  const isDoctorPopulationHealthRoute = normalizedPath === `${doctorBasePath}/population-health`;
+  const isDoctorHivRoute = normalizedPath === `${doctorBasePath}/hiv`;
+  const isDoctorMaternityRoute = normalizedPath === `${doctorBasePath}/maternity`;
+  const isDoctorOncologyRoute = normalizedPath === `${doctorBasePath}/oncology`;
+  const isDoctorCardiologyRoute = normalizedPath === `${doctorBasePath}/cardiology`;
+  const isDoctorOphthalmologyRoute = normalizedPath === `${doctorBasePath}/ophthalmology`;
+  const isDoctorPatientDetailRoute = normalizedPath.startsWith(`${doctorBasePath}/patients/`);
+  const isDoctorTreatmentDetailRoute = normalizedPath.startsWith(`${doctorBasePath}/treatments/`);
+  const isDoctorSpecialtyModuleRoute =
+    isDoctorEmergencyRoute ||
+    isDoctorOperatingRoomRoute ||
+    isDoctorPACURoute ||
+    isDoctorBedManagementRoute ||
+    isDoctorMARRoute ||
+    isDoctorBloodBankRoute ||
+    isDoctorSepsisRoute ||
+    isDoctorInfectionControlRoute ||
+    isDoctorRevenueCycleRoute ||
+    isDoctorCDIRoute ||
+    isDoctorPopulationHealthRoute ||
+    isDoctorHivRoute ||
+    isDoctorMaternityRoute ||
+    isDoctorOncologyRoute ||
+    isDoctorCardiologyRoute ||
+    isDoctorOphthalmologyRoute;
+  const isDoctorSubpageRoute =
+    isDoctorPatientsRoute ||
+    isDoctorAppointmentsRoute ||
+    isDoctorTreatmentsRoute ||
+    isDoctorSpecialtyModuleRoute ||
+    isDoctorPatientDetailRoute ||
+    isDoctorTreatmentDetailRoute;
+
+  const headerTitle = isDoctorModulesRoute
+    ? 'Doctor Modules'
+    : isDoctorCoordinationRoute
+    ? 'Doctor Coordination'
+    : isDoctorPatientsRoute
+    ? 'Patient Directory'
+    : isDoctorPatientDetailRoute
+    ? 'Patient Profile'
+    : isDoctorAppointmentsRoute
+    ? 'Appointment Management'
+    : isDoctorTreatmentsRoute
+    ? 'Treatment History'
+    : isDoctorTreatmentDetailRoute
+    ? 'Treatment Timeline'
+    : isDoctorEmergencyRoute
+    ? 'Emergency Department'
+    : isDoctorOperatingRoomRoute
+    ? 'Operating Room'
+    : isDoctorPACURoute
+    ? 'PACU'
+    : isDoctorBedManagementRoute
+    ? 'Bed Management & ADT'
+    : isDoctorMARRoute
+    ? 'Medication Administration Record (MAR)'
+    : isDoctorBloodBankRoute
+    ? 'Blood Bank Dashboard'
+    : isDoctorSepsisRoute
+    ? 'Sepsis Management & SEP-1 Bundle'
+    : isDoctorInfectionControlRoute
+    ? 'Infection Control & Epidemiology'
+    : isDoctorRevenueCycleRoute
+    ? 'Revenue Cycle Management'
+    : isDoctorCDIRoute
+    ? 'Clinical Documentation Improvement'
+    : isDoctorPopulationHealthRoute
+    ? 'Population Health'
+    : isDoctorHivRoute
+    ? 'HIV/AIDS Care'
+    : isDoctorMaternityRoute
+    ? 'Maternity & Obstetrics'
+    : isDoctorOncologyRoute
+    ? 'Oncology'
+    : isDoctorCardiologyRoute
+    ? 'Cardiology'
+    : isDoctorOphthalmologyRoute
+    ? 'Ophthalmology'
+    : 'Doctor Dashboard';
+
+  const headerSubtitle = isDoctorModulesRoute
+    ? 'Choose a specialty module and continue with live clinical operations.'
+    : isDoctorCoordinationRoute
+    ? 'Closed-loop handoffs, critical results, triage escalations, and doctor-routed execution.'
+    : isDoctorPatientsRoute
+    ? 'Manage patient records, demographics, and visit activity.'
+    : isDoctorPatientDetailRoute
+    ? 'Full clinical profile for the selected patient.'
+    : isDoctorAppointmentsRoute
+    ? 'Track and action doctor appointments with real-time status.'
+    : isDoctorTreatmentsRoute
+    ? 'Review completed treatments and past care activity.'
+    : isDoctorTreatmentDetailRoute
+    ? 'Chronological timeline of treatment events and orders.'
+    : isDoctorEmergencyRoute
+    ? 'Real-time ED tracking board, triage prioritization, and emergency care flow.'
+    : isDoctorOperatingRoomRoute
+    ? 'Surgical scheduling, operating room utilization, and case coordination.'
+    : isDoctorPACURoute
+    ? 'Post-anesthesia recovery monitoring, scoring, and discharge workflow.'
+    : isDoctorBedManagementRoute
+    ? 'Monitor occupancy, admissions, discharges, and transfers.'
+    : isDoctorMARRoute
+    ? 'Medication safety workflow with barcode checks, administration events, and compliance visibility.'
+    : isDoctorBloodBankRoute
+    ? 'Transfusion workflow, blood product coordination, and reaction safety monitoring.'
+    : isDoctorSepsisRoute
+    ? 'SEP-1 bundle execution, sepsis screening, and time-critical intervention tracking.'
+    : isDoctorInfectionControlRoute
+    ? 'Healthcare-associated infection surveillance, isolation controls, and epidemiology follow-through.'
+    : isDoctorRevenueCycleRoute
+    ? 'Charge capture, coding quality, and end-to-end revenue integrity visibility.'
+    : isDoctorCDIRoute
+    ? 'Documentation quality, physician query management, and DRG impact optimization.'
+    : isDoctorPopulationHealthRoute
+    ? 'Cohort risk stratification, preventive care outreach, and longitudinal outcomes tracking.'
+    : isDoctorHivRoute
+    ? 'Comprehensive HIV care, ARV regimen workflow, and longitudinal adherence monitoring.'
+    : isDoctorMaternityRoute
+    ? 'Maternal care pathways, high-risk pregnancies, and delivery-readiness coordination.'
+    : isDoctorOncologyRoute
+    ? 'Cancer care orchestration, regimens, infusion sessions, and adverse-event follow-through.'
+    : isDoctorCardiologyRoute
+    ? 'Cardiac risk stratification, diagnostics, and finance-gated care workflow.'
+    : isDoctorOphthalmologyRoute
+    ? 'Ocular encounters, visual acuity, imaging, procedures, and follow-up management.'
+    : `Welcome back, Dr. ${currentUser?.lastName}`;
+  const subpageHeroTone = isDoctorEmergencyRoute
+    ? 'border-red-200/70 bg-gradient-to-r from-red-50 via-orange-50 to-red-100/70'
+    : isDoctorOperatingRoomRoute
+    ? 'border-indigo-200/70 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-100/70'
+    : isDoctorPACURoute
+    ? 'border-purple-200/70 bg-gradient-to-r from-purple-50 via-violet-50 to-purple-100/70'
+    : isDoctorBedManagementRoute
+    ? 'border-blue-200/70 bg-gradient-to-r from-blue-50 via-cyan-50 to-blue-100/70'
+    : isDoctorMARRoute
+    ? 'border-cyan-200/70 bg-gradient-to-r from-cyan-50 via-blue-50 to-cyan-100/70'
+    : isDoctorBloodBankRoute
+    ? 'border-rose-200/70 bg-gradient-to-r from-red-50 via-rose-50 to-red-100/70'
+    : isDoctorSepsisRoute
+    ? 'border-orange-200/70 bg-gradient-to-r from-orange-50 via-red-50 to-orange-100/70'
+    : isDoctorInfectionControlRoute
+    ? 'border-emerald-200/70 bg-gradient-to-r from-green-50 via-emerald-50 to-green-100/70'
+    : isDoctorRevenueCycleRoute
+    ? 'border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100/70'
+    : isDoctorCDIRoute
+    ? 'border-blue-200/70 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-100/70'
+    : isDoctorPopulationHealthRoute
+    ? 'border-teal-200/70 bg-gradient-to-r from-teal-50 via-cyan-50 to-teal-100/70'
+    : isDoctorHivRoute
+    ? 'border-red-200/70 bg-gradient-to-r from-red-50 via-orange-50 to-red-100/70'
+    : isDoctorMaternityRoute
+    ? 'border-pink-200/70 bg-gradient-to-r from-pink-50 via-rose-50 to-pink-100/70'
+    : isDoctorOncologyRoute
+    ? 'border-fuchsia-200/70 bg-gradient-to-r from-purple-50 via-fuchsia-50 to-rose-100/70'
+    : isDoctorCardiologyRoute
+    ? 'border-rose-200/70 bg-gradient-to-r from-red-50 via-rose-50 to-amber-100/70'
+    : isDoctorOphthalmologyRoute
+    ? 'border-sky-200/70 bg-gradient-to-r from-sky-50 via-indigo-50 to-blue-100/70'
+    : 'border-slate-200/70 bg-gradient-to-r from-white via-slate-50 to-blue-50';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -1796,27 +2048,30 @@ const DoctorDashboard: React.FC = () => {
 
       {/* Sidebar */}
       <div className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-800 via-slate-900 to-gray-900 border-r border-slate-700/50 z-50 transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
-        <div className="p-6 flex-1 overflow-y-auto">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
+        <div className="p-4 flex-1 overflow-y-auto">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3 min-w-0">
               {tenantInfo?.logoUrl ? (
-                <div className="h-10 w-10 bg-white p-1 rounded-xl flex items-center justify-center overflow-hidden">
+                <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center overflow-hidden">
                   <img 
                     src={tenantInfo.logoUrl} 
-                    alt={`${tenantInfo.clinicName} Logo`} 
-                    className="w-full h-full object-contain"
+                    alt={`${tenantDisplayName} logo`} 
+                    className="w-full h-full object-cover"
                   />
                 </div>
               ) : (
-                <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
-                  <Stethoscope className="w-6 h-6 text-white" />
+                <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center overflow-hidden">
+                  <span className="text-xs font-bold tracking-wide text-white">{tenantInitials}</span>
                 </div>
               )}
-              <div>
-                <h2 className="font-bold text-white">
-                  {tenantInfo?.clinicName ? tenantInfo.clinicName : 'MediCore'}
-                </h2>
+              <div className="min-w-0">
+                <h2 className="font-bold text-white truncate">{tenantDisplayName}</h2>
                 <p className="text-xs text-slate-300">Doctor Portal</p>
+                {billingSummary && (
+                  <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${billingTone.pill}`}>
+                    {billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining ?? 'N/A'}d
+                  </span>
+                )}
               </div>
             </div>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden">
@@ -1824,31 +2079,37 @@ const DoctorDashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* User Info */}
-          <div className="mb-8 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-white" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-white truncate">Dr. {currentUser?.lastName}</p>
-                <p className="text-xs text-slate-400 truncate">{currentUser?.email}</p>
-              </div>
-            </div>
-          </div>
-
           {/* Navigation */}
-          <nav className="space-y-2">
+          <nav className="space-y-1">
             {getDoctorActions().map((action, index) => {
               const Icon = action.icon;
-              const isActive = action.route === 'doctor' || (action.route && window.location.pathname.includes(action.route));
+              const actionRoutePath = action.route ? `/ehr/${tenantSlug}/${action.route}`.replace(/\/+$/, '') : '';
+              const isActive = Boolean(
+                action.route &&
+                  (action.route === 'doctor'
+                    ? normalizedPath === actionRoutePath
+                    : action.route === 'doctor/modules'
+                    ? normalizedPath === actionRoutePath || isDoctorSpecialtyModuleRoute
+                    : normalizedPath === actionRoutePath || normalizedPath.startsWith(`${actionRoutePath}/`))
+              );
               
               return (
                 <button
                   key={index}
                   onClick={() => {
                     if (action.route === 'doctor') {
-                      setActiveTab('dashboard');
+                      setActiveTab('queue');
+                      navigate(`/ehr/${tenantSlug}/doctor`);
+                    } else if (action.route === 'doctor/coordination') {
+                      navigate(`/ehr/${tenantSlug}/doctor/coordination`);
+                    } else if (action.route === 'doctor/modules') {
+                      navigate(`/ehr/${tenantSlug}/doctor/modules`);
+                    } else if (action.route === 'doctor/patients') {
+                      navigate(`/ehr/${tenantSlug}/doctor/patients`);
+                    } else if (action.route === 'doctor/appointments') {
+                      navigate(`/ehr/${tenantSlug}/doctor/appointments`);
+                    } else if (action.route === 'doctor/treatments') {
+                      navigate(`/ehr/${tenantSlug}/doctor/treatments`);
                     } else if (action.action === 'questionnaires') {
                       // Open questionnaire library - if no patient selected, show error
                       if (!currentAppointment?.patient?.id) {
@@ -1928,16 +2189,15 @@ const DoctorDashboard: React.FC = () => {
                     }
                     setSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
                     isActive
                       ? 'bg-gradient-to-r from-blue-500/20 to-indigo-500/20 border border-blue-500/30 text-white'
                       : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
                   }`}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <Icon className="w-4 h-4 flex-shrink-0" />
                   <div className="text-left min-w-0 flex-1">
                     <p className="font-medium truncate">{action.label}</p>
-                    <p className="text-xs text-slate-400 truncate">{action.desc}</p>
                   </div>
                   {action.action === 'messages' && unreadMessageCount > 0 && (
                     <span className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">
@@ -1969,163 +2229,227 @@ const DoctorDashboard: React.FC = () => {
 
       {/* Main Content */}
       <div className="lg:pl-64">
-
         {/* Top Header */}
-        <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">
-          <div className="px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-4">
+        <header className="bg-gradient-to-r from-white/85 via-blue-50/80 to-indigo-50/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">
+          <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
+            <div className="flex items-center justify-between min-h-14 py-2 sm:min-h-16">
+              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                  className="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
                 >
                   <Menu className="w-5 h-5 text-slate-600" />
                 </button>
-                <div>
-                  <h1 className="text-xl font-bold text-slate-900">Doctor Dashboard</h1>
-                  <p className="text-sm text-slate-600">Welcome back, Dr. {currentUser?.lastName}</p>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-lg font-bold text-slate-900">{headerTitle}</h1>
+                    {subscriptionMiniLabel && (
+                      <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${billingTone.pill}`}>
+                        {subscriptionMiniLabel}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs leading-4 text-slate-600 whitespace-normal break-words">{headerSubtitle}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
-                  className={`px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 border ${
-                    showGuidelineSearch 
-                      ? 'bg-purple-600 text-white border-purple-600 shadow-md' 
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300 hover:text-purple-600'
-                  }`}
-                >
-                  <Brain className="w-4 h-4" />
-                  <span className="font-medium hidden sm:inline">AI Assistant</span>
-                </button>
-                <button
-                  onClick={() => setShowAvailabilityManager(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                  title="Manage Availability"
-                >
-                  <Calendar className="h-4 w-4" />
-                  Availability
-                </button>
-                <RealtimeStatusIndicator
-                  isConnected={!connectionError}
-                  lastUpdate={lastUpdate}
-                  isUpdating={isUpdating}
-                  error={connectionError}
-                />
-                <DatePicker
-                  value={selectedDate}
-                  onChange={setSelectedDate}
-                />
-                <button
-                  onClick={() => {
-                    fetchTodayAppointments();
-                    fetchAuthorizedOrders();
-                    loadDoctorSyncPanel();
-                  }}
-                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <RefreshCw className="w-5 h-5 text-slate-600" />
-                </button>
+              <div className="flex items-center gap-2 sm:gap-4">
+                {isDoctorDashboardRoute ? (
+                  <>
+                    <button
+                      onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+                      className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+                        showGuidelineSearch
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-white/50 hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <Brain className="w-4 h-4" />
+                      <span className="font-medium hidden sm:inline">AI Assistant</span>
+                    </button>
+                    <button
+                      onClick={() => setShowAvailabilityManager(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                      title="Manage Availability"
+                    >
+                      <Calendar className="h-4 w-4" />
+                      Availability
+                    </button>
+                    <RealtimeStatusIndicator
+                      isConnected={!connectionError}
+                      lastUpdate={lastUpdate}
+                      isUpdating={isUpdating}
+                      error={connectionError}
+                    />
+                    <DatePicker
+                      value={selectedDate}
+                      onChange={setSelectedDate}
+                    />
+                    <button
+                      onClick={() => {
+                        fetchTodayAppointments();
+                        fetchAuthorizedOrders();
+                        loadDoctorSyncPanel();
+                      }}
+                      className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      <RefreshCw className="w-5 h-5 text-slate-600" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowInboxModal(true)}
+                      className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-indigo-500 bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm"
+                    >
+                      <Mail className="h-4 w-4 text-white" />
+                      Messages
+                    </button>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="Refresh page"
+                    >
+                      <RefreshCw className="w-5 h-5 text-slate-600" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
-        </div>
+        </header>
 
         {/* Main Content Area */}
         <div className={`p-6 ${modalOpen ? 'pointer-events-none' : ''}`} aria-hidden={modalOpen}
         >
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {quickStats.map((stat, index) => {
-              const Icon = stat.icon;
-              return (
-                <div key={index} className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6 hover:shadow-lg transition-all duration-300">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-600">{stat.label}</p>
-                      <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
-                    </div>
-                    <div className={`p-3 rounded-xl bg-gradient-to-r ${stat.color.includes('blue') ? 'from-blue-500 to-cyan-500' : stat.color.includes('yellow') ? 'from-yellow-500 to-orange-500' : stat.color.includes('green') ? 'from-green-500 to-emerald-500' : 'from-purple-500 to-indigo-500'}`}>
-                      <Icon className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Specialist Modules */}
-          <div className="mb-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              {specialistModules.map((module) => {
-                const Icon = module.icon;
+          {isDoctorDashboardRoute && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {quickStats.map((stat, index) => {
+                const Icon = stat.icon;
+                const quickStatCardTone = stat.color.includes('blue')
+                  ? 'bg-gradient-to-br from-blue-50 via-white to-cyan-100/70 border-blue-200/70'
+                  : stat.color.includes('yellow')
+                  ? 'bg-gradient-to-br from-amber-50 via-white to-orange-100/70 border-amber-200/70'
+                  : stat.color.includes('green')
+                  ? 'bg-gradient-to-br from-emerald-50 via-white to-teal-100/70 border-emerald-200/70'
+                  : 'bg-gradient-to-br from-violet-50 via-white to-indigo-100/70 border-violet-200/70';
                 return (
-                  <div
-                    key={module.title}
-                    className={`group relative overflow-hidden rounded-2xl border-4 ${module.border} bg-gradient-to-r ${module.gradient} shadow-lg transition-all duration-300 hover:shadow-2xl`}
-                  >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-10 bg-white transition-opacity duration-300" />
-                    <div className="relative flex h-full flex-col gap-4 p-5 text-white">
-                      <div className="flex items-start gap-3">
-                        <div className="p-3 bg-white/15 rounded-xl backdrop-blur-sm">
-                          <Icon className="w-8 h-8 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold leading-tight">{module.title}</h3>
-                          <p className="text-sm text-white/80 mt-2">{module.description}</p>
-                        </div>
+                  <div key={index} className={`backdrop-blur-sm rounded-2xl border p-6 hover:shadow-lg transition-all duration-300 ${quickStatCardTone}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-slate-600">{stat.label}</p>
+                        <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {module.chips.map((chip) => (
-                          <span
-                            key={chip}
-                            className="px-2.5 py-1 bg-white/20 rounded-full text-xs font-medium tracking-wide backdrop-blur-sm"
-                          >
-                            {chip}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="mt-auto">
-                        <button
-                          onClick={() => {
-                            if (module.requiresPaymentClearance && appointmentAwaitingPayment) {
-                              notifyAppointmentPaymentBlocked(
-                                module.paymentLockedMessage || 'This specialist workflow is locked until payment clears.',
-                              );
-                              return;
-                            }
-                            if (module.route !== '#') {
-                              navigate(module.route);
-                            }
-                          }}
-                          className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-white rounded-xl font-semibold shadow hover:shadow-lg transition ${module.buttonTextColor} ${module.buttonHover}`}
-                        >
-                          <Icon className={`w-4 h-4 ${module.buttonTextColor}`} />
-                          <span>{module.buttonLabel}</span>
-                        </button>
+                      <div className={`p-3 rounded-xl bg-gradient-to-r ${stat.color.includes('blue') ? 'from-blue-500 to-cyan-500' : stat.color.includes('yellow') ? 'from-yellow-500 to-orange-500' : stat.color.includes('green') ? 'from-green-500 to-emerald-500' : 'from-purple-500 to-indigo-500'}`}>
+                        <Icon className="w-6 h-6 text-white" />
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
+          )}
 
+          {isDoctorModulesRoute && (
+            <div className="space-y-6 mb-10">
+              <div className="rounded-2xl border border-sky-200/70 bg-gradient-to-r from-sky-50 via-white to-indigo-100/70 px-5 py-4">
+                <h2 className="text-xl font-bold text-slate-900">Specialty Modules</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Open role-enabled modules from one place while keeping your doctor workspace context.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {specialistModules.map((module) => {
+                  const Icon = module.icon;
+                  return (
+                    <div
+                      key={module.title}
+                      className={`group relative overflow-hidden rounded-2xl border-4 ${module.border} bg-gradient-to-r ${module.gradient} shadow-lg transition-all duration-300 hover:shadow-2xl`}
+                    >
+                      <div className="absolute inset-0 opacity-0 group-hover:opacity-10 bg-white transition-opacity duration-300" />
+                      <div className="relative flex h-full flex-col gap-4 p-5 text-white">
+                        <div className="flex items-start gap-3">
+                          <div className="p-3 bg-white/15 rounded-xl backdrop-blur-sm">
+                            <Icon className="w-8 h-8 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold leading-tight">{module.title}</h3>
+                            <p className="text-sm text-white/80 mt-2">{module.description}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {module.chips.map((chip) => (
+                            <span
+                              key={chip}
+                              className="px-2.5 py-1 bg-white/20 rounded-full text-xs font-medium tracking-wide backdrop-blur-sm"
+                            >
+                              {chip}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="mt-auto">
+                          <button
+                            onClick={() => {
+                              if (module.requiresPaymentClearance && appointmentAwaitingPayment) {
+                                notifyAppointmentPaymentBlocked(
+                                  module.paymentLockedMessage || 'This specialist workflow is locked until payment clears.',
+                                );
+                                return;
+                              }
+                              if (module.route !== '#') {
+                                navigate(module.route);
+                              }
+                            }}
+                            className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-white rounded-xl font-semibold shadow hover:shadow-lg transition ${module.buttonTextColor} ${module.buttonHover}`}
+                          >
+                            <Icon className={`w-4 h-4 ${module.buttonTextColor}`} />
+                            <span>{module.buttonLabel}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {isDoctorSubpageRoute && (
+            <div className="space-y-6 mb-8">
+              <div className={`rounded-2xl border px-5 py-4 shadow-sm ${subpageHeroTone}`}>
+                <h2 className="text-xl font-bold text-slate-900">{headerTitle}</h2>
+                <p className="mt-1 text-sm text-slate-600">{headerSubtitle}</p>
+              </div>
+              {isDoctorPatientsRoute && <DoctorPatientsList embedded />}
+              {isDoctorPatientDetailRoute && <DoctorPatientDetail embedded />}
+              {isDoctorAppointmentsRoute && <DoctorAppointmentManagement embedded />}
+              {isDoctorTreatmentsRoute && <DoctorTreatmentHistory embedded />}
+              {isDoctorTreatmentDetailRoute && <DoctorTreatmentHistoryDetail embedded />}
+              {isDoctorEmergencyRoute && <EDDashboard />}
+              {isDoctorOperatingRoomRoute && <ORDashboard />}
+              {isDoctorPACURoute && <PACUDashboard />}
+              {isDoctorBedManagementRoute && <BedManagementDashboard embedded />}
+              {isDoctorMARRoute && <MARDashboard embedded />}
+              {isDoctorBloodBankRoute && <BloodBankDashboard embedded />}
+              {isDoctorSepsisRoute && <SepsisDashboard embedded />}
+              {isDoctorInfectionControlRoute && <InfectionControlDashboard embedded />}
+              {isDoctorRevenueCycleRoute && <RevenueCycleDashboard embedded />}
+              {isDoctorCDIRoute && <CdiDashboard embedded />}
+              {isDoctorPopulationHealthRoute && <PopulationHealthDashboard embedded />}
+              {isDoctorHivRoute && <HIVDoctorDashboard embedded />}
+              {isDoctorMaternityRoute && <MaternityDoctorDashboard embedded />}
+              {isDoctorOncologyRoute && <OncologyDashboard embedded />}
+              {isDoctorCardiologyRoute && <CardiologyDashboard embedded />}
+              {isDoctorOphthalmologyRoute && <OphthalmologyDashboard embedded />}
+            </div>
+          )}
+
+          {(isDoctorDashboardRoute || isDoctorCoordinationRoute) && (
+          <>
           {/* Tab Navigation */}
+          {isDoctorDashboardRoute && (
           <div className="mb-8">
             <div className="bg-gradient-to-r from-slate-50 via-indigo-50 to-purple-50 rounded-2xl border-2 border-indigo-200 p-3 shadow-lg sticky top-16 z-20">
               <nav className="flex items-center justify-between gap-2 overflow-x-auto">
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className={`group flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
-                    activeTab === 'dashboard'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-200 scale-105'
-                      : 'bg-white text-slate-700 border-2 border-blue-200 hover:border-blue-400 hover:text-blue-700 hover:scale-105'
-                  }`}
-                >
-                  <BarChart3 className={`w-5 h-5 ${activeTab === 'dashboard' ? 'text-white' : 'text-blue-500 group-hover:text-blue-700'}`} />
-                  <span>Dashboard</span>
-                </button>
                 <button
                   onClick={() => setActiveTab('queue')}
                   className={`group flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
@@ -2205,9 +2529,10 @@ const DoctorDashboard: React.FC = () => {
               </nav>
             </div>
           </div>
+          )}
 
           {/* Tab Content */}
-          {activeTab === 'dashboard' && (
+          {isDoctorCoordinationRoute && (
             <div className="space-y-6">
               {/* Critical Alert Banner */}
               {criticalAlertCount > 0 && (
@@ -2276,63 +2601,119 @@ const DoctorDashboard: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">Doctor Synchronization Panel</h3>
                     <p className="text-sm text-slate-600">
-                      Unified doctor sync for HIV, oncology, specialty workflows, and accounts handoff status.
+                      Closed-loop doctor follow-through for handoffs, critical results, triage escalations, and doctor-routed order work.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={loadDoctorSyncPanel}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${doctorSyncLoading ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={doctorSyncIncludeAcknowledged}
+                        onChange={(event) => setDoctorSyncIncludeAcknowledged(event.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      Include acknowledged
+                    </label>
+                    <button
+                      type="button"
+                      onClick={loadDoctorSyncPanel}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${doctorSyncLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-5">
+                  {[
+                    { key: 'all', label: 'All doctor sync', count: doctorSyncSummary.total },
+                    { key: 'handoff', label: 'Handoffs', count: doctorSyncSummary.handoff },
+                    { key: 'critical_results', label: 'Critical results', count: doctorSyncSummary.critical_results },
+                    { key: 'triage', label: 'Triage', count: doctorSyncSummary.triage },
+                    { key: 'orders', label: 'Orders', count: doctorSyncSummary.orders },
+                    { key: 'coordination', label: 'Coordination', count: doctorSyncSummary.coordination },
+                  ].map((focusOption) => (
+                    <button
+                      key={focusOption.key}
+                      type="button"
+                      onClick={() => setDoctorSyncFocus(focusOption.key as typeof doctorSyncFocus)}
+                      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                        doctorSyncFocus === focusOption.key
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span>{focusOption.label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${doctorSyncFocus === focusOption.key ? 'bg-white/20' : 'bg-white text-slate-600'}`}>
+                        {focusOption.count || 0}
+                      </span>
+                    </button>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-3 mb-5">
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-blue-200/70 bg-gradient-to-br from-blue-50 via-white to-cyan-100/80 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Doctor Queue Total</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.doctorQueue?.totalItems ?? doctorSyncSummary.total}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-white to-orange-100/80 px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Pending</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorSyncSummary.pending}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-teal-100/80 px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Acknowledged</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorSyncSummary.acknowledged}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-rose-200/70 bg-gradient-to-br from-rose-50 via-white to-red-100/80 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Pending &gt;24h</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.doctorQueue?.pendingOlderThan24h ?? 0}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-orange-200/70 bg-gradient-to-br from-orange-50 via-white to-amber-100/80 px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Doctor Review Flags</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorSyncSummary.doctorReviewRecommended}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50 via-white to-blue-100/80 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Executed Recommendations</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.recommendationExecution?.executedActionsTotal ?? 0}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-violet-200/70 bg-gradient-to-br from-violet-50 via-white to-purple-100/80 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Reuse/Idempotent</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.recommendationExecution?.reusedOrIdempotentTotal ?? 0}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-cyan-200/70 bg-gradient-to-br from-cyan-50 via-white to-sky-100/80 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Accounts Sync Pending</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.accountsSync?.pendingItems ?? doctorSyncSummary.accounts}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-blue-200/70 bg-gradient-to-br from-blue-50 via-white to-indigo-100/80 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">CDSS Coverage</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.cdssAdoption?.executionCoveragePercent ?? 0}%
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-purple-200/70 bg-gradient-to-br from-purple-50 via-white to-fuchsia-100/80 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Avg Time To Action</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.cdssAdoption?.averageTimeToExecutionHours ?? 0}h
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-rose-200/70 bg-gradient-to-br from-rose-50 via-white to-pink-100/80 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Overrides Logged</p>
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.cdssAdoption?.overrideActionsTotal ?? 0}
@@ -2341,13 +2722,13 @@ const DoctorDashboard: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50 via-white to-blue-100/70 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500 mb-2">Specialty Queue Drilldown</p>
                     <div className="space-y-2">
                       {(doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).slice(0, 8).map((moduleRow) => (
                         <div
                           key={`doctor-module-${moduleRow.module}`}
-                          className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                          className="flex items-center justify-between rounded-lg border border-indigo-100/80 bg-white/70 px-3 py-2"
                         >
                           <div>
                             <p className="text-sm font-semibold text-slate-800 capitalize">{moduleRow.module}</p>
@@ -2366,13 +2747,13 @@ const DoctorDashboard: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="rounded-xl border border-violet-200/70 bg-gradient-to-br from-violet-50 via-white to-purple-100/70 px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500 mb-2">Top Executed Doctor Actions</p>
                     <div className="space-y-2">
                       {(doctorOutcomeAnalytics?.recommendationExecution?.topActions || []).slice(0, 6).map((row) => (
                         <div
                           key={`doctor-action-${row.actionId}`}
-                          className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                          className="flex items-center justify-between rounded-lg border border-violet-100/80 bg-white/70 px-3 py-2"
                         >
                           <p className="text-sm text-slate-700">{row.actionId.replace(/-/g, ' ')}</p>
                           <span className="text-sm font-bold text-slate-900">{row.count}</span>
@@ -2389,7 +2770,6 @@ const DoctorDashboard: React.FC = () => {
                   items={doctorSyncItems}
                   summary={doctorSyncSummary}
                   loading={doctorSyncLoading}
-                  compact
                   acknowledgingTaskId={doctorSyncMaternityAcknowledgeId}
                   workflowActionItemId={doctorSyncWorkflowItemId}
                   recommendationActionKey={doctorSyncRecommendationKey}
@@ -2412,55 +2792,11 @@ const DoctorDashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* Quick Actions */}
-              <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-                  <button
-                    onClick={() => setActiveTab('current-appointment')}
-                    className="p-4 bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-xl hover:shadow-md transition-all group"
-                  >
-                    <FileText className="w-6 h-6 text-sky-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
-                    <div className="text-sm font-semibold text-slate-900">Current Patient</div>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('queue')}
-                    className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl hover:shadow-md transition-all group"
-                  >
-                    <Users className="w-6 h-6 text-emerald-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
-                    <div className="text-sm font-semibold text-slate-900">Patient Queue</div>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('schedule')}
-                    className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl hover:shadow-md transition-all group"
-                  >
-                    <Calendar className="w-6 h-6 text-purple-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
-                    <div className="text-sm font-semibold text-slate-900">Schedule</div>
-                  </button>
-                  <button
-                    onClick={() => setShowInboxModal(true)}
-                    className="p-4 bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-xl hover:shadow-md transition-all group relative"
-                  >
-                    <Mail className="w-6 h-6 text-pink-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
-                    <div className="text-sm font-semibold text-slate-900">Messages</div>
-                    {unreadMessageCount > 0 && (
-                      <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                        {unreadMessageCount}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => navigate(`/ehr/${tenantSlug}/post-visit/doctor`)}
-                    className="p-4 bg-gradient-to-br from-cyan-50 to-blue-50 border border-cyan-200 rounded-xl hover:shadow-md transition-all group"
-                  >
-                    <Shield className="w-6 h-6 text-cyan-700 mb-2 mx-auto group-hover:scale-110 transition-transform" />
-                    <div className="text-sm font-semibold text-slate-900">Post-Visit Workspace</div>
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 
+          {isDoctorDashboardRoute && (
+          <>
           {activeTab === 'queue' && (
             <PatientQueue
               tenantSlug={tenantSlug!}
@@ -2751,6 +3087,19 @@ const DoctorDashboard: React.FC = () => {
                                 }`}>
                                   {patientRiskAssessment.risk_level.toUpperCase()} RISK
                                 </span>
+                                <div className="mt-2">
+                                  <RiskTierBadge
+                                    tier={
+                                      patientRiskAssessment.risk_level === 'critical' ? 'critical'
+                                      : patientRiskAssessment.risk_level === 'high' ? 'high'
+                                      : patientRiskAssessment.risk_level === 'moderate' ? 'medium'
+                                      : patientRiskAssessment.risk_level === 'low' ? 'low'
+                                      : 'minimal'
+                                    }
+                                    compositeScore={displayScore / 100}
+                                    compact
+                                  />
+                                </div>
                                 {riskFactors.length > 0 && (
                                   <div className="mt-2 pt-2 border-t border-orange-200">
                                     <div className="grid grid-cols-2 gap-1 text-xs">
@@ -2916,6 +3265,22 @@ const DoctorDashboard: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Pre-Chart AI Panel (Sprint 64) */}
+                    <PreChartPanel
+                      appointmentId={currentAppointment.id}
+                      token={localStorage.getItem('ehr_token') || ''}
+                      tenantSlug={tenantSlug!}
+                    />
+
+                    {/* Ambient AI Bar (Sprint 63) */}
+                    <AmbientBar
+                      patientId={currentAppointment.patient.id}
+                      providerId={currentUser?.id || ''}
+                      appointmentId={currentAppointment.id}
+                      tenantSlug={tenantSlug!}
+                      token={localStorage.getItem('ehr_token') || ''}
+                    />
+
                     {/* Clinical Alerts - Compact */}
                     {(() => {
                       const latestVitals = vitalsData[currentAppointment.patient.id]?.[0];
@@ -2981,6 +3346,19 @@ const DoctorDashboard: React.FC = () => {
                           onAlertClick={() => setShowProViewerModal(true)}
                         />
                       </div>
+                    )}
+
+                    {/* AI Order Intelligence */}
+                    {problems.length > 0 && (
+                      <OrderIntelligencePanel
+                        diagnoses={problems.map((p: any) => p.problemName || p.name || '').filter(Boolean)}
+                        patientAge={currentAppointment.patient.dateOfBirth
+                          ? Math.floor((Date.now() - new Date(currentAppointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+                          : undefined}
+                        encounterType={currentAppointment.appointmentType || 'outpatient'}
+                        token={localStorage.getItem('ehr_token') || ''}
+                        tenantSlug={tenantSlug!}
+                      />
                     )}
 
                     {/* Chart Sidebar - Compact */}
@@ -3145,7 +3523,7 @@ const DoctorDashboard: React.FC = () => {
                     You don't have any patients currently admitted under your care.
                   </p>
                   <button
-                    onClick={() => navigate(`/ehr/${tenantSlug}/bed-management`)}
+                    onClick={() => navigate(`/ehr/${tenantSlug}/doctor/bed-management`)}
                     className="px-6 py-3 bg-gradient-to-r from-rose-600 to-pink-600 text-white rounded-xl hover:shadow-lg transition font-medium"
                   >
                     Go to Bed Management
@@ -3327,6 +3705,10 @@ const DoctorDashboard: React.FC = () => {
                 </div>
               )}
             </div>
+          )}
+          </>
+          )}
+          </>
           )}
         </div>
       </div>
@@ -3607,7 +3989,6 @@ const DoctorDashboard: React.FC = () => {
                 token={localStorage.getItem('ehr_token') || ''}
                 tenantSlug={tenantSlug!}
                 onSave={(note) => {
-                  console.log('Voice note saved:', note);
                   // Optionally save to backend as a clinical note
                   setShowVoiceConsultationModal(false);
                   showSuccess('Success', 'Voice consultation saved successfully');
@@ -4078,15 +4459,36 @@ const DoctorDashboard: React.FC = () => {
 
       {/* Inbox Modal */}
       {showInboxModal && tenantSlug && (
-        <Inbox
-          onClose={() => setShowInboxModal(false)}
-          onCompose={() => {
-            setShowInboxModal(false);
-            setShowMessageComposerModal(true);
-          }}
-          token={localStorage.getItem('ehr_token') || ''}
-          tenantSlug={tenantSlug}
-        />
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+              <h2 className="text-lg font-bold text-slate-900">Inbox</h2>
+              <button onClick={() => setShowInboxModal(false)} className="p-2 text-slate-400 hover:text-slate-700 rounded">✕</button>
+            </div>
+            {/* Two-panel layout: Smart Inbox left, Messages right */}
+            <div className="flex flex-1 overflow-hidden divide-x divide-slate-100">
+              <div className="w-2/5 overflow-hidden flex flex-col">
+                <SmartInbox
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug}
+                  userId={currentUser?.id || ''}
+                />
+              </div>
+              <div className="flex-1 overflow-auto">
+                <Inbox
+                  onClose={() => setShowInboxModal(false)}
+                  onCompose={() => {
+                    setShowInboxModal(false);
+                    setShowMessageComposerModal(true);
+                  }}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Message Composer Modal */}
@@ -4144,7 +4546,6 @@ const DoctorDashboard: React.FC = () => {
                 tenantSlug={tenantSlug!}
                 token={localStorage.getItem('ehr_token') || ''}
                 onSelectTemplate={(templateId) => {
-                  console.log('Selected template:', templateId);
                   setShowConsentLibraryModal(false);
                 }}
                 onClose={() => setShowConsentLibraryModal(false)}
@@ -4174,9 +4575,7 @@ const DoctorDashboard: React.FC = () => {
                 patientId={currentAppointment.patient.id}
                 tenantSlug={tenantSlug!}
                 token={localStorage.getItem('ehr_token') || ''}
-                onAddImmunization={() => {
-                  console.log('Add immunization clicked');
-                }}
+                onAddImmunization={() => {}}
               />
             </div>
           </div>
@@ -4233,9 +4632,7 @@ const DoctorDashboard: React.FC = () => {
                 patientId={selectedPatientIdForPro}
                 tenantSlug={tenantSlug!}
                 token={localStorage.getItem('ehr_token') || ''}
-                onScheduleCreated={() => {
-                  console.log('PRO schedule created');
-                }}
+                onScheduleCreated={() => {}}
               />
             </div>
           </div>

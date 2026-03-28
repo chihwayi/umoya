@@ -103,6 +103,61 @@ export class BcmaController {
     return this.bcmaService.getMARsByPatient(patientId, targetDate, tenantDb);
   }
 
+  @Get('mar/worklist')
+  @ApiOperation({ summary: 'Get medication safety worklist with risk and SLA scoring' })
+  @ApiResponse({ status: 200, description: 'Medication safety worklist retrieved' })
+  async getMedicationSafetyWorklist(
+    @Query('patientId') patientId: string,
+    @Query('date') date: string,
+    @Query('includeCompleted') includeCompleted: string,
+    @Query('focus') focus: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const targetDate = date ? new Date(date) : new Date();
+    const parsedLimit = Number(limit);
+    return this.bcmaService.getMedicationSafetyWorklist(tenantDb, {
+      patientId: patientId || undefined,
+      date: targetDate,
+      includeCompleted: String(includeCompleted || '').toLowerCase() === 'true',
+      focus,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
+  @Get('mar/handoff-brief')
+  @ApiOperation({ summary: 'Get shift handoff brief for MAR medication safety review' })
+  @ApiResponse({ status: 200, description: 'Medication safety handoff brief generated' })
+  async getMedicationSafetyHandoffBrief(
+    @Query('patientId') patientId: string,
+    @Query('date') date: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const targetDate = date ? new Date(date) : new Date();
+    return this.bcmaService.getMedicationSafetyHandoffBrief(tenantDb, {
+      patientId: patientId || undefined,
+      date: targetDate,
+    });
+  }
+
+  @Get('mar/operational-brief')
+  @ApiOperation({ summary: 'Get MAR operational brief (alias of shift handoff brief)' })
+  @ApiResponse({ status: 200, description: 'Medication safety operational brief generated' })
+  async getMedicationSafetyOperationalBrief(
+    @Query('patientId') patientId: string,
+    @Query('date') date: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const targetDate = date ? new Date(date) : new Date();
+    return this.bcmaService.getMedicationSafetyHandoffBrief(tenantDb, {
+      patientId: patientId || undefined,
+      date: targetDate,
+    });
+  }
+
   @Post('mar/:id/hold')
   @ApiOperation({ summary: 'Hold medication administration' })
   @ApiResponse({ status: 200, description: 'Medication held' })
@@ -126,6 +181,25 @@ export class BcmaController {
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     return this.bcmaService.refuseMedication(id, data.reason, tenantDb);
+  }
+
+  @Post('mar/:id/escalate')
+  @ApiOperation({ summary: 'Escalate MAR entry into medication safety alert' })
+  @ApiResponse({ status: 201, description: 'Escalation alert created' })
+  async escalateMedicationSafety(
+    @Param('id') id: string,
+    @Body()
+    data: {
+      severity?: string;
+      alertType?: string;
+      message?: string;
+      details?: any;
+    },
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return this.bcmaService.createEscalationAlert(id, userId, data || {}, tenantDb);
   }
 
   // ==================== ALERTS ====================
@@ -194,4 +268,3 @@ export class BcmaController {
     return this.bcmaService.administerFromScheduledEntry(id, body, userId, tenantDb);
   }
 }
-

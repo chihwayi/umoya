@@ -60,4 +60,31 @@ export class ReportsController {
   async getLabResultsReport(@Query() query: any, @Request() req: RequestWithTenant) {
     return this.reportsService.getLabResultsReport(query, req.tenantDb);
   }
+
+  @Get('modules/:module/general')
+  @ApiOperation({ summary: 'Get module general report summary' })
+  @ApiResponse({ status: 200, description: 'Module general report retrieved' })
+  async getModuleGeneralReport(
+    @Param('module') moduleKey: string,
+    @Query('days') days: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    const parsedDays = Number(days);
+    return this.reportsService.getModuleGeneralReport(
+      moduleKey,
+      req.tenantDb,
+      Number.isFinite(parsedDays) ? parsedDays : undefined,
+    );
+  }
+
+  @Get('quality/mortality')
+  @ApiOperation({ summary: 'Mortality / sentinel report from clinical outcomes (if data exists)' })
+  @ApiResponse({ status: 200, description: 'Mortality report or empty if not configured' })
+  async getMortalityReport(
+    @Query('startDate') startDate: string | undefined,
+    @Query('endDate') endDate: string | undefined,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.reportsService.getMortalityReport(req.tenantDb, startDate, endDate);
+  }
 }

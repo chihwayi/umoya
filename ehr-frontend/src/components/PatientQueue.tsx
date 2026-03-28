@@ -76,7 +76,7 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
   tenantSlug,
   token,
   onAppointmentUpdate,
-  appointments: propAppointments = [],
+  appointments: propAppointments,
   onAppointmentSelect
 }) => {
   const navigate = useNavigate();
@@ -88,14 +88,15 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
   const [selectedDate, setSelectedDate] = useState(getTodayFormatted());
   const [vitalsData, setVitalsData] = useState<Record<string, PatientVitals[]>>({});
 
-  // Use appointments from props if available, otherwise use local state
-  const displayAppointments = propAppointments.length > 0 ? propAppointments : appointments;
+  // Use appointments from parent when provided, even when the list is empty.
+  const hasExternalAppointments = Array.isArray(propAppointments);
+  const displayAppointments = hasExternalAppointments ? (propAppointments || []) : appointments;
 
   useEffect(() => {
-    if (propAppointments.length === 0) {
+    if (!hasExternalAppointments) {
       fetchAppointments();
     }
-  }, [selectedDate, propAppointments.length]);
+  }, [selectedDate, hasExternalAppointments]);
 
   useEffect(() => {
     // Whenever appointments to display change, fetch vitals for those patients
@@ -107,23 +108,19 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      console.log('🔍 PatientQueue - Fetching appointments independently');
       const response = await ehrApi.getAppointments(token, tenantSlug, {
         date: formatDateForAPI(selectedDate)
       });
-      console.log('🔍 PatientQueue - All appointments from API:', response.data.appointments);
       
       // Get current user from localStorage for filtering
       const userData = localStorage.getItem('ehr_user');
       const currentUser = userData ? JSON.parse(userData) : null;
-      console.log('🔍 PatientQueue - Current user:', currentUser);
       
       // Filter by doctor if user is available
       const filteredAppointments = currentUser 
         ? response.data.appointments.filter((apt: any) => apt.doctor.id === currentUser.id)
         : response.data.appointments;
       
-      console.log('🔍 PatientQueue - Filtered appointments:', filteredAppointments);
       setAppointments(filteredAppointments);
       // Trigger vitals fetch for fetched list
       fetchVitalsForAppointments(filteredAppointments);
@@ -236,7 +233,9 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
           break;
       }
       
-      fetchAppointments();
+      if (!hasExternalAppointments) {
+        fetchAppointments();
+      }
       onAppointmentUpdate();
     } catch (error) {
       console.error(`Error ${action} appointment:`, error);
@@ -330,22 +329,12 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
   });
 
   const getQueueStats = () => {
-    // Debug: Log all appointment statuses
-    console.log('🔍 PatientQueue - All appointments:', displayAppointments);
-    console.log('🔍 PatientQueue - Appointment statuses:', displayAppointments.map(apt => ({ 
-      id: apt.id, 
-      patient: `${apt.patient.firstName} ${apt.patient.lastName}`, 
-      status: apt.status 
-    })));
-    
     const stats = {
       waiting: displayAppointments.filter(apt => apt.status === 'confirmed').length,
       inProgress: displayAppointments.filter(apt => apt.status === 'in-progress' || apt.status === 'in_progress').length,
       completed: displayAppointments.filter(apt => apt.status === 'completed').length,
       noShow: displayAppointments.filter(apt => apt.status === 'no-show' || apt.status === 'no_show').length
     };
-    
-    console.log('📊 PatientQueue - Calculated stats:', stats);
     return stats;
   };
 
@@ -358,7 +347,13 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-slate-900">Patient Queue</h2>
           <button
-            onClick={fetchAppointments}
+            onClick={() => {
+              if (hasExternalAppointments) {
+                onAppointmentUpdate();
+                return;
+              }
+              fetchAppointments();
+            }}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <RefreshCw className={`w-5 h-5 text-gray-600 ${loading ? 'animate-spin' : ''}`} />

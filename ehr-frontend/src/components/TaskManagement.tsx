@@ -5,14 +5,14 @@ import {
   ChevronDown, ChevronRight, Star, Flag, Bell, Eye, TestTube, Sparkles, Zap, RefreshCw
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 
 interface Task {
   id: string;
   patientId: string;
   patientName: string;
   patientRoom?: string;
-  taskType: 'medication' | 'vitals' | 'assessment' | 'procedure' | 'documentation' | 'follow_up' | 'lab' | 'imaging';
+  taskType: 'medication' | 'vitals' | 'assessment' | 'procedure' | 'documentation' | 'follow_up' | 'lab' | 'imaging' | 'escalation';
   title: string;
   description: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
@@ -28,7 +28,8 @@ interface Task {
   recurringPattern?: string;
   relatedAppointmentId?: string;
   relatedOrderId?: string;
-  source?: 'manual' | 'copilot';
+  source?: 'manual' | 'copilot' | 'clinical_escalation';
+  relatedEscalationTaskId?: string;
 }
 
 interface TaskManagementProps {
@@ -51,13 +52,14 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'in_progress' | 'completed' | 'overdue'>('all');
   const [filterPriority, setFilterPriority] = useState<'all' | 'low' | 'normal' | 'high' | 'urgent'>('all');
-  const [filterType, setFilterType] = useState<'all' | 'medication' | 'vitals' | 'assessment' | 'procedure' | 'documentation' | 'follow_up' | 'lab' | 'imaging'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'medication' | 'vitals' | 'assessment' | 'procedure' | 'documentation' | 'follow_up' | 'lab' | 'imaging' | 'escalation'>('all');
   const [sortBy, setSortBy] = useState<'dueTime' | 'priority' | 'patient' | 'type'>('dueTime');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
   const [serverCompletedTaskIds, setServerCompletedTaskIds] = useState<Set<string>>(new Set());
+  const [serverEscalationTasks, setServerEscalationTasks] = useState<Task[]>([]);
 
   useEffect(() => {
     const loadState = async () => {
@@ -65,9 +67,42 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         const token = localStorage.getItem('ehr_token');
         const tenantSlug = localStorage.getItem('ehr_tenant_slug');
         if (!token || !tenantSlug) return;
-        const response = await ehrApi.getNurseWorklistState(token, tenantSlug);
-        const completed = new Set<string>(response.data?.completedTaskIds || []);
+        const [stateResponse, escalationResponse] = await Promise.all([
+          ehrApi.getNurseWorklistState(token, tenantSlug),
+          ehrApi.getClinicalEscalationFeed(token, tenantSlug, { includeCompleted: true, limit: 50 }),
+        ]);
+        const completed = new Set<string>(stateResponse.data?.completedTaskIds || []);
         setServerCompletedTaskIds(completed);
+        const escalationTasks = Array.isArray(escalationResponse.data?.items)
+          ? escalationResponse.data.items.map((item: any) => ({
+              id: `clinical-escalation-${item.id}`,
+              patientId: item.patientId,
+              patientName: item.patientName || item.patientNumber || 'Unknown patient',
+              taskType: 'escalation' as const,
+              title: item.title || 'Clinical escalation',
+              description: item.summary || 'Clinical escalation requires follow-up.',
+              priority:
+                item.severity === 'critical' ? 'urgent' :
+                item.severity === 'high' ? 'high' :
+                item.severity === 'medium' ? 'normal' :
+                'low',
+              status:
+                item.status === 'completed' ? 'completed' :
+                item.status === 'acknowledged' ? 'in_progress' :
+                'pending',
+              dueTime: item.dueAt || new Date().toISOString(),
+              estimatedDuration: 15,
+              assignedTo: currentUser?.id || '',
+              createdBy: 'clinical_escalation',
+              createdAt: item.dueAt || new Date().toISOString(),
+              completedAt: item.completedAt || undefined,
+              notes: item.recommendedAction || undefined,
+              isRecurring: false,
+              source: 'clinical_escalation' as const,
+              relatedEscalationTaskId: item.id,
+            }))
+          : [];
+        setServerEscalationTasks(escalationTasks);
       } catch {
       }
     };
@@ -220,15 +255,15 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         }
       });
 
-      setTasks(realTasks);
+      setTasks([...realTasks, ...serverEscalationTasks]);
     };
 
-    if (appointments.length > 0) {
+    if (appointments.length > 0 || serverEscalationTasks.length > 0) {
       generateTasksFromAppointments();
     } else {
       setTasks([]);
     }
-  }, [appointments, currentUser, serverCompletedTaskIds]);
+  }, [appointments, currentUser, serverCompletedTaskIds, serverEscalationTasks]);
 
   // Notify parent of task count changes
   // Use useRef to store the callback to avoid recreating it on every render
@@ -304,6 +339,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
       case 'follow_up': return <Users className="w-4 h-4" />;
       case 'lab': return <TestTube className="w-4 h-4" />;
       case 'imaging': return <Eye className="w-4 h-4" />;
+      case 'escalation': return <AlertTriangle className="w-4 h-4" />;
       default: return <Clock className="w-4 h-4" />;
     }
   };
@@ -345,15 +381,24 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
       const tenantSlug = localStorage.getItem('ehr_tenant_slug');
       if (!token || !tenantSlug) return;
       const task = tasks.find((t) => t.id === taskId);
-      await ehrApi.completeNurseTask(
-        taskId,
-        {
-          patientId: task?.patientId,
-          context: { taskType: task?.taskType, priority: task?.priority },
-        },
-        token,
-        tenantSlug,
-      );
+      if (task?.source === 'clinical_escalation' && task.relatedEscalationTaskId) {
+        await ehrApi.completeClinicalEscalation(
+          task.relatedEscalationTaskId,
+          { note: task.notes },
+          token,
+          tenantSlug,
+        );
+      } else {
+        await ehrApi.completeNurseTask(
+          taskId,
+          {
+            patientId: task?.patientId,
+            context: { taskType: task?.taskType, priority: task?.priority },
+          },
+          token,
+          tenantSlug,
+        );
+      }
 
       setServerCompletedTaskIds((prev) => {
         const next = new Set(prev);
@@ -370,12 +415,21 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
     }
   };
 
-  const handleTaskStart = (taskId: string) => {
-    setTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? { ...task, status: 'in_progress' as const }
-        : task
-    ));
+  const handleTaskStart = async (taskId: string) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      const task = tasks.find((item) => item.id === taskId);
+      if (task?.source === 'clinical_escalation' && task.relatedEscalationTaskId && token && tenantSlug) {
+        await ehrApi.acknowledgeClinicalEscalation(task.relatedEscalationTaskId, token, tenantSlug);
+      }
+      setTasks(prev => prev.map(task => 
+        task.id === taskId 
+          ? { ...task, status: 'in_progress' as const }
+          : task
+      ));
+    } catch {
+    }
   };
 
   const toggleTaskExpansion = (taskId: string) => {
@@ -385,6 +439,12 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         newSet.delete(taskId);
       } else {
         newSet.add(taskId);
+        // Fire-and-forget: mark this nurse task as viewed so it won't reappear as unread
+        const token = localStorage.getItem('ehr_token');
+        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+        if (token && tenantSlug) {
+          cdssApi.markNurseTaskViewed(taskId, token, tenantSlug).catch(() => {/* non-critical */});
+        }
       }
       return newSet;
     });
@@ -599,6 +659,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
               <option value="follow_up">Follow-up</option>
               <option value="lab">Lab</option>
               <option value="imaging">Imaging</option>
+              <option value="escalation">Clinical Escalations</option>
             </select>
             <select
               value={sortBy}
@@ -648,7 +709,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
 
       {/* Task List */}
       <div className="space-y-4">
-        {appointments.length === 0 ? (
+        {appointments.length === 0 && serverEscalationTasks.length === 0 ? (
            <div className="text-center py-12 bg-white rounded-2xl shadow-lg border border-slate-200/50">
              <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
              <h3 className="text-lg font-semibold text-slate-600 mb-2">No Appointments Today</h3>
@@ -714,6 +775,11 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                           <span className="px-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
                             <Sparkles className="w-3 h-3" />
                             AI PRIORITY
+                          </span>
+                        )}
+                        {task.source === 'clinical_escalation' && (
+                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
+                            CLINICAL ESCALATION
                           </span>
                         )}
                         {task.isRecurring && (

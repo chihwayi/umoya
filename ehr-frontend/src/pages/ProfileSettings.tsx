@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Key, ArrowLeft, Save } from 'lucide-react';
+import { User, Mail, Key } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
+import AdminNavigationShell from '../components/AdminNavigationShell';
 
 const ProfileSettings: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -25,16 +26,7 @@ const ProfileSettings: React.FC = () => {
   if (!user) return null;
 
   return (
-    <div className="p-6">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate(`/ehr/${tenantSlug}/dashboard`)}
-        className="flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-4 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span className="text-sm">Back to Dashboard</span>
-      </button>
-
+    <AdminNavigationShell title="Profile Settings" subtitle="Manage your account information">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
@@ -127,14 +119,16 @@ const ProfileSettings: React.FC = () => {
           </div>
         </div>
 
-        {/* Note */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <p className="text-sm text-blue-700">
-            <strong>Note:</strong> To update your personal information (name, email, phone), please contact your system administrator.
-          </p>
-        </div>
+        {/* Note for non-admin users */}
+        {user.role !== 'admin' && (
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm text-blue-700">
+              <strong>Note:</strong> To update your personal information (name, email, phone), please contact your system administrator.
+            </p>
+          </div>
+        )}
       </div>
-    </div>
+    </AdminNavigationShell>
   );
 };
 

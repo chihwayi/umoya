@@ -27,6 +27,18 @@ import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import { ehrApi } from '../services/api';
 
+interface MonitoringAlertItem {
+  id: string;
+  patient_id?: string;
+  patient_name?: string | null;
+  patient_number?: string | null;
+  monitoring_type?: string;
+  reading_value?: number;
+  reading_unit?: string;
+  alert_severity?: 'low' | 'medium' | 'high' | 'critical' | string;
+  reading_date?: string;
+}
+
 const StatCard: React.FC<{
   title: string;
   value: string | number;
@@ -79,6 +91,7 @@ const TelemedicineDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'overview' | 'consultations' | 'monitoring' | 'consents'>('overview');
+  const [monitoringAlerts, setMonitoringAlerts] = useState<MonitoringAlertItem[]>([]);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
@@ -110,10 +123,15 @@ const TelemedicineDashboard: React.FC = () => {
         query.status = statusFilter;
       }
 
-      const consultationsRes = await ehrApi.getTelemedicineConsultations(token, tenantSlug, query);
+      const [consultationsRes, monitoringRes] = await Promise.all([
+        ehrApi.getTelemedicineConsultations(token, tenantSlug, query),
+        ehrApi.getTelemedicineMonitoringAlerts(token, tenantSlug),
+      ]);
       const consultationsData = consultationsRes.data?.consultations || consultationsRes.data || [];
+      const monitoringRows = Array.isArray(monitoringRes.data) ? (monitoringRes.data as MonitoringAlertItem[]) : [];
 
       setConsultations(consultationsData);
+      setMonitoringAlerts(monitoringRows);
 
       // Calculate stats
       const today = new Date().toISOString().split('T')[0];
@@ -127,8 +145,10 @@ const TelemedicineDashboard: React.FC = () => {
         todayConsultations: todayConsultations.length,
         activeConsultations: consultationsData.filter((c: any) => c.status === 'in_progress').length,
         completedConsultations: consultationsData.filter((c: any) => c.status === 'completed').length,
-        pendingConsents: 0, // TODO: Fetch from consent API
-        activeMonitoring: 0, // TODO: Fetch from monitoring API
+        pendingConsents: consultationsData.filter(
+          (c: any) => c?.patient_consent !== true && !['completed', 'cancelled', 'no_show'].includes(String(c?.status || '').toLowerCase()),
+        ).length,
+        activeMonitoring: new Set(monitoringRows.map((row) => row?.patient_id).filter(Boolean)).size,
       });
     } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
@@ -179,6 +199,26 @@ const TelemedicineDashboard: React.FC = () => {
       consultation.doctor_name?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
+
+  const pendingConsentConsultations = consultations.filter(
+    (consultation) =>
+      consultation?.patient_consent !== true &&
+      !['completed', 'cancelled', 'no_show'].includes(String(consultation?.status || '').toLowerCase()),
+  );
+
+  const getSeverityBadge = (severity?: string) => {
+    const normalized = String(severity || 'low').toLowerCase();
+    if (normalized === 'critical') {
+      return 'bg-rose-500/20 text-rose-300 border-rose-500/40';
+    }
+    if (normalized === 'high') {
+      return 'bg-orange-500/20 text-orange-300 border-orange-500/40';
+    }
+    if (normalized === 'medium') {
+      return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+    }
+    return 'bg-sky-500/20 text-sky-300 border-sky-500/40';
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
@@ -404,15 +444,62 @@ const TelemedicineDashboard: React.FC = () => {
 
         {activeTab === 'monitoring' && (
           <div className="bg-white/5 backdrop-blur rounded-2xl border border-white/10 p-6">
-            <h2 className="text-xl font-bold mb-4">Remote Patient Monitoring</h2>
-            <p className="text-white/60">Remote monitoring features coming soon...</p>
+            <h2 className="text-xl font-bold mb-4">Remote Patient Monitoring Alerts</h2>
+            {monitoringAlerts.length === 0 ? (
+              <p className="text-white/60">No active monitoring alerts right now.</p>
+            ) : (
+              <div className="space-y-3">
+                {monitoringAlerts.slice(0, 20).map((alert) => (
+                  <div key={alert.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold">
+                          {alert.patient_name || 'Patient'} {alert.patient_number ? `(${alert.patient_number})` : ''}
+                        </p>
+                        <p className="text-xs text-white/60">
+                          {String(alert.monitoring_type || 'reading').replace(/_/g, ' ')} • {alert.reading_value ?? 'n/a'}{' '}
+                          {alert.reading_unit || ''}
+                        </p>
+                      </div>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${getSeverityBadge(alert.alert_severity)}`}>
+                        {String(alert.alert_severity || 'low')}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-white/50">{formatDate(alert.reading_date || '')}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'consents' && (
           <div className="bg-white/5 backdrop-blur rounded-2xl border border-white/10 p-6">
-            <h2 className="text-xl font-bold mb-4">Consent Management</h2>
-            <p className="text-white/60">Consent management features coming soon...</p>
+            <h2 className="text-xl font-bold mb-4">Consent Management Queue</h2>
+            {pendingConsentConsultations.length === 0 ? (
+              <p className="text-white/60">No pending telemedicine consents.</p>
+            ) : (
+              <div className="space-y-3">
+                {pendingConsentConsultations.map((consultation) => (
+                  <div key={consultation.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{consultation.patient_name || 'Unknown Patient'}</p>
+                        <p className="text-xs text-white/60">
+                          Dr. {consultation.doctor_name || 'Unknown'} • {formatDate(consultation.scheduled_start_time)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => navigate(`/ehr/${tenantSlug}/telemedicine/consultation/${consultation.id}`)}
+                        className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium hover:bg-purple-700"
+                      >
+                        Open Consultation
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -421,4 +508,3 @@ const TelemedicineDashboard: React.FC = () => {
 };
 
 export default TelemedicineDashboard;
-

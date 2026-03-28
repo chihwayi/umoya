@@ -31,7 +31,7 @@ export class TerminologyController {
         },
         type: {
           type: 'string',
-          enum: ['snomed', 'icd10'],
+          enum: ['snomed', 'icd10', 'icd11'],
         },
       },
     },
@@ -41,14 +41,16 @@ export class TerminologyController {
   async importTerminology(
     @UploadedFile() file: Express.Multer.File,
     @Body('type') type: 'snomed' | 'icd10',
+    @Body('replace') replaceRaw?: string,
   ) {
     if (!file) {
       throw new BadRequestException('File is required');
     }
-    if (!type || !['snomed', 'icd10'].includes(type)) {
-      throw new BadRequestException('Valid type (snomed or icd10) is required');
+    if (!type || !['snomed', 'icd10', 'icd11'].includes(type)) {
+      throw new BadRequestException('Valid type (snomed, icd10, or icd11) is required');
     }
-    const jobId = await this.terminologyImportService.importFile(file, type);
+    const replace = replaceRaw === 'true' || replaceRaw === '1';
+    const jobId = await this.terminologyImportService.importFile(file, type as 'snomed' | 'icd10' | 'icd11', replace);
     return { jobId, message: 'Import job started successfully' };
   }
 

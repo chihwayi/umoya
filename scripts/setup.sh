@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Load environment variables
-source "$(dirname "$0")/load-env.sh"
-
 # MediCore Development Environment Setup Script
 
 set -e
@@ -22,8 +19,12 @@ check_requirements() {
         echo "❌ Docker is not installed. Please install Docker first."
         exit 1
     fi
-    
-    if ! command -v docker-compose &> /dev/null; then
+
+    if docker compose version &> /dev/null; then
+        COMPOSE_CMD=(docker compose)
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD=(docker-compose)
+    else
         echo "❌ Docker Compose is not installed. Please install Docker Compose first."
         exit 1
     fi
@@ -47,12 +48,14 @@ install_dependencies() {
         fi
     done
     
-    # Install web app dependencies
-    if [ -f "web-app/package.json" ]; then
-        echo "Installing web app dependencies..."
-        cd web-app && npm install && cd - > /dev/null
-    fi
-    
+    # Install frontend dependencies
+    for frontend in web-app ehr-frontend patient-portal; do
+        if [ -f "$frontend/package.json" ]; then
+            echo "Installing dependencies for $frontend..."
+            cd "$frontend" && npm install && cd - > /dev/null
+        fi
+    done
+
     
     echo "✅ Dependencies installed"
 }
@@ -71,15 +74,43 @@ setup_environment() {
             cat > .env << EOF
 # MediCore Environment Configuration
 NODE_ENV=development
+SERVICE_BASE_URL=
+SERVICE_TENANT_PATH=/tenant-service
+SERVICE_EHR_PATH=/ehr-service
+SERVICE_CDSS_PATH=/cdss-service
+
+REACT_APP_API_BASE_URL=
+REACT_APP_TENANT_API_PATH=/tenant-service/api
+REACT_APP_EHR_API_PATH=/ehr-service/api
+REACT_APP_CDSS_API_PATH=/cdss-service
+
+SERVICE_TENANT_URL=http://tenant-service:3001
+SERVICE_EHR_URL=http://ehr-service:3013
+SERVICE_CDSS_URL=http://cdss-service:8000
+
+REACT_APP_TENANT_API_URL=http://localhost:3001/api
 REACT_APP_EHR_API_URL=http://localhost:3013/api
-REACT_APP_TENANT_API_URL=/api
 REACT_APP_CDSS_API_URL=http://localhost:8000
+
+PUBLIC_APP_BASE_URL=
+PUBLIC_STAFF_APP_PATH=/
+PUBLIC_PATIENT_PORTAL_PATH=/patient
+PUBLIC_ADMIN_APP_PATH=/admin
+FRONTEND_URL=http://localhost:3000
+PORTAL_BASE_URL=http://localhost:3015
+WEB_APP_URL=http://localhost:3011
 REACT_APP_BASE_DOMAIN=medicore.co.zw
 REACT_APP_PROTOCOL=http
 
 CDSS_ENABLE_AI=true
 MOCK_VISION_AI=true
 LLM_API_URL=http://host.docker.internal:11434
+POSTVISIT_LLM_API_URL=https://api.openai.com/v1/chat/completions
+RXNORM_BASE_URL=https://rxnav.nlm.nih.gov/REST
+PAGERDUTY_EVENTS_API_URL=https://events.pagerduty.com/v2/enqueue
+POSTVISIT_CLINICALTRIALS_API_URL=https://clinicaltrials.gov/api/v2/studies
+POSTVISIT_CLINICALTRIALS_STUDY_BASE_URL=https://clinicaltrials.gov/study
+WHISPER_API_URL=https://api.openai.com/v1/audio/transcriptions
 
 DATABASE_URL=postgresql://medicore:medicore_password@localhost:5432/medicore_master
 REDIS_URL=redis://localhost:6379
@@ -97,6 +128,9 @@ PORT_EHR_SERVICE=3013
 PORT_WHISPER=8001
 PORT_ELASTICSEARCH=9200
 PORT_SNOWSTORM=8080
+ELASTICSEARCH_URL=http://localhost:9200
+SNOWSTORM_URL=http://localhost:8080
+WHISPER_SERVICE_URL=http://localhost:8001
 
 # Zimbabwe-specific settings
 DEFAULT_CURRENCY=USD
@@ -161,7 +195,7 @@ setup_databases() {
     echo "🗄️  Setting up databases..."
     
     # Start PostgreSQL and Redis
-    docker-compose up -d postgres-master redis
+    "${COMPOSE_CMD[@]}" up -d postgres-master redis
     
     # Wait for PostgreSQL to be ready
     echo "Waiting for PostgreSQL to be ready..."
@@ -169,7 +203,7 @@ setup_databases() {
     
     # Run database migrations
     echo "Running database migrations..."
-    npm run migrate
+    ./scripts/migrate.sh
     
     echo "✅ Databases configured"
 }
@@ -183,7 +217,7 @@ build_services() {
         if [ -f "$service/Dockerfile" ]; then
             service_name=$(basename "$service")
             echo "Building $service_name..."
-            docker-compose build "$service_name" || echo "⚠️  Failed to build $service_name"
+            "${COMPOSE_CMD[@]}" build "$service_name" || echo "⚠️  Failed to build $service_name"
         fi
     done
     
@@ -225,6 +259,9 @@ main() {
         source .env
         set +a
     fi
+
+    WEB_APP_URL="${WEB_APP_URL:-}"
+    API_BASE_URL="${API_BASE_URL:-${REACT_APP_EHR_API_URL:-}}"
     
     setup_databases
     build_services
@@ -237,9 +274,10 @@ main() {
     echo "Next steps:"
     echo "1. Review and update the .env file with your specific configuration"
     echo "2. Start the development environment: npm run dev"
-    echo "3. Access the web application at: ${WEB_APP_URL}"
-    echo "4. Access the API documentation at: ${API_BASE_URL}"
-    echo "5. Monitor services with Grafana at: http://localhost:${PORT_GRAFANA:-3012} (admin/admin)"
+    echo "3. Run the core smoke check: npm run smoke:core"
+    echo "4. Access the web application at: ${WEB_APP_URL:-set WEB_APP_URL or PUBLIC_APP_BASE_URL in .env}"
+    echo "5. Access the API documentation at: ${API_BASE_URL:-set REACT_APP_EHR_API_URL or REACT_APP_API_BASE_URL in .env}"
+    echo "6. Monitor services with Grafana at: ${GRAFANA_URL:-http://localhost:${PORT_GRAFANA:-3012}} (admin/admin)"
     echo ""
     echo "For more information, see the README.md file"
 }

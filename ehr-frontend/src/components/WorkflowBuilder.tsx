@@ -281,27 +281,34 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-gradient-to-br from-white via-slate-50 to-indigo-50 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200/80">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-slate-100 via-indigo-100 to-violet-100 p-6 flex items-center justify-between border-b border-indigo-200/70">
           <div>
-            <h2 className="text-2xl font-bold">{workflow?.id ? 'Edit' : 'Create'} Workflow</h2>
-            <p className="text-blue-100 text-sm mt-1">Design automated clinical workflows</p>
+            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <Settings className="h-6 w-6 text-indigo-600" />
+              {workflow?.id ? 'Edit' : 'Create'} Workflow
+            </h2>
+            <p className="text-slate-600 text-sm mt-1">Design automated clinical workflows</p>
           </div>
-          <button onClick={onClose} className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors">
-            <X className="h-6 w-6" />
+          <button
+            onClick={onClose}
+            className="p-2 bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Close workflow builder"
+          >
+            <X className="h-6 w-6 text-slate-700" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-slate-200">
+        <div className="border-b border-slate-200 bg-white/80">
           <nav className="-mb-px flex space-x-8 px-6">
             <button
               onClick={() => setCurrentTab('design')}
               className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                 currentTab === 'design'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-indigo-600 text-indigo-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
@@ -311,7 +318,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
               onClick={() => setCurrentTab('preview')}
               className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
                 currentTab === 'preview'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-indigo-600 text-indigo-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
@@ -321,7 +328,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+        <div className="flex-1 overflow-y-auto p-6 bg-white/70">
           {currentTab === 'design' && (
             <div className="space-y-6">
               {/* Basic Info */}
@@ -336,7 +343,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
                   <div>
@@ -344,7 +351,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
                     <select
                       value={formData.trigger_event}
                       onChange={(e) => setFormData({ ...formData, trigger_event: e.target.value })}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/20"
                     >
                       {TRIGGER_EVENTS.map((event) => (
                         <option key={event.value} value={event.value}>
@@ -359,7 +366,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       rows={2}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
                   <div>
@@ -377,7 +384,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
                       id="isActive"
                       checked={formData.is_active}
                       onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
                     />
                     <label htmlFor="isActive" className="text-sm font-medium text-slate-700">
                       Active
@@ -392,7 +399,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
                   <h3 className="text-lg font-semibold text-slate-800">Workflow Steps</h3>
                   <button
                     onClick={addStep}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm shadow-sm"
                   >
                     <Plus className="w-4 h-4" />
                     Add Step
@@ -449,7 +456,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
                             id={`required-${index}`}
                             checked={step.is_required}
                             onChange={(e) => updateStep(index, { is_required: e.target.checked })}
-                            className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                            className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
                           />
                           <label htmlFor={`required-${index}`} className="text-sm font-medium text-slate-700">
                             Required (workflow fails if this step fails)
@@ -481,7 +488,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
                   <div className="space-y-2">
                     {formData.steps.map((step, index) => (
                       <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
                           {index + 1}
                         </div>
                         <div className="flex-1">
@@ -505,17 +512,17 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
         </div>
 
         {/* Footer */}
-        <div className="border-t border-slate-200 p-4 bg-slate-50 flex justify-end gap-3">
+        <div className="border-t border-slate-200 p-4 bg-white/80 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors"
+            className="px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm"
           >
             {saving ? (
               <>
@@ -536,4 +543,3 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
 };
 
 export default WorkflowBuilder;
-

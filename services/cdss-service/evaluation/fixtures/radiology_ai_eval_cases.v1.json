@@ -1,0 +1,40 @@
+{
+  "dataset_version": "2026-03-26.radiology-ai.v1",
+  "description": "Radiology AI release-gate baseline dataset.",
+  "k": 3,
+  "cases": [
+    {
+      "id": "rad-001",
+      "query": "CT head order for suspected stroke within thrombolysis window",
+      "expected": {
+        "relevant_citation_ids": ["stroke-ct-head-appropriateness"],
+        "supporting_citation_ids": ["stroke-ct-head-appropriateness"],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [{ "id": "stroke-ct-head-appropriateness", "title": "Stroke CT head appropriateness" }],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Proceed with urgent non-contrast CT head and prioritize rapid interpretation."
+        }
+      }
+    },
+    {
+      "id": "rad-002",
+      "query": "Incidental liver lesion follow-up without imaging details",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Request radiologist review because the imaging characteristics are not available."
+        }
+      }
+    }
+  ]
+}

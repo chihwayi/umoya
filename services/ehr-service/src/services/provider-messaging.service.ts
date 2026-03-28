@@ -5,6 +5,32 @@ import { DataSource } from 'typeorm';
 export class ProviderMessagingService {
   private readonly logger = new Logger(ProviderMessagingService.name);
 
+  private isMissingSchemaError(error: any): boolean {
+    const code = String(error?.code || '').toUpperCase();
+    const message = String(error?.message || '').toLowerCase();
+    return code === '42P01' || code === '42703' || message.includes('does not exist');
+  }
+
+  private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
+    try {
+      const result = await tenantDb.query(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = $1
+        ) AS exists
+        `,
+        [tableName],
+      );
+      return !!result[0]?.exists;
+    } catch (error: any) {
+      this.logger.warn(`Failed table existence check for ${tableName}: ${error.message}`);
+      return false;
+    }
+  }
+
   async sendMessage(messageData: any, tenantDb: DataSource): Promise<any> {
     try {
       const {
@@ -430,17 +456,31 @@ export class ProviderMessagingService {
 
   async getUnreadCount(userId: string, tenantDb: DataSource): Promise<number> {
     try {
-      const result = await tenantDb.query(
-        `SELECT COUNT(*) as count FROM provider_messages 
-         WHERE (recipient_id = $1 OR recipient_role IN (SELECT role FROM users WHERE id = $1))
-           AND status IN ('sent', 'delivered')
-           AND read_at IS NULL`,
-        [userId]
-      );
+      const hasMessagesTable = await this.hasTable(tenantDb, 'provider_messages');
+      if (!hasMessagesTable) {
+        this.logger.warn('provider_messages table missing; returning unread count 0');
+        return 0;
+      }
 
-      return parseInt(result[0].count);
+      const hasUsersTable = await this.hasTable(tenantDb, 'users');
+      const query = hasUsersTable
+        ? `SELECT COUNT(*) as count FROM provider_messages 
+           WHERE (recipient_id = $1 OR recipient_role IN (SELECT role FROM users WHERE id = $1))
+             AND status IN ('sent', 'delivered')
+             AND read_at IS NULL`
+        : `SELECT COUNT(*) as count FROM provider_messages 
+           WHERE recipient_id = $1
+             AND status IN ('sent', 'delivered')
+             AND read_at IS NULL`;
+
+      const result = await tenantDb.query(query, [userId]);
+      return parseInt(result[0]?.count || '0', 10);
     } catch (error) {
       this.logger.error(`Error getting unread count: ${error.message}`, error.stack);
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn('Returning unread count fallback = 0 due to missing messaging schema');
+        return 0;
+      }
       throw error;
     }
   }
@@ -530,7 +570,6 @@ export class ProviderMessagingService {
     }
   }
 }
-
 
 
 

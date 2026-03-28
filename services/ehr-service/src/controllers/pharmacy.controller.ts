@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PharmacyService } from '../services/pharmacy.service';
+import { PharmacyIntelligenceService } from '../services/pharmacy-intelligence.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import {
   CreateSupplierDto,
@@ -18,7 +19,10 @@ import {
   UpdatePricingRuleDto,
   CreateFormularyDto,
   UpdateFormularyDto,
+  ContraindicationOverrideDto,
 } from '../dto/pharmacy.dto';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { PaginationQueryDto } from 'src/dto/diabetes.dto';
 
 @ApiTags('Pharmacy Management')
@@ -27,7 +31,10 @@ import { PaginationQueryDto } from 'src/dto/diabetes.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('pharmacy')
 export class PharmacyController {
-  constructor(private pharmacyService: PharmacyService) {}
+  constructor(
+    private pharmacyService: PharmacyService,
+    private pharmacyIntelligenceService: PharmacyIntelligenceService,
+  ) {}
 
   // ============================================
   // SUPPLIER ENDPOINTS
@@ -163,6 +170,131 @@ export class PharmacyController {
     return this.pharmacyService.createDispensing(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
+  @Post('intelligence/reconciliation-review')
+  @ApiOperation({ summary: 'Generate AI medication reconciliation, substitution, and counseling review' })
+  async generateMedicationReview(
+    @Body()
+    body: {
+      patientId: string;
+      encounterId?: string;
+      language?: string;
+      readingLevel?: number;
+      reportedMedications?: Array<Record<string, any>>;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const actorUserId = (req.user as any)?.userId ?? (req.user as any)?.id ?? null;
+    return this.pharmacyIntelligenceService.generateMedicationReview(
+      req.tenantId,
+      req.tenantDb!,
+      body,
+      actorUserId,
+    );
+  }
+
+  @Get('intelligence/reconciliation-review/:id')
+  @ApiOperation({ summary: 'Get persisted AI medication reconciliation review with substitution recommendations' })
+  async getMedicationReview(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.pharmacyIntelligenceService.getReviewById(req.tenantDb!, id);
+  }
+
+  @Post('intelligence/dispense-plan')
+  @ApiOperation({ summary: 'Prepare governed dispense-plan intelligence for a prescription' })
+  async prepareDispensePlan(
+    @Body() body: { prescriptionId: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    const actorUserId = (req.user as any)?.userId ?? (req.user as any)?.id ?? null;
+    return this.pharmacyIntelligenceService.prepareDispensePlan(
+      req.tenantId,
+      req.tenantDb!,
+      body.prescriptionId,
+      actorUserId,
+    );
+  }
+
+  @Post('intelligence/inventory-forecast')
+  @ApiOperation({ summary: 'Generate persisted inventory shortage forecasts and reorder guidance' })
+  async generateInventoryForecasts(
+    @Body() body: { horizonDays?: number; lookbackDays?: number; inventoryIds?: string[] },
+    @Request() req: RequestWithTenant,
+  ) {
+    const actorUserId = (req.user as any)?.userId ?? (req.user as any)?.id ?? null;
+    return this.pharmacyIntelligenceService.generateInventoryForecasts(
+      req.tenantDb!,
+      body,
+      actorUserId,
+    );
+  }
+
+  @Get('intelligence/inventory-forecast')
+  @ApiOperation({ summary: 'List persisted inventory forecasts' })
+  async listInventoryForecasts(
+    @Query() query: { shortageRisk?: string; limit?: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.pharmacyIntelligenceService.listInventoryForecasts(req.tenantDb!, query);
+  }
+
+  @Post('intelligence/dispensing-anomalies')
+  @ApiOperation({ summary: 'Detect and persist dispensing anomalies for pharmacist review' })
+  async detectDispensingAnomalies(
+    @Body() body: { lookbackDays?: number; limit?: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.pharmacyIntelligenceService.detectDispensingAnomalies(req.tenantDb!, body);
+  }
+
+  @Get('intelligence/dispensing-anomalies')
+  @ApiOperation({ summary: 'List persisted dispensing anomalies' })
+  async listDispensingAnomalies(
+    @Query() query: { status?: string; severity?: string; limit?: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.pharmacyIntelligenceService.listDispensingAnomalies(req.tenantDb!, query);
+  }
+
+  @Post('intelligence/high-risk-review')
+  @ApiOperation({ summary: 'Generate high-risk medication review and antimicrobial stewardship output' })
+  async generateHighRiskMedicationReview(
+    @Body()
+    body: {
+      patientId?: string;
+      prescriptionId?: string;
+      medications?: Array<Record<string, any>>;
+      patientAge?: number;
+      patientGender?: string;
+      diagnoses?: string[];
+      renalFunction?: number;
+      route?: string;
+      indication?: string;
+      cultureSent?: boolean;
+      cultureSource?: string;
+      cultureResult?: string;
+      organismIdentified?: string;
+      sensitivityProfile?: Record<string, any>;
+      plannedDurationDays?: number;
+      startDate?: string;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const actorUserId = (req.user as any)?.userId ?? (req.user as any)?.id ?? null;
+    return this.pharmacyIntelligenceService.generateHighRiskMedicationReview(
+      req.tenantDb!,
+      body,
+      actorUserId,
+    );
+  }
+
+  @Get('intelligence/stewardship')
+  @ApiOperation({ summary: 'List persisted antimicrobial stewardship reviews generated from pharmacy intelligence' })
+  async listStewardshipReviews(
+    @Query() query: { patientId?: string; reviewRequired?: boolean; limit?: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.pharmacyIntelligenceService.listStewardshipReviews(req.tenantDb!, query);
+  }
+
   @Get('dispensings/:id')
   @ApiOperation({ summary: 'Get dispensing' })
   async getDispensing(@Param('id') id: string, @Request() req: RequestWithTenant) {
@@ -293,17 +425,7 @@ export class PharmacyController {
   @ApiOperation({ summary: 'Dispense a prescription' })
   async dispensePrescription(
     @Param('id') id: string,
-    @Body() dto: { 
-      items: Array<{ inventoryId: string; quantityDispensed: number }>; 
-      paymentMethod?: string; 
-      notes?: string;
-      discountAmount?: number;
-      amountPaid?: number;
-      medicalAidId?: string;
-      medicalAidName?: string;
-      policyNumber?: string;
-      coveragePercentage?: number;
-    },
+    @Body() dto: CreateDispensingDto,
     @Request() req: RequestWithTenant,
   ) {
     return this.pharmacyService.dispensePrescription(req.tenantDb, id, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
@@ -318,5 +440,19 @@ export class PharmacyController {
   ) {
     return this.pharmacyService.processDispensingPayment(req.tenantDb, id, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
-}
 
+  @Post('prescriptions/override-contraindication')
+  @UseGuards(RolesGuard)
+  @Roles('doctor', 'senior_clinician')
+  @ApiOperation({ summary: 'Override contraindication hard-stop (senior clinician only)' })
+  async overrideContraindication(
+    @Body() dto: ContraindicationOverrideDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    if (!dto.overrideReason || dto.overrideReason.length < 20) {
+      throw new BadRequestException('Override reason must be at least 20 characters');
+    }
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
+    return this.pharmacyService.createPrescriptionWithContraindicationOverride(dto, userId, req.tenantDb);
+  }
+}

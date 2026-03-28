@@ -16,7 +16,7 @@ export interface ImportStatus {
   processedRows?: number;
   error?: string;
   fileName?: string;
-  type?: 'snomed' | 'icd10';
+  type?: 'snomed' | 'icd10' | 'icd11';
   startTime?: Date;
   endTime?: Date;
 }
@@ -156,19 +156,29 @@ export class TerminologyImportService implements OnModuleDestroy {
   }
 
   async getStats() {
-    if (!this.masterDb || !this.masterDb.isInitialized) return { snomedConcepts: 0, icd10Codes: 0 };
-    
+    if (!this.masterDb || !this.masterDb.isInitialized) return { snomedConcepts: 0, icd10Codes: 0, icd11Codes: 0 };
+
     try {
         const snomedCount = await this.masterDb.query('SELECT count(*) as count FROM snomed_concepts');
-        const icd10Count = await this.masterDb.query('SELECT count(*) as count FROM icd10_codes');
-        
+        const icd10Count  = await this.masterDb.query('SELECT count(*) as count FROM icd10_codes');
+        const icd11Exists = await this.masterDb.query(`
+            SELECT EXISTS (
+              SELECT FROM information_schema.tables
+              WHERE table_schema = 'public' AND table_name = 'icd11_codes'
+            )`);
+        let icd11Count = 0;
+        if (icd11Exists[0].exists) {
+            const res = await this.masterDb.query('SELECT count(*) as count FROM icd11_codes');
+            icd11Count = parseInt(res[0].count);
+        }
         return {
             snomedConcepts: parseInt(snomedCount[0].count),
-            icd10Codes: parseInt(icd10Count[0].count)
+            icd10Codes:     parseInt(icd10Count[0].count),
+            icd11Codes:     icd11Count,
         };
     } catch (e) {
         this.logger.error('Failed to get stats', e);
-        return { snomedConcepts: 0, icd10Codes: 0 };
+        return { snomedConcepts: 0, icd10Codes: 0, icd11Codes: 0 };
     }
   }
 
@@ -198,10 +208,10 @@ export class TerminologyImportService implements OnModuleDestroy {
     }
   }
 
-  async importFile(file: Express.Multer.File, type: 'snomed' | 'icd10'): Promise<string> {
+  async importFile(file: Express.Multer.File, type: 'snomed' | 'icd10' | 'icd11', replace = false): Promise<string> {
     const jobId = Math.random().toString(36).substring(7);
     const tempPath = file.path; // Multer saves to a temp path
-    
+
     const job: ImportStatus = {
       jobId,
       status: 'pending',
@@ -210,11 +220,11 @@ export class TerminologyImportService implements OnModuleDestroy {
       type,
       startTime: new Date(),
     };
-    
+
     await this.saveJob(job);
 
     // Start processing in background
-    this.processImport(job, tempPath, type).catch(async err => {
+    this.processImport(job, tempPath, type, replace, file.originalname).catch(async err => {
       this.logger.error(`Import job ${jobId} failed: ${err.message}`, err.stack);
       job.status = 'failed';
       job.error = err.message;
@@ -225,19 +235,51 @@ export class TerminologyImportService implements OnModuleDestroy {
     return jobId;
   }
 
-  private async processImport(job: ImportStatus, filePath: string, type: 'snomed' | 'icd10') {
+  private async processImport(job: ImportStatus, filePath: string, type: 'snomed' | 'icd10' | 'icd11', replace = false, originalName = '') {
     job.status = 'processing';
     job.message = 'Extracting and analyzing file...';
     await this.saveJob(job);
 
     try {
-        if (filePath.endsWith('.zip')) {
+        const isZip = originalName.toLowerCase().endsWith('.zip') || filePath.endsWith('.zip');
+        const isTxt = originalName.toLowerCase().endsWith('.txt');
+
+        if (replace) {
+            job.message = 'Clearing existing data...';
+            await this.saveJob(job);
+            const masterDb = await this.getMasterDb();
+            if (type === 'snomed') {
+                await masterDb.query('TRUNCATE snomed_to_icd10_map, snomed_relationships, snomed_descriptions, snomed_concepts CASCADE');
+            } else if (type === 'icd11') {
+                await masterDb.query('TRUNCATE snomed_to_icd11_map, icd11_codes CASCADE');
+            } else {
+                await masterDb.query('TRUNCATE icd10_codes');
+            }
+            job.message = 'Existing data cleared. Importing...';
+            await this.saveJob(job);
+        }
+
+        if (isZip) {
             await this.processZipFile(job, filePath, type);
+        } else if (isTxt && type === 'icd10') {
+            // ICD-10 plain text file — process directly without zip extraction
+            const masterDb = await this.getMasterDb();
+            const queryRunner = masterDb.createQueryRunner();
+            await queryRunner.connect();
+            try {
+                const totalBytes = fs.statSync(filePath).size;
+                job.message = 'Importing ICD-10 Codes...';
+                await this.processFile(queryRunner, filePath, this.processors.icd10, job, false, totalBytes, 0);
+            } finally {
+                await queryRunner.release();
+            }
         } else {
-            // Handle single file if applicable (though user mainly uploads zips)
-             job.message = 'Single file upload not fully supported for complex imports, assuming extraction handled.';
-             // For now, let's assume ZIPs for RF2 and ICD10 bundles
-             throw new BadRequestException('Please upload a .zip file containing the terminology data.');
+            const hint = type === 'icd10'
+                ? 'Please upload a .zip or .txt file for ICD-10.'
+                : type === 'icd11'
+                ? 'Please upload a .zip file (ICD-11 MMS linearization JSON).'
+                : 'Please upload a .zip file (SNOMED CT RF2 release).';
+            throw new BadRequestException(hint);
         }
 
         job.status = 'completed';
@@ -264,19 +306,37 @@ export class TerminologyImportService implements OnModuleDestroy {
     const zip = new AdmZip(zipPath);
     const zipEntries = zip.getEntries();
     const extractPath = path.join(path.dirname(zipPath), `extract_${job.jobId}`);
+    const maxEntries = 10000;
     
     if (!fs.existsSync(extractPath)) {
         fs.mkdirSync(extractPath);
     }
 
     try {
+        if (zipEntries.length > maxEntries) {
+          throw new Error(`Zip contains too many entries (${zipEntries.length}). Maximum allowed is ${maxEntries}.`);
+        }
         job.message = `Extracting ${zipEntries.length} files...`;
-        zip.extractAllTo(extractPath, true);
+        const extractRoot = path.resolve(extractPath);
+        for (const entry of zipEntries) {
+          const entryName = String(entry.entryName || '').replace(/\\/g, '/');
+          if (!entryName || entryName.endsWith('/')) {
+            continue;
+          }
+          const destination = path.resolve(extractRoot, entryName);
+          if (!destination.startsWith(`${extractRoot}${path.sep}`)) {
+            throw new Error(`Unsafe zip entry path detected: ${entryName}`);
+          }
+          fs.mkdirSync(path.dirname(destination), { recursive: true });
+          fs.writeFileSync(destination, entry.getData());
+        }
 
         if (type === 'snomed') {
             await this.importSnomedFromFolder(job, extractPath);
         } else if (type === 'icd10') {
             await this.importIcd10FromFolder(job, extractPath);
+        } else if (type === 'icd11') {
+            await this.importIcd11FromFolder(job, extractPath);
         }
 
     } finally {
@@ -325,7 +385,8 @@ export class TerminologyImportService implements OnModuleDestroy {
         }
 
         job.message = 'Refreshing Materialized Views...';
-        await queryRunner.query('REFRESH MATERIALIZED VIEW snomed_search_view');
+        // CONCURRENTLY allows reads to continue during refresh (requires unique index on description_id)
+        await queryRunner.query('REFRESH MATERIALIZED VIEW CONCURRENTLY snomed_search_view');
         
     } finally {
         await queryRunner.release();
@@ -352,6 +413,111 @@ export class TerminologyImportService implements OnModuleDestroy {
       } finally {
           await queryRunner.release();
       }
+  }
+
+  private async importIcd11FromFolder(job: ImportStatus, folderPath: string) {
+    const files = this.findFilesRecursively(folderPath);
+    // WHO distributes ICD-11 as JSON (linearization export) or CSV
+    const jsonFile = files.find(f => f.match(/icd11.*\.json$/i) || f.match(/linearization.*\.json$/i));
+    const csvFile  = files.find(f => f.match(/icd11.*\.csv$/i)  || f.match(/mms.*\.csv$/i));
+
+    if (!jsonFile && !csvFile) {
+      throw new Error('No ICD-11 file found. Expected a JSON linearization export (icd11*.json) or CSV (icd11*.csv) inside the zip.');
+    }
+
+    const masterDb = await this.getMasterDb();
+    const queryRunner = masterDb.createQueryRunner();
+    await queryRunner.connect();
+
+    try {
+      if (jsonFile) {
+        job.message = 'Parsing ICD-11 JSON...';
+        await this.saveJob(job);
+
+        const raw = fs.readFileSync(jsonFile, 'utf8');
+        let entities: any[] = [];
+
+        const parsed = JSON.parse(raw);
+        // Support both { entities: [] } wrapper and bare array
+        if (Array.isArray(parsed)) {
+          entities = parsed;
+        } else if (Array.isArray(parsed.entities)) {
+          entities = parsed.entities;
+        } else if (Array.isArray(parsed.linearization)) {
+          entities = parsed.linearization;
+        }
+
+        if (entities.length === 0) {
+          throw new Error('ICD-11 JSON contained no recognisable entities array.');
+        }
+
+        job.message = `Importing ${entities.length.toLocaleString()} ICD-11 codes...`;
+        await this.saveJob(job);
+
+        const BATCH_SIZE = 2000;
+        let batch: any[] = [];
+        let count = 0;
+
+        for (const entity of entities) {
+          // Normalise: WHO JSON uses @value wrappers on string fields
+          const code  = String(entity.code  || '').trim();
+          const title = typeof entity.title === 'object'
+            ? String((entity.title as any)['@value'] || '')
+            : String(entity.title || '').trim();
+          if (!code || !title) continue;
+
+          const parentCode = (() => {
+            const p = entity.parent;
+            if (!p) return null;
+            const arr = Array.isArray(p) ? p : [p];
+            const uri = String(arr[0] || '');
+            const match = uri.match(/entity\/([A-Z0-9.]+)$/);
+            return match ? match[1] : null;
+          })();
+
+          batch.push({
+            tableName: 'icd11_codes',
+            columns: ['code', 'title', 'parent_code', 'chapter', 'billable', 'valid_for_coding'],
+            values: [code, title, parentCode, entity.chapter || null, true, true],
+          });
+
+          if (batch.length >= BATCH_SIZE) {
+            await this.insertBatch(queryRunner, batch);
+            count += batch.length;
+            batch = [];
+            job.processedRows = count;
+            job.progress = Math.min(Math.round((count / entities.length) * 99), 99);
+            if (count % 10000 === 0) {
+              job.message = `Importing ICD-11 codes... (${count.toLocaleString()} of ${entities.length.toLocaleString()})`;
+              await this.saveJob(job);
+            }
+          }
+        }
+
+        if (batch.length > 0) {
+          await this.insertBatch(queryRunner, batch);
+          count += batch.length;
+          job.processedRows = count;
+          await this.saveJob(job);
+        }
+      } else if (csvFile) {
+        // CSV fallback — tab or comma separated: code, title[, parent_code, chapter]
+        job.message = 'Importing ICD-11 from CSV...';
+        const totalBytes = fs.statSync(csvFile).size;
+        await this.processFile(queryRunner, csvFile, (row: string[]) => {
+          const code  = (row[0] || '').trim();
+          const title = (row[1] || '').trim();
+          if (!code || !title) return null;
+          return {
+            tableName: 'icd11_codes',
+            columns: ['code', 'title', 'parent_code', 'chapter', 'billable', 'valid_for_coding'],
+            values: [code, title, row[2] || null, row[3] || null, true, true],
+          };
+        }, job, true, totalBytes, 0);
+      }
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   private findFilesRecursively(dir: string): string[] {
@@ -550,6 +716,24 @@ export class TerminologyImportService implements OnModuleDestroy {
           row[11] || null, // correlation
           this.parseBool(row[2]) // active
         ]
+      };
+    },
+    icd11: (row: any) => {
+      // row is a plain object from ICD-11 JSON (not a tab-split string[])
+      const code  = String(row.code  || '').trim();
+      const title = String(row.title || row.classKind || '').trim();
+      if (!code || !title) return null;
+      return {
+        tableName: 'icd11_codes',
+        columns: ['code', 'title', 'parent_code', 'chapter', 'billable', 'valid_for_coding'],
+        values: [
+          code,
+          title,
+          row.parentCode || null,
+          row.chapter    || null,
+          true,
+          true,
+        ],
       };
     },
     icd10: (row: string[]) => {

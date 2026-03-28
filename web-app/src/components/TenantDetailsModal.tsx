@@ -1,11 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { Tenant, TenantUser, CreateTenantUserRequest } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Tenant,
+  TenantUser,
+  CreateTenantUserRequest,
+  UpdateTenantRequest,
+  TenantDhis2ConfigPayload,
+  TenantDhis2ConfigView,
+  TenantSubscriptionPayment,
+  TenantSubscriptionPaymentProvider,
+} from '../types';
 import { tenantAPI } from '../services/api';
-import { Modal } from './Modal';
+import { ConfirmModal, Modal, PromptModal } from './Modal';
+import {
+  CORE_INCLUDED_MODULES,
+  DEMO_DEFAULT_MODULES,
+  SUBSCRIPTION_MODULE_OPTIONS,
+  normalizeModules,
+} from '../constants/subscriptions';
 
 interface TenantDetailsModalProps {
   tenant: Tenant | null;
   isOpen: boolean;
+  focusSection?: 'default' | 'dhis2';
   onClose: () => void;
   onUpdate: () => void;
 }
@@ -15,9 +31,106 @@ const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>, current: Crea
   setter({...current, role: e.target.value as CreateTenantUserRequest['role']});
 };
 
+interface Dhis2FormState {
+  baseUrl: string;
+  apiVersion: string;
+  authType: 'pat' | 'basic';
+  pat: string;
+  username: string;
+  password: string;
+  orgUnitId: string;
+  trackedEntityTypeId: string;
+  datasetId: string;
+  enabled: boolean;
+  scheduledSyncEnabled: boolean;
+  scheduledRetryLimit: number;
+  alertLookbackHours: number;
+  alertErrorThreshold: number;
+  alertWebhookUrl: string;
+}
+
+const createDefaultDhis2Form = (): Dhis2FormState => ({
+  baseUrl: '',
+  apiVersion: '40',
+  authType: 'pat',
+  pat: '',
+  username: '',
+  password: '',
+  orgUnitId: '',
+  trackedEntityTypeId: '',
+  datasetId: '',
+  enabled: true,
+  scheduledSyncEnabled: false,
+  scheduledRetryLimit: 20,
+  alertLookbackHours: 24,
+  alertErrorThreshold: 10,
+  alertWebhookUrl: '',
+});
+
+const formatDateInput = (value?: string | null) => (value ? new Date(value).toISOString().slice(0, 10) : '');
+const buildDefaultDemoExpiryDate = () => {
+  const expiry = new Date();
+  expiry.setDate(expiry.getDate() + 14);
+  return expiry.toISOString().slice(0, 10);
+};
+const sanitizeSelectedModules = (modules?: string[]) =>
+  Array.from(
+    new Set(
+      (modules || [])
+        .map((moduleKey) => String(moduleKey || '').trim().toLowerCase())
+        .filter((moduleKey) => SUBSCRIPTION_MODULE_OPTIONS.some((option) => option.key === moduleKey)),
+    ),
+  );
+const resolvePaidPackagePreset = (modules: string[]) =>
+  modules.length === 1 && modules[0] === 'claims' ? 'claims_only' : 'full_ehr';
+
+const getBillingToneStyles = (tone?: string) => {
+  switch (tone) {
+    case 'warning':
+      return 'border-amber-200 bg-amber-50 text-amber-800';
+    case 'critical':
+      return 'border-red-200 bg-red-50 text-red-800';
+    case 'expired':
+      return 'border-slate-300 bg-slate-100 text-slate-800';
+    default:
+      return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  }
+};
+
+const buildPackageForm = (tenant: Tenant): UpdateTenantRequest => ({
+  subscriptionTier: tenant.subscriptionTier,
+  subscriptionMode: tenant.subscriptionMode,
+  packagePreset: tenant.packagePreset,
+  packageName:
+    tenant.packageName ||
+    (tenant.subscriptionMode === 'demo'
+      ? 'Guided Demo'
+      : tenant.packagePreset === 'claims_only'
+        ? 'Claims Only'
+        : 'Module Subscription'),
+  enabledModules:
+    tenant.packagePreset === 'claims_only'
+      ? ['claims']
+      : sanitizeSelectedModules(tenant.enabledModules),
+  demoExpiresAt: formatDateInput(tenant.demoExpiresAt),
+  billingEndsAt: formatDateInput(tenant.billingEndsAt),
+  gracePeriodDays:
+    tenant.billingEndsAt && tenant.graceEndsAt
+      ? Math.max(
+          Math.round(
+            (new Date(tenant.graceEndsAt).getTime() - new Date(tenant.billingEndsAt).getTime()) /
+              (1000 * 60 * 60 * 24)
+          ),
+          0,
+        )
+      : 5,
+  suspensionWarningDays: tenant.suspensionWarningDays || tenant.billingSummary?.warningDays || 5,
+});
+
 export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   tenant,
   isOpen,
+  focusSection = 'default',
   onClose,
   onUpdate
 }) => {
@@ -44,16 +157,28 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
+  const [dhis2Loading, setDhis2Loading] = useState(false);
+  const [dhis2Saving, setDhis2Saving] = useState(false);
+  const [dhis2Configured, setDhis2Configured] = useState(false);
+  const [dhis2HasPat, setDhis2HasPat] = useState(false);
+  const [dhis2PatMasked, setDhis2PatMasked] = useState<string | null>(null);
+  const [dhis2Form, setDhis2Form] = useState<Dhis2FormState>(createDefaultDhis2Form());
+  const [dhis2RunNowLoading, setDhis2RunNowLoading] = useState(false);
+  const [packageForm, setPackageForm] = useState<UpdateTenantRequest | null>(null);
+  const [packageSaving, setPackageSaving] = useState(false);
+  const [showDeleteDhis2ConfigConfirm, setShowDeleteDhis2ConfigConfirm] = useState(false);
+  const [subscriptionPaymentProviders, setSubscriptionPaymentProviders] = useState<TenantSubscriptionPaymentProvider[]>([]);
+  const [subscriptionPayments, setSubscriptionPayments] = useState<TenantSubscriptionPayment[]>([]);
+  const [subscriptionPaymentsLoading, setSubscriptionPaymentsLoading] = useState(false);
+  const [paymentSessionLoading, setPaymentSessionLoading] = useState(false);
+  const [paymentConfirmLoading, setPaymentConfirmLoading] = useState(false);
+  const [confirmPaymentPrompt, setConfirmPaymentPrompt] = useState<{ payment: TenantSubscriptionPayment; value: string } | null>(null);
+  const [selectedPaymentProvider, setSelectedPaymentProvider] = useState('zimswitch');
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentMonthsToExtend, setPaymentMonthsToExtend] = useState<number>(1);
+  const dhis2SectionRef = React.useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (tenant && isOpen) {
-      loadUsers();
-    } else {
-      setUsers([]); // Clear users when closed or tenant cleared
-    }
-  }, [tenant, isOpen]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!tenant) return;
     setUsers([]); // Clear users immediately to prevent showing stale data from previous tenant
     setLoading(true);
@@ -70,6 +195,377 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setUsers([]);
     } finally {
       setLoading(false);
+    }
+  }, [tenant]);
+
+  const loadDhis2Config = useCallback(async () => {
+    if (!tenant) return;
+    setDhis2Loading(true);
+    try {
+      const data = await tenantAPI.getTenantDhis2Config(tenant.id);
+      if ((data as any)?.configured === false) {
+        setDhis2Configured(false);
+        setDhis2HasPat(false);
+        setDhis2PatMasked(null);
+        setDhis2Form(createDefaultDhis2Form());
+        return;
+      }
+
+      const config = data as TenantDhis2ConfigView;
+      setDhis2Configured(true);
+      setDhis2HasPat(Boolean(config.hasPat));
+      setDhis2PatMasked(config.patMasked ?? null);
+      setDhis2Form({
+        baseUrl: config.baseUrl || '',
+        apiVersion: config.apiVersion || '40',
+        authType: config.authType === 'basic' ? 'basic' : 'pat',
+        pat: '',
+        username: config.username || '',
+        password: '',
+        orgUnitId: config.orgUnitId || '',
+        trackedEntityTypeId: config.trackedEntityTypeId || '',
+        datasetId: config.datasetId || '',
+        enabled: Boolean(config.enabled),
+        scheduledSyncEnabled: Boolean(config.scheduledSyncEnabled),
+        scheduledRetryLimit: Number(config.scheduledRetryLimit || 20),
+        alertLookbackHours: Number(config.alertLookbackHours || 24),
+        alertErrorThreshold: Number(config.alertErrorThreshold || 10),
+        alertWebhookUrl: config.alertWebhookUrl || '',
+      });
+    } catch (error) {
+      console.error('Failed to load tenant DHIS2 config:', error);
+      setErrorMessage('Failed to load DHIS2 configuration');
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setDhis2Loading(false);
+    }
+  }, [tenant]);
+
+  const loadSubscriptionPayments = useCallback(async () => {
+    if (!tenant) return;
+    setSubscriptionPaymentsLoading(true);
+    try {
+      const [providers, payments] = await Promise.all([
+        tenantAPI.getSubscriptionPaymentProviders(tenant.id),
+        tenantAPI.getSubscriptionPayments(tenant.id, 10),
+      ]);
+      setSubscriptionPaymentProviders(Array.isArray(providers) ? providers : []);
+      setSubscriptionPayments(Array.isArray(payments) ? payments : []);
+
+      const defaultProvider =
+        (Array.isArray(providers) ? providers : []).find((provider) => provider.enabled && provider.key !== 'manual')?.key ||
+        (Array.isArray(providers) ? providers : []).find((provider) => provider.enabled)?.key ||
+        'zimswitch';
+      setSelectedPaymentProvider(defaultProvider);
+      const estimatedAmount =
+        tenant.subscriptionTier === 'enterprise'
+          ? 199
+          : tenant.subscriptionTier === 'professional'
+            ? 99
+            : 49;
+      setPaymentAmount(estimatedAmount);
+      setPaymentMonthsToExtend(1);
+    } catch (error) {
+      console.error('Failed to load subscription payments:', error);
+      setSubscriptionPaymentProviders([]);
+      setSubscriptionPayments([]);
+    } finally {
+      setSubscriptionPaymentsLoading(false);
+    }
+  }, [tenant]);
+
+  useEffect(() => {
+    if (tenant && isOpen) {
+      loadUsers();
+      loadDhis2Config();
+      loadSubscriptionPayments();
+      setPackageForm(buildPackageForm(tenant));
+    } else {
+      setUsers([]); // Clear users when closed or tenant cleared
+      setDhis2Configured(false);
+      setDhis2HasPat(false);
+      setDhis2PatMasked(null);
+      setDhis2Form(createDefaultDhis2Form());
+      setPackageForm(null);
+      setSubscriptionPaymentProviders([]);
+      setSubscriptionPayments([]);
+    }
+  }, [isOpen, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
+
+  useEffect(() => {
+    if (!isOpen || focusSection !== 'dhis2') {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      dhis2SectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [focusSection, isOpen, tenant?.id]);
+
+  const handlePackageFieldChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setPackageForm((prev) => {
+      if (!prev) return prev;
+      if (name === 'subscriptionMode') {
+        return {
+          ...prev,
+          subscriptionMode: value as 'demo' | 'paid',
+          subscriptionTier: value === 'demo' ? 'enterprise' : prev.subscriptionTier || 'basic',
+          packagePreset: 'full_ehr',
+          enabledModules:
+            value === 'demo'
+              ? [...CORE_INCLUDED_MODULES, ...DEMO_DEFAULT_MODULES]
+              : [...CORE_INCLUDED_MODULES],
+          demoExpiresAt: value === 'demo' ? (prev.demoExpiresAt || buildDefaultDemoExpiryDate()) : undefined,
+        };
+      }
+
+      return {
+        ...prev,
+        [name]: value,
+      };
+    });
+  };
+
+  const handleModuleToggle = (moduleKey: string) => {
+    if (packageForm?.subscriptionMode === 'demo') {
+      return;
+    }
+
+    setPackageForm((prev) => {
+      if (!prev) return prev;
+      const current = new Set(sanitizeSelectedModules(prev.enabledModules));
+      if (current.has(moduleKey)) {
+        current.delete(moduleKey);
+      } else {
+        current.add(moduleKey);
+      }
+      return {
+        ...prev,
+        enabledModules: Array.from(current),
+      };
+    });
+  };
+
+  const handleSavePackage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenant || !packageForm) return;
+
+    const isDemoMode = packageForm.subscriptionMode === 'demo';
+    const selectedModules = sanitizeSelectedModules(packageForm.enabledModules);
+    const paidPackagePreset = resolvePaidPackagePreset(selectedModules);
+    const payload: UpdateTenantRequest = {
+      subscriptionTier: isDemoMode ? 'enterprise' : packageForm.subscriptionTier,
+      subscriptionMode: packageForm.subscriptionMode,
+      packagePreset: isDemoMode ? 'full_ehr' : paidPackagePreset,
+      packageName: isDemoMode ? 'Guided Demo' : paidPackagePreset === 'claims_only' ? 'Claims Only' : 'Module Subscription',
+      enabledModules: isDemoMode
+        ? normalizeModules([...CORE_INCLUDED_MODULES, ...DEMO_DEFAULT_MODULES], 'full_ehr')
+        : normalizeModules(selectedModules, paidPackagePreset),
+      demoExpiresAt: isDemoMode ? packageForm.demoExpiresAt : undefined,
+      demoDurationDays: undefined,
+      billingEndsAt: isDemoMode ? undefined : packageForm.billingEndsAt,
+      gracePeriodDays: isDemoMode ? undefined : Number(packageForm.gracePeriodDays || 5),
+      suspensionWarningDays: Number(packageForm.suspensionWarningDays || 5),
+    };
+
+    setPackageSaving(true);
+    try {
+      const updatedTenant = await tenantAPI.updateTenant(tenant.id, payload);
+      setPackageForm(buildPackageForm(updatedTenant));
+      showSuccess('Tenant package updated');
+      onUpdate();
+    } catch (error: any) {
+      console.error('Failed to update tenant package:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to update tenant package');
+    } finally {
+      setPackageSaving(false);
+    }
+  };
+
+  const handleCreateSubscriptionPaymentSession = async () => {
+    if (!tenant) return;
+    if (!selectedPaymentProvider) {
+      showError('Please select a payment provider');
+      return;
+    }
+    if (!Number.isFinite(Number(paymentAmount)) || Number(paymentAmount) <= 0) {
+      showError('Payment amount must be greater than zero');
+      return;
+    }
+    if (!Number.isFinite(Number(paymentMonthsToExtend)) || Number(paymentMonthsToExtend) <= 0) {
+      showError('Months to extend must be at least 1');
+      return;
+    }
+
+    setPaymentSessionLoading(true);
+    try {
+      const session = await tenantAPI.createSubscriptionPaymentSession(tenant.id, {
+        provider: selectedPaymentProvider,
+        amount: Number(paymentAmount),
+        monthsToExtend: Number(paymentMonthsToExtend),
+        currency: 'USD',
+        metadata: {
+          initiatedFrom: 'super_admin_portal',
+          tenantSubdomain: tenant.subdomain,
+        },
+      });
+      await loadSubscriptionPayments();
+      if (session?.checkoutUrl) {
+        window.open(session.checkoutUrl, '_blank', 'noopener,noreferrer');
+      }
+      showSuccess(`Payment session created (${session.reference}). Continue checkout in the opened tab/window.`);
+    } catch (error: any) {
+      console.error('Failed to create subscription payment session:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to create subscription payment session');
+    } finally {
+      setPaymentSessionLoading(false);
+    }
+  };
+
+  const handleConfirmSubscriptionPayment = (payment: TenantSubscriptionPayment) => {
+    setConfirmPaymentPrompt({ payment, value: payment.externalPaymentId || '' });
+  };
+
+  const submitConfirmSubscriptionPayment = async (externalPaymentId: string) => {
+    if (!tenant || !confirmPaymentPrompt) return;
+    const { payment } = confirmPaymentPrompt;
+    setPaymentConfirmLoading(true);
+    try {
+      await tenantAPI.confirmSubscriptionPayment(tenant.id, payment.id, {
+        status: 'successful',
+        externalPaymentId: externalPaymentId.trim() || undefined,
+        note: 'Confirmed from super admin portal',
+      });
+      setConfirmPaymentPrompt(null);
+      await loadSubscriptionPayments();
+      onUpdate();
+      showSuccess('Subscription payment confirmed and tenant billing extended');
+    } catch (error: any) {
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to confirm payment');
+    } finally {
+      setPaymentConfirmLoading(false);
+    }
+  };
+
+  const handleSaveDhis2Config = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenant) return;
+
+    const normalizedBaseUrl = dhis2Form.baseUrl.trim();
+    const normalizedOrgUnitId = dhis2Form.orgUnitId.trim();
+    if (!normalizedBaseUrl) {
+      showError('DHIS2 Base URL is required');
+      return;
+    }
+    if (!normalizedOrgUnitId) {
+      showError('DHIS2 Org Unit ID is required');
+      return;
+    }
+    if (dhis2Form.authType === 'pat' && !dhis2Form.pat.trim() && !dhis2HasPat) {
+      showError('PAT is required for PAT authentication');
+      return;
+    }
+
+    const payload: TenantDhis2ConfigPayload = {
+      baseUrl: normalizedBaseUrl,
+      apiVersion: dhis2Form.apiVersion.trim() || '40',
+      authType: dhis2Form.authType,
+      orgUnitId: normalizedOrgUnitId,
+      trackedEntityTypeId: dhis2Form.trackedEntityTypeId.trim() || null,
+      datasetId: dhis2Form.datasetId.trim() || null,
+      enabled: dhis2Form.enabled,
+      scheduledSyncEnabled: dhis2Form.scheduledSyncEnabled,
+      scheduledRetryLimit: Math.min(Math.max(Number(dhis2Form.scheduledRetryLimit || 20), 1), 200),
+      alertLookbackHours: Math.min(Math.max(Number(dhis2Form.alertLookbackHours || 24), 1), 720),
+      alertErrorThreshold: Math.min(Math.max(Number(dhis2Form.alertErrorThreshold || 10), 1), 10000),
+      alertWebhookUrl: dhis2Form.alertWebhookUrl.trim() || null,
+    };
+
+    if (dhis2Form.authType === 'pat' && dhis2Form.pat.trim()) {
+      payload.pat = dhis2Form.pat.trim();
+    }
+    if (dhis2Form.authType === 'basic') {
+      if (dhis2Form.username.trim()) {
+        payload.username = dhis2Form.username.trim();
+      }
+      if (dhis2Form.password.trim()) {
+        payload.password = dhis2Form.password.trim();
+      }
+      if (!payload.username && !dhis2Configured) {
+        showError('Username is required for basic authentication');
+        return;
+      }
+      if (!payload.password && !dhis2Configured) {
+        showError('Password is required for basic authentication');
+        return;
+      }
+    }
+
+    setDhis2Saving(true);
+    try {
+      const saved = await tenantAPI.upsertTenantDhis2Config(tenant.id, payload);
+      setDhis2Configured(true);
+      setDhis2HasPat(Boolean(saved.hasPat));
+      setDhis2PatMasked(saved.patMasked ?? null);
+      setDhis2Form((prev) => ({
+        ...prev,
+        pat: '',
+        password: '',
+        username: saved.username || prev.username,
+      }));
+      showSuccess('DHIS2 configuration saved');
+    } catch (error: any) {
+      console.error('Failed to save tenant DHIS2 config:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to save DHIS2 configuration');
+    } finally {
+      setDhis2Saving(false);
+    }
+  };
+
+  const handleClearDhis2Config = async () => {
+    if (!tenant) return;
+    setDhis2Saving(true);
+    try {
+      await tenantAPI.clearTenantDhis2Config(tenant.id);
+      setDhis2Configured(false);
+      setDhis2HasPat(false);
+      setDhis2PatMasked(null);
+      setDhis2Form(createDefaultDhis2Form());
+      showSuccess('DHIS2 configuration deleted');
+    } catch (error: any) {
+      console.error('Failed to delete tenant DHIS2 config:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to delete DHIS2 configuration');
+    } finally {
+      setDhis2Saving(false);
+      setShowDeleteDhis2ConfigConfirm(false);
+    }
+  };
+
+  const handleRunDhis2SyncNow = async () => {
+    if (!tenant) return;
+    setDhis2RunNowLoading(true);
+    try {
+      const result = await tenantAPI.runTenantDhis2SyncNow(tenant.id);
+      if (result?.status === 'SUCCESS') {
+        const cycle = result?.result || {};
+        showSuccess(
+          `Sync now completed: patients=${cycle.patientStatus || 'UNKNOWN'}, aggregate=${cycle.aggregateStatus || 'UNKNOWN'}, retries=${cycle.retryAttempted || 0}/${cycle.retryFailed || 0}`,
+        );
+      } else {
+        showError(result?.message || 'Unable to run DHIS2 sync now');
+      }
+    } catch (error: any) {
+      console.error('Failed to run tenant DHIS2 sync now:', error);
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to run DHIS2 sync now');
+    } finally {
+      setDhis2RunNowLoading(false);
     }
   };
 
@@ -224,6 +720,12 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   };
 
   if (!tenant) return null;
+  const packageMode = packageForm?.subscriptionMode || tenant.subscriptionMode;
+  const isDemoMode = packageMode === 'demo';
+  const selectedPaidModules = sanitizeSelectedModules(packageForm?.enabledModules || tenant.enabledModules);
+  const packagePreset = isDemoMode ? 'full_ehr' : resolvePaidPackagePreset(selectedPaidModules);
+  const isClaimsOnly = !isDemoMode && packagePreset === 'claims_only';
+  const billingSummary = tenant.billingSummary;
 
   return (
     <>
@@ -291,6 +793,18 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
                 <span>{tenant.subdomain}.medicore.app</span>
               </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => dhis2SectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  className="inline-flex items-center gap-2 mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16h6M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                  </svg>
+                  DHIS2 Settings
+                </button>
+              </div>
             </div>
           </div>
 
@@ -309,6 +823,540 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
               {errorMessage}
             </div>
           )}
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h4 className="font-bold text-slate-800">Subscription and lifecycle</h4>
+                <p className="text-xs text-slate-500 mt-1">
+                  Control demo expiry, paid billing windows, module entitlements, and warning lead time.
+                </p>
+              </div>
+              <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${getBillingToneStyles(billingSummary?.tone)}`}>
+                {billingSummary?.label || 'Lifecycle'}
+              </div>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <div className={`rounded-2xl border px-4 py-4 ${getBillingToneStyles(billingSummary?.tone)}`}>
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">{billingSummary?.message || 'No billing summary available yet.'}</p>
+                    <p className="mt-1 text-xs opacity-80">
+                      Access ends: {billingSummary?.accessEndsAt ? new Date(billingSummary.accessEndsAt).toLocaleString() : 'N/A'}
+                      {' · '}
+                      Suspension: {billingSummary?.suspensionAt ? new Date(billingSummary.suspensionAt).toLocaleString() : 'N/A'}
+                      {' · '}
+                      Auto-delete: {billingSummary?.autoDeleteAt ? new Date(billingSummary.autoDeleteAt).toLocaleString() : 'Not scheduled'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="rounded-xl bg-white/70 px-3 py-2">
+                      <p className="text-slate-500">Days remaining</p>
+                      <p className="text-lg font-bold text-slate-900">{billingSummary?.daysRemaining ?? 'N/A'}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 px-3 py-2">
+                      <p className="text-slate-500">Days to suspension</p>
+                      <p className="text-lg font-bold text-slate-900">{billingSummary?.daysUntilSuspension ?? 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSavePackage} className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Package Mode</label>
+                    <select
+                      name="subscriptionMode"
+                      value={packageMode}
+                      onChange={handlePackageFieldChange}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+                    >
+                      <option value="demo">Demo</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </div>
+                  {isDemoMode ? (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Demo Expiry Date</label>
+                      <input
+                        type="date"
+                        name="demoExpiresAt"
+                        value={packageForm?.demoExpiresAt || ''}
+                        onChange={handlePackageFieldChange}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Subscription Tier</label>
+                        <select
+                          name="subscriptionTier"
+                          value={packageForm?.subscriptionTier || tenant.subscriptionTier}
+                          onChange={handlePackageFieldChange}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+                        >
+                          <option value="basic">Basic</option>
+                          <option value="professional">Professional</option>
+                          <option value="enterprise">Enterprise</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Suspension Warning Days</label>
+                        <input
+                          type="number"
+                          name="suspensionWarningDays"
+                          min={1}
+                          max={30}
+                          value={packageForm?.suspensionWarningDays || 5}
+                          onChange={handlePackageFieldChange}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Billing Ends On</label>
+                        <input
+                          type="date"
+                          name="billingEndsAt"
+                          value={packageForm?.billingEndsAt || ''}
+                          onChange={handlePackageFieldChange}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Grace Period (Days)</label>
+                        <input
+                          type="number"
+                          name="gracePeriodDays"
+                          min={0}
+                          max={30}
+                          value={packageForm?.gracePeriodDays || 5}
+                          onChange={handlePackageFieldChange}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {!isDemoMode && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h5 className="text-sm font-semibold text-slate-800">Subscribed modules</h5>
+                    <span className="text-xs text-slate-500">
+                      {isClaimsOnly
+                        ? 'Standalone subscription: claims only.'
+                        : `Select the paid modules for this tenant. Standard EHR includes ${CORE_INCLUDED_MODULES.join(' + ').replace('nurse_general', 'nurse general')}.`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {SUBSCRIPTION_MODULE_OPTIONS.map((moduleOption) => {
+                      const checked = selectedPaidModules.includes(moduleOption.key);
+                      const locked = false;
+                      return (
+                        <label
+                          key={moduleOption.key}
+                          className={`rounded-xl border p-3 ${
+                            checked ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'
+                          } ${locked ? 'opacity-95' : 'cursor-pointer hover:border-slate-300'}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={locked}
+                              onChange={() => handleModuleToggle(moduleOption.key)}
+                              className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-slate-900">{moduleOption.label}</span>
+                                {(moduleOption.key === 'finance' || moduleOption.key === 'nurse_general') && !isClaimsOnly && (
+                                  <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                    Standard Core
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 text-xs leading-5 text-slate-500">{moduleOption.description}</p>
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={packageSaving}
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {packageSaving ? 'Saving package...' : 'Save package settings'}
+                  </button>
+                </div>
+              </form>
+
+              {!isDemoMode && (
+                <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h5 className="text-sm font-semibold text-slate-900">Online subscription payments</h5>
+                      <p className="text-xs text-slate-500">
+                        Create a gateway checkout session and confirm payment to extend tenant billing instantly.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={loadSubscriptionPayments}
+                      disabled={subscriptionPaymentsLoading || paymentSessionLoading || paymentConfirmLoading}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      {subscriptionPaymentsLoading ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Gateway</label>
+                      <select
+                        value={selectedPaymentProvider}
+                        onChange={(e) => setSelectedPaymentProvider(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                      >
+                        {(subscriptionPaymentProviders.length ? subscriptionPaymentProviders : [{ key: 'zimswitch', label: 'Zimswitch', enabled: true, mode: 'gateway' }])
+                          .filter((provider) => provider.enabled)
+                          .map((provider) => (
+                            <option key={provider.key} value={provider.key}>
+                              {provider.label}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Amount (USD)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        step="0.01"
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Months to extend</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={paymentMonthsToExtend}
+                        onChange={(e) => setPaymentMonthsToExtend(Number(e.target.value))}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={handleCreateSubscriptionPaymentSession}
+                        disabled={paymentSessionLoading || paymentConfirmLoading}
+                        className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {paymentSessionLoading ? 'Creating session...' : 'Create Checkout Session'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {(subscriptionPayments || []).length === 0 ? (
+                      <p className="text-xs text-slate-500">No recent subscription payment sessions.</p>
+                    ) : (
+                      subscriptionPayments.slice(0, 5).map((payment) => (
+                        <div key={payment.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">
+                                {payment.reference} · {String(payment.provider || '').toUpperCase()} · ${Number(payment.amount || 0).toFixed(2)} {payment.currency}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Created {new Date(payment.createdAt).toLocaleString()} · {payment.monthsToExtend} month(s)
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                                  payment.status === 'successful'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    : payment.status === 'pending'
+                                      ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                      : 'border-slate-300 bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                {payment.status}
+                              </span>
+                              {payment.checkoutUrl && payment.status === 'pending' && (
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(payment.checkoutUrl || '', '_blank', 'noopener,noreferrer')}
+                                  className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                >
+                                  Open Checkout
+                                </button>
+                              )}
+                              {payment.status === 'pending' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleConfirmSubscriptionPayment(payment)}
+                                  disabled={paymentConfirmLoading}
+                                  className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                  {paymentConfirmLoading ? 'Confirming...' : 'Confirm Paid'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* DHIS2 Integration Section */}
+          <div ref={dhis2SectionRef} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-50/50">
+              <div>
+                <h4 className="font-bold text-slate-800">DHIS2 Integration</h4>
+                <p className="text-xs text-slate-500 mt-1">Tenant-scoped DHIS2 auth, org unit mapping, and scheduler controls.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                    dhis2Configured ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  {dhis2Configured ? 'Configured' : 'Not configured'}
+                </span>
+                <button
+                  type="button"
+                  onClick={loadDhis2Config}
+                  disabled={dhis2Loading || dhis2Saving}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  {dhis2Loading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveDhis2Config} className="p-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">DHIS2 Base URL</label>
+                  <input
+                    type="url"
+                    value={dhis2Form.baseUrl}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, baseUrl: e.target.value }))}
+                    placeholder="https://dhis2.example.org"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">API Version</label>
+                  <input
+                    type="text"
+                    value={dhis2Form.apiVersion}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, apiVersion: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Auth Type</label>
+                  <select
+                    value={dhis2Form.authType}
+                    onChange={(e) =>
+                      setDhis2Form((prev) => ({ ...prev, authType: e.target.value === 'basic' ? 'basic' : 'pat' }))
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+                  >
+                    <option value="pat">Personal Access Token</option>
+                    <option value="basic">Username + Password</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Org Unit ID</label>
+                  <input
+                    type="text"
+                    value={dhis2Form.orgUnitId}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, orgUnitId: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Tracked Entity Type ID</label>
+                  <input
+                    type="text"
+                    value={dhis2Form.trackedEntityTypeId}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, trackedEntityTypeId: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Dataset ID</label>
+                  <input
+                    type="text"
+                    value={dhis2Form.datasetId}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, datasetId: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+              </div>
+
+              {dhis2Form.authType === 'pat' ? (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">PAT</label>
+                  <input
+                    type="password"
+                    value={dhis2Form.pat}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, pat: e.target.value }))}
+                    placeholder={dhis2HasPat ? 'PAT already stored. Enter only to rotate.' : 'd2pat_...'}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                  {dhis2HasPat && (
+                    <p className="text-xs text-slate-500 mt-1">Stored token: {dhis2PatMasked || 'set'}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={dhis2Form.username}
+                      onChange={(e) => setDhis2Form((prev) => ({ ...prev, username: e.target.value }))}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={dhis2Form.password}
+                      onChange={(e) => setDhis2Form((prev) => ({ ...prev, password: e.target.value }))}
+                      placeholder="Enter only to set/rotate password"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={dhis2Form.enabled}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Enable DHIS2 integration
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={dhis2Form.scheduledSyncEnabled}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, scheduledSyncEnabled: e.target.checked }))}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Enable scheduled sync for this tenant
+                </label>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Retry Limit (1-200)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={dhis2Form.scheduledRetryLimit}
+                    onChange={(e) =>
+                      setDhis2Form((prev) => ({ ...prev, scheduledRetryLimit: Number(e.target.value || 20) }))
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Alert Lookback Hours (1-720)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={720}
+                    value={dhis2Form.alertLookbackHours}
+                    onChange={(e) =>
+                      setDhis2Form((prev) => ({ ...prev, alertLookbackHours: Number(e.target.value || 24) }))
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Alert Error Threshold (1-10000)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={dhis2Form.alertErrorThreshold}
+                    onChange={(e) =>
+                      setDhis2Form((prev) => ({ ...prev, alertErrorThreshold: Number(e.target.value || 10) }))
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Alert Webhook URL (optional)</label>
+                  <input
+                    type="url"
+                    value={dhis2Form.alertWebhookUrl}
+                    onChange={(e) => setDhis2Form((prev) => ({ ...prev, alertWebhookUrl: e.target.value }))}
+                    placeholder="https://hooks.slack.com/..."
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                {dhis2Configured && (
+                  <button
+                    type="button"
+                    onClick={handleRunDhis2SyncNow}
+                    disabled={dhis2RunNowLoading || dhis2Saving || dhis2Loading}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {dhis2RunNowLoading ? 'Running...' : 'Run Sync Now'}
+                  </button>
+                )}
+                {dhis2Configured && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteDhis2ConfigConfirm(true)}
+                    disabled={dhis2Saving || dhis2RunNowLoading}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Delete Config
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={dhis2Saving || dhis2Loading || dhis2RunNowLoading}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {dhis2Saving ? 'Saving...' : 'Save DHIS2 Config'}
+                </button>
+              </div>
+            </form>
+          </div>
 
           {/* Users Section */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -611,6 +1659,31 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={showDeleteDhis2ConfigConfirm}
+        onClose={() => setShowDeleteDhis2ConfigConfirm(false)}
+        onConfirm={() => {
+          void handleClearDhis2Config();
+        }}
+        title="Delete DHIS2 Configuration"
+        message="Delete this tenant DHIS2 configuration?"
+        confirmText="Delete"
+        cancelText="Keep"
+        type="danger"
+      />
+
+      <PromptModal
+        isOpen={!!confirmPaymentPrompt}
+        onClose={() => setConfirmPaymentPrompt(null)}
+        onConfirm={submitConfirmSubscriptionPayment}
+        title={`Confirm Payment — ${confirmPaymentPrompt?.payment.reference || ''}`}
+        message="Enter the gateway transaction / reference ID to confirm this subscription payment."
+        value={confirmPaymentPrompt?.value || ''}
+        onValueChange={(v) => setConfirmPaymentPrompt((p) => p ? { ...p, value: v } : p)}
+        placeholder="Gateway transaction ID (optional)"
+        confirmText="Confirm Payment"
+        type="info"
+      />
     </>
   );
 };

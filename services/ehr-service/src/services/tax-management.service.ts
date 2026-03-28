@@ -430,6 +430,36 @@ export class TaxManagementService {
       })),
     };
   }
+
+  /**
+   * Combined tax report for a period (VAT + optional PAYE).
+   * Use for Zimbabwe tax filing: taxable revenue, VAT, withholding by period.
+   */
+  async getTaxReport(
+    tenantDb: DataSource,
+    startDate: string,
+    endDate: string,
+    payeTaxPeriod?: string, // YYYY-MM, optional
+  ): Promise<any> {
+    const vatReport = await this.getVATReport(tenantDb, startDate, endDate);
+    const result: any = {
+      generatedAt: new Date().toISOString(),
+      period: { startDate, endDate },
+      taxableRevenue: vatReport.summary?.amountExcludingVAT ?? 0,
+      vatAmount: vatReport.summary?.totalVAT ?? 0,
+      vatSummary: vatReport.summary,
+      vatTransactionCount: vatReport.summary?.totalTransactions ?? 0,
+      payeAmount: null as number | null,
+      payeSummary: null as any,
+    };
+    if (payeTaxPeriod) {
+      const payeReport = await this.getPAYEReport(tenantDb, payeTaxPeriod);
+      result.payeAmount = payeReport.summary?.totalPAYE ?? 0;
+      result.payeSummary = payeReport.summary;
+      result.payePeriod = payeTaxPeriod;
+    }
+    return result;
+  }
 }
 
 

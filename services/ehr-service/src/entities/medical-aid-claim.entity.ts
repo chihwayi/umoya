@@ -65,6 +65,21 @@ export class MedicalAidClaim {
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string;
 
+  @Column({ name: 'submission_method', type: 'varchar', nullable: true })
+  submissionMethod?: string;
+
+  @Column({ name: 'external_claim_id', type: 'varchar', nullable: true })
+  externalClaimId?: string;
+
+  @Column({ name: 'api_response_data', type: 'jsonb', nullable: true })
+  apiResponseData?: any;
+
+  @Column({ name: 'last_status_check_at', type: 'timestamp', nullable: true })
+  lastStatusCheckAt?: Date;
+
+  @Column({ name: 'next_status_check_at', type: 'timestamp', nullable: true })
+  nextStatusCheckAt?: Date;
+
   @Column({ name: 'diagnosis_codes', type: 'text', array: true, nullable: true })
   diagnosisCodes?: string[];
 
@@ -76,6 +91,18 @@ export class MedicalAidClaim {
 
   @Column({ name: 'claim_data', type: 'jsonb', nullable: true })
   claimData?: any;
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @Column({ name: 'original_claim_id', type: 'uuid', nullable: true })
+  originalClaimId?: string;
+
+  @Column({ name: 'pre_authorization_id', type: 'uuid', nullable: true })
+  preAuthorizationId?: string;
+
+  @Column({ name: 'resubmission_count', type: 'int', nullable: true, default: 0 })
+  resubmissionCount: number = 0;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

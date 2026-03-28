@@ -58,6 +58,12 @@ export class User {
 
   @Column({ name: 'two_factor_enabled', default: false })
   twoFactorEnabled: boolean;
+  @Column({ name: 'fcm_token', type: 'text', nullable: true })
+  fcmToken?: string;
+
+  @Column({ name: 'on_call', type: 'boolean', default: false })
+  onCall: boolean = false;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

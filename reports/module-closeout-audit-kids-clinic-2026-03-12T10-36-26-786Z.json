@@ -1,0 +1,149 @@
+{
+  "startedAt": "2026-03-12T10:36:26.786Z",
+  "environment": {
+    "EHR_BASE_URL": "http://localhost:3013",
+    "TENANT_ID": "kids-clinic",
+    "DOCTOR_EMAIL": "mumu@gmail.com"
+  },
+  "modules": [
+    {
+      "key": "mar",
+      "name": "Medication Administration Record (MAR)",
+      "endpoint": "http://localhost:3013/api/bcma/mar/operational-brief",
+      "frontendPath": "/Users/devoop/Dev/personal/medicore/ehr-frontend/src/pages/MARDashboard.tsx",
+      "backendReachable": true,
+      "httpStatus": 200,
+      "status": "done",
+      "missingCriteria": [],
+      "criteria": {
+        "workflow_operational_brief": true,
+        "risk_prioritization": true,
+        "documentation_quality": true,
+        "actionable_recommendations": true,
+        "cdss_coverage": true,
+        "ai_guideline_search": true
+      },
+      "cdssCoveragePercent": 0
+    },
+    {
+      "key": "blood-bank",
+      "name": "Blood Bank Dashboard",
+      "endpoint": "http://localhost:3013/api/blood-bank/operational-brief",
+      "frontendPath": "/Users/devoop/Dev/personal/medicore/ehr-frontend/src/pages/BloodBankDashboard.tsx",
+      "backendReachable": true,
+      "httpStatus": 200,
+      "status": "done",
+      "missingCriteria": [],
+      "criteria": {
+        "workflow_operational_brief": true,
+        "risk_prioritization": true,
+        "documentation_quality": true,
+        "actionable_recommendations": true,
+        "cdss_coverage": true,
+        "ai_guideline_search": true
+      },
+      "cdssCoveragePercent": 100
+    },
+    {
+      "key": "sepsis",
+      "name": "Sepsis Management & SEP-1 Bundle",
+      "endpoint": "http://localhost:3013/api/sepsis/operational-brief",
+      "frontendPath": "/Users/devoop/Dev/personal/medicore/ehr-frontend/src/pages/SepsisDashboard.tsx",
+      "backendReachable": true,
+      "httpStatus": 200,
+      "status": "done",
+      "missingCriteria": [],
+      "criteria": {
+        "workflow_operational_brief": true,
+        "risk_prioritization": true,
+        "documentation_quality": true,
+        "actionable_recommendations": true,
+        "cdss_coverage": true,
+        "ai_guideline_search": true
+      },
+      "cdssCoveragePercent": 100
+    },
+    {
+      "key": "infection-control",
+      "name": "Infection Control & Epidemiology",
+      "endpoint": "http://localhost:3013/api/infection-control/operational-brief",
+      "frontendPath": "/Users/devoop/Dev/personal/medicore/ehr-frontend/src/pages/InfectionControlDashboard.tsx",
+      "backendReachable": true,
+      "httpStatus": 200,
+      "status": "done",
+      "missingCriteria": [],
+      "criteria": {
+        "workflow_operational_brief": true,
+        "risk_prioritization": true,
+        "documentation_quality": true,
+        "actionable_recommendations": true,
+        "cdss_coverage": true,
+        "ai_guideline_search": true
+      },
+      "cdssCoveragePercent": 0
+    },
+    {
+      "key": "cdi",
+      "name": "Clinical Documentation Improvement",
+      "endpoint": "http://localhost:3013/api/cdi/queries/brief/021d5b24-678e-44cc-acca-d6734b9002a9",
+      "frontendPath": "/Users/devoop/Dev/personal/medicore/ehr-frontend/src/pages/CdiDashboard.tsx",
+      "backendReachable": true,
+      "httpStatus": 200,
+      "status": "done",
+      "missingCriteria": [],
+      "criteria": {
+        "workflow_operational_brief": true,
+        "risk_prioritization": true,
+        "documentation_quality": true,
+        "actionable_recommendations": true,
+        "cdss_coverage": true,
+        "ai_guideline_search": true
+      },
+      "cdssCoveragePercent": 100
+    },
+    {
+      "key": "revenue-cycle",
+      "name": "Revenue Cycle Management",
+      "endpoint": "http://localhost:3013/api/revenue-cycle/operational-brief?doctorId=021d5b24-678e-44cc-acca-d6734b9002a9",
+      "frontendPath": "/Users/devoop/Dev/personal/medicore/ehr-frontend/src/pages/RevenueCycleDashboard.tsx",
+      "backendReachable": true,
+      "httpStatus": 200,
+      "status": "done",
+      "missingCriteria": [],
+      "criteria": {
+        "workflow_operational_brief": true,
+        "risk_prioritization": true,
+        "documentation_quality": true,
+        "actionable_recommendations": true,
+        "cdss_coverage": true,
+        "ai_guideline_search": true
+      },
+      "cdssCoveragePercent": 0
+    },
+    {
+      "key": "population-health",
+      "name": "Population Health",
+      "endpoint": "http://localhost:3013/api/population-health/operational-brief",
+      "frontendPath": "/Users/devoop/Dev/personal/medicore/ehr-frontend/src/pages/PopulationHealthDashboard.tsx",
+      "backendReachable": true,
+      "httpStatus": 200,
+      "status": "done",
+      "missingCriteria": [],
+      "criteria": {
+        "workflow_operational_brief": true,
+        "risk_prioritization": true,
+        "documentation_quality": true,
+        "actionable_recommendations": true,
+        "cdss_coverage": true,
+        "ai_guideline_search": true
+      },
+      "cdssCoveragePercent": 0
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "done": 7,
+    "remaining": 0
+  },
+  "finishedAt": "2026-03-12T10:36:27.205Z"
+}

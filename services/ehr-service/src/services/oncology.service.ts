@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { TerminologyService } from './terminology.service';
+import { CdssService } from './cdss.service';
 import {
   CreateOncologyImagingFindingDto,
   CreateOncologyPathologyDto,
@@ -43,6 +44,7 @@ export class OncologyService {
   constructor(
     private readonly financeService: FinanceService,
     private readonly terminologyService: TerminologyService,
+    private readonly cdssService: CdssService,
   ) {}
 
   private extractConceptId(candidate: any): string | null {
@@ -2646,7 +2648,9 @@ export class OncologyService {
       return [];
     }
 
-    const recommendations: Array<{ biomarker: string; therapy: string; rationale: string }> = [];
+    const recommendations: Array<{ biomarker: string; therapy: string; rationale: string; source?: string }> = [];
+    const detectedBiomarkers: string[] = [];
+
     genomicRecords.forEach((record) => {
       const genomicData = record.genomic_data || {};
       Object.entries(genomicData).forEach(([key, value]) => {
@@ -2658,10 +2662,44 @@ export class OncologyService {
             biomarker: key,
             therapy: match.therapy,
             rationale: `Detected ${key} with value ${String(value)}. Evidence supports ${match.therapy}.`,
+            source: 'local_library',
           });
+          detectedBiomarkers.push(key);
         }
       });
     });
+
+    // Enrich with CDSS AI-driven therapy matching for additional evidence-based suggestions
+    if (detectedBiomarkers.length > 0) {
+      const cancerType = genomicRecords[0]?.cancer_type || genomicRecords[0]?.diagnosis || 'cancer';
+      this.cdssService.diagnosisAssist(
+        {
+          conditions: [cancerType],
+          genomicMarkers: detectedBiomarkers,
+          genomicData: genomicRecords.map((r) => r.genomic_data),
+          context: 'oncology_targeted_therapy',
+          specialty: 'oncology',
+          module: 'targeted_therapy',
+          caseId,
+        },
+        true,
+      ).then((cdssResult: any) => {
+        // cdssResult is logged but not merged synchronously — recommendations returned immediately
+        if (cdssResult?.recommendations?.length) {
+          this.logger.log(`[Oncology] CDSS provided ${cdssResult.recommendations.length} additional therapy suggestion(s) for case ${caseId}`);
+        }
+      }).catch((e: any) => this.logger.warn(`[Oncology] CDSS therapy match failed: ${e?.message}`));
+    }
+
+    // CDSS clinical-trial match (fire-and-forget enrichment)
+    this.cdssService.getGuidelines(
+      `oncology targeted therapy ${genomicRecords[0]?.cancer_type || 'cancer'}`,
+      { biomarkers: detectedBiomarkers, caseId, specialty: 'oncology', module: 'targeted_therapy' },
+    ).then((guidelines: any) => {
+      if (guidelines) {
+        this.logger.log(`[Oncology] CDSS guideline context retrieved for case ${caseId}`);
+      }
+    }).catch((e: any) => this.logger.warn(`[Oncology] CDSS guideline fetch failed: ${e?.message}`));
 
     return recommendations;
   }

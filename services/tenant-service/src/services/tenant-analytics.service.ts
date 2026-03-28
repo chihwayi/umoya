@@ -128,16 +128,33 @@ export class TenantAnalyticsService {
     });
 
     const metrics = await this.getTenantMetrics(tenantId, 90);
+    const activeCount = users.filter(u => u.status === 'active').length;
+    const lastLoginDates = users.map(u => u.lastLogin).filter(Boolean) as Date[];
+    const lastActivity = lastLoginDates.length
+      ? new Date(Math.max(...lastLoginDates.map(d => new Date(d).getTime())))
+      : (tenant as any).updatedAt ?? tenant.createdAt;
 
     return {
-      tenant,
+      tenant: {
+        id: tenant.id,
+        clinicName: tenant.clinicName,
+        subdomain: tenant.subdomain,
+        status: tenant.status,
+        createdAt: tenant.createdAt,
+        updatedAt: (tenant as any).updatedAt,
+      },
+      kpis: {
+        totalUsers: users.length,
+        activeUsers: activeCount,
+        lastActivity: lastActivity,
+      },
       users: {
         total: users.length,
-        active: users.filter(u => u.status === 'active').length,
-        byRole: this.groupByRole(users)
+        active: activeCount,
+        byRole: this.groupByRole(users),
       },
       metrics,
-      generatedAt: new Date()
+      generatedAt: new Date().toISOString(),
     };
   }
 

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MediCore Demo Medical Aid Provider</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Demo Provider Portal</p>
+          <h1>MediCore Medical Aid Sandbox</h1>
+          <p class="subtext">
+            File-backed microservice for members, plans, claims, and pre-authorizations.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="refreshAllBtn" class="btn btn-secondary">Refresh</button>
+          <a class="btn" href="/api/export/claims.csv" target="_blank" rel="noreferrer">Export Claims CSV</a>
+        </div>
+      </header>
+
+      <section class="stats-grid" id="statsGrid"></section>
+
+      <section class="card">
+        <h2>Plan Management</h2>
+        <form id="planForm" class="form-grid">
+          <input name="name" placeholder="Plan name" required />
+          <input name="code" placeholder="Code (e.g. STANDARD-80)" />
+          <input name="currency" placeholder="Currency" value="USD" />
+          <input name="annualLimit" type="number" step="0.01" placeholder="Annual limit" required />
+          <input name="outpatientLimit" type="number" step="0.01" placeholder="Outpatient limit" required />
+          <input name="inpatientLimit" type="number" step="0.01" placeholder="Inpatient limit" required />
+          <input name="perClaimLimit" type="number" step="0.01" placeholder="Per-claim limit" required />
+          <input name="coveragePercent" type="number" step="0.01" min="0" max="100" placeholder="Coverage %" required />
+          <input name="copayPercent" type="number" step="0.01" min="0" max="100" placeholder="Co-pay %" required />
+          <input name="requiresPreauthAbove" type="number" step="0.01" placeholder="Preauth threshold" required />
+          <button class="btn" type="submit">Create Plan</button>
+        </form>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Plan</th>
+                <th>Coverage</th>
+                <th>Limits</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="plansTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Member Enrollment (Patients with Insurance)</h2>
+        <form id="memberForm" class="form-grid">
+          <input name="firstName" placeholder="First name" required />
+          <input name="lastName" placeholder="Last name" required />
+          <input name="memberNumber" placeholder="Member number (optional auto)" />
+          <input name="policyNumber" placeholder="Policy number" />
+          <input name="dateOfBirth" type="date" placeholder="Date of birth" />
+          <select name="gender">
+            <option value="">Gender</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="other">Other</option>
+          </select>
+          <input name="phone" placeholder="Phone" />
+          <input name="email" placeholder="Email" />
+          <select name="relationship">
+            <option value="self">Self</option>
+            <option value="spouse">Spouse</option>
+            <option value="child">Child</option>
+            <option value="parent">Parent</option>
+            <option value="dependent">Dependent</option>
+          </select>
+          <select name="planId" id="memberPlanSelect" required></select>
+          <select name="status">
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <input name="notes" placeholder="Notes" />
+          <button class="btn" type="submit">Create Member</button>
+        </form>
+
+        <h3>Adjust Member Limits</h3>
+        <form id="adjustForm" class="form-grid compact">
+          <select name="memberId" id="adjustMemberSelect" required></select>
+          <input name="annualLimitRemaining" type="number" step="0.01" placeholder="Annual remaining" />
+          <input name="outpatientLimitRemaining" type="number" step="0.01" placeholder="Outpatient remaining" />
+          <input name="inpatientLimitRemaining" type="number" step="0.01" placeholder="Inpatient remaining" />
+          <input name="perClaimLimit" type="number" step="0.01" placeholder="Per-claim limit" />
+          <select name="status">
+            <option value="">Member status (keep)</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <button class="btn" type="submit">Apply Adjustment</button>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Remaining Limits</th>
+              </tr>
+            </thead>
+            <tbody id="membersTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Claims Intake & Adjudication</h2>
+        <form id="manualClaimForm" class="form-grid compact">
+          <input name="memberNumber" placeholder="Member number" required />
+          <input name="claimAmount" type="number" step="0.01" placeholder="Claim amount" required />
+          <select name="claimType">
+            <option value="outpatient">Outpatient</option>
+            <option value="inpatient">Inpatient</option>
+          </select>
+          <input name="primaryDiagnosisCode" placeholder="Primary diagnosis code" />
+          <input name="serviceCodes" placeholder="Service codes (comma-separated)" />
+          <button class="btn" type="submit">Submit Manual Claim</button>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Claim</th>
+                <th>Member</th>
+                <th>Amounts</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="claimsTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Pre-Authorizations</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Reference</th>
+                <th>Member</th>
+                <th>Request</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody id="preauthTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <p id="flash" class="flash hidden"></p>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -3,6 +3,7 @@ import { X, FileText, Check, XCircle, Clock, AlertTriangle } from 'lucide-react'
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SignaturePad from './SignaturePad';
+import { usePrompt } from '../hooks/usePrompt';
 
 interface ConsentFormProps {
   patientId: string;
@@ -28,6 +29,7 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
   onSuccess,
 }) => {
   const { showSuccess, showError } = useNotification();
+  const { prompt, Dialog } = usePrompt();
   const [template, setTemplate] = useState<any>(null);
   const [consent, setConsent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -145,8 +147,17 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
 
   const declineConsent = async () => {
     if (!consent) return;
-    
-    const reason = prompt('Please provide a reason for declining:');
+
+    const reason = await prompt({
+      title: 'Decline Consent',
+      message: 'Please provide a reason for declining this consent.',
+      placeholder: 'Reason for declining',
+      confirmText: 'Decline Consent',
+      cancelText: 'Cancel',
+      type: 'danger',
+      multiline: true,
+      required: true,
+    });
     if (!reason) return;
     
     try {
@@ -181,7 +192,9 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      {Dialog}
+      <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-200">
         <div className="flex items-center gap-3 mb-2">
@@ -380,7 +393,8 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
           onCancel={() => setShowSignaturePad(false)}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

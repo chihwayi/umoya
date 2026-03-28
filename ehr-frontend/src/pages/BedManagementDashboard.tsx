@@ -18,7 +18,11 @@ interface BedOccupancyStats {
   occupancy_rate: number;
 }
 
-const BedManagementDashboard: React.FC = () => {
+interface BedManagementDashboardProps {
+  embedded?: boolean;
+}
+
+const BedManagementDashboard: React.FC<BedManagementDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
@@ -68,46 +72,64 @@ const BedManagementDashboard: React.FC = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-blue-700 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/${user.role === 'doctor' ? 'doctor' : user.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                  <Bed className="w-8 h-8" />
-                  Bed Management & ADT
-                </h1>
-                <p className="text-indigo-100 mt-1">Real-time bed tracking, admissions, discharges & transfers</p>
+    <div className={embedded ? '' : 'min-h-screen bg-slate-50'}>
+      {!embedded && (
+        <div className="bg-gradient-to-r from-indigo-600 to-blue-700 text-white shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/${user.role === 'doctor' ? 'doctor' : user.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h1 className="text-3xl font-bold flex items-center gap-3">
+                    <Bed className="w-8 h-8" />
+                    Bed Management & ADT
+                  </h1>
+                  <p className="text-indigo-100 mt-1">Real-time bed tracking, admissions, discharges & transfers</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowAdmissionWorkflow(true)}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium"
-              >
-                New Admission
-              </button>
-              <button
-                onClick={handleRefresh}
-                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAdmissionWorkflow(true)}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium"
+                >
+                  New Admission
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className={embedded ? 'space-y-4' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'}>
+        {embedded && (
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setShowAdmissionWorkflow(true)}
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              New Admission
+            </button>
+            <button
+              onClick={handleRefresh}
+              className="p-2 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+              title="Refresh bed board"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          </div>
+        )}
         {token && (
           <BedManagementBoard 
             tenantSlug={tenantSlug!} 

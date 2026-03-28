@@ -1,0 +1,113 @@
+[
+  {
+    "knowledge_id": "sepsis-acute-care-2026-01",
+    "condition": "sepsis",
+    "aliases": ["suspected sepsis", "septic patient"],
+    "title": "Sepsis Early Management Guidance",
+    "source_name": "Surviving Sepsis Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-14",
+    "reviewed_at": "2026-03-01",
+    "specialty": "acute_care",
+    "module": "critical_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["sepsis", "shock", "lactate", "cultures", "antibiotics"],
+    "recommendation_blocks": [
+      "Escalate immediately when infection plus organ dysfunction or shock is suspected.",
+      "Obtain cultures quickly when feasible and start appropriate empiric antimicrobials without avoidable delay.",
+      "Assess lactate, perfusion, and fluid responsiveness early and reassess after initial resuscitation."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "stroke-acute-care-2026-01",
+    "condition": "stroke",
+    "aliases": ["acute stroke", "suspected stroke", "cva"],
+    "title": "Acute Stroke Initial Management Guidance",
+    "source_name": "WHO Stroke Pathway Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-20",
+    "reviewed_at": "2026-03-01",
+    "specialty": "acute_care",
+    "module": "neurology",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["stroke", "cva", "thrombolysis", "ct head", "nihss"],
+    "recommendation_blocks": [
+      "Treat suspected stroke as a time-critical emergency and document last-known-well time immediately.",
+      "Obtain urgent brain imaging before determining reperfusion eligibility.",
+      "Screen for hypoglycemia and other stroke mimics while keeping imaging and escalation moving."
+    ],
+    "contraindications": [],
+    "medication_warnings": [
+      {
+        "match_terms": ["warfarin", "apixaban", "rivaroxaban", "dabigatran"],
+        "message": "Confirm anticoagulant exposure and timing before considering reperfusion therapy."
+      }
+    ]
+  },
+  {
+    "knowledge_id": "dka-acute-care-2026-01",
+    "condition": "diabetic_ketoacidosis",
+    "aliases": ["dka", "diabetic ketoacidosis"],
+    "title": "Diabetic Ketoacidosis Management Guidance",
+    "source_name": "ADA Hyperglycemic Crisis Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-18",
+    "reviewed_at": "2026-03-01",
+    "specialty": "acute_care",
+    "module": "endocrinology",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["dka", "ketones", "anion gap", "insulin infusion", "potassium"],
+    "recommendation_blocks": [
+      "Start structured fluid resuscitation, insulin therapy, and electrolyte monitoring promptly when DKA is confirmed or strongly suspected.",
+      "Review potassium before insulin escalation and replace aggressively when low or falling.",
+      "Search for precipitating infection, omission of insulin, or other acute triggers while treatment is underway."
+    ],
+    "contraindications": [
+      {
+        "label": "hypokalemia",
+        "match_terms": ["hypokalemia", "low potassium"],
+        "reason": "Severe hypokalemia must be corrected before insulin intensification.",
+        "severity": "major"
+      }
+    ],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "hypertensive-emergency-acute-care-2026-01",
+    "condition": "hypertensive_emergency",
+    "aliases": ["hypertensive crisis", "malignant hypertension"],
+    "title": "Hypertensive Emergency Initial Guidance",
+    "source_name": "WHO Emergency Cardiovascular Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-22",
+    "reviewed_at": "2026-03-01",
+    "specialty": "acute_care",
+    "module": "cardiovascular_emergency",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["hypertensive emergency", "bp crisis", "end organ damage"],
+    "recommendation_blocks": [
+      "Differentiate hypertensive emergency from severe asymptomatic hypertension by looking for acute end-organ injury.",
+      "Lower blood pressure in a controlled monitored setting when emergency features are present rather than pursuing rapid unsupervised correction.",
+      "Tailor agent selection to the affected organ system and pregnancy status."
+    ],
+    "contraindications": [
+      {
+        "label": "pregnancy",
+        "match_terms": ["pregnancy", "pregnant"],
+        "reason": "Use pregnancy-appropriate antihypertensives and evaluate urgently for pre-eclampsia-related disease.",
+        "severity": "major"
+      }
+    ],
+    "medication_warnings": []
+  }
+]

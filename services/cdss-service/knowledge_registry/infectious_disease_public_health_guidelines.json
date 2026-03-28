@@ -1,0 +1,94 @@
+[
+  {
+    "knowledge_id": "malaria-treatment-protocol-2026-01",
+    "condition": "malaria_treatment_protocol",
+    "aliases": ["malaria treatment protocol"],
+    "title": "Malaria Treatment Protocol Guidance",
+    "source_name": "WHO Malaria Treatment Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-24",
+    "reviewed_at": "2026-03-01",
+    "specialty": "infectious_disease",
+    "module": "malaria_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["malaria", "artemether-lumefantrine", "artesunate", "pregnancy", "falciparum"],
+    "recommendation_blocks": [
+      "Use first-line ACT therapy for uncomplicated malaria when local policy and species pattern support it.",
+      "Escalate immediately to parenteral artesunate and inpatient management when severe malaria features are present.",
+      "Review pregnancy status, age, oral tolerance, and species pattern before finalizing therapy."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "tuberculosis-programmatic-care-2026-01",
+    "condition": "tuberculosis",
+    "aliases": ["tb", "tuberculosis treatment", "tuberculosis regimen"],
+    "title": "Tuberculosis Programmatic Care Guidance",
+    "source_name": "WHO TB Programmatic Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-25",
+    "reviewed_at": "2026-03-01",
+    "specialty": "infectious_disease",
+    "module": "tuberculosis_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["tuberculosis", "tb", "dst", "rifampicin resistance", "hiv"],
+    "recommendation_blocks": [
+      "Select TB regimen against drug-susceptibility pattern and confirm whether rifampicin resistance is present before standardizing therapy.",
+      "Coordinate HIV co-management, adherence support, and toxicity monitoring early when co-infection exists.",
+      "Escalate specialist review when MDR/RR-TB, severe toxicity, treatment failure, or complicated extrapulmonary disease is suspected."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "immunization-catchup-schedule-2026-01",
+    "condition": "immunization_catch-up_schedule",
+    "aliases": ["immunization catch-up schedule", "vaccine catch-up schedule"],
+    "title": "Immunization Catch-up Schedule Guidance",
+    "source_name": "WHO Immunization Catch-up Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-26",
+    "reviewed_at": "2026-03-01",
+    "specialty": "public_health",
+    "module": "immunization",
+    "target_population": "children",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["immunization", "catch-up", "vaccine", "schedule", "overdue"],
+    "recommendation_blocks": [
+      "Use age and documented prior doses to rebuild the schedule rather than restarting a vaccine series unnecessarily.",
+      "Prioritize overdue primary-series and outbreak-relevant vaccines when multiple doses are missing.",
+      "Document minimum interval constraints clearly before giving accelerated catch-up doses."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "pmtct-mer-indicators-2026-01",
+    "condition": "pepfar_mer_indicators_pmtct",
+    "aliases": ["pepfar mer indicators pmtct", "pmtct mer indicators"],
+    "title": "PMTCT MER Indicator Guidance",
+    "source_name": "PEPFAR PMTCT Monitoring Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-27",
+    "reviewed_at": "2026-03-01",
+    "specialty": "obstetrics",
+    "module": "pmtct",
+    "target_population": "pregnant_women",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["pmtct", "mer", "pregnancy", "hiv", "maternal"],
+    "recommendation_blocks": [
+      "Track PMTCT indicators against documented HIV status, ART status, and maternal-infant follow-up milestones.",
+      "Escalate review when maternal viral suppression, ART continuity, or infant prophylaxis milestones are missing.",
+      "Preserve cohort definitions and reporting period logic consistently when computing MER outputs."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

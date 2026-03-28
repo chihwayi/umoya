@@ -1,11 +1,13 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Repository, DataSource } from 'typeorm';
 import { TriageAssessment } from '../entities/triage-assessment.entity';
+import { ClinicalEscalationTask } from '../entities/clinical-escalation-task.entity';
 import { TenantService } from './tenant.service';
 import { AllergyService } from './allergy.service';
 import { TerminologyService } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
 import { ClinicalWorkflowService } from './clinical-workflow.service';
+import { NurseTaskService } from './nurse-task.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -23,6 +25,7 @@ export class TriageService {
     private allergyService: AllergyService,
     private terminologyService: TerminologyService,
     private cdssHookService: CdssHookService,
+    @Optional() private nurseTaskService?: NurseTaskService,
     @Optional() private workflowService?: ClinicalWorkflowService,
   ) {}
 
@@ -202,6 +205,115 @@ export class TriageService {
     return normalized;
   }
 
+  private deriveTriageEscalation(saved: any) {
+    const priority = String(saved.priority || '').toLowerCase();
+    const severityScore = Number(saved.severity_score ?? saved.severityScore ?? 0);
+    const painScore = Number(saved.pain_score ?? saved.painScore ?? 0);
+
+    if (priority !== 'urgent' && priority !== 'high' && severityScore < 7 && painScore < 8) {
+      return null;
+    }
+
+    const severity =
+      priority === 'urgent' || severityScore >= 9 ? 'critical' :
+      priority === 'high' || severityScore >= 7 ? 'high' :
+      'medium';
+
+    const summaryParts = [
+      `Triage priority ${saved.priority || 'unknown'}`,
+      Number.isFinite(severityScore) && severityScore > 0 ? `severity score ${severityScore}` : null,
+      Number.isFinite(painScore) && painScore > 0 ? `pain score ${painScore}` : null,
+      saved.chief_complaint ? `chief complaint: ${saved.chief_complaint}` : null,
+    ].filter(Boolean);
+
+    return {
+      severity,
+      title: `Triage escalation for patient ${saved.patient_id || saved.patientId}`,
+      summary: summaryParts.join(', '),
+      recommendedAction:
+        severity === 'critical'
+          ? 'Immediate nurse escalation and clinician review from triage.'
+          : 'Prompt nurse review and reassessment from triage.',
+      dueAtMinutes: severity === 'critical' ? 10 : 30,
+    };
+  }
+
+  private async createTriageEscalationTask(
+    tenantDb: DataSource,
+    tenantId: string,
+    saved: any,
+    observationConcepts: StoredConceptSummary[],
+  ): Promise<string | null> {
+    const escalation = this.deriveTriageEscalation(saved);
+    if (!escalation) {
+      return null;
+    }
+
+    const dueAt = new Date();
+    dueAt.setMinutes(dueAt.getMinutes() + escalation.dueAtMinutes);
+
+    const escalationRepo = tenantDb.getRepository(ClinicalEscalationTask);
+    const escalationTask = escalationRepo.create({
+      patientId: saved.patient_id,
+      earlyWarningScoreId: null,
+      nurseTaskId: null,
+      sourceModule: 'triage',
+      sourceReferenceId: saved.id,
+      escalationType: 'triage_priority_review',
+      severity: escalation.severity,
+      status: 'open',
+      title: escalation.title,
+      summary: escalation.summary,
+      recommendedAction: escalation.recommendedAction,
+      assignedTo: null,
+      dueAt,
+      acknowledgedBy: null,
+      acknowledgedAt: null,
+      completedBy: null,
+      completedAt: null,
+      evidence: {
+        priority: saved.priority,
+        severityScore: saved.severity_score,
+        painScore: saved.pain_score,
+        chiefComplaint: saved.chief_complaint,
+      },
+      metadata: {
+        chiefComplaintConcept: saved.chief_complaint_snomed_code
+          ? {
+              conceptId: saved.chief_complaint_snomed_code,
+              term: saved.chief_complaint_snomed_term,
+            }
+          : null,
+        observationConcepts,
+      },
+    });
+
+    const savedEscalation = await escalationRepo.save(escalationTask);
+
+    if (this.nurseTaskService) {
+      const nurseTask = await this.nurseTaskService.createTask(
+        {
+          patientId: saved.patient_id,
+          assignedBySystem: true,
+          taskType: 'triage_priority_review',
+          priority: escalation.severity === 'critical' ? 'urgent' : 'high',
+          title: 'Triage escalation review',
+          description: escalation.summary,
+          dueDate: dueAt.toISOString(),
+          sourceType: 'clinical_escalation',
+          sourceId: savedEscalation.id,
+        },
+        tenantDb,
+        tenantId,
+      );
+
+      savedEscalation.nurseTaskId = nurseTask.id;
+      await escalationRepo.save(savedEscalation);
+    }
+
+    return savedEscalation.id;
+  }
+
   async recordAssessment(data: Partial<TriageAssessment>, tenantId: string): Promise<TriageAssessment> {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
     if (!tenantDb) {
@@ -254,6 +366,12 @@ export class TriageService {
     );
 
     const saved = result[0];
+    const escalationTaskId = await this.createTriageEscalationTask(
+      tenantDb,
+      tenantId,
+      saved,
+      observationsList,
+    );
 
     let cdssInsights: any = null;
     try {
@@ -314,6 +432,7 @@ export class TriageService {
     return {
       ...saved,
       cdssInsights,
+      escalationTaskId,
     };
   }
 

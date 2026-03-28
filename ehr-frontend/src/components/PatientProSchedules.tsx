@@ -3,6 +3,7 @@ import { Calendar, Clock, Repeat, Plus, Edit, Trash2, CheckCircle, XCircle } fro
 import { format } from 'date-fns';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface Schedule {
   id: string;
@@ -35,6 +36,7 @@ const PatientProSchedules: React.FC<PatientProSchedulesProps> = ({
   onScheduleCreated,
 }) => {
   const { showError, showSuccess } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -70,7 +72,14 @@ const PatientProSchedules: React.FC<PatientProSchedulesProps> = ({
   };
 
   const handleDelete = async (scheduleId: string) => {
-    if (!window.confirm('Are you sure you want to delete this schedule?')) return;
+    const shouldProceed = await confirm({
+      title: 'Delete Schedule',
+      message: 'Are you sure you want to delete this schedule?',
+      confirmText: 'Delete',
+      cancelText: 'Keep',
+      type: 'danger',
+    });
+    if (!shouldProceed) return;
 
     try {
       await ehrApi.deleteProSchedule(scheduleId, token, tenantSlug);
@@ -140,7 +149,9 @@ const PatientProSchedules: React.FC<PatientProSchedulesProps> = ({
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+    <>
+      {Dialog}
+      <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
           <Calendar className="w-5 h-5" />
@@ -232,9 +243,9 @@ const PatientProSchedules: React.FC<PatientProSchedulesProps> = ({
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
 export default PatientProSchedules;
-

@@ -25,6 +25,48 @@ export class ClinicalWorkflowService {
     }
   }
 
+  private isMissingSchemaError(error: any): boolean {
+    const code = String(error?.code || '').toUpperCase();
+    const message = String(error?.message || '').toLowerCase();
+    return code === '42P01' || code === '42703' || message.includes('does not exist');
+  }
+
+  private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
+    try {
+      const result = await tenantDb.query(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = $1
+        ) AS exists
+        `,
+        [tableName],
+      );
+      return !!result[0]?.exists;
+    } catch (error: any) {
+      this.logger.warn(`Failed table existence check for ${tableName}: ${error.message}`);
+      return false;
+    }
+  }
+
+  private getDefaultAnalytics() {
+    return {
+      totalWorkflows: 0,
+      activeWorkflows: 0,
+      totalExecutions: 0,
+      completedExecutions: 0,
+      failedExecutions: 0,
+      runningExecutions: 0,
+      successRate: 0,
+      avgExecutionTimeSeconds: 0,
+      executionsByTrigger: [],
+      mostUsedWorkflows: [],
+      executionsOverTime: [],
+    };
+  }
+
   // ==================== WORKFLOW MANAGEMENT ====================
 
   async createWorkflow(workflowData: any, tenantDb: DataSource, userId?: string) {
@@ -126,34 +168,61 @@ export class ClinicalWorkflowService {
   async getWorkflows(filters: any, tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
-    let query = `SELECT * FROM clinical_workflows WHERE 1=1`;
-    const params: any[] = [];
-    let paramIndex = 1;
-
-    if (filters?.triggerEvent) {
-      query += ` AND trigger_event = $${paramIndex++}`;
-      params.push(filters.triggerEvent);
-    }
-    if (filters?.isActive !== undefined) {
-      query += ` AND is_active = $${paramIndex++}`;
-      params.push(filters.isActive);
-    }
-    if (filters?.search) {
-      query += ` AND (name ILIKE $${paramIndex++} OR description ILIKE $${paramIndex})`;
-      params.push(`%${filters.search}%`);
-      params.push(`%${filters.search}%`);
+    const hasWorkflowTable = await this.hasTable(tenantDb, 'clinical_workflows');
+    if (!hasWorkflowTable) {
+      this.logger.warn('clinical_workflows table missing; returning empty workflows list');
+      return [];
     }
 
-    query += ` ORDER BY priority DESC, created_at DESC`;
+    const hasWorkflowStepsTable = await this.hasTable(tenantDb, 'workflow_steps');
 
-    const workflows = await tenantDb.query(query, params);
+    try {
+      let query = `SELECT * FROM clinical_workflows WHERE 1=1`;
+      const params: any[] = [];
+      let paramIndex = 1;
 
-    // Get steps for each workflow
-    for (const workflow of workflows) {
-      workflow.steps = await this.getWorkflowSteps(workflow.id, tenantDb);
+      if (filters?.triggerEvent) {
+        query += ` AND trigger_event = $${paramIndex++}`;
+        params.push(filters.triggerEvent);
+      }
+      if (filters?.isActive !== undefined) {
+        query += ` AND is_active = $${paramIndex++}`;
+        params.push(filters.isActive);
+      }
+      if (filters?.search) {
+        query += ` AND (name ILIKE $${paramIndex++} OR description ILIKE $${paramIndex})`;
+        params.push(`%${filters.search}%`);
+        params.push(`%${filters.search}%`);
+      }
+
+      query += ` ORDER BY priority DESC, created_at DESC`;
+
+      const workflows = await tenantDb.query(query, params);
+
+      for (const workflow of workflows) {
+        if (!hasWorkflowStepsTable) {
+          workflow.steps = [];
+          continue;
+        }
+        try {
+          workflow.steps = await this.getWorkflowSteps(workflow.id, tenantDb);
+        } catch (error: any) {
+          if (this.isMissingSchemaError(error)) {
+            workflow.steps = [];
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      return workflows;
+    } catch (error: any) {
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn(`Workflow list fallback due to missing schema: ${error.message}`);
+        return [];
+      }
+      throw error;
     }
-
-    return workflows;
   }
 
   async getWorkflowById(workflowId: string, tenantDb: DataSource) {
@@ -573,76 +642,122 @@ export class ClinicalWorkflowService {
   async getWorkflowExecutions(filters: any, tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
-    let query = `SELECT we.*, cw.name as workflow_name 
-                 FROM workflow_executions we
-                 JOIN clinical_workflows cw ON we.workflow_id = cw.id
-                 WHERE 1=1`;
-    const params: any[] = [];
-    let paramIndex = 1;
-
-    if (filters?.workflowId) {
-      query += ` AND we.workflow_id = $${paramIndex++}`;
-      params.push(filters.workflowId);
-    }
-    if (filters?.patientId) {
-      query += ` AND we.patient_id = $${paramIndex++}`;
-      params.push(filters.patientId);
-    }
-    if (filters?.status) {
-      query += ` AND we.status = $${paramIndex++}`;
-      params.push(filters.status);
+    const hasExecutionTable = await this.hasTable(tenantDb, 'workflow_executions');
+    const hasWorkflowTable = await this.hasTable(tenantDb, 'clinical_workflows');
+    if (!hasExecutionTable || !hasWorkflowTable) {
+      this.logger.warn('Workflow execution tables missing; returning empty execution list');
+      return [];
     }
 
-    query += ` ORDER BY we.created_at DESC LIMIT ${filters?.limit || 100}`;
+    const hasStepExecutionTable = await this.hasTable(tenantDb, 'workflow_step_executions');
+    const hasWorkflowStepsTable = await this.hasTable(tenantDb, 'workflow_steps');
 
-    const executions = await tenantDb.query(query, params);
+    try {
+      let query = `SELECT we.*, cw.name as workflow_name 
+                   FROM workflow_executions we
+                   JOIN clinical_workflows cw ON we.workflow_id = cw.id
+                   WHERE 1=1`;
+      const params: any[] = [];
+      let paramIndex = 1;
 
-    // Get step executions for each
-    for (const execution of executions) {
-      execution.steps = await this.getStepExecutions(execution.id, tenantDb);
-      
-      // Handle execution_data - PostgreSQL JSONB can return as object or string
-      let executionData: any = {};
-      const rawData = execution.execution_data;
-      if (rawData !== null && rawData !== undefined) {
-        try {
-          if (typeof rawData === 'string') {
-            const trimmed = rawData.trim();
-            if (trimmed && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
-              executionData = JSON.parse(trimmed);
-            } else {
-              executionData = {};
-            }
-          } else if (typeof rawData === 'object') {
-            executionData = rawData;
-          }
-        } catch (error: any) {
-          this.logger.warn(`Failed to parse execution_data for execution ${execution.id}: ${error.message}`);
-          executionData = {};
-        }
+      if (filters?.workflowId) {
+        query += ` AND we.workflow_id = $${paramIndex++}`;
+        params.push(filters.workflowId);
       }
-      execution.executionData = executionData;
-    }
+      if (filters?.patientId) {
+        query += ` AND we.patient_id = $${paramIndex++}`;
+        params.push(filters.patientId);
+      }
+      if (filters?.status) {
+        query += ` AND we.status = $${paramIndex++}`;
+        params.push(filters.status);
+      }
 
-    return executions;
+      query += ` ORDER BY we.created_at DESC LIMIT ${filters?.limit || 100}`;
+
+      const executions = await tenantDb.query(query, params);
+
+      for (const execution of executions) {
+        if (hasStepExecutionTable && hasWorkflowStepsTable) {
+          execution.steps = await this.getStepExecutions(execution.id, tenantDb);
+        } else {
+          execution.steps = [];
+        }
+
+        let executionData: any = {};
+        const rawData = execution.execution_data;
+        if (rawData !== null && rawData !== undefined) {
+          try {
+            if (typeof rawData === 'string') {
+              const trimmed = rawData.trim();
+              if (trimmed && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
+                executionData = JSON.parse(trimmed);
+              } else {
+                executionData = {};
+              }
+            } else if (typeof rawData === 'object') {
+              executionData = rawData;
+            }
+          } catch (error: any) {
+            this.logger.warn(`Failed to parse execution_data for execution ${execution.id}: ${error.message}`);
+            executionData = {};
+          }
+        }
+        execution.executionData = executionData;
+      }
+
+      return executions;
+    } catch (error: any) {
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn(`Workflow executions fallback due to missing schema: ${error.message}`);
+        return [];
+      }
+      throw error;
+    }
   }
 
   async getStepExecutions(executionId: string, tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
-    const steps = await tenantDb.query(
-      `SELECT wse.*, ws.step_type, ws.step_order
-       FROM workflow_step_executions wse
-       JOIN workflow_steps ws ON wse.step_id = ws.id
-       WHERE wse.execution_id = $1
-       ORDER BY wse.step_order ASC`,
-      [executionId],
-    );
+    const hasStepExecutionTable = await this.hasTable(tenantDb, 'workflow_step_executions');
+    const hasWorkflowStepsTable = await this.hasTable(tenantDb, 'workflow_steps');
+    if (!hasStepExecutionTable || !hasWorkflowStepsTable) {
+      return [];
+    }
 
-    return steps.map((step: any) => ({
-      ...step,
-      resultData: step.result_data ? JSON.parse(step.result_data) : null,
-    }));
+    try {
+      const steps = await tenantDb.query(
+        `SELECT wse.*, ws.step_type, ws.step_order
+         FROM workflow_step_executions wse
+         JOIN workflow_steps ws ON wse.step_id = ws.id
+         WHERE wse.execution_id = $1
+         ORDER BY wse.step_order ASC`,
+        [executionId],
+      );
+
+      return steps.map((step: any) => {
+        let resultData: any = null;
+        if (step.result_data !== null && step.result_data !== undefined) {
+          try {
+            resultData = typeof step.result_data === 'string' ? JSON.parse(step.result_data) : step.result_data;
+          } catch (error: any) {
+            this.logger.warn(`Failed to parse workflow step result_data for step ${step.id}: ${error.message}`);
+            resultData = null;
+          }
+        }
+
+        return {
+          ...step,
+          resultData,
+        };
+      });
+    } catch (error: any) {
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn(`Step executions fallback due to missing schema: ${error.message}`);
+        return [];
+      }
+      throw error;
+    }
   }
 
   // ==================== WORKFLOW TEMPLATES ====================
@@ -650,52 +765,62 @@ export class ClinicalWorkflowService {
   async getWorkflowTemplates(category: string | null, tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
-    let query = `SELECT * FROM workflow_templates WHERE is_active = true`;
-    const params: any[] = [];
-
-    if (category) {
-      query += ` AND category = $1`;
-      params.push(category);
+    const hasTemplatesTable = await this.hasTable(tenantDb, 'workflow_templates');
+    if (!hasTemplatesTable) {
+      this.logger.warn('workflow_templates table missing; returning empty templates list');
+      return [];
     }
 
-    query += ` ORDER BY is_default DESC, name ASC`;
+    try {
+      let query = `SELECT * FROM workflow_templates WHERE is_active = true`;
+      const params: any[] = [];
 
-    const templates = await tenantDb.query(query, params);
-
-    return templates.map((template: any) => {
-      let templateData: any = {};
-      
-      // Handle template_data field - PostgreSQL JSONB can return as object or string
-      const rawData = template.template_data;
-      
-      if (rawData !== null && rawData !== undefined) {
-        try {
-          if (typeof rawData === 'string') {
-            // Try to parse if it's a string
-            const trimmed = rawData.trim();
-            if (trimmed && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
-              templateData = JSON.parse(trimmed);
-            } else {
-              // If it's not valid JSON, use empty object
-              this.logger.warn(`Template ${template.id} has invalid JSON string: ${rawData.substring(0, 50)}`);
-              templateData = {};
-            }
-          } else if (typeof rawData === 'object') {
-            // Already an object (PostgreSQL JSONB)
-            templateData = rawData;
-          }
-        } catch (error: any) {
-          this.logger.warn(`Failed to parse template_data for template ${template.id}: ${error.message}`);
-          templateData = {};
-        }
+      if (category) {
+        query += ` AND category = $1`;
+        params.push(category);
       }
-      
-      return {
-        ...template,
-        template_data: templateData,
-        templateData: templateData, // Also include for backward compatibility
-      };
-    });
+
+      query += ` ORDER BY is_default DESC, name ASC`;
+
+      const templates = await tenantDb.query(query, params);
+
+      return templates.map((template: any) => {
+        let templateData: any = {};
+
+        const rawData = template.template_data;
+
+        if (rawData !== null && rawData !== undefined) {
+          try {
+            if (typeof rawData === 'string') {
+              const trimmed = rawData.trim();
+              if (trimmed && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
+                templateData = JSON.parse(trimmed);
+              } else {
+                this.logger.warn(`Template ${template.id} has invalid JSON string: ${rawData.substring(0, 50)}`);
+                templateData = {};
+              }
+            } else if (typeof rawData === 'object') {
+              templateData = rawData;
+            }
+          } catch (error: any) {
+            this.logger.warn(`Failed to parse template_data for template ${template.id}: ${error.message}`);
+            templateData = {};
+          }
+        }
+
+        return {
+          ...template,
+          template_data: templateData,
+          templateData: templateData,
+        };
+      });
+    } catch (error: any) {
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn(`Workflow templates fallback due to missing schema: ${error.message}`);
+        return [];
+      }
+      throw error;
+    }
   }
 
   async createWorkflowFromTemplate(templateId: string, tenantDb: DataSource, userId?: string) {
@@ -768,79 +893,88 @@ export class ClinicalWorkflowService {
   async getWorkflowAnalytics(tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
-    // Get total workflows
-    const totalWorkflows = await tenantDb.query(`SELECT COUNT(*) as count FROM clinical_workflows`);
-    const activeWorkflows = await tenantDb.query(`SELECT COUNT(*) as count FROM clinical_workflows WHERE is_active = true`);
+    const hasWorkflowTable = await this.hasTable(tenantDb, 'clinical_workflows');
+    const hasExecutionTable = await this.hasTable(tenantDb, 'workflow_executions');
 
-    // Get total executions
-    const totalExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions`);
-    const completedExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'completed'`);
-    const failedExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'failed'`);
-    const runningExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'running'`);
+    if (!hasWorkflowTable || !hasExecutionTable) {
+      this.logger.warn('Workflow analytics tables missing; returning default analytics payload');
+      return this.getDefaultAnalytics();
+    }
 
-    // Get executions by trigger event
-    const executionsByTrigger = await tenantDb.query(`
-      SELECT trigger_event, COUNT(*) as count
-      FROM workflow_executions
-      GROUP BY trigger_event
-      ORDER BY count DESC
-      LIMIT 10
-    `);
+    try {
+      const totalWorkflows = await tenantDb.query(`SELECT COUNT(*) as count FROM clinical_workflows`);
+      const activeWorkflows = await tenantDb.query(`SELECT COUNT(*) as count FROM clinical_workflows WHERE is_active = true`);
 
-    // Get most used workflows
-    const mostUsedWorkflows = await tenantDb.query(`
-      SELECT w.id, w.name, COUNT(we.id) as execution_count
-      FROM clinical_workflows w
-      LEFT JOIN workflow_executions we ON w.id = we.workflow_id
-      GROUP BY w.id, w.name
-      ORDER BY execution_count DESC
-      LIMIT 10
-    `);
+      const totalExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions`);
+      const completedExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'completed'`);
+      const failedExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'failed'`);
+      const runningExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'running'`);
 
-    // Get average execution time
-    const avgExecutionTime = await tenantDb.query(`
-      SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_seconds
-      FROM workflow_executions
-      WHERE completed_at IS NOT NULL AND started_at IS NOT NULL
-    `);
+      const executionsByTrigger = await tenantDb.query(`
+        SELECT trigger_event, COUNT(*) as count
+        FROM workflow_executions
+        GROUP BY trigger_event
+        ORDER BY count DESC
+        LIMIT 10
+      `);
 
-    // Get executions over time (last 30 days)
-    const executionsOverTime = await tenantDb.query(`
-      SELECT DATE(started_at) as date, COUNT(*) as count
-      FROM workflow_executions
-      WHERE started_at >= NOW() - INTERVAL '30 days'
-      GROUP BY DATE(started_at)
-      ORDER BY date DESC
-    `);
+      const mostUsedWorkflows = await tenantDb.query(`
+        SELECT w.id, w.name, COUNT(we.id) as execution_count
+        FROM clinical_workflows w
+        LEFT JOIN workflow_executions we ON w.id = we.workflow_id
+        GROUP BY w.id, w.name
+        ORDER BY execution_count DESC
+        LIMIT 10
+      `);
 
-    // Get success rate
-    const totalCount = parseInt(totalExecutions[0].count, 10);
-    const completedCount = parseInt(completedExecutions[0].count, 10);
-    const successRate = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+      const avgExecutionTime = await tenantDb.query(`
+        SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_seconds
+        FROM workflow_executions
+        WHERE completed_at IS NOT NULL AND started_at IS NOT NULL
+      `);
 
-    return {
-      totalWorkflows: parseInt(totalWorkflows[0].count, 10),
-      activeWorkflows: parseInt(activeWorkflows[0].count, 10),
-      totalExecutions: totalCount,
-      completedExecutions: completedCount,
-      failedExecutions: parseInt(failedExecutions[0].count, 10),
-      runningExecutions: parseInt(runningExecutions[0].count, 10),
-      successRate: Math.round(successRate * 100) / 100,
-      avgExecutionTimeSeconds: avgExecutionTime[0].avg_seconds ? Math.round(parseFloat(avgExecutionTime[0].avg_seconds)) : 0,
-      executionsByTrigger: executionsByTrigger.map((row: any) => ({
-        triggerEvent: row.trigger_event,
-        count: parseInt(row.count, 10),
-      })),
-      mostUsedWorkflows: mostUsedWorkflows.map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        executionCount: parseInt(row.execution_count, 10),
-      })),
-      executionsOverTime: executionsOverTime.map((row: any) => ({
-        date: row.date,
-        count: parseInt(row.count, 10),
-      })),
-    };
+      const executionsOverTime = await tenantDb.query(`
+        SELECT DATE(started_at) as date, COUNT(*) as count
+        FROM workflow_executions
+        WHERE started_at >= NOW() - INTERVAL '30 days'
+        GROUP BY DATE(started_at)
+        ORDER BY date DESC
+      `);
+
+      const totalCount = parseInt(totalExecutions[0].count, 10);
+      const completedCount = parseInt(completedExecutions[0].count, 10);
+      const successRate = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+      return {
+        totalWorkflows: parseInt(totalWorkflows[0].count, 10),
+        activeWorkflows: parseInt(activeWorkflows[0].count, 10),
+        totalExecutions: totalCount,
+        completedExecutions: completedCount,
+        failedExecutions: parseInt(failedExecutions[0].count, 10),
+        runningExecutions: parseInt(runningExecutions[0].count, 10),
+        successRate: Math.round(successRate * 100) / 100,
+        avgExecutionTimeSeconds: avgExecutionTime[0].avg_seconds ? Math.round(parseFloat(avgExecutionTime[0].avg_seconds)) : 0,
+        executionsByTrigger: executionsByTrigger.map((row: any) => ({
+          triggerEvent: row.trigger_event,
+          count: parseInt(row.count, 10),
+        })),
+        mostUsedWorkflows: mostUsedWorkflows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          executionCount: parseInt(row.execution_count, 10),
+        })),
+        executionsOverTime: executionsOverTime.map((row: any) => ({
+          date: row.date,
+          count: parseInt(row.count, 10),
+        })),
+      };
+    } catch (error: any) {
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn(`Workflow analytics fallback due to missing schema: ${error.message}`);
+        return this.getDefaultAnalytics();
+      }
+      throw error;
+    }
   }
 
   async getWorkflowAnalyticsById(workflowId: string, tenantDb: DataSource) {
@@ -849,78 +983,121 @@ export class ClinicalWorkflowService {
     // Get workflow details
     const workflow = await this.getWorkflowById(workflowId, tenantDb);
 
-    // Get execution statistics
-    const totalExecutions = await tenantDb.query(
-      `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1`,
-      [workflowId],
-    );
-    const completedExecutions = await tenantDb.query(
-      `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1 AND status = 'completed'`,
-      [workflowId],
-    );
-    const failedExecutions = await tenantDb.query(
-      `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1 AND status = 'failed'`,
-      [workflowId],
-    );
+    const hasExecutionsTable = await this.hasTable(tenantDb, 'workflow_executions');
+    const hasStepExecutionsTable = await this.hasTable(tenantDb, 'workflow_step_executions');
+    const hasStepsTable = await this.hasTable(tenantDb, 'workflow_steps');
 
-    // Get average execution time
-    const avgExecutionTime = await tenantDb.query(
-      `SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_seconds
-       FROM workflow_executions
-       WHERE workflow_id = $1 AND completed_at IS NOT NULL AND started_at IS NOT NULL`,
-      [workflowId],
-    );
+    if (!hasExecutionsTable) {
+      return {
+        workflow: {
+          id: workflow.id,
+          name: workflow.name,
+          triggerEvent: workflow.trigger_event,
+          isActive: workflow.is_active,
+        },
+        totalExecutions: 0,
+        completedExecutions: 0,
+        failedExecutions: 0,
+        successRate: 0,
+        avgExecutionTimeSeconds: 0,
+        stepFailures: [],
+        recentExecutions: [],
+      };
+    }
 
-    // Get step failure rates
-    const stepFailures = await tenantDb.query(
-      `SELECT ws.step_type, COUNT(*) as failure_count
-       FROM workflow_step_executions wse
-       JOIN workflow_steps ws ON wse.step_id = ws.id
-       WHERE wse.execution_id IN (SELECT id FROM workflow_executions WHERE workflow_id = $1)
-       AND wse.status = 'failed'
-       GROUP BY ws.step_type
-       ORDER BY failure_count DESC`,
-      [workflowId],
-    );
+    try {
+      const totalExecutions = await tenantDb.query(
+        `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1`,
+        [workflowId],
+      );
+      const completedExecutions = await tenantDb.query(
+        `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1 AND status = 'completed'`,
+        [workflowId],
+      );
+      const failedExecutions = await tenantDb.query(
+        `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1 AND status = 'failed'`,
+        [workflowId],
+      );
 
-    // Get recent executions
-    const recentExecutions = await tenantDb.query(
-      `SELECT id, status, started_at, completed_at, trigger_event
-       FROM workflow_executions
-       WHERE workflow_id = $1
-       ORDER BY started_at DESC
-       LIMIT 10`,
-      [workflowId],
-    );
+      const avgExecutionTime = await tenantDb.query(
+        `SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_seconds
+         FROM workflow_executions
+         WHERE workflow_id = $1 AND completed_at IS NOT NULL AND started_at IS NOT NULL`,
+        [workflowId],
+      );
 
-    const totalCount = parseInt(totalExecutions[0].count, 10);
-    const completedCount = parseInt(completedExecutions[0].count, 10);
-    const successRate = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+      const stepFailures =
+        hasStepExecutionsTable && hasStepsTable
+          ? await tenantDb.query(
+              `SELECT ws.step_type, COUNT(*) as failure_count
+               FROM workflow_step_executions wse
+               JOIN workflow_steps ws ON wse.step_id = ws.id
+               WHERE wse.execution_id IN (SELECT id FROM workflow_executions WHERE workflow_id = $1)
+               AND wse.status = 'failed'
+               GROUP BY ws.step_type
+               ORDER BY failure_count DESC`,
+              [workflowId],
+            )
+          : [];
 
-    return {
-      workflow: {
-        id: workflow.id,
-        name: workflow.name,
-        triggerEvent: workflow.trigger_event,
-        isActive: workflow.is_active,
-      },
-      totalExecutions: totalCount,
-      completedExecutions: completedCount,
-      failedExecutions: parseInt(failedExecutions[0].count, 10),
-      successRate: Math.round(successRate * 100) / 100,
-      avgExecutionTimeSeconds: avgExecutionTime[0].avg_seconds ? Math.round(parseFloat(avgExecutionTime[0].avg_seconds)) : 0,
-      stepFailures: stepFailures.map((row: any) => ({
-        stepType: row.step_type,
-        failureCount: parseInt(row.failure_count, 10),
-      })),
-      recentExecutions: recentExecutions.map((row: any) => ({
-        id: row.id,
-        status: row.status,
-        startedAt: row.started_at,
-        completedAt: row.completed_at,
-        triggerEvent: row.trigger_event,
-      })),
-    };
+      const recentExecutions = await tenantDb.query(
+        `SELECT id, status, started_at, completed_at, trigger_event
+         FROM workflow_executions
+         WHERE workflow_id = $1
+         ORDER BY started_at DESC
+         LIMIT 10`,
+        [workflowId],
+      );
+
+      const totalCount = parseInt(totalExecutions[0].count, 10);
+      const completedCount = parseInt(completedExecutions[0].count, 10);
+      const successRate = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+      return {
+        workflow: {
+          id: workflow.id,
+          name: workflow.name,
+          triggerEvent: workflow.trigger_event,
+          isActive: workflow.is_active,
+        },
+        totalExecutions: totalCount,
+        completedExecutions: completedCount,
+        failedExecutions: parseInt(failedExecutions[0].count, 10),
+        successRate: Math.round(successRate * 100) / 100,
+        avgExecutionTimeSeconds: avgExecutionTime[0].avg_seconds ? Math.round(parseFloat(avgExecutionTime[0].avg_seconds)) : 0,
+        stepFailures: stepFailures.map((row: any) => ({
+          stepType: row.step_type,
+          failureCount: parseInt(row.failure_count, 10),
+        })),
+        recentExecutions: recentExecutions.map((row: any) => ({
+          id: row.id,
+          status: row.status,
+          startedAt: row.started_at,
+          completedAt: row.completed_at,
+          triggerEvent: row.trigger_event,
+        })),
+      };
+    } catch (error: any) {
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn(`Workflow analytics by id fallback due to missing schema: ${error.message}`);
+        return {
+          workflow: {
+            id: workflow.id,
+            name: workflow.name,
+            triggerEvent: workflow.trigger_event,
+            isActive: workflow.is_active,
+          },
+          totalExecutions: 0,
+          completedExecutions: 0,
+          failedExecutions: 0,
+          successRate: 0,
+          avgExecutionTimeSeconds: 0,
+          stepFailures: [],
+          recentExecutions: [],
+        };
+      }
+      throw error;
+    }
   }
 
   // ==================== EXECUTION MANAGEMENT ====================
@@ -1047,4 +1224,3 @@ export class ClinicalWorkflowService {
     }
   }
 }
-

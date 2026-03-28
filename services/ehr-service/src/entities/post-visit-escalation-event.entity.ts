@@ -66,6 +66,21 @@ export class PostVisitEscalationEvent {
 
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   metadata: Record<string, any>;
+  @Column({ name: 'classification_confidence', type: 'double precision', nullable: true })
+  classificationConfidence?: number;
+
+  @Column({ name: 'classification_reason', type: 'text', nullable: true })
+  classificationReason?: string;
+
+  @Column({ name: 'classification_source', type: 'varchar', length: 30, nullable: true })
+  classificationSource?: string;
+
+  @Column({ name: 'classification_stage', type: 'varchar', length: 20 })
+  classificationStage: string;
+
+  @Column({ name: 'classification_temporality', type: 'varchar', length: 20, nullable: true })
+  classificationTemporality?: string;
+
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp with time zone' })
   createdAt: Date;

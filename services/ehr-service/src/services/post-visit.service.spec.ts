@@ -2487,6 +2487,36 @@ describe('PostVisitService', () => {
   it('creates escalation event when patient companion message contains urgent symptoms', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     let companionInsertCount = 0;
+    const patientAiSessionRows: any[] = [];
+    const patientAiEscalationRows: any[] = [];
+    const followupRows: any[] = [];
+    const patientAiSessionRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => {
+        const row = { id: `patient-ai-session-${patientAiSessionRows.length + 1}`, ...value };
+        patientAiSessionRows.push(row);
+        return row;
+      }),
+      findOneBy: jest.fn(async ({ id }) => patientAiSessionRows.find((row) => row.id === id) ?? null),
+    };
+    const patientAiEscalationRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => {
+        const row = { id: `patient-ai-escalation-${patientAiEscalationRows.length + 1}`, ...value };
+        patientAiEscalationRows.push(row);
+        return row;
+      }),
+      findOneBy: jest.fn(async ({ id }) => patientAiEscalationRows.find((row) => row.id === id) ?? null),
+    };
+    const followupRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => {
+        const row = { id: `followup-${followupRows.length + 1}`, ...value };
+        followupRows.push(row);
+        return row;
+      }),
+      findOneBy: jest.fn(async ({ id }) => followupRows.find((row) => row.id === id) ?? null),
+    };
 
     const tenantDb = {
       query: jest.fn(async (sql: string, params: any[] = []) => {
@@ -2585,6 +2615,9 @@ describe('PostVisitService', () => {
         if (sql.includes('UPDATE post_visit_escalation_events') && sql.includes('SET workflow_key')) {
           return [];
         }
+        if (sql.includes('UPDATE post_visit_escalation_events') && sql.includes("SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb")) {
+          return [];
+        }
         if (sql.includes('UPDATE post_visit_companion_messages') && sql.includes('escalation_detected = TRUE')) {
           return [];
         }
@@ -2592,6 +2625,18 @@ describe('PostVisitService', () => {
           return [];
         }
         return [];
+      }),
+      getRepository: jest.fn((entity: any) => {
+        switch (entity?.name) {
+          case 'PatientAiSession':
+            return patientAiSessionRepo;
+          case 'PatientAiEscalation':
+            return patientAiEscalationRepo;
+          case 'PatientFollowupOrchestration':
+            return followupRepo;
+          default:
+            return null;
+        }
       }),
     } as any;
 
@@ -2605,6 +2650,138 @@ describe('PostVisitService', () => {
     expect(result.escalation).toEqual(expect.objectContaining({ id: 'esc-1', routeTarget: 'emergency' }));
     expect(result.patientMessage.escalationDetected).toBe(true);
     expect(result.assistantMessage.messageType).toBe('alert');
+    expect(result.patientAi).toEqual({
+      sessionId: 'patient-ai-session-1',
+      escalationId: 'patient-ai-escalation-1',
+      followupOrchestrationId: 'followup-1',
+    });
+    expect(patientAiSessionRows).toHaveLength(1);
+    expect(patientAiEscalationRows).toHaveLength(1);
+    expect(followupRows).toHaveLength(1);
+    expect(followupRows[0]).toEqual(expect.objectContaining({
+      triggerType: 'post_visit_companion_message',
+      routeBackTarget: 'emergency',
+    }));
+  });
+
+  it('syncs post-visit escalation resolution into patient-ai escalation and follow-up state', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const patientAiSessionRows: any[] = [
+      {
+        id: 'patient-ai-session-1',
+        status: 'needs_follow_up',
+        provenance: {},
+      },
+    ];
+    const patientAiEscalationRows: any[] = [
+      {
+        id: 'patient-ai-escalation-1',
+        status: 'open',
+        provenance: {},
+        resolutionNotes: null,
+        resolvedAt: null,
+        resolvedBy: null,
+      },
+    ];
+    const followupRows: any[] = [
+      {
+        id: 'followup-1',
+        status: 'open',
+        reminderState: 'pending',
+        payload: {},
+        completedAt: null,
+      },
+    ];
+    const patientAiSessionRepo = {
+      findOneBy: jest.fn(async ({ id }) => patientAiSessionRows.find((row) => row.id === id) ?? null),
+      save: jest.fn(async (value) => {
+        const index = patientAiSessionRows.findIndex((row) => row.id === value.id);
+        patientAiSessionRows[index] = { ...patientAiSessionRows[index], ...value };
+        return patientAiSessionRows[index];
+      }),
+    };
+    const patientAiEscalationRepo = {
+      findOneBy: jest.fn(async ({ id }) => patientAiEscalationRows.find((row) => row.id === id) ?? null),
+      save: jest.fn(async (value) => {
+        const index = patientAiEscalationRows.findIndex((row) => row.id === value.id);
+        patientAiEscalationRows[index] = { ...patientAiEscalationRows[index], ...value };
+        return patientAiEscalationRows[index];
+      }),
+    };
+    const followupRepo = {
+      findOneBy: jest.fn(async ({ id }) => followupRows.find((row) => row.id === id) ?? null),
+      save: jest.fn(async (value) => {
+        const index = followupRows.findIndex((row) => row.id === value.id);
+        followupRows[index] = { ...followupRows[index], ...value };
+        return followupRows[index];
+      }),
+    };
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_escalation_events WHERE id = $1 LIMIT 1')) {
+          return [
+            {
+              id: 'esc-1',
+              status: 'open',
+              workflow_key: null,
+              metadata: {
+                patient_ai_session_id: 'patient-ai-session-1',
+                patient_ai_escalation_id: 'patient-ai-escalation-1',
+                patient_followup_orchestration_id: 'followup-1',
+              },
+            },
+          ];
+        }
+        if (sql.includes('UPDATE post_visit_escalation_events') && sql.includes('SET status = $2')) {
+          return [
+            {
+              id: 'esc-1',
+              status: 'resolved',
+              metadata: {
+                patient_ai_session_id: 'patient-ai-session-1',
+                patient_ai_escalation_id: 'patient-ai-escalation-1',
+                patient_followup_orchestration_id: 'followup-1',
+              },
+            },
+          ];
+        }
+        return [];
+      }),
+      getRepository: jest.fn((entity: any) => {
+        switch (entity?.name) {
+          case 'PatientAiSession':
+            return patientAiSessionRepo;
+          case 'PatientAiEscalation':
+            return patientAiEscalationRepo;
+          case 'PatientFollowupOrchestration':
+            return followupRepo;
+          default:
+            return null;
+        }
+      }),
+    } as any;
+
+    const result = await service.resolveEscalation(
+      tenantDb,
+      'esc-1',
+      { status: 'resolved', resolutionNote: 'Patient contacted and stable.' },
+      { actorUserId: 'doctor-1' },
+    );
+
+    expect(result.status).toBe('resolved');
+    expect(patientAiEscalationRows[0]).toEqual(expect.objectContaining({
+      status: 'resolved',
+      resolutionNotes: 'Patient contacted and stable.',
+      resolvedBy: 'doctor-1',
+    }));
+    expect(followupRows[0]).toEqual(expect.objectContaining({
+      status: 'completed',
+      reminderState: 'acknowledged',
+    }));
+    expect(patientAiSessionRows[0]).toEqual(expect.objectContaining({
+      status: 'closed',
+    }));
   });
 
   it('delivers patient and clinician alert channels when escalation is detected', async () => {

@@ -1,0 +1,103 @@
+[
+  {
+    "knowledge_id": "asthma-primary-care-2026-01",
+    "condition": "asthma",
+    "aliases": ["bronchial asthma"],
+    "title": "Asthma Management Guidance",
+    "source_name": "GINA Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-10",
+    "reviewed_at": "2026-03-01",
+    "specialty": "primary_care",
+    "module": "respiratory_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["asthma", "ics", "laba", "saba", "wheeze"],
+    "recommendation_blocks": [
+      "Use an ICS-containing regimen rather than SABA-only treatment for persistent asthma.",
+      "Escalate stepwise therapy based on symptom control, exacerbation burden, and inhaler technique.",
+      "Review trigger exposure, inhaler technique, and adherence before intensifying therapy."
+    ],
+    "contraindications": [
+      {
+        "label": "pregnancy",
+        "match_terms": ["pregnancy", "pregnant"],
+        "reason": "Prefer pregnancy-compatible inhaled corticosteroid choices and avoid unnecessary regimen instability during pregnancy.",
+        "severity": "moderate"
+      }
+    ],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "copd-primary-care-2026-01",
+    "condition": "copd",
+    "aliases": ["chronic obstructive pulmonary disease"],
+    "title": "COPD Management Guidance",
+    "source_name": "GOLD Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-08",
+    "reviewed_at": "2026-03-01",
+    "specialty": "primary_care",
+    "module": "respiratory_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["copd", "lama", "laba", "smoking cessation"],
+    "recommendation_blocks": [
+      "Prioritize smoking cessation, vaccination, and inhaled bronchodilator therapy based on symptom and exacerbation burden.",
+      "Use LAMA or LABA maintenance therapy and escalate to combination therapy when symptoms or exacerbations persist.",
+      "Assess for pulmonary rehabilitation and oxygen needs when functional limitation or hypoxemia is present."
+    ],
+    "contraindications": [
+      {
+        "label": "narrow_angle_glaucoma",
+        "match_terms": ["narrow_angle_glaucoma"],
+        "reason": "Use inhaled anticholinergics cautiously when narrow-angle glaucoma is present.",
+        "severity": "moderate"
+      }
+    ],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "hf-primary-care-2026-01",
+    "condition": "heart_failure",
+    "aliases": ["hf", "congestive heart failure", "chf"],
+    "title": "Heart Failure Management Guidance",
+    "source_name": "ACC/AHA Heart Failure Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-12",
+    "reviewed_at": "2026-03-01",
+    "specialty": "cardiology",
+    "module": "chronic_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["heart failure", "ace inhibitor", "arb", "beta blocker", "sglt2"],
+    "recommendation_blocks": [
+      "Use guideline-directed medical therapy with RAAS blockade, beta-blocker, and SGLT2 therapy when clinically appropriate.",
+      "Avoid NSAID exposure and monitor fluid status, renal function, and potassium during medication titration.",
+      "Escalate quickly when congestion, hypotension, or rapid weight gain suggests decompensation."
+    ],
+    "contraindications": [
+      {
+        "label": "pregnancy",
+        "match_terms": ["pregnancy", "pregnant"],
+        "reason": "Avoid ACE inhibitors and ARBs in pregnancy and use pregnancy-safe alternatives.",
+        "severity": "major"
+      },
+      {
+        "label": "hyperkalemia",
+        "match_terms": ["hyperkalemia"],
+        "reason": "RAAS-directed therapy can worsen hyperkalemia and requires closer monitoring.",
+        "severity": "moderate"
+      }
+    ],
+    "medication_warnings": [
+      {
+        "match_terms": ["nsaid", "ibuprofen", "naproxen"],
+        "message": "NSAIDs can worsen heart failure control and should be avoided when possible."
+      }
+    ]
+  }
+]

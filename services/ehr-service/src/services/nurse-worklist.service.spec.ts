@@ -44,6 +44,108 @@ describe('NurseWorklistService', () => {
     expect(tenantDb.query).not.toHaveBeenCalled();
   });
 
+  it('builds a doctor synchronization feed from doctor-routed coordination items', async () => {
+    const { service } = makeService();
+    jest.spyOn(service, 'getCrossModuleEscalationFeed').mockResolvedValue({
+      items: [
+        {
+          id: 'handoff:patient-1:draft',
+          module: 'nursing',
+          item_type: 'nurse_handoff_risk',
+          severity: 'high',
+          workflow_status: 'pending',
+          doctor_sync_status: 'nurse_handoff_pending',
+          destination_role: 'nurse',
+        },
+        {
+          id: 'lab-critical-alert:alert-1',
+          module: 'lab',
+          item_type: 'lab_critical_alert_followup',
+          severity: 'critical',
+          workflow_status: 'pending',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_role: 'doctor',
+        },
+        {
+          id: 'medication:mar-1',
+          module: 'nursing',
+          item_type: 'medication_administration_followup',
+          severity: 'high',
+          workflow_status: 'acknowledged',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_role: 'doctor',
+        },
+        {
+          id: 'pharmacy:rx-1',
+          module: 'pharmacy',
+          item_type: 'pharmacy_protocol_followup',
+          severity: 'medium',
+          workflow_status: 'pending',
+          doctor_sync_status: 'nurse_followup_required',
+          destination_role: 'nurse',
+        },
+      ],
+      summary: {},
+    } as any);
+
+    const result = await service.getDoctorSynchronizationFeed({} as any);
+
+    expect(result.summary.total).toBe(2);
+    expect(result.summary.handoff).toBe(1);
+    expect(result.summary.critical_results).toBe(1);
+    expect(result.summary.acknowledged).toBe(0);
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'handoff:patient-1:draft',
+          coordination_focus: 'handoff',
+        }),
+        expect.objectContaining({
+          id: 'lab-critical-alert:alert-1',
+          coordination_focus: 'critical_results',
+        }),
+      ]),
+    );
+  });
+
+  it('supports doctor synchronization focus filters and acknowledged inclusion', async () => {
+    const { service } = makeService();
+    jest.spyOn(service, 'getCrossModuleEscalationFeed').mockResolvedValue({
+      items: [
+        {
+          id: 'ed:visit-1',
+          module: 'ed',
+          item_type: 'ed_protocol_followup',
+          severity: 'critical',
+          workflow_status: 'pending',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_role: 'doctor',
+        },
+        {
+          id: 'medication:mar-1',
+          module: 'nursing',
+          item_type: 'medication_administration_followup',
+          severity: 'high',
+          workflow_status: 'acknowledged',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_role: 'doctor',
+        },
+      ],
+      summary: {},
+    } as any);
+
+    const triageOnly = await service.getDoctorSynchronizationFeed({} as any, { focus: 'triage' });
+    expect(triageOnly.items).toHaveLength(1);
+    expect(triageOnly.items[0].id).toBe('ed:visit-1');
+
+    const withAcknowledged = await service.getDoctorSynchronizationFeed({} as any, {
+      focus: 'orders',
+      includeAcknowledged: true,
+    });
+    expect(withAcknowledged.items).toHaveLength(1);
+    expect(withAcknowledged.items[0].id).toBe('medication:mar-1');
+  });
+
   it('persists task completion context and records the audit event', async () => {
     const { service, mocks } = makeService();
     const tenantDb = { query: jest.fn().mockResolvedValue([]) } as any;
@@ -123,6 +225,129 @@ describe('NurseWorklistService', () => {
       completedTaskIds: ['task-1'],
       acknowledgedAlertIds: ['alert-1'],
     });
+  });
+
+  it('builds a clinical escalation feed with summary counts', async () => {
+    const { service } = makeService();
+    const tenantDb = {
+      query: jest.fn().mockResolvedValue([
+        {
+          id: 'esc-1',
+          patient_id: 'patient-1',
+          early_warning_score_id: 'ews-1',
+          nurse_task_id: 'task-1',
+          source_module: 'early_warning',
+          source_reference_id: 'vitals-1',
+          escalation_type: 'deterioration_review',
+          severity: 'critical',
+          status: 'open',
+          title: 'NEWS2 escalation',
+          summary: 'Immediate review required',
+          recommended_action: 'Repeat vitals',
+          due_at: new Date().toISOString(),
+          acknowledged_at: null,
+          completed_at: null,
+          evidence: {},
+          metadata: {},
+          first_name: 'Jane',
+          last_name: 'Doe',
+          patient_number: 'P001',
+          early_warning_total_score: 8,
+          early_warning_risk_level: 'high',
+          remote_monitoring_alert_id: 'rma-1',
+          remote_monitoring_alert_type: 'early_warning_deterioration',
+          remote_monitoring_severity: 'critical',
+        },
+      ]),
+    } as any;
+
+    const result = await service.getClinicalEscalationFeed(tenantDb, { includeCompleted: false });
+
+    expect(result.summary).toEqual({
+      total: 1,
+      critical: 1,
+      open: 1,
+      acknowledged: 0,
+      highRiskEarlyWarning: 1,
+      remoteMonitoringLinked: 1,
+    });
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        id: 'esc-1',
+        patientName: 'Jane Doe',
+        earlyWarning: expect.objectContaining({ totalScore: 8, riskLevel: 'high' }),
+        remoteMonitoring: expect.objectContaining({ alertId: 'rma-1' }),
+      }),
+    );
+  });
+
+  it('acknowledges a clinical escalation and updates linked records', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 'esc-1', patient_id: 'patient-1', early_warning_score_id: 'ews-1', nurse_task_id: 'task-1' },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await service.acknowledgeClinicalEscalation(tenantDb, user, 'esc-1', {
+      ipAddress: '127.0.0.1',
+    });
+
+    expect(result).toEqual({ ok: true, escalationTaskId: 'esc-1' });
+    expect(tenantDb.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('UPDATE clinical_escalation_tasks'),
+      ['esc-1', 'user-1'],
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_ALERT_ACKNOWLEDGE,
+        resourceId: 'esc-1',
+        patientId: 'patient-1',
+      }),
+    );
+  });
+
+  it('completes a clinical escalation and resolves linked work items', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 'esc-1', patient_id: 'patient-1', nurse_task_id: 'task-1' },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await service.completeClinicalEscalation(
+      tenantDb,
+      user,
+      'esc-1',
+      { note: 'Patient reassessed and stabilized' },
+      { ipAddress: '127.0.0.1' },
+    );
+
+    expect(result).toEqual({ ok: true, escalationTaskId: 'esc-1' });
+    expect(tenantDb.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('UPDATE clinical_escalation_tasks'),
+      ['esc-1', 'user-1', 'Patient reassessed and stabilized'],
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_TASK_COMPLETE,
+        resourceId: 'esc-1',
+        patientId: 'patient-1',
+      }),
+    );
   });
 
   it('requires a reason when a nurse overrides an alert recommendation', async () => {

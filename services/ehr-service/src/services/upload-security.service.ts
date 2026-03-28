@@ -53,7 +53,7 @@ export class UploadSecurityService {
   }
 
   async assertCleanUpload(
-    file: Pick<Express.Multer.File, 'buffer' | 'originalname' | 'mimetype'>,
+    file: Pick<Express.Multer.File, 'buffer' | 'originalname' | 'mimetype'> & { path?: string },
     fileLabel: string,
   ): Promise<void> {
     const enabled = this.parseBool(process.env.EHR_MALWARE_SCAN_ENABLED, false);
@@ -61,7 +61,20 @@ export class UploadSecurityService {
       return;
     }
 
-    if (!file?.buffer || !Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+    let scanBuffer: Buffer | null = null;
+    if (file?.buffer && Buffer.isBuffer(file.buffer) && file.buffer.length > 0) {
+      scanBuffer = file.buffer;
+    } else if (typeof file?.path === 'string' && file.path.trim().length > 0) {
+      try {
+        const disk = await fs.readFile(file.path);
+        if (disk.length > 0) {
+          scanBuffer = disk;
+        }
+      } catch {
+        scanBuffer = null;
+      }
+    }
+    if (!scanBuffer) {
       throw new BadRequestException(`Invalid ${fileLabel} upload`);
     }
 
@@ -71,7 +84,7 @@ export class UploadSecurityService {
     const failClosed = this.parseBool(process.env.EHR_MALWARE_SCAN_FAIL_CLOSED, true);
     const infectedExitCodes = this.parseIntSet(process.env.EHR_MALWARE_SCAN_INFECTED_EXIT_CODES || '1', new Set([1]));
 
-    await this.withTempFile(file.buffer, file.originalname || `${fileLabel}.bin`, async (tempPath) => {
+    await this.withTempFile(scanBuffer, file.originalname || `${fileLabel}.bin`, async (tempPath) => {
       let status = -1;
       try {
         const result = spawnSync(command, [...args, tempPath], {

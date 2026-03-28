@@ -241,6 +241,25 @@ export class ADTService {
     filters: { wardName?: string; service?: string; attendingProvider?: string; status?: string },
     tenantDb: DataSource,
   ): Promise<any[]> {
+    const admissionColumns = await tenantDb.query(
+      `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'admissions'
+      `,
+    );
+    const availableColumns = new Set(
+      admissionColumns.map((row: { column_name: string }) => row.column_name),
+    );
+
+    const admittingDiagnosisIcd10Select = availableColumns.has('admitting_diagnosis_icd10')
+      ? 'a.admitting_diagnosis_icd10'
+      : 'NULL::text AS admitting_diagnosis_icd10';
+    const admittingDiagnosisSnomedSelect = availableColumns.has('admitting_diagnosis_snomed')
+      ? 'a.admitting_diagnosis_snomed'
+      : 'NULL::text AS admitting_diagnosis_snomed';
+
     // Use raw query to get all needed fields including bed details
     let query = `
       SELECT 
@@ -251,8 +270,8 @@ export class ADTService {
         a.admission_type,
         a.admission_status,
         a.admitting_diagnosis,
-        a.admitting_diagnosis_icd10,
-        a.admitting_diagnosis_snomed,
+        ${admittingDiagnosisIcd10Select},
+        ${admittingDiagnosisSnomedSelect},
         a.attending_provider,
         a.current_ward,
         a.current_bed_id,
@@ -362,4 +381,3 @@ export class ADTService {
     );
   }
 }
-

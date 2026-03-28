@@ -43,6 +43,18 @@ interface ImagingStudy {
   study_time?: string;
 }
 
+interface ImagingOrderAiReview {
+  id: string;
+  appropriatenessStatus: string;
+  rationale: string;
+  protocolSummary?: {
+    contrastRequired?: boolean;
+    preparationInstructions?: string | null;
+  };
+  blockingIssues?: Array<{ code?: string; message?: string }>;
+  supportingSignals?: Array<{ code?: string; message?: string }>;
+}
+
 interface TechnologistImagingWorklistProps {
   tenantSlug: string;
   token: string;
@@ -76,6 +88,8 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
   const [completionNotes, setCompletionNotes] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeQueueView, setActiveQueueView] = useState<QueueView>('ready');
+  const [orderReviews, setOrderReviews] = useState<Record<string, ImagingOrderAiReview | null>>({});
+  const [reviewLoadingIds, setReviewLoadingIds] = useState<Record<string, boolean>>({});
 
   const loadData = useCallback(async () => {
     if (!tenantSlug || !token) return;
@@ -232,7 +246,28 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
     }
   };
 
+  const handlePrepareAiReview = async (orderId: string) => {
+    try {
+      setReviewLoadingIds((current) => ({ ...current, [orderId]: true }));
+      const response = await ehrApi.prepareImagingOrderAiReview(tenantSlug, token, orderId);
+      setOrderReviews((current) => ({ ...current, [orderId]: response.data || null }));
+      showSuccess('AI protocol ready', 'Radiology appropriateness and protocol review prepared.');
+    } catch (error) {
+      console.error('Failed to prepare imaging AI review', error);
+      showError('Unable to prepare AI review', 'Please try again.');
+    } finally {
+      setReviewLoadingIds((current) => ({ ...current, [orderId]: false }));
+    }
+  };
+
   const renderOrderCard = (order: ImagingOrder, actions: React.ReactNode) => {
+    const review = orderReviews[order.id];
+    const reviewTone =
+      review?.appropriatenessStatus === 'supported'
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+        : review?.appropriatenessStatus === 'acceptable_with_caution'
+          ? 'border-amber-200 bg-amber-50 text-amber-800'
+          : 'border-slate-200 bg-slate-50 text-slate-700';
     return (
       <div
         key={order.id}
@@ -297,6 +332,37 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
         )}
 
         <div className="flex flex-col sm:flex-row gap-2">{actions}</div>
+
+        {review && (
+          <div className={`mt-3 rounded-xl border p-3 text-xs ${reviewTone}`}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold uppercase tracking-wide">
+                AI Protocol Review
+              </span>
+              <span className="rounded-full bg-white/70 px-2 py-1 font-semibold">
+                {review.appropriatenessStatus.replace(/_/g, ' ')}
+              </span>
+            </div>
+            <p className="mt-2">{review.rationale}</p>
+            {review.protocolSummary?.preparationInstructions && (
+              <p className="mt-2">
+                Preparation: {review.protocolSummary.preparationInstructions}
+              </p>
+            )}
+            {Array.isArray(review.blockingIssues) && review.blockingIssues.length > 0 && (
+              <ul className="mt-2 list-disc list-inside space-y-1">
+                {review.blockingIssues.slice(0, 2).map((issue, index) => (
+                  <li key={`${order.id}-issue-${index}`}>{issue.message || issue.code}</li>
+                ))}
+              </ul>
+            )}
+            {Array.isArray(review.supportingSignals) && review.supportingSignals.length > 0 && (
+              <p className="mt-2">
+                Key protocol signal: {review.supportingSignals[0].message || review.supportingSignals[0].code}
+              </p>
+            )}
+          </div>
+        )}
 
         {order.payment_status === 'awaiting_payment' && (
           <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
@@ -458,6 +524,18 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
                     order,
                     <>
                       <button
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-sky-200 bg-sky-50 text-sky-700 text-sm font-semibold hover:bg-sky-100"
+                        onClick={() => void handlePrepareAiReview(order.id)}
+                        disabled={Boolean(reviewLoadingIds[order.id])}
+                      >
+                        {reviewLoadingIds[order.id] ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                        {orderReviews[order.id] ? 'Refresh AI Protocol' : 'AI Protocol'}
+                      </button>
+                      <button
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-sm font-semibold shadow hover:opacity-95"
                         onClick={() => {
                           setScheduleTarget(order);
@@ -507,17 +585,31 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
                 {filteredScheduledOrders.map((order) =>
                   renderOrderCard(
                     order,
-                    <button
-                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white text-sm font-semibold shadow hover:opacity-95"
-                      onClick={() => {
-                        setStartTarget(order);
-                        setStartDate(defaultDate());
-                        setStartTime(defaultTime());
-                      }}
-                    >
-                      <PlayCircle className="w-4 h-4" />
-                      Start Study
-                    </button>,
+                    <>
+                      <button
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-sky-200 bg-sky-50 text-sky-700 text-sm font-semibold hover:bg-sky-100"
+                        onClick={() => void handlePrepareAiReview(order.id)}
+                        disabled={Boolean(reviewLoadingIds[order.id])}
+                      >
+                        {reviewLoadingIds[order.id] ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                        {orderReviews[order.id] ? 'Refresh AI Protocol' : 'AI Protocol'}
+                      </button>
+                      <button
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white text-sm font-semibold shadow hover:opacity-95"
+                        onClick={() => {
+                          setStartTarget(order);
+                          setStartDate(defaultDate());
+                          setStartTime(defaultTime());
+                        }}
+                      >
+                        <PlayCircle className="w-4 h-4" />
+                        Start Study
+                      </button>
+                    </>,
                   ),
                 )}
               </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Bed, Stethoscope, FileText, Calendar, Check, AlertCircle } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
-import axios from 'axios';
 import ICD10Picker from './ICD10Picker';
+import { ehrAxios } from '../services/api';
 
 interface AdmissionWorkflowProps {
   patientId?: string;
@@ -54,13 +54,9 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadPatients = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
-      const response = await axios.get(`${EHR_API_URL}/patients`, {
-        headers: {
-          'X-Tenant-ID': tenantSlug,
-          'Authorization': `Bearer ${token}`
-        },
-        params: { limit: 100 }
+      const response = await ehrAxios.get('/patients', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params: { limit: 100 },
       });
       setPatients(response.data?.patients || response.data || []);
     } catch (error) {
@@ -70,12 +66,8 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadAdmittedPatients = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
-      const response = await axios.get(`${EHR_API_URL}/beds/admissions`, {
-        headers: {
-          'X-Tenant-ID': tenantSlug,
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await ehrAxios.get('/beds/admissions', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       });
       const admitted = (response.data || []).map((admission: any) => admission.patientId);
       setAdmittedPatients(admitted);
@@ -86,13 +78,9 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadDoctors = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
-      const response = await axios.get(`${EHR_API_URL}/users`, {
-        headers: {
-          'X-Tenant-ID': tenantSlug,
-          'Authorization': `Bearer ${token}`
-        },
-        params: { role: 'doctor' }
+      const response = await ehrAxios.get('/users', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params: { role: 'doctor' },
       });
       setDoctors(response.data || []);
     } catch (error) {
@@ -102,16 +90,12 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadAvailableBeds = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
       const params: any = {};
       if (formData.ward) params.wardName = formData.ward;
       
-      const response = await axios.get(`${EHR_API_URL}/beds/available`, {
-        headers: {
-          'X-Tenant-ID': tenantSlug,
-          'Authorization': `Bearer ${token}`
-        },
-        params
+      const response = await ehrAxios.get('/beds/available', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params,
       });
       setAvailableBeds(response.data || []);
     } catch (error) {
@@ -130,20 +114,10 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
     try {
       setLoading(true);
       
-      // Use direct axios call to avoid ehrApi.post function error
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
-      const response = await axios.post(
-        `${EHR_API_URL}/beds/admissions`,
-        {
-          patientId: selectedPatient?.id || patientId,
-          ...formData,
-        },
-        {
-          headers: {
-            'X-Tenant-ID': tenantSlug,
-            'Authorization': `Bearer ${token}`
-          }
-        }
+      const response = await ehrAxios.post(
+        '/beds/admissions',
+        { patientId: selectedPatient?.id || patientId, ...formData },
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
       );
       
       showSuccess('Success', 'Patient admitted successfully');
@@ -507,4 +481,3 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 };
 
 export default AdmissionWorkflow;
-

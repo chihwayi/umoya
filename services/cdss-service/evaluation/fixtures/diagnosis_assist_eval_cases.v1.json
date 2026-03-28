@@ -1,0 +1,40 @@
+{
+  "dataset_version": "2026-03-26.diagnosis-assist.v1",
+  "description": "Diagnosis assist release-gate baseline dataset.",
+  "k": 3,
+  "cases": [
+    {
+      "id": "dx-001",
+      "query": "Community acquired pneumonia empiric treatment in stable adult",
+      "expected": {
+        "relevant_citation_ids": ["who-cap-first-line"],
+        "supporting_citation_ids": ["who-cap-first-line"],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [{ "id": "who-cap-first-line", "title": "WHO adult CAP first-line guidance" }],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Use first-line community acquired pneumonia therapy and review response to treatment."
+        }
+      }
+    },
+    {
+      "id": "dx-002",
+      "query": "Unclear dizziness without vitals or neurologic exam",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
+        }
+      }
+    }
+  ]
+}

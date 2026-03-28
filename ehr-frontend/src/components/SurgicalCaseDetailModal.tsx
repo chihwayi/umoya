@@ -3,6 +3,7 @@ import { X, User, Calendar, Clock, Activity, FileText, Play, CheckCircle, XCircl
 import { useNotification } from './GlobalNotification';
 import ImplantTrackingModal from './ImplantTrackingModal';
 import { cdssApi, ehrAxios } from '../services/api';
+import { usePrompt } from '../hooks/usePrompt';
 
 interface SurgicalCaseDetailModalProps {
   caseId: string;
@@ -20,6 +21,7 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
   onClose,
 }) => {
   const { showError, showSuccess } = useNotification();
+  const { prompt, Dialog } = usePrompt();
   const [surgicalCase, setSurgicalCase] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showDocumentation, setShowDocumentation] = useState(false);
@@ -138,7 +140,16 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
   };
 
   const handleCancelCase = async () => {
-    const reason = prompt('Reason for cancellation:');
+    const reason = await prompt({
+      title: 'Cancel Surgical Case',
+      message: 'Provide the reason for cancelling this surgical case.',
+      placeholder: 'Reason for cancellation',
+      confirmText: 'Cancel Case',
+      cancelText: 'Keep Case',
+      type: 'danger',
+      multiline: true,
+      required: true,
+    });
     if (!reason) return;
 
     try {
@@ -177,23 +188,43 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
   };
 
   const addSpecimen = () => {
-    const specimen = prompt('Specimen description:');
-    if (specimen) {
-      setDocumentation({
-        ...documentation,
-        specimensSent: [...documentation.specimensSent, specimen],
+    void (async () => {
+      const specimen = await prompt({
+        title: 'Add Specimen',
+        message: 'Enter the specimen description.',
+        placeholder: 'Specimen description',
+        confirmText: 'Add Specimen',
+        cancelText: 'Cancel',
+        type: 'info',
+        required: true,
       });
-    }
+      if (specimen) {
+        setDocumentation((prev) => ({
+          ...prev,
+          specimensSent: [...prev.specimensSent, specimen],
+        }));
+      }
+    })();
   };
 
   const addDrain = () => {
-    const drain = prompt('Drain description (e.g., JP drain, RUQ):');
-    if (drain) {
-      setDocumentation({
-        ...documentation,
-        drainsPlaced: [...documentation.drainsPlaced, drain],
+    void (async () => {
+      const drain = await prompt({
+        title: 'Add Drain',
+        message: 'Enter the drain description.',
+        placeholder: 'Drain description (e.g., JP drain, RUQ)',
+        confirmText: 'Add Drain',
+        cancelText: 'Cancel',
+        type: 'info',
+        required: true,
       });
-    }
+      if (drain) {
+        setDocumentation((prev) => ({
+          ...prev,
+          drainsPlaced: [...prev.drainsPlaced, drain],
+        }));
+      }
+    })();
   };
 
   const completeChecklistPhase = async (phase: 'sign-in' | 'time-out' | 'sign-out', body: any) => {
@@ -310,7 +341,9 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <>
+      {Dialog}
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6">
@@ -866,9 +899,9 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
           onClose={() => setShowImplantModal(false)}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
 export default SurgicalCaseDetailModal;
-

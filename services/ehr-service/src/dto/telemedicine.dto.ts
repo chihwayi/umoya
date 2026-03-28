@@ -50,6 +50,16 @@ export class CreateTelemedicineConsultationDto {
 }
 
 export class UpdateTelemedicineConsultationDto {
+  @ApiPropertyOptional({ description: 'Scheduled start time' })
+  @IsDateString()
+  @IsOptional()
+  scheduledStartTime?: string;
+
+  @ApiPropertyOptional({ description: 'Consultation type', enum: ['video', 'audio', 'chat', 'hybrid'] })
+  @IsEnum(['video', 'audio', 'chat', 'hybrid'])
+  @IsOptional()
+  consultationType?: 'video' | 'audio' | 'chat' | 'hybrid';
+
   @ApiPropertyOptional({ description: 'Status', enum: ['scheduled', 'waiting', 'in_progress', 'completed', 'cancelled', 'no_show', 'technical_issue'] })
   @IsEnum(['scheduled', 'waiting', 'in_progress', 'completed', 'cancelled', 'no_show', 'technical_issue'])
   @IsOptional()
@@ -513,4 +523,3 @@ export class RemoteMonitoringQueryDto {
   @IsOptional()
   limit?: number;
 }
-

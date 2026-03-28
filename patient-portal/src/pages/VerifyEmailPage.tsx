@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
+import { runtimeUrls } from '../config/runtime';
 
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL;
+const API_BASE_URL = runtimeUrls.ehrApi;
 
 if (!API_BASE_URL) {
-  console.error('REACT_APP_EHR_API_URL environment variable is not set');
+  console.error('Patient Portal API URL is not configured');
 }
 
 const VerifyEmailPage: React.FC = () => {
@@ -116,4 +117,3 @@ const VerifyEmailPage: React.FC = () => {
 };
 
 export default VerifyEmailPage;
-

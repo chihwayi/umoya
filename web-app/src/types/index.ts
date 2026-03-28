@@ -1,3 +1,22 @@
+export interface TenantBillingSummary {
+  mode: 'demo' | 'paid';
+  packagePreset: 'full_ehr' | 'claims_only';
+  state: 'demo' | 'active' | 'grace' | 'suspended' | 'expired';
+  packageName: string | null;
+  accessEndsAt: string | null;
+  suspensionAt: string | null;
+  autoDeleteAt: string | null;
+  daysRemaining: number | null;
+  daysUntilSuspension: number | null;
+  overdueDays: number;
+  warningDays: number;
+  tone: 'good' | 'warning' | 'critical' | 'expired';
+  label: string;
+  message: string;
+  enabledModules: string[];
+  coreModules: string[];
+}
+
 export interface Tenant {
   id: string;
   clinicName: string;
@@ -5,6 +24,17 @@ export interface Tenant {
   databaseName: string;
   connectionString: string | null;
   subscriptionTier: 'basic' | 'professional' | 'enterprise';
+  subscriptionMode: 'demo' | 'paid';
+  packagePreset: 'full_ehr' | 'claims_only';
+  subscriptionState: 'demo' | 'active' | 'grace' | 'suspended' | 'expired';
+  packageName: string | null;
+  enabledModules: string[];
+  billingEndsAt: string | null;
+  demoExpiresAt: string | null;
+  graceEndsAt: string | null;
+  autoDeleteAt: string | null;
+  suspensionWarningDays: number;
+  billingSummary: TenantBillingSummary;
   status: 'pending' | 'active' | 'suspended' | 'cancelled';
   contactEmail: string;
   contactPhone: string;
@@ -26,6 +56,15 @@ export interface CreateTenantRequest {
   city?: string;
   logoUrl?: string;
   subscriptionTier: 'basic' | 'professional' | 'enterprise';
+  subscriptionMode?: 'demo' | 'paid';
+  packagePreset?: 'full_ehr' | 'claims_only';
+  packageName?: string;
+  enabledModules?: string[];
+  demoDurationDays?: number;
+  demoExpiresAt?: string;
+  billingEndsAt?: string;
+  gracePeriodDays?: number;
+  suspensionWarningDays?: number;
 }
 
 export interface UpdateTenantRequest {
@@ -36,6 +75,15 @@ export interface UpdateTenantRequest {
   city?: string;
   logoUrl?: string;
   subscriptionTier?: 'basic' | 'professional' | 'enterprise';
+  subscriptionMode?: 'demo' | 'paid';
+  packagePreset?: 'full_ehr' | 'claims_only';
+  packageName?: string;
+  enabledModules?: string[];
+  demoDurationDays?: number;
+  demoExpiresAt?: string;
+  billingEndsAt?: string;
+  gracePeriodDays?: number;
+  suspensionWarningDays?: number;
 }
 
 export interface TenantUser {
@@ -89,8 +137,101 @@ export interface TenantReport {
   generatedAt: string;
 }
 
+export interface TenantDhis2ConfigView {
+  tenantId: string;
+  baseUrl: string;
+  apiVersion: string;
+  authType: 'pat' | 'basic';
+  hasPat: boolean;
+  patMasked: string | null;
+  username: string | null;
+  orgUnitId: string;
+  trackedEntityTypeId: string | null;
+  datasetId: string | null;
+  enabled: boolean;
+  scheduledSyncEnabled: boolean;
+  scheduledRetryLimit: number;
+  alertLookbackHours: number;
+  alertErrorThreshold: number;
+  alertWebhookUrl: string | null;
+  updatedAt: string | null;
+}
+
+export interface TenantDhis2ConfigPayload {
+  baseUrl: string;
+  apiVersion?: string;
+  authType?: 'pat' | 'basic';
+  pat?: string | null;
+  username?: string | null;
+  password?: string | null;
+  orgUnitId: string;
+  trackedEntityTypeId?: string | null;
+  datasetId?: string | null;
+  enabled?: boolean;
+  scheduledSyncEnabled?: boolean;
+  scheduledRetryLimit?: number;
+  alertLookbackHours?: number;
+  alertErrorThreshold?: number;
+  alertWebhookUrl?: string | null;
+}
+
+export interface TenantSubscriptionPaymentProvider {
+  key: string;
+  label: string;
+  enabled: boolean;
+  mode: 'gateway' | 'manual';
+}
+
+export interface TenantSubscriptionPayment {
+  id: string;
+  tenantId: string;
+  provider: string;
+  reference: string;
+  sessionId: string;
+  externalPaymentId?: string | null;
+  amount: number;
+  currency: string;
+  monthsToExtend: number;
+  status: 'pending' | 'successful' | 'failed' | 'cancelled' | string;
+  checkoutUrl?: string | null;
+  successUrl?: string | null;
+  cancelUrl?: string | null;
+  metadata?: Record<string, any>;
+  paidAt?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface User {
   id: string;
   email: string;
   role: 'super_admin' | 'admin';
+}
+
+export type DemoAccessRequestStatus =
+  | 'new'
+  | 'reviewing'
+  | 'approved'
+  | 'provisioned'
+  | 'rejected';
+
+export interface DemoAccessRequest {
+  id: string;
+  fullName: string;
+  clinicName: string;
+  workEmail: string;
+  phone: string;
+  roleTitle?: string | null;
+  specialization?: string | null;
+  currentSystem?: string | null;
+  interestSummary: string;
+  interestAreas: string[];
+  preferredContactMethod: 'email' | 'phone' | 'whatsapp';
+  status: DemoAccessRequestStatus;
+  adminNotes?: string | null;
+  assignedTenantId?: string | null;
+  assignedSubdomain?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

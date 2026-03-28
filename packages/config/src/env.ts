@@ -12,13 +12,18 @@ const envSchema = z.object({
   SERVICE_CDSS_PATH: z.string().default('/cdss-service'),
 
   REACT_APP_API_BASE_URL: z.string().optional(),
-  REACT_APP_TENANT_API_PATH: z.string().default('/tenant-service'),
-  REACT_APP_EHR_API_PATH: z.string().default('/ehr-service'),
+  REACT_APP_TENANT_API_PATH: z.string().default('/tenant-service/api'),
+  REACT_APP_EHR_API_PATH: z.string().default('/ehr-service/api'),
   REACT_APP_CDSS_API_PATH: z.string().default('/cdss-service'),
 
   LOCAL_AI_BASE_URL: z.string().optional(),
   LOCAL_WHISPER_PATH: z.string().default('/inference'),
   LOCAL_OCR_PATH: z.string().default('/extract'),
+
+  PUBLIC_APP_BASE_URL: z.string().optional(),
+  PUBLIC_STAFF_APP_PATH: z.string().default('/'),
+  PUBLIC_PATIENT_PORTAL_PATH: z.string().default('/patient'),
+  PUBLIC_ADMIN_APP_PATH: z.string().default('/admin'),
 
   // Explicit service URLs (take priority over inherited URLs)
   SERVICE_TENANT_URL: z.string().optional(),
@@ -29,6 +34,9 @@ const envSchema = z.object({
   REACT_APP_TENANT_API_URL: z.string().optional(),
   REACT_APP_EHR_API_URL: z.string().optional(),
   REACT_APP_CDSS_API_URL: z.string().optional(),
+  FRONTEND_URL: z.string().optional(),
+  PORTAL_BASE_URL: z.string().optional(),
+  WEB_APP_URL: z.string().optional(),
 
   // Database
   DATABASE_URL: z.string().optional(),
@@ -37,16 +45,19 @@ const envSchema = z.object({
   POSTGRES_DB: z.string().default('medicore_master'),
 
   // Third Party
-  DHIS2_URL: z.string().default('https://dhis2.mohcc.gov.zw'),
+  DHIS2_URL: z.string().optional(),
+  RXNORM_BASE_URL: z.string().optional(),
+  POSTVISIT_LLM_API_URL: z.string().optional(),
+  PAGERDUTY_EVENTS_API_URL: z.string().optional(),
 
   // Secrets
   JWT_SECRET: z.string().default('your-super-secret-jwt-key-change-this-in-production'),
 
   // Security
-  CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3011,http://127.0.0.1:3000,http://127.0.0.1:3011'),
+  CORS_ORIGINS: z.string().default(''),
 
   // AI & Transcription
-  WHISPER_API_URL: z.string().default('https://api.openai.com/v1/audio/transcriptions'),
+  WHISPER_API_URL: z.string().optional(),
   WHISPER_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   USE_LOCAL_WHISPER: z.enum(['true', 'false']).default('true'),
@@ -66,22 +77,15 @@ const envSchema = z.object({
   POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY: z.enum(['moderate', 'high', 'critical']).default('high'),
   POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY: z.enum(['moderate', 'high', 'critical']).default('critical'),
   POSTVISIT_TRIAL_SLA_NOTIFY_MAX_RECIPIENTS: z.string().default('3'),
-  POSTVISIT_CLINICALTRIALS_API_URL: z.string().default('https://clinicaltrials.gov/api/v2/studies'),
+  POSTVISIT_CLINICALTRIALS_API_URL: z.string().optional(),
+  POSTVISIT_CLINICALTRIALS_STUDY_BASE_URL: z.string().optional(),
   LOCAL_OCR_URL: z.string().optional(),
 
   // Notifications (SMS)
-  SMS_GATEWAY_ECONET: z.string().default('https://api.econet.co.zw/sms'),
-  SMS_GATEWAY_TELECEL: z.string().default('https://api.telecel.co.zw/sms'),
-  SMS_GATEWAY_NETONE: z.string().default('https://api.netone.co.zw/sms'),
+  SMS_GATEWAY_ECONET: z.string().optional(),
+  SMS_GATEWAY_TELECEL: z.string().optional(),
+  SMS_GATEWAY_NETONE: z.string().optional(),
 });
-
-const DEV_DEFAULTS = {
-  serviceTenantUrl: 'http://tenant-service:3001',
-  serviceEhrUrl: 'http://ehr-service:3013',
-  serviceCdssUrl: 'http://cdss-service:8000',
-  localWhisperUrl: 'http://127.0.0.1:8080/inference',
-  localOcrUrl: 'http://127.0.0.1:8081/extract',
-} as const;
 
 const rawNodeEnv = (process.env.NODE_ENV || 'development').toLowerCase();
 const isDevLike = rawNodeEnv === 'development' || rawNodeEnv === 'test';
@@ -128,21 +132,19 @@ const joinUrl = (base: string, path: string): string => {
 const serviceBaseUrl = firstNonEmpty(parsedEnv.SERVICE_BASE_URL);
 const reactApiBaseUrl = firstNonEmpty(parsedEnv.REACT_APP_API_BASE_URL, parsedEnv.SERVICE_BASE_URL);
 const localAiBaseUrl = firstNonEmpty(parsedEnv.LOCAL_AI_BASE_URL);
+const publicAppBaseUrl = firstNonEmpty(parsedEnv.PUBLIC_APP_BASE_URL);
 
 const resolvedServiceTenantUrl = firstNonEmpty(
   hasExplicitEnvValue('SERVICE_TENANT_URL') ? parsedEnv.SERVICE_TENANT_URL : undefined,
   serviceBaseUrl ? joinUrl(serviceBaseUrl, parsedEnv.SERVICE_TENANT_PATH) : undefined,
-  DEV_DEFAULTS.serviceTenantUrl,
 );
 const resolvedServiceEhrUrl = firstNonEmpty(
   hasExplicitEnvValue('SERVICE_EHR_URL') ? parsedEnv.SERVICE_EHR_URL : undefined,
   serviceBaseUrl ? joinUrl(serviceBaseUrl, parsedEnv.SERVICE_EHR_PATH) : undefined,
-  DEV_DEFAULTS.serviceEhrUrl,
 );
 const resolvedServiceCdssUrl = firstNonEmpty(
   hasExplicitEnvValue('SERVICE_CDSS_URL') ? parsedEnv.SERVICE_CDSS_URL : undefined,
   serviceBaseUrl ? joinUrl(serviceBaseUrl, parsedEnv.SERVICE_CDSS_PATH) : undefined,
-  DEV_DEFAULTS.serviceCdssUrl,
 );
 
 const resolvedReactTenantApiUrl = firstNonEmpty(
@@ -164,12 +166,23 @@ const resolvedReactCdssApiUrl = firstNonEmpty(
 const resolvedLocalWhisperUrl = firstNonEmpty(
   hasExplicitEnvValue('LOCAL_WHISPER_URL') ? parsedEnv.LOCAL_WHISPER_URL : undefined,
   localAiBaseUrl ? joinUrl(localAiBaseUrl, parsedEnv.LOCAL_WHISPER_PATH) : undefined,
-  DEV_DEFAULTS.localWhisperUrl,
 );
 const resolvedLocalOcrUrl = firstNonEmpty(
   hasExplicitEnvValue('LOCAL_OCR_URL') ? parsedEnv.LOCAL_OCR_URL : undefined,
   localAiBaseUrl ? joinUrl(localAiBaseUrl, parsedEnv.LOCAL_OCR_PATH) : undefined,
-  DEV_DEFAULTS.localOcrUrl,
+);
+
+const resolvedFrontendUrl = firstNonEmpty(
+  hasExplicitEnvValue('FRONTEND_URL') ? parsedEnv.FRONTEND_URL : undefined,
+  publicAppBaseUrl ? joinUrl(publicAppBaseUrl, parsedEnv.PUBLIC_STAFF_APP_PATH) : undefined,
+);
+const resolvedPortalBaseUrl = firstNonEmpty(
+  hasExplicitEnvValue('PORTAL_BASE_URL') ? parsedEnv.PORTAL_BASE_URL : undefined,
+  publicAppBaseUrl ? joinUrl(publicAppBaseUrl, parsedEnv.PUBLIC_PATIENT_PORTAL_PATH) : undefined,
+);
+const resolvedWebAppUrl = firstNonEmpty(
+  hasExplicitEnvValue('WEB_APP_URL') ? parsedEnv.WEB_APP_URL : undefined,
+  publicAppBaseUrl ? joinUrl(publicAppBaseUrl, parsedEnv.PUBLIC_ADMIN_APP_PATH) : undefined,
 );
 
 const envData = {
@@ -182,11 +195,14 @@ const envData = {
   REACT_APP_CDSS_API_URL: resolvedReactCdssApiUrl,
   LOCAL_WHISPER_URL: resolvedLocalWhisperUrl,
   LOCAL_OCR_URL: resolvedLocalOcrUrl,
+  FRONTEND_URL: resolvedFrontendUrl,
+  PORTAL_BASE_URL: resolvedPortalBaseUrl,
+  WEB_APP_URL: resolvedWebAppUrl,
 };
 
 const isLocalHostUrl = (url?: string): boolean => {
   const value = String(url || '').trim().toLowerCase();
-  return value.includes('localhost') || value.includes('127.0.0.1');
+  return value.includes('localhost') || value.includes('127.0.0.1') || value.includes('host.docker.internal');
 };
 
 if (!isDevLike) {
@@ -241,6 +257,9 @@ export const config = {
     tenantApi: env.REACT_APP_TENANT_API_URL,
     ehrApi: env.REACT_APP_EHR_API_URL,
     cdssApi: env.REACT_APP_CDSS_API_URL,
+    staffApp: env.FRONTEND_URL,
+    patientPortal: env.PORTAL_BASE_URL,
+    adminApp: env.WEB_APP_URL,
   },
 
   db: {

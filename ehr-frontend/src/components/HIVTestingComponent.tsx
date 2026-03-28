@@ -6,12 +6,15 @@ import {
   CheckCircle,
   ClipboardList,
   Plus,
-  Save,
   Shield,
   TestTube,
   Trash2,
   User,
   X,
+  ChevronRight,
+  RotateCcw,
+  ArrowRight,
+  Zap,
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
@@ -44,6 +47,8 @@ interface StiPanel {
   infectionConcept?: SnomedConcept | null;
   testConcept?: SnomedConcept | null;
 }
+
+type WizardStep = 'context' | 'run_test' | 'post_record' | 'linkage_sti';
 
 const testKits = [
   'Determine HIV-1/2',
@@ -125,13 +130,13 @@ const testTypeOptions = [
 ];
 
 const resultOptions = [
-  { value: 'reactive', label: 'Reactive' },
-  { value: 'non_reactive', label: 'Non-reactive' },
-  { value: 'positive', label: 'Positive' },
-  { value: 'negative', label: 'Negative' },
-  { value: 'invalid', label: 'Invalid' },
-  { value: 'indeterminate', label: 'Indeterminate' },
-  { value: 'pending', label: 'Pending' },
+  { value: 'reactive', label: 'Reactive', color: '#FF4D6A', bg: '#FF4D6A15', border: '#FF4D6A40' },
+  { value: 'non_reactive', label: 'Non-reactive', color: '#00C896', bg: '#00C89615', border: '#00C89640' },
+  { value: 'positive', label: 'Positive', color: '#FF4D6A', bg: '#FF4D6A15', border: '#FF4D6A40' },
+  { value: 'negative', label: 'Negative', color: '#00C896', bg: '#00C89615', border: '#00C89640' },
+  { value: 'invalid', label: 'Invalid', color: '#FF7A40', bg: '#FF7A4015', border: '#FF7A4040' },
+  { value: 'indeterminate', label: 'Indeterminate', color: '#FF7A40', bg: '#FF7A4015', border: '#FF7A4040' },
+  { value: 'pending', label: 'Pending', color: '#5A78A0', bg: '#5A78A015', border: '#5A78A040' },
 ];
 
 const recencyResultOptions = [
@@ -226,11 +231,6 @@ const testStageLookup = testStageOptions.reduce<Record<string, string>>((acc, op
   return acc;
 }, {});
 
-const infectionLookup = infectionOptions.reduce<Record<string, string>>((acc, option) => {
-  acc[option.value] = option.label;
-  return acc;
-}, {});
-
 const defaultTestForm = {
   testStage: 'screening',
   testType: 'rapid_antibody',
@@ -297,35 +297,15 @@ const parseJsonArray = (value: any): any[] => {
   return [];
 };
 
-const SectionCard: React.FC<{
-  title: string;
-  icon: React.ReactNode;
-  description?: string;
-  badge?: string;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-}> = ({ title, icon, description, badge, actions, children }) => (
-  <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="flex items-start gap-3">
-        <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600">{icon}</div>
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-            {badge && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                {badge}
-              </span>
-            )}
-          </div>
-          {description && <p className="text-sm text-slate-500 mt-1 max-w-2xl">{description}</p>}
-        </div>
-      </div>
-      {actions}
-    </div>
-    <div className="mt-4">{children}</div>
-  </section>
+const Field: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({ label, children, className }) => (
+  <div className={className}>
+    <label className="block text-xs font-semibold text-[#7A9AB8] mb-1.5 uppercase tracking-wide">{label}</label>
+    {children}
+  </div>
 );
+
+const selectCls = 'w-full px-3 py-2 bg-[#060C16] border border-white/[0.1] rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-[#00C896]/50 focus:border-[#00C896]/50 transition';
+const inputCls = 'w-full px-3 py-2 bg-[#060C16] border border-white/[0.1] rounded-xl text-white text-sm placeholder-[#3A5A7A] focus:outline-none focus:ring-1 focus:ring-[#00C896]/50 focus:border-[#00C896]/50 transition';
 
 const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, patientId, initialData, onDataChange }) => {
   const { showSuccess, showError } = useNotification();
@@ -334,7 +314,6 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [searching, setSearching] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [testForm, setTestForm] = useState(defaultTestForm);
   const [testingContext, setTestingContext] = useState(defaultTestingContext);
@@ -346,6 +325,15 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
   const [showAlgorithmExplanation, setShowAlgorithmExplanation] = useState(false);
   const [testConceptSelection, setTestConceptSelection] = useState<SnomedConcept | null>(null);
   const [specimenConceptSelection, setSpecimenConceptSelection] = useState<SnomedConcept | null>(null);
+  const [wizardStep, setWizardStep] = useState<WizardStep>('context');
+  const [showSnomedExpanded, setShowSnomedExpanded] = useState(false);
+
+  const [servicePoints, setServicePoints] = useState<{ code: string; name: string }[]>(defaultTestingServicePoints);
+  const [outreachEvents, setOutreachEvents] = useState<{ code: string; name: string }[]>(defaultTestingOutreachEvents);
+  const [partnerServices, setPartnerServices] = useState<{ code: string; name: string }[]>(defaultPartnerServices);
+  const [linkageActions, setLinkageActions] = useState<{ code: string; name: string }[]>(defaultLinkageActions);
+  const [stiMethods, setStiMethods] = useState<{ code: string; name: string }[]>(defaultStiMethods);
+  const [stiSpecimens, setStiSpecimens] = useState<{ code: string; name: string }[]>(defaultStiSpecimens);
 
   const snomedToken = useMemo(() => localStorage.getItem('ehr_token') || '', []);
   const snomedReady = Boolean(snomedToken && tenantSlug);
@@ -357,9 +345,6 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
         try {
           const token = localStorage.getItem('ehr_token');
           if (!token) return;
-          // Use searchPatients as a fallback if getPatientById isn't available or behaves differently,
-          // but preferably use getPatientById.
-          // Since we verified getPatientById exists in ehrApi, we use it.
           const response = await ehrApi.getPatientById(patientId, token, tenantSlug);
           setSelectedPatient(response.data);
         } catch (error) {
@@ -371,93 +356,75 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
     loadPatient();
   }, [patientId, snomedReady, tenantSlug]);
 
-  // Handle initial data from parent (e.g. Unified Workflow)
   useEffect(() => {
     if (initialData) {
-      setTestForm(prev => ({
-        ...prev,
-        ...initialData
-      }));
+      setTestForm(prev => ({ ...prev, ...initialData }));
     }
   }, [initialData]);
 
-  // Propagate changes to parent
   useEffect(() => {
-    if (onDataChange) {
-      onDataChange(testForm);
-    }
+    if (onDataChange) onDataChange(testForm);
   }, [testForm, onDataChange]);
 
   useEffect(() => {
-    if (selectedPatient) {
-      loadTestHistory();
-    }
+    if (selectedPatient) loadTestHistory();
   }, [selectedPatient]);
+
+  useEffect(() => {
+    const loadTestingLookups = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token');
+        if (!token || !tenantSlug) return;
+        const [spRes, oeRes, psRes, laRes, smRes, ssRes] = await Promise.all([
+          ehrApi.getHivLookupData('testing_service_points', {}, token, tenantSlug),
+          ehrApi.getHivLookupData('testing_outreach_events', {}, token, tenantSlug),
+          ehrApi.getHivLookupData('testing_partner_services', {}, token, tenantSlug),
+          ehrApi.getHivLookupData('testing_linkage_actions', {}, token, tenantSlug),
+          ehrApi.getHivLookupData('testing_sti_methods', {}, token, tenantSlug),
+          ehrApi.getHivLookupData('testing_sti_specimens', {}, token, tenantSlug),
+        ]);
+        const sp = spRes.data.data || []; const oe = oeRes.data.data || [];
+        const ps = psRes.data.data || []; const la = laRes.data.data || [];
+        const sm = smRes.data.data || []; const ss = ssRes.data.data || [];
+        setServicePoints(sp.length > 0 ? sp : defaultTestingServicePoints);
+        setOutreachEvents(oe.length > 0 ? oe : defaultTestingOutreachEvents);
+        setPartnerServices(ps.length > 0 ? ps : defaultPartnerServices);
+        setLinkageActions(la.length > 0 ? la : defaultLinkageActions);
+        setStiMethods(sm.length > 0 ? sm : defaultStiMethods);
+        setStiSpecimens(ss.length > 0 ? ss : defaultStiSpecimens);
+      } catch {
+        // fallback to defaults (already set)
+      }
+    };
+    loadTestingLookups();
+  }, []);
 
   const computeNextTestDefaults = (tests: any[]): Partial<typeof defaultTestForm> => {
     if (!tests || tests.length === 0) {
-      return {
-        testStage: defaultTestForm.testStage,
-        testKitName: testKits[0],
-        testingReason: defaultTestForm.testingReason,
-        testType: defaultTestForm.testType,
-      };
+      return { testStage: defaultTestForm.testStage, testKitName: testKits[0], testingReason: defaultTestForm.testingReason, testType: defaultTestForm.testType };
     }
-
-    const all = tests;
-    const last = all[all.length - 1];
+    const last = tests[tests.length - 1];
     const lastStage = last.testStage || last.test_stage || defaultTestForm.testStage;
     const lastResult = last.testResult || last.test_result || '';
-
     let nextStage = lastStage;
     let nextKit = last.testKitName || last.test_kit_name || testKits[0];
-
     if (lastStage === 'screening') {
-      if (lastResult === 'positive' || lastResult === 'reactive') {
-        nextStage = 'confirmatory';
-        nextKit = testKits[1] || testKits[0];
-      } else if (lastResult === 'invalid' || lastResult === 'indeterminate') {
-        nextStage = 'screening';
-        nextKit = last.testKitName || last.test_kit_name || testKits[0];
-      }
+      if (lastResult === 'positive' || lastResult === 'reactive') { nextStage = 'confirmatory'; nextKit = testKits[1] || testKits[0]; }
+      else if (lastResult === 'invalid' || lastResult === 'indeterminate') { nextStage = 'screening'; }
     } else if (lastStage === 'confirmatory') {
-      const screening = all.find(
-        (t: any) => (t.testStage || t.test_stage) === 'screening',
-      );
-      const screeningResult =
-        screening?.testResult || screening?.test_result || '';
-
-      if (
-        screeningResult &&
-        lastResult &&
-        screeningResult !== 'pending' &&
-        lastResult !== 'pending' &&
-        screeningResult !== lastResult
-      ) {
+      const screening = tests.find((t: any) => (t.testStage || t.test_stage) === 'screening');
+      const screeningResult = screening?.testResult || screening?.test_result || '';
+      if (screeningResult && lastResult && screeningResult !== 'pending' && lastResult !== 'pending' && screeningResult !== lastResult) {
         nextStage = 'tie_breaker';
         nextKit = testKits[2] || testKits[1] || testKits[0];
       }
     }
-
-    return {
-      testStage: nextStage,
-      testKitName: nextKit,
-      testingReason:
-        last.testingReason || last.testing_reason || defaultTestForm.testingReason,
-      testType: last.testType || last.test_type || defaultTestForm.testType,
-    };
+    return { testStage: nextStage, testKitName: nextKit, testingReason: last.testingReason || last.testing_reason || defaultTestForm.testingReason, testType: last.testType || last.test_type || defaultTestForm.testType };
   };
 
-  const resetFormState = (
-    historyCount = 0,
-    nextDefaults?: Partial<typeof defaultTestForm>,
-  ) => {
+  const resetFormState = (historyCount = 0, nextDefaults?: Partial<typeof defaultTestForm>) => {
     const baseKitName = historyCount === 0 ? testKits[0] : testKits[1] || testKits[0];
-    setTestForm({
-      ...defaultTestForm,
-      testKitName: baseKitName,
-      ...nextDefaults,
-    });
+    setTestForm({ ...defaultTestForm, testKitName: baseKitName, ...nextDefaults });
     setTestingContext(defaultTestingContext);
     setFollowUpActions([]);
     setStiPanels([defaultStiPanel]);
@@ -470,39 +437,28 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
-
       const response = await ehrApi.getPatientHivTests(selectedPatient.id, token, tenantSlug);
       const tests = response.data.tests || [];
       setTestHistory(tests);
-
       if (tests.length > 0) {
         const latestTest = tests[0];
-
         try {
           const algoResponse = await ehrApi.processHivAlgorithm(latestTest.id, token, tenantSlug);
-          if (algoResponse.data) {
-            setAlgorithmResult(algoResponse.data);
-          }
-        } catch (error) {
-          console.error('Failed to process HIV algorithm with CDSS:', error);
+          if (algoResponse.data) setAlgorithmResult(algoResponse.data);
+        } catch {
           if (latestTest.algorithm_result) {
             setAlgorithmResult({
               result: latestTest.algorithm_result,
               confidence: 'high',
-              next_step:
-                latestTest.algorithm_result === 'positive'
-                  ? 'Offer enrollment in HIV care and confirm STI treatment links'
-                  : latestTest.algorithm_result === 'negative'
-                  ? 'Provide post-test counselling and prevention package'
-                  : 'Continue national testing algorithm',
+              next_step: latestTest.algorithm_result === 'positive'
+                ? 'Offer enrollment in HIV care and confirm STI treatment links'
+                : latestTest.algorithm_result === 'negative'
+                ? 'Provide post-test counselling and prevention package'
+                : 'Continue national testing algorithm',
             });
           }
         }
-
-        if (
-          latestTest.algorithm_result === 'positive' ||
-          latestTest.algorithm_result === 'negative'
-        ) {
+        if (latestTest.algorithm_result === 'positive' || latestTest.algorithm_result === 'negative') {
           resetFormState(0);
         } else {
           const nextDefaults = computeNextTestDefaults([...tests].reverse());
@@ -515,20 +471,14 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
   };
 
   const searchPatients = async () => {
-    if (!searchTerm.trim()) {
-      setPatients([]);
-      return;
-    }
-
+    if (!searchTerm.trim()) { setPatients([]); return; }
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
-
       setSearching(true);
       const response = await ehrApi.searchPatients(searchTerm, token, tenantSlug);
       setPatients(response.data || []);
-    } catch (error) {
-      console.error('Search failed:', error);
+    } catch {
       showError('Error', 'Failed to search patients');
     } finally {
       setSearching(false);
@@ -536,66 +486,34 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
   };
 
   const toggleFollowUpAction = (action: string) => {
-    setFollowUpActions((prev) =>
-      prev.includes(action) ? prev.filter((item) => item !== action) : [...prev, action],
-    );
+    setFollowUpActions(prev => prev.includes(action) ? prev.filter(i => i !== action) : [...prev, action]);
   };
 
   const handleStiChange = (index: number, field: keyof StiPanel, value: any) => {
-    setStiPanels((prev) =>
-      prev.map((panel, idx) => (idx === index ? { ...panel, [field]: value } : panel)),
-    );
+    setStiPanels(prev => prev.map((panel, idx) => idx === index ? { ...panel, [field]: value } : panel));
   };
 
-  const handleStiConceptChange = (
-    index: number,
-    field: 'infectionConcept' | 'testConcept',
-    concept: SnomedConcept | null,
-  ) => {
-    setStiPanels((prev) =>
-      prev.map((panel, idx) => (idx === index ? { ...panel, [field]: concept } : panel)),
-    );
+  const handleStiConceptChange = (index: number, field: 'infectionConcept' | 'testConcept', concept: SnomedConcept | null) => {
+    setStiPanels(prev => prev.map((panel, idx) => idx === index ? { ...panel, [field]: concept } : panel));
   };
 
-  const addStiPanel = () => {
-    setStiPanels((prev) => [...prev, { ...defaultStiPanel }]);
-  };
-
-  const removeStiPanel = (index: number) => {
-    setStiPanels((prev) => prev.filter((_, idx) => idx !== index));
-  };
+  const addStiPanel = () => setStiPanels(prev => [...prev, { ...defaultStiPanel }]);
+  const removeStiPanel = (index: number) => setStiPanels(prev => prev.filter((_, idx) => idx !== index));
 
   const handleSubmit = async () => {
-    if (!selectedPatient) {
-      showError('Error', 'Please select a patient');
-      return;
-    }
-
-    if (!testForm.testResult) {
-      showError('Error', 'Please select a test result');
-      return;
-    }
-
+    if (!selectedPatient) { showError('Error', 'Please select a patient'); return; }
+    if (!testForm.testResult) { showError('Error', 'Please select a test result'); return; }
     try {
       const token = localStorage.getItem('ehr_token');
       const currentUser = JSON.parse(localStorage.getItem('ehr_user') || '{}');
-
-      if (!token) {
-        showError('Error', 'Not authenticated');
-        return;
-      }
-
+      if (!token) { showError('Error', 'Not authenticated'); return; }
       setSubmitting(true);
-
       const mapDateForApi = (value: string) => {
         if (!value) return null;
-        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-          return value;
-        }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
         const iso = formatDateForAPI(value);
         return iso || null;
       };
-
       const payload = {
         patientId: selectedPatient.id,
         testedBy: currentUser.id,
@@ -629,37 +547,30 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
         testingContext,
         testConcept: testConceptSelection,
         specimenConcept: specimenConceptSelection,
-        stis: stiPanels
-          .filter((panel) => panel.infectionType)
-          .map((panel) => ({
-            infectionType: panel.infectionType,
-            testType: panel.testType,
-            testMethod: panel.testMethod,
-            specimenType: panel.specimenType,
-            anatomicSite: panel.anatomicSite || null,
-            result: panel.result || 'pending',
-            resultValue: panel.resultValue || null,
-            resultUnit: panel.resultUnit || null,
-            treatmentProvided: panel.treatmentProvided,
-            treatmentRegimen: panel.treatmentRegimen || null,
-            treatmentDate: panel.treatmentDate || null,
-            notes: panel.notes || null,
-            infectionConcept: panel.infectionConcept || null,
-            testConcept: panel.testConcept || null,
-          })),
+        stis: stiPanels.filter(p => p.infectionType).map(p => ({
+          infectionType: p.infectionType,
+          testType: p.testType,
+          testMethod: p.testMethod,
+          specimenType: p.specimenType,
+          anatomicSite: p.anatomicSite || null,
+          result: p.result || 'pending',
+          resultValue: p.resultValue || null,
+          resultUnit: p.resultUnit || null,
+          treatmentProvided: p.treatmentProvided,
+          treatmentRegimen: p.treatmentRegimen || null,
+          treatmentDate: p.treatmentDate || null,
+          notes: p.notes || null,
+          infectionConcept: p.infectionConcept || null,
+          testConcept: p.testConcept || null,
+        })),
       };
-
       const nextDefaults = computeNextTestDefaults([...testHistory, payload]);
-
       const response = await ehrApi.createHivTest(payload, token, tenantSlug);
-
-      showSuccess('Success', 'HIV/STI testing encounter recorded');
+      showSuccess('Recorded', 'Test result saved — review algorithm outcome below');
+      setWizardStep('post_record');
       resetFormState(testHistory.length + 1, nextDefaults);
       await loadTestHistory();
-
-      if (response.data?.algorithm) {
-        setAlgorithmResult(response.data.algorithm);
-      }
+      if (response.data?.algorithm) setAlgorithmResult(response.data.algorithm);
     } catch (error: any) {
       console.error('Test submission failed:', error);
       showError('Error', error.response?.data?.message || 'Failed to record test');
@@ -669,1201 +580,948 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
   };
 
   const handleEnrollInCare = () => {
-    if (selectedPatient) {
-      setShowEnrollmentModal(true);
-    }
+    if (selectedPatient) setShowEnrollmentModal(true);
   };
 
-  const historyWithParsed = useMemo(
-    () =>
-      testHistory.map((test: any) => ({
-        ...test,
-        stis_results: parseJsonArray(test.stis_results),
-        stis_screened: parseJsonArray(test.stis_screened),
-        follow_up_actions: parseJsonArray(test.follow_up_actions),
-        sti_tests: test.sti_tests || [],
-      })),
+  const historyWithParsed = useMemo(() =>
+    testHistory.map((test: any) => ({
+      ...test,
+      stis_results: parseJsonArray(test.stis_results),
+      stis_screened: parseJsonArray(test.stis_screened),
+      follow_up_actions: parseJsonArray(test.follow_up_actions),
+      sti_tests: test.sti_tests || [],
+    })),
     [testHistory],
   );
 
-  const nextStepHint = useMemo(() => {
-    if (!historyWithParsed.length) {
-      return null;
-    }
-
-    const defaults = computeNextTestDefaults(historyWithParsed);
-    const stage = defaults.testStage || defaultTestForm.testStage;
-    const kitName = defaults.testKitName || testKits[0];
-
-    if (stage === 'confirmatory') {
-      return {
-        title: 'Confirmatory HIV test expected',
-        detail: `Use the second HIV rapid test (${kitName}) to confirm the reactive screening result.`,
-      };
-    }
-
-    if (stage === 'tie_breaker') {
-      return {
-        title: 'Tie-breaker HIV test expected',
-        detail: `Screening and confirmatory results disagreed — perform a third HIV rapid test (${kitName}) as the tie-breaker.`,
-      };
-    }
-
-    if (stage === 'screening') {
-      return {
-        title: 'Repeat screening or start new algorithm',
-        detail: `Previous result was invalid, indeterminate or negative. Start or repeat screening using ${kitName} as the first test.`,
-      };
-    }
-
-    return null;
-  }, [historyWithParsed]);
-
-  const enrollmentSeedTest = useMemo(() => {
-    if (!historyWithParsed.length) {
-      return null;
-    }
-    const positiveTests = historyWithParsed.filter((test: any) => {
-      return (
-        test.test_result === 'positive' ||
-        test.test_result === 'reactive' ||
-        test.algorithm_result === 'positive'
-      );
-    });
-    if (positiveTests.length > 0) {
-      return positiveTests[positiveTests.length - 1];
-    }
-    return historyWithParsed[0];
-  }, [historyWithParsed]);
-
-  const stageStepMeta = useMemo(() => {
-    const stage = testForm.testStage || defaultTestForm.testStage;
-    if (stage === 'screening') {
-      return { index: 1, total: 3, label: 'Screening test 1' };
-    }
-    if (stage === 'confirmatory') {
-      return { index: 2, total: 3, label: 'Confirmatory test 2' };
-    }
-    if (stage === 'tie_breaker') {
-      return { index: 3, total: 3, label: 'Tie-breaker test 3' };
-    }
-    return { index: 1, total: 1, label: 'HIV testing step' };
-  }, [testForm.testStage]);
-
   const screeningTest = useMemo(
-    () =>
-      historyWithParsed.find(
-        (t: any) => (t.testStage || t.test_stage) === 'screening',
-      ),
+    () => historyWithParsed.find((t: any) => (t.testStage || t.test_stage) === 'screening'),
     [historyWithParsed],
   );
 
   const previousKitNames = useMemo(
-    () =>
-      historyWithParsed
-        .map((t: any) => t.testKitName || t.test_kit_name)
-        .filter(Boolean),
+    () => historyWithParsed.map((t: any) => t.testKitName || t.test_kit_name).filter(Boolean),
     [historyWithParsed],
   );
-
-  const recommendedDefaults = useMemo(
-    () => computeNextTestDefaults([...historyWithParsed].reverse()),
-    [historyWithParsed],
-  );
-
-  const recommendedKitName =
-    recommendedDefaults.testStage === 'screening'
-      ? ''
-      : recommendedDefaults.testKitName || testKits[0];
-
-  const workflowSteps = [
-    { title: 'Context capture', detail: 'Reason · approach · cadre' },
-    { title: 'Kit & result', detail: 'Kit metadata · readings' },
-    { title: 'Linkage & recency', detail: 'Partner services · recency assays' },
-    { title: 'STI bundle', detail: 'Syphilis · GC/CT · Hepatitis · HPV' },
-  ];
-  const formSteps = [
-    { id: 'context', title: 'Context', icon: <ClipboardList className="w-4 h-4" /> },
-    { id: 'test', title: 'HIV Test', icon: <TestTube className="w-4 h-4" /> },
-    { id: 'linkage', title: 'Linkage & Recency', icon: <Shield className="w-4 h-4" /> },
-    { id: 'sti', title: 'STI Bundle', icon: <Activity className="w-4 h-4" /> },
-  ] as const;
-  type FormStepId = (typeof formSteps)[number]['id'];
-  const [activeStep, setActiveStep] = useState<FormStepId>('context');
-
-  const isStiBundleEnabled = Boolean(
-    testForm.testKitName && testForm.testKitName.toLowerCase().includes('syphilis'),
-  );
-
-  const isFollowOnStage =
-    testForm.testStage === 'confirmatory' || testForm.testStage === 'tie_breaker';
-
-  const visibleFormSteps = formSteps.filter(
-    (step) =>
-      (step.id !== 'sti' || isStiBundleEnabled) &&
-      (step.id !== 'context' || !isFollowOnStage),
-  );
-
-  const activeStepIndex = visibleFormSteps.findIndex((step) => step.id === activeStep);
-  const goToPreviousStep = () => {
-    if (activeStepIndex > 0) {
-      setActiveStep(visibleFormSteps[activeStepIndex - 1].id);
-    }
-  };
-  const goToNextStep = () => {
-    if (activeStepIndex < visibleFormSteps.length - 1) {
-      setActiveStep(visibleFormSteps[activeStepIndex + 1].id);
-    }
-  };
-
-  const [servicePoints, setServicePoints] = useState<{ code: string; name: string }[]>(
-    defaultTestingServicePoints,
-  );
-  const [outreachEvents, setOutreachEvents] = useState<{ code: string; name: string }[]>(
-    defaultTestingOutreachEvents,
-  );
-  const [partnerServices, setPartnerServices] = useState<{ code: string; name: string }[]>(
-    defaultPartnerServices,
-  );
-  const [linkageActions, setLinkageActions] = useState<{ code: string; name: string }[]>(
-    defaultLinkageActions,
-  );
-  const [stiMethods, setStiMethods] = useState<{ code: string; name: string }[]>(
-    defaultStiMethods,
-  );
-  const [stiSpecimens, setStiSpecimens] = useState<{ code: string; name: string }[]>(
-    defaultStiSpecimens,
-  );
-
-  useEffect(() => {
-    if (!isStiBundleEnabled && activeStep === 'sti') {
-      setActiveStep('linkage');
-    }
-  }, [isStiBundleEnabled, activeStep]);
-
-  useEffect(() => {
-    if (isFollowOnStage && activeStep === 'context') {
-      setActiveStep('test');
-    }
-  }, [isFollowOnStage, activeStep]);
 
   const isKitDisabledForStage = (kit: string) => {
     if (testForm.testStage === 'confirmatory' && screeningTest) {
-      const screeningKit =
-        screeningTest.testKitName || screeningTest.test_kit_name || '';
-      return Boolean(screeningKit && kit === screeningKit);
+      const sk = screeningTest.testKitName || screeningTest.test_kit_name || '';
+      return Boolean(sk && kit === sk);
     }
-
     if (testForm.testStage === 'tie_breaker' && previousKitNames.length > 0) {
       return previousKitNames.includes(kit);
     }
-
     return false;
   };
 
-  const canShowSaveButton =
-    Boolean(selectedPatient) &&
-    Boolean(testForm.testResult) &&
-    (activeStep === 'test' || activeStep === 'linkage' || activeStep === 'sti');
+  // STI is enabled when dual kit is selected or kit name indicates dual purpose
+  const isStiBundleEnabled = Boolean(
+    testForm.dualKitUsed ||
+    testForm.testKitName?.toLowerCase().includes('syphilis') ||
+    testForm.testKitName?.toLowerCase().includes('duo'),
+  );
 
-  const canSubmitEncounter =
-    Boolean(selectedPatient) &&
-    Boolean(
-      testForm.testResult &&
-        testForm.testKitName &&
-        testForm.testStage &&
-        testForm.testType &&
-        testForm.testingReason,
-    );
+  // Algorithm decision after recording a test
+  const algorithmDecision = useMemo(() => {
+    if (!historyWithParsed.length) return null;
+    const algoResult = algorithmResult?.result || algorithmResult?.algorithm_result;
+    if (algoResult === 'positive') {
+      return {
+        type: 'final_positive',
+        title: 'HIV POSITIVE',
+        message: 'Two or more tests in this episode returned reactive/positive. Initiate linkage to HIV care immediately.',
+        action: 'Enroll in HIV Care',
+        color: '#FF4D6A',
+        nextStep: 'linkage_sti' as WizardStep,
+      };
+    }
+    if (algoResult === 'negative') {
+      return {
+        type: 'final_negative',
+        title: 'HIV NEGATIVE',
+        message: 'Algorithm is complete. Provide post-test counselling, prevention package, and schedule retesting.',
+        action: 'Record Follow-up & Close',
+        color: '#00C896',
+        nextStep: 'linkage_sti' as WizardStep,
+      };
+    }
+    const lastTest = historyWithParsed[0];
+    const stage = lastTest?.test_stage || lastTest?.testStage || 'screening';
+    const testResult = lastTest?.test_result || lastTest?.testResult || '';
 
-  useEffect(() => {
-    const loadTestingLookups = async () => {
-      try {
-        const token = localStorage.getItem('ehr_token');
-        if (!token || !tenantSlug) return;
-
-        const [
-          servicePointsRes,
-          outreachEventsRes,
-          partnerServicesRes,
-          linkageActionsRes,
-          stiMethodsRes,
-          stiSpecimensRes,
-        ] = await Promise.all([
-          ehrApi.getHivLookupData('testing_service_points', {}, token, tenantSlug),
-          ehrApi.getHivLookupData('testing_outreach_events', {}, token, tenantSlug),
-          ehrApi.getHivLookupData('testing_partner_services', {}, token, tenantSlug),
-          ehrApi.getHivLookupData('testing_linkage_actions', {}, token, tenantSlug),
-          ehrApi.getHivLookupData('testing_sti_methods', {}, token, tenantSlug),
-          ehrApi.getHivLookupData('testing_sti_specimens', {}, token, tenantSlug),
-        ]);
-
-        const sp = servicePointsRes.data.data || [];
-        const oe = outreachEventsRes.data.data || [];
-        const ps = partnerServicesRes.data.data || [];
-        const la = linkageActionsRes.data.data || [];
-        const sm = stiMethodsRes.data.data || [];
-        const ss = stiSpecimensRes.data.data || [];
-
-        setServicePoints(sp.length > 0 ? sp : defaultTestingServicePoints);
-        setOutreachEvents(oe.length > 0 ? oe : defaultTestingOutreachEvents);
-        setPartnerServices(ps.length > 0 ? ps : defaultPartnerServices);
-        setLinkageActions(la.length > 0 ? la : defaultLinkageActions);
-        setStiMethods(sm.length > 0 ? sm : defaultStiMethods);
-        setStiSpecimens(ss.length > 0 ? ss : defaultStiSpecimens);
-      } catch {
-        setServicePoints(defaultTestingServicePoints);
-        setOutreachEvents(defaultTestingOutreachEvents);
-        setPartnerServices(defaultPartnerServices);
-        setLinkageActions(defaultLinkageActions);
-        setStiMethods(defaultStiMethods);
-        setStiSpecimens(defaultStiSpecimens);
+    if (testResult === 'invalid' || testResult === 'indeterminate') {
+      return {
+        type: 'repeat',
+        title: stage === 'screening' ? 'Repeat Screening Test' : stage === 'confirmatory' ? 'Repeat Confirmatory Test' : 'Repeat Tie-breaker',
+        message: `Result is ${testResult}. The WHO algorithm requires repeating this test with a fresh sample or different kit.`,
+        action: 'Repeat This Test',
+        color: '#FF7A40',
+        nextStep: 'run_test' as WizardStep,
+      };
+    }
+    if (stage === 'screening' && (testResult === 'reactive' || testResult === 'positive')) {
+      return {
+        type: 'proceed_confirmatory',
+        title: 'Screening Reactive — Proceed to Test 2',
+        message: `Test 1 (${lastTest?.test_kit_name || 'screening kit'}) returned ${testResult}. WHO algorithm requires a second test using a DIFFERENT kit to confirm.`,
+        action: 'Perform Confirmatory Test 2',
+        color: '#FF7A40',
+        nextStep: 'run_test' as WizardStep,
+      };
+    }
+    if (stage === 'confirmatory') {
+      const sTest = historyWithParsed.find((t: any) => (t.test_stage || t.testStage) === 'screening');
+      const sResult = sTest?.test_result || sTest?.testResult || '';
+      if (sResult && testResult && sResult !== testResult && testResult !== 'pending' && sResult !== 'pending') {
+        return {
+          type: 'proceed_tiebreaker',
+          title: 'Discordant Results — Tie-breaker Required',
+          message: `Test 1: ${sResult} / Test 2: ${testResult} — these disagree. WHO algorithm requires a third test with a different kit to resolve.`,
+          action: 'Perform Tie-breaker Test 3',
+          color: '#FF7A40',
+          nextStep: 'run_test' as WizardStep,
+        };
       }
-    };
+    }
+    if (stage === 'tie_breaker') {
+      return {
+        type: 'final',
+        title: 'Algorithm Complete',
+        message: 'Tie-breaker test performed. Review the final algorithm result above and record linkage actions.',
+        action: 'Record Linkage & Close',
+        color: '#00C896',
+        nextStep: 'linkage_sti' as WizardStep,
+      };
+    }
+    // Screening non-reactive
+    if (stage === 'screening' && (testResult === 'non_reactive' || testResult === 'negative')) {
+      return {
+        type: 'final_negative',
+        title: 'HIV NEGATIVE',
+        message: 'Non-reactive on screening. Provide post-test counselling, risk reduction, and schedule retesting.',
+        action: 'Record Follow-up & Close',
+        color: '#00C896',
+        nextStep: 'linkage_sti' as WizardStep,
+      };
+    }
+    return null;
+  }, [historyWithParsed, algorithmResult]);
 
-    loadTestingLookups();
-  }, []);
+  // Algorithm stage progress for display
+  const algoStages = useMemo(() => {
+    const stages = [
+      { key: 'screening', label: 'Test 1', sublabel: 'Screening' },
+      { key: 'confirmatory', label: 'Test 2', sublabel: 'Confirmatory' },
+      { key: 'tie_breaker', label: 'Test 3', sublabel: 'Tie-breaker' },
+    ];
+    return stages.map(stage => {
+      const done = historyWithParsed.some((t: any) => (t.test_stage || t.testStage) === stage.key);
+      const active = testForm.testStage === stage.key;
+      return { ...stage, done, active };
+    });
+  }, [historyWithParsed, testForm.testStage]);
 
-  const formSections: Record<FormStepId, React.ReactNode> = {
-    context: isFollowOnStage ? (
-      <SectionCard
-        title="Testing context"
-        icon={<ClipboardList className="w-5 h-5" />}
-        description="Using the same clinical context as the initial screening test."
-      >
-        <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          <p className="font-semibold">Context locked for follow-up step</p>
-          <p className="mt-1">
-            This confirmatory or tie-breaker test reuses the reason, location and cadre from the
-            screening visit. Return to the clinical encounter if you need to adjust visit context.
-          </p>
-        </div>
-      </SectionCard>
-    ) : (
-      <SectionCard
-        title="Testing context"
-        icon={<ClipboardList className="w-5 h-5" />}
-        description="Capture reason, approach, location, and cadre before entering results."
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { label: 'Reason for testing', field: 'testingReason', options: testingReasonOptions },
-            { label: 'Testing approach', field: 'testingApproach', options: testingApproachOptions },
-            { label: 'Testing location', field: 'testingLocation', options: testingLocationOptions },
-            { label: 'Algorithm stage', field: 'testStage', options: testStageOptions },
-            { label: 'Specimen', field: 'specimenType', options: specimenOptions },
-            { label: 'Provider cadre', field: 'testingCadre', options: testingCadreOptions },
-          ].map(({ label, field, options }) => (
-            <div key={field}>
-              <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
-              <select
-                value={testForm[field as keyof typeof testForm] as string}
-                onChange={(e) => setTestForm({ ...testForm, [field]: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              >
-                {options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Service point</label>
-            <select
-              value={testingContext.servicePoint}
-              onChange={(e) => setTestingContext({ ...testingContext, servicePoint: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">Select service point...</option>
-              {servicePoints.map((sp) => (
-                <option key={sp.code} value={sp.code}>
-                  {sp.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Outreach / campaign</label>
-            <select
-              value={testingContext.outreachEvent}
-              onChange={(e) => setTestingContext({ ...testingContext, outreachEvent: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              {outreachEvents.map((event) => (
-                <option key={event.code} value={event.code}>
-                  {event.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Referred by</label>
-            <input
-              type="text"
-              value={testingContext.referredBy}
-              onChange={(e) => setTestingContext({ ...testingContext, referredBy: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              placeholder="Optional"
-            />
-          </div>
-        </div>
-      </SectionCard>
-    ),
-    test: (
-      <SectionCard
-        title="HIV test kit & result"
-        icon={<TestTube className="w-5 h-5" />}
-        description="Document the kit, lot, expiry, and observed results for this algorithm step."
-      >
-        {nextStepHint && (
-          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-start gap-3">
-            <AlertTriangle className="w-4 h-4 mt-0.5 text-emerald-600" />
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
-                Step {stageStepMeta.index} of {stageStepMeta.total} · {stageStepMeta.label}
-              </p>
-              <p className="font-semibold mt-0.5">Next expected step</p>
-              <p>{nextStepHint.title}</p>
-              <p className="text-xs text-emerald-800 mt-1">{nextStepHint.detail}</p>
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Test kit</label>
-            <select
-              value={testForm.testKitName}
-              onChange={(e) => setTestForm({ ...testForm, testKitName: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              {testKits.map((kit) => {
-                const disabled = isKitDisabledForStage(kit);
-                const label =
-                  recommendedKitName && kit === recommendedKitName
-                    ? `${kit} (recommended)`
-                    : kit;
-                return (
-                  <option key={kit} value={kit} disabled={disabled}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Kit category</label>
-            <select
-              value={testForm.kitType}
-              onChange={(e) => setTestForm({ ...testForm, kitType: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              {kitTypes.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Test type</label>
-            <select
-              value={testForm.testType}
-              onChange={(e) => setTestForm({ ...testForm, testType: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              {testTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Test result</label>
-            <select
-              value={testForm.testResult}
-              onChange={(e) => setTestForm({ ...testForm, testResult: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">Select result...</option>
-              {resultOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Kit lot number</label>
-            <input
-              type="text"
-              value={testForm.testKitLot}
-              onChange={(e) => setTestForm({ ...testForm, testKitLot: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              placeholder="Enter lot number"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Kit expiry date</label>
-            <input
-              type="text"
-              value={testForm.testKitExpiry}
-              onChange={(e) => setTestForm({ ...testForm, testKitExpiry: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              placeholder="dd/mm/yyyy"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Result value</label>
-            <input
-              type="text"
-              value={testForm.resultValue}
-              onChange={(e) => setTestForm({ ...testForm, resultValue: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              placeholder="Optional numerical value"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Result unit</label>
-            <input
-              type="text"
-              value={testForm.resultUnit}
-              onChange={(e) => setTestForm({ ...testForm, resultUnit: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              placeholder="e.g., copies/mL"
-            />
-          </div>
-          {snomedReady && (
-            <>
-              <div className="md:col-span-2">
-                <SnomedConceptPicker
-                  value={testConceptSelection}
-                  onChange={setTestConceptSelection}
-                  token={snomedToken}
-                  tenantSlug={tenantSlug}
-                  label="HIV test SNOMED concept"
-                  helperText="Select the exact analyte/procedure performed for interoperability."
-                context="procedure"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <SnomedConceptPicker
-                  value={specimenConceptSelection}
-                  onChange={setSpecimenConceptSelection}
-                  token={snomedToken}
-                  tenantSlug={tenantSlug}
-                  label="Specimen SNOMED concept"
-                  helperText="Optional structured specimen description (finger prick, plasma, etc.)."
-                context="specimen"
-                />
-              </div>
-            </>
-          )}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
-            <textarea
-              value={testForm.notes}
-              onChange={(e) => setTestForm({ ...testForm, notes: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              rows={3}
-              placeholder="Additional notes..."
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <label className="flex items-center gap-2 text-sm text-slate-700 font-medium">
-            <input
-              type="checkbox"
-              checked={testForm.dualKitUsed}
-              onChange={(e) => setTestForm({ ...testForm, dualKitUsed: e.target.checked })}
-              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Dual HIV/Syphilis kit used
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700 font-medium">
-            <input
-              type="checkbox"
-              checked={testForm.selfTestReported}
-              onChange={(e) => setTestForm({ ...testForm, selfTestReported: e.target.checked })}
-              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Client self-tested before visit
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700 font-medium">
-            <input
-              type="checkbox"
-              checked={testForm.selfTestConfirmed}
-              onChange={(e) => setTestForm({ ...testForm, selfTestConfirmed: e.target.checked })}
-              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Self-test confirmed by provider
-          </label>
-        </div>
-      </SectionCard>
-    ),
-    linkage: (
-      <SectionCard
-        title="Linkage, partner services & recency"
-        icon={<Shield className="w-5 h-5" />}
-        description="Record partner notification, linkage outcomes, recency assays, and plan the next test."
-      >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Partner services</label>
-            <select
-              value={testForm.partnerNotificationStatus}
-              onChange={(e) =>
-                setTestForm({ ...testForm, partnerNotificationStatus: e.target.value })
-              }
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">Not recorded</option>
-              {partnerServices.map((option: { code: string; name: string }) => (
-                <option key={option.code} value={option.code}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Linkage action</label>
-            <select
-              value={testForm.linkageAction}
-              onChange={(e) => setTestForm({ ...testForm, linkageAction: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">Not recorded</option>
-              {linkageActions.map((option: { code: string; name: string }) => (
-                <option key={option.code} value={option.code}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700 font-medium">
-            <input
-              type="checkbox"
-              checked={testForm.linkageCompleted}
-              onChange={(e) => setTestForm({ ...testForm, linkageCompleted: e.target.checked })}
-              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Linkage completed
-          </label>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Recency testing performed
-            </label>
-            <select
-              value={testForm.recencyTestPerformed ? 'yes' : 'no'}
-              onChange={(e) =>
-                setTestForm({ ...testForm, recencyTestPerformed: e.target.value === 'yes' })
-              }
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
-          </div>
-          {testForm.recencyTestPerformed && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Recency result</label>
-                <select
-                  value={testForm.recencyResult}
-                  onChange={(e) => setTestForm({ ...testForm, recencyResult: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="">Select...</option>
-                  {recencyResultOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Recency kit lot</label>
-                <input
-                  type="text"
-                  value={testForm.recencyKitLot}
-                  onChange={(e) => setTestForm({ ...testForm, recencyKitLot: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Recency kit expiry
-                </label>
-                <input
-                  type="text"
-                  value={testForm.recencyKitExpiry}
-                  onChange={(e) =>
-                    setTestForm({ ...testForm, recencyKitExpiry: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  placeholder="dd/mm/yyyy"
-                />
-              </div>
-            </>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Next recommended test date
-            </label>
-            <input
-              type="text"
-              value={testForm.nextTestDueDate}
-              onChange={(e) => setTestForm({ ...testForm, nextTestDueDate: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              placeholder="dd/mm/yyyy"
-            />
-          </div>
-        </div>
-      </SectionCard>
-    ),
-    sti: (
-      <SectionCard
-        title="Follow-up actions & integrated STI testing"
-        icon={<Activity className="w-5 h-5" />}
-        description="Tag counselling and prevention actions, then capture each STI panel bundled with the visit."
-        actions={
-          <button
-            type="button"
-            onClick={addStiPanel}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-full border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-          >
-            <Plus className="w-4 h-4" /> Add STI test
-          </button>
-        }
-      >
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-700 mb-2">Follow-up actions</label>
-          <div className="flex flex-wrap gap-2">
-            {followUpOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => toggleFollowUpAction(option.value)}
-                className={`px-3 py-1 text-xs rounded-full border transition ${
-                  followUpActions.includes(option.value)
-                    ? 'bg-emerald-100 border-emerald-300 text-emerald-800'
-                    : 'border-slate-200 text-slate-600 hover:border-slate-400'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-3">
-          {stiPanels.map((panel, index) => (
-            <div
-              key={`${panel.infectionType}-${index}`}
-              className="border border-slate-200 rounded-2xl p-4 space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-700">STI panel {index + 1}</p>
-                {stiPanels.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeStiPanel(index)}
-                    className="text-rose-600 hover:text-rose-800"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Infection</label>
-                  <select
-                    value={panel.infectionType}
-                    onChange={(e) => handleStiChange(index, 'infectionType', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  >
-                    {infectionOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  {snomedReady && (
-                    <div className="mt-2">
-                      <SnomedConceptPicker
-                        value={panel.infectionConcept ?? null}
-                        onChange={(concept) => handleStiConceptChange(index, 'infectionConcept', concept)}
-                        token={snomedToken}
-                        tenantSlug={tenantSlug}
-                        label="Infection SNOMED concept"
-                        helperText="Optional — capture the coded pathogen or syndrome."
-                    context="condition"
-                      />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Test method</label>
-                  <select
-                    value={panel.testMethod}
-                    onChange={(e) => handleStiChange(index, 'testMethod', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  >
-                    {stiMethods.map((option: { code: string; name: string }) => (
-                      <option key={option.code} value={option.code}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
-                  {snomedReady && (
-                    <div className="mt-2">
-                      <SnomedConceptPicker
-                        value={panel.testConcept ?? null}
-                        onChange={(concept) => handleStiConceptChange(index, 'testConcept', concept)}
-                        token={snomedToken}
-                        tenantSlug={tenantSlug}
-                        label="Test SNOMED concept"
-                        helperText="Optional coded lab/imaging procedure."
-                    context="procedure"
-                      />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Specimen/site</label>
-                  <select
-                    value={panel.specimenType}
-                    onChange={(e) => handleStiChange(index, 'specimenType', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  >
-                    {stiSpecimens.map((option: { code: string; name: string }) => (
-                      <option key={option.code} value={option.code}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Result</label>
-                  <select
-                    value={panel.result}
-                    onChange={(e) => handleStiChange(index, 'result', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  >
-                    {stiResultOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Treatment regimen</label>
-                  <input
-                    type="text"
-                    value={panel.treatmentRegimen}
-                    onChange={(e) => handleStiChange(index, 'treatmentRegimen', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Treatment date</label>
-                  <input
-                    type="date"
-                    value={panel.treatmentDate}
-                    onChange={(e) => handleStiChange(index, 'treatmentDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-xs text-slate-700 font-medium">
-                <input
-                  type="checkbox"
-                  checked={panel.treatmentProvided}
-                  onChange={(e) => handleStiChange(index, 'treatmentProvided', e.target.checked)}
-                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                Treatment provided during this visit
-              </label>
-              <textarea
-                value={panel.notes}
-                onChange={(e) => handleStiChange(index, 'notes', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                rows={2}
-                placeholder="Notes / partner services"
-              />
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-    ),
-  };
+  const enrollmentSeedTest = useMemo(() => {
+    if (!historyWithParsed.length) return null;
+    const positiveTests = historyWithParsed.filter((t: any) =>
+      t.test_result === 'positive' || t.test_result === 'reactive' || t.algorithm_result === 'positive'
+    );
+    return positiveTests.length > 0 ? positiveTests[positiveTests.length - 1] : historyWithParsed[0];
+  }, [historyWithParsed]);
+
+  const currentStageLabel = testStageOptions.find(s => s.value === testForm.testStage)?.label || 'Testing';
+  const isFinalAlgorithmResult = Boolean(
+    algorithmResult?.result === 'positive' ||
+    algorithmResult?.result === 'negative' ||
+    algorithmResult?.algorithm_result === 'positive' ||
+    algorithmResult?.algorithm_result === 'negative'
+  );
+
+  // ─── RENDER ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 pb-16 max-w-6xl mx-auto px-4">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-600 to-slate-900 text-white shadow-xl p-6">
-        <div className="flex flex-wrap items-center justify-between gap-6">
+    <div className="space-y-5 pb-16 max-w-5xl mx-auto px-4">
+      <style>{`
+        .hiv-result-card { transition: all 0.15s ease; }
+        .hiv-result-card:hover { transform: translateY(-1px); }
+        .hiv-result-card.selected { transform: scale(1.02); }
+      `}</style>
+
+      {/* ── Header ── */}
+      <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-[#0A1A1A] via-[#0D1F2D] to-[#080E1A] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="uppercase tracking-wide text-emerald-100 text-xs font-semibold">WHO 2024 Integrated HIV & STI Testing</p>
-            <h1 className="text-3xl font-bold mt-2 mb-2">Differentiated Testing Workspace</h1>
-            <p className="text-emerald-50 max-w-2xl">
-              Capture the full context, run the Zimbabwe national algorithm, bundle STI screening, and document linkage services without leaving this view.
-            </p>
-          </div>
-          <TestTube className="w-16 h-16 opacity-80" />
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 mt-6">
-          {workflowSteps.map((step) => (
-            <div key={step.title} className="bg-white/10 backdrop-blur rounded-2xl px-4 py-3 border border-white/20">
-              <p className="text-xs uppercase tracking-wide text-emerald-100 mb-1">{step.title}</p>
-              <p className="text-sm text-emerald-50">{step.detail}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#00C896]" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#00C896]">WHO 2024 · Zimbabwe National Algorithm</p>
             </div>
-          ))}
+            <h1 className="text-xl font-bold text-white">HIV Testing Workspace</h1>
+            <p className="text-sm text-[#5A78A0] mt-0.5">Algorithm-driven · Test 1 → 2 → 3 · Integrated STI screening</p>
+          </div>
+          <TestTube className="w-10 h-10 text-[#00C896]/40" />
         </div>
-        <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Algorithm progress */}
+        <div className="mt-4 flex items-center gap-2">
+          {algoStages.map((stage, i) => (
+            <React.Fragment key={stage.key}>
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                stage.done
+                  ? 'border-[#00C896]/40 bg-[#00C896]/10 text-[#00C896]'
+                  : stage.active && wizardStep === 'run_test'
+                  ? 'border-[#FF7A40]/40 bg-[#FF7A40]/10 text-[#FF7A40]'
+                  : 'border-white/[0.07] bg-white/[0.03] text-[#3A5A7A]'
+              }`}>
+                {stage.done ? <CheckCircle className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current flex items-center justify-center text-[8px]">{i+1}</span>}
+                <span className="hidden sm:inline">{stage.sublabel}</span>
+                <span className="sm:hidden">{stage.label}</span>
+              </div>
+              {i < algoStages.length - 1 && <ChevronRight className="w-3 h-3 text-[#3A5A7A] shrink-0" />}
+            </React.Fragment>
+          ))}
+          {isFinalAlgorithmResult && (
+            <>
+              <ChevronRight className="w-3 h-3 text-[#3A5A7A] shrink-0" />
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold ${
+                (algorithmResult?.result || algorithmResult?.algorithm_result) === 'positive'
+                  ? 'border-[#FF4D6A]/40 bg-[#FF4D6A]/10 text-[#FF4D6A]'
+                  : 'border-[#00C896]/40 bg-[#00C896]/10 text-[#00C896]'
+              }`}>
+                <CheckCircle className="w-3 h-3" />
+                Final Result
+              </div>
+            </>
+          )}
+        </div>
+        <div className="absolute -bottom-8 -right-8 w-32 h-32 rounded-full bg-[#00C896]/[0.06] blur-3xl pointer-events-none" />
       </div>
 
-      <SectionCard
-        title={patientId ? "Patient Context" : "Patient search & intake"}
-        icon={<User className="w-5 h-5" />}
-        description={patientId ? "Review demographics and proceed through the WHO-aligned workflow." : "Find the client, review demographics, then proceed through the WHO-aligned workflow."}
-      >
-        {!patientId && (
-        <>
-        <div className="flex flex-col lg:flex-row gap-3">
-          <input
-            type="text"
-            placeholder="Search by name or patient number..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && searchPatients()}
-            className="flex-1 px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-          />
-          <button
-            onClick={searchPatients}
-            disabled={searching || !searchTerm.trim()}
-            className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {searching ? 'Searching…' : 'Search'}
-          </button>
-        </div>
-
-        {patients.length > 0 && (
-          <div className="mt-4 border border-slate-200 rounded-2xl divide-y divide-slate-200 overflow-hidden">
-            {patients.map((patient) => (
-              <button
-                key={patient.id}
-                onClick={() => {
-                  setSelectedPatient(patient);
-                  setPatients([]);
-                  setSearchTerm(`${patient.firstName} ${patient.lastName}`);
-                  setTestHistory([]);
-                  setAlgorithmResult(null);
-                  resetFormState();
-                }}
-                className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors"
-              >
-                <div className="font-semibold text-slate-900">
-                  {patient.firstName} {patient.lastName}
-                </div>
-                <div className="text-sm text-slate-500">ID: {patient.patientNumber}</div>
-              </button>
-            ))}
+      {/* ── Patient Search ── */}
+      {!patientId && (
+        <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#2B7FFF]/15 border border-[#2B7FFF]/25">
+              <User className="w-4 h-4 text-[#2B7FFF]" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Patient Search</h3>
+              <p className="text-[11px] text-[#5A78A0]">Search by name or patient number</p>
+            </div>
           </div>
-        )}
-        </>
-        )}
-
-      {selectedPatient && (
-        <div className="space-y-6">
-            <div className="flex flex-wrap gap-2">
-              {visibleFormSteps.map((step) => (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search by name or patient number..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && searchPatients()}
+              className={inputCls + ' flex-1'}
+            />
+            <button
+              onClick={searchPatients}
+              disabled={searching || !searchTerm.trim()}
+              className="px-4 py-2 bg-[#2B7FFF] text-white rounded-xl text-sm font-semibold hover:bg-[#3A8FFF] disabled:opacity-40 transition shrink-0"
+            >
+              {searching ? '...' : 'Search'}
+            </button>
+          </div>
+          {patients.length > 0 && (
+            <div className="mt-3 rounded-xl border border-white/[0.07] overflow-hidden">
+              {patients.map(patient => (
                 <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => setActiveStep(step.id)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition ${
-                    activeStep === step.id
-                      ? 'bg-emerald-600 border-emerald-600 text-white shadow'
-                      : 'border-slate-200 text-slate-600 hover:border-emerald-200 hover:text-emerald-700'
-                  }`}
+                  key={patient.id}
+                  onClick={() => {
+                    setSelectedPatient(patient);
+                    setPatients([]);
+                    setSearchTerm(`${patient.firstName} ${patient.lastName}`);
+                    setTestHistory([]);
+                    setAlgorithmResult(null);
+                    resetFormState();
+                    setWizardStep('context');
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors border-b border-white/[0.04] last:border-0"
                 >
-                  {step.icon}
-                  {step.title}
+                  <div className="font-semibold text-white text-sm">{patient.firstName} {patient.lastName}</div>
+                  <div className="text-xs text-[#5A78A0]">ID: {patient.patientNumber}</div>
                 </button>
               ))}
             </div>
+          )}
+        </div>
+      )}
 
-            <div>{formSections[activeStep]}</div>
+      {/* ── Selected Patient Card ── */}
+      {selectedPatient && (
+        <div className="flex items-center justify-between rounded-2xl border border-[#00C896]/25 bg-[#00C896]/[0.05] px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-[#00C896]/15 border border-[#00C896]/30 flex items-center justify-center">
+              <User className="w-4 h-4 text-[#00C896]" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">
+                {selectedPatient.first_name || selectedPatient.firstName} {selectedPatient.last_name || selectedPatient.lastName}
+              </p>
+              <p className="text-xs text-[#5A78A0]">
+                {selectedPatient.patientNumber || selectedPatient.patient_number} · {selectedPatient.gender}
+                {selectedPatient.date_of_birth || selectedPatient.dateOfBirth
+                  ? ` · ${Math.floor((new Date().getTime() - new Date(selectedPatient.date_of_birth || selectedPatient.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} yrs`
+                  : ''}
+              </p>
+            </div>
+          </div>
+          {!patientId && (
+            <button
+              onClick={() => { setSelectedPatient(null); setSearchTerm(''); setTestHistory([]); setAlgorithmResult(null); setWizardStep('context'); }}
+              className="p-1.5 text-[#3A5A7A] hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
 
-            <div className="flex items-center justify-between pt-2">
-              <button
-                type="button"
-                onClick={goToPreviousStep}
-                disabled={activeStepIndex === 0}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:border-slate-300 disabled:opacity-40"
-              >
-                Previous section
-              </button>
-              <button
-                type="button"
-                onClick={goToNextStep}
-                disabled={activeStepIndex === visibleFormSteps.length - 1}
-                className="px-4 py-2 rounded-xl border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"
-              >
-                Next section
+      {selectedPatient && (
+        <>
+          {/* ── Wizard Step: CONTEXT ── */}
+          {wizardStep === 'context' && (
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05]">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#2B7FFF]/15 border border-[#2B7FFF]/25">
+                    <ClipboardList className="w-4 h-4 text-[#2B7FFF]" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Testing Context</h3>
+                    <p className="text-[11px] text-[#5A78A0]">Reason · approach · location · cadre</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold text-[#2B7FFF] bg-[#2B7FFF]/10 border border-[#2B7FFF]/20 px-2 py-1 rounded-full">Step 1 of flow</span>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <Field label="Reason for testing">
+                    <select value={testForm.testingReason} onChange={e => setTestForm({ ...testForm, testingReason: e.target.value })} className={selectCls}>
+                      {testingReasonOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Testing approach">
+                    <select value={testForm.testingApproach} onChange={e => setTestForm({ ...testForm, testingApproach: e.target.value })} className={selectCls}>
+                      {testingApproachOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Testing location">
+                    <select value={testForm.testingLocation} onChange={e => setTestForm({ ...testForm, testingLocation: e.target.value })} className={selectCls}>
+                      {testingLocationOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Provider cadre">
+                    <select value={testForm.testingCadre} onChange={e => setTestForm({ ...testForm, testingCadre: e.target.value })} className={selectCls}>
+                      {testingCadreOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Specimen type">
+                    <select value={testForm.specimenType} onChange={e => setTestForm({ ...testForm, specimenType: e.target.value })} className={selectCls}>
+                      {specimenOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Service point">
+                    <select value={testingContext.servicePoint} onChange={e => setTestingContext({ ...testingContext, servicePoint: e.target.value })} className={selectCls}>
+                      <option value="">Select...</option>
+                      {servicePoints.map(sp => <option key={sp.code} value={sp.code}>{sp.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Outreach / campaign">
+                    <select value={testingContext.outreachEvent} onChange={e => setTestingContext({ ...testingContext, outreachEvent: e.target.value })} className={selectCls}>
+                      {outreachEvents.map(e => <option key={e.code} value={e.code}>{e.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Referred by" className="sm:col-span-2">
+                    <input type="text" value={testingContext.referredBy} onChange={e => setTestingContext({ ...testingContext, referredBy: e.target.value })} className={inputCls} placeholder="Optional" />
+                  </Field>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => setWizardStep('run_test')}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#00C896] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] transition"
+                  >
+                    Begin Testing <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Wizard Step: RUN TEST ── */}
+          {wizardStep === 'run_test' && (
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 overflow-hidden">
+              {/* Algorithm step banner */}
+              <div className="px-5 py-3 border-b border-white/[0.05] bg-[#FF7A40]/[0.05]">
+                <div className="flex items-center gap-3">
+                  <Zap className="w-4 h-4 text-[#FF7A40]" />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#FF7A40]">Algorithm in progress</p>
+                    <p className="text-sm font-bold text-white">{currentStageLabel}</p>
+                  </div>
+                  {testForm.testStage === 'confirmatory' && (
+                    <span className="ml-auto text-[10px] text-[#FF7A40] bg-[#FF7A40]/10 border border-[#FF7A40]/20 px-2 py-1 rounded-full font-semibold">
+                      Must use different kit from Test 1
+                    </span>
+                  )}
+                  {testForm.testStage === 'tie_breaker' && (
+                    <span className="ml-auto text-[10px] text-[#FF7A40] bg-[#FF7A40]/10 border border-[#FF7A40]/20 px-2 py-1 rounded-full font-semibold">
+                      Must use kit not used in Tests 1 or 2
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="p-5 space-y-5">
+                {/* Kit Selection */}
+                <div>
+                  <p className="text-xs font-bold text-[#7A9AB8] uppercase tracking-wide mb-3">Test Kit</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {testKits.map(kit => {
+                      const disabled = isKitDisabledForStage(kit);
+                      const selected = testForm.testKitName === kit;
+                      const isDual = kit.toLowerCase().includes('syphilis') || kit.toLowerCase().includes('duo');
+                      return (
+                        <button
+                          key={kit}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => !disabled && setTestForm({ ...testForm, testKitName: kit })}
+                          className={`relative text-left px-3 py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                            disabled ? 'opacity-30 cursor-not-allowed border-white/[0.05] bg-white/[0.02] text-[#3A5A7A]'
+                            : selected ? 'border-[#00C896]/60 bg-[#00C896]/10 text-white'
+                            : 'border-white/[0.07] bg-white/[0.02] text-[#8FA8CC] hover:border-white/[0.14] hover:text-white'
+                          }`}
+                        >
+                          {selected && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[#00C896]" />}
+                          <span className="block truncate">{kit}</span>
+                          {isDual && !disabled && (
+                            <span className="mt-1 block text-[9px] text-[#FF7A40] font-bold">HIV + Syphilis</span>
+                          )}
+                          {disabled && <span className="mt-1 block text-[9px] text-[#3A5A7A]">Used in previous test</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Kit metadata */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Field label="Kit category">
+                    <select value={testForm.kitType} onChange={e => setTestForm({ ...testForm, kitType: e.target.value })} className={selectCls}>
+                      {kitTypes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Test type">
+                    <select value={testForm.testType} onChange={e => setTestForm({ ...testForm, testType: e.target.value })} className={selectCls}>
+                      {testTypeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Kit lot number">
+                    <input type="text" value={testForm.testKitLot} onChange={e => setTestForm({ ...testForm, testKitLot: e.target.value })} className={inputCls} placeholder="Lot #" />
+                  </Field>
+                  <Field label="Kit expiry date">
+                    <input type="text" value={testForm.testKitExpiry} onChange={e => setTestForm({ ...testForm, testKitExpiry: e.target.value })} className={inputCls} placeholder="dd/mm/yyyy" />
+                  </Field>
+                  <Field label="Result value" className="sm:col-span-1">
+                    <input type="text" value={testForm.resultValue} onChange={e => setTestForm({ ...testForm, resultValue: e.target.value })} className={inputCls} placeholder="Optional" />
+                  </Field>
+                  <Field label="Result unit">
+                    <input type="text" value={testForm.resultUnit} onChange={e => setTestForm({ ...testForm, resultUnit: e.target.value })} className={inputCls} placeholder="e.g., copies/mL" />
+                  </Field>
+                </div>
+
+                {/* Result — large prominent buttons */}
+                <div>
+                  <p className="text-xs font-bold text-[#7A9AB8] uppercase tracking-wide mb-3">
+                    Test Result <span className="text-[#FF4D6A]">*</span>
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                    {resultOptions.map(option => {
+                      const selected = testForm.testResult === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setTestForm({ ...testForm, testResult: option.value })}
+                          className={`hiv-result-card relative px-4 py-3.5 rounded-xl border-2 text-sm font-bold text-center transition-all ${
+                            selected ? 'selected' : ''
+                          }`}
+                          style={{
+                            borderColor: selected ? option.color : 'rgba(255,255,255,0.07)',
+                            background: selected ? option.bg : 'rgba(255,255,255,0.02)',
+                            color: selected ? option.color : '#5A78A0',
+                          }}
+                        >
+                          {selected && (
+                            <span className="absolute top-1.5 right-1.5">
+                              <CheckCircle className="w-3.5 h-3.5" style={{ color: option.color }} />
+                            </span>
+                          )}
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Checkboxes */}
+                <div className="flex flex-wrap gap-4">
+                  {[
+                    { field: 'dualKitUsed', label: 'Dual HIV/Syphilis kit used' },
+                    { field: 'selfTestReported', label: 'Client self-tested before visit' },
+                    { field: 'selfTestConfirmed', label: 'Self-test confirmed by provider' },
+                  ].map(({ field, label }) => (
+                    <label key={field} className="flex items-center gap-2 text-xs text-[#8FA8CC] font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={testForm[field as keyof typeof testForm] as boolean}
+                        onChange={e => setTestForm({ ...testForm, [field]: e.target.checked })}
+                        className="rounded border-white/20 bg-[#060C16] text-[#00C896] focus:ring-[#00C896]/30"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+
+                {/* Notes */}
+                <Field label="Notes">
+                  <textarea
+                    value={testForm.notes}
+                    onChange={e => setTestForm({ ...testForm, notes: e.target.value })}
+                    className={inputCls}
+                    rows={2}
+                    placeholder="Optional clinical notes..."
+                  />
+                </Field>
+
+                {/* SNOMED (collapsed) */}
+                {snomedReady && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSnomedExpanded(p => !p)}
+                      className="text-xs text-[#5A78A0] hover:text-[#00C896] transition-colors font-semibold"
+                    >
+                      {showSnomedExpanded ? '▲ Hide' : '▼ Add'} SNOMED CT concepts (optional)
+                    </button>
+                    {showSnomedExpanded && (
+                      <div className="mt-3 space-y-3">
+                        <SnomedConceptPicker value={testConceptSelection} onChange={setTestConceptSelection} token={snomedToken} tenantSlug={tenantSlug} label="HIV test SNOMED concept" helperText="Select the analyte/procedure for interoperability." context="procedure" />
+                        <SnomedConceptPicker value={specimenConceptSelection} onChange={setSpecimenConceptSelection} token={snomedToken} tenantSlug={tenantSlug} label="Specimen SNOMED concept" helperText="Structured specimen description." context="specimen" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* STI panel — only when dual kit active */}
+                {isStiBundleEnabled && (
+                  <div className="rounded-xl border border-[#FF7A40]/20 bg-[#FF7A40]/[0.04] p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-[#FF7A40]" />
+                        <p className="text-sm font-bold text-white">Integrated STI Testing</p>
+                        <span className="text-[10px] text-[#FF7A40] bg-[#FF7A40]/10 border border-[#FF7A40]/20 px-2 py-0.5 rounded-full">Dual kit detected</span>
+                      </div>
+                      <button type="button" onClick={addStiPanel} className="text-xs text-[#FF7A40] hover:text-[#FFB380] font-semibold flex items-center gap-1 transition-colors">
+                        <Plus className="w-3.5 h-3.5" /> Add STI
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {stiPanels.map((panel, index) => (
+                        <div key={`${panel.infectionType}-${index}`} className="rounded-xl border border-white/[0.07] bg-[#080E1A]/60 p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs font-bold text-[#8FA8CC]">STI Panel {index + 1}</p>
+                            {stiPanels.length > 1 && (
+                              <button type="button" onClick={() => removeStiPanel(index)} className="text-[#FF4D6A] hover:text-[#FF7A9A] transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <Field label="Infection">
+                              <select value={panel.infectionType} onChange={e => handleStiChange(index, 'infectionType', e.target.value)} className={selectCls}>
+                                {infectionOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Test method">
+                              <select value={panel.testMethod} onChange={e => handleStiChange(index, 'testMethod', e.target.value)} className={selectCls}>
+                                {stiMethods.map(o => <option key={o.code} value={o.code}>{o.name}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Specimen/site">
+                              <select value={panel.specimenType} onChange={e => handleStiChange(index, 'specimenType', e.target.value)} className={selectCls}>
+                                {stiSpecimens.map(o => <option key={o.code} value={o.code}>{o.name}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Result">
+                              <select value={panel.result} onChange={e => handleStiChange(index, 'result', e.target.value)} className={selectCls}>
+                                {stiResultOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Treatment regimen">
+                              <input type="text" value={panel.treatmentRegimen} onChange={e => handleStiChange(index, 'treatmentRegimen', e.target.value)} className={inputCls} />
+                            </Field>
+                            <Field label="Treatment date">
+                              <input type="date" value={panel.treatmentDate} onChange={e => handleStiChange(index, 'treatmentDate', e.target.value)} className={inputCls} />
+                            </Field>
+                          </div>
+                          <label className="mt-2 flex items-center gap-2 text-xs text-[#8FA8CC] cursor-pointer">
+                            <input type="checkbox" checked={panel.treatmentProvided} onChange={e => handleStiChange(index, 'treatmentProvided', e.target.checked)} className="rounded border-white/20 bg-[#060C16] text-[#00C896]" />
+                            Treatment provided during this visit
+                          </label>
+                          {snomedReady && (
+                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <SnomedConceptPicker value={panel.infectionConcept ?? null} onChange={c => handleStiConceptChange(index, 'infectionConcept', c)} token={snomedToken} tenantSlug={tenantSlug} label="Infection SNOMED concept" helperText="Optional coded pathogen." context="condition" />
+                              <SnomedConceptPicker value={panel.testConcept ?? null} onChange={c => handleStiConceptChange(index, 'testConcept', c)} token={snomedToken} tenantSlug={tenantSlug} label="Test SNOMED concept" helperText="Optional coded procedure." context="procedure" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Record button — only shown when result is selected */}
+                <div className="flex items-center justify-between pt-2 border-t border-white/[0.05]">
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep('context')}
+                    className="text-sm text-[#5A78A0] hover:text-white transition-colors font-medium"
+                  >
+                    ← Back to Context
+                  </button>
+                  {testForm.testResult ? (
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                      className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#00C896] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] disabled:opacity-50 transition shadow-lg"
+                    >
+                      {submitting ? (
+                        <span className="h-4 w-4 border-2 border-[#051119]/30 border-t-[#051119] rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4" />
+                      )}
+                      {submitting ? 'Recording...' : `Record ${currentStageLabel}`}
+                    </button>
+                  ) : (
+                    <div className="text-xs text-[#3A5A7A] italic">Select a result to enable recording</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Wizard Step: POST RECORD (Algorithm Outcome) ── */}
+          {wizardStep === 'post_record' && algorithmDecision && (
+            <div className="rounded-2xl border overflow-hidden" style={{ borderColor: algorithmDecision.color + '40' }}>
+              <div className="px-5 py-4 border-b" style={{ borderColor: algorithmDecision.color + '20', background: algorithmDecision.color + '08' }}>
+                <div className="flex items-center gap-3">
+                  {algorithmDecision.type === 'final_positive' ? (
+                    <AlertTriangle className="w-6 h-6" style={{ color: algorithmDecision.color }} />
+                  ) : algorithmDecision.type === 'final_negative' ? (
+                    <CheckCircle className="w-6 h-6" style={{ color: algorithmDecision.color }} />
+                  ) : algorithmDecision.type === 'repeat' ? (
+                    <RotateCcw className="w-6 h-6" style={{ color: algorithmDecision.color }} />
+                  ) : (
+                    <ArrowRight className="w-6 h-6" style={{ color: algorithmDecision.color }} />
+                  )}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: algorithmDecision.color }}>
+                      WHO Algorithm Decision
+                    </p>
+                    <h3 className="text-lg font-black text-white">{algorithmDecision.title}</h3>
+                  </div>
+                </div>
+              </div>
+              <div className="p-5 bg-[#0A1525]/90">
+                <p className="text-sm text-[#8FA8CC] leading-relaxed mb-4">{algorithmDecision.message}</p>
+
+                {/* CDSS explanation toggle */}
+                <button
+                  onClick={() => setShowAlgorithmExplanation(p => !p)}
+                  className="text-xs font-semibold text-[#5A78A0] hover:text-[#00C896] transition-colors mb-4 flex items-center gap-1.5"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  {showAlgorithmExplanation ? 'Hide' : 'Show'} CDSS explanation
+                </button>
+                {showAlgorithmExplanation && (
+                  <div className="mb-4 rounded-xl border border-[#2B7FFF]/20 bg-[#2B7FFF]/[0.05] p-4 space-y-2">
+                    <p className="text-xs font-bold text-[#2B7FFF]">Why this decision?</p>
+                    {algorithmResult?.interpretation ? (
+                      <p className="text-xs text-[#8FA8CC]">{algorithmResult.interpretation}</p>
+                    ) : (
+                      <p className="text-xs text-[#8FA8CC]">
+                        {(algorithmResult?.result || algorithmResult?.algorithm_result) === 'positive'
+                          ? 'The national HIV testing algorithm classified this case as HIV Positive because at least two rapid tests in this episode were reactive/positive — consistent with the Zimbabwe/WHO 3-test algorithm.'
+                          : (algorithmResult?.result || algorithmResult?.algorithm_result) === 'negative'
+                          ? 'The national HIV testing algorithm classified this case as HIV Negative based on a non-reactive screening test or a consistent series of non-reactive results.'
+                          : 'The algorithm evaluated the test results against the WHO/Zimbabwe national HIV testing algorithm and determined the next appropriate step as shown above.'}
+                      </p>
+                    )}
+                    {Array.isArray(algorithmResult?.algorithm_steps) && algorithmResult.algorithm_steps.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-[#5A78A0] mb-1">Steps considered</p>
+                        <ul className="text-xs text-[#7A9AB8] space-y-0.5 list-disc list-inside">
+                          {algorithmResult.algorithm_steps.slice(0, 3).map((step: any, idx: number) => (
+                            <li key={idx}>{step.test_kit && <span className="font-semibold">{step.test_kit}: </span>}{step.step_result || step.test_result}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => {
+                      if (algorithmDecision.nextStep === 'run_test') {
+                        setWizardStep('run_test');
+                      } else {
+                        setWizardStep('linkage_sti');
+                      }
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition"
+                    style={{
+                      background: algorithmDecision.color + '20',
+                      color: algorithmDecision.color,
+                      border: `1px solid ${algorithmDecision.color}40`,
+                    }}
+                  >
+                    {algorithmDecision.nextStep === 'run_test' ? <ArrowRight className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                    {algorithmDecision.action}
+                  </button>
+                  {algorithmDecision.type === 'final_positive' && (
+                    <button
+                      onClick={handleEnrollInCare}
+                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl bg-[#FF4D6A]/20 text-[#FF4D6A] border border-[#FF4D6A]/40 hover:bg-[#FF4D6A]/30 transition"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Enroll in HIV Care
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setWizardStep('run_test')}
+                    className="px-4 py-2.5 text-xs text-[#5A78A0] border border-white/[0.07] rounded-xl hover:text-white hover:border-white/[0.14] transition"
+                  >
+                    View Test Form
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Wizard Step: POST RECORD (no algorithm yet) ── */}
+          {wizardStep === 'post_record' && !algorithmDecision && (
+            <div className="rounded-2xl border border-[#00C896]/20 bg-[#00C896]/[0.05] p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <CheckCircle className="w-5 h-5 text-[#00C896]" />
+                <p className="text-sm font-bold text-white">Test result recorded</p>
+              </div>
+              <p className="text-xs text-[#5A78A0] mb-4">The result has been saved. Review the testing timeline below and proceed as guided by the algorithm.</p>
+              <button onClick={() => setWizardStep('linkage_sti')} className="px-4 py-2 text-sm font-semibold text-[#00C896] border border-[#00C896]/30 rounded-xl hover:bg-[#00C896]/10 transition">
+                Record Follow-up &amp; Close →
               </button>
             </div>
+          )}
 
-            {canShowSaveButton && (
-              <div className="flex justify-end">
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting || !canSubmitEncounter}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl shadow-lg hover:bg-emerald-700 disabled:opacity-50 font-semibold"
-                >
-                  <Save className="w-5 h-5" />
-                  {submitting ? 'Recording…' : 'Record Encounter'}
-                </button>
+          {/* ── Wizard Step: LINKAGE & STI ── */}
+          {wizardStep === 'linkage_sti' && (
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.05]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#A66CFF]/15 border border-[#A66CFF]/25">
+                  <Shield className="w-4 h-4 text-[#A66CFF]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Linkage, Follow-up & Partner Services</h3>
+                  <p className="text-[11px] text-[#5A78A0]">Post-test actions, partner notification, recency assay</p>
+                </div>
               </div>
-            )}
+              <div className="p-5 space-y-5">
+                {/* Follow-up actions */}
+                <div>
+                  <p className="text-xs font-bold text-[#7A9AB8] uppercase tracking-wide mb-2">Follow-up actions</p>
+                  <div className="flex flex-wrap gap-2">
+                    {followUpOptions.map(option => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => toggleFollowUpAction(option.value)}
+                        className={`px-3 py-1.5 text-xs rounded-full border font-semibold transition ${
+                          followUpActions.includes(option.value)
+                            ? 'border-[#00C896]/40 bg-[#00C896]/10 text-[#00C896]'
+                            : 'border-white/[0.07] bg-white/[0.02] text-[#5A78A0] hover:border-white/[0.14] hover:text-white'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {(algorithmResult || historyWithParsed.length > 0) && (
-              <div className="grid gap-6 lg:grid-cols-3">
-                {algorithmResult && (
-                  <SectionCard
-                    title="Algorithm outcome"
-                    icon={<AlertTriangle className="w-5 h-5" />}
-                    badge="Auto-evaluated"
-                    description="Latest consolidated decision from the national testing algorithm."
+                {/* Partner services and linkage */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Field label="Partner services">
+                    <select value={testForm.partnerNotificationStatus} onChange={e => setTestForm({ ...testForm, partnerNotificationStatus: e.target.value })} className={selectCls}>
+                      <option value="">Not recorded</option>
+                      {partnerServices.map(o => <option key={o.code} value={o.code}>{o.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Linkage action">
+                    <select value={testForm.linkageAction} onChange={e => setTestForm({ ...testForm, linkageAction: e.target.value })} className={selectCls}>
+                      <option value="">Not recorded</option>
+                      {linkageActions.map(o => <option key={o.code} value={o.code}>{o.name}</option>)}
+                    </select>
+                  </Field>
+                  <div className="flex items-end pb-1">
+                    <label className="flex items-center gap-2 text-xs text-[#8FA8CC] font-medium cursor-pointer">
+                      <input type="checkbox" checked={testForm.linkageCompleted} onChange={e => setTestForm({ ...testForm, linkageCompleted: e.target.checked })} className="rounded border-white/20 bg-[#060C16] text-[#00C896]" />
+                      Linkage completed
+                    </label>
+                  </div>
+                </div>
+
+                {/* Recency */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Field label="Recency testing performed">
+                    <select value={testForm.recencyTestPerformed ? 'yes' : 'no'} onChange={e => setTestForm({ ...testForm, recencyTestPerformed: e.target.value === 'yes' })} className={selectCls}>
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </Field>
+                  {testForm.recencyTestPerformed && (
+                    <>
+                      <Field label="Recency result">
+                        <select value={testForm.recencyResult} onChange={e => setTestForm({ ...testForm, recencyResult: e.target.value })} className={selectCls}>
+                          <option value="">Select...</option>
+                          {recencyResultOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Recency kit lot">
+                        <input type="text" value={testForm.recencyKitLot} onChange={e => setTestForm({ ...testForm, recencyKitLot: e.target.value })} className={inputCls} />
+                      </Field>
+                      <Field label="Recency kit expiry">
+                        <input type="text" value={testForm.recencyKitExpiry} onChange={e => setTestForm({ ...testForm, recencyKitExpiry: e.target.value })} className={inputCls} placeholder="dd/mm/yyyy" />
+                      </Field>
+                    </>
+                  )}
+                  <Field label="Next recommended test date">
+                    <input type="text" value={testForm.nextTestDueDate} onChange={e => setTestForm({ ...testForm, nextTestDueDate: e.target.value })} className={inputCls} placeholder="dd/mm/yyyy" />
+                  </Field>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-white/[0.05]">
+                  <button onClick={() => setWizardStep('post_record')} className="text-sm text-[#5A78A0] hover:text-white transition-colors font-medium">
+                    ← Back
+                  </button>
+                  <button
+                    onClick={() => {
+                      showSuccess('Complete', 'HIV testing encounter fully documented');
+                      setWizardStep('context');
+                      setAlgorithmResult(null);
+                      setTestHistory([]);
+                      resetFormState();
+                      loadTestHistory();
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#00C896] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] transition"
                   >
-                    <div className="flex items-start gap-4">
-                      {(algorithmResult.result || algorithmResult.algorithm_result) === 'positive' ? (
-                        <AlertTriangle className="w-8 h-8 text-red-500 flex-shrink-0" />
-                      ) : (algorithmResult.result || algorithmResult.algorithm_result) === 'negative' ? (
-                        <CheckCircle className="w-8 h-8 text-emerald-500 flex-shrink-0" />
-                      ) : (
-                        <Activity className="w-8 h-8 text-amber-500 flex-shrink-0" />
-                      )}
-                      <div>
-                        <p className="text-sm uppercase tracking-wide text-slate-500">Result</p>
-                        <p className="text-2xl font-bold text-slate-900">
-                          {(algorithmResult.result || algorithmResult.algorithm_result || 'pending').toUpperCase()}
-                        </p>
-                        <p className="mt-1 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          {algorithmResult.source === 'ehr_fallback'
-                            ? 'Source · Basic EHR fallback (CDSS unavailable)'
-                            : 'Source · CDSS HIV algorithm'}
-                        </p>
-                        {(algorithmResult.next_step || algorithmResult.recommendation) && (
-                          <p className="text-sm text-slate-600 mt-2">
-                            {(algorithmResult.result || algorithmResult.algorithm_result) ===
-                            'positive'
-                              ? 'HIV Positive: ensure immediate linkage to HIV care, baseline labs, and partner services.'
-                              : (algorithmResult.result || algorithmResult.algorithm_result) ===
-                                'negative'
-                              ? 'HIV Negative: provide post-test counselling, risk reduction package, and schedule retesting as per guidelines.'
-                              : algorithmResult.next_step || algorithmResult.recommendation}
-                          </p>
-                        )}
-                        {(algorithmResult.result || algorithmResult.algorithm_result) === 'positive' && (
-                          <button
-                            onClick={handleEnrollInCare}
-                            className="mt-4 px-4 py-2 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700"
-                          >
-                            Enroll patient in care
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setShowAlgorithmExplanation((prev) => !prev)}
-                          className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:text-emerald-900"
-                        >
-                          <Shield className="w-4 h-4" />
-                          {showAlgorithmExplanation ? 'Hide CDSS explanation' : 'Ask CDSS why'}
-                        </button>
-                        {showAlgorithmExplanation && (
-                          <div className="mt-3 rounded-xl bg-emerald-50/70 border border-emerald-100 px-4 py-3 text-sm text-emerald-900 space-y-2">
-                            <p className="font-semibold">Why this result?</p>
-                            {algorithmResult.interpretation ? (
-                              <p>{algorithmResult.interpretation}</p>
-                            ) : (
-                              <p>
-                                {(algorithmResult.result || algorithmResult.algorithm_result) === 'positive'
-                                  ? 'The national HIV testing algorithm classified this case as HIV Positive because at least two rapid tests in this episode were reactive/positive.'
-                                  : (algorithmResult.result || algorithmResult.algorithm_result) === 'negative'
-                                  ? 'The national HIV testing algorithm classified this case as HIV Negative based on a non-reactive screening test or a consistent series of non-reactive tests.'
-                                  : (algorithmResult.result || algorithmResult.algorithm_result) === 'indeterminate'
-                                  ? 'The recorded rapid test results are discordant or incomplete, so the algorithm could not reach a final HIV status. Continue the national testing algorithm or arrange further testing.'
-                                  : 'A detailed CDSS explanation is not available for this result, but the decision shown above comes from the national HIV testing algorithm.'}
+                    <CheckCircle className="w-4 h-4" />
+                    Complete Encounter
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Testing History ── */}
+          {historyWithParsed.length > 0 && (
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.05]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FF7A40]/15 border border-[#FF7A40]/25">
+                  <Calendar className="w-4 h-4 text-[#FF7A40]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Testing Timeline</h3>
+                  <p className="text-[11px] text-[#5A78A0]">HIV &amp; STI history for this patient</p>
+                </div>
+              </div>
+              <div className="p-5 space-y-2.5">
+                {(() => {
+                  const now = new Date();
+                  const overdueCutoff = new Date(now);
+                  overdueCutoff.setDate(overdueCutoff.getDate() - cdssConfig.thresholds.testingOverdueDaysGrace);
+                  return historyWithParsed.map((test: any) => {
+                    const isPositive = test.test_result === 'positive' || test.test_result === 'reactive' || test.algorithm_result === 'positive';
+                    const nextDueDate = test.next_test_due_date ? new Date(test.next_test_due_date) : null;
+                    const isOverdue = nextDueDate !== null && nextDueDate < overdueCutoff && !isPositive;
+                    const stageLabel = testStageLookup[test.test_stage] || test.test_stage || '—';
+                    return (
+                      <div key={test.id} className={`rounded-xl border px-4 py-3 ${
+                        isPositive ? 'border-[#FF4D6A]/25 bg-[#FF4D6A]/[0.05]'
+                        : isOverdue ? 'border-[#FF7A40]/25 bg-[#FF7A40]/[0.04]'
+                        : 'border-white/[0.06] bg-white/[0.02]'
+                      }`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-semibold text-white truncate">{test.test_kit_name || '—'}</p>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                isPositive ? 'bg-[#FF4D6A]/15 text-[#FF4D6A] border border-[#FF4D6A]/25'
+                                : test.test_result === 'non_reactive' || test.test_result === 'negative'
+                                ? 'bg-[#00C896]/10 text-[#00C896] border border-[#00C896]/20'
+                                : 'bg-[#FF7A40]/10 text-[#FF7A40] border border-[#FF7A40]/20'
+                              }`}>
+                                {test.test_result}
+                              </span>
+                            </div>
+                            <p className="text-xs text-[#5A78A0] mt-0.5">
+                              {formatDateToDDMMYYYY(test.test_date)} · {stageLabel} · {testingReasonLookup[test.testing_reason] || test.testing_reason || '—'}
+                            </p>
+                            {isPositive && <p className="text-xs font-semibold text-[#FF4D6A] mt-1">{cdssConfig.messages.testingTimelinePositive}</p>}
+                            {isOverdue && <p className="text-xs font-semibold text-[#FF7A40] mt-1">{cdssConfig.messages.testingTimelineOverduePrefix} {formatDateToDDMMYYYY(test.next_test_due_date)}</p>}
+                            {test.follow_up_actions?.length > 0 && (
+                              <p className="text-[11px] text-[#5A78A0] mt-1">Follow-up: {test.follow_up_actions.join(', ')}</p>
+                            )}
+                            {test.sti_tests?.length > 0 && (
+                              <p className="text-[11px] text-[#FF7A40] mt-0.5">
+                                STI: {test.sti_tests.map((s: any) => `${s.infection_type} (${s.result})`).join(', ')}
                               </p>
                             )}
-                            {Array.isArray(algorithmResult.algorithm_steps) &&
-                              algorithmResult.algorithm_steps.length > 0 && (
-                                <div>
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 mb-1">
-                                    Key steps considered
-                                  </p>
-                                  <ul className="text-xs list-disc list-inside space-y-0.5">
-                                    {algorithmResult.algorithm_steps.slice(0, 3).map((step: any, idx: number) => (
-                                      <li key={idx}>
-                                        {step.test_kit && (
-                                          <span className="font-semibold">{step.test_kit}: </span>
-                                        )}
-                                        {step.step_result || step.test_result}
-                                      </li>
-                                    ))}
-                                    {algorithmResult.algorithm_steps.length > 3 && (
-                                      <li>…plus additional checks in the national algorithm.</li>
-                                    )}
-                                  </ul>
-                                </div>
-                              )}
                           </div>
-                        )}
+                          {test.algorithm_result && (
+                            <span className={`shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                              test.algorithm_result === 'positive' ? 'bg-[#FF4D6A]/10 text-[#FF4D6A] border-[#FF4D6A]/25'
+                              : test.algorithm_result === 'negative' ? 'bg-[#00C896]/10 text-[#00C896] border-[#00C896]/25'
+                              : 'bg-[#FF7A40]/10 text-[#FF7A40] border-[#FF7A40]/25'
+                            }`}>
+                              {test.algorithm_result}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </SectionCard>
-                )}
-
-                {historyWithParsed.length > 0 && (
-                  <SectionCard
-                    title="Testing timeline"
-                    icon={<Calendar className="w-5 h-5" />}
-                    description="Most recent HIV & STI encounters (latest first)."
-                  >
-                    <div className="space-y-3">
-                      {(() => {
-                        const now = new Date();
-                        const overdueCutoff = new Date(now);
-                        overdueCutoff.setDate(
-                          overdueCutoff.getDate() - cdssConfig.thresholds.testingOverdueDaysGrace,
-                        );
-
-                        return historyWithParsed.map((test: any) => {
-                          const isPositive =
-                            test.test_result === 'positive' ||
-                            test.test_result === 'reactive' ||
-                            test.algorithm_result === 'positive';
-                          const nextDueDate = test.next_test_due_date ? new Date(test.next_test_due_date) : null;
-                          const isOverdue =
-                            nextDueDate !== null && nextDueDate < overdueCutoff && !isPositive;
-
-                          return (
-                            <div
-                              key={test.id}
-                              className={`border rounded-2xl px-4 py-3 ${
-                                isPositive
-                                  ? 'border-red-200 bg-red-50/60'
-                                  : isOverdue
-                                  ? 'border-amber-200 bg-amber-50/60'
-                                  : 'border-slate-200 bg-white'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-semibold text-slate-900">{test.test_kit_name}</p>
-                                  <p className="text-sm text-slate-500">
-                                    {formatDateToDDMMYYYY(test.test_date)} ·{' '}
-                                    <span
-                                      className={`font-medium ${
-                                        isPositive ? 'text-red-700' : 'text-slate-700'
-                                      }`}
-                                    >
-                                      {test.test_result}
-                                    </span>
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    {testingReasonLookup[test.testing_reason] ||
-                                      test.testing_reason ||
-                                      '—'}{' '}
-                                    · Step: {testStageLookup[test.test_stage] || test.test_stage}
-                                  </p>
-                                  {isPositive && (
-                                    <p className="mt-1 text-xs font-semibold text-red-700">
-                                      {cdssConfig.messages.testingTimelinePositive}
-                                    </p>
-                                  )}
-                                  {isOverdue && (
-                                    <p className="mt-1 text-xs font-semibold text-amber-700">
-                                      {cdssConfig.messages.testingTimelineOverduePrefix}{' '}
-                                      {formatDateToDDMMYYYY(test.next_test_due_date)}.
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col items-end gap-2">
-                                  {test.algorithm_result && (
-                                    <span
-                                      className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                                        test.algorithm_result === 'positive'
-                                          ? 'bg-red-50 text-red-700 border border-red-100'
-                                          : test.algorithm_result === 'negative'
-                                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                          : 'bg-amber-50 text-amber-700 border border-amber-100'
-                                      }`}
-                                    >
-                                      {test.algorithm_result}
-                                    </span>
-                                  )}
-                                  {test.next_test_due_date && !isPositive && (
-                                    <span className="text-[11px] text-slate-500">
-                                      Next test: {formatDateToDDMMYYYY(test.next_test_due_date)}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              {test.follow_up_actions && test.follow_up_actions.length > 0 && (
-                                <p className="text-xs text-slate-600 mt-2">
-                                  Follow-up: {test.follow_up_actions.join(', ')}
-                                </p>
-                              )}
-                              {test.sti_tests && test.sti_tests.length > 0 && (
-                                <p className="text-xs text-rose-600 mt-1">
-                                  STI screens:{' '}
-                                  {test.sti_tests
-                                    .map((sti: any) => `${sti.infection_type} (${sti.result})`)
-                                    .join(', ')}
-                                </p>
-                              )}
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </SectionCard>
-                )}
+                    );
+                  });
+                })()}
               </div>
-            )}
-          </div>
-        )}
-
-      </SectionCard>
+            </div>
+          )}
+        </>
+      )}
 
       {showEnrollmentModal && selectedPatient && (
         <HIVEnrollmentModal
           patientId={selectedPatient.id}
           patientName={`${selectedPatient.first_name || selectedPatient.firstName} ${selectedPatient.last_name || selectedPatient.lastName}`}
-          patientAge={
-            selectedPatient.date_of_birth || selectedPatient.dateOfBirth
-              ? Math.floor(
-                  (new Date().getTime() -
-                    new Date(selectedPatient.date_of_birth || selectedPatient.dateOfBirth).getTime()) /
-                    (365.25 * 24 * 60 * 60 * 1000),
-                )
-              : undefined
-          }
+          patientAge={selectedPatient.date_of_birth || selectedPatient.dateOfBirth
+            ? Math.floor((new Date().getTime() - new Date(selectedPatient.date_of_birth || selectedPatient.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+            : undefined}
           patientSex={selectedPatient.gender}
           initialHivTest={enrollmentSeedTest || undefined}
           onClose={() => setShowEnrollmentModal(false)}
-          onSuccess={() => {
-            setShowEnrollmentModal(false);
-            loadTestHistory();
-          }}
+          onSuccess={() => { setShowEnrollmentModal(false); loadTestHistory(); }}
           tenantSlug={tenantSlug}
         />
       )}

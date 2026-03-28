@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Camera, AlertCircle, CreditCard, Brain, Search, ChevronDown, ChevronUp } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { X, Camera, AlertCircle, CreditCard, Brain, Search, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { AiOutputWrapper } from './AiOutputWrapper';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import {
   buildSharedContextTags,
   getImagingOrderDuplicateGuard,
   getImagingOrderPrefill,
 } from '../services/doctorContextAdapter';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface Modality {
   id: string;
@@ -59,9 +61,12 @@ export default function ImagingOrderModal({
   const [loading, setLoading] = useState(false);
   const [orderConcept, setOrderConcept] = useState<SnomedConcept | null>(null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+  const [aiReview, setAiReview] = useState<any | null>(null);
+  const [appropriateness, setAppropriateness] = useState<any | null>(null);
   const [selectedPatientContext, setSelectedPatientContext] = useState<any>(null);
   const [loadingPatientContext, setLoadingPatientContext] = useState(false);
   const { showSuccess, showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
 
   const applyContextPrefill = useCallback((context: any) => {
     const prefill = getImagingOrderPrefill(context);
@@ -167,6 +172,26 @@ export default function ImagingOrderModal({
     void loadSelectedPatientContext();
   }, [loadSelectedPatientContext]);
 
+  // Pre-submission appropriateness check (debounced 800ms)
+  useEffect(() => {
+    if (!selectedModality || !clinicalIndication || clinicalIndication.length < 10) {
+      setAppropriateness(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const res = await cdssApi.checkImagingAppropriateness({
+          modality: modalities.find(m => m.id === selectedModality)?.modality_code ?? selectedModality,
+          study_type: selectedStudyType?.study_name ?? selectedModality,
+          clinical_indication: clinicalIndication,
+          diagnoses: suspectedDiagnosis ? [suspectedDiagnosis] : [],
+        }, token, tenantSlug);
+        setAppropriateness((res as any).data);
+      } catch { /* non-blocking */ }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [selectedModality, selectedStudyType, clinicalIndication, suspectedDiagnosis]);
+
   const selectedPatientContextTags = useMemo(
     () => buildSharedContextTags(selectedPatientContext),
     [selectedPatientContext],
@@ -245,7 +270,13 @@ export default function ImagingOrderModal({
       suspectedDiagnosis,
     });
     if (duplicatePrompt) {
-      const shouldProceed = window.confirm(duplicatePrompt.message);
+      const shouldProceed = await confirm({
+        title: 'Potential Duplicate Imaging Order',
+        message: duplicatePrompt.message,
+        confirmText: 'Proceed Anyway',
+        cancelText: 'Review Order',
+        type: 'warning',
+      });
       if (!shouldProceed) {
         return;
       }
@@ -268,6 +299,7 @@ export default function ImagingOrderModal({
         snomedDefinitionStatus: orderConcept.definitionStatus,
       });
       const insights = response.data?.cdssInsights ?? response.data?.cdss_insights ?? null;
+      const review = response.data?.aiReview ?? null;
 
       const costMessage =
         selectedStudyType.cost != null && Number(selectedStudyType.cost) > 0
@@ -278,7 +310,8 @@ export default function ImagingOrderModal({
       showSuccess(`${selectedStudyType.study_name} order placed.${costMessage}`, '');
       onSuccess?.();
       setCdssInsights(insights);
-      if (!insights) {
+      setAiReview(review);
+      if (!insights && !review) {
         onClose();
       }
     } catch (error) {
@@ -290,7 +323,9 @@ export default function ImagingOrderModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <>
+      {Dialog}
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6">
@@ -377,6 +412,35 @@ export default function ImagingOrderModal({
                     ))}
                   </ul>
                 </div>
+              )}
+            </div>
+          )}
+
+          {aiReview && (
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-sky-600 rounded-xl">
+                  <Brain className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Radiology Order Review</p>
+                  <p className="text-xs text-slate-500">
+                    Persisted appropriateness and protocol guidance for this imaging order.
+                  </p>
+                </div>
+              </div>
+              <div className="text-xs text-slate-700">
+                <span className="font-semibold uppercase tracking-wide">
+                  {String(aiReview.appropriatenessStatus || 'needs_context').replace(/_/g, ' ')}
+                </span>
+              </div>
+              <p className="text-sm text-slate-700">{aiReview.rationale}</p>
+              {Array.isArray(aiReview.blockingIssues) && aiReview.blockingIssues.length > 0 && (
+                <ul className="text-xs text-slate-700 list-disc list-inside space-y-1">
+                  {aiReview.blockingIssues.slice(0, 3).map((issue: any, idx: number) => (
+                    <li key={`img-review-issue-${idx}`}>{issue?.message || issue?.code}</li>
+                  ))}
+                </ul>
               )}
             </div>
           )}
@@ -650,6 +714,32 @@ export default function ImagingOrderModal({
               {selectedStudyType && `Selected: ${selectedStudyType.study_name}`}
             </div>
             <div className="flex space-x-3">
+              {/* Pre-submission appropriateness result */}
+              {appropriateness && (
+                <div className="flex-1 mr-4">
+                  <AiOutputWrapper
+                    label="Imaging Appropriateness"
+                    confidence={appropriateness.confidence}
+                    abstained={appropriateness.abstained}
+                    model_id={appropriateness.model_id}
+                    citations={appropriateness.citations}
+                    compact
+                  >
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {(appropriateness.acr_score ?? 0) >= 7
+                        ? <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                        : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                      <span className={`font-semibold capitalize ${(appropriateness.acr_score ?? 0) >= 7 ? 'text-green-700' : (appropriateness.acr_score ?? 0) >= 4 ? 'text-amber-700' : 'text-red-700'}`}>
+                        ACR {appropriateness.acr_score}/9 — {(appropriateness.appropriateness_status ?? '').replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    {(appropriateness.blocking_issues ?? []).map((issue: string, i: number) => (
+                      <p key={i} className="text-[10px] text-amber-700 mt-0.5">{issue}</p>
+                    ))}
+                  </AiOutputWrapper>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={onClose}
@@ -679,6 +769,7 @@ export default function ImagingOrderModal({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

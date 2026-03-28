@@ -2,10 +2,55 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { DataSource } from 'typeorm';
 import { Not, In } from 'typeorm';
 import { EDVisit } from '../entities/ed-visit.entity';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class EDService {
   private readonly logger = new Logger(EDService.name);
+
+  constructor(private readonly cdssService: CdssService) {}
+
+  private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
+    const [row] = await tenantDb.query(`SELECT to_regclass($1) as table_name`, [`public.${tableName}`]);
+    return Boolean(row?.table_name);
+  }
+
+  private async ensureEDVisitsTableForWrite(tenantDb: DataSource): Promise<void> {
+    if (await this.hasTable(tenantDb, 'ed_visits')) {
+      return;
+    }
+
+    throw new BadRequestException(
+      'Emergency Department schema is not initialized for this tenant. Please run tenant ED setup before creating ED visits.',
+    );
+  }
+
+  private async ensureEDTriageTableForWrite(tenantDb: DataSource): Promise<void> {
+    if (await this.hasTable(tenantDb, 'ed_triage_assessments')) {
+      return;
+    }
+
+    throw new BadRequestException(
+      'Emergency Department triage schema is not initialized for this tenant. Please run tenant ED setup before triage actions.',
+    );
+  }
+
+  private getEmptyMetrics() {
+    return {
+      total_visits_today: 0,
+      current_census: 0,
+      average_wait_time_minutes: 0,
+      average_door_to_provider_minutes: 0,
+      lwbs_count: 0,
+      lwbs_rate: 0,
+      admission_rate: 0,
+      esi_level_1: 0,
+      esi_level_2: 0,
+      esi_level_3: 0,
+      esi_level_4: 0,
+      esi_level_5: 0,
+    };
+  }
 
   private async generateEDVisitNumber(tenantDb: DataSource): Promise<string> {
     const [result] = await tenantDb.query(
@@ -29,6 +74,8 @@ export class EDService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<EDVisit> {
+    await this.ensureEDVisitsTableForWrite(tenantDb);
+
     const repository = tenantDb.getRepository(EDVisit);
 
     const edVisitNumber = await this.generateEDVisitNumber(tenantDb);
@@ -60,6 +107,9 @@ export class EDService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<EDVisit> {
+    await this.ensureEDVisitsTableForWrite(tenantDb);
+    await this.ensureEDTriageTableForWrite(tenantDb);
+
     const repository = tenantDb.getRepository(EDVisit);
     const visit = await repository.findOne({ where: { id: visitId } });
 
@@ -110,6 +160,36 @@ export class EDService {
 
     this.logger.log(`ED patient triaged: ${visit.edVisitNumber}, ESI Level ${triageData.triageLevel}`);
 
+    // Fire-and-forget CDSS AI triage enrichment — NEWS2 scoring + diagnosis assist
+    this.cdssService.analyzeNurseTriage({
+      patientId: visit.patientId,
+      chiefComplaint: visit.chiefComplaint,
+      symptoms: triageData.symptoms || [],
+      vitals: {
+        temperature: triageData.vitalSigns?.temperature,
+        heartRate: triageData.vitalSigns?.heartRate,
+        respiratoryRate: triageData.vitalSigns?.respiratoryRate,
+        systolicBp: triageData.vitalSigns?.bloodPressureSystolic,
+        diastolicBp: triageData.vitalSigns?.bloodPressureDiastolic,
+        spo2: triageData.vitalSigns?.oxygenSaturation,
+        gcs: triageData.vitalSigns?.gcs,
+      },
+      esiLevel: triageData.triageLevel,
+      context: 'emergency_triage',
+      specialty: 'acute_care',
+      module: 'emergency_triage',
+    }).then((result: any) => {
+      const aiEsi = result?.recommended_esi || result?.triage_level;
+      if (aiEsi && Number(aiEsi) < triageData.triageLevel) {
+        // CDSS suggests higher acuity than the assigned ESI — log for clinician review
+        this.logger.warn(`[ED] CDSS suggests ESI ${aiEsi} (higher acuity) vs assigned ESI ${triageData.triageLevel} for visit ${visitId}`);
+        tenantDb.query(
+          `UPDATE ed_visits SET ai_triage_flag = true, ai_triage_note = $2 WHERE id = $1`,
+          [visitId, `CDSS recommended ESI ${aiEsi}: ${result?.rationale || result?.summary || ''}`],
+        ).catch(() => {});
+      }
+    }).catch((e: any) => this.logger.warn(`[ED] CDSS triage enrichment failed: ${e?.message}`));
+
     return updated;
   }
 
@@ -134,6 +214,11 @@ export class EDService {
   ];
 
   async getEDTrackingBoard(tenantDb: DataSource): Promise<EDVisit[]> {
+    if (!(await this.hasTable(tenantDb, 'ed_visits'))) {
+      this.logger.warn('ED tracking requested but ed_visits table is missing for this tenant. Returning empty board.');
+      return [];
+    }
+
     const repository = tenantDb.getRepository(EDVisit);
     return await repository.find({
       where: {
@@ -150,6 +235,8 @@ export class EDService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<EDVisit> {
+    await this.ensureEDVisitsTableForWrite(tenantDb);
+
     const repository = tenantDb.getRepository(EDVisit);
     const visit = await repository.findOne({ where: { id: visitId } });
 
@@ -191,6 +278,8 @@ export class EDService {
     },
     userId?: string,
   ): Promise<EDVisit> {
+    await this.ensureEDVisitsTableForWrite(tenantDb);
+
     const repository = tenantDb.getRepository(EDVisit);
     const visit = await repository.findOne({ where: { id: visitId }, relations: ['patient'] });
     if (!visit) {
@@ -241,6 +330,11 @@ export class EDService {
   }
 
   async getEDMetrics(date: Date, tenantDb: DataSource): Promise<any> {
+    if (!(await this.hasTable(tenantDb, 'ed_visits'))) {
+      this.logger.warn('ED metrics requested but ed_visits table is missing for this tenant. Returning empty metrics.');
+      return this.getEmptyMetrics();
+    }
+
     const [dayRow] = await tenantDb.query(
       `
       SELECT 
@@ -289,4 +383,3 @@ export class EDService {
     };
   }
 }
-

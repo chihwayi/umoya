@@ -61,6 +61,17 @@ export class NurseWorklistService {
     }
   }
 
+  private async safeGetHivEnrollments(tenantDb: DataSource) {
+    try {
+      return await this.hivService.getEnrollments({ status: 'active' }, tenantDb);
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+      return { enrollments: [] };
+    }
+  }
+
   private getWorkflowRank(status?: string | null) {
     switch (String(status || '').toLowerCase()) {
       case 'completed':
@@ -116,6 +127,62 @@ export class NurseWorklistService {
       return null;
     }
     return normalized.toLowerCase().replace(/[\s-]+/g, '_');
+  }
+
+  private isDoctorSyncCandidate(item: any) {
+    const destinationRole = String(item?.destination_role || '').toLowerCase();
+    const doctorSyncStatus = String(item?.doctor_sync_status || '').toLowerCase();
+    const itemType = String(item?.item_type || '').toLowerCase();
+    const moduleKey = this.normalizeModuleKey(item?.module);
+
+    if (destinationRole === 'doctor') {
+      return true;
+    }
+
+    if (
+      doctorSyncStatus.includes('doctor') ||
+      doctorSyncStatus === 'nurse_handoff_pending' ||
+      doctorSyncStatus === 'awaiting_doctor_review'
+    ) {
+      return true;
+    }
+
+    return (
+      itemType === 'nurse_handoff_risk' ||
+      itemType === 'medication_administration_followup' ||
+      itemType === 'lab_critical_alert_followup' ||
+      itemType === 'imaging_report_followup' ||
+      moduleKey === 'ed' ||
+      moduleKey === 'sepsis'
+    );
+  }
+
+  private classifyDoctorSyncFocus(item: any) {
+    const itemType = String(item?.item_type || '').toLowerCase();
+    const moduleKey = this.normalizeModuleKey(item?.module);
+
+    if (itemType === 'nurse_handoff_risk') {
+      return 'handoff';
+    }
+    if (
+      itemType === 'lab_critical_alert_followup' ||
+      itemType === 'imaging_report_followup' ||
+      moduleKey === 'lab' ||
+      moduleKey === 'imaging'
+    ) {
+      return 'critical_results';
+    }
+    if (moduleKey === 'ed' || moduleKey === 'sepsis') {
+      return 'triage';
+    }
+    if (
+      itemType === 'medication_administration_followup' ||
+      moduleKey === 'pharmacy' ||
+      moduleKey === 'hiv'
+    ) {
+      return 'orders';
+    }
+    return 'coordination';
   }
 
   private readContextValue(context: Record<string, any>, keys: string[]) {
@@ -3830,7 +3897,8 @@ export class NurseWorklistService {
         ORDER BY facility_name ASC
         `,
       ),
-      tenantDb.query(
+      this.safeQuery(
+        tenantDb,
         `
         SELECT
           t.id,
@@ -3888,7 +3956,7 @@ export class NurseWorklistService {
         LIMIT 50
         `,
       ),
-      this.hivService.getEnrollments({ status: 'active' }, tenantDb),
+      this.safeGetHivEnrollments(tenantDb),
       tenantDb.query(
         `
         SELECT
@@ -5765,6 +5833,67 @@ export class NurseWorklistService {
         handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
         medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
       },
+    };
+  }
+
+  async getDoctorSynchronizationFeed(
+    tenantDb: DataSource,
+    options?: {
+      focus?: string;
+      includeAcknowledged?: boolean;
+    },
+  ) {
+    const feed = await this.getCrossModuleEscalationFeed(tenantDb);
+    const requestedFocus = this.normalizeText(options?.focus)?.toLowerCase() || 'all';
+    const includeAcknowledged = options?.includeAcknowledged === true;
+
+    const items = (Array.isArray(feed?.items) ? feed.items : [])
+      .filter((item: any) => this.isDoctorSyncCandidate(item))
+      .map((item: any) => ({
+        ...item,
+        coordination_focus: this.classifyDoctorSyncFocus(item),
+      }))
+      .filter((item: any) => {
+        if (!includeAcknowledged && String(item.workflow_status || '').toLowerCase() === 'acknowledged') {
+          return false;
+        }
+
+        switch (requestedFocus) {
+          case 'handoff':
+          case 'critical_results':
+          case 'triage':
+          case 'orders':
+          case 'coordination':
+            return item.coordination_focus === requestedFocus;
+          default:
+            return true;
+        }
+      });
+
+    const summary = {
+      total: items.length,
+      critical: items.filter((item: any) => item.severity === 'critical').length,
+      high: items.filter((item: any) => item.severity === 'high').length,
+      pending: items.filter((item: any) => String(item.workflow_status || '').toLowerCase() === 'pending').length,
+      acknowledged: items.filter((item: any) => String(item.workflow_status || '').toLowerCase() === 'acknowledged').length,
+      doctorReviewRecommended: items.filter((item: any) =>
+        String(item.doctor_sync_status || '').toLowerCase().includes('doctor_review'),
+      ).length,
+      handoff: items.filter((item: any) => item.coordination_focus === 'handoff').length,
+      critical_results: items.filter((item: any) => item.coordination_focus === 'critical_results').length,
+      triage: items.filter((item: any) => item.coordination_focus === 'triage').length,
+      orders: items.filter((item: any) => item.coordination_focus === 'orders').length,
+      coordination: items.filter((item: any) => item.coordination_focus === 'coordination').length,
+    };
+
+    return {
+      items,
+      summary,
+      filters: {
+        focus: requestedFocus,
+        includeAcknowledged,
+      },
+      generatedAt: new Date().toISOString(),
     };
   }
 
@@ -9192,6 +9321,286 @@ export class NurseWorklistService {
       completedTaskIds: Array.from(completedTaskIds),
       acknowledgedAlertIds: Array.from(acknowledgedAlertIds),
     };
+  }
+
+  async getClinicalEscalationFeed(
+    tenantDb: DataSource,
+    options?: { status?: string; severity?: string; includeCompleted?: boolean; limit?: number },
+  ) {
+    const limit = Math.min(Math.max(Number(options?.limit || 50), 1), 200);
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        cet.id,
+        cet.patient_id,
+        cet.early_warning_score_id,
+        cet.nurse_task_id,
+        cet.source_module,
+        cet.source_reference_id,
+        cet.escalation_type,
+        cet.severity,
+        cet.status,
+        cet.title,
+        cet.summary,
+        cet.recommended_action,
+        cet.due_at,
+        cet.acknowledged_at,
+        cet.completed_at,
+        cet.evidence,
+        cet.metadata,
+        p.first_name,
+        p.last_name,
+        p.patient_number,
+        pews.total_score AS early_warning_total_score,
+        pews.risk_level AS early_warning_risk_level,
+        rma.id AS remote_monitoring_alert_id,
+        rma.alert_type AS remote_monitoring_alert_type,
+        rma.severity AS remote_monitoring_severity
+      FROM clinical_escalation_tasks cet
+      INNER JOIN patients p ON p.id = cet.patient_id
+      LEFT JOIN patient_early_warning_scores pews ON pews.id = cet.early_warning_score_id
+      LEFT JOIN remote_monitoring_alerts rma ON rma.linked_escalation_task_id = cet.id
+      WHERE ($1::text IS NULL OR cet.status = $1)
+        AND ($2::text IS NULL OR cet.severity = $2)
+        AND ($3::boolean = true OR cet.status <> 'completed')
+      ORDER BY
+        CASE lower(cet.severity)
+          WHEN 'critical' THEN 4
+          WHEN 'high' THEN 3
+          WHEN 'medium' THEN 2
+          ELSE 1
+        END DESC,
+        cet.due_at ASC NULLS LAST,
+        cet.created_at DESC
+      LIMIT $4
+      `,
+      [
+        options?.status || null,
+        options?.severity || null,
+        Boolean(options?.includeCompleted),
+        limit,
+      ],
+    );
+
+    const items = rows.map((row: any) => ({
+      id: row.id,
+      patientId: row.patient_id,
+      patientName: [row.first_name, row.last_name].filter(Boolean).join(' '),
+      patientNumber: row.patient_number,
+      sourceModule: row.source_module,
+      sourceReferenceId: row.source_reference_id,
+      escalationType: row.escalation_type,
+      severity: row.severity,
+      status: row.status,
+      title: row.title,
+      summary: row.summary,
+      recommendedAction: row.recommended_action,
+      dueAt: row.due_at,
+      acknowledgedAt: row.acknowledged_at,
+      completedAt: row.completed_at,
+      earlyWarning: row.early_warning_score_id
+        ? {
+            id: row.early_warning_score_id,
+            totalScore: row.early_warning_total_score,
+            riskLevel: row.early_warning_risk_level,
+          }
+        : null,
+      remoteMonitoring: row.remote_monitoring_alert_id
+        ? {
+            alertId: row.remote_monitoring_alert_id,
+            alertType: row.remote_monitoring_alert_type,
+            severity: row.remote_monitoring_severity,
+          }
+        : null,
+      evidence: row.evidence || {},
+      metadata: row.metadata || {},
+    }));
+
+    return {
+      items,
+      summary: {
+        total: items.length,
+        critical: items.filter((item: any) => String(item.severity).toLowerCase() === 'critical').length,
+        open: items.filter((item: any) => String(item.status).toLowerCase() === 'open').length,
+        acknowledged: items.filter((item: any) => String(item.status).toLowerCase() === 'acknowledged').length,
+        highRiskEarlyWarning: items.filter((item: any) => item.earlyWarning?.riskLevel === 'high').length,
+        remoteMonitoringLinked: items.filter((item: any) => Boolean(item.remoteMonitoring)).length,
+      },
+    };
+  }
+
+  async acknowledgeClinicalEscalation(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    escalationTaskId: string,
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      UPDATE clinical_escalation_tasks
+      SET
+        status = CASE WHEN status = 'completed' THEN status ELSE 'acknowledged' END,
+        acknowledged_by = COALESCE(acknowledged_by, $2),
+        acknowledged_at = COALESCE(acknowledged_at, NOW()),
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, patient_id, early_warning_score_id, nurse_task_id
+      `,
+      [escalationTaskId, user.id],
+    );
+
+    const escalation = rows[0];
+    if (!escalation) {
+      throw new BadRequestException('Clinical escalation task not found');
+    }
+
+    if (escalation.early_warning_score_id) {
+      await this.safeQuery(
+        tenantDb,
+        `
+        UPDATE patient_early_warning_scores
+        SET
+          alert_acknowledged_by = COALESCE(alert_acknowledged_by, $2),
+          alert_acknowledged_at = COALESCE(alert_acknowledged_at, NOW())
+        WHERE id = $1
+        `,
+        [escalation.early_warning_score_id, user.id],
+      );
+    }
+
+    if (escalation.nurse_task_id) {
+      await this.safeQuery(
+        tenantDb,
+        `
+        UPDATE nurse_tasks
+        SET
+          status = CASE WHEN status = 'completed' THEN status ELSE 'in_progress' END,
+          updated_at = NOW()
+        WHERE id = $1
+        `,
+        [escalation.nurse_task_id],
+      );
+    }
+
+    await this.safeQuery(
+      tenantDb,
+      `
+      UPDATE remote_monitoring_alerts
+      SET
+        acknowledged_by = COALESCE(acknowledged_by, $2),
+        acknowledged_at = COALESCE(acknowledged_at, NOW()),
+        status = CASE WHEN status = 'completed' THEN status ELSE 'acknowledged' END,
+        updated_at = NOW()
+      WHERE linked_escalation_task_id = $1
+      `,
+      [escalationTaskId, user.id],
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_ALERT_ACKNOWLEDGE,
+      resourceType: 'clinical_escalation_task',
+      resourceId: escalationTaskId,
+      patientId: escalation.patient_id || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        escalationTaskId,
+        patientId: escalation.patient_id,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return { ok: true, escalationTaskId };
+  }
+
+  async completeClinicalEscalation(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    escalationTaskId: string,
+    payload?: { note?: string },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      UPDATE clinical_escalation_tasks
+      SET
+        status = 'completed',
+        completed_by = $2,
+        completed_at = NOW(),
+        metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('completionNote', $3),
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, patient_id, nurse_task_id
+      `,
+      [escalationTaskId, user.id, payload?.note || null],
+    );
+
+    const escalation = rows[0];
+    if (!escalation) {
+      throw new BadRequestException('Clinical escalation task not found');
+    }
+
+    if (escalation.nurse_task_id) {
+      await this.safeQuery(
+        tenantDb,
+        `
+        UPDATE nurse_tasks
+        SET
+          status = 'completed',
+          completed_by = $2,
+          completed_at = NOW(),
+          completion_notes = COALESCE($3, completion_notes),
+          updated_at = NOW()
+        WHERE id = $1
+        `,
+        [escalation.nurse_task_id, user.id, payload?.note || null],
+      );
+    }
+
+    await this.safeQuery(
+      tenantDb,
+      `
+      UPDATE remote_monitoring_alerts
+      SET
+        status = 'completed',
+        resolved_at = NOW(),
+        updated_at = NOW()
+      WHERE linked_escalation_task_id = $1
+      `,
+      [escalationTaskId],
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_TASK_COMPLETE,
+      resourceType: 'clinical_escalation_task',
+      resourceId: escalationTaskId,
+      patientId: escalation.patient_id || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        escalationTaskId,
+        patientId: escalation.patient_id,
+        completionNote: payload?.note || null,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return { ok: true, escalationTaskId };
   }
 
   async completeTask(

@@ -10,7 +10,7 @@ interface SafetyAlert {
   patientId: string;
   patientName: string;
   patientRoom?: string;
-  alertType: 'allergy' | 'fall_risk' | 'isolation' | 'critical_vitals' | 'medication' | 'lab' | 'general';
+  alertType: 'allergy' | 'fall_risk' | 'isolation' | 'critical_vitals' | 'medication' | 'lab' | 'general' | 'escalation';
   severity: 'low' | 'medium' | 'high' | 'critical';
   title: string;
   description: string;
@@ -46,11 +46,12 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
   const [filteredAlerts, setFilteredAlerts] = useState<SafetyAlert[]>([]);
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
-  const [filterType, setFilterType] = useState<'all' | 'allergy' | 'fall_risk' | 'isolation' | 'critical_vitals' | 'medication' | 'lab' | 'general'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'allergy' | 'fall_risk' | 'isolation' | 'critical_vitals' | 'medication' | 'lab' | 'general' | 'escalation'>('all');
   const [showAcknowledged, setShowAcknowledged] = useState(false);
 
   const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
   const [serverAcknowledgedIds, setServerAcknowledgedIds] = useState<Set<string>>(new Set());
+  const [serverEscalationAlerts, setServerEscalationAlerts] = useState<SafetyAlert[]>([]);
 
   useEffect(() => {
     const loadState = async () => {
@@ -58,8 +59,40 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
         const token = localStorage.getItem('ehr_token');
         const tenantSlug = localStorage.getItem('ehr_tenant_slug');
         if (!token || !tenantSlug) return;
-        const response = await ehrApi.getNurseWorklistState(token, tenantSlug);
-        setServerAcknowledgedIds(new Set<string>(response.data?.acknowledgedAlertIds || []));
+        const [stateResponse, escalationResponse] = await Promise.all([
+          ehrApi.getNurseWorklistState(token, tenantSlug),
+          ehrApi.getClinicalEscalationFeed(token, tenantSlug, { includeCompleted: true, limit: 50 }),
+        ]);
+        setServerAcknowledgedIds(new Set<string>(stateResponse.data?.acknowledgedAlertIds || []));
+        const escalationAlerts = Array.isArray(escalationResponse.data?.items)
+          ? escalationResponse.data.items.map((item: any) => ({
+              id: item.id,
+              patientId: item.patientId,
+              patientName: item.patientName || item.patientNumber || 'Unknown patient',
+              alertType: 'escalation' as const,
+              severity: item.severity || 'medium',
+              title: item.title || 'Clinical escalation',
+              description: item.summary || 'Clinical escalation requires follow-up.',
+              details: item.recommendedAction || undefined,
+              createdAt: item.dueAt || new Date().toISOString(),
+              acknowledgedBy: item.status === 'acknowledged' ? 'clinical_escalation' : undefined,
+              acknowledgedAt: item.acknowledgedAt || undefined,
+              isActive: item.status !== 'completed',
+              requiresAction: item.status !== 'completed',
+              actionRequired: item.recommendedAction || 'Review escalation and complete follow-up.',
+              relatedData: {
+                escalationTaskId: item.id,
+                sourceModule: item.sourceModule,
+                earlyWarning: item.earlyWarning,
+                remoteMonitoring: item.remoteMonitoring,
+              },
+              whyShown: item.sourceModule ? `Raised from ${item.sourceModule.replace(/_/g, ' ')} workflow.` : 'Raised from clinical escalation workflow.',
+              whyNow: item.earlyWarning?.riskLevel
+                ? `Risk level ${item.earlyWarning.riskLevel} requires nurse follow-up.`
+                : 'Escalation remains open for nurse action.',
+            }))
+          : [];
+        setServerEscalationAlerts(escalationAlerts);
       } catch {
       }
     };
@@ -223,15 +256,16 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
         });
       }
 
-      setAlerts(realAlerts);
+      const mergedAlerts = [...realAlerts, ...serverEscalationAlerts];
+      setAlerts(mergedAlerts);
     };
 
-    if (appointments.length > 0) {
+    if (appointments.length > 0 || serverEscalationAlerts.length > 0) {
       generateRealAlerts();
     } else {
       setAlerts([]);
     }
-  }, [appointments, acknowledgedAlertIds, serverAcknowledgedIds, currentUser?.id]);
+  }, [appointments, acknowledgedAlertIds, serverAcknowledgedIds, currentUser?.id, serverEscalationAlerts]);
 
   // Notify parent of alert count changes
   // Use useRef to store the callback to avoid recreating it on every render
@@ -279,6 +313,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
       case 'critical_vitals': return <Heart className="w-5 h-5" />;
       case 'medication': return <Pill className="w-5 h-5" />;
       case 'lab': return <Activity className="w-5 h-5" />;
+      case 'escalation': return <Bell className="w-5 h-5" />;
       default: return <Bell className="w-5 h-5" />;
     }
   };
@@ -309,15 +344,19 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
       const tenantSlug = localStorage.getItem('ehr_tenant_slug');
       if (!token || !tenantSlug) return;
       const alert = alerts.find((a) => a.id === alertId);
-      await ehrApi.acknowledgeNurseAlert(
-        alertId,
-        {
-          patientId: alert?.patientId,
-          context: { alertType: alert?.alertType, severity: alert?.severity },
-        },
-        token,
-        tenantSlug,
-      );
+      if (alert?.alertType === 'escalation' && alert.relatedData?.escalationTaskId) {
+        await ehrApi.acknowledgeClinicalEscalation(alert.relatedData.escalationTaskId, token, tenantSlug);
+      } else {
+        await ehrApi.acknowledgeNurseAlert(
+          alertId,
+          {
+            patientId: alert?.patientId,
+            context: { alertType: alert?.alertType, severity: alert?.severity },
+          },
+          token,
+          tenantSlug,
+        );
+      }
       setServerAcknowledgedIds((prev) => {
         const next = new Set(prev);
         next.add(alertId);
@@ -454,6 +493,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
               <option value="critical_vitals">Critical Vitals</option>
               <option value="medication">Medication</option>
               <option value="lab">Lab Results</option>
+              <option value="escalation">Clinical Escalations</option>
               <option value="general">General</option>
             </select>
           </div>

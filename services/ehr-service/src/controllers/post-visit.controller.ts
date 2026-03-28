@@ -90,26 +90,29 @@ export class PostVisitController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    const normalizedStatus = (
-      ['captured', 'processing', 'draft_ready', 'doctor_reviewed', 'published', 'closed'].includes(
-        String(status || '').toLowerCase(),
-      )
-        ? String(status || '').toLowerCase()
-        : undefined
-    ) as
-      | 'captured'
-      | 'processing'
-      | 'draft_ready'
-      | 'doctor_reviewed'
-      | 'published'
-      | 'closed'
-      | undefined;
+    const VALID_STATUSES = ['captured', 'processing', 'draft_ready', 'doctor_reviewed', 'published', 'closed'] as const;
+    const VALID_SOURCE_TYPES = ['in_person', 'telemedicine', 'hybrid'] as const;
 
-    const normalizedSourceType = (
-      ['in_person', 'telemedicine', 'hybrid'].includes(String(sourceType || '').toLowerCase())
-        ? String(sourceType || '').toLowerCase()
-        : undefined
-    ) as 'in_person' | 'telemedicine' | 'hybrid' | undefined;
+    const normalizedStatus = status && VALID_STATUSES.includes(status.toLowerCase() as any)
+      ? (status.toLowerCase() as typeof VALID_STATUSES[number])
+      : undefined;
+
+    const normalizedSourceType = sourceType && VALID_SOURCE_TYPES.includes(sourceType.toLowerCase() as any)
+      ? (sourceType.toLowerCase() as typeof VALID_SOURCE_TYPES[number])
+      : undefined;
+
+    if (status && !normalizedStatus) {
+      throw new HttpException(
+        `Invalid status '${status}'. Valid values: ${VALID_STATUSES.join(', ')}`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (sourceType && !normalizedSourceType) {
+      throw new HttpException(
+        `Invalid sourceType '${sourceType}'. Valid values: ${VALID_SOURCE_TYPES.join(', ')}`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
     const includePublishedOnly = ['1', 'true', 'yes', 'published'].includes(
       String(publishedOnly || '').toLowerCase(),

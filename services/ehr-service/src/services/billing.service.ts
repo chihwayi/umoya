@@ -17,6 +17,8 @@ export class BillingService {
     const totalAmount = subtotal + (createDto.taxAmount || 0) - (createDto.discountAmount || 0);
     
     // Create bill without items (items column doesn't exist in billing table)
+    const resolvedBillDate = createDto.billDate ? new Date(createDto.billDate) : new Date();
+
     const billData: any = {
       billNumber,
       patientId: createDto.patientId,
@@ -26,7 +28,8 @@ export class BillingService {
       discountAmount: createDto.discountAmount || 0,
       totalAmount,
       status: createDto.status || BillStatus.PENDING,
-      billDate: createDto.billDate ? new Date(createDto.billDate) : new Date(),
+      billDate: resolvedBillDate,
+      invoiceDate: resolvedBillDate,
       dueDate: createDto.dueDate ? new Date(createDto.dueDate) : null,
       notes: createDto.notes || null,
       createdById: createdById,

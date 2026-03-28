@@ -34,7 +34,11 @@ interface Appointment {
   notes: string;
 }
 
-const DoctorAppointmentManagement: React.FC = () => {
+interface DoctorAppointmentManagementProps {
+  embedded?: boolean;
+}
+
+const DoctorAppointmentManagement: React.FC<DoctorAppointmentManagementProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
@@ -173,42 +177,43 @@ const DoctorAppointmentManagement: React.FC = () => {
   const stats = getAppointmentStats();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-slate-200/50 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            <div className="flex items-center gap-6">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-                className="p-3 hover:bg-slate-100 rounded-xl transition-all duration-200 group"
-              >
-                <ArrowLeft className="w-5 h-5 text-slate-600 group-hover:text-slate-900 transition-colors" />
-              </button>
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
-                  <Calendar className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-slate-900">My Appointments</h1>
-                  <p className="text-slate-600 font-medium">Manage your patient appointments</p>
+    <div className={embedded ? '' : 'min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'}>
+      {!embedded && (
+        <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-slate-200/50 sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-20">
+              <div className="flex items-center gap-6">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
+                  className="p-3 hover:bg-slate-100 rounded-xl transition-all duration-200 group"
+                >
+                  <ArrowLeft className="w-5 h-5 text-slate-600 group-hover:text-slate-900 transition-colors" />
+                </button>
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
+                    <Calendar className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-slate-900">My Appointments</h1>
+                    <p className="text-slate-600 font-medium">Manage your patient appointments</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={fetchAppointments}
-                disabled={loading}
-                className="p-3 hover:bg-slate-100 rounded-xl transition-all duration-200 disabled:opacity-50 group"
-              >
-                <RefreshCw className={`w-5 h-5 text-slate-600 group-hover:text-slate-900 transition-colors ${loading ? 'animate-spin' : ''}`} />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={fetchAppointments}
+                  disabled={loading}
+                  className="p-3 hover:bg-slate-100 rounded-xl transition-all duration-200 disabled:opacity-50 group"
+                >
+                  <RefreshCw className={`w-5 h-5 text-slate-600 group-hover:text-slate-900 transition-colors ${loading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <div className={embedded ? 'space-y-8' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8'}>
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6">
           <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all duration-300">

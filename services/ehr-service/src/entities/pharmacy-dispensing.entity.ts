@@ -60,6 +60,15 @@ export class PharmacyDispensing {
   @Column({ name: 'bill_id', type: 'uuid', nullable: true })
   billId?: string;
 
+  @Column({ name: 'ai_review_acknowledged_at', type: 'timestamptz', nullable: true })
+  aiReviewAcknowledgedAt?: Date | null;
+
+  @Column({ name: 'ai_review_acknowledged_by', type: 'uuid', nullable: true })
+  aiReviewAcknowledgedBy?: string | null;
+
+  @Column({ name: 'ai_review_summary', type: 'jsonb', default: () => "'{}'::jsonb" })
+  aiReviewSummary: Record<string, any>;
+
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
@@ -86,5 +95,4 @@ export class PharmacyDispensing {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
-
 

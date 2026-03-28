@@ -1,6 +1,20 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import { Tenant, CreateTenantRequest, UpdateTenantRequest, TenantUser, CreateTenantUserRequest, SystemStats, TenantReport } from '../types';
+import {
+  Tenant,
+  CreateTenantRequest,
+  UpdateTenantRequest,
+  TenantUser,
+  CreateTenantUserRequest,
+  SystemStats,
+  TenantReport,
+  TenantDhis2ConfigView,
+  TenantDhis2ConfigPayload,
+  TenantSubscriptionPayment,
+  TenantSubscriptionPaymentProvider,
+  DemoAccessRequest,
+  DemoAccessRequestStatus,
+} from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -178,6 +192,87 @@ export const tenantAPI = {
     return response.data;
   },
 
+  getTenantDhis2Config: async (tenantId: string): Promise<TenantDhis2ConfigView | { configured: false }> => {
+    const response = await api.get(`/tenants/${tenantId}/dhis2-config`);
+    return response.data;
+  },
+
+  upsertTenantDhis2Config: async (
+    tenantId: string,
+    payload: TenantDhis2ConfigPayload,
+  ): Promise<TenantDhis2ConfigView> => {
+    const response = await api.put(`/tenants/${tenantId}/dhis2-config`, payload);
+    return response.data;
+  },
+
+  clearTenantDhis2Config: async (tenantId: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/tenants/${tenantId}/dhis2-config`);
+    return response.data;
+  },
+
+  getSubscriptionPaymentProviders: async (tenantId: string): Promise<TenantSubscriptionPaymentProvider[]> => {
+    const response = await api.get(`/tenants/${tenantId}/subscription-payments/providers`);
+    return response.data;
+  },
+
+  getSubscriptionPayments: async (tenantId: string, limit = 20): Promise<TenantSubscriptionPayment[]> => {
+    const response = await api.get(`/tenants/${tenantId}/subscription-payments`, {
+      params: { limit },
+    });
+    return response.data;
+  },
+
+  createSubscriptionPaymentSession: async (
+    tenantId: string,
+    payload: {
+      provider: string;
+      amount?: number;
+      currency?: string;
+      monthsToExtend?: number;
+      successUrl?: string;
+      cancelUrl?: string;
+      metadata?: Record<string, any>;
+    },
+  ): Promise<TenantSubscriptionPayment> => {
+    const response = await api.post(`/tenants/${tenantId}/subscription-payments/session`, payload);
+    return response.data;
+  },
+
+  confirmSubscriptionPayment: async (
+    tenantId: string,
+    paymentId: string,
+    payload: {
+      status: 'successful' | 'failed' | 'cancelled';
+      externalPaymentId?: string;
+      note?: string;
+    },
+  ): Promise<{
+    payment: TenantSubscriptionPayment;
+    tenant: {
+      id: string;
+      subscriptionState: string;
+      status: string;
+      billingEndsAt?: string | null;
+      graceEndsAt?: string | null;
+    };
+    billingSummary: any;
+  }> => {
+    const response = await api.post(`/tenants/${tenantId}/subscription-payments/${paymentId}/confirm`, payload);
+    return response.data;
+  },
+
+  runTenantDhis2SyncNow: async (
+    tenantId: string,
+    payload: { retryLimit?: number; includeAlerts?: boolean } = {},
+  ): Promise<any> => {
+    const response = await api.post('/dhis2/sync/run-now', payload, {
+      headers: {
+        'X-Tenant-ID': tenantId,
+      },
+    });
+    return response.data;
+  },
+
   repairAllTenants: async (): Promise<{ message: string; count: number }> => {
     const response = await api.post('/admin/tenants/repair-all');
     return response.data;
@@ -207,7 +302,77 @@ export const analyticsAPI = {
   },
 };
 
+export const demoAccessRequestAPI = {
+  list: async (status?: DemoAccessRequestStatus): Promise<DemoAccessRequest[]> => {
+    const response = await api.get('/demo-access-requests', {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
+  updateStatus: async (
+    id: string,
+    payload: {
+      status: DemoAccessRequestStatus;
+      adminNotes?: string;
+      assignedTenantId?: string;
+      assignedSubdomain?: string;
+    },
+  ): Promise<DemoAccessRequest> => {
+    const response = await api.patch(`/demo-access-requests/${id}/status`, payload);
+    return response.data;
+  },
+
+  provisionTenant: async (id: string): Promise<{ request: DemoAccessRequest; tenant: Tenant }> => {
+    const response = await api.post(`/demo-access-requests/${id}/provision-tenant`);
+    return response.data;
+  },
+};
+
 // Backup API
+export interface BackupSchedule {
+  enabled: boolean;
+  frequency: 'daily';
+  runTime: string;
+  timezone: string;
+  retentionDays: number;
+  lastRunAt: string | null;
+  lastRunStatus: 'never' | 'success' | 'failed';
+  lastError: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuntimeEndpointConfig {
+  tenantServiceUrl: string;
+  ehrServiceUrl: string;
+  cdssServiceUrl: string;
+  medicalAidDemoUrl: string;
+  superAdminWebUrl: string;
+  ehrFrontendUrl: string;
+  ollamaBaseUrl: string;
+  whisperPath: string;
+  ocrPath: string;
+  ollamaTagsPath: string;
+  hasOverrides: boolean;
+  sources: Record<string, 'override' | 'env'>;
+  updatedAt: string;
+}
+
+export interface RuntimeEndpointConfigPayload {
+  tenantServiceUrl?: string | null;
+  ehrServiceUrl?: string | null;
+  cdssServiceUrl?: string | null;
+  medicalAidDemoUrl?: string | null;
+  superAdminWebUrl?: string | null;
+  ehrFrontendUrl?: string | null;
+  ollamaBaseUrl?: string | null;
+  whisperPath?: string | null;
+  ocrPath?: string | null;
+  ollamaTagsPath?: string | null;
+}
+
 export const backupAPI = {
   listBackups: async (): Promise<any[]> => {
     const response = await api.get('/admin/backups');
@@ -227,7 +392,27 @@ export const backupAPI = {
   restoreBackup: async (key: string): Promise<{ message: string }> => {
     const response = await api.post(`/admin/backups/${encodeURIComponent(key)}/restore`);
     return response.data;
-  }
+  },
+
+  getSchedule: async (): Promise<BackupSchedule> => {
+    const response = await api.get('/admin/backups/schedule');
+    return response.data;
+  },
+
+  updateSchedule: async (payload: {
+    enabled?: boolean;
+    runTime?: string;
+    timezone?: string;
+    retentionDays?: number;
+  }): Promise<BackupSchedule> => {
+    const response = await api.put('/admin/backups/schedule', payload);
+    return response.data;
+  },
+
+  runScheduledBackupNow: async (): Promise<{ message: string; backupId: string; nextRunAt: string | null }> => {
+    const response = await api.post('/admin/backups/schedule/run-now');
+    return response.data;
+  },
 };
 
 export const healthAPI = {
@@ -239,15 +424,36 @@ export const healthAPI = {
     const response = await api.post('/admin/system-health/refresh');
     return response.data;
   },
+  getPlatformServices: async () => {
+    const response = await api.get('/admin/platform-services');
+    return response.data;
+  },
+  restartPlatformService: async (serviceId: string) => {
+    const response = await api.post(`/admin/platform-services/${encodeURIComponent(serviceId)}/restart`);
+    return response.data;
+  },
+  runRuntimeTest: async (testId: 'whisper' | 'ocr' | 'ollama') => {
+    const response = await api.post(`/admin/platform-services/tests/${encodeURIComponent(testId)}`);
+    return response.data;
+  },
+  getRuntimeConfig: async (): Promise<RuntimeEndpointConfig> => {
+    const response = await api.get('/admin/runtime-config');
+    return response.data;
+  },
+  updateRuntimeConfig: async (payload: RuntimeEndpointConfigPayload): Promise<RuntimeEndpointConfig> => {
+    const response = await api.put('/admin/runtime-config', payload);
+    return response.data;
+  },
 };
 
 // Terminology API
 export const terminologyAPI = {
-  importFile: async (file: File, type: 'snomed' | 'icd10'): Promise<{ jobId: string; message: string }> => {
+  importFile: async (file: File, type: 'snomed' | 'icd10' | 'icd11', replace = false): Promise<{ jobId: string; message: string }> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', type);
-    
+    formData.append('replace', replace ? 'true' : 'false');
+
     const response = await api.post('/terminology/import/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -266,7 +472,7 @@ export const terminologyAPI = {
     return response.data;
   },
 
-  getStats: async (): Promise<{ snomedConcepts: number; icd10Codes: number }> => {
+  getStats: async (): Promise<{ snomedConcepts: number; icd10Codes: number; icd11Codes: number }> => {
     const response = await api.get('/terminology/import/stats');
     return response.data;
   }
@@ -347,6 +553,12 @@ export const cdssAdminAPI = {
   },
   getIngestJobs: async (limit = 20): Promise<any> => {
     const response = await api.get(`/cdss-admin/admin/ingest/jobs?limit=${limit}`, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  getIngestionHistory: async (limit = 120, query?: string): Promise<any> => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (query && query.trim()) params.set('query', query.trim());
+    const response = await api.get(`/cdss-admin/admin/ingest/history?${params.toString()}`, { headers: { ...getOwnerHeaders() } });
     return response.data;
   },
   getAdminJobs: async (limit = 50, type?: string, status?: string): Promise<any> => {

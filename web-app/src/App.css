@@ -1,3 +1,74 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --mc-bg: #080e1a;
+  --mc-bg-soft: #0b1424;
+  --mc-surface: #0e1829;
+  --mc-surface-alt: #102139;
+  --mc-surface-soft: #13243d;
+  --mc-border: #253a58;
+  --mc-text: #e8f0ff;
+  --mc-muted: #9fb3d3;
+  --mc-accent: #00c896;
+  --mc-accent-strong: #24d9a8;
+  --mc-info: #14b8a6;
+  --mc-warn: #ffb020;
+  --mc-danger: #ff4d6a;
+  --mc-ok: #39d98a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(circle at 12% -10%, rgba(0, 200, 150, 0.18), transparent 34%),
+    radial-gradient(circle at 92% 18%, rgba(20, 184, 166, 0.16), transparent 34%),
+    radial-gradient(circle at 4% 100%, rgba(255, 122, 64, 0.1), transparent 28%),
+    var(--mc-bg);
+  color: var(--mc-text);
+}
+
+a {
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(11, 20, 36, 0.95);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(20, 184, 166, 0.45);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 184, 166, 0.72);
+}
+
+.App {
+  min-height: 100vh;
+  color: var(--mc-text);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--mc-info);
+  outline-offset: 2px;
+}

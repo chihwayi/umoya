@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { MedicalRecord } from '../entities/medical-record.entity';
 import { LabOrder } from '../entities/lab-order.entity';
@@ -8,12 +9,17 @@ import { Prescription } from '../entities/prescription.entity';
 import { Bill } from '../entities/billing.entity';
 import { Patient } from '../entities/patient.entity';
 import { Vitals } from '../entities/vitals.entity';
+import { FinanceService } from './finance.service';
 
 @Injectable()
 export class PatientPortalService {
   private readonly logger = new Logger(PatientPortalService.name);
 
-  constructor(private tenantService: TenantService) {}
+  constructor(
+    private tenantService: TenantService,
+    private readonly cdssService: CdssService,
+    private readonly financeService: FinanceService,
+  ) {}
 
   private async getPatientRepository(tenantId: string): Promise<Repository<Patient>> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
@@ -97,6 +103,7 @@ export class PatientPortalService {
       priorityLevel: apt.priorityLevel || apt.priority_level,
       virtualMeetingUrl: apt.virtualMeetingUrl || apt.virtual_meeting_url,
       isTelehealth: apt.isTelehealth || apt.is_telehealth,
+      isTelemedicine: !!(apt.isTelehealth || apt.is_telehealth),
       feeAmount: apt.feeAmount || apt.fee_amount,
       paymentStatus: apt.paymentStatus || apt.payment_status,
       doctor: apt.doctor_id ? {
@@ -105,6 +112,11 @@ export class PatientPortalService {
         lastName: apt.doctor_last_name,
         specialization: apt.doctor_specialization,
       } : null,
+      // Mobile-friendly flat fields
+      doctorName: apt.doctor_id
+        ? `${apt.doctor_first_name ?? ''} ${apt.doctor_last_name ?? ''}`.trim() || null
+        : null,
+      doctorSpecialty: apt.doctor_specialization ?? null,
     }));
   }
 
@@ -562,6 +574,70 @@ export class PatientPortalService {
       items: bill.items || [],
       dueDate: bill.dueDate,
       notes: bill.notes,
+    };
+  }
+
+  async getPatientBillQuote(patientId: string, billId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const billRepository = connection.getRepository(Bill);
+    const bill = await billRepository.findOne({
+      where: { id: billId },
+      relations: ['patient'],
+    });
+
+    if (!bill) {
+      throw new NotFoundException('Bill not found');
+    }
+
+    await this.verifyPatientAccess(patientId, bill.patientId, tenantId);
+
+    const [transaction] = await connection.query(
+      `
+        SELECT id
+        FROM financial_transactions
+        WHERE source_module = 'billing'
+          AND source_reference_id::text = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [billId],
+    );
+
+    if (transaction?.id) {
+      return this.financeService.generatePatientQuote(connection, transaction.id);
+    }
+
+    const totalCharge = Number(bill.totalAmount || 0);
+    return {
+      id: null,
+      transactionId: null,
+      patientId: bill.patientId,
+      billId: bill.id,
+      appointmentId: bill.appointmentId || null,
+      payerType: 'self',
+      quoteStatus: bill.status === 'paid' ? 'settled' : 'self_pay',
+      totalCharge,
+      estimatedPayerAmount: 0,
+      estimatedPatientResponsibility: bill.status === 'paid' ? 0 : totalCharge,
+      copayAmount: 0,
+      deductibleRemaining: 0,
+      quoteConfidence: 'medium',
+      blockers: [],
+      recommendedNextStep:
+        bill.status === 'paid'
+          ? 'No payment action is required for this bill.'
+          : 'Pay the outstanding patient balance or contact the clinic if you expect insurer coverage.',
+      quotedAt: new Date().toISOString(),
+      quoteData: {
+        sourceSignals: {
+          patientPortalFallback: true,
+          financialTransactionFound: false,
+        },
+      },
     };
   }
 
@@ -1074,6 +1150,18 @@ export class PatientPortalService {
     );
     const latestVitals = latestVitalsResult[0] || null;
 
+    const patientAiFollowupSummaryResult = await connection.query(
+      `SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status IN ('open', 'in_progress'))::int AS active_count,
+          COUNT(*) FILTER (WHERE risk_level IN ('urgent', 'emergency') AND status IN ('open', 'in_progress'))::int AS urgent_count,
+          MIN(due_at) FILTER (WHERE status IN ('open', 'in_progress')) AS next_due_at
+        FROM patient_followup_orchestrations
+        WHERE patient_id = $1`,
+      [patientId],
+    );
+    const patientAiFollowupSummary = patientAiFollowupSummaryResult?.[0] || null;
+
     return {
       summary: {
         appointments: parseInt(appointmentsCount || '0', 10),
@@ -1081,6 +1169,7 @@ export class PatientPortalService {
         medicalRecords: parseInt(recordsCount || '0', 10),
         pendingBills: parseInt(billsCount || '0', 10),
         vitalsRecords: parseInt(vitalsCount || '0', 10),
+        aiFollowups: Number(patientAiFollowupSummary?.active_count || 0),
       },
       upcomingAppointment: upcomingAppointment ? {
         id: upcomingAppointment.id,
@@ -1097,6 +1186,159 @@ export class PatientPortalService {
         oxygenSaturation: latestVitals.oxygen_saturation || latestVitals.oxygenSaturation,
         recordedAt: latestVitals.recorded_at || latestVitals.recordedAt,
       } : null,
+      aiFollowups: {
+        total: Number(patientAiFollowupSummary?.total || 0),
+        activeCount: Number(patientAiFollowupSummary?.active_count || 0),
+        urgentCount: Number(patientAiFollowupSummary?.urgent_count || 0),
+        nextDueAt: patientAiFollowupSummary?.next_due_at || null,
+      },
+    };
+  }
+
+  async getPatientAiFollowups(patientId: string, tenantId: string): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const rows = await connection.query(
+      `SELECT
+          f.id,
+          f.patient_ai_session_id as "patientAiSessionId",
+          f.trigger_type as "triggerType",
+          f.risk_level as "riskLevel",
+          f.status,
+          f.reminder_state as "reminderState",
+          f.next_action as "nextAction",
+          f.unresolved_question as "unresolvedQuestion",
+          f.nonadherence_flag as "nonadherenceFlag",
+          f.missed_followup_flag as "missedFollowupFlag",
+          f.route_back_target as "routeBackTarget",
+          f.due_at as "dueAt",
+          f.last_touched_at as "lastTouchedAt",
+          f.completed_at as "completedAt",
+          f.payload,
+          f.created_at as "createdAt",
+          s.session_type as "sessionType",
+          s.guidance_summary as "guidanceSummary",
+          s.urgency,
+          s.latest_message as "latestMessage",
+          s.latest_reply as "latestReply",
+          s.requires_clinician_follow_up as "requiresClinicianFollowUp"
+        FROM patient_followup_orchestrations f
+        LEFT JOIN patient_ai_sessions s ON s.id = f.patient_ai_session_id
+        WHERE f.patient_id = $1
+        ORDER BY
+          CASE WHEN f.status IN ('open', 'in_progress') THEN 0 ELSE 1 END,
+          CASE WHEN f.risk_level = 'emergency' THEN 0 WHEN f.risk_level = 'urgent' THEN 1 ELSE 2 END,
+          COALESCE(f.due_at, f.created_at) ASC`,
+      [patientId],
+    );
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      patientAiSessionId: row.patientAiSessionId,
+      triggerType: row.triggerType,
+      riskLevel: row.riskLevel,
+      status: row.status,
+      reminderState: row.reminderState,
+      nextAction: row.nextAction,
+      unresolvedQuestion: row.unresolvedQuestion,
+      nonadherenceFlag: row.nonadherenceFlag,
+      missedFollowupFlag: row.missedFollowupFlag,
+      routeBackTarget: row.routeBackTarget,
+      dueAt: row.dueAt,
+      lastTouchedAt: row.lastTouchedAt,
+      completedAt: row.completedAt,
+      payload: row.payload || {},
+      createdAt: row.createdAt,
+      session: {
+        type: row.sessionType || null,
+        guidanceSummary: row.guidanceSummary || null,
+        urgency: row.urgency || null,
+        latestMessage: row.latestMessage || null,
+        latestReply: row.latestReply || null,
+        requiresClinicianFollowUp: row.requiresClinicianFollowUp === true,
+      },
+    }));
+  }
+
+  async updatePatientAiFollowup(
+    patientId: string,
+    tenantId: string,
+    followupId: string,
+    updates: { status?: 'open' | 'in_progress' | 'completed' | 'dismissed'; reminderState?: 'pending' | 'sent' | 'acknowledged' },
+  ): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const [existing] = await connection.query(
+      `SELECT * FROM patient_followup_orchestrations WHERE id = $1 AND patient_id = $2 LIMIT 1`,
+      [followupId, patientId],
+    );
+
+    if (!existing) {
+      throw new NotFoundException('AI follow-up not found');
+    }
+
+    const nextStatus = updates.status || existing.status;
+    const nextReminderState = updates.reminderState || existing.reminder_state;
+
+    const [updated] = await connection.query(
+      `UPDATE patient_followup_orchestrations
+       SET status = $3,
+           reminder_state = $4,
+           last_touched_at = NOW(),
+           completed_at = CASE
+             WHEN $3 = 'completed' AND completed_at IS NULL THEN NOW()
+             WHEN $3 != 'completed' THEN NULL
+             ELSE completed_at
+           END,
+           payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object(
+             'patientPortalLastActionAt', NOW(),
+             'patientPortalLastActionStatus', $3,
+             'patientPortalLastReminderState', $4
+           )
+       WHERE id = $1 AND patient_id = $2
+       RETURNING
+         id,
+         patient_ai_session_id as "patientAiSessionId",
+         trigger_type as "triggerType",
+         risk_level as "riskLevel",
+         status,
+         reminder_state as "reminderState",
+         next_action as "nextAction",
+         unresolved_question as "unresolvedQuestion",
+         nonadherence_flag as "nonadherenceFlag",
+         missed_followup_flag as "missedFollowupFlag",
+         route_back_target as "routeBackTarget",
+         due_at as "dueAt",
+         last_touched_at as "lastTouchedAt",
+         completed_at as "completedAt",
+         payload,
+         created_at as "createdAt"`,
+      [followupId, patientId, nextStatus, nextReminderState],
+    );
+
+    return {
+      id: updated.id,
+      patientAiSessionId: updated.patientAiSessionId,
+      triggerType: updated.triggerType,
+      riskLevel: updated.riskLevel,
+      status: updated.status,
+      reminderState: updated.reminderState,
+      nextAction: updated.nextAction,
+      unresolvedQuestion: updated.unresolvedQuestion,
+      nonadherenceFlag: updated.nonadherenceFlag,
+      missedFollowupFlag: updated.missedFollowupFlag,
+      routeBackTarget: updated.routeBackTarget,
+      dueAt: updated.dueAt,
+      lastTouchedAt: updated.lastTouchedAt,
+      completedAt: updated.completedAt,
+      payload: updated.payload || {},
+      createdAt: updated.createdAt,
     };
   }
 
@@ -1614,5 +1856,129 @@ export class PatientPortalService {
     nextDate.setHours(hours, minutes, 0, 0);
 
     return nextDate;
+  }
+
+  // ── AI Health Insights ────────────────────────────────────────────────────
+
+  /**
+   * GET /patient-portal/patients/:id/ai-insights
+   * Returns an AI-generated health summary with risk assessment and care gaps,
+   * personalised from the patient's latest vitals, active medications, and conditions.
+   * Falls back to a structured static summary when CDSS is unavailable.
+   */
+  async getPatientHealthInsights(patientId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+
+    // Gather context in parallel
+    const [patientRows, vitalsRows, prescriptionRows, conditionRows] = await Promise.all([
+      connection.query(
+        `SELECT date_of_birth, gender, first_name FROM patients WHERE id = $1 LIMIT 1`,
+        [patientId],
+      ).catch(() => []),
+      connection.query(
+        `SELECT blood_pressure_systolic, blood_pressure_diastolic, heart_rate, temperature,
+                oxygen_saturation, weight, height, recorded_at
+         FROM vitals WHERE patient_id = $1 ORDER BY recorded_at DESC LIMIT 1`,
+        [patientId],
+      ).catch(() => []),
+      connection.query(
+        `SELECT medication_name, dosage, frequency FROM prescriptions
+         WHERE patient_id = $1 AND status = 'active' LIMIT 20`,
+        [patientId],
+      ).catch(() => []),
+      connection.query(
+        `SELECT condition_type, condition_name, status, risk_level FROM chronic_disease_registry
+         WHERE patient_id = $1 AND status NOT IN ('resolved') LIMIT 10`,
+        [patientId],
+      ).catch(() => []),
+    ]);
+
+    const patient = patientRows[0] || {};
+    const vitals = vitalsRows[0] || {};
+    const age = patient.date_of_birth
+      ? Math.floor((Date.now() - new Date(patient.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+      : undefined;
+
+    const patientContext = {
+      patientId,
+      age,
+      gender: patient.gender,
+      vitals: {
+        systolicBp: vitals.blood_pressure_systolic,
+        diastolicBp: vitals.blood_pressure_diastolic,
+        heartRate: vitals.heart_rate,
+        temperature: vitals.temperature,
+        spo2: vitals.oxygen_saturation,
+        weight: vitals.weight,
+        height: vitals.height,
+      },
+      medications: prescriptionRows.map((p: any) => p.medication_name),
+      diagnoses: conditionRows.map((c: any) => ({ name: c.condition_name, status: c.status })),
+      context: 'patient_portal_health_insights',
+      specialty: 'primary_care',
+      module: 'patient_self_service',
+    };
+
+    try {
+      const [riskResult, careGaps] = await Promise.all([
+        this.cdssService.riskAssessment(patientContext, connection, tenantId),
+        this.cdssService
+          .detectCareGaps(
+            age,
+            patient.gender,
+            [],
+            conditionRows.map((c: any) => c.condition_name).filter(Boolean),
+            {
+              tenantId,
+              tenantDb: connection,
+              patientId,
+              context: 'patient_portal_health_insights',
+              specialty: 'primary_care',
+              module: 'patient_self_service',
+            },
+          )
+          .catch(() => null),
+      ]);
+
+      return {
+        source: 'cdss',
+        patientId,
+        generatedAt: new Date().toISOString(),
+        riskLevel: riskResult?.risk_level || riskResult?.risk,
+        riskSummary: riskResult?.summary || riskResult?.explanation,
+        riskFactors: riskResult?.risk_factors || [],
+        recommendations: riskResult?.recommendations || [],
+        careGaps: careGaps?.gaps || careGaps?.care_gaps || [],
+        conditions: conditionRows,
+        latestVitals: vitals.recorded_at ? vitals : null,
+        activeMedicationCount: prescriptionRows.length,
+      };
+    } catch (err: any) {
+      this.logger.warn(`[PatientPortal] CDSS health insights unavailable: ${err?.message}`);
+      // Structured local summary
+      const highRiskConditions = conditionRows.filter((c: any) => ['high', 'critical'].includes(c.risk_level));
+      const bpSystolic = Number(vitals.blood_pressure_systolic ?? 0);
+      const localFlags: string[] = [];
+      if (bpSystolic >= 140) localFlags.push('Elevated blood pressure');
+      if (Number(vitals.oxygen_saturation ?? 100) < 94) localFlags.push('Low oxygen saturation');
+      if (highRiskConditions.length > 0) {
+        localFlags.push(...highRiskConditions.map((c: any) => `${c.condition_name} (${c.risk_level} risk)`));
+      }
+      return {
+        source: 'local_fallback',
+        patientId,
+        generatedAt: new Date().toISOString(),
+        riskLevel: localFlags.length > 2 ? 'high' : localFlags.length > 0 ? 'moderate' : 'low',
+        riskFactors: localFlags,
+        recommendations: localFlags.length > 0
+          ? ['Please discuss these findings with your healthcare provider at your next visit.']
+          : ['Your health indicators appear stable. Keep up with scheduled screenings.'],
+        careGaps: [],
+        conditions: conditionRows,
+        latestVitals: vitals.recorded_at ? vitals : null,
+        activeMedicationCount: prescriptionRows.length,
+      };
+    }
   }
 }

@@ -30,6 +30,8 @@ import TelemedicinePage from './pages/TelemedicinePage';
 import DiabetesManagementPage from './pages/DiabetesManagementPage';
 import CardiologyManagementPage from './pages/CardiologyManagementPage';
 import SymptomCheckerPage from './pages/SymptomCheckerPage';
+import PatientAiFollowupsPage from './pages/PatientAiFollowupsPage';
+import PostVisitCompanionPage from './pages/PostVisitCompanionPage';
 import FamilyAccessPage from './pages/FamilyAccessPage';
 import FitnessIntegrationPage from './pages/FitnessIntegrationPage';
 // Tier 1 Features
@@ -206,6 +208,22 @@ function App() {
               element={
                 <ProtectedRoute requireLinked>
                   <SymptomCheckerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/ai-followups"
+              element={
+                <ProtectedRoute requireLinked>
+                  <PatientAiFollowupsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/post-visit"
+              element={
+                <ProtectedRoute requireLinked>
+                  <PostVisitCompanionPage />
                 </ProtectedRoute>
               }
             />

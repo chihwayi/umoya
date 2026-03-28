@@ -79,7 +79,7 @@ def _metadata_quality_report(metadatas: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _write_metadata_quality_report(report: Dict[str, Any]) -> None:
+def _write_metadata_quality_report(report: Dict[str, Any]) -> str:
     report_path = os.getenv("CDSS_INGEST_METADATA_REPORT_PATH", "").strip()
     if not report_path:
         report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ingest_metadata_report.json")
@@ -87,6 +87,18 @@ def _write_metadata_quality_report(report: Dict[str, Any]) -> None:
     with open(report_path, "w", encoding="utf-8") as fh:
         json.dump(report, fh, indent=2, sort_keys=True)
     print(f"📊 Metadata quality report written: {report_path}")
+    return report_path
+
+
+def _sha256_file(file_path: str) -> str:
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
     """
@@ -223,7 +235,7 @@ def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
 
         return []
 
-def ingest_guidelines():
+def ingest_guidelines() -> Dict[str, Any]:
     print(f"🚀 Starting Advanced Knowledge Ingestion (Unstructured) from {GUIDELINES_DIR}...")
     
     rag = RAGEngine()
@@ -231,7 +243,14 @@ def ingest_guidelines():
     # Check if RAG engine is ready
     if not rag.collection:
         print("❌ RAG Engine not initialized correctly.")
-        return
+        return {
+            "ok": False,
+            "message": "RAG engine not initialized",
+            "processedFiles": [],
+            "totalFiles": 0,
+            "totalChunks": 0,
+            "collectionCount": 0,
+        }
 
     # Wipe existing data (Data Hygiene)
     try:
@@ -259,10 +278,18 @@ def ingest_guidelines():
     
     if not files:
         print("❌ No PDF guideline files found.")
-        return
+        return {
+            "ok": False,
+            "message": "No guideline PDF files found",
+            "processedFiles": [],
+            "totalFiles": 0,
+            "totalChunks": 0,
+            "collectionCount": 0,
+        }
 
     total_chunks = 0
     all_metadatas: List[Dict[str, Any]] = []
+    processed_files: List[Dict[str, Any]] = []
     
     for file_path in files:
         print(f"📄 Processing {os.path.basename(file_path)}...")
@@ -272,6 +299,15 @@ def ingest_guidelines():
         
         if not chunks:
             print("   ⚠️ No chunks extracted.")
+            processed_files.append({
+                "fileName": os.path.basename(file_path),
+                "filePath": file_path,
+                "sizeBytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                "sha256": _sha256_file(file_path) if os.path.exists(file_path) else None,
+                "chunkCount": 0,
+                "pageCount": 0,
+                "status": "skipped_no_chunks",
+            })
             continue
             
         max_chunks_raw = os.getenv("CDSS_INGEST_MAX_CHUNKS_PER_FILE", "0").strip()
@@ -295,6 +331,17 @@ def ingest_guidelines():
         rag.add_documents(texts, metadatas, ids)
         total_chunks += len(chunks)
         print(f"   ✅ Added {len(chunks)} chunks. Total in DB: {rag.collection.count()}")
+        pages = {str((meta or {}).get("page") or "") for meta in metadatas}
+        pages.discard("")
+        processed_files.append({
+            "fileName": os.path.basename(file_path),
+            "filePath": file_path,
+            "sizeBytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+            "sha256": _sha256_file(file_path) if os.path.exists(file_path) else None,
+            "chunkCount": len(chunks),
+            "pageCount": len(pages),
+            "status": "completed",
+        })
         
     print(f"🎉 Ingestion Complete! Total Chunks: {total_chunks}")
     report = _metadata_quality_report(all_metadatas)
@@ -309,7 +356,21 @@ def ingest_guidelines():
             sort_keys=True,
         ),
     )
-    _write_metadata_quality_report(report)
+    report_path = _write_metadata_quality_report(report)
+    return {
+        "ok": True,
+        "message": "Ingestion completed",
+        "processedFiles": processed_files,
+        "totalFiles": len(processed_files),
+        "totalChunks": total_chunks,
+        "collectionCount": rag.collection.count() if rag.collection else total_chunks,
+        "metadataReportPath": report_path,
+        "metadataQuality": {
+            "unknownTargetPopulationRate": report.get("unknown_target_population_rate"),
+            "unknownClinicalDomainRate": report.get("unknown_clinical_domain_rate"),
+            "fieldCoverage": report.get("field_coverage", {}),
+        },
+    }
 
 if __name__ == "__main__":
     ingest_guidelines()

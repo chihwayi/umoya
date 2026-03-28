@@ -126,6 +126,15 @@ export class TelemedicineConsultation {
 
   @OneToMany(() => TelemedicinePrescription, prescription => prescription.consultation)
   prescriptions: TelemedicinePrescription[];
+  @Column({ name: 'recording_download_url', type: 'text', nullable: true })
+  recordingDownloadUrl?: string;
+
+  @Column({ name: 'recording_fetched_at', type: 'timestamptz', nullable: true })
+  recordingFetchedAt?: Date;
+
+  @Column({ name: 'reminder_sent_at', type: 'timestamptz', nullable: true })
+  reminderSentAt?: Date;
+
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

@@ -1,0 +1,46 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@design/*": [
+        "src/design/*"
+      ],
+      "@ui/*": [
+        "src/components/ui/*"
+      ],
+      "@doctor/*": [
+        "src/components/doctor/*"
+      ],
+      "@nurse/*": [
+        "src/components/nurse/*"
+      ],
+      "@patient/*": [
+        "src/components/patient/*"
+      ],
+      "@shared/*": [
+        "src/components/shared/*"
+      ],
+      "@navigation/*": [
+        "src/navigation/*"
+      ],
+      "@services/*": [
+        "src/services/*"
+      ],
+      "@stores/*": [
+        "src/stores/*"
+      ],
+      "@hooks/*": [
+        "src/hooks/*"
+      ],
+      "@utils/*": [
+        "src/utils/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
+}

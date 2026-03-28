@@ -10,6 +10,9 @@ dist/
 *.tgz
 *.tar.gz
 
+# TypeScript compiler cache
+*.tsbuildinfo
+
 # Environment variables
 .env
 .env.local
@@ -44,6 +47,7 @@ jspm_packages/
 # Optional eslint cache
 .eslintcache
 .login
+.postvisitai
 
 # Optional REPL history
 .node_repl_history
@@ -88,6 +92,11 @@ jspm_packages/
 # IDE
 .vscode/
 .idea/
+.cursor/
+.claude/
+
+# Python virtual envs
+.venv-cli/
 *.swp
 *.swo
 *~

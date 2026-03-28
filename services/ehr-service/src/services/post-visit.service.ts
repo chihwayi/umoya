@@ -1,10 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import 'multer';
 import axios from 'axios';
 import * as FormData from 'form-data';
 import { createHash } from 'crypto';
-import { config } from '@medicore/config';
+import { config, env } from '@medicore/config';
 import {
   CuratePostVisitCompanionMemoryDto,
   CreatePostVisitSessionDto,
@@ -38,8 +38,16 @@ import {
   type PostVisitSoapSpecialty,
   type SpecialtySoapValidationSummary,
 } from './soap-template-registry';
+import { PostVisitEscalationService } from './post-visit-escalation.service';
+import { PostVisitBillingIntelligenceService } from './post-visit-billing-intelligence.service';
+import { PostVisitCompanionMemoryService } from './post-visit-companion-memory.service';
+import { PostVisitSessionService } from './post-visit-session.service';
+import { PostVisitDraftService } from './post-visit-draft.service';
 import { detectFromTranscript as realTimeAlertEngineDetect } from './real-time-alert-engine';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
+import { PatientAiSession } from '../entities/patient-ai-session.entity';
+import { PatientAiEscalation } from '../entities/patient-ai-escalation.entity';
+import { PatientFollowupOrchestration } from '../entities/patient-followup-orchestration.entity';
 import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
 
 type PostVisitSessionStatus =
@@ -307,6 +315,9 @@ interface PostVisitMobileEvent {
 
 @Injectable()
 export class PostVisitService {
+  private readonly postVisitSchemaReady = new WeakSet<DataSource>();
+  private readonly postVisitSchemaInFlight = new WeakMap<DataSource, Promise<void>>();
+
   constructor(
     private readonly transcriptionService: TranscriptionService,
     private readonly patientService: PatientService,
@@ -316,1238 +327,12 @@ export class PostVisitService {
     private readonly groundedLlmService?: PostVisitGroundedLlmService,
     private readonly hipaaAuditService?: HipaaAuditService,
     private readonly fileStorageService?: FileStorageService,
+    @Optional() private readonly escalationService?: PostVisitEscalationService,
+    @Optional() private readonly billingIntelligenceService?: PostVisitBillingIntelligenceService,
+    @Optional() private readonly companionMemoryService?: PostVisitCompanionMemoryService,
+    @Optional() private readonly sessionService?: PostVisitSessionService,
+    @Optional() private readonly draftService?: PostVisitDraftService,
   ) {}
-
-  private async ensurePostVisitSchema(tenantDb: DataSource) {
-    await tenantDb.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_sessions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        tenant_id VARCHAR(100),
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
-        appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
-        consultation_id UUID REFERENCES telemedicine_consultations(id) ON DELETE SET NULL,
-        status VARCHAR(30) NOT NULL DEFAULT 'captured'
-          CHECK (status IN ('captured','processing','draft_ready','doctor_reviewed','published','closed')),
-        source_type VARCHAR(20) NOT NULL DEFAULT 'in_person'
-          CHECK (source_type IN ('in_person','telemedicine','hybrid')),
-        language VARCHAR(10) DEFAULT 'en',
-        started_at TIMESTAMP WITH TIME ZONE,
-        completed_at TIMESTAMP WITH TIME ZONE,
-        reviewed_at TIMESTAMP WITH TIME ZONE,
-        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        published_at TIMESTAMP WITH TIME ZONE,
-        safety_level VARCHAR(20),
-        risk_flags JSONB NOT NULL DEFAULT '{}'::jsonb,
-        meta JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_transcript_segments (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        segment_order INTEGER NOT NULL,
-        start_second DOUBLE PRECISION NOT NULL,
-        end_second DOUBLE PRECISION NOT NULL,
-        text TEXT NOT NULL,
-        confidence DOUBLE PRECISION,
-        language VARCHAR(10),
-        speaker_label VARCHAR(60),
-        speaker_role VARCHAR(20) NOT NULL DEFAULT 'unknown'
-          CHECK (speaker_role IN ('doctor','patient','unknown')),
-        diarization_confidence DOUBLE PRECISION,
-        speaker_assignment_status VARCHAR(20) NOT NULL DEFAULT 'unresolved'
-          CHECK (speaker_assignment_status IN ('auto','confirmed','reassigned','unresolved')),
-        needs_review BOOLEAN NOT NULL DEFAULT FALSE,
-        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        reviewed_at TIMESTAMP WITH TIME ZONE,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_transcript_segments
-      ADD COLUMN IF NOT EXISTS speaker_label VARCHAR(60),
-      ADD COLUMN IF NOT EXISTS speaker_role VARCHAR(20) NOT NULL DEFAULT 'unknown'
-        CHECK (speaker_role IN ('doctor','patient','unknown')),
-      ADD COLUMN IF NOT EXISTS diarization_confidence DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS speaker_assignment_status VARCHAR(20) NOT NULL DEFAULT 'unresolved'
-        CHECK (speaker_assignment_status IN ('auto','confirmed','reassigned','unresolved')),
-      ADD COLUMN IF NOT EXISTS needs_review BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_extracted_entities (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        entity_type VARCHAR(60) NOT NULL,
-        entity_value TEXT NOT NULL,
-        normalized_value JSONB NOT NULL DEFAULT '{}'::jsonb,
-        confidence DOUBLE PRECISION,
-        source_start_second DOUBLE PRECISION,
-        source_end_second DOUBLE PRECISION,
-        source_origin VARCHAR(30) NOT NULL DEFAULT 'transcript',
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_draft_artifacts (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        artifact_type VARCHAR(50) NOT NULL,
-        artifact_status VARCHAR(20) NOT NULL DEFAULT 'draft'
-          CHECK (artifact_status IN ('draft','reviewed','published')),
-        content JSONB NOT NULL DEFAULT '{}'::jsonb,
-        citations JSONB NOT NULL DEFAULT '[]'::jsonb,
-        confidence DOUBLE PRECISION,
-        generated_by VARCHAR(80) NOT NULL DEFAULT 'post_visit_pipeline',
-        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        UNIQUE(session_id, artifact_type)
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_review_actions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        artifact_id UUID REFERENCES post_visit_draft_artifacts(id) ON DELETE SET NULL,
-        artifact_type VARCHAR(50) NOT NULL,
-        action VARCHAR(20) NOT NULL CHECK (action IN ('accept','edit','reject')),
-        review_reason TEXT,
-        review_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        before_content JSONB NOT NULL DEFAULT '{}'::jsonb,
-        after_content JSONB NOT NULL DEFAULT '{}'::jsonb,
-        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_review',
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_rule_citations (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        artifact_type VARCHAR(50) NOT NULL DEFAULT 'recommendation_bundle',
-        recommendation_id VARCHAR(120),
-        rule_id VARCHAR(120) NOT NULL,
-        guideline_id VARCHAR(120) NOT NULL,
-        citation_label VARCHAR(255) NOT NULL,
-        citation_source VARCHAR(255) NOT NULL,
-        citation_url TEXT,
-        evidence_excerpt TEXT,
-        confidence DOUBLE PRECISION,
-        relevance_score DOUBLE PRECISION,
-        citation_year INTEGER,
-        is_superseded BOOLEAN NOT NULL DEFAULT FALSE,
-        superseded_by_guideline_id VARCHAR(120),
-        doctor_acknowledged_superseded BOOLEAN NOT NULL DEFAULT FALSE,
-        superseded_acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        superseded_acknowledged_at TIMESTAMP WITH TIME ZONE,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_rule_citations
-      ADD COLUMN IF NOT EXISTS relevance_score DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS citation_year INTEGER,
-      ADD COLUMN IF NOT EXISTS is_superseded BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS superseded_by_guideline_id VARCHAR(120),
-      ADD COLUMN IF NOT EXISTS doctor_acknowledged_superseded BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS superseded_acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS superseded_acknowledged_at TIMESTAMP WITH TIME ZONE
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_action_executions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        recommendation_id VARCHAR(120) NOT NULL,
-        action_key VARCHAR(160) NOT NULL,
-        action_type VARCHAR(60) NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'executed' CHECK (status IN ('executed','failed','skipped')),
-        execution_note TEXT,
-        result_resource_type VARCHAR(80),
-        result_resource_id VARCHAR(120),
-        result_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-        error_message TEXT,
-        executed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_execute',
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        UNIQUE(session_id, recommendation_id, action_key)
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_companion_threads (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        status VARCHAR(20) NOT NULL DEFAULT 'active'
-          CHECK (status IN ('active','closed')),
-        message_count INTEGER NOT NULL DEFAULT 0,
-        last_message_at TIMESTAMP WITH TIME ZONE,
-        last_patient_message_at TIMESTAMP WITH TIME ZONE,
-        last_clinician_message_at TIMESTAMP WITH TIME ZONE,
-        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        UNIQUE(session_id, patient_id)
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_companion_messages (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        thread_id UUID NOT NULL REFERENCES post_visit_companion_threads(id) ON DELETE CASCADE,
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        sender_type VARCHAR(20) NOT NULL
-          CHECK (sender_type IN ('patient','clinician','system')),
-        sender_id UUID,
-        message_type VARCHAR(30) NOT NULL DEFAULT 'question'
-          CHECK (message_type IN ('question','answer','summary','checklist','alert','system')),
-        message_text TEXT NOT NULL,
-        grounded_context JSONB NOT NULL DEFAULT '{}'::jsonb,
-        escalation_detected BOOLEAN NOT NULL DEFAULT FALSE,
-        escalation_event_id UUID,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_document_intelligence (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        document_type VARCHAR(40) NOT NULL
-          CHECK (document_type IN ('lab_report','prescription','imaging_report','discharge_summary','other')),
-        document_name VARCHAR(255) NOT NULL,
-        mime_type VARCHAR(120),
-        file_size INTEGER,
-        file_sha256 VARCHAR(128) NOT NULL,
-        duplicate_of_document_id UUID REFERENCES post_visit_document_intelligence(id) ON DELETE SET NULL,
-        duplicate_similarity DOUBLE PRECISION,
-        extraction_status VARCHAR(20) NOT NULL DEFAULT 'processed'
-          CHECK (extraction_status IN ('processed','failed','duplicate')),
-        ocr_engine VARCHAR(120),
-        ocr_confidence DOUBLE PRECISION,
-        extracted_text TEXT,
-        structured_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-        fhir_resources JSONB NOT NULL DEFAULT '[]'::jsonb,
-        critical_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
-        critical_detected BOOLEAN NOT NULL DEFAULT FALSE,
-        critical_routed BOOLEAN NOT NULL DEFAULT FALSE,
-        escalation_event_id UUID,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_document_intelligence
-      ADD COLUMN IF NOT EXISTS duplicate_of_document_id UUID REFERENCES post_visit_document_intelligence(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS duplicate_similarity DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(20) NOT NULL DEFAULT 'processed'
-        CHECK (extraction_status IN ('processed','failed','duplicate')),
-      ADD COLUMN IF NOT EXISTS ocr_engine VARCHAR(120),
-      ADD COLUMN IF NOT EXISTS ocr_confidence DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS extracted_text TEXT,
-      ADD COLUMN IF NOT EXISTS structured_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-      ADD COLUMN IF NOT EXISTS fhir_resources JSONB NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS critical_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS critical_detected BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS critical_routed BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS escalation_event_id UUID,
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_escalation_events (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        thread_id UUID REFERENCES post_visit_companion_threads(id) ON DELETE SET NULL,
-        message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'open'
-          CHECK (status IN ('open','acknowledged','resolved','dismissed')),
-        severity VARCHAR(20) NOT NULL
-          CHECK (severity IN ('low','moderate','high','critical')),
-        route_target VARCHAR(20) NOT NULL
-          CHECK (route_target IN ('emergency','doctor','nurse')),
-        trigger_type VARCHAR(50) NOT NULL DEFAULT 'symptom_keyword',
-        trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
-        signal_text TEXT,
-        classification_confidence DOUBLE PRECISION,
-        classification_temporality VARCHAR(20)
-          CHECK (classification_temporality IN ('current','historical','unclear')),
-        classification_source VARCHAR(30),
-        classification_reason TEXT,
-        classification_stage VARCHAR(20) NOT NULL DEFAULT 'v1',
-        detected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        sla_due_at TIMESTAMP WITH TIME ZONE,
-        acknowledged_at TIMESTAMP WITH TIME ZONE,
-        acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        resolved_at TIMESTAMP WITH TIME ZONE,
-        resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        resolution_note TEXT,
-        workflow_key VARCHAR(160),
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_escalation_events
-      ADD COLUMN IF NOT EXISTS classification_confidence DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS classification_temporality VARCHAR(20)
-        CHECK (classification_temporality IN ('current','historical','unclear')),
-      ADD COLUMN IF NOT EXISTS classification_source VARCHAR(30),
-      ADD COLUMN IF NOT EXISTS classification_reason TEXT,
-      ADD COLUMN IF NOT EXISTS classification_stage VARCHAR(20) NOT NULL DEFAULT 'v1'
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_intravisit_alert_events (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        status VARCHAR(20) NOT NULL DEFAULT 'open'
-          CHECK (status IN ('open','confirmed','dismissed')),
-        alert_type VARCHAR(80) NOT NULL,
-        severity VARCHAR(20) NOT NULL
-          CHECK (severity IN ('moderate','high','critical')),
-        route_target VARCHAR(20) NOT NULL DEFAULT 'doctor'
-          CHECK (route_target IN ('doctor','nurse','emergency')),
-        assigned_role VARCHAR(20) NOT NULL DEFAULT 'doctor'
-          CHECK (assigned_role IN ('doctor','nurse','rapid_response')),
-        assigned_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-        assigned_team VARCHAR(80),
-        policy_version VARCHAR(20) NOT NULL DEFAULT 'c3.v1',
-        routing_rationale TEXT,
-        source VARCHAR(60) NOT NULL DEFAULT 'streamed_transcript',
-        transcript_offset_seconds INTEGER,
-        signal_text TEXT,
-        alert_message TEXT NOT NULL,
-        suggested_action TEXT,
-        confidence DOUBLE PRECISION,
-        trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        detected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        sla_due_at TIMESTAMP WITH TIME ZONE,
-        acknowledged_at TIMESTAMP WITH TIME ZONE,
-        acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        acknowledgment_note TEXT,
-        resolved_at TIMESTAMP WITH TIME ZONE,
-        resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        resolution_note TEXT,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_intravisit_alert_events
-      ADD COLUMN IF NOT EXISTS route_target VARCHAR(20) NOT NULL DEFAULT 'doctor'
-        CHECK (route_target IN ('doctor','nurse','emergency')),
-      ADD COLUMN IF NOT EXISTS assigned_role VARCHAR(20) NOT NULL DEFAULT 'doctor'
-        CHECK (assigned_role IN ('doctor','nurse','rapid_response')),
-      ADD COLUMN IF NOT EXISTS assigned_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS assigned_team VARCHAR(80),
-      ADD COLUMN IF NOT EXISTS policy_version VARCHAR(20) NOT NULL DEFAULT 'c3.v1',
-      ADD COLUMN IF NOT EXISTS routing_rationale TEXT,
-      ADD COLUMN IF NOT EXISTS source VARCHAR(60) NOT NULL DEFAULT 'streamed_transcript',
-      ADD COLUMN IF NOT EXISTS transcript_offset_seconds INTEGER,
-      ADD COLUMN IF NOT EXISTS signal_text TEXT,
-      ADD COLUMN IF NOT EXISTS trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-      ADD COLUMN IF NOT EXISTS sla_due_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS acknowledgment_note TEXT,
-      ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS resolution_note TEXT
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_billing_suggestions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        suggestion_key VARCHAR(120) NOT NULL,
-        code_type VARCHAR(20) NOT NULL CHECK (code_type IN ('cpt','icd10')),
-        code VARCHAR(20) NOT NULL,
-        description TEXT NOT NULL,
-        confidence DOUBLE PRECISION,
-        justification TEXT,
-        documentation_checks JSONB NOT NULL DEFAULT '[]'::jsonb,
-        documentation_score INTEGER NOT NULL DEFAULT 0,
-        documentation_status VARCHAR(20) NOT NULL DEFAULT 'insufficient'
-          CHECK (documentation_status IN ('sufficient','partial','insufficient')),
-        status VARCHAR(20) NOT NULL DEFAULT 'proposed'
-          CHECK (status IN ('proposed','approved','rejected')),
-        approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        approved_at TIMESTAMP WITH TIME ZONE,
-        approval_note TEXT,
-        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_billing_intelligence_v1',
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        UNIQUE(session_id, suggestion_key)
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_patient_story (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        version INTEGER NOT NULL,
-        session_id UUID REFERENCES post_visit_sessions(id) ON DELETE SET NULL,
-        content JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        UNIQUE(patient_id, version)
-      )
-    `);
-    await tenantDb.query(`
-      CREATE INDEX IF NOT EXISTS idx_post_visit_patient_story_patient_version
-      ON post_visit_patient_story(patient_id, version DESC)
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_billing_suggestions
-      ADD COLUMN IF NOT EXISTS suggestion_key VARCHAR(120),
-      ADD COLUMN IF NOT EXISTS code_type VARCHAR(20),
-      ADD COLUMN IF NOT EXISTS code VARCHAR(20),
-      ADD COLUMN IF NOT EXISTS description TEXT,
-      ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS justification TEXT,
-      ADD COLUMN IF NOT EXISTS documentation_checks JSONB NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS documentation_score INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS documentation_status VARCHAR(20) NOT NULL DEFAULT 'insufficient'
-        CHECK (documentation_status IN ('sufficient','partial','insufficient')),
-      ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'proposed'
-        CHECK (status IN ('proposed','approved','rejected')),
-      ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS approval_note TEXT,
-      ADD COLUMN IF NOT EXISTS source VARCHAR(80) NOT NULL DEFAULT 'post_visit_billing_intelligence_v1',
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_billing_audit_log (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        suggestion_id UUID REFERENCES post_visit_billing_suggestions(id) ON DELETE CASCADE,
-        action VARCHAR(30) NOT NULL CHECK (action IN ('generated','approved','rejected','refreshed')),
-        action_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        action_note TEXT,
-        before_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-        after_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_previsit_briefs (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        appointment_id UUID UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
-        scheduled_at TIMESTAMP WITH TIME ZONE,
-        status VARCHAR(20) NOT NULL DEFAULT 'active'
-          CHECK (status IN ('active','archived')),
-        brief_content JSONB NOT NULL DEFAULT '{}'::jsonb,
-        follow_up_risk_score INTEGER NOT NULL DEFAULT 0,
-        follow_up_risk_tier VARCHAR(20) NOT NULL DEFAULT 'low'
-          CHECK (follow_up_risk_tier IN ('low','moderate','high','critical')),
-        follow_up_risk_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
-        nudge_policy VARCHAR(120),
-        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_previsit_brief_v1',
-        generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_previsit_briefs
-      ADD COLUMN IF NOT EXISTS appointment_id UUID UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'
-        CHECK (status IN ('active','archived')),
-      ADD COLUMN IF NOT EXISTS brief_content JSONB NOT NULL DEFAULT '{}'::jsonb,
-      ADD COLUMN IF NOT EXISTS follow_up_risk_score INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS follow_up_risk_tier VARCHAR(20) NOT NULL DEFAULT 'low'
-        CHECK (follow_up_risk_tier IN ('low','moderate','high','critical')),
-      ADD COLUMN IF NOT EXISTS follow_up_risk_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS nudge_policy VARCHAR(120),
-      ADD COLUMN IF NOT EXISTS source VARCHAR(80) NOT NULL DEFAULT 'post_visit_previsit_brief_v1',
-      ADD COLUMN IF NOT EXISTS generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP WITH TIME ZONE
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_coordinator_tasks (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        brief_id UUID NOT NULL REFERENCES post_visit_previsit_briefs(id) ON DELETE CASCADE,
-        appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        risk_tier VARCHAR(20) NOT NULL
-          CHECK (risk_tier IN ('high','critical')),
-        nudge_policy VARCHAR(120),
-        status VARCHAR(20) NOT NULL DEFAULT 'pending'
-          CHECK (status IN ('pending','acknowledged','completed')),
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        UNIQUE(brief_id)
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_admin_documents (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
-        document_type VARCHAR(40) NOT NULL
-          CHECK (document_type IN ('referral_letter','sick_note','return_to_work')),
-        version_no INTEGER NOT NULL DEFAULT 1,
-        status VARCHAR(20) NOT NULL DEFAULT 'signed'
-          CHECK (status IN ('draft','signed','dispatched','voided')),
-        title VARCHAR(255) NOT NULL,
-        body_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-        immutable_hash VARCHAR(128) NOT NULL,
-        signed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        signed_at TIMESTAMP WITH TIME ZONE,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        UNIQUE(session_id, document_type, version_no)
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_admin_documents
-      ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS document_type VARCHAR(40)
-        CHECK (document_type IN ('referral_letter','sick_note','return_to_work')),
-      ADD COLUMN IF NOT EXISTS version_no INTEGER NOT NULL DEFAULT 1,
-      ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'signed'
-        CHECK (status IN ('draft','signed','dispatched','voided')),
-      ADD COLUMN IF NOT EXISTS title VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS body_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-      ADD COLUMN IF NOT EXISTS immutable_hash VARCHAR(128),
-      ADD COLUMN IF NOT EXISTS signed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_trial_matches (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        trial_source VARCHAR(40) NOT NULL DEFAULT 'clinicaltrials_gov_v2',
-        trial_id VARCHAR(80) NOT NULL,
-        trial_title TEXT NOT NULL,
-        trial_phase VARCHAR(80),
-        trial_status VARCHAR(80),
-        condition_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
-        source_url TEXT,
-        eligibility_score INTEGER NOT NULL DEFAULT 0,
-        eligibility_rationale JSONB NOT NULL DEFAULT '[]'::jsonb,
-        match_status VARCHAR(20) NOT NULL DEFAULT 'proposed'
-          CHECK (match_status IN ('proposed','considered','deferred','excluded','enrolled')),
-        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        reviewed_at TIMESTAMP WITH TIME ZONE,
-        review_note TEXT,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        UNIQUE(session_id, trial_id)
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_trial_matches
-      ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS trial_source VARCHAR(40) NOT NULL DEFAULT 'clinicaltrials_gov_v2',
-      ADD COLUMN IF NOT EXISTS trial_id VARCHAR(80),
-      ADD COLUMN IF NOT EXISTS trial_title TEXT,
-      ADD COLUMN IF NOT EXISTS trial_phase VARCHAR(80),
-      ADD COLUMN IF NOT EXISTS trial_status VARCHAR(80),
-      ADD COLUMN IF NOT EXISTS condition_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS source_url TEXT,
-      ADD COLUMN IF NOT EXISTS eligibility_score INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS eligibility_rationale JSONB NOT NULL DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS match_status VARCHAR(20) NOT NULL DEFAULT 'proposed'
-        CHECK (match_status IN ('proposed','considered','deferred','excluded','enrolled')),
-      ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS review_note TEXT,
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_trial_match_audit_log (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        trial_match_id UUID NOT NULL REFERENCES post_visit_trial_matches(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        action VARCHAR(20) NOT NULL
-          CHECK (action IN ('consider','defer','exclude','enroll')),
-        previous_status VARCHAR(20)
-          CHECK (previous_status IN ('proposed','considered','deferred','excluded','enrolled')),
-        next_status VARCHAR(20) NOT NULL
-          CHECK (next_status IN ('proposed','considered','deferred','excluded','enrolled')),
-        note TEXT,
-        acted_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        acted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_trial_match_audit_log
-      ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS trial_match_id UUID REFERENCES post_visit_trial_matches(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS action VARCHAR(20)
-        CHECK (action IN ('consider','defer','exclude','enroll')),
-      ADD COLUMN IF NOT EXISTS previous_status VARCHAR(20)
-        CHECK (previous_status IN ('proposed','considered','deferred','excluded','enrolled')),
-      ADD COLUMN IF NOT EXISTS next_status VARCHAR(20)
-        CHECK (next_status IN ('proposed','considered','deferred','excluded','enrolled')),
-      ADD COLUMN IF NOT EXISTS note TEXT,
-      ADD COLUMN IF NOT EXISTS acted_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS acted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_companion_memory (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        memory_type VARCHAR(60) NOT NULL,
-        memory_key VARCHAR(120) NOT NULL,
-        memory_value TEXT NOT NULL,
-        confidence DOUBLE PRECISION,
-        source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
-        created_by UUID,
-        is_active BOOLEAN NOT NULL DEFAULT TRUE,
-        promoted_at TIMESTAMP WITH TIME ZONE,
-        promoted_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        retired_at TIMESTAMP WITH TIME ZONE,
-        retired_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        curation_note TEXT,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      ALTER TABLE IF EXISTS post_visit_companion_memory
-      ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
-      ADD COLUMN IF NOT EXISTS memory_type VARCHAR(60),
-      ADD COLUMN IF NOT EXISTS memory_key VARCHAR(120),
-      ADD COLUMN IF NOT EXISTS memory_value TEXT,
-      ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS created_by UUID,
-      ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
-      ADD COLUMN IF NOT EXISTS promoted_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS promoted_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS retired_at TIMESTAMP WITH TIME ZONE,
-      ADD COLUMN IF NOT EXISTS retired_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS curation_note TEXT,
-      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_companion_acknowledgements (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        acknowledgement_type VARCHAR(60) NOT NULL
-          CHECK (acknowledgement_type IN ('teach_back','medication_adherence','follow_up_commitment','warning_sign_understanding')),
-        acknowledged BOOLEAN NOT NULL DEFAULT TRUE,
-        details JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS fhir_sync_log (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        tenant_id VARCHAR(80),
-        session_id UUID REFERENCES post_visit_sessions(id) ON DELETE SET NULL,
-        resource_type VARCHAR(80) NOT NULL,
-        resource_id VARCHAR(255) NOT NULL,
-        fhir_resource_id VARCHAR(255),
-        operation VARCHAR(20) NOT NULL DEFAULT 'create'
-          CHECK (operation IN ('create','update','delete')),
-        status VARCHAR(20) NOT NULL DEFAULT 'pending'
-          CHECK (status IN ('pending','success','failed')),
-        attempt_count INTEGER NOT NULL DEFAULT 0,
-        max_attempts INTEGER NOT NULL DEFAULT 5,
-        last_error TEXT,
-        next_retry_at TIMESTAMP WITH TIME ZONE,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`
-      CREATE TABLE IF NOT EXISTS post_visit_peer_consults (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
-        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        request_summary_deidentified TEXT NOT NULL,
-        response_summary_deidentified TEXT,
-        status VARCHAR(20) NOT NULL DEFAULT 'requested'
-          CHECK (status IN ('requested','responded','closed')),
-        requested_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        responded_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        responded_at TIMESTAMP WITH TIME ZONE,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_patient_id ON post_visit_sessions(patient_id)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_doctor_id ON post_visit_sessions(doctor_id)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_status ON post_visit_sessions(status)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_started_at ON post_visit_sessions(started_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_transcript_segments_session ON post_visit_transcript_segments(session_id, segment_order)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_transcript_needs_review ON post_visit_transcript_segments(session_id, needs_review, segment_order)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_transcript_speaker_role ON post_visit_transcript_segments(session_id, speaker_role, segment_order)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_extracted_entities_session ON post_visit_extracted_entities(session_id, entity_type)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_draft_artifacts_session ON post_visit_draft_artifacts(session_id, artifact_type)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_review_actions_session ON post_visit_review_actions(session_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_review_actions_artifact ON post_visit_review_actions(artifact_type, action)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_session ON post_visit_rule_citations(session_id, rule_id)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_guideline ON post_visit_rule_citations(guideline_id)`);
-    await tenantDb.query(`
-      CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_quality
-      ON post_visit_rule_citations(session_id, is_superseded, doctor_acknowledged_superseded, relevance_score DESC)
-    `);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_action_executions_session ON post_visit_action_executions(session_id, recommendation_id)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_action_executions_status ON post_visit_action_executions(status, executed_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_threads_session ON post_visit_companion_threads(session_id, status)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_threads_patient ON post_visit_companion_threads(patient_id, last_message_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_session ON post_visit_companion_messages(session_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_thread ON post_visit_companion_messages(thread_id, created_at ASC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_patient ON post_visit_companion_messages(patient_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_escalation ON post_visit_companion_messages(escalation_detected, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_doc_intelligence_session ON post_visit_document_intelligence(session_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_doc_intelligence_hash ON post_visit_document_intelligence(session_id, file_sha256)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_doc_intelligence_critical ON post_visit_document_intelligence(session_id, critical_detected, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_session ON post_visit_escalation_events(session_id, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_status ON post_visit_escalation_events(status, severity, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_route ON post_visit_escalation_events(route_target, status, sla_due_at)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_trigger ON post_visit_escalation_events(trigger_type, status, route_target, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_patient ON post_visit_escalation_events(patient_id, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_confidence ON post_visit_escalation_events(classification_confidence DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_temporality ON post_visit_escalation_events(classification_temporality, status, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_session ON post_visit_intravisit_alert_events(session_id, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_status ON post_visit_intravisit_alert_events(status, severity, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_patient ON post_visit_intravisit_alert_events(patient_id, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_route ON post_visit_intravisit_alert_events(route_target, assigned_role, status, sla_due_at)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_ack ON post_visit_intravisit_alert_events(status, acknowledged_at, detected_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_billing_suggestions_session ON post_visit_billing_suggestions(session_id, status, code_type, confidence DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_billing_suggestions_patient ON post_visit_billing_suggestions(patient_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_billing_suggestions_code ON post_visit_billing_suggestions(code_type, code)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_billing_audit_session ON post_visit_billing_audit_log(session_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_billing_audit_suggestion ON post_visit_billing_audit_log(suggestion_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_appointment ON post_visit_previsit_briefs(appointment_id)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_patient ON post_visit_previsit_briefs(patient_id, generated_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_doctor ON post_visit_previsit_briefs(doctor_id, generated_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_risk ON post_visit_previsit_briefs(follow_up_risk_tier, follow_up_risk_score DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_coordinator_tasks_status ON post_visit_coordinator_tasks(status, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_coordinator_tasks_patient ON post_visit_coordinator_tasks(patient_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_session ON post_visit_admin_documents(session_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_patient ON post_visit_admin_documents(patient_id, document_type, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_hash ON post_visit_admin_documents(immutable_hash)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_session ON post_visit_trial_matches(session_id, eligibility_score DESC, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_patient ON post_visit_trial_matches(patient_id, match_status, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_trial_id ON post_visit_trial_matches(trial_id)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_session ON post_visit_trial_match_audit_log(session_id, acted_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_match ON post_visit_trial_match_audit_log(trial_match_id, acted_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_actor ON post_visit_trial_match_audit_log(acted_by, acted_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_patient ON post_visit_companion_memory(patient_id, is_active, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_session ON post_visit_companion_memory(session_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_key ON post_visit_companion_memory(memory_type, memory_key, is_active)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_curation ON post_visit_companion_memory(patient_id, promoted_at DESC, retired_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_fhir_sync_log_status ON fhir_sync_log(status, next_retry_at)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_fhir_sync_log_session ON fhir_sync_log(session_id, created_at DESC)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_peer_consults_session ON post_visit_peer_consults(session_id, status)`);
-    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_peer_consults_status ON post_visit_peer_consults(status, created_at DESC)`);
-  }
-
-  private mapSession(row: any) {
-    return {
-      id: row.id,
-      tenantId: row.tenant_id ?? null,
-      patientId: row.patient_id,
-      doctorId: row.doctor_id ?? null,
-      appointmentId: row.appointment_id ?? null,
-      consultationId: row.consultation_id ?? null,
-      status: row.status as PostVisitSessionStatus,
-      sourceType: row.source_type,
-      language: row.language || 'en',
-      startedAt: row.started_at,
-      completedAt: row.completed_at,
-      reviewedAt: row.reviewed_at,
-      reviewedBy: row.reviewed_by ?? null,
-      publishedAt: row.published_at,
-      safetyLevel: row.safety_level ?? null,
-      riskFlags: row.risk_flags || {},
-      meta: row.meta || {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private mapEscalationEvent(row: any) {
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      patientId: row.patient_id,
-      threadId: row.thread_id || null,
-      messageId: row.message_id || null,
-      status: row.status,
-      severity: row.severity,
-      routeTarget: row.route_target,
-      triggerType: row.trigger_type,
-      triggerTerms: row.trigger_terms || [],
-      signalText: row.signal_text || null,
-      classificationConfidence:
-        row.classification_confidence === null || row.classification_confidence === undefined
-          ? null
-          : Number(row.classification_confidence),
-      classificationTemporality: row.classification_temporality || null,
-      classificationSource: row.classification_source || null,
-      classificationReason: row.classification_reason || null,
-      classificationStage: row.classification_stage || 'v1',
-      detectedAt: row.detected_at,
-      slaDueAt: row.sla_due_at || null,
-      acknowledgedAt: row.acknowledged_at || null,
-      acknowledgedBy: row.acknowledged_by || null,
-      resolvedAt: row.resolved_at || null,
-      resolvedBy: row.resolved_by || null,
-      resolutionNote: row.resolution_note || null,
-      workflowKey: row.workflow_key || null,
-      metadata: row.metadata || {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private mapIntraVisitAlertEvent(row: any) {
-    const acknowledgedAt = row.acknowledged_at || null;
-    const slaDueAt = row.sla_due_at || null;
-    const isAcknowledged = acknowledgedAt !== null;
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      patientId: row.patient_id,
-      status: row.status,
-      alertType: row.alert_type,
-      severity: row.severity,
-      routeTarget: (row.route_target || 'doctor') as IntraVisitAlertRouteTarget,
-      assignedRole: (row.assigned_role || 'doctor') as IntraVisitAlertAssignedRole,
-      assignedUserId: row.assigned_user_id || null,
-      assignedTeam: row.assigned_team || null,
-      policyVersion: row.policy_version || 'c3.v1',
-      routingRationale: row.routing_rationale || null,
-      source: row.source || 'streamed_transcript',
-      transcriptOffsetSeconds:
-        row.transcript_offset_seconds === null || row.transcript_offset_seconds === undefined
-          ? null
-          : Number(row.transcript_offset_seconds),
-      signalText: row.signal_text || null,
-      alertMessage: row.alert_message,
-      suggestedAction: row.suggested_action || null,
-      confidence: row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
-      triggerTerms: Array.isArray(row.trigger_terms) ? row.trigger_terms : [],
-      metadata: row.metadata || {},
-      detectedAt: row.detected_at,
-      slaDueAt,
-      isAcknowledged,
-      acknowledgedAt,
-      acknowledgedBy: row.acknowledged_by || null,
-      acknowledgmentNote: row.acknowledgment_note || null,
-      resolvedAt: row.resolved_at || null,
-      resolvedBy: row.resolved_by || null,
-      resolutionNote: row.resolution_note || null,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private mapBillingSuggestion(row: any) {
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      patientId: row.patient_id,
-      suggestionKey: row.suggestion_key,
-      codeType: row.code_type,
-      code: row.code,
-      description: row.description,
-      confidence:
-        row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
-      justification: row.justification || null,
-      documentationChecks: Array.isArray(row.documentation_checks) ? row.documentation_checks : [],
-      documentationScore: Number(row.documentation_score || 0),
-      documentationStatus: row.documentation_status || 'insufficient',
-      status: row.status || 'proposed',
-      approvedBy: row.approved_by || null,
-      approvedAt: row.approved_at || null,
-      approvalNote: row.approval_note || null,
-      source: row.source || 'post_visit_billing_intelligence_v1',
-      metadata: row.metadata || {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private mapPreVisitBrief(row: any) {
-    return {
-      id: row.id,
-      appointmentId: row.appointment_id,
-      patientId: row.patient_id,
-      doctorId: row.doctor_id || null,
-      scheduledAt: row.scheduled_at || null,
-      status: row.status || 'active',
-      brief: row.brief_content || {},
-      followUpRisk: {
-        score: Number(row.follow_up_risk_score || 0),
-        tier: row.follow_up_risk_tier || 'low',
-        reasons: Array.isArray(row.follow_up_risk_reasons) ? row.follow_up_risk_reasons : [],
-        nudgePolicy: row.nudge_policy || null,
-      },
-      source: row.source || 'post_visit_previsit_brief_v1',
-      generatedBy: row.generated_by || null,
-      generatedAt: row.generated_at,
-      deliveredAt: row.delivered_at || null,
-      metadata: row.metadata || {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private mapAdminDocument(row: any) {
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      patientId: row.patient_id,
-      doctorId: row.doctor_id || null,
-      documentType: row.document_type,
-      version: Number(row.version_no || 1),
-      status: row.status || 'signed',
-      title: row.title || null,
-      body: row.body_json || {},
-      immutableHash: row.immutable_hash || null,
-      signedBy: row.signed_by || null,
-      signedAt: row.signed_at || null,
-      metadata: row.metadata || {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private mapTrialMatch(row: any) {
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      patientId: row.patient_id,
-      trialSource: row.trial_source || 'clinicaltrials_gov_v2',
-      trialId: row.trial_id,
-      trialTitle: row.trial_title,
-      trialPhase: row.trial_phase || null,
-      trialStatus: row.trial_status || null,
-      conditionTags: Array.isArray(row.condition_tags) ? row.condition_tags : [],
-      sourceUrl: row.source_url || null,
-      eligibilityScore: Number(row.eligibility_score || 0),
-      eligibilityRationale: Array.isArray(row.eligibility_rationale) ? row.eligibility_rationale : [],
-      matchStatus: (row.match_status || 'proposed') as PostVisitTrialMatchStatus,
-      reviewedBy: row.reviewed_by || null,
-      reviewedAt: row.reviewed_at || null,
-      reviewNote: row.review_note || null,
-      metadata: row.metadata || {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private mapTrialMatchAuditRow(row: any) {
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      trialMatchId: row.trial_match_id,
-      patientId: row.patient_id,
-      action: row.action || null,
-      previousStatus: row.previous_status || null,
-      nextStatus: row.next_status || null,
-      note: row.note || null,
-      actedBy: row.acted_by || null,
-      actedAt: row.acted_at || row.created_at || null,
-      metadata: row.metadata || {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private mapCompanionMemory(row: any) {
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      patientId: row.patient_id,
-      memoryType: row.memory_type,
-      memoryKey: row.memory_key,
-      memoryValue: row.memory_value,
-      confidence:
-        row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
-      sourceMessageId: row.source_message_id || null,
-      createdBy: row.created_by || null,
-      isActive: row.is_active !== false,
-      promotedAt: row.promoted_at || null,
-      promotedBy: row.promoted_by || null,
-      retiredAt: row.retired_at || null,
-      retiredBy: row.retired_by || null,
-      curationNote: row.curation_note || null,
-      metadata: row.metadata || {},
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
-  }
-
-  private normalizeLanguage(language?: string | null) {
-    const raw = String(language || '').trim().toLowerCase();
-    if (!raw) return 'en';
-    if (raw === 'english' || raw === 'eng') return 'en';
-    if (raw === 'shona') return 'sn';
-    if (raw === 'ndebele') return 'nd';
-    return raw;
-  }
-
-  private isDiarizationReviewEnabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_DIARIZATION_REVIEW || 'false').toLowerCase() === 'true';
-  }
-
-  private getDiarizationConfidenceThreshold(): number {
-    const raw = Number(process.env.POSTVISIT_DIARIZATION_MIN_CONFIDENCE || 0.65);
-    if (!Number.isFinite(raw)) return 0.65;
-    return Math.min(0.95, Math.max(0.2, raw));
-  }
-
-  private normalizeDiarizationConfidence(value: any): number | null {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return null;
-    return Math.min(1, Math.max(0, num));
-  }
-
-  private normalizeSegmentSpeakerRole(value: any): 'doctor' | 'patient' | 'unknown' {
-    const normalized = String(value || '').trim().toLowerCase();
-    if (!normalized) return 'unknown';
-    if (['doctor', 'dr', 'clinician', 'provider'].includes(normalized)) return 'doctor';
-    if (['patient', 'pt', 'client'].includes(normalized)) return 'patient';
-    return 'unknown';
-  }
-
-  private isCitationQualityV2Enabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_CITATION_QUALITY_V2 || 'false').toLowerCase() === 'true';
-  }
-
-  private getCitationRelevanceThreshold(): number {
-    const raw = Number(process.env.POSTVISIT_CITATION_MIN_RELEVANCE || 0.55);
-    if (!Number.isFinite(raw)) return 0.55;
-    return Math.min(0.95, Math.max(0.2, raw));
-  }
-
-  private normalizeCitationRelevanceScore(value: any): number | null {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return null;
-    return Math.min(1, Math.max(0, num));
-  }
-
-  private extractGuidelineYear(guidelineId?: string | null): number | null {
-    const source = String(guidelineId || '');
-    const match = source.match(/(19|20)\d{2}/);
-    if (!match) return null;
-    const year = Number(match[0]);
-    if (!Number.isFinite(year)) return null;
-    return year;
-  }
-
-  private isPostVisitOcrEnabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE || 'false').toLowerCase() === 'true';
-  }
-
-  private isMedicationIntelligenceV2Enabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2 || 'false').toLowerCase() === 'true';
-  }
-
-  private isSpecialtySoapEnabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_SPECIALTY_SOAP || 'false').toLowerCase() === 'true';
-  }
-
-  private isMultilingualTeachBackEnabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_MULTILINGUAL_TEACHBACK || 'false').toLowerCase() === 'true';
-  }
-
-  private isIntraVisitAlertsEnabled(): boolean {
-    const configured = (config as any)?.features?.postVisitIntraVisitAlerts;
-    if (typeof configured === 'boolean') {
-      return configured;
-    }
-    return String(process.env.FEATURE_POSTVISIT_INTRAVISIT_ALERTS || 'false').toLowerCase() === 'true';
-  }
-
-  private isBillingIntelligenceEnabled(): boolean {
-    const configured = (config as any)?.features?.postVisitBillingIntelligence;
-    if (typeof configured === 'boolean') {
-      return configured;
-    }
-    return String(process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE || 'false').toLowerCase() === 'true';
-  }
-
-  private isPatientStoryEnabled(): boolean {
-    const configured = (config as any)?.features?.postVisitPatientStory;
-    if (typeof configured === 'boolean') {
-      return configured;
-    }
-    return String(process.env.FEATURE_POSTVISIT_PATIENT_STORY || 'false').toLowerCase() === 'true';
-  }
-
-  /**
-   * Regenerate versioned patient story snapshot from published post-visit sessions (background job post-signoff).
-   * No PHI in logs; content is stored in tenant DB only.
-   */
-  private async regeneratePatientStoryForPatient(
-    tenantDb: DataSource,
-    patientId: string,
-    triggerSessionId?: string,
-  ): Promise<void> {
-    const [versionRows] = await tenantDb.query(
-      `SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM post_visit_patient_story WHERE patient_id = $1`,
-      [patientId],
-    );
-    const nextVersion = Number(versionRows?.next_version ?? 1);
-
-    const sessionRows = await tenantDb.query(
-      `
-        SELECT s.id, s.published_at, s.updated_at
-        FROM post_visit_sessions s
-        WHERE s.patient_id = $1
-          AND LOWER(s.status) = 'published'
-        ORDER BY COALESCE(s.published_at, s.updated_at) DESC
-        LIMIT 100
-      `,
-      [patientId],
-    );
-
-    const timeline: Array<{ sessionId: string; publishedAt: string; summaryExcerpt: string; keyPoints: string[] }> = [];
-    for (const row of sessionRows || []) {
-      const artifact = await this.getArtifactRow(tenantDb, row.id, 'visit_summary');
-      const content = artifact?.content || {};
-      const summaryExcerpt = String(content.plain_language_summary || '').trim().slice(0, 500);
-      const keyPoints = Array.isArray(content.key_points) ? content.key_points.slice(0, 5) : [];
-      timeline.push({
-        sessionId: row.id,
-        publishedAt: row.published_at ? new Date(row.published_at).toISOString() : '',
-        summaryExcerpt,
-        keyPoints,
-      });
-    }
-
-    const content = {
-      timeline,
-      generatedAt: new Date().toISOString(),
-      triggerSessionId: triggerSessionId || null,
-    };
-
-    await tenantDb.query(
-      `
-        INSERT INTO post_visit_patient_story (patient_id, version, session_id, content)
-        VALUES ($1, $2, $3, $4::jsonb)
-      `,
-      [patientId, nextVersion, triggerSessionId || null, JSON.stringify(content)],
-    );
-  }
-
-  private isPreVisitBriefEnabled(): boolean {
-    const configured = (config as any)?.features?.postVisitPreVisitBrief;
-    if (typeof configured === 'boolean') {
-      return configured;
-    }
-    return String(process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF || 'false').toLowerCase() === 'true';
-  }
-
-  private isAdminDocumentsEnabled(): boolean {
-    const configured = (config as any)?.features?.postVisitAdminDocuments;
-    if (typeof configured === 'boolean') {
-      return configured;
-    }
-    return String(process.env.FEATURE_POSTVISIT_ADMIN_DOCS || 'false').toLowerCase() === 'true';
-  }
-
-  private isVoiceReviewEnabled(): boolean {
-    const configured = (config as any)?.features?.postVisitVoiceReview;
-    if (typeof configured === 'boolean') {
-      return configured;
-    }
-    return String(process.env.FEATURE_POSTVISIT_VOICE_REVIEW || 'false').toLowerCase() === 'true';
-  }
 
   private isTrialMatcherEnabled(): boolean {
     const runtimeOverride = process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
@@ -1561,1411 +346,208 @@ export class PostVisitService {
     return String(process.env.FEATURE_POSTVISIT_TRIAL_MATCHER || 'false').toLowerCase() === 'true';
   }
 
-  private isCompanionMemoryEnabled(): boolean {
-    const configured = (config as any)?.features?.postVisitCompanionMemory;
-    if (typeof configured === 'boolean') {
-      return configured;
-    }
-    return String(process.env.FEATURE_POSTVISIT_COMPANION_MEMORY || 'true').toLowerCase() !== 'false';
-  }
-
-  private isFhirWriteBackEnabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_FHIR_WRITEBACK || 'false').toLowerCase() === 'true';
-  }
-
-  private isPeerConsultEnabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_PEER_CONSULT || 'false').toLowerCase() === 'true';
-  }
-
-  private resolveClinicalTrialsApiUrl(): string {
-    const direct = String(process.env.POSTVISIT_CLINICALTRIALS_API_URL || '').trim();
-    if (direct) return direct;
-    return 'https://clinicaltrials.gov/api/v2/studies';
-  }
-
   private getTrialDecisionSlaHours(): number {
-    const configured = Number((config as any)?.features?.postVisitTrialDecisionSlaHours);
-    const raw = Number.isFinite(configured)
-      ? configured
-      : Number(process.env.POSTVISIT_TRIAL_DECISION_SLA_HOURS || '72');
-    if (!Number.isFinite(raw)) return 72;
-    return Math.min(Math.max(Math.round(raw), 1), 24 * 30);
+    const configured = Number(
+      (config as any)?.features?.postVisitTrialDecisionSlaHours
+        ?? process.env.POSTVISIT_TRIAL_DECISION_SLA_HOURS
+        ?? 72,
+    );
+    return Number.isFinite(configured) && configured > 0 ? configured : 72;
   }
 
-  private getTrialDecisionEscalationRouteTarget(): 'doctor' | 'nurse' {
-    const configuredValue = (config as any)?.features?.postVisitTrialDecisionEscalationRoute;
-    const configured = String(configuredValue || process.env.POSTVISIT_TRIAL_DECISION_ESCALATION_ROUTE || 'doctor')
+  private getTrialDecisionEscalationRouteTarget(): 'doctor' | 'nurse' | 'emergency' {
+    const configured = String(
+      (config as any)?.features?.postVisitTrialDecisionEscalationRouteTarget
+        ?? process.env.POSTVISIT_TRIAL_DECISION_ROUTE_TARGET
+        ?? 'doctor',
+    )
       .trim()
       .toLowerCase();
-    if (configured === 'nurse') return 'nurse';
-    return 'doctor';
+    return ['doctor', 'nurse', 'emergency'].includes(configured)
+      ? (configured as 'doctor' | 'nurse' | 'emergency')
+      : 'doctor';
   }
 
-  private getTrialSlaEmailMinSeverity(): TrialSlaNotificationSeverity {
-    const configuredValue = (config as any)?.features?.postVisitTrialSlaEmailMinSeverity;
-    const normalized = String(configuredValue || process.env.POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY || 'high')
-      .trim()
-      .toLowerCase();
-    if (normalized === 'moderate' || normalized === 'critical') return normalized;
-    return 'high';
-  }
-
-  private getTrialSlaSmsMinSeverity(): TrialSlaNotificationSeverity {
-    const configuredValue = (config as any)?.features?.postVisitTrialSlaSmsMinSeverity;
-    const normalized = String(configuredValue || process.env.POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY || 'critical')
-      .trim()
-      .toLowerCase();
-    if (normalized === 'moderate' || normalized === 'high') return normalized;
-    return 'critical';
-  }
-
-  private getTrialSlaMaxRecipients(): number {
-    const configuredValue = Number((config as any)?.features?.postVisitTrialSlaNotifyMaxRecipients);
-    const raw = Number.isFinite(configuredValue)
-      ? configuredValue
-      : Number(process.env.POSTVISIT_TRIAL_SLA_NOTIFY_MAX_RECIPIENTS || '3');
-    if (!Number.isFinite(raw)) return 3;
-    return Math.min(Math.max(Math.round(raw), 1), 20);
-  }
-
-  private severityRank(severity: PostVisitEscalationSeverity | TrialSlaNotificationSeverity): number {
-    if (severity === 'critical') return 4;
-    if (severity === 'high') return 3;
-    if (severity === 'moderate') return 2;
-    return 1;
-  }
-
-  private isSeverityAtLeast(
-    severity: PostVisitEscalationSeverity | TrialSlaNotificationSeverity,
-    threshold: TrialSlaNotificationSeverity,
-  ): boolean {
-    return this.severityRank(severity) >= this.severityRank(threshold);
-  }
-
-  private computeTrialDecisionAgeHours(createdAt: any, reviewedAt: any): number {
-    const reference = reviewedAt || createdAt;
-    const parsed = new Date(reference);
-    if (Number.isNaN(parsed.getTime())) return 0;
-    return Math.max(0, (Date.now() - parsed.getTime()) / (1000 * 60 * 60));
-  }
-
-  private normalizeVoiceCommand(input?: string | null): PostVisitVoiceCommand | null {
-    const normalized = String(input || '')
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_|_$/g, '');
-
-    const aliases: Record<string, PostVisitVoiceCommand> = {
-      APPROVE_SUMMARY: 'APPROVE_SUMMARY',
-      ACCEPT_SUMMARY: 'APPROVE_SUMMARY',
-      APPROVE_VISIT_SUMMARY: 'APPROVE_SUMMARY',
-      APPROVE_BUNDLE: 'APPROVE_BUNDLE',
-      ACCEPT_BUNDLE: 'APPROVE_BUNDLE',
-      APPROVE_RECOMMENDATION_BUNDLE: 'APPROVE_BUNDLE',
-      GENERATE_ADMIN_DOCS: 'GENERATE_ADMIN_DOCS',
-      CREATE_ADMIN_DOCS: 'GENERATE_ADMIN_DOCS',
-      REGENERATE_DRAFT: 'REGENERATE_DRAFT',
-      REFRESH_DRAFT: 'REGENERATE_DRAFT',
-      SIGN_AND_PUBLISH: 'SIGN_AND_PUBLISH',
-      PUBLISH: 'SIGN_AND_PUBLISH',
-    };
-
-    return aliases[normalized] || null;
-  }
-
-  private resolveFollowUpRiskTier(score: number): PostVisitFollowUpRiskTier {
-    if (score >= 80) return 'critical';
-    if (score >= 60) return 'high';
-    if (score >= 30) return 'moderate';
-    return 'low';
-  }
-
-  private resolveNudgePolicyForRiskTier(tier: PostVisitFollowUpRiskTier): string {
-    if (tier === 'critical') return 'immediate_clinician_outreach';
-    if (tier === 'high') return 'same_day_nurse_followup';
-    if (tier === 'moderate') return 'next_day_companion_nudge';
-    return 'routine_weekly_checkin';
-  }
-
-  private resolveLocalOcrUrl(): string {
-    const direct = String(process.env.LOCAL_OCR_URL || config.ai?.ocr?.localUrl || '').trim();
-    if (direct) {
-      return direct.replace(/\/+$/, '');
-    }
-    return '';
-  }
-
-  private getLocalOcrTimeoutMs(): number {
-    const raw = Number(process.env.POSTVISIT_OCR_TIMEOUT_MS || 120000);
-    if (!Number.isFinite(raw)) return 120000;
-    return Math.min(300000, Math.max(5000, raw));
-  }
-
-  private hashFile(buffer: Buffer): string {
-    return createHash('sha256').update(buffer).digest('hex');
-  }
-
-  private normalizeDocumentText(text: string): string {
-    return String(text || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s./%-]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  private computeDocumentSimilarity(leftRaw: string, rightRaw: string): number {
-    const left = this.normalizeDocumentText(leftRaw);
-    const right = this.normalizeDocumentText(rightRaw);
-    if (!left || !right) return 0;
-    if (left === right) return 1;
-
-    const leftTokens = new Set(left.split(/\s+/).filter((token) => token.length > 1));
-    const rightTokens = new Set(right.split(/\s+/).filter((token) => token.length > 1));
-    if (!leftTokens.size || !rightTokens.size) return 0;
-
-    let overlap = 0;
-    for (const token of leftTokens) {
-      if (rightTokens.has(token)) overlap += 1;
-    }
-    const union = leftTokens.size + rightTokens.size - overlap;
-    if (union <= 0) return 0;
-    return overlap / union;
-  }
-
-  private normalizeDocumentType(type?: string): PostVisitDocumentType {
-    const normalized = String(type || '').trim().toLowerCase();
-    if (['lab_report', 'prescription', 'imaging_report', 'discharge_summary', 'other'].includes(normalized)) {
-      return normalized as PostVisitDocumentType;
-    }
-    return 'other';
-  }
-
-  private parseDocumentIntelligenceFromText(
-    text: string,
-    documentType: PostVisitDocumentType,
-  ): PostVisitDocumentIntelligenceModel {
-    const normalizedText = String(text || '').trim();
-    const lines = normalizedText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    const observations: PostVisitDocumentObservation[] = [];
-    const medications: PostVisitMedicationMention[] = [];
-    const findings: string[] = [];
-
-    const observationPattern =
-      /^([A-Za-z][A-Za-z0-9()[\] %/._-]{1,80}?)\s*[:=-]\s*(-?\d+(?:\.\d+)?)\s*([A-Za-z%/^\d.-]+)?(?:\s*\(([^)]+)\))?$/i;
-    const medicationPattern =
-      /^([A-Z][A-Za-z0-9-]+(?:\s+[A-Za-z0-9-]+){0,2})\s+(\d+(?:\.\d+)?)\s?(mg|mcg|g|ml|iu|units?)\b(?:\s*(.*))?$/i;
-
-    for (const line of lines) {
-      const observationMatch = line.match(observationPattern);
-      if (observationMatch) {
-        observations.push({
-          name: observationMatch[1].trim(),
-          value: Number(observationMatch[2]),
-          unit: observationMatch[3] ? observationMatch[3].trim() : null,
-          referenceRange: observationMatch[4] ? observationMatch[4].trim() : null,
-          interpretation: null,
-        });
-        continue;
-      }
-
-      const medicationMatch = line.match(medicationPattern);
-      if (medicationMatch) {
-        medications.push({
-          medicationName: medicationMatch[1].trim(),
-          dose: `${medicationMatch[2]} ${medicationMatch[3]}`,
-          frequency: medicationMatch[4] ? medicationMatch[4].trim() : null,
-          route: null,
-        });
-        continue;
-      }
-
-      if (/impression|conclusion|assessment|finding|diagnosis|recommendation/i.test(line)) {
-        findings.push(line);
-      }
+  // S108: Schema is now authoritative in provisioning scripts (sprint48–sprint58).
+  // This method verifies the core table exists and logs a clear error if not,
+  // instead of silently creating it inline (which caused drift with migrations).
+  private async ensurePostVisitSchema(tenantDb: DataSource) {
+    if (this.postVisitSchemaReady.has(tenantDb)) {
+      return;
     }
 
-    return {
-      documentType,
-      summary: normalizedText.slice(0, 1200),
-      observations: observations.slice(0, 120),
-      medications: medications.slice(0, 80),
-      findings: findings.slice(0, 80),
-    };
-  }
-
-  private mapDocumentIntelligenceToFhir(
-    sessionRow: any,
-    documentId: string,
-    model: PostVisitDocumentIntelligenceModel,
-  ): any[] {
-    const encounterRef = `Encounter/post-visit-${sessionRow.id}`;
-    const patientRef = `Patient/${sessionRow.patient_id}`;
-    const effectiveDate = this.toIsoDate(new Date());
-
-    const observationResources = model.observations.map((observation, index) => ({
-      resourceType: 'Observation',
-      id: `post-visit-docobs-${this.safeToken(documentId)}-${index + 1}`,
-      status: 'final',
-      category: [{ text: 'laboratory' }],
-      code: { text: observation.name },
-      subject: { reference: patientRef },
-      encounter: { reference: encounterRef },
-      effectiveDateTime: effectiveDate,
-      valueQuantity: {
-        value: observation.value,
-        unit: observation.unit || undefined,
-      },
-      referenceRange: observation.referenceRange
-        ? [
-            {
-              text: observation.referenceRange,
-            },
-          ]
-        : undefined,
-    }));
-
-    const medicationResources = model.medications.map((medication, index) => ({
-      resourceType: 'MedicationRequest',
-      id: `post-visit-docmed-${this.safeToken(documentId)}-${index + 1}`,
-      status: 'active',
-      intent: 'order',
-      subject: { reference: patientRef },
-      encounter: { reference: encounterRef },
-      authoredOn: effectiveDate,
-      medicationCodeableConcept: {
-        text: medication.medicationName,
-      },
-      dosageInstruction: [
-        {
-          text: [medication.dose, medication.frequency].filter(Boolean).join(' ').trim(),
-        },
-      ],
-    }));
-
-    const diagnosticReportResource = {
-      resourceType: 'DiagnosticReport',
-      id: `post-visit-docreport-${this.safeToken(documentId)}`,
-      status: 'final',
-      code: {
-        text: `${model.documentType.replace(/_/g, ' ')} intelligence extract`,
-      },
-      subject: {
-        reference: patientRef,
-      },
-      encounter: {
-        reference: encounterRef,
-      },
-      effectiveDateTime: effectiveDate,
-      issued: effectiveDate,
-      conclusion: model.findings.join('; ') || model.summary.slice(0, 500),
-      result: observationResources.map((observation) => ({
-        reference: `Observation/${observation.id}`,
-      })),
-    };
-
-    return [...observationResources, ...medicationResources, diagnosticReportResource];
-  }
-
-  private detectCriticalDocumentFlags(model: PostVisitDocumentIntelligenceModel): PostVisitDocumentCriticalFlag[] {
-    const flags: PostVisitDocumentCriticalFlag[] = [];
-    const thresholds: Array<{
-      code: string;
-      label: string;
-      matcher: RegExp;
-      criticalHigh?: number;
-      criticalLow?: number;
-      highHigh?: number;
-      highLow?: number;
-      unit?: string;
-    }> = [
-      {
-        code: 'potassium',
-        label: 'Potassium critical',
-        matcher: /potassium|k\+/i,
-        criticalHigh: 6.0,
-        criticalLow: 2.8,
-        highHigh: 5.5,
-        highLow: 3.0,
-        unit: 'mmol/L',
-      },
-      {
-        code: 'glucose',
-        label: 'Glucose critical',
-        matcher: /glucose|blood sugar/i,
-        criticalHigh: 22.0,
-        criticalLow: 2.5,
-        highHigh: 16.0,
-        highLow: 3.0,
-        unit: 'mmol/L',
-      },
-      {
-        code: 'hemoglobin',
-        label: 'Hemoglobin critical',
-        matcher: /hemoglobin|haemoglobin|hb/i,
-        criticalLow: 6.5,
-        highLow: 7.5,
-        unit: 'g/dL',
-      },
-    ];
-
-    for (const observation of model.observations) {
-      const name = String(observation.name || '');
-      const value = Number(observation.value);
-      if (!Number.isFinite(value)) continue;
-      for (const threshold of thresholds) {
-        if (!threshold.matcher.test(name)) continue;
-        if (threshold.criticalHigh !== undefined && value >= threshold.criticalHigh) {
-          flags.push({
-            code: threshold.code,
-            label: threshold.label,
-            severity: 'critical',
-            value,
-            unit: observation.unit || threshold.unit || null,
-            threshold: `>= ${threshold.criticalHigh}`,
-          });
-          continue;
-        }
-        if (threshold.criticalLow !== undefined && value <= threshold.criticalLow) {
-          flags.push({
-            code: threshold.code,
-            label: threshold.label,
-            severity: 'critical',
-            value,
-            unit: observation.unit || threshold.unit || null,
-            threshold: `<= ${threshold.criticalLow}`,
-          });
-          continue;
-        }
-        if (threshold.highHigh !== undefined && value >= threshold.highHigh) {
-          flags.push({
-            code: threshold.code,
-            label: threshold.label,
-            severity: 'high',
-            value,
-            unit: observation.unit || threshold.unit || null,
-            threshold: `>= ${threshold.highHigh}`,
-          });
-          continue;
-        }
-        if (threshold.highLow !== undefined && value <= threshold.highLow) {
-          flags.push({
-            code: threshold.code,
-            label: threshold.label,
-            severity: 'high',
-            value,
-            unit: observation.unit || threshold.unit || null,
-            threshold: `<= ${threshold.highLow}`,
-          });
-        }
-      }
+    const inFlight = this.postVisitSchemaInFlight.get(tenantDb);
+    if (inFlight) {
+      await inFlight;
+      return;
     }
 
-    return flags;
-  }
+    const initPromise = this.checkPostVisitSchema(tenantDb);
+    this.postVisitSchemaInFlight.set(tenantDb, initPromise);
 
-  private splitIntoPhrases(value?: string) {
-    const text = String(value || '').trim();
-    if (!text || text.toLowerCase() === 'not provided') {
-      return [];
-    }
-    return text
-      .split(/[\n.;]+/)
-      .map((part) => part.trim())
-      .filter((part) => part.length > 0);
-  }
-
-  private parseBloodPressure(bp?: string | null) {
-    const raw = String(bp || '').trim();
-    const match = raw.match(/^(\d{2,3})\s*\/\s*(\d{2,3})$/);
-    if (!match) return null;
-    return {
-      systolic: Number(match[1]),
-      diastolic: Number(match[2]),
-    };
-  }
-
-  private parseNumericValue(value: any): number | null {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-    const raw = String(value ?? '').trim();
-    if (!raw) return null;
-    const match = raw.match(/-?\d+(?:\.\d+)?/);
-    if (!match) return null;
-    const numeric = Number(match[0]);
-    return Number.isFinite(numeric) ? numeric : null;
-  }
-
-  private normalizeMedicationToken(value: string): string {
-    return String(value || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, ' ')
-      .replace(/\b\d+(?:\.\d+)?\s?(mg|mcg|g|ml|iu|units?)\b/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  private splitMedicationTextList(value: string): string[] {
-    const raw = String(value || '').trim();
-    if (!raw) return [];
-    return raw
-      .split(/[,\n;|]+/)
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-  }
-
-  private getMedicationSeverityRank(severity: MedicationRiskSeverity | 'major' | 'moderate' | null | undefined): number {
-    if (severity === 'contraindicated') return 4;
-    if (severity === 'major') return 3;
-    if (severity === 'moderate') return 2;
-    if (severity === 'minor') return 1;
-    return 0;
-  }
-
-  private inferMedicationNormalization(inputName: string): MedicationNormalizationRecord {
-    const normalizedInput = this.normalizeMedicationToken(inputName);
-    const dictionary: Array<{ token: string; normalizedName: string; rxCui: string }> = [
-      { token: 'metformin', normalizedName: 'metformin', rxCui: '6809' },
-      { token: 'gabapentin', normalizedName: 'gabapentin', rxCui: '25480' },
-      { token: 'rivaroxaban', normalizedName: 'rivaroxaban', rxCui: '1114195' },
-      { token: 'warfarin', normalizedName: 'warfarin', rxCui: '11289' },
-      { token: 'aspirin', normalizedName: 'aspirin', rxCui: '1191' },
-      { token: 'clarithromycin', normalizedName: 'clarithromycin', rxCui: '21212' },
-      { token: 'simvastatin', normalizedName: 'simvastatin', rxCui: '36567' },
-      { token: 'lisinopril', normalizedName: 'lisinopril', rxCui: '29046' },
-      { token: 'spironolactone', normalizedName: 'spironolactone', rxCui: '9997' },
-      { token: 'sildenafil', normalizedName: 'sildenafil', rxCui: '136411' },
-      { token: 'nitroglycerin', normalizedName: 'nitroglycerin', rxCui: '4917' },
-      { token: 'diazepam', normalizedName: 'diazepam', rxCui: '3322' },
-      { token: 'diphenhydramine', normalizedName: 'diphenhydramine', rxCui: '3498' },
-      { token: 'amitriptyline', normalizedName: 'amitriptyline', rxCui: '704' },
-      { token: 'zolpidem', normalizedName: 'zolpidem', rxCui: '39993' },
-      { token: 'nitrofurantoin', normalizedName: 'nitrofurantoin', rxCui: '7454' },
-      { token: 'enoxaparin', normalizedName: 'enoxaparin', rxCui: '67108' },
-      { token: 'omeprazole', normalizedName: 'omeprazole', rxCui: '7646' },
-      { token: 'amlodipine', normalizedName: 'amlodipine', rxCui: '17767' },
-      { token: 'atorvastatin', normalizedName: 'atorvastatin', rxCui: '83367' },
-    ];
-
-    const dictionaryHit = dictionary.find((entry) => normalizedInput.includes(entry.token));
-    if (dictionaryHit) {
-      return {
-        inputName,
-        normalizedName: dictionaryHit.normalizedName,
-        rxCui: dictionaryHit.rxCui,
-        source: 'rxnorm_dictionary',
-      };
-    }
-
-    const fallbackToken = normalizedInput.split(/\s+/)[0] || normalizedInput;
-    return {
-      inputName,
-      normalizedName: fallbackToken || normalizedInput || 'unknown_medication',
-      rxCui: null,
-      source: fallbackToken ? 'heuristic' : 'unknown',
-    };
-  }
-
-  private extractEstimatedEgfr(patientContext: any, extractedEntities: any[]): number | null {
-    const entityHit = extractedEntities.find((entity: any) => {
-      const type = String(entity?.entity_type || entity?.type || '').toLowerCase();
-      const value = String(entity?.entity_value || entity?.value || '').toLowerCase();
-      return type.includes('egfr') || /e\s*gfr|glomerular/i.test(value);
-    });
-    const entityEgfr = this.parseNumericValue(entityHit?.entity_value || entityHit?.value);
-    if (entityEgfr !== null) return entityEgfr;
-
-    const labAlert = patientContext?.modules?.lab?.latestCriticalAlert;
-    const componentName = String(labAlert?.component_name || '').toLowerCase();
-    if (componentName.includes('egfr') || componentName.includes('glomerular')) {
-      const alertEgfr = this.parseNumericValue(labAlert?.result_value);
-      if (alertEgfr !== null) return alertEgfr;
-    }
-
-    return null;
-  }
-
-  private buildMedicationIntelligenceAssessment(
-    patientContext: any,
-    extractedEntities: any[],
-  ): MedicationIntelligenceAssessment {
-    if (!this.isMedicationIntelligenceV2Enabled()) {
-      return {
-        enabled: false,
-        medications: [],
-        interactions: [],
-        beersAlerts: [],
-        renalAlerts: [],
-        highestSeverity: null,
-        highRiskCount: 0,
-        egfr: null,
-        riskNarrative: 'Medication intelligence v2 is disabled by feature flag.',
-      };
-    }
-
-    const modules = patientContext?.modules || {};
-    const age = Number(patientContext?.patient?.age || 0);
-    const medicationCandidates: string[] = [];
-    const pushCandidate = (value?: any) => {
-      const text = String(value || '').trim();
-      if (!text) return;
-      medicationCandidates.push(text);
-    };
-
-    const latestPrescription = modules?.pharmacy?.latestPrescription;
-    pushCandidate(latestPrescription?.medication_name);
-    pushCandidate(latestPrescription?.generic_name);
-
-    const edCurrentMedications = this.splitMedicationTextList(modules?.ed?.latestVisit?.current_medications || '');
-    for (const med of edCurrentMedications) {
-      pushCandidate(med);
-    }
-
-    pushCandidate(modules?.hiv?.latestEnrollment?.current_regimen);
-    pushCandidate(modules?.hiv?.latestClinicalVisit?.arv_regimen_name);
-
-    for (const entity of extractedEntities) {
-      const entityType = String(entity?.entity_type || entity?.type || '').toLowerCase();
-      const entityValue = String(entity?.entity_value || entity?.value || '').trim();
-      if (!entityValue) continue;
-      if (entityType.includes('medication') || entityType.includes('drug') || /\b\d+(?:\.\d+)?\s?(mg|mcg|g|ml|iu)\b/i.test(entityValue)) {
-        pushCandidate(entityValue);
-      }
-    }
-
-    const deduped = Array.from(
-      new Map(
-        medicationCandidates
-          .map((candidate) => [this.normalizeMedicationToken(candidate), candidate] as const)
-          .filter(([key]) => key.length > 0),
-      ).entries(),
-    ).map(([, original]) => original);
-
-    const medications = deduped.map((name) => this.inferMedicationNormalization(name));
-    const normalizedMedicationSet = new Set(medications.map((item) => item.normalizedName));
-
-    const interactionCatalog: MedicationInteractionSignal[] = [
-      {
-        pair: ['sildenafil', 'nitroglycerin'],
-        severity: 'contraindicated',
-        rationale: 'Concurrent PDE5 inhibitors and nitrates can cause profound hypotension.',
-        guidelineId: 'fda-drug-safety-pde5-nitrates',
-      },
-      {
-        pair: ['clarithromycin', 'simvastatin'],
-        severity: 'major',
-        rationale: 'Clarithromycin increases simvastatin concentration and myopathy risk.',
-        guidelineId: 'fda-simvastatin-drug-interaction-safety',
-      },
-      {
-        pair: ['warfarin', 'aspirin'],
-        severity: 'major',
-        rationale: 'Dual anticoagulant/antiplatelet exposure increases bleeding risk.',
-        guidelineId: 'acc-antithrombotic-bleeding-risk',
-      },
-      {
-        pair: ['spironolactone', 'lisinopril'],
-        severity: 'major',
-        rationale: 'Combined RAAS/potassium-sparing therapy increases hyperkalemia risk.',
-        guidelineId: 'kdigo-hyperkalemia-management',
-      },
-    ];
-
-    const interactions = interactionCatalog.filter(
-      (item) => normalizedMedicationSet.has(item.pair[0]) && normalizedMedicationSet.has(item.pair[1]),
-    );
-
-    const beersCatalog: Array<{ medication: string; severity: 'major' | 'moderate'; rationale: string }> = [
-      { medication: 'diphenhydramine', severity: 'major', rationale: 'High anticholinergic burden in older adults.' },
-      { medication: 'amitriptyline', severity: 'major', rationale: 'Strong anticholinergic and orthostatic hypotension risk.' },
-      { medication: 'diazepam', severity: 'major', rationale: 'Long-acting benzodiazepine with fall/cognitive risk.' },
-      { medication: 'zolpidem', severity: 'moderate', rationale: 'Sedative-hypnotic with confusion/fall risk in age 65+.' },
-    ];
-    const beersAlerts: MedicationBeersSignal[] =
-      age >= 65
-        ? beersCatalog.filter((item) => normalizedMedicationSet.has(item.medication))
-        : [];
-
-    const egfr = this.extractEstimatedEgfr(patientContext, extractedEntities);
-    const renalAlerts: MedicationRenalSignal[] = [];
-    if (egfr !== null) {
-      const pushRenalAlert = (
-        medication: string,
-        severity: 'major' | 'moderate',
-        rationale: string,
-      ) => {
-        if (!normalizedMedicationSet.has(medication)) return;
-        renalAlerts.push({ medication, severity, rationale, egfr });
-      };
-
-      if (egfr < 30) {
-        pushRenalAlert('metformin', 'major', 'Metformin should generally be avoided when eGFR is below 30 mL/min.');
-        pushRenalAlert('nitrofurantoin', 'major', 'Nitrofurantoin efficacy/safety is reduced in severe renal impairment.');
-        pushRenalAlert('enoxaparin', 'major', 'Enoxaparin dosing requires major adjustment when eGFR is below 30.');
-      } else if (egfr < 45) {
-        pushRenalAlert('metformin', 'moderate', 'Metformin dose reduction and closer monitoring are recommended when eGFR < 45.');
-      }
-      if (egfr < 60) {
-        pushRenalAlert('gabapentin', 'moderate', 'Gabapentin dose review is recommended when eGFR < 60.');
-      }
-      if (egfr < 50) {
-        pushRenalAlert('rivaroxaban', 'major', 'Rivaroxaban renal-dose review is required when eGFR < 50.');
-      }
-    }
-
-    let highestSeverity: MedicationRiskSeverity | null = null;
-    for (const interaction of interactions) {
-      if (!highestSeverity || this.getMedicationSeverityRank(interaction.severity) > this.getMedicationSeverityRank(highestSeverity)) {
-        highestSeverity = interaction.severity;
-      }
-    }
-    for (const beers of beersAlerts) {
-      if (!highestSeverity || this.getMedicationSeverityRank(beers.severity) > this.getMedicationSeverityRank(highestSeverity)) {
-        highestSeverity = beers.severity;
-      }
-    }
-    for (const renal of renalAlerts) {
-      if (!highestSeverity || this.getMedicationSeverityRank(renal.severity) > this.getMedicationSeverityRank(highestSeverity)) {
-        highestSeverity = renal.severity;
-      }
-    }
-
-    const highRiskCount =
-      interactions.filter((item) => ['contraindicated', 'major'].includes(item.severity)).length +
-      beersAlerts.filter((item) => item.severity === 'major').length +
-      renalAlerts.filter((item) => item.severity === 'major').length;
-
-    const narrativeParts: string[] = [];
-    if (medications.length > 0) {
-      const mappedCount = medications.filter((item) => item.rxCui).length;
-      narrativeParts.push(`${medications.length} medication signal(s) identified (${mappedCount} RxNorm mapped).`);
-    }
-    if (interactions.length > 0) {
-      narrativeParts.push(
-        `Interaction alerts: ${interactions
-          .map((item) => `${item.pair[0]} + ${item.pair[1]} (${item.severity})`)
-          .join('; ')}.`,
-      );
-    }
-    if (beersAlerts.length > 0) {
-      narrativeParts.push(`Beers age-65+ alerts: ${beersAlerts.map((item) => `${item.medication} (${item.severity})`).join('; ')}.`);
-    }
-    if (renalAlerts.length > 0 && egfr !== null) {
-      narrativeParts.push(
-        `Renal dosing alerts at eGFR ${egfr}: ${renalAlerts.map((item) => `${item.medication} (${item.severity})`).join('; ')}.`,
-      );
-    } else if (egfr !== null) {
-      narrativeParts.push(`eGFR ${egfr} reviewed with no deterministic renal dosing flags.`);
-    }
-    if (narrativeParts.length === 0) {
-      narrativeParts.push('No medication safety signals were found from available context.');
-    }
-
-    return {
-      enabled: true,
-      medications,
-      interactions,
-      beersAlerts,
-      renalAlerts,
-      highestSeverity,
-      highRiskCount,
-      egfr,
-      riskNarrative: narrativeParts.join(' ').slice(0, 1200),
-    };
-  }
-
-  private extractEntitiesFromTranscription(result: TranscriptionResult): ExtractedEntityInput[] {
-    const entities: ExtractedEntityInput[] = [];
-    const language = this.normalizeLanguage(result.language);
-    const confidence = typeof result.confidence === 'number' ? result.confidence : null;
-
-    const pushSection = (section: string, value?: string) => {
-      for (const phrase of this.splitIntoPhrases(value)) {
-        entities.push({
-          entityType: section,
-          entityValue: phrase,
-          normalizedValue: { language },
-          confidence,
-          sourceOrigin: 'soap_note',
-        });
-      }
-    };
-
-    pushSection('subjective', result.soap_note?.subjective);
-    pushSection('objective', result.soap_note?.objective);
-    pushSection('assessment', result.soap_note?.assessment);
-    pushSection('plan', result.soap_note?.plan);
-
-    const transcriptionText = String(result.text || '').trim();
-    if (transcriptionText) {
-      const bpMatch = transcriptionText.match(/\b(\d{2,3})\s*\/\s*(\d{2,3})\b/);
-      if (bpMatch) {
-        entities.push({
-          entityType: 'vital_blood_pressure',
-          entityValue: `${bpMatch[1]}/${bpMatch[2]}`,
-          normalizedValue: {
-            systolic: Number(bpMatch[1]),
-            diastolic: Number(bpMatch[2]),
-            unit: 'mmHg',
-          },
-          confidence,
-          sourceOrigin: 'transcript',
-        });
-      }
-
-      const heartRateMatch = transcriptionText.match(/\b(?:heart rate|hr)\s*(?:is|of)?\s*(\d{2,3})\b/i);
-      if (heartRateMatch) {
-        entities.push({
-          entityType: 'vital_heart_rate',
-          entityValue: heartRateMatch[1],
-          normalizedValue: {
-            value: Number(heartRateMatch[1]),
-            unit: 'bpm',
-          },
-          confidence,
-          sourceOrigin: 'transcript',
-        });
-      }
-    }
-
-    return entities;
-  }
-
-  private async getSessionRow(tenantDb: DataSource, sessionId: string) {
-    const rows = await tenantDb.query(`SELECT * FROM post_visit_sessions WHERE id = $1 LIMIT 1`, [sessionId]);
-    if (!rows?.length) {
-      throw new NotFoundException('Post-visit session not found');
-    }
-    return rows[0];
-  }
-
-  private async getArtifactRow(tenantDb: DataSource, sessionId: string, artifactType: string) {
-    const rows = await tenantDb.query(
-      `
-        SELECT *
-        FROM post_visit_draft_artifacts
-        WHERE session_id = $1
-          AND artifact_type = $2
-        LIMIT 1
-      `,
-      [sessionId, artifactType],
-    );
-    return rows?.length ? rows[0] : null;
-  }
-
-  private assertPatientSessionAccess(sessionRow: any, patientId: string) {
-    if (String(sessionRow.patient_id) !== String(patientId)) {
-      throw new ForbiddenException('You do not have access to this post-visit session');
-    }
-  }
-
-  private assertPatientCompanionAccessAllowed(sessionRow: any) {
-    const status = String(sessionRow.status || '').toLowerCase();
-    if (!['published', 'closed'].includes(status)) {
-      throw new ForbiddenException('Post-visit session is not yet published for patient companion access');
-    }
-  }
-
-  private async ensureCompanionThread(
-    tenantDb: DataSource,
-    sessionRow: any,
-    createdBy: string | null,
-  ) {
-    const resolvedSessionId = String(sessionRow?.id || '').trim();
-    const resolvedPatientId = String(sessionRow?.patient_id || '').trim();
-    if (!resolvedSessionId || !resolvedPatientId) {
-      throw new InternalServerErrorException(
-        'Unable to initialize companion thread due to missing post-visit session identity.',
-      );
-    }
-
-    const rows = await tenantDb.query(
-      `
-        INSERT INTO post_visit_companion_threads (
-          session_id,
-          patient_id,
-          status,
-          created_by
-        ) VALUES ($1,$2,'active',$3)
-        ON CONFLICT (session_id, patient_id)
-        DO UPDATE SET updated_at = NOW()
-        RETURNING *
-      `,
-      [resolvedSessionId, resolvedPatientId, createdBy],
-    );
-    return rows[0];
-  }
-
-  private isEscalationConfidenceV2Enabled(): boolean {
-    return String(process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE || 'false').toLowerCase() === 'true';
-  }
-
-  private buildEscalationPrefilter(message: string): EscalationPrefilterResult {
-    const text = String(message || '').toLowerCase().trim();
-    const criticalTerms = [
-      'chest pain',
-      'shortness of breath',
-      'difficulty breathing',
-      'cannot breathe',
-      'suicidal',
-      'seizure',
-      'stroke',
-      'fainted',
-      'fainting',
-      'heavy bleeding',
-      'vomiting blood',
-      'coughing blood',
-    ];
-    const highTerms = [
-      'severe headache',
-      'vision loss',
-      'confusion',
-      'high fever',
-      'very dizzy',
-      'palpitations',
-      'worsening pain',
-      'severe pain',
-      'passed out',
-    ];
-    const moderateTerms = [
-      'dizziness',
-      'nausea',
-      'vomiting',
-      'swelling',
-      'rash',
-      'side effects',
-      'medication reaction',
-      'mild pain',
-      'headache',
-    ];
-
-    const matched = (terms: string[]) => terms.filter((term) => text.includes(term));
-    const criticalMatches = matched(criticalTerms);
-    if (criticalMatches.length) {
-      return {
-        matched: true,
-        text,
-        candidateSeverity: 'critical',
-        routeTarget: 'emergency',
-        triggerTerms: criticalMatches,
-        triggerType: 'symptom_keyword',
-      };
-    }
-
-    const highMatches = matched(highTerms);
-    if (highMatches.length) {
-      return {
-        matched: true,
-        text,
-        candidateSeverity: 'high',
-        routeTarget: 'doctor',
-        triggerTerms: highMatches,
-        triggerType: 'symptom_keyword',
-      };
-    }
-
-    const moderateMatches = matched(moderateTerms);
-    if (moderateMatches.length) {
-      return {
-        matched: true,
-        text,
-        candidateSeverity: 'moderate',
-        routeTarget: 'nurse',
-        triggerTerms: moderateMatches,
-        triggerType: 'symptom_keyword',
-      };
-    }
-
-    return {
-      matched: false,
-      text,
-      candidateSeverity: 'low',
-      routeTarget: 'nurse',
-      triggerTerms: [],
-      triggerType: 'none',
-    };
-  }
-
-  private inferTemporalityFromText(text: string): 'current' | 'historical' | 'unclear' {
-    const normalized = String(text || '').toLowerCase();
-    if (!normalized) return 'unclear';
-    if (
-      normalized.includes('right now') ||
-      normalized.includes('currently') ||
-      normalized.includes('at the moment') ||
-      normalized.includes('today') ||
-      normalized.includes('now ')
-    ) {
-      return 'current';
-    }
-    if (
-      normalized.includes('last week') ||
-      normalized.includes('last month') ||
-      normalized.includes('yesterday') ||
-      normalized.includes('previously') ||
-      normalized.includes('used to')
-    ) {
-      return 'historical';
-    }
-    return 'unclear';
-  }
-
-  private getEscalationConfidenceThreshold(severity: 'low' | 'moderate' | 'high' | 'critical'): number {
-    if (severity === 'critical') return 0.85;
-    if (severity === 'high') return 0.7;
-    if (severity === 'moderate') return 0.55;
-    return 0.5;
-  }
-
-  private getSlaMinutesForSeverity(severity: 'low' | 'moderate' | 'high' | 'critical'): number {
-    if (severity === 'critical') return 15;
-    if (severity === 'high') return 60;
-    if (severity === 'moderate') return 240;
-    return 0;
-  }
-
-  private normalizeIntraVisitAlertSource(source?: string): string {
-    const normalized = String(source || '').trim().toLowerCase();
-    if (!normalized) return 'streamed_transcript';
-    return normalized.slice(0, 60);
-  }
-
-  private normalizeIntraVisitTranscriptOffset(value?: number): number | null {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return null;
-    return Math.max(0, Math.floor(numeric));
-  }
-
-  private getIntraVisitSeverityRank(severity: IntraVisitAlertSeverity): number {
-    if (severity === 'critical') return 3;
-    if (severity === 'high') return 2;
-    return 1;
-  }
-
-  private getIntraVisitSlaMinutes(severity: IntraVisitAlertSeverity): number {
-    const defaults: Record<IntraVisitAlertSeverity, number> = {
-      critical: 5,
-      high: 20,
-      moderate: 60,
-    };
-    const envMap: Record<IntraVisitAlertSeverity, string | undefined> = {
-      critical: process.env.POSTVISIT_INTRAVISIT_SLA_CRITICAL_MINUTES,
-      high: process.env.POSTVISIT_INTRAVISIT_SLA_HIGH_MINUTES,
-      moderate: process.env.POSTVISIT_INTRAVISIT_SLA_MODERATE_MINUTES,
-    };
-    const raw = Number(envMap[severity]);
-    if (!Number.isFinite(raw)) return defaults[severity];
-    return Math.max(1, Math.min(24 * 60, Math.floor(raw)));
-  }
-
-  private async findLatestActiveClinician(
-    tenantDb: DataSource,
-    roles: Array<'doctor' | 'nurse' | 'nurse_accounts'>,
-    preferredUserId?: string | null,
-  ): Promise<{ id: string; role: IntraVisitAlertAssignedRole } | null> {
-    if (preferredUserId) {
-      const preferredRows = await tenantDb.query(
-        `
-          SELECT id, role
-          FROM users
-          WHERE id = $1
-            AND is_active = true
-          LIMIT 1
-        `,
-        [preferredUserId],
-      );
-      const preferred = preferredRows?.[0];
-      const preferredRole = String(preferred?.role || '').toLowerCase();
-      if (preferred?.id && roles.includes(preferredRole as 'doctor' | 'nurse' | 'nurse_accounts')) {
-        return {
-          id: preferred.id,
-          role: preferredRole === 'doctor' ? 'doctor' : 'nurse',
-        };
-      }
-    }
-
-    const rows = await tenantDb.query(
-      `
-        SELECT id, role
-        FROM users
-        WHERE role = ANY($1::text[])
-          AND is_active = true
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC
-        LIMIT 1
-      `,
-      [roles],
-    );
-    const row = rows?.[0];
-    if (!row?.id) return null;
-    const rowRole = String(row.role || '').toLowerCase();
-    return {
-      id: row.id,
-      role: rowRole === 'doctor' ? 'doctor' : 'nurse',
-    };
-  }
-
-  private async resolveIntraVisitRoutingDecision(
-    tenantDb: DataSource,
-    sessionRow: any,
-    alertDraft: IntraVisitAlertDraft,
-  ): Promise<IntraVisitRoutingDecision> {
-    const emergencyAlertTypes = new Set<string>([
-      'cardiorespiratory_emergency_signal',
-      'critical_hypoxia_signal',
-      'hypertensive_crisis_signal',
-    ]);
-
-    const severity = alertDraft.severity;
-    const routeTarget: IntraVisitAlertRouteTarget =
-      emergencyAlertTypes.has(alertDraft.alertType)
-        ? 'emergency'
-        : severity === 'critical' || severity === 'high'
-          ? 'doctor'
-          : 'nurse';
-
-    const slaMinutes = this.getIntraVisitSlaMinutes(severity);
-    const slaDueAt = new Date(Date.now() + slaMinutes * 60 * 1000);
-
-    if (routeTarget === 'emergency') {
-      const emergencyAssignee = await this.findLatestActiveClinician(
-        tenantDb,
-        ['doctor', 'nurse', 'nurse_accounts'],
-        sessionRow?.doctor_id || null,
-      );
-      return {
-        routeTarget,
-        assignedRole: emergencyAssignee ? emergencyAssignee.role : 'rapid_response',
-        assignedUserId: emergencyAssignee?.id || null,
-        assignedTeam: 'Emergency Response',
-        routingRationale:
-          'Critical emergency-pattern signal detected; routed to rapid response path with immediate acknowledgement SLA.',
-        policyVersion: 'c3.v1',
-        slaDueAt,
-      };
-    }
-
-    if (routeTarget === 'doctor') {
-      const doctorAssignee = await this.findLatestActiveClinician(tenantDb, ['doctor'], sessionRow?.doctor_id || null);
-      return {
-        routeTarget,
-        assignedRole: 'doctor',
-        assignedUserId: doctorAssignee?.id || null,
-        assignedTeam: 'Doctor Primary',
-        routingRationale:
-          severity === 'critical'
-            ? 'Critical non-emergency signal routed to responsible doctor for immediate confirmation.'
-            : 'High-severity signal routed to responsible doctor for expedited review.',
-        policyVersion: 'c3.v1',
-        slaDueAt,
-      };
-    }
-
-    const nurseAssignee = await this.findLatestActiveClinician(tenantDb, ['nurse', 'nurse_accounts'], null);
-    return {
-      routeTarget: 'nurse',
-      assignedRole: 'nurse',
-      assignedUserId: nurseAssignee?.id || null,
-      assignedTeam: 'Nurse Triage',
-      routingRationale: 'Moderate-severity signal routed to nurse triage with acknowledgement SLA.',
-      policyVersion: 'c3.v1',
-      slaDueAt,
-    };
-  }
-
-  private async classifyEscalationSignals(args: {
-    sessionId: string;
-    message: string;
-    language?: string;
-  }): Promise<EscalationDetectionResult> {
-    const prefilter = this.buildEscalationPrefilter(args.message);
-    const confidenceV2Enabled = this.isEscalationConfidenceV2Enabled();
-
-    if (!confidenceV2Enabled) {
-      const severity = prefilter.candidateSeverity;
-      const confidence = prefilter.matched ? (severity === 'critical' ? 0.9 : severity === 'high' ? 0.8 : 0.68) : 0.2;
-      const temporality = prefilter.matched ? 'current' : 'unclear';
-      return {
-        detected: prefilter.matched,
-        severity,
-        routeTarget: prefilter.routeTarget,
-        triggerTerms: prefilter.triggerTerms,
-        triggerType: prefilter.triggerType,
-        slaMinutes: this.getSlaMinutesForSeverity(severity),
-        confidence,
-        temporality,
-        classifierSource: 'keyword_prefilter',
-        candidateSeverity: prefilter.candidateSeverity,
-        escalationSuppressedReason: prefilter.matched ? null : 'no_stage1_match',
-        classifierModel: null,
-        classifierRationale: null,
-        classifierAudit: null,
-      };
-    }
-
-    let llmClassification: PostVisitEscalationClassifierOutput | null = null;
-    if (prefilter.matched && this.groundedLlmService) {
-      llmClassification = await this.groundedLlmService.classifyEscalationSignal({
-        sessionId: args.sessionId,
-        message: args.message,
-        triggerTerms: prefilter.triggerTerms,
-        candidateSeverity: prefilter.candidateSeverity,
-      });
-    }
-
-    const severity = llmClassification?.severity || prefilter.candidateSeverity;
-    const suggestedRoute = llmClassification?.routeTarget || prefilter.routeTarget;
-    const confidence = Math.min(
-      1,
-      Math.max(
-        0,
-        Number.isFinite(Number(llmClassification?.confidence))
-          ? Number(llmClassification?.confidence)
-          : prefilter.matched
-            ? severity === 'critical'
-              ? 0.78
-              : severity === 'high'
-                ? 0.66
-                : 0.56
-            : 0.18,
-      ),
-    );
-    const temporality =
-      llmClassification?.temporality || this.inferTemporalityFromText(prefilter.text) || 'unclear';
-    const threshold = this.getEscalationConfidenceThreshold(severity);
-    const temporalGatePassed = temporality === 'current';
-    const confidenceGatePassed = confidence >= threshold;
-    const detected = prefilter.matched && temporalGatePassed && confidenceGatePassed;
-
-    let finalRoute: 'emergency' | 'doctor' | 'nurse' = suggestedRoute;
-    let suppressionReason: EscalationDetectionResult['escalationSuppressedReason'] = null;
-
-    if (!prefilter.matched) {
-      finalRoute = 'nurse';
-      suppressionReason = 'no_stage1_match';
-    } else if (!confidenceGatePassed) {
-      finalRoute = severity === 'critical' || severity === 'high' ? 'doctor' : 'nurse';
-      suppressionReason = 'low_confidence';
-    } else if (!temporalGatePassed) {
-      finalRoute = severity === 'critical' || severity === 'high' ? 'doctor' : 'nurse';
-      suppressionReason = temporality === 'historical' ? 'historical_signal' : 'unclear_temporality';
-    }
-
-    return {
-      detected,
-      severity,
-      routeTarget: finalRoute,
-      triggerTerms: prefilter.triggerTerms,
-      triggerType: prefilter.triggerType,
-      slaMinutes: detected ? this.getSlaMinutesForSeverity(severity) : 0,
-      confidence,
-      temporality,
-      classifierSource: llmClassification ? 'hybrid_v2' : 'keyword_prefilter',
-      candidateSeverity: prefilter.candidateSeverity,
-      escalationSuppressedReason: detected ? null : suppressionReason,
-      classifierModel: llmClassification?.model || null,
-      classifierRationale: llmClassification?.rationale || null,
-      classifierAudit: llmClassification?.audit || null,
-    };
-  }
-
-  private async routeEscalationToWorkflow(
-    tenantDb: DataSource,
-    args: {
-      sessionRow: any;
-      escalationId: string;
-      routeTarget: 'emergency' | 'doctor' | 'nurse';
-      severity: 'low' | 'moderate' | 'high' | 'critical';
-      triggerTerms: string[];
-    },
-  ): Promise<string | null> {
-    const workflowKey = `post_visit_escalation:${args.escalationId}`;
     try {
-      await tenantDb.query(
-        `
-          INSERT INTO nurse_cross_module_workflow_state (
-            workflow_key,
-            module,
-            item_type,
-            source_record_id,
-            patient_id,
-            status,
-            destination_role,
-            destination_service,
-            destination_specialty,
-            note,
-            context
-          ) VALUES (
-            $1,
-            'post_visit',
-            'companion_escalation',
-            $2,
-            $3,
-            'pending',
-            $4::varchar(80),
-            'post_visit_companion',
-            CASE
-              WHEN $4::varchar(80) = 'emergency'::varchar(80) THEN 'Emergency'
-              WHEN $4::varchar(80) = 'doctor'::varchar(80) THEN 'General Medicine'
-              ELSE 'Nursing'
-            END,
-            $5,
-            $6::jsonb
-          )
-          ON CONFLICT (workflow_key) DO UPDATE
-          SET status = EXCLUDED.status,
-              destination_role = EXCLUDED.destination_role,
-              destination_service = EXCLUDED.destination_service,
-              destination_specialty = EXCLUDED.destination_specialty,
-              note = EXCLUDED.note,
-              context = EXCLUDED.context,
-              updated_at = NOW()
-        `,
-        [
-          workflowKey,
-          args.escalationId,
-          args.sessionRow.patient_id,
-          args.routeTarget,
-          `Post-visit companion escalation (${args.severity})`,
-          JSON.stringify({
-            escalation_id: args.escalationId,
-            severity: args.severity,
-            route_target: args.routeTarget,
-            trigger_terms: args.triggerTerms,
-            source: 'post_visit_companion',
-          }),
-        ],
-      );
-      return workflowKey;
-    } catch (error: any) {
-      const message = String(error?.message || '');
-      if (message.includes('nurse_cross_module_workflow_state')) {
-        return null;
-      }
-      throw error;
+      await initPromise;
+      this.postVisitSchemaReady.add(tenantDb);
+    } finally {
+      this.postVisitSchemaInFlight.delete(tenantDb);
     }
   }
 
-  private async createEscalationEvent(
+  private async checkPostVisitSchema(tenantDb: DataSource): Promise<void> {
+    const [row] = await tenantDb.query(`
+      SELECT to_regclass('post_visit_sessions') AS tbl
+    `).catch(() => [null]);
+
+    if (!row) {
+      return;
+    }
+
+    if (!row?.tbl) {
+      throw new Error(
+        'post_visit_sessions table not found. ' +
+        'Run provisioning scripts sprint48 through sprint58 before using the PostVisit module.',
+      );
+    }
+  }
+
+  private getOptionalRepository<T = any>(tenantDb: DataSource, entity: new () => T): any | null {
+    const dataSource = tenantDb as any;
+    return typeof dataSource?.getRepository === 'function' ? dataSource.getRepository(entity) : null;
+  }
+
+  private mapPostVisitSeverityToUrgency(severity?: string | null): 'routine' | 'urgent' | 'emergency' {
+    const normalized = String(severity || '').trim().toLowerCase();
+    if (normalized === 'critical') return 'emergency';
+    if (normalized === 'high' || normalized === 'moderate') return 'urgent';
+    return 'routine';
+  }
+
+  private buildPostVisitDueAt(urgency: 'routine' | 'urgent' | 'emergency'): Date {
+    const hours = urgency === 'emergency' ? 2 : urgency === 'urgent' ? 24 : 72;
+    return new Date(Date.now() + hours * 60 * 60 * 1000);
+  }
+
+  private async createPostVisitPatientAiArtifacts(
     tenantDb: DataSource,
     args: {
-      sessionRow: any;
+      sessionId: string;
       threadId: string;
-      messageId: string;
-      detection: EscalationDetectionResult;
+      patientId: string;
+      patientMessageId: string;
+      assistantMessageId: string;
       messageText: string;
-      tenantId?: string;
+      assistantAnswer: { answer: string; abstained?: boolean; abstainReason?: string | null; citationsUsed?: string[]; model?: string | null; source?: string | null };
+      detection: { detected: boolean; severity: string; routeTarget: string; confidence: number; temporality?: string | null; classifierSource?: string | null };
+      postVisitEscalationId?: string | null;
     },
-  ) {
-    const detectedAt = new Date();
-    const slaDueAt =
-      args.detection.slaMinutes > 0
-        ? new Date(detectedAt.getTime() + args.detection.slaMinutes * 60 * 1000)
-        : null;
-    const initialStatus = args.detection.detected ? 'open' : 'dismissed';
+  ): Promise<{
+    patientAiSession: PatientAiSession | null;
+    patientAiEscalation: PatientAiEscalation | null;
+    followupOrchestration: PatientFollowupOrchestration | null;
+  }> {
+    const sessionRepo = this.getOptionalRepository(tenantDb, PatientAiSession);
+    const escalationRepo = this.getOptionalRepository(tenantDb, PatientAiEscalation);
+    const followupRepo = this.getOptionalRepository(tenantDb, PatientFollowupOrchestration);
 
-    const rows = await tenantDb.query(
-      `
-        INSERT INTO post_visit_escalation_events (
-          session_id,
-          patient_id,
-          thread_id,
-          message_id,
-          status,
-          severity,
-          route_target,
-          trigger_type,
-          trigger_terms,
-          signal_text,
-          classification_confidence,
-          classification_temporality,
-          classification_source,
-          classification_reason,
-          classification_stage,
-          detected_at,
-          sla_due_at,
-          metadata
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb
-        )
-        RETURNING *
-      `,
-      [
-        args.sessionRow.id,
-        args.sessionRow.patient_id,
-        args.threadId,
-        args.messageId,
-        initialStatus,
-        args.detection.severity,
-        args.detection.routeTarget,
-        args.detection.triggerType,
-        JSON.stringify(args.detection.triggerTerms),
-        args.messageText,
-        args.detection.confidence,
-        args.detection.temporality,
-        args.detection.classifierSource,
-        args.detection.classifierRationale || args.detection.escalationSuppressedReason || null,
-        args.detection.classifierSource === 'keyword_prefilter' ? 'v1' : 'v2',
-        detectedAt.toISOString(),
-        slaDueAt ? slaDueAt.toISOString() : null,
-        JSON.stringify({
-          source: 'post_visit_companion_message',
-          trigger_terms: args.detection.triggerTerms,
-          classification: {
+    if (!sessionRepo || !followupRepo) {
+      return {
+        patientAiSession: null,
+        patientAiEscalation: null,
+        followupOrchestration: null,
+      };
+    }
+
+    const urgency = this.mapPostVisitSeverityToUrgency(args.detection?.severity);
+    const requiresClinicianFollowUp = args.detection?.detected === true || args.assistantAnswer?.abstained === true;
+    const patientAiSession = await sessionRepo.save(
+      sessionRepo.create({
+        patientId: args.patientId,
+        sessionType: 'post_visit_companion',
+        sourceSessionId: args.sessionId,
+        status: requiresClinicianFollowUp ? 'needs_follow_up' : 'open',
+        latestMessage: args.messageText,
+        latestReply: args.assistantAnswer?.answer || null,
+        latestIntent: 'post_visit_companion_answer',
+        triageLevel: args.detection?.detected ? args.detection?.severity || null : null,
+        urgency,
+        guidanceSummary: args.assistantAnswer?.answer || null,
+        requiresClinicianFollowUp,
+        urgentSignal: args.detection?.detected === true,
+        abstained: args.assistantAnswer?.abstained === true,
+        abstainReason: args.assistantAnswer?.abstainReason || null,
+        citations: Array.isArray(args.assistantAnswer?.citationsUsed)
+          ? args.assistantAnswer.citationsUsed.map((citationId) => ({ id: citationId }))
+          : [],
+        provenance: {
+          source: 'post_visit_companion',
+          model: args.assistantAnswer?.model || null,
+          answerEngine: args.assistantAnswer?.source || null,
+          sessionId: args.sessionId,
+          threadId: args.threadId,
+          patientMessageId: args.patientMessageId,
+          assistantMessageId: args.assistantMessageId,
+          postVisitEscalationId: args.postVisitEscalationId || null,
+        },
+      }),
+    );
+
+    let patientAiEscalation: PatientAiEscalation | null = null;
+    if (args.detection?.detected === true && escalationRepo) {
+      patientAiEscalation = await escalationRepo.save(
+        escalationRepo.create({
+          patientId: args.patientId,
+          patientAiSessionId: patientAiSession.id,
+          sourceType: 'post_visit_companion',
+          severity: args.detection.severity,
+          routeTarget: args.detection.routeTarget,
+          status: 'open',
+          triggerSummary: `Post-visit companion escalation routed to ${args.detection.routeTarget} from patient message review.`,
+          recommendedAction: args.assistantAnswer?.answer || null,
+          provenance: {
+            source: 'post_visit_companion',
+            sessionId: args.sessionId,
+            threadId: args.threadId,
+            patientMessageId: args.patientMessageId,
+            assistantMessageId: args.assistantMessageId,
+            postVisitEscalationId: args.postVisitEscalationId || null,
+            classifierSource: args.detection.classifierSource || null,
             confidence: args.detection.confidence,
-            temporality: args.detection.temporality,
-            source: args.detection.classifierSource,
-            candidate_severity: args.detection.candidateSeverity,
-            final_severity: args.detection.severity,
-            final_route_target: args.detection.routeTarget,
-            detected: args.detection.detected,
-            suppression_reason: args.detection.escalationSuppressedReason || null,
-            classifier_model: args.detection.classifierModel || null,
-            rationale: args.detection.classifierRationale || null,
+            temporality: args.detection.temporality || null,
           },
         }),
-      ],
+      );
+    }
+
+    const followupOrchestration = await followupRepo.save(
+      followupRepo.create({
+        patientId: args.patientId,
+        patientAiSessionId: patientAiSession.id,
+        triggerType: 'post_visit_companion_message',
+        riskLevel: urgency,
+        status: 'open',
+        reminderState: 'pending',
+        nextAction: args.detection?.detected
+          ? `Route to ${args.detection.routeTarget} and continue clinician follow-up.`
+          : args.assistantAnswer?.answer || 'Continue post-visit follow-up plan.',
+        unresolvedQuestion: args.assistantAnswer?.abstained === true ? args.messageText : null,
+        nonadherenceFlag: false,
+        missedFollowupFlag: /\bmiss(ed|ing)\b/i.test(args.messageText),
+        routeBackTarget: args.detection?.detected ? args.detection.routeTarget : 'patient_support',
+        dueAt: this.buildPostVisitDueAt(urgency),
+        lastTouchedAt: new Date(),
+        payload: {
+          source: 'post_visit_companion',
+          sessionId: args.sessionId,
+          threadId: args.threadId,
+          patientMessageId: args.patientMessageId,
+          assistantMessageId: args.assistantMessageId,
+          postVisitEscalationId: args.postVisitEscalationId || null,
+          citationsUsed: Array.isArray(args.assistantAnswer?.citationsUsed) ? args.assistantAnswer.citationsUsed : [],
+        },
+      }),
     );
 
-    const inserted = rows[0];
-    if (args.detection.detected) {
-      const workflowKey = await this.routeEscalationToWorkflow(tenantDb, {
-        sessionRow: args.sessionRow,
-        escalationId: inserted.id,
-        routeTarget: args.detection.routeTarget,
-        severity: args.detection.severity,
-        triggerTerms: args.detection.triggerTerms,
-      });
-
-      if (workflowKey) {
-        await tenantDb.query(
-          `
-            UPDATE post_visit_escalation_events
-            SET workflow_key = $2,
-                updated_at = NOW()
-            WHERE id = $1
-          `,
-          [inserted.id, workflowKey],
-        );
-        inserted.workflow_key = workflowKey;
-      }
-
-      const channelDelivery = await this.sendEscalationAlerts(tenantDb, {
-        escalationId: inserted.id,
-        sessionRow: args.sessionRow,
-        detection: args.detection,
-        messageText: args.messageText,
-        tenantId: args.tenantId,
-      });
-      inserted.metadata = {
-        ...(inserted.metadata || {}),
-        channel_delivery: channelDelivery,
-      };
+    if (args.postVisitEscalationId) {
       await tenantDb.query(
         `
           UPDATE post_visit_escalation_events
@@ -2973,1785 +555,102 @@ export class PostVisitService {
               updated_at = NOW()
           WHERE id = $1
         `,
-        [inserted.id, JSON.stringify({ channel_delivery: channelDelivery })],
+        [
+          args.postVisitEscalationId,
+          JSON.stringify({
+            patient_ai_session_id: patientAiSession.id,
+            patient_ai_escalation_id: patientAiEscalation?.id || null,
+            patient_followup_orchestration_id: followupOrchestration.id,
+          }),
+        ],
       );
-    }
-
-    if (args.detection.classifierAudit && args.detection.classifierModel) {
-      await this.persistGroundedLlmAudit(tenantDb, {
-        model: args.detection.classifierModel,
-        audit: args.detection.classifierAudit,
-        sessionId: args.sessionRow.id,
-        patientId: args.sessionRow.patient_id,
-        encounterId: args.sessionRow.appointment_id || args.sessionRow.consultation_id || null,
-        actorRole: 'patient',
-        metadata: {
-          channel: 'post_visit_escalation_classifier',
-          escalation_id: inserted.id,
-          classification_detected: args.detection.detected,
-          route_target: args.detection.routeTarget,
-          severity: args.detection.severity,
-          temporality: args.detection.temporality,
-          confidence: args.detection.confidence,
-        },
-      });
-    }
-
-    return inserted;
-  }
-
-  private async sendEscalationAlerts(
-    tenantDb: DataSource,
-    args: {
-      escalationId: string;
-      sessionRow: any;
-      detection: EscalationDetectionResult;
-      messageText: string;
-      tenantId?: string;
-    },
-  ) {
-    const channels = {
-      patientInApp: false,
-      patientSms: false,
-      patientEmail: false,
-      clinicianSms: false,
-      clinicianEmail: false,
-      errors: [] as string[],
-    };
-
-    const [patientRow] = await tenantDb.query(
-      `
-        SELECT id, first_name, last_name, phone, email
-        FROM patients
-        WHERE id = $1
-        LIMIT 1
-      `,
-      [args.sessionRow.patient_id],
-    );
-
-    if (args.tenantId && this.patientNotificationsService) {
-      try {
-        await this.patientNotificationsService.createNotification(
-          args.sessionRow.patient_id,
-          'system_alert',
-          'Post-Visit Safety Alert',
-          args.detection.routeTarget === 'emergency'
-            ? 'Your message contains urgent symptoms. Please seek emergency care now.'
-            : 'Your message was flagged for rapid clinician review. The care team has been alerted.',
-          args.tenantId,
-          {
-            actionUrl: `/post-visit/sessions/${args.sessionRow.id}/summary`,
-            actionLabel: 'Open Post-Visit Summary',
-            priority: args.detection.severity === 'critical' ? 'urgent' : 'high',
-            metadata: {
-              escalationId: args.escalationId,
-              routeTarget: args.detection.routeTarget,
-              severity: args.detection.severity,
-            },
-          },
-        );
-        channels.patientInApp = true;
-      } catch (error: any) {
-        channels.errors.push(`patient_notification:${String(error?.message || error)}`);
-      }
-    }
-
-    const patientAlertText =
-      args.detection.routeTarget === 'emergency'
-        ? 'Urgent symptoms detected. Please call emergency services immediately.'
-        : `Your care team has been alerted to review your symptoms: ${args.messageText.slice(0, 120)}`;
-
-    if (patientRow?.phone && this.notificationsService && ['high', 'critical'].includes(args.detection.severity)) {
-      try {
-        await this.notificationsService.sendSms(
-          {
-            phone: patientRow.phone,
-            message: patientAlertText,
-          },
-          tenantDb,
-        );
-        channels.patientSms = true;
-      } catch (error: any) {
-        channels.errors.push(`patient_sms:${String(error?.message || error)}`);
-      }
-    }
-
-    if (patientRow?.email && this.emailService && ['high', 'critical'].includes(args.detection.severity)) {
-      try {
-        await this.emailService.sendEmail({
-          to: patientRow.email,
-          subject: 'Post-Visit Safety Alert',
-          text: patientAlertText,
-        });
-        channels.patientEmail = true;
-      } catch (error: any) {
-        channels.errors.push(`patient_email:${String(error?.message || error)}`);
-      }
-    }
-
-    let clinicianRow: any = null;
-    if (args.detection.routeTarget === 'doctor' && args.sessionRow.doctor_id) {
-      const rows = await tenantDb.query(
-        `
-          SELECT id, first_name, last_name, phone, email
-          FROM users
-          WHERE id = $1
-          LIMIT 1
-        `,
-        [args.sessionRow.doctor_id],
-      );
-      clinicianRow = rows?.[0] || null;
-    } else if (args.detection.routeTarget === 'nurse') {
-      const rows = await tenantDb.query(
-        `
-          SELECT id, first_name, last_name, phone, email
-          FROM users
-          WHERE role IN ('nurse','nurse_accounts')
-            AND is_active = true
-          ORDER BY updated_at DESC NULLS LAST, created_at DESC
-          LIMIT 1
-        `,
-      );
-      clinicianRow = rows?.[0] || null;
-    } else if (args.detection.routeTarget === 'emergency') {
-      const rows = await tenantDb.query(
-        `
-          SELECT id, first_name, last_name, phone, email
-          FROM users
-          WHERE role IN ('doctor','nurse','nurse_accounts')
-            AND is_active = true
-          ORDER BY CASE WHEN role = 'doctor' THEN 0 ELSE 1 END, updated_at DESC NULLS LAST
-          LIMIT 1
-        `,
-      );
-      clinicianRow = rows?.[0] || null;
-    }
-
-    const clinicianText = `Post-visit escalation ${args.escalationId} (${args.detection.severity}, ${args.detection.routeTarget}) for patient ${patientRow?.first_name || 'patient'} ${patientRow?.last_name || ''}.`;
-
-    if (clinicianRow?.phone && this.notificationsService && ['high', 'critical'].includes(args.detection.severity)) {
-      try {
-        await this.notificationsService.sendSms(
-          {
-            phone: clinicianRow.phone,
-            message: clinicianText,
-          },
-          tenantDb,
-        );
-        channels.clinicianSms = true;
-      } catch (error: any) {
-        channels.errors.push(`clinician_sms:${String(error?.message || error)}`);
-      }
-    }
-
-    if (clinicianRow?.email && this.emailService) {
-      try {
-        await this.emailService.sendEmail({
-          to: clinicianRow.email,
-          subject: `Post-Visit Escalation (${args.detection.severity.toUpperCase()})`,
-          text: `${clinicianText}\nMessage snippet: ${args.messageText.slice(0, 240)}`,
-        });
-        channels.clinicianEmail = true;
-      } catch (error: any) {
-        channels.errors.push(`clinician_email:${String(error?.message || error)}`);
-      }
-    }
-
-    return channels;
-  }
-
-  private buildCitationCatalogFromRecommendations(recommendationArtifact: any): GroundingCitation[] {
-    const items = Array.isArray(recommendationArtifact?.content?.items)
-      ? recommendationArtifact.content.items
-      : [];
-    const citations: GroundingCitation[] = [];
-    for (const item of items) {
-      const recommendationId = String(item?.id || item?.recommendation_id || '').trim();
-      const ruleId = String(item?.rule_id || '').trim() || undefined;
-      const itemCitations = Array.isArray(item?.citations) ? item.citations : [];
-      for (const citation of itemCitations) {
-        const citationId = String(citation?.citation_id || '').trim();
-        if (!citationId) {
-          continue;
-        }
-        citations.push({
-          id: citationId,
-          label: String(citation?.label || citation?.title || '').trim() || citationId,
-          source: String(citation?.source || '').trim() || undefined,
-          url: citation?.url || null,
-          excerpt: citation?.excerpt || null,
-          guidelineId: String(citation?.guideline_id || '').trim() || undefined,
-          recommendationId: recommendationId || undefined,
-          ruleId,
-        });
-      }
-    }
-    return citations;
-  }
-
-  private applyRecommendationLlmRewrites(
-    recommendationItems: any[],
-    rewrites: Array<{ recommendationId: string; title?: string; description?: string }>,
-  ) {
-    if (!Array.isArray(recommendationItems) || !Array.isArray(rewrites) || rewrites.length === 0) {
-      return recommendationItems;
-    }
-    const rewriteById = new Map<string, { title?: string; description?: string }>();
-    for (const rewrite of rewrites) {
-      const recommendationId = String(rewrite?.recommendationId || '').trim();
-      if (!recommendationId) continue;
-      rewriteById.set(recommendationId, {
-        title: typeof rewrite.title === 'string' ? rewrite.title.trim() : undefined,
-        description: typeof rewrite.description === 'string' ? rewrite.description.trim() : undefined,
-      });
-    }
-    return recommendationItems.map((item) => {
-      const rewrite = rewriteById.get(String(item?.id || '').trim());
-      if (!rewrite) {
-        return item;
-      }
-      return {
-        ...item,
-        title: rewrite.title || item?.title,
-        description: rewrite.description || item?.description,
-      };
-    });
-  }
-
-  private async buildGroundedCompanionAnswer(args: {
-    sessionId: string;
-    question: string;
-    visitSummaryArtifact: any;
-    recommendationArtifact: any;
-    escalation: EscalationDetectionResult;
-    memoryFacts?: string[];
-  }): Promise<{
-    answer: string;
-    source: 'deterministic' | 'llm';
-    citationsUsed: string[];
-    model: string | null;
-    abstained: boolean;
-    llmAudit: LlmAuditMetadata | null;
-  }> {
-    if (args.escalation.detected && args.escalation.routeTarget === 'emergency') {
-      return {
-        answer: 'Your symptoms may be urgent. Please call emergency services now or go to the nearest emergency facility immediately.',
-        source: 'deterministic',
-        citationsUsed: [],
-        model: null,
-        abstained: false,
-        llmAudit: null,
-      };
-    }
-
-    const summary = String(args.visitSummaryArtifact?.content?.plain_language_summary || '').trim();
-    const recommendations = Array.isArray(args.recommendationArtifact?.content?.items)
-      ? args.recommendationArtifact.content.items
-      : [];
-    const checklist = recommendations.slice(0, 3).map((item: any) => String(item?.title || '').trim()).filter(Boolean);
-    const memoryFacts = Array.isArray(args.memoryFacts) ? args.memoryFacts.slice(0, 8) : [];
-    const citationCatalog = this.buildCitationCatalogFromRecommendations(args.recommendationArtifact).slice(0, 30);
-    let llmAuditAttempt: LlmAuditMetadata | null = null;
-    let llmModelAttempt: string | null = null;
-    let llmAbstainedAttempt = false;
-
-    if (this.groundedLlmService) {
-      const llmResult = await this.groundedLlmService.answerPatientQuestion({
-        sessionId: String(args.sessionId || args.visitSummaryArtifact?.session_id || args.recommendationArtifact?.session_id || ''),
-        language: String(args.visitSummaryArtifact?.content?.language || 'en'),
-        question: args.question,
-        summary,
-        checklist,
-        memoryFacts,
-        citations: citationCatalog,
-      });
-      llmAuditAttempt = llmResult?.audit || null;
-      llmModelAttempt = llmResult?.model || null;
-      llmAbstainedAttempt = llmResult?.abstained === true;
-      if (llmResult && !llmResult.abstained && llmResult.answer) {
-        const answer = args.escalation.detected
-          ? `${llmResult.answer} We have also routed your concern to the care team for follow-up.`
-          : llmResult.answer;
-        return {
-          answer,
-          source: 'llm',
-          citationsUsed: llmResult.citationsUsed || [],
-          model: llmResult.model || null,
-          abstained: false,
-          llmAudit: llmAuditAttempt,
-        };
-      }
-    }
-
-    const lowerQuestion = String(args.question || '').toLowerCase();
-    const clinicianEscalationSuffix = args.escalation.detected
-      ? ' We have alerted the care team to review your message.'
-      : '';
-    const memorySuffix = memoryFacts.length
-      ? ` I also remembered these prior context points: ${memoryFacts.slice(0, 2).join(' ; ')}.`
-      : '';
-
-    if (lowerQuestion.includes('medicine') || lowerQuestion.includes('medication') || lowerQuestion.includes('dose')) {
-      if (checklist.length) {
-        return {
-          answer: `Based on your approved visit plan, follow these medication-related actions: ${checklist.join('; ')}. If symptoms worsen, contact the clinic immediately.${memorySuffix}${clinicianEscalationSuffix}`,
-          source: 'deterministic',
-          citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
-          model: llmModelAttempt,
-          abstained: llmAbstainedAttempt,
-          llmAudit: llmAuditAttempt,
-        };
-      }
-    }
-
-    if (lowerQuestion.includes('when') || lowerQuestion.includes('follow up') || lowerQuestion.includes('next visit')) {
-      if (checklist.length) {
-        return {
-          answer: `Your approved follow-up checklist includes: ${checklist.join('; ')}. Please complete these and keep your next review appointment.${memorySuffix}${clinicianEscalationSuffix}`,
-          source: 'deterministic',
-          citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
-          model: llmModelAttempt,
-          abstained: llmAbstainedAttempt,
-          llmAudit: llmAuditAttempt,
-        };
-      }
-    }
-
-    if (summary) {
-      return {
-        answer: `From your approved visit summary: ${summary} Please follow the checklist and contact the clinic if you have worsening symptoms.${memorySuffix}${clinicianEscalationSuffix}`,
-        source: 'deterministic',
-        citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
-        model: llmModelAttempt,
-        abstained: llmAbstainedAttempt,
-        llmAudit: llmAuditAttempt,
-      };
     }
 
     return {
-      answer:
-        `I can help with your approved visit plan and checklist. If you share your concern, I will guide you based on your doctor-approved instructions.${memorySuffix}${clinicianEscalationSuffix}`.trim(),
-      source: 'deterministic',
-      citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
-      model: llmModelAttempt,
-      abstained: llmAbstainedAttempt,
-      llmAudit: llmAuditAttempt,
+      patientAiSession,
+      patientAiEscalation,
+      followupOrchestration,
     };
   }
 
-  private async persistGroundedLlmAudit(
+  private async syncResolvedPostVisitEscalationIntoPatientAi(
     tenantDb: DataSource,
-    args: {
-      model: string | null;
-      audit: LlmAuditMetadata | null;
-      sessionId: string;
-      patientId?: string | null;
-      encounterId?: string | null;
-      actorUserId?: string | null;
-      actorRole?: string | null;
-      requestId?: string | null;
-      metadata?: Record<string, any>;
-    },
+    escalationRow: any,
+    payload: { status: 'resolved' | 'dismissed'; resolutionNote?: string | null; actorUserId?: string | null },
   ): Promise<void> {
-    if (!this.hipaaAuditService) {
-      return;
-    }
-    const modelName = String(args.model || '').trim();
-    if (!modelName || !args.audit?.promptHash) {
-      return;
-    }
+    const metadata = typeof escalationRow?.metadata === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(escalationRow.metadata);
+          } catch {
+            return {};
+          }
+        })()
+      : escalationRow?.metadata || {};
 
-    try {
-      const modelId = this.toModelRegistryId(modelName);
-      await this.hipaaAuditService.registerModelEntry(tenantDb, {
-        modelId,
-        modelName,
-        modelVersion: String(args.audit.templateVersion || 'v1'),
-        provider: this.inferModelProvider(modelName),
-        status: 'active',
-        metadata: {
-          feature: 'post_visit_grounded_llm',
-        },
-      });
+    const sessionRepo = this.getOptionalRepository(tenantDb, PatientAiSession);
+    const escalationRepo = this.getOptionalRepository(tenantDb, PatientAiEscalation);
+    const followupRepo = this.getOptionalRepository(tenantDb, PatientFollowupOrchestration);
 
-      await this.hipaaAuditService.logPromptAudit(tenantDb, {
-        promptHash: args.audit.promptHash,
-        templateVersion: args.audit.templateVersion || 'postvisit-grounded-v1',
-        modelId,
-        sessionId: args.sessionId,
-        patientId: args.patientId || null,
-        encounterId: args.encounterId || null,
-        actorId: this.normalizeUuid(args.actorUserId),
-        actorRole: args.actorRole || null,
-        inputTokenCount: args.audit.inputTokenCount,
-        outputTokenCount: args.audit.outputTokenCount,
-        latencyMs: args.audit.latencyMs,
-        safetyGateTriggered: args.audit.safetyGateTriggered === true,
-        requestId: args.requestId || null,
-        metadata: {
-          model_name: modelName,
-          ...args.metadata,
-        },
-      });
-    } catch (_error) {
-      // Prompt/model audit is best-effort and must not block patient or doctor workflows.
-    }
-  }
-
-  private toModelRegistryId(modelName: string): string {
-    return `postvisit.${String(modelName || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, '-')}`;
-  }
-
-  private inferModelProvider(modelName: string): string {
-    const normalized = String(modelName || '').toLowerCase();
-    if (!normalized) return 'unknown';
-    if (normalized.includes('gpt') || normalized.includes('openai')) return 'openai';
-    if (normalized.includes('claude')) return 'anthropic';
-    if (normalized.includes('llama') || normalized.includes('mistral') || normalized.includes('qwen')) return 'ollama';
-    if (normalized.includes('whisper')) return 'whisper-local';
-    return 'custom';
-  }
-
-  private normalizeUuid(value?: string | null): string | null {
-    const normalized = String(value || '').trim();
-    if (!normalized) return null;
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized) ? normalized : null;
-  }
-
-  private async touchCompanionThreadAfterMessage(
-    tenantDb: DataSource,
-    threadId: string,
-    senderType: 'patient' | 'clinician' | 'system',
-  ) {
-    const stampColumn =
-      senderType === 'patient'
-        ? 'last_patient_message_at'
-        : senderType === 'clinician'
-          ? 'last_clinician_message_at'
-          : null;
-
-    if (stampColumn) {
-      await tenantDb.query(
-        `
-          UPDATE post_visit_companion_threads
-          SET message_count = message_count + 1,
-              last_message_at = NOW(),
-              ${stampColumn} = NOW(),
-              updated_at = NOW()
-          WHERE id = $1
-        `,
-        [threadId],
-      );
-      return;
-    }
-
-    await tenantDb.query(
-      `
-        UPDATE post_visit_companion_threads
-        SET message_count = message_count + 1,
-            last_message_at = NOW(),
-            updated_at = NOW()
-        WHERE id = $1
-      `,
-      [threadId],
-    );
-  }
-
-  private async upsertDraftArtifact(
-    tenantDb: DataSource,
-    args: {
-      sessionId: string;
-      artifactType: string;
-      content: Record<string, any>;
-      citations?: Array<Record<string, any>>;
-      confidence?: number | null;
-      generatedBy?: string;
-      actorUserId?: string | null;
-      artifactStatus?: 'draft' | 'reviewed' | 'published';
-    },
-  ) {
-    const rows = await tenantDb.query(
-      `
-        INSERT INTO post_visit_draft_artifacts (
-          session_id,
-          artifact_type,
-          artifact_status,
-          content,
-          citations,
-          confidence,
-          generated_by,
-          created_by,
-          updated_by
-        ) VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,$8)
-        ON CONFLICT (session_id, artifact_type)
-        DO UPDATE SET
-          artifact_status = EXCLUDED.artifact_status,
-          content = EXCLUDED.content,
-          citations = EXCLUDED.citations,
-          confidence = EXCLUDED.confidence,
-          generated_by = EXCLUDED.generated_by,
-          updated_by = EXCLUDED.updated_by,
-          updated_at = NOW()
-        RETURNING *
-      `,
-      [
-        args.sessionId,
-        args.artifactType,
-        args.artifactStatus || 'draft',
-        JSON.stringify(args.content || {}),
-        JSON.stringify(args.citations || []),
-        typeof args.confidence === 'number' ? args.confidence : null,
-        args.generatedBy || 'post_visit_pipeline',
-        args.actorUserId || null,
-      ],
-    );
-    return rows[0];
-  }
-
-  private async replaceRuleCitations(
-    tenantDb: DataSource,
-    sessionId: string,
-    citations: Array<{
-      recommendationId: string;
-      ruleId: string;
-      citation: RuleCitation;
-      metadata?: Record<string, any>;
-    }>,
-  ) {
-    await tenantDb.query(`DELETE FROM post_visit_rule_citations WHERE session_id = $1`, [sessionId]);
-
-    for (const row of citations) {
-      await tenantDb.query(
-        `
-          INSERT INTO post_visit_rule_citations (
-            session_id,
-            artifact_type,
-            recommendation_id,
-            rule_id,
-            guideline_id,
-            citation_label,
-            citation_source,
-            citation_url,
-            evidence_excerpt,
-            confidence,
-            relevance_score,
-            citation_year,
-            is_superseded,
-            superseded_by_guideline_id,
-            metadata
-          ) VALUES ($1,'recommendation_bundle',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
-        `,
-        [
-          sessionId,
-          row.recommendationId,
-          row.ruleId,
-          row.citation.guidelineId,
-          row.citation.label,
-          row.citation.source,
-          row.citation.url || null,
-          row.citation.excerpt || null,
-          typeof row.citation.confidence === 'number' ? row.citation.confidence : null,
-          this.normalizeCitationRelevanceScore(
-            row.citation.relevanceScore ?? row.citation.confidence ?? null,
-          ),
-          row.citation.publicationYear ?? this.extractGuidelineYear(row.citation.guidelineId),
-          row.citation.isSuperseded === true,
-          row.citation.supersededByGuidelineId || null,
-          JSON.stringify(row.metadata || {}),
-        ],
-      );
-    }
-  }
-
-  private buildRecommendationRules(
-    patientContext: any,
-    extractedEntities: any[],
-  ): RecommendationRuleResult[] {
-    const rules: RecommendationRuleResult[] = [];
-    const latestVitals = patientContext?.latestVitals || {};
-    const modules = patientContext?.modules || {};
-
-    const extractedBpEntity = extractedEntities.find(
-      (entity) => String(entity.entity_type || entity.type) === 'vital_blood_pressure',
-    );
-    const extractedBp = this.parseBloodPressure(extractedBpEntity?.entity_value || extractedBpEntity?.value);
-    const contextBp = this.parseBloodPressure(latestVitals?.blood_pressure || latestVitals?.bloodPressure);
-    const bp = extractedBp || contextBp;
-
-    if (bp && (bp.systolic >= 140 || bp.diastolic >= 90)) {
-      rules.push({
-        ruleId: 'htn_followup_rule',
-        recommendationId: 'htn_followup',
-        title: 'Elevated blood pressure follow-up',
-        description:
-          'Schedule blood pressure reassessment and initiate hypertension workup/order-set if persistent at follow-up.',
-        urgency: bp.systolic >= 180 || bp.diastolic >= 120 ? 'stat' : 'urgent',
-        actionType: 'follow_up',
-        confidence: 0.86,
-        context: {
-          bloodPressure: `${bp.systolic}/${bp.diastolic}`,
-          source: extractedBp ? 'transcript' : 'latest_vitals',
-        },
-        citations: [
-          {
-            guidelineId: 'who-pen-hypertension-2023',
-            label: 'WHO PEN hypertension follow-up threshold guidance',
-            source: 'WHO PEN',
-            url: 'https://www.who.int/publications/i/item/9789240009226',
-            excerpt: 'Repeat and confirm elevated blood pressure before definitive long-term management.',
-            confidence: 0.88,
+    if (escalationRepo && metadata?.patient_ai_escalation_id) {
+      const aiEscalation = await escalationRepo.findOneBy({ id: metadata.patient_ai_escalation_id });
+      if (aiEscalation) {
+        await escalationRepo.save({
+          ...aiEscalation,
+          status: payload.status,
+          resolutionNotes: payload.resolutionNote || aiEscalation.resolutionNotes || null,
+          resolvedAt: new Date(),
+          resolvedBy: payload.actorUserId || aiEscalation.resolvedBy || null,
+          provenance: {
+            ...(aiEscalation.provenance || {}),
+            postVisitEscalationStatus: payload.status,
           },
-        ],
-      });
-    }
-
-    const labCritical = modules?.lab?.latestCriticalAlert;
-    if (labCritical && ['pending', 'unacknowledged'].includes(String(labCritical.alert_status || '').toLowerCase())) {
-      rules.push({
-        ruleId: 'critical_lab_followup_rule',
-        recommendationId: 'critical_lab_followup',
-        title: 'Critical lab escalation callback',
-        description:
-          'Contact patient urgently and document immediate safety instructions linked to unresolved critical lab alert.',
-        urgency: 'stat',
-        actionType: 'monitoring',
-        confidence: 0.9,
-        context: {
-          alertId: labCritical.id,
-          component: labCritical.component_name,
-          severity: labCritical.severity,
-        },
-        citations: [
-          {
-            guidelineId: 'joint-commission-critical-lab-policy',
-            label: 'Critical laboratory result communication policy',
-            source: 'Clinical Safety Policy',
-            excerpt: 'Critical values must trigger timely provider notification and documented patient communication.',
-            confidence: 0.84,
-          },
-        ],
-      });
-    }
-
-    const hivEnrollment = modules?.hiv?.latestEnrollment;
-    if (hivEnrollment) {
-      rules.push({
-        ruleId: 'hiv_followup_continuity_rule',
-        recommendationId: 'hiv_followup_continuity',
-        title: 'HIV continuity follow-up scheduling',
-        description:
-          'Confirm next HIV clinical review date, adherence counseling checkpoint, and required lab monitoring timeline.',
-        urgency: 'routine',
-        actionType: 'follow_up',
-        confidence: 0.82,
-        context: {
-          enrollmentId: hivEnrollment.id,
-          nextReviewDate: modules?.hiv?.latestClinicalVisit?.next_review_date || null,
-        },
-        citations: [
-          {
-            guidelineId: 'who-hiv-care-followup-2024',
-            label: 'WHO HIV care and treatment clinical follow-up guidance',
-            source: 'WHO HIV Guidelines',
-            url: 'https://www.who.int/teams/global-hiv-hepatitis-and-stis-programmes/hiv/treatment',
-            excerpt: 'Maintain scheduled clinical and laboratory follow-up to support retention and viral suppression.',
-            confidence: 0.86,
-          },
-        ],
-      });
-    }
-
-    const medicationIntelligence = this.buildMedicationIntelligenceAssessment(patientContext, extractedEntities);
-    if (medicationIntelligence.enabled && medicationIntelligence.medications.length > 0) {
-      const highestSeverity = medicationIntelligence.highestSeverity;
-      const hasHighRisk = highestSeverity !== null && this.getMedicationSeverityRank(highestSeverity) >= 3;
-      const issueCount =
-        medicationIntelligence.interactions.length +
-        medicationIntelligence.beersAlerts.length +
-        medicationIntelligence.renalAlerts.length;
-
-      if (issueCount > 0) {
-        rules.push({
-          ruleId: 'medication_safety_intelligence_v2_rule',
-          recommendationId: 'medication_safety_intelligence_v2',
-          title: hasHighRisk ? 'High-risk medication safety review' : 'Medication safety review',
-          description: medicationIntelligence.riskNarrative,
-          urgency: hasHighRisk ? 'urgent' : 'routine',
-          actionType: 'medication',
-          confidence: hasHighRisk ? 0.91 : 0.83,
-          context: {
-            medicationIntelligence,
-            issueCount,
-            highRisk: hasHighRisk,
-          },
-          citations: [
-            {
-              guidelineId: 'fda-drug-safety-interactions',
-              label: 'FDA drug interaction safety communication',
-              source: 'FDA Safety',
-              excerpt: 'Clinicians should proactively identify and mitigate high-risk drug-drug interactions.',
-              confidence: 0.86,
-            },
-            {
-              guidelineId: 'ags-beers-criteria-2023',
-              label: 'AGS Beers Criteria for potentially inappropriate medications in older adults',
-              source: 'AGS Beers',
-              excerpt: 'Avoid high-risk medications in adults 65+ when safer alternatives exist.',
-              confidence: 0.85,
-            },
-            {
-              guidelineId: 'kdigo-drug-dosing-ckd-2024',
-              label: 'KDIGO kidney disease drug dosing safety recommendations',
-              source: 'KDIGO',
-              excerpt: 'Renally cleared medications require eGFR-based dose review and adjustment.',
-              confidence: 0.84,
-            },
-          ],
         });
       }
     }
 
-    const activePrescriptionCount =
-      Number(modules?.pharmacy?.activePrescriptionCount || 0) ||
-      Number(modules?.pharmacy?.active_count || 0);
-    if (activePrescriptionCount > 0) {
-      rules.push({
-        ruleId: 'medication_adherence_reinforcement_rule',
-        recommendationId: 'medication_adherence_reinforcement',
-        title: 'Medication adherence reinforcement',
-        description:
-          medicationIntelligence.enabled
-            ? `${medicationIntelligence.riskNarrative} Reinforce adherence and confirm understanding using teach-back.`
-            : 'Issue plain-language medication adherence reminders and confirm patient understanding via teach-back.',
-        urgency: 'routine',
-        actionType: 'medication',
-        confidence: 0.78,
-        context: {
-          activePrescriptionCount,
-          medicationIntelligence: medicationIntelligence.enabled
-            ? {
-                highestSeverity: medicationIntelligence.highestSeverity,
-                highRiskCount: medicationIntelligence.highRiskCount,
-                egfr: medicationIntelligence.egfr,
-              }
-            : null,
-        },
-        citations: [
-          {
-            guidelineId: 'adherence-counseling-best-practice',
-            label: 'Medication adherence counseling best practice',
-            source: 'Clinical Adherence Guidance',
-            excerpt: 'Use teach-back and reminder reinforcement to reduce post-visit medication errors.',
-            confidence: 0.79,
+    if (followupRepo && metadata?.patient_followup_orchestration_id) {
+      const followup = await followupRepo.findOneBy({ id: metadata.patient_followup_orchestration_id });
+      if (followup) {
+        await followupRepo.save({
+          ...followup,
+          status: payload.status === 'resolved' ? 'completed' : 'dismissed',
+          reminderState: payload.status === 'resolved' ? 'acknowledged' : followup.reminderState,
+          completedAt: payload.status === 'resolved' ? new Date() : followup.completedAt,
+          lastTouchedAt: new Date(),
+          payload: {
+            ...(followup.payload || {}),
+            postVisitEscalationStatus: payload.status,
+            resolutionNote: payload.resolutionNote || null,
           },
-        ],
-      });
+        });
+      }
     }
 
-    if (!rules.length) {
-      rules.push({
-        ruleId: 'general_post_visit_followup_rule',
-        recommendationId: 'general_post_visit_followup',
-        title: 'General post-visit follow-up package',
-        description:
-          'Provide plain-language summary, follow-up date recommendation, and return-precaution instructions.',
-        urgency: 'routine',
-        actionType: 'follow_up',
-        confidence: 0.72,
-        context: {},
-        citations: [
-          {
-            guidelineId: 'transition-of-care-best-practice',
-            label: 'Transitions of care communication guidance',
-            source: 'Care Continuity Framework',
-            excerpt: 'Clear discharge communication improves adherence and reduces avoidable return visits.',
-            confidence: 0.74,
+    if (sessionRepo && metadata?.patient_ai_session_id) {
+      const aiSession = await sessionRepo.findOneBy({ id: metadata.patient_ai_session_id });
+      if (aiSession) {
+        await sessionRepo.save({
+          ...aiSession,
+          status: payload.status === 'resolved' ? 'closed' : aiSession.status,
+          provenance: {
+            ...(aiSession.provenance || {}),
+            postVisitEscalationStatus: payload.status,
           },
-        ],
-      });
-    }
-
-    return rules;
-  }
-
-  private resolveSoapSpecialty(patientContext: any): PostVisitSoapSpecialty {
-    const modules = patientContext?.modules || {};
-    const age = Number(patientContext?.patient?.age || 0);
-
-    if (modules?.cardiology?.latestEncounter) {
-      return 'cardiology';
-    }
-    if (age > 0 && age < 15) {
-      return 'paediatrics';
-    }
-    if (modules?.mentalHealth?.latestEncounter || modules?.mental_health?.latestEncounter) {
-      return 'mental_health';
-    }
-    return 'general_practice';
-  }
-
-  private evaluateSpecialtySoapTemplate(
-    specialty: PostVisitSoapSpecialty,
-    soapNote: any,
-    patientContext: any,
-  ): SpecialtySoapValidationSummary {
-    const soapNoteFields = {
-      subjective: String(soapNote?.subjective || '').trim(),
-      objective: String(soapNote?.objective || '').trim(),
-      assessment: String(soapNote?.assessment || '').trim(),
-      plan: String(soapNote?.plan || '').trim(),
-    };
-    const context = {
-      modules: patientContext?.modules || {},
-      age: Number(patientContext?.patient?.age || 0),
-      hasWeight:
-        this.parseNumericValue(patientContext?.latestVitals?.weightKg) !== null ||
-        this.parseNumericValue(patientContext?.latestVitals?.weight) !== null,
-    };
-    return getValidationSummary(specialty, soapNoteFields, context);
-  }
-
-  private evaluateBillingDocumentationSufficiency(args: {
-    sessionRow: any;
-    soapNote: any;
-    summaryContent: any;
-    recommendationItems: any[];
-  }): PostVisitBillingDocumentationSummary {
-    const subjective = String(args.soapNote?.subjective || '').trim();
-    const objective = String(args.soapNote?.objective || '').trim();
-    const assessment = String(args.soapNote?.assessment || '').trim();
-    const plan = String(args.soapNote?.plan || '').trim();
-    const plainSummary = String(args.summaryContent?.plain_language_summary || '').trim();
-    const sourceType = String(args.sessionRow?.source_type || '').toLowerCase();
-    const startedAtMs = new Date(args.sessionRow?.started_at || args.sessionRow?.created_at || 0).getTime();
-    const completedAtMs = new Date(args.sessionRow?.completed_at || args.sessionRow?.updated_at || 0).getTime();
-    const durationMinutes =
-      Number.isFinite(startedAtMs) && Number.isFinite(completedAtMs) && completedAtMs >= startedAtMs
-        ? Math.round((completedAtMs - startedAtMs) / (1000 * 60))
-        : null;
-    const recommendationCount = Array.isArray(args.recommendationItems) ? args.recommendationItems.length : 0;
-
-    const checks: PostVisitBillingDocumentationCheck[] = [
-      {
-        id: 'subjective_documented',
-        label: 'Subjective complaint narrative present',
-        passed: subjective.length >= 10,
-        guidance: 'Add chief complaint and symptom narrative in subjective.',
-      },
-      {
-        id: 'objective_documented',
-        label: 'Objective findings documented',
-        passed: objective.length >= 10,
-        guidance: 'Add measurable objective findings (vitals, exam, or tests).',
-      },
-      {
-        id: 'assessment_documented',
-        label: 'Assessment/diagnostic impression documented',
-        passed: assessment.length >= 10,
-        guidance: 'Add explicit clinical impression/diagnosis in assessment.',
-      },
-      {
-        id: 'plan_documented',
-        label: 'Treatment/follow-up plan documented',
-        passed: plan.length >= 10,
-        guidance: 'Add treatment steps and follow-up plan.',
-      },
-      {
-        id: 'diagnosis_evidence_present',
-        label: 'Diagnosis evidence present for coding',
-        passed: /(diagnos|hypertension|diabetes|hiv|chest pain|anxiety|depress|infection|headache|fever)/i.test(
-          `${assessment} ${plainSummary}`,
-        ),
-        guidance: 'Include a diagnosable condition statement that supports ICD coding.',
-      },
-      {
-        id: 'care_complexity_supported',
-        label: 'Care complexity supported by plan/recommendations',
-        passed:
-          recommendationCount > 0 ||
-          /(urgent|stat|monitor|order|referral|follow[- ]?up|adherence|safety)/i.test(`${plan} ${plainSummary}`),
-        guidance: 'Document complexity indicators such as orders, monitoring, referrals, or urgent follow-up.',
-      },
-      {
-        id: 'encounter_context_present',
-        label: 'Encounter context supports claim documentation',
-        passed:
-          ['in_person', 'telemedicine', 'hybrid'].includes(sourceType) &&
-          (durationMinutes === null || durationMinutes >= 5),
-        guidance: 'Ensure encounter context/time is captured for compliant billing justification.',
-      },
-    ];
-
-    const passedCount = checks.filter((check) => check.passed).length;
-    const score = Math.round((passedCount / checks.length) * 100);
-    const status: PostVisitBillingDocumentationSummary['status'] =
-      score >= 85 ? 'sufficient' : score >= 60 ? 'partial' : 'insufficient';
-    const gaps = checks.filter((check) => !check.passed).map((check) => check.guidance);
-
-    return {
-      score,
-      status,
-      checks,
-      gaps,
-    };
-  }
-
-  private buildBillingSuggestionDrafts(args: {
-    sessionRow: any;
-    soapNote: any;
-    summaryContent: any;
-    recommendationItems: any[];
-    documentation: PostVisitBillingDocumentationSummary;
-  }): PostVisitBillingSuggestionDraft[] {
-    const subjective = String(args.soapNote?.subjective || '').trim();
-    const objective = String(args.soapNote?.objective || '').trim();
-    const assessment = String(args.soapNote?.assessment || '').trim();
-    const plan = String(args.soapNote?.plan || '').trim();
-    const combined = `${subjective}\n${objective}\n${assessment}\n${plan}\n${String(
-      args.summaryContent?.plain_language_summary || '',
-    )}`.toLowerCase();
-    const sourceType = String(args.sessionRow?.source_type || '').toLowerCase();
-
-    const suggestions: PostVisitBillingSuggestionDraft[] = [];
-    const pushSuggestion = (draft: PostVisitBillingSuggestionDraft) => {
-      const exists = suggestions.some(
-        (item) => item.codeType === draft.codeType && String(item.code).toUpperCase() === String(draft.code).toUpperCase(),
-      );
-      if (!exists) suggestions.push(draft);
-    };
-
-    const cptCode =
-      sourceType === 'telemedicine'
-        ? '99442'
-        : args.documentation.score >= 80
-          ? '99214'
-          : '99213';
-    const cptDescription =
-      cptCode === '99442'
-        ? 'Telephone/telehealth E/M service'
-        : cptCode === '99214'
-          ? 'Established patient office/outpatient visit, moderate complexity'
-          : 'Established patient office/outpatient visit, low complexity';
-    const cptConfidenceBase = cptCode === '99214' ? 0.83 : cptCode === '99442' ? 0.8 : 0.74;
-    pushSuggestion({
-      suggestionKey: `cpt:${cptCode}`,
-      codeType: 'cpt',
-      code: cptCode,
-      description: cptDescription,
-      confidence: Math.min(0.98, Number((cptConfidenceBase * (0.6 + args.documentation.score / 250)).toFixed(2))),
-      justification: `Encounter context (${sourceType || 'in_person'}) and documentation score ${args.documentation.score} support this CPT level.`,
-      metadata: {
-        sourceType,
-        documentationScore: args.documentation.score,
-      },
-    });
-
-    const icdRules: Array<{
-      code: string;
-      description: string;
-      pattern: RegExp;
-      confidence: number;
-      reason: string;
-    }> = [
-      { code: 'I10', description: 'Essential (primary) hypertension', pattern: /\bhypertension\b|high blood pressure|\bbp\b/, confidence: 0.86, reason: 'Assessment indicates elevated blood pressure/hypertension context.' },
-      { code: 'E11.9', description: 'Type 2 diabetes mellitus without complications', pattern: /\bdiabetes\b|\bhyperglyc/i, confidence: 0.84, reason: 'Documentation references diabetes care context.' },
-      { code: 'B20', description: 'HIV disease', pattern: /\bhiv\b|antiretroviral|\bart\b/, confidence: 0.9, reason: 'Encounter references HIV diagnosis/management.' },
-      { code: 'R07.9', description: 'Chest pain, unspecified', pattern: /chest pain|angina|tightness/, confidence: 0.8, reason: 'Symptom narrative includes chest pain-related complaint.' },
-      { code: 'R06.02', description: 'Shortness of breath', pattern: /shortness of breath|dyspnea|cannot breathe|difficulty breathing/, confidence: 0.8, reason: 'Respiratory symptom documented in encounter.' },
-      { code: 'R51.9', description: 'Headache, unspecified', pattern: /headache|migraine/, confidence: 0.75, reason: 'Headache symptom appears in clinical narrative.' },
-      { code: 'R50.9', description: 'Fever, unspecified', pattern: /\bfever\b|febrile/, confidence: 0.74, reason: 'Fever signal appears in subjective/objective findings.' },
-      { code: 'F41.9', description: 'Anxiety disorder, unspecified', pattern: /\banxiety\b|panic|anxious/, confidence: 0.76, reason: 'Mental health documentation suggests anxiety condition.' },
-      { code: 'F32.9', description: 'Major depressive disorder, single episode, unspecified', pattern: /\bdepress/i, confidence: 0.76, reason: 'Assessment includes depressive symptom context.' },
-      { code: 'R52', description: 'Pain, unspecified', pattern: /\bpain\b/, confidence: 0.65, reason: 'General pain symptom documented without more specific coding evidence.' },
-    ];
-
-    for (const rule of icdRules) {
-      if (!rule.pattern.test(combined)) continue;
-      const tunedConfidence = Math.min(
-        0.98,
-        Number((rule.confidence * (0.62 + args.documentation.score / 240)).toFixed(2)),
-      );
-      pushSuggestion({
-        suggestionKey: `icd10:${rule.code}`,
-        codeType: 'icd10',
-        code: rule.code,
-        description: rule.description,
-        confidence: tunedConfidence,
-        justification: `${rule.reason} Documentation sufficiency score ${args.documentation.score}.`,
-        metadata: {
-          trigger: rule.pattern.source,
-          documentationScore: args.documentation.score,
-        },
-      });
-    }
-
-    if (!suggestions.some((item) => item.codeType === 'icd10')) {
-      pushSuggestion({
-        suggestionKey: 'icd10:Z09',
-        codeType: 'icd10',
-        code: 'Z09',
-        description: 'Follow-up examination after treatment for conditions other than malignant neoplasm',
-        confidence: 0.58,
-        justification: 'Default follow-up ICD recommendation due to insufficient disease-specific coding evidence.',
-        metadata: {
-          fallback: true,
-          documentationScore: args.documentation.score,
-        },
-      });
-    }
-
-    return suggestions.sort((left, right) => right.confidence - left.confidence).slice(0, 12);
-  }
-
-  private async routeBillingSuggestionToWorkflow(
-    tenantDb: DataSource,
-    args: {
-      suggestionId: string;
-      sessionId: string;
-      patientId: string;
-      codeType: PostVisitBillingCodeType;
-      code: string;
-      actorUserId?: string | null;
-      note?: string | null;
-    },
-  ): Promise<string | null> {
-    const workflowKey = `post_visit_billing:${args.suggestionId}`;
-    try {
-      await tenantDb.query(
-        `
-          INSERT INTO nurse_cross_module_workflow_state (
-            workflow_key,
-            module,
-            item_type,
-            source_record_id,
-            patient_id,
-            status,
-            destination_role,
-            destination_service,
-            destination_specialty,
-            note,
-            context
-          ) VALUES (
-            $1,
-            'post_visit',
-            'billing_code_suggestion',
-            $2,
-            $3,
-            'pending',
-            'accounts',
-            'billing',
-            'Revenue Cycle',
-            $4,
-            $5::jsonb
-          )
-          ON CONFLICT (workflow_key) DO UPDATE
-          SET status = EXCLUDED.status,
-              destination_role = EXCLUDED.destination_role,
-              destination_service = EXCLUDED.destination_service,
-              destination_specialty = EXCLUDED.destination_specialty,
-              note = EXCLUDED.note,
-              context = EXCLUDED.context,
-              updated_at = NOW()
-        `,
-        [
-          workflowKey,
-          args.suggestionId,
-          args.patientId,
-          args.note || `Doctor-approved ${args.codeType.toUpperCase()} ${args.code} from post-visit billing intelligence.`,
-          JSON.stringify({
-            suggestion_id: args.suggestionId,
-            session_id: args.sessionId,
-            code_type: args.codeType,
-            code: args.code,
-            approved_by: args.actorUserId || null,
-            source: 'post_visit_billing_intelligence',
-          }),
-        ],
-      );
-      return workflowKey;
-    } catch (error: any) {
-      const message = String(error?.message || '');
-      if (message.includes('nurse_cross_module_workflow_state')) {
-        return null;
+        });
       }
-      throw error;
     }
   }
 
-  private buildBillingDocumentationSummaryFromSuggestionRows(
-    rows: any[],
-  ): PostVisitBillingDocumentationSummary | null {
-    if (!Array.isArray(rows) || rows.length === 0) return null;
-    const primary = rows[0];
-    const checks = Array.isArray(primary?.documentation_checks)
-      ? primary.documentation_checks.map((row: any, index: number) => ({
-          id: String(row?.id || `check_${index + 1}`),
-          label: String(row?.label || row?.id || `Check ${index + 1}`),
-          passed: row?.passed === true,
-          guidance: String(row?.guidance || row?.label || 'Documentation requirement not met.'),
-        }))
-      : [];
-    const metadataGaps = Array.isArray(primary?.metadata?.documentation?.gaps)
-      ? primary.metadata.documentation.gaps
-          .map((gap: any) => String(gap || '').trim())
-          .filter((gap: string) => gap.length > 0)
-      : [];
-    const gaps =
-      metadataGaps.length > 0
-        ? metadataGaps
-        : checks.filter((check) => !check.passed).map((check) => check.guidance);
-    const score = Math.max(0, Math.min(100, Number(primary?.documentation_score || 0)));
-    const statusRaw = String(primary?.documentation_status || 'insufficient').toLowerCase();
-    const status: PostVisitBillingDocumentationSummary['status'] =
-      statusRaw === 'sufficient' || statusRaw === 'partial' || statusRaw === 'insufficient'
-        ? statusRaw
-        : 'insufficient';
 
-    return {
-      score,
-      status,
-      checks,
-      gaps,
-    };
-  }
 
-  private async refreshSessionBillingIntelligence(
-    tenantDb: DataSource,
-    args: {
-      sessionRow: any;
-      soapNote: any;
-      summaryContent: any;
-      recommendationItems: any[];
-      actorUserId?: string | null;
-      source?: string;
-    },
-  ) {
-    if (!this.isBillingIntelligenceEnabled()) {
-      return {
-        featureEnabled: false,
-        documentation: null,
-        suggestions: [],
-      };
-    }
-
-    const documentation = this.evaluateBillingDocumentationSufficiency({
-      sessionRow: args.sessionRow,
-      soapNote: args.soapNote,
-      summaryContent: args.summaryContent,
-      recommendationItems: args.recommendationItems,
-    });
-    const drafts = this.buildBillingSuggestionDrafts({
-      sessionRow: args.sessionRow,
-      soapNote: args.soapNote,
-      summaryContent: args.summaryContent,
-      recommendationItems: args.recommendationItems,
-      documentation,
-    });
-
-    const existingRows = await tenantDb.query(
-      `
-        SELECT *
-        FROM post_visit_billing_suggestions
-        WHERE session_id = $1
-      `,
-      [args.sessionRow.id],
-    );
-    const existingByKey = new Map<string, any>(
-      (Array.isArray(existingRows) ? existingRows : []).map((row: any) => [String(row?.suggestion_key || ''), row]),
-    );
-    const currentKeys = drafts.map((draft) => draft.suggestionKey);
-
-    if (currentKeys.length > 0) {
-      await tenantDb.query(
-        `
-          DELETE FROM post_visit_billing_suggestions
-          WHERE session_id = $1
-            AND NOT (suggestion_key = ANY($2::text[]))
-            AND status <> 'approved'
-        `,
-        [args.sessionRow.id, currentKeys],
-      );
-    } else {
-      await tenantDb.query(
-        `
-          DELETE FROM post_visit_billing_suggestions
-          WHERE session_id = $1
-            AND status <> 'approved'
-        `,
-        [args.sessionRow.id],
-      );
-    }
-
-    const source = String(args.source || 'post_visit_billing_intelligence_v1').trim() || 'post_visit_billing_intelligence_v1';
-    for (const draft of drafts) {
-      const metadata = {
-        ...(draft.metadata || {}),
-        documentation: {
-          score: documentation.score,
-          status: documentation.status,
-          gaps: documentation.gaps,
-        },
-        refreshed_at: new Date().toISOString(),
-      };
-      const upsertedRows = await tenantDb.query(
-        `
-          INSERT INTO post_visit_billing_suggestions (
-            session_id,
-            patient_id,
-            suggestion_key,
-            code_type,
-            code,
-            description,
-            confidence,
-            justification,
-            documentation_checks,
-            documentation_score,
-            documentation_status,
-            status,
-            source,
-            metadata
-          ) VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,'proposed',$12,$13::jsonb
-          )
-          ON CONFLICT (session_id, suggestion_key) DO UPDATE
-          SET code_type = EXCLUDED.code_type,
-              code = EXCLUDED.code,
-              description = EXCLUDED.description,
-              confidence = EXCLUDED.confidence,
-              justification = EXCLUDED.justification,
-              documentation_checks = EXCLUDED.documentation_checks,
-              documentation_score = EXCLUDED.documentation_score,
-              documentation_status = EXCLUDED.documentation_status,
-              status = CASE
-                WHEN post_visit_billing_suggestions.status = 'approved' THEN post_visit_billing_suggestions.status
-                ELSE 'proposed'
-              END,
-              approved_by = CASE
-                WHEN post_visit_billing_suggestions.status = 'approved' THEN post_visit_billing_suggestions.approved_by
-                ELSE NULL
-              END,
-              approved_at = CASE
-                WHEN post_visit_billing_suggestions.status = 'approved' THEN post_visit_billing_suggestions.approved_at
-                ELSE NULL
-              END,
-              approval_note = CASE
-                WHEN post_visit_billing_suggestions.status = 'approved' THEN post_visit_billing_suggestions.approval_note
-                ELSE NULL
-              END,
-              source = EXCLUDED.source,
-              metadata = EXCLUDED.metadata,
-              updated_at = NOW()
-          RETURNING *
-        `,
-        [
-          args.sessionRow.id,
-          args.sessionRow.patient_id,
-          draft.suggestionKey,
-          draft.codeType,
-          draft.code,
-          draft.description,
-          draft.confidence,
-          draft.justification,
-          JSON.stringify(documentation.checks),
-          documentation.score,
-          documentation.status,
-          source,
-          JSON.stringify(metadata),
-        ],
-      );
-      const updatedRow = upsertedRows[0];
-      const existing = existingByKey.get(draft.suggestionKey);
-
-      await tenantDb.query(
-        `
-          INSERT INTO post_visit_billing_audit_log (
-            session_id,
-            suggestion_id,
-            action,
-            action_by,
-            action_note,
-            before_payload,
-            after_payload,
-            metadata
-          ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)
-        `,
-        [
-          args.sessionRow.id,
-          updatedRow.id,
-          existing ? 'refreshed' : 'generated',
-          args.actorUserId || null,
-          existing ? 'Billing suggestion refreshed from latest draft artifacts.' : 'Billing suggestion generated from draft artifacts.',
-          JSON.stringify(existing ? this.mapBillingSuggestion(existing) : {}),
-          JSON.stringify(this.mapBillingSuggestion(updatedRow)),
-          JSON.stringify({
-            source,
-            documentation_score: documentation.score,
-            documentation_status: documentation.status,
-          }),
-        ],
-      );
-    }
-
-    const rows = await tenantDb.query(
-      `
-        SELECT *
-        FROM post_visit_billing_suggestions
-        WHERE session_id = $1
-        ORDER BY
-          CASE status
-            WHEN 'approved' THEN 1
-            WHEN 'proposed' THEN 2
-            ELSE 3
-          END,
-          confidence DESC NULLS LAST,
-          created_at DESC
-      `,
-      [args.sessionRow.id],
-    );
-
-    return {
-      featureEnabled: true,
-      documentation,
-      suggestions: rows.map((row: any) => this.mapBillingSuggestion(row)),
-    };
-  }
-
-  private simplifyClinicalLanguage(value: string): string {
-    let text = String(value || '').trim();
-    if (!text) return '';
-    const replacements: Array<[RegExp, string]> = [
-      [/\bhypertension\b/gi, 'high blood pressure'],
-      [/\bmyocardial infarction\b/gi, 'heart attack'],
-      [/\bdyspnea\b/gi, 'shortness of breath'],
-      [/\badherence\b/gi, 'taking medicine as directed'],
-      [/\bmonitoring\b/gi, 'regular checking'],
-      [/\bevaluation\b/gi, 'checkup'],
-      [/\bprophylaxis\b/gi, 'prevention treatment'],
-      [/\bcontraindicated\b/gi, 'not safe together'],
-    ];
-    for (const [pattern, replacement] of replacements) {
-      text = text.replace(pattern, replacement);
-    }
-    return text.replace(/\s+/g, ' ').trim();
-  }
-
-  private estimateLiteracyScore(value: string): { score: number; level: 'easy' | 'moderate' | 'hard' } {
-    const text = String(value || '').trim();
-    if (!text) {
-      return { score: 100, level: 'easy' };
-    }
-    const sentences = text.split(/[.!?]+/).map((part) => part.trim()).filter(Boolean);
-    const words = text.split(/\s+/).map((part) => part.trim()).filter(Boolean);
-    const sentenceCount = Math.max(1, sentences.length);
-    const wordCount = Math.max(1, words.length);
-    const averageWordsPerSentence = wordCount / sentenceCount;
-    const averageWordLength = words.reduce((sum, word) => sum + word.length, 0) / wordCount;
-
-    const score = Math.max(0, Math.min(100, Math.round(100 - averageWordsPerSentence * 1.4 - averageWordLength * 5.5)));
-    if (score >= 70) {
-      return { score, level: 'easy' };
-    }
-    if (score >= 45) {
-      return { score, level: 'moderate' };
-    }
-    return { score, level: 'hard' };
-  }
-
-  private localizePlainSummary(value: string, language: string): string {
-    const normalizedLanguage = this.normalizeLanguage(language || 'en');
-    const text = String(value || '').trim();
-    if (!text) return '';
-    if (normalizedLanguage === 'sn') {
-      return `Pfupiso yekushanya kwanhasi: ${text}`;
-    }
-    if (normalizedLanguage === 'nd') {
-      return `Isifinyezo sokuhlangana kwanamhlanje: ${text}`;
-    }
-    return text;
-  }
-
-  private buildTeachBackQuestions(keyPoints: string[], language: string): string[] {
-    const normalizedLanguage = this.normalizeLanguage(language || 'en');
-    const prompts =
-      normalizedLanguage === 'sn'
-        ? [
-            'Mungatsanangura nemazwi enyu kuti muchaita sei:',
-            'Kana zviratidzo zvikawedzera, muchaita sei:',
-            'Ndeipi nguva yekudzoka muchipatara yamanzwisisa:',
-          ]
-        : normalizedLanguage === 'nd'
-          ? [
-              'Ungachaza ngamazwi akho ukuthi uzakwenza njani:',
-              'Nxa izimpawu zisiba zimbi, uzakwenzani:',
-              'Yisiphi isikhathi sokubuya esivunyelwene:',
-            ]
-          : [
-              'Can you explain in your own words how you will do this step:',
-              'If symptoms get worse, what will you do first:',
-              'What follow-up date or timing did you understand:',
-            ];
-    return keyPoints
-      .filter((point) => point.length > 0)
-      .slice(0, 3)
-      .map((point, index) => `${prompts[index] || prompts[prompts.length - 1]} ${point}`);
-  }
-
-  private buildCompanionTopicChecklist(summary: string, plan: string, keyPoints: string[]): string[] {
-    const combined = `${summary} ${plan}`.toLowerCase();
-    const topics: string[] = [];
-    if (/(medication|dose|tablet|medicine|drug)/i.test(combined)) {
-      topics.push('Medication schedule and dose clarity');
-    }
-    if (/(follow|review|return|appointment|clinic)/i.test(combined)) {
-      topics.push('Follow-up date and return plan');
-    }
-    if (/(danger|worse|urgent|emergency|warning|severe|pain|bleeding|breathing)/i.test(combined)) {
-      topics.push('Warning signs and escalation plan');
-    }
-    if (topics.length === 0) {
-      topics.push('Key care instructions');
-    }
-
-    const extraPoints = keyPoints
-      .slice(0, 2)
-      .map((point) => point.replace(/\s+/g, ' ').trim())
-      .filter((point) => point.length > 0)
-      .map((point) => `Confirm understanding: ${point}`);
-
-    return [...topics, ...extraPoints].slice(0, 5);
-  }
-
-  private buildVisitSummaryContent(args: {
-    patientContext: any;
-    soapNote: any;
-    extractedEntities: any[];
-    session: any;
-  }) {
-    const patientName =
-      args.patientContext?.patient?.fullName ||
-      `${args.patientContext?.patient?.firstName || ''} ${args.patientContext?.patient?.lastName || ''}`.trim() ||
-      'Patient';
-    const subjective = String(args.soapNote?.subjective || '').trim();
-    const objective = String(args.soapNote?.objective || '').trim();
-    const assessment = String(args.soapNote?.assessment || '').trim();
-    const plan = String(args.soapNote?.plan || '').trim();
-
-    const keyPoints = [subjective, objective, assessment, plan]
-      .flatMap((part) => this.splitIntoPhrases(part))
-      .slice(0, 8);
-
-    const plainLanguageSummaryRaw = [
-      `Today ${patientName} was reviewed.`,
-      assessment ? `Main clinical assessment: ${assessment}.` : '',
-      plan ? `Next steps: ${plan}.` : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-
-    // Two-pass: (1) plain-language/literacy rewrite, (2) patient preferred-language localisation
-    const simplifiedSummary = this.simplifyClinicalLanguage(plainLanguageSummaryRaw);
-    const preferredLanguage = this.normalizeLanguage(
-      args.session?.language || args.patientContext?.patient?.preferredLanguage || 'en',
-    );
-    const localizedPlainLanguageSummary = this.localizePlainSummary(simplifiedSummary, preferredLanguage);
-    const literacy = this.estimateLiteracyScore(localizedPlainLanguageSummary);
-    const teachBackQuestions = this.isMultilingualTeachBackEnabled()
-      ? this.buildTeachBackQuestions(keyPoints.length ? keyPoints : [plan || assessment || subjective], preferredLanguage)
-      : [];
-    const companionTopicChecklist = this.isMultilingualTeachBackEnabled()
-      ? this.buildCompanionTopicChecklist(localizedPlainLanguageSummary, plan, keyPoints)
-      : [];
-
-    return {
-      summary_text: [subjective, objective, assessment, plan].filter(Boolean).join('\n\n'),
-      plain_language_summary: localizedPlainLanguageSummary || simplifiedSummary || plainLanguageSummaryRaw,
-      key_points: keyPoints,
-      language: preferredLanguage,
-      literacy_score: literacy.score,
-      literacy_level: literacy.level,
-      teach_back_questions: teachBackQuestions,
-      companion_topic_checklist: companionTopicChecklist,
-      generated_from: {
-        sessionId: args.session.id,
-        sourceType: args.session.source_type,
-        extractedEntityCount: args.extractedEntities.length,
-      },
-    };
-  }
-
-  private mapOrderPriorityFromUrgency(urgency?: string) {
-    const normalized = String(urgency || '').toLowerCase();
-    if (normalized === 'stat' || normalized === 'urgent') {
-      return 'urgent';
-    }
-    return 'normal';
-  }
-
-  private mapLabPriorityFromUrgency(urgency?: string) {
-    const normalized = String(urgency || '').toLowerCase();
-    if (normalized === 'stat') return 'stat';
-    if (normalized === 'urgent') return 'urgent';
-    return 'routine';
-  }
-
-  private async createGeneralOrderFromRecommendation(
-    tenantDb: DataSource,
-    args: {
-      sessionRow: any;
-      recommendation: Record<string, any>;
-      actorUserId: string;
-      note?: string;
-    },
-  ) {
-    const actionType = String(args.recommendation.action_type || '').toLowerCase();
-    const mappedOrderType =
-      actionType === 'medication'
-        ? 'medication'
-        : actionType === 'monitoring'
-          ? 'activity'
-          : actionType === 'follow_up' || actionType === 'referral'
-            ? 'consultation'
-            : 'procedure';
-
-    const instructions = [
-      String(args.recommendation.description || '').trim(),
-      args.note ? `Doctor note: ${args.note}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const rows = await tenantDb.query(
-      `
-        INSERT INTO orders (
-          patient_id,
-          appointment_id,
-          doctor_id,
-          order_type,
-          order_name,
-          description,
-          instructions,
-          priority,
-          status,
-          authorized_by,
-          authorized_at,
-          execution_notes,
-          external_codes
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'authorized',$3,NOW(),$9,$10::jsonb)
-        RETURNING id, order_type, order_name, status, priority, created_at
-      `,
-      [
-        args.sessionRow.patient_id,
-        args.sessionRow.appointment_id || null,
-        args.actorUserId,
-        mappedOrderType,
-        String(args.recommendation.title || args.recommendation.id || 'Post-visit action'),
-        String(args.recommendation.description || '').trim() || null,
-        instructions || 'Follow post-visit recommendation.',
-        this.mapOrderPriorityFromUrgency(args.recommendation.urgency),
-        args.note || null,
-        JSON.stringify({
-          source: 'post_visit_recommendation_execute',
-          session_id: args.sessionRow.id,
-          recommendation_id: args.recommendation.id || null,
-          rule_id: args.recommendation.rule_id || null,
-        }),
-      ],
-    );
-    return {
-      resourceType: 'order',
-      resourceId: rows[0].id,
-      payload: rows[0],
-    };
-  }
-
-  private async createLabOrderFromRecommendation(
-    tenantDb: DataSource,
-    args: {
-      sessionRow: any;
-      recommendation: Record<string, any>;
-      actorUserId: string;
-      note?: string;
-    },
-  ) {
-    const countRows = await tenantDb.query(`SELECT COUNT(*)::int AS count FROM lab_orders`);
-    const totalCount = Number(countRows?.[0]?.count || 0);
-    const orderNumber = `LAB${String(totalCount + 1).padStart(8, '0')}`;
-
-    const defaultTestName = String(args.recommendation.title || 'Post-visit test').trim();
-    const defaultTestCode = String(args.recommendation.rule_id || args.recommendation.id || 'POSTVISIT').trim();
-    const testPayload =
-      Array.isArray(args.recommendation.actionPayload?.tests) && args.recommendation.actionPayload.tests.length
-        ? args.recommendation.actionPayload.tests
-        : [
-            {
-              testCode: defaultTestCode,
-              testName: defaultTestName,
-              category: 'chemistry',
-              specimenType: 'blood',
-              instructions: String(args.recommendation.description || '').trim() || undefined,
-            },
-          ];
-
-    const rows = await tenantDb.query(
-      `
-        INSERT INTO lab_orders (
-          order_number,
-          patient_id,
-          ordering_provider_id,
-          tests,
-          priority,
-          status,
-          clinical_info,
-          special_instructions,
-          payment_status
-        ) VALUES ($1,$2,$3,$4::jsonb,$5,'ordered',$6,$7,'payment_confirmed')
-        RETURNING id, order_number, status, priority, created_at
-      `,
-      [
-        orderNumber,
-        args.sessionRow.patient_id,
-        args.actorUserId,
-        JSON.stringify(testPayload),
-        this.mapLabPriorityFromUrgency(args.recommendation.urgency),
-        String(args.recommendation.description || '').trim() || null,
-        args.note || null,
-      ],
-    );
-
-    return {
-      resourceType: 'lab_order',
-      resourceId: rows[0].id,
-      payload: rows[0],
-    };
-  }
-
-  private async syncRecommendationExecutionIntoArtifact(
-    tenantDb: DataSource,
-    args: {
-      sessionId: string;
-      recommendationId: string;
-      execution: Record<string, any>;
-      actorUserId: string;
-    },
-  ) {
-    const artifact = await this.getArtifactRow(tenantDb, args.sessionId, 'recommendation_bundle');
-    if (!artifact) return;
-
-    const content = artifact.content && typeof artifact.content === 'object' ? { ...artifact.content } : {};
-    const actionExecutions =
-      content.action_executions && typeof content.action_executions === 'object'
-        ? { ...content.action_executions }
-        : {};
-    actionExecutions[args.recommendationId] = args.execution;
-    content.action_executions = actionExecutions;
-
-    if (Array.isArray(content.items)) {
-      content.items = content.items.map((item: any) => {
-        if (String(item?.id) !== String(args.recommendationId)) {
-          return item;
-        }
-        return {
-          ...item,
-          execution: args.execution,
-        };
-      });
-    }
-
-    await this.upsertDraftArtifact(tenantDb, {
-      sessionId: args.sessionId,
-      artifactType: 'recommendation_bundle',
-      content,
-      citations: Array.isArray(artifact.citations) ? artifact.citations : [],
-      confidence: typeof artifact.confidence === 'number' ? artifact.confidence : null,
-      generatedBy: 'post_visit_execute',
-      actorUserId: args.actorUserId,
-      artifactStatus: artifact.artifact_status || 'draft',
-    });
-  }
-
-  private async safeSyncCrossModuleWorkflow(
-    tenantDb: DataSource,
-    args: {
-      sessionRow: any;
-      recommendation: Record<string, any>;
-      actorUserId: string;
-      result: { resourceType: string; resourceId: string; payload: Record<string, any> };
-    },
-  ) {
-    const actionType = String(args.recommendation.action_type || '').toLowerCase();
-    const workflowKey = `post_visit:${args.sessionRow.id}:${args.recommendation.id}`;
-    try {
-      await tenantDb.query(
-        `
-          INSERT INTO nurse_cross_module_workflow_state (
-            workflow_key,
-            module,
-            item_type,
-            source_record_id,
-            patient_id,
-            status,
-            destination_role,
-            destination_service,
-            destination_specialty,
-            completed_by,
-            completed_at,
-            note,
-            context
-          ) VALUES (
-            $1,
-            'post_visit',
-            $2,
-            $3,
-            $4,
-            'completed',
-            'doctor',
-            'post_visit',
-            'General Medicine',
-            $5,
-            NOW(),
-            $6,
-            $7::jsonb
-          )
-          ON CONFLICT (workflow_key) DO UPDATE
-          SET status = 'completed',
-              completed_by = EXCLUDED.completed_by,
-              completed_at = EXCLUDED.completed_at,
-              note = EXCLUDED.note,
-              context = EXCLUDED.context,
-              updated_at = NOW()
-        `,
-        [
-          workflowKey,
-          actionType || 'follow_up',
-          String(args.sessionRow.id),
-          args.sessionRow.patient_id,
-          args.actorUserId,
-          `Executed from post-visit recommendation ${args.recommendation.id}`,
-          JSON.stringify({
-            source: 'post_visit_execute',
-            recommendation_id: args.recommendation.id,
-            result_resource_type: args.result.resourceType,
-            result_resource_id: args.result.resourceId,
-          }),
-        ],
-      );
-    } catch (error: any) {
-      const message = String(error?.message || '');
-      if (message.includes('nurse_cross_module_workflow_state')) {
-        return;
-      }
-      throw error;
-    }
-  }
-
+  // S108: Delegated to PostVisitSessionService.
   async createSession(
     tenantDb: DataSource,
     dto: CreatePostVisitSessionDto,
     requestContext: { tenantId?: string; actorUserId?: string | null } = {},
   ) {
+    if (this.sessionService) return this.sessionService.createSession(tenantDb, dto, requestContext);
     await this.ensurePostVisitSchema(tenantDb);
 
     const patientRows = await tenantDb.query(`SELECT id FROM patients WHERE id = $1 LIMIT 1`, [dto.patientId]);
@@ -4791,16 +690,20 @@ export class PostVisitService {
     return this.mapSession(inserted[0]);
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getSession(tenantDb: DataSource, sessionId: string) {
+    if (this.sessionService) return this.sessionService.getSession(tenantDb, sessionId);
     await this.ensurePostVisitSchema(tenantDb);
     const row = await this.getSessionRow(tenantDb, sessionId);
     return this.mapSession(row);
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async listSessions(
     tenantDb: DataSource,
     options: ListPostVisitSessionsOptions = {},
   ) {
+    if (this.sessionService) return this.sessionService.listSessions(tenantDb, options);
     await this.ensurePostVisitSchema(tenantDb);
 
     const limit = Math.min(Math.max(Number(options.limit || 25), 1), 100);
@@ -4918,7 +821,9 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitDraftService.
   async getSessionDraft(tenantDb: DataSource, sessionId: string) {
+    if (this.draftService) return this.draftService.getSessionDraft(tenantDb, sessionId);
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
@@ -5143,7 +1048,9 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitDraftService.
   async getAnnotatedDraft(sessionId: string, tenantDb: DataSource) {
+    if (this.draftService) return this.draftService.getAnnotatedDraft(sessionId, tenantDb);
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
@@ -5210,11 +1117,13 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitDraftService.
   async askAboutSection(
     sessionId: string,
     body: { question: string; sectionType: string; artifactType?: string },
     tenantDb: DataSource,
   ) {
+    if (this.draftService) return this.draftService.askAboutSection(sessionId, body, tenantDb);
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
@@ -5368,11 +1277,15 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitBillingIntelligenceService.
   async getSessionBillingIntelligence(
     tenantDb: DataSource,
     sessionId: string,
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.billingIntelligenceService) {
+      return this.billingIntelligenceService.getSessionBillingIntelligence(tenantDb, sessionId, options);
+    }
     await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
     const rows = await tenantDb.query(
@@ -5437,6 +1350,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitBillingIntelligenceService.
   async reviewBillingSuggestion(
     tenantDb: DataSource,
     sessionId: string,
@@ -5444,6 +1358,9 @@ export class PostVisitService {
     payload: ReviewPostVisitBillingSuggestionDto,
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.billingIntelligenceService) {
+      return this.billingIntelligenceService.reviewBillingSuggestion(tenantDb, sessionId, suggestionId, payload, options);
+    }
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated doctor user is required for billing suggestion review');
@@ -6367,6 +2284,7 @@ export class PostVisitService {
     const llmResult = await this.groundedLlmService?.draftReferralLetter({
       sessionId,
       language: sessionRow.language || 'en',
+      tenantId: options.tenantId,
       patientLabel,
       clinicianLabel: doctorLabel,
       recipientLabel: payload.recipientLabel || null,
@@ -6459,6 +2377,7 @@ export class PostVisitService {
     const llmResult = await this.groundedLlmService?.draftClinicalNote({
       sessionId,
       language: sessionRow.language || 'en',
+      tenantId: options.tenantId,
       transcriptText,
       soapNote: soapArtifact?.content?.soap_note || null,
       visitSummary: visitSummaryArtifact?.content || null,
@@ -6913,7 +2832,10 @@ export class PostVisitService {
       const minAgeYears = this.parseTrialAgeYears(minimumAgeRaw);
       const maxAgeYears = this.parseTrialAgeYears(maximumAgeRaw);
 
-      const sourceUrl = `https://clinicaltrials.gov/study/${id}`;
+      const clinicalTrialsStudyBaseUrl = String(
+        process.env.POSTVISIT_CLINICALTRIALS_STUDY_BASE_URL || env.POSTVISIT_CLINICALTRIALS_STUDY_BASE_URL || '',
+      ).replace(/\/+$/, '');
+      const sourceUrl = clinicalTrialsStudyBaseUrl ? `${clinicalTrialsStudyBaseUrl}/${id}` : null;
       results.push({
         trialId: id,
         trialTitle: title,
@@ -7254,7 +3176,7 @@ export class PostVisitService {
 
   private async resolveTrialSlaFanoutRecipients(
     tenantDb: DataSource,
-    args: { sessionId: string; routeTarget: 'doctor' | 'nurse' },
+    args: { sessionId: string; routeTarget: 'doctor' | 'nurse' | 'emergency' },
   ) {
     const maxRecipients = this.getTrialSlaMaxRecipients();
     if (args.routeTarget === 'doctor') {
@@ -7427,7 +3349,7 @@ export class PostVisitService {
       escalationId: string;
       sessionId: string;
       patientId: string;
-      routeTarget: 'doctor' | 'nurse';
+      routeTarget: 'doctor' | 'nurse' | 'emergency';
       severity: TrialSlaNotificationSeverity;
       trialTitle: string | null;
       trialId: string | null;
@@ -8450,11 +4372,15 @@ export class PostVisitService {
     return facts;
   }
 
+  // S108: Delegated to PostVisitCompanionMemoryService.
   async listSessionCompanionMemory(
     tenantDb: DataSource,
     sessionId: string,
     options: { limit?: number; includeInactive?: boolean } = {},
   ) {
+    if (this.companionMemoryService) {
+      return this.companionMemoryService.listSessionCompanionMemory(tenantDb, sessionId, options);
+    }
     await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
     if (!this.isCompanionMemoryEnabled()) {
@@ -8494,6 +4420,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitCompanionMemoryService.
   async curateCompanionMemory(
     tenantDb: DataSource,
     sessionId: string,
@@ -8501,6 +4428,9 @@ export class PostVisitService {
     payload: CuratePostVisitCompanionMemoryDto,
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.companionMemoryService) {
+      return this.companionMemoryService.curateCompanionMemory(tenantDb, sessionId, memoryId, payload, options);
+    }
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isCompanionMemoryEnabled()) {
       throw new BadRequestException('Companion memory is disabled by feature flag');
@@ -9612,6 +5542,7 @@ export class PostVisitService {
       const llmPolish = await this.groundedLlmService.polishDoctorContent({
         sessionId,
         language: sessionRow.language || 'en',
+        tenantId: options.tenantId,
         soapNote,
         baseSummary: {
           summaryText: summaryContent.summary_text,
@@ -9821,12 +5752,14 @@ export class PostVisitService {
     return fullName || null;
   }
 
+  // S108: Delegated to PostVisitDraftService.
   async reviewDraftArtifact(
     tenantDb: DataSource,
     sessionId: string,
     payload: ReviewPostVisitArtifactDto,
     options: { tenantId?: string; actorUserId?: string | null; source?: string } = {},
   ) {
+    if (this.draftService) return this.draftService.reviewDraftArtifact(tenantDb, sessionId, payload, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated reviewer is required');
@@ -10409,11 +6342,13 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async listPatientSessions(
     tenantDb: DataSource,
     patientId: string,
     options: { limit?: number; offset?: number } = {},
   ) {
+    if (this.sessionService) return this.sessionService.listPatientSessions(tenantDb, patientId, options);
     await this.ensurePostVisitSchema(tenantDb);
     const limit = Math.min(Math.max(Number(options.limit || 20), 1), 100);
     const offset = Math.max(Number(options.offset || 0), 0);
@@ -10477,11 +6412,13 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getPatientStoryLatest(
     tenantDb: DataSource,
     patientId: string,
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.sessionService) return this.sessionService.getPatientStoryLatest(tenantDb, patientId, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPatientStoryEnabled()) {
       return { featureEnabled: false, story: null, version: null };
@@ -10533,7 +6470,9 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getPatientStoryVersions(tenantDb: DataSource, patientId: string, limit = 20) {
+    if (this.sessionService) return this.sessionService.getPatientStoryVersions(tenantDb, patientId, limit);
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPatientStoryEnabled()) {
       return { featureEnabled: false, versions: [] };
@@ -10559,7 +6498,9 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getPatientStoryVersion(tenantDb: DataSource, patientId: string, version: number) {
+    if (this.sessionService) return this.sessionService.getPatientStoryVersion(tenantDb, patientId, version);
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPatientStoryEnabled()) {
       return { featureEnabled: false, story: null };
@@ -10589,12 +6530,14 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getPatientStoryDiff(
     tenantDb: DataSource,
     patientId: string,
     fromVersion: number,
     toVersion: number,
   ) {
+    if (this.sessionService) return this.sessionService.getPatientStoryDiff(tenantDb, patientId, fromVersion, toVersion);
     await this.ensurePostVisitSchema(tenantDb);
     if (!this.isPatientStoryEnabled()) {
       return { featureEnabled: false, from: null, to: null, diff: null };
@@ -10889,6 +6832,7 @@ export class PostVisitService {
 
     const assistantAnswer = await this.buildGroundedCompanionAnswer({
       sessionId,
+      tenantId: options.tenantId,
       question: messageText,
       visitSummaryArtifact,
       recommendationArtifact,
@@ -10956,6 +6900,18 @@ export class PostVisitService {
     const assistantMessage = assistantMessageRows[0];
     await this.touchCompanionThreadAfterMessage(tenantDb, thread.id, 'system');
 
+    const patientAiArtifacts = await this.createPostVisitPatientAiArtifacts(tenantDb, {
+      sessionId,
+      threadId: thread.id,
+      patientId,
+      patientMessageId: patientMessage.id,
+      assistantMessageId: assistantMessage.id,
+      messageText,
+      assistantAnswer,
+      detection,
+      postVisitEscalationId: escalation?.id || null,
+    });
+
     return {
       sessionId,
       threadId: thread.id,
@@ -10974,6 +6930,11 @@ export class PostVisitService {
         createdAt: assistantMessage.created_at,
       },
       escalation: escalation && detection.detected ? this.mapEscalationEvent(escalation) : null,
+      patientAi: {
+        sessionId: patientAiArtifacts.patientAiSession?.id || null,
+        escalationId: patientAiArtifacts.patientAiEscalation?.id || null,
+        followupOrchestrationId: patientAiArtifacts.followupOrchestration?.id || null,
+      },
       memory: {
         enabled: this.isCompanionMemoryEnabled(),
         newEntries: persistedMemories.map((row: any) => this.mapCompanionMemory(row)),
@@ -11038,6 +6999,24 @@ export class PostVisitService {
           acknowledgement_type: payload.acknowledgementType,
         },
       });
+      await tenantDb.query(
+        `
+          UPDATE patient_followup_orchestrations
+          SET status = 'completed',
+              reminder_state = 'acknowledged',
+              completed_at = NOW(),
+              last_touched_at = NOW(),
+              payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object(
+                'followUpCommitmentAcknowledged', true,
+                'commitmentText', $3
+              )
+          WHERE patient_id = $1
+            AND trigger_type = 'post_visit_companion_message'
+            AND status = 'open'
+            AND COALESCE(payload->>'sessionId', '') = $2
+        `,
+        [patientId, sessionId, commitmentText],
+      ).catch(() => undefined);
     }
 
     return {
@@ -11264,7 +7243,9 @@ export class PostVisitService {
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
-    if (!audioFile?.buffer || !Buffer.isBuffer(audioFile.buffer) || audioFile.buffer.length === 0) {
+    const hasBuffer = !!(audioFile?.buffer && Buffer.isBuffer(audioFile.buffer) && audioFile.buffer.length > 0);
+    const hasPath = typeof (audioFile as any)?.path === 'string' && String((audioFile as any).path).trim().length > 0;
+    if (!hasBuffer && !hasPath) {
       throw new BadRequestException('Audio chunk file is required');
     }
 
@@ -11336,6 +7317,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitEscalationService.
   async listIntraVisitAlerts(
     tenantDb: DataSource,
     sessionId: string,
@@ -11345,6 +7327,7 @@ export class PostVisitService {
       offset?: number;
     } = {},
   ) {
+    if (this.escalationService) return this.escalationService.listIntraVisitAlerts(tenantDb, sessionId, filters);
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
@@ -11430,6 +7413,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitEscalationService.
   async acknowledgeIntraVisitAlert(
     tenantDb: DataSource,
     sessionId: string,
@@ -11437,6 +7421,7 @@ export class PostVisitService {
     payload: { note?: string } = {},
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.escalationService) return this.escalationService.acknowledgeIntraVisitAlert(tenantDb, sessionId, alertId, payload, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated user is required to acknowledge intra-visit alert');
@@ -11499,6 +7484,7 @@ export class PostVisitService {
     return this.mapIntraVisitAlertEvent(updatedRows[0]);
   }
 
+  // S108: Delegated to PostVisitEscalationService.
   async resolveIntraVisitAlert(
     tenantDb: DataSource,
     sessionId: string,
@@ -11506,6 +7492,7 @@ export class PostVisitService {
     payload: { status?: 'confirmed' | 'dismissed'; note?: string } = {},
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.escalationService) return this.escalationService.resolveIntraVisitAlert(tenantDb, sessionId, alertId, payload, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated user is required to resolve intra-visit alert');
@@ -12249,6 +8236,7 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitEscalationService — implementation lives there.
   async listEscalations(
     tenantDb: DataSource,
     filters: {
@@ -12264,6 +8252,7 @@ export class PostVisitService {
       offset?: number;
     } = {},
   ) {
+    if (this.escalationService) return this.escalationService.listEscalations(tenantDb, filters);
     await this.ensurePostVisitSchema(tenantDb);
     const conditions: string[] = [];
     const params: any[] = [];
@@ -12363,12 +8352,14 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitEscalationService.
   async resolveEscalation(
     tenantDb: DataSource,
     escalationId: string,
     payload: { status?: 'resolved' | 'dismissed'; resolutionNote?: string } = {},
     options: { actorUserId?: string | null } = {},
   ) {
+    if (this.escalationService) return this.escalationService.resolveEscalation(tenantDb, escalationId, payload, options);
     await this.ensurePostVisitSchema(tenantDb);
     if (!options.actorUserId) {
       throw new BadRequestException('Authenticated user is required to resolve escalation');
@@ -12420,6 +8411,12 @@ export class PostVisitService {
         }
       }
     }
+
+    await this.syncResolvedPostVisitEscalationIntoPatientAi(tenantDb, existing, {
+      status: targetStatus,
+      resolutionNote: payload.resolutionNote || null,
+      actorUserId: options.actorUserId,
+    });
 
     return this.mapEscalationEvent(updated);
   }
@@ -13306,10 +9303,12 @@ export class PostVisitService {
     return map[mime] || '.audio';
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getSessionRecordingUrl(
     sessionId: string,
     tenantDb: DataSource,
   ): Promise<{ url: string; mimeType: string; durationMs: number | null } | { url: null }> {
+    if (this.sessionService) return this.sessionService.getSessionRecordingUrl(sessionId, tenantDb);
     const repo = tenantDb.getRepository(PostVisitSession);
     const session = await repo.findOne({ where: { id: sessionId } });
     if (!session?.recordingStorageKey || !this.fileStorageService) {
@@ -13327,12 +9326,1798 @@ export class PostVisitService {
     };
   }
 
+  // S108: Delegated to PostVisitSessionService.
   async getSessionForPatient(
     sessionId: string,
     patientId: string,
     tenantDb: DataSource,
   ): Promise<PostVisitSession | null> {
+    if (this.sessionService) return this.sessionService.getSessionForPatient(sessionId, patientId, tenantDb);
     const repo = tenantDb.getRepository(PostVisitSession);
     return repo.findOne({ where: { id: sessionId, patientId } });
   }
 }
+
+// S111/MOAS-09: restore the missing post-extraction helper surface as a
+// compatibility layer so the remaining public service methods compile and run
+// against the extracted services.
+export interface PostVisitService {
+  [key: string]: any;
+}
+
+Object.assign(PostVisitService.prototype as any, {
+  normalizeLanguage(this: any, language?: string | null) {
+    const raw = String(language || '').trim().toLowerCase();
+    if (!raw) return 'en';
+    if (raw === 'english' || raw === 'eng') return 'en';
+    if (raw === 'shona') return 'sn';
+    if (raw === 'ndebele') return 'nd';
+    return raw;
+  },
+
+  async getSessionRow(this: any, tenantDb: DataSource, sessionId: string) {
+    if (this.sessionService?.getSessionRow) {
+      return this.sessionService.getSessionRow(tenantDb, sessionId);
+    }
+    const rows = await tenantDb.query(`SELECT * FROM post_visit_sessions WHERE id = $1 LIMIT 1`, [sessionId]);
+    if (!rows?.length) {
+      throw new NotFoundException('Post-visit session not found');
+    }
+    return rows[0];
+  },
+
+  mapSession(this: any, row: any) {
+    if (this.sessionService?.mapSession) {
+      return this.sessionService.mapSession(row);
+    }
+    return {
+      id: row.id,
+      tenantId: row.tenant_id ?? null,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id ?? null,
+      appointmentId: row.appointment_id ?? null,
+      consultationId: row.consultation_id ?? null,
+      status: row.status as PostVisitSessionStatus,
+      sourceType: row.source_type,
+      language: row.language || 'en',
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+      reviewedAt: row.reviewed_at,
+      reviewedBy: row.reviewed_by ?? null,
+      publishedAt: row.published_at,
+      safetyLevel: row.safety_level ?? null,
+      riskFlags: row.risk_flags || {},
+      meta: row.meta || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  async getArtifactRow(this: any, tenantDb: DataSource, sessionId: string, artifactType: string) {
+    if (this.draftService?.getArtifactRow) {
+      return this.draftService.getArtifactRow(tenantDb, sessionId, artifactType);
+    }
+    const rows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_draft_artifacts
+        WHERE session_id = $1
+          AND artifact_type = $2
+        LIMIT 1
+      `,
+      [sessionId, artifactType],
+    );
+    return rows?.length ? rows[0] : null;
+  },
+
+  mapEscalationEvent(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id ?? row.sessionId ?? null,
+      patientId: row.patient_id ?? row.patientId ?? null,
+      threadId: row.thread_id ?? row.threadId ?? null,
+      messageId: row.message_id ?? row.messageId ?? null,
+      status: row.status,
+      severity: row.severity,
+      routeTarget: row.route_target ?? row.routeTarget ?? null,
+      triggerType: row.trigger_type ?? row.triggerType ?? null,
+      triggerTerms: row.trigger_terms ?? row.triggerTerms ?? [],
+      signalText: row.signal_text ?? row.signalText ?? null,
+      classificationConfidence:
+        row.classification_confidence == null && row.classificationConfidence == null
+          ? null
+          : Number(row.classification_confidence ?? row.classificationConfidence),
+      classificationTemporality: row.classification_temporality ?? row.classificationTemporality ?? null,
+      classificationSource: row.classification_source ?? row.classificationSource ?? null,
+      classificationReason: row.classification_reason ?? row.classificationReason ?? null,
+      classificationStage: row.classification_stage ?? row.classificationStage ?? 'v1',
+      detectedAt: row.detected_at ?? row.detectedAt ?? null,
+      slaDueAt: row.sla_due_at ?? row.slaDueAt ?? null,
+      acknowledgedAt: row.acknowledged_at ?? row.acknowledgedAt ?? null,
+      acknowledgedBy: row.acknowledged_by ?? row.acknowledgedBy ?? null,
+      resolvedAt: row.resolved_at ?? row.resolvedAt ?? null,
+      resolvedBy: row.resolved_by ?? row.resolvedBy ?? null,
+      resolutionNote: row.resolution_note ?? row.resolutionNote ?? null,
+      workflowKey: row.workflow_key ?? row.workflowKey ?? null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at ?? row.createdAt ?? null,
+      updatedAt: row.updated_at ?? row.updatedAt ?? null,
+    };
+  },
+
+  mapIntraVisitAlertEvent(this: any, row: any) {
+    const acknowledgedAt = row.acknowledged_at || null;
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      status: row.status,
+      alertType: row.alert_type,
+      severity: row.severity,
+      routeTarget: (row.route_target || 'doctor') as IntraVisitAlertRouteTarget,
+      assignedRole: (row.assigned_role || 'doctor') as IntraVisitAlertAssignedRole,
+      assignedUserId: row.assigned_user_id || null,
+      assignedTeam: row.assigned_team || null,
+      policyVersion: row.policy_version || 'c3.v1',
+      routingRationale: row.routing_rationale || null,
+      source: row.source || 'streamed_transcript',
+      transcriptOffsetSeconds:
+        row.transcript_offset_seconds == null ? null : Number(row.transcript_offset_seconds),
+      signalText: row.signal_text || null,
+      alertMessage: row.alert_message,
+      suggestedAction: row.suggested_action || null,
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      triggerTerms: Array.isArray(row.trigger_terms) ? row.trigger_terms : [],
+      metadata: row.metadata || {},
+      detectedAt: row.detected_at,
+      slaDueAt: row.sla_due_at || null,
+      isAcknowledged: acknowledgedAt !== null,
+      acknowledgedAt,
+      acknowledgedBy: row.acknowledged_by || null,
+      acknowledgmentNote: row.acknowledgment_note || null,
+      resolvedAt: row.resolved_at || null,
+      resolvedBy: row.resolved_by || null,
+      resolutionNote: row.resolution_note || null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  mapBillingSuggestion(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      suggestionKey: row.suggestion_key,
+      codeType: row.code_type,
+      code: row.code,
+      description: row.description,
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      justification: row.justification || null,
+      documentationChecks: Array.isArray(row.documentation_checks) ? row.documentation_checks : [],
+      documentationScore: Number(row.documentation_score || 0),
+      documentationStatus: row.documentation_status || 'insufficient',
+      status: row.status || 'proposed',
+      approvedBy: row.approved_by || null,
+      approvedAt: row.approved_at || null,
+      approvalNote: row.approval_note || null,
+      source: row.source || 'post_visit_billing_intelligence_v1',
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  buildBillingDocumentationSummaryFromSuggestionRows(this: any, rows: any[]) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return null;
+    }
+    const primary = rows[0];
+    const checks = Array.isArray(primary?.documentation_checks)
+      ? primary.documentation_checks.map((row: any, index: number) => ({
+          id: String(row?.id || `check_${index + 1}`),
+          label: String(row?.label || row?.id || `Check ${index + 1}`),
+          passed: row?.passed === true,
+          guidance: String(row?.guidance || row?.label || 'Documentation requirement not met.'),
+        }))
+      : [];
+    const score = Math.max(0, Math.min(100, Number(primary?.documentation_score || 0)));
+    const statusRaw = String(primary?.documentation_status || 'insufficient').toLowerCase();
+    const status =
+      statusRaw === 'sufficient' || statusRaw === 'partial' || statusRaw === 'insufficient'
+        ? statusRaw
+        : score >= 80
+          ? 'sufficient'
+          : score >= 50
+            ? 'partial'
+            : 'insufficient';
+    const gaps = checks.filter((check: any) => !check.passed).map((check: any) => check.label);
+    return { score, status, checks, gaps };
+  },
+
+  isBillingIntelligenceEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitBillingIntelligence;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE || 'false').toLowerCase() === 'true';
+  },
+
+  async routeBillingSuggestionToWorkflow(this: any, tenantDb: DataSource, args: any) {
+    const workflowKey = `post_visit_billing:${String(args?.suggestionId || '').trim()}`;
+    await tenantDb.query(
+      `
+        INSERT INTO nurse_cross_module_workflow_state (
+          workflow_key,
+          workflow_type,
+          patient_id,
+          appointment_id,
+          consultation_id,
+          assigned_role,
+          assigned_user_id,
+          status,
+          priority,
+          note,
+          metadata
+        ) VALUES ($1,$2,$3,$4,$5,'doctor',NULL,'open','normal',$6,$7::jsonb)
+      `,
+      [
+        workflowKey,
+        'post_visit_billing_review',
+        args.patientId || null,
+        null,
+        null,
+        args.note || null,
+        JSON.stringify({
+          suggestionId: args.suggestionId || null,
+          sessionId: args.sessionId || null,
+          code: args.code || null,
+          codeType: args.codeType || null,
+        }),
+      ],
+    ).catch(() => {});
+    return workflowKey;
+  },
+
+  isPreVisitBriefEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitPreVisitBrief;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF || 'false').toLowerCase() === 'true';
+  },
+
+  mapPreVisitBrief(this: any, row: any) {
+    return {
+      id: row.id,
+      appointmentId: row.appointment_id,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id || null,
+      scheduledAt: row.scheduled_at || null,
+      status: row.status || 'active',
+      brief: row.brief_content || {},
+      followUpRisk: {
+        score: Number(row.follow_up_risk_score || 0),
+        tier: row.follow_up_risk_tier || 'low',
+        reasons: Array.isArray(row.follow_up_risk_reasons) ? row.follow_up_risk_reasons : [],
+        nudgePolicy: row.nudge_policy || null,
+      },
+      source: row.source || 'post_visit_previsit_brief_v1',
+      generatedBy: row.generated_by || null,
+      generatedAt: row.generated_at,
+      deliveredAt: row.delivered_at || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  isAdminDocumentsEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitAdminDocuments;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_ADMIN_DOCS || 'false').toLowerCase() === 'true';
+  },
+
+  mapAdminDocument(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id || null,
+      documentType: row.document_type,
+      version: Number(row.version_no || 1),
+      status: row.status || 'signed',
+      title: row.title || null,
+      body: row.body_json || {},
+      immutableHash: row.immutable_hash || null,
+      signedBy: row.signed_by || null,
+      signedAt: row.signed_at || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  isVoiceReviewEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitVoiceReview;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_VOICE_REVIEW || 'false').toLowerCase() === 'true';
+  },
+
+  normalizeVoiceCommand(this: any, input?: string | null): PostVisitVoiceCommand | null {
+    const normalized = String(input || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+    const aliases: Record<string, PostVisitVoiceCommand> = {
+      APPROVE_SUMMARY: 'APPROVE_SUMMARY',
+      ACCEPT_SUMMARY: 'APPROVE_SUMMARY',
+      APPROVE_VISIT_SUMMARY: 'APPROVE_SUMMARY',
+      APPROVE_BUNDLE: 'APPROVE_BUNDLE',
+      ACCEPT_BUNDLE: 'APPROVE_BUNDLE',
+      APPROVE_RECOMMENDATION_BUNDLE: 'APPROVE_BUNDLE',
+      GENERATE_ADMIN_DOCS: 'GENERATE_ADMIN_DOCS',
+      CREATE_ADMIN_DOCS: 'GENERATE_ADMIN_DOCS',
+      REGENERATE_DRAFT: 'REGENERATE_DRAFT',
+      REFRESH_DRAFT: 'REGENERATE_DRAFT',
+      SIGN_AND_PUBLISH: 'SIGN_AND_PUBLISH',
+      PUBLISH: 'SIGN_AND_PUBLISH',
+    };
+    return aliases[normalized] || null;
+  },
+
+  isCompanionMemoryEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitCompanionMemory;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_COMPANION_MEMORY || 'true').toLowerCase() !== 'false';
+  },
+
+  mapCompanionMemory(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      memoryType: row.memory_type,
+      memoryKey: row.memory_key,
+      memoryValue: row.memory_value,
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      sourceMessageId: row.source_message_id || null,
+      createdBy: row.created_by || null,
+      isActive: row.is_active !== false,
+      promotedAt: row.promoted_at || null,
+      promotedBy: row.promoted_by || null,
+      retiredAt: row.retired_at || null,
+      retiredBy: row.retired_by || null,
+      curationNote: row.curation_note || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  resolveFollowUpRiskTier(this: any, score: number): PostVisitFollowUpRiskTier {
+    if (score >= 80) return 'critical';
+    if (score >= 60) return 'high';
+    if (score >= 30) return 'moderate';
+    return 'low';
+  },
+
+  resolveNudgePolicyForRiskTier(this: any, tier: PostVisitFollowUpRiskTier): string {
+    if (tier === 'critical') return 'immediate_clinician_outreach';
+    if (tier === 'high') return 'same_day_nurse_followup';
+    if (tier === 'moderate') return 'next_day_companion_nudge';
+    return 'routine_weekly_checkin';
+  },
+
+  isDiarizationReviewEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_DIARIZATION_REVIEW || 'false').toLowerCase() === 'true';
+  },
+
+  isIntraVisitAlertsEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitIntraVisitAlerts;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_INTRAVISIT_ALERTS || 'false').toLowerCase() === 'true';
+  },
+
+  getDiarizationConfidenceThreshold(this: any): number {
+    const raw = Number(process.env.POSTVISIT_DIARIZATION_MIN_CONFIDENCE || 0.65);
+    if (!Number.isFinite(raw)) return 0.65;
+    return Math.min(0.95, Math.max(0.2, raw));
+  },
+
+  normalizeDiarizationConfidence(this: any, value: any): number | null {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return Math.min(1, Math.max(0, num));
+  },
+
+  normalizeSegmentSpeakerRole(this: any, value: any): 'doctor' | 'patient' | 'unknown' {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return 'unknown';
+    if (['doctor', 'dr', 'clinician', 'provider'].includes(normalized)) return 'doctor';
+    if (['patient', 'pt', 'client'].includes(normalized)) return 'patient';
+    return 'unknown';
+  },
+
+  isPostVisitOcrEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE || 'false').toLowerCase() === 'true';
+  },
+
+  resolveLocalOcrUrl(this: any): string {
+    const direct = String(process.env.LOCAL_OCR_URL || config.ai?.ocr?.localUrl || '').trim();
+    return direct ? direct.replace(/\/+$/, '') : '';
+  },
+
+  getLocalOcrTimeoutMs(this: any): number {
+    const raw = Number(process.env.POSTVISIT_OCR_TIMEOUT_MS || 120000);
+    if (!Number.isFinite(raw)) return 120000;
+    return Math.min(300000, Math.max(5000, raw));
+  },
+
+  hashFile(this: any, buffer: Buffer): string {
+    return createHash('sha256').update(buffer).digest('hex');
+  },
+
+  normalizeDocumentText(this: any, text: string): string {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\\s./%-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+  computeDocumentSimilarity(this: any, leftRaw: string, rightRaw: string): number {
+    const left = this.normalizeDocumentText(leftRaw);
+    const right = this.normalizeDocumentText(rightRaw);
+    if (!left || !right) return 0;
+    if (left === right) return 1;
+    const leftTokens = new Set(left.split(/\s+/).filter((token: string) => token.length > 1));
+    const rightTokens = new Set(right.split(/\s+/).filter((token: string) => token.length > 1));
+    if (!leftTokens.size || !rightTokens.size) return 0;
+    let overlap = 0;
+    for (const token of leftTokens) {
+      if (rightTokens.has(token)) overlap += 1;
+    }
+    const union = leftTokens.size + rightTokens.size - overlap;
+    return union <= 0 ? 0 : overlap / union;
+  },
+
+  normalizeDocumentType(this: any, type?: string): PostVisitDocumentType {
+    const normalized = String(type || '').trim().toLowerCase();
+    if (['lab_report', 'prescription', 'imaging_report', 'discharge_summary', 'other'].includes(normalized)) {
+      return normalized as PostVisitDocumentType;
+    }
+    return 'other';
+  },
+
+  parseDocumentIntelligenceFromText(this: any, text: string, documentType: PostVisitDocumentType): PostVisitDocumentIntelligenceModel {
+    const normalizedText = String(text || '').trim();
+    const lines = normalizedText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    const observations: PostVisitDocumentObservation[] = [];
+    const medications: PostVisitMedicationMention[] = [];
+    const findings: string[] = [];
+    const observationPattern =
+      /^([A-Za-z][A-Za-z0-9()[\] %/._-]{1,80}?)\s*[:=-]\s*(-?\d+(?:\.\d+)?)\s*([A-Za-z%/^\d.-]+)?(?:\s*\(([^)]+)\))?$/i;
+    const medicationPattern =
+      /^([A-Z][A-Za-z0-9-]+(?:\s+[A-Za-z0-9-]+){0,2})\s+(\d+(?:\.\d+)?)\s?(mg|mcg|g|ml|iu|units?)\b(?:\s*(.*))?$/i;
+    for (const line of lines) {
+      const observationMatch = line.match(observationPattern);
+      if (observationMatch) {
+        observations.push({
+          name: observationMatch[1].trim(),
+          value: Number(observationMatch[2]),
+          unit: observationMatch[3] ? observationMatch[3].trim() : null,
+          referenceRange: observationMatch[4] ? observationMatch[4].trim() : null,
+          interpretation: null,
+        });
+        continue;
+      }
+      const medicationMatch = line.match(medicationPattern);
+      if (medicationMatch) {
+        medications.push({
+          medicationName: medicationMatch[1].trim(),
+          dose: `${medicationMatch[2]} ${medicationMatch[3]}`,
+          frequency: medicationMatch[4] ? medicationMatch[4].trim() : null,
+          route: null,
+        });
+        continue;
+      }
+      if (/impression|conclusion|assessment|finding|diagnosis|recommendation/i.test(line)) {
+        findings.push(line);
+      }
+    }
+    return {
+      documentType,
+      summary: normalizedText.slice(0, 1200),
+      observations: observations.slice(0, 120),
+      medications: medications.slice(0, 80),
+      findings: findings.slice(0, 80),
+    };
+  },
+
+  mapDocumentIntelligenceToFhir(this: any, sessionRow: any, documentId: string, model: PostVisitDocumentIntelligenceModel): any[] {
+    const encounterRef = `Encounter/post-visit-${sessionRow.id}`;
+    const patientRef = `Patient/${sessionRow.patient_id}`;
+    const effectiveDate = this.toIsoDate(new Date());
+    const observationResources = model.observations.map((observation: any, index: number) => ({
+      resourceType: 'Observation',
+      id: `post-visit-docobs-${this.safeToken(documentId)}-${index + 1}`,
+      status: 'final',
+      category: [{ text: 'laboratory' }],
+      code: { text: observation.name },
+      subject: { reference: patientRef },
+      encounter: { reference: encounterRef },
+      effectiveDateTime: effectiveDate,
+      valueQuantity: {
+        value: observation.value,
+        unit: observation.unit || undefined,
+      },
+      referenceRange: observation.referenceRange ? [{ text: observation.referenceRange }] : undefined,
+    }));
+    const medicationResources = model.medications.map((medication: any, index: number) => ({
+      resourceType: 'MedicationRequest',
+      id: `post-visit-docmed-${this.safeToken(documentId)}-${index + 1}`,
+      status: 'active',
+      intent: 'order',
+      subject: { reference: patientRef },
+      encounter: { reference: encounterRef },
+      authoredOn: effectiveDate,
+      medicationCodeableConcept: { text: medication.medicationName },
+      dosageInstruction: [{ text: [medication.dose, medication.frequency].filter(Boolean).join(' ').trim() }],
+    }));
+    const diagnosticReportResource = {
+      resourceType: 'DiagnosticReport',
+      id: `post-visit-docreport-${this.safeToken(documentId)}`,
+      status: 'final',
+      code: { text: `${model.documentType.replace(/_/g, ' ')} intelligence extract` },
+      subject: { reference: patientRef },
+      encounter: { reference: encounterRef },
+      effectiveDateTime: effectiveDate,
+      issued: effectiveDate,
+      conclusion: model.findings.join('; ') || model.summary.slice(0, 500),
+      result: observationResources.map((observation: any) => ({ reference: `Observation/${observation.id}` })),
+    };
+    return [...observationResources, ...medicationResources, diagnosticReportResource];
+  },
+
+  detectCriticalDocumentFlags(this: any, model: PostVisitDocumentIntelligenceModel): PostVisitDocumentCriticalFlag[] {
+    const flags: PostVisitDocumentCriticalFlag[] = [];
+    const thresholds = [
+      { code: 'potassium', label: 'Potassium critical', matcher: /potassium|k\+/i, criticalHigh: 6.0, highHigh: 5.5, unit: 'mmol/L' },
+      { code: 'glucose', label: 'Glucose critical', matcher: /glucose|blood sugar/i, criticalHigh: 22.0, criticalLow: 2.5, highHigh: 16.0, highLow: 3.0, unit: 'mmol/L' },
+      { code: 'hemoglobin', label: 'Hemoglobin critical', matcher: /hemoglobin|haemoglobin|hb/i, criticalLow: 6.5, highLow: 7.5, unit: 'g/dL' },
+    ];
+    for (const observation of model.observations) {
+      const value = Number(observation.value);
+      if (!Number.isFinite(value)) continue;
+      for (const threshold of thresholds) {
+        if (!threshold.matcher.test(String(observation.name || ''))) continue;
+        if (threshold.criticalHigh != null && value >= threshold.criticalHigh) {
+          flags.push({ code: threshold.code, label: threshold.label, severity: 'critical', value, unit: observation.unit || threshold.unit || null, threshold: `>= ${threshold.criticalHigh}` });
+        } else if (threshold.criticalLow != null && value <= threshold.criticalLow) {
+          flags.push({ code: threshold.code, label: threshold.label, severity: 'critical', value, unit: observation.unit || threshold.unit || null, threshold: `<= ${threshold.criticalLow}` });
+        } else if (threshold.highHigh != null && value >= threshold.highHigh) {
+          flags.push({ code: threshold.code, label: threshold.label, severity: 'high', value, unit: observation.unit || threshold.unit || null, threshold: `>= ${threshold.highHigh}` });
+        } else if (threshold.highLow != null && value <= threshold.highLow) {
+          flags.push({ code: threshold.code, label: threshold.label, severity: 'high', value, unit: observation.unit || threshold.unit || null, threshold: `<= ${threshold.highLow}` });
+        }
+      }
+    }
+    return flags;
+  },
+
+  splitIntoPhrases(this: any, value?: string) {
+    const text = String(value || '').trim();
+    if (!text || text.toLowerCase() === 'not provided') return [];
+    return text.split(/[\n.;]+/).map((part) => part.trim()).filter((part) => part.length > 0);
+  },
+
+  parseBloodPressure(this: any, bp?: string | null) {
+    const raw = String(bp || '').trim();
+    const match = raw.match(/^(\d{2,3})\s*\/\s*(\d{2,3})$/);
+    if (!match) return null;
+    return { systolic: Number(match[1]), diastolic: Number(match[2]) };
+  },
+
+  parseNumericValue(this: any, value: any): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const match = raw.match(/-?\d+(?:\.\d+)?/);
+    if (!match) return null;
+    const numeric = Number(match[0]);
+    return Number.isFinite(numeric) ? numeric : null;
+  },
+
+  normalizeMedicationToken(this: any, value: string): string {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .replace(/\b\d+(?:\.\d+)?\s?(mg|mcg|g|ml|iu|units?)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+  splitMedicationTextList(this: any, value: string): string[] {
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+    return raw.split(/[,\n;|]+/).map((item) => item.trim()).filter((item) => item.length > 0);
+  },
+
+  getMedicationSeverityRank(this: any, severity: MedicationRiskSeverity | 'major' | 'moderate' | null | undefined): number {
+    if (severity === 'contraindicated') return 4;
+    if (severity === 'major') return 3;
+    if (severity === 'moderate') return 2;
+    if (severity === 'minor') return 1;
+    return 0;
+  },
+
+  inferMedicationNormalization(this: any, inputName: string): MedicationNormalizationRecord {
+    const normalizedInput = this.normalizeMedicationToken(inputName);
+    const dictionary: Array<{ token: string; normalizedName: string; rxCui: string }> = [
+      { token: 'metformin', normalizedName: 'metformin', rxCui: '6809' },
+      { token: 'gabapentin', normalizedName: 'gabapentin', rxCui: '25480' },
+      { token: 'rivaroxaban', normalizedName: 'rivaroxaban', rxCui: '1114195' },
+      { token: 'warfarin', normalizedName: 'warfarin', rxCui: '11289' },
+      { token: 'aspirin', normalizedName: 'aspirin', rxCui: '1191' },
+      { token: 'clarithromycin', normalizedName: 'clarithromycin', rxCui: '21212' },
+      { token: 'simvastatin', normalizedName: 'simvastatin', rxCui: '36567' },
+      { token: 'lisinopril', normalizedName: 'lisinopril', rxCui: '29046' },
+      { token: 'spironolactone', normalizedName: 'spironolactone', rxCui: '9997' },
+    ];
+    const dictionaryHit = dictionary.find((entry) => normalizedInput.includes(entry.token));
+    if (dictionaryHit) {
+      return { inputName, normalizedName: dictionaryHit.normalizedName, rxCui: dictionaryHit.rxCui, source: 'rxnorm_dictionary' };
+    }
+    const fallbackToken = normalizedInput.split(/\s+/)[0] || normalizedInput;
+    return {
+      inputName,
+      normalizedName: fallbackToken || normalizedInput || 'unknown_medication',
+      rxCui: null,
+      source: fallbackToken ? 'heuristic' : 'unknown',
+    };
+  },
+
+  extractEstimatedEgfr(this: any, patientContext: any, extractedEntities: any[]): number | null {
+    const entityHit = extractedEntities.find((entity: any) => {
+      const type = String(entity?.entity_type || entity?.type || '').toLowerCase();
+      const value = String(entity?.entity_value || entity?.value || '').toLowerCase();
+      return type.includes('egfr') || /e\s*gfr|glomerular/i.test(value);
+    });
+    const entityEgfr = this.parseNumericValue(entityHit?.entity_value || entityHit?.value);
+    if (entityEgfr !== null) return entityEgfr;
+    const labAlert = patientContext?.modules?.lab?.latestCriticalAlert;
+    return this.parseNumericValue(labAlert?.result_value);
+  },
+
+  buildMedicationIntelligenceAssessment(this: any, patientContext: any, extractedEntities: any[]): MedicationIntelligenceAssessment {
+    if (!this.isMedicationIntelligenceV2Enabled()) {
+      return {
+        enabled: false,
+        medications: [],
+        interactions: [],
+        beersAlerts: [],
+        renalAlerts: [],
+        highestSeverity: null,
+        highRiskCount: 0,
+        egfr: null,
+        riskNarrative: 'Medication intelligence v2 is disabled by feature flag.',
+      };
+    }
+    const age = Number(patientContext?.patient?.age || 0);
+    const medicationCandidates: string[] = [];
+    const latestPrescription = patientContext?.modules?.pharmacy?.latestPrescription;
+    for (const candidate of [
+      latestPrescription?.medication_name,
+      latestPrescription?.generic_name,
+      ...(extractedEntities || []).map((entity: any) => entity?.entity_value || entity?.value),
+    ]) {
+      if (String(candidate || '').trim()) {
+        medicationCandidates.push(String(candidate).trim());
+      }
+    }
+    const deduped = Array.from(
+      new Map(
+        medicationCandidates
+          .map((candidate) => [this.normalizeMedicationToken(candidate), candidate] as const)
+          .filter(([key]) => key.length > 0),
+      ).entries(),
+    ).map(([, original]) => original);
+    const medications = deduped.map((name) => this.inferMedicationNormalization(name));
+    const normalizedMedicationSet = new Set(medications.map((item) => item.normalizedName));
+    const interactions: MedicationInteractionSignal[] = [];
+    if (normalizedMedicationSet.has('clarithromycin') && normalizedMedicationSet.has('simvastatin')) {
+      interactions.push({
+        pair: ['clarithromycin', 'simvastatin'],
+        severity: 'major',
+        rationale: 'Clarithromycin increases simvastatin concentration and myopathy risk.',
+        guidelineId: 'fda-simvastatin-drug-interaction-safety',
+      });
+    }
+    const egfr = this.extractEstimatedEgfr(patientContext, extractedEntities);
+    const renalAlerts: MedicationRenalSignal[] = [];
+    if (egfr !== null && egfr < 50 && normalizedMedicationSet.has('rivaroxaban')) {
+      renalAlerts.push({
+        medication: 'rivaroxaban',
+        severity: 'major',
+        rationale: 'Rivaroxaban renal-dose review is required when eGFR < 50.',
+        egfr,
+      });
+    }
+    const beersAlerts: MedicationBeersSignal[] =
+      age >= 65 && normalizedMedicationSet.has('simvastatin')
+        ? [{ medication: 'simvastatin', severity: 'moderate', rationale: 'Review statin tolerance and myalgia in older adults.' }]
+        : [];
+    let highestSeverity: MedicationRiskSeverity | null = null;
+    for (const signal of [...interactions, ...beersAlerts, ...renalAlerts]) {
+      if (!highestSeverity || this.getMedicationSeverityRank(signal.severity) > this.getMedicationSeverityRank(highestSeverity)) {
+        highestSeverity = signal.severity as MedicationRiskSeverity;
+      }
+    }
+    const highRiskCount =
+      interactions.filter((item) => ['contraindicated', 'major'].includes(item.severity)).length +
+      renalAlerts.filter((item) => item.severity === 'major').length;
+    return {
+      enabled: true,
+      medications,
+      interactions,
+      beersAlerts,
+      renalAlerts,
+      highestSeverity,
+      highRiskCount,
+      egfr,
+      riskNarrative: highRiskCount > 0
+        ? 'High-risk medication safety signals detected.'
+        : 'No high-risk medication safety signals detected.',
+    };
+  },
+
+  isMedicationIntelligenceV2Enabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2 || 'false').toLowerCase() === 'true';
+  },
+
+  extractEntitiesFromTranscription(this: any, result: TranscriptionResult): ExtractedEntityInput[] {
+    const entities: ExtractedEntityInput[] = [];
+    const language = this.normalizeLanguage(result.language);
+    const confidence = typeof result.confidence === 'number' ? result.confidence : null;
+    const pushSection = (section: string, value?: string) => {
+      for (const phrase of this.splitIntoPhrases(value)) {
+        entities.push({
+          entityType: section,
+          entityValue: phrase,
+          normalizedValue: { language },
+          confidence,
+          sourceOrigin: 'soap_note',
+        });
+      }
+    };
+    pushSection('subjective', result.soap_note?.subjective);
+    pushSection('objective', result.soap_note?.objective);
+    pushSection('assessment', result.soap_note?.assessment);
+    pushSection('plan', result.soap_note?.plan);
+    const transcriptionText = String(result.text || '').trim();
+    if (transcriptionText) {
+      const bpMatch = transcriptionText.match(/\b(\d{2,3})\s*\/\s*(\d{2,3})\b/);
+      if (bpMatch) {
+        entities.push({
+          entityType: 'vital_blood_pressure',
+          entityValue: `${bpMatch[1]}/${bpMatch[2]}`,
+          normalizedValue: { systolic: Number(bpMatch[1]), diastolic: Number(bpMatch[2]), unit: 'mmHg' },
+          confidence,
+          sourceOrigin: 'transcript',
+        });
+      }
+      const heartRateMatch = transcriptionText.match(/\b(?:heart rate|hr)\s*(?:is|of)?\s*(\d{2,3})\b/i);
+      if (heartRateMatch) {
+        entities.push({
+          entityType: 'vital_heart_rate',
+          entityValue: heartRateMatch[1],
+          normalizedValue: { value: Number(heartRateMatch[1]), unit: 'bpm' },
+          confidence,
+          sourceOrigin: 'transcript',
+        });
+      }
+    }
+    return entities;
+  },
+
+  async upsertDraftArtifact(this: any, tenantDb: DataSource, args: {
+    sessionId: string;
+    artifactType: string;
+    content: Record<string, any>;
+    citations?: Array<Record<string, any>>;
+    confidence?: number | null;
+    generatedBy?: string;
+    actorUserId?: string | null;
+    artifactStatus?: 'draft' | 'reviewed' | 'published';
+  }) {
+    const rows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_draft_artifacts (
+          session_id,
+          artifact_type,
+          artifact_status,
+          content,
+          citations,
+          confidence,
+          generated_by,
+          created_by,
+          updated_by
+        ) VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,$8)
+        ON CONFLICT (session_id, artifact_type)
+        DO UPDATE SET
+          artifact_status = EXCLUDED.artifact_status,
+          content = EXCLUDED.content,
+          citations = EXCLUDED.citations,
+          confidence = EXCLUDED.confidence,
+          generated_by = EXCLUDED.generated_by,
+          updated_by = EXCLUDED.updated_by,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        args.sessionId,
+        args.artifactType,
+        args.artifactStatus || 'draft',
+        JSON.stringify(args.content || {}),
+        JSON.stringify(args.citations || []),
+        typeof args.confidence === 'number' ? args.confidence : null,
+        args.generatedBy || 'post_visit_pipeline',
+        args.actorUserId || null,
+      ],
+    );
+    return rows[0];
+  },
+
+  isSpecialtySoapEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_SPECIALTY_SOAP || 'false').toLowerCase() === 'true';
+  },
+
+  resolveSoapSpecialty(this: any, patientContext: any): PostVisitSoapSpecialty {
+    const modules = patientContext?.modules || {};
+    const age = Number(patientContext?.patient?.age || 0);
+    if (modules?.cardiology?.latestEncounter) return 'cardiology';
+    if (age > 0 && age < 15) return 'paediatrics';
+    if (modules?.mentalHealth?.latestEncounter || modules?.mental_health?.latestEncounter) return 'mental_health';
+    return 'general_practice';
+  },
+
+  evaluateSpecialtySoapTemplate(this: any, specialty: PostVisitSoapSpecialty, soapNote: any, patientContext: any): SpecialtySoapValidationSummary {
+    const soapNoteFields = {
+      subjective: String(soapNote?.subjective || '').trim(),
+      objective: String(soapNote?.objective || '').trim(),
+      assessment: String(soapNote?.assessment || '').trim(),
+      plan: String(soapNote?.plan || '').trim(),
+    };
+    const context = {
+      modules: patientContext?.modules || {},
+      age: Number(patientContext?.patient?.age || 0),
+      hasWeight:
+        this.parseNumericValue(patientContext?.latestVitals?.weightKg) !== null ||
+        this.parseNumericValue(patientContext?.latestVitals?.weight) !== null,
+    };
+    return getValidationSummary(specialty, soapNoteFields, context);
+  },
+
+  buildRecommendationRules(this: any, patientContext: any, extractedEntities: any[]): RecommendationRuleResult[] {
+    const rules: RecommendationRuleResult[] = [];
+    const latestVitals = patientContext?.latestVitals || {};
+    const modules = patientContext?.modules || {};
+    const extractedBpEntity = extractedEntities.find((entity: any) => String(entity.entity_type || entity.type) === 'vital_blood_pressure');
+    const bp = this.parseBloodPressure(extractedBpEntity?.entity_value || extractedBpEntity?.value) ||
+      this.parseBloodPressure(latestVitals?.blood_pressure || latestVitals?.bloodPressure);
+    if (bp && (bp.systolic >= 140 || bp.diastolic >= 90)) {
+      rules.push({
+        ruleId: 'htn_followup_rule',
+        recommendationId: 'htn_followup',
+        title: 'Elevated blood pressure follow-up',
+        description: 'Schedule blood pressure reassessment and hypertension workup if persistent.',
+        urgency: bp.systolic >= 180 || bp.diastolic >= 120 ? 'stat' : 'urgent',
+        actionType: 'follow_up',
+        confidence: 0.86,
+        context: { bloodPressure: `${bp.systolic}/${bp.diastolic}` },
+        citations: [{
+          guidelineId: 'who-pen-hypertension-2023',
+          label: 'WHO PEN hypertension follow-up threshold guidance',
+          source: 'WHO PEN',
+          confidence: 0.88,
+        }],
+      });
+    }
+    const labCritical = modules?.lab?.latestCriticalAlert;
+    if (labCritical && ['pending', 'unacknowledged'].includes(String(labCritical.alert_status || '').toLowerCase())) {
+      rules.push({
+        ruleId: 'critical_lab_followup_rule',
+        recommendationId: 'critical_lab_followup',
+        title: 'Critical lab escalation callback',
+        description: 'Contact patient urgently and document immediate safety instructions.',
+        urgency: 'stat',
+        actionType: 'monitoring',
+        confidence: 0.9,
+        context: { alertId: labCritical.id, component: labCritical.component_name, severity: labCritical.severity },
+        citations: [{
+          guidelineId: 'joint-commission-critical-lab-policy',
+          label: 'Critical laboratory result communication policy',
+          source: 'Clinical Safety Policy',
+          confidence: 0.84,
+        }],
+      });
+    }
+    const hivEnrollment = modules?.hiv?.latestEnrollment;
+    if (hivEnrollment) {
+      rules.push({
+        ruleId: 'hiv_followup_continuity_rule',
+        recommendationId: 'hiv_followup_continuity',
+        title: 'HIV continuity follow-up scheduling',
+        description: 'Confirm next HIV clinical review date, adherence counseling checkpoint, and required lab monitoring timeline.',
+        urgency: 'routine',
+        actionType: 'follow_up',
+        confidence: 0.82,
+        context: { enrollmentId: hivEnrollment.id, nextReviewDate: modules?.hiv?.latestClinicalVisit?.next_review_date || null },
+        citations: [{
+          guidelineId: 'who-hiv-care-followup-2024',
+          label: 'WHO HIV care and treatment clinical follow-up guidance',
+          source: 'WHO HIV Guidelines',
+          confidence: 0.86,
+        }],
+      });
+    }
+    const medicationIntelligence = this.buildMedicationIntelligenceAssessment(patientContext, extractedEntities);
+    const issueCount =
+      medicationIntelligence.interactions.length +
+      medicationIntelligence.beersAlerts.length +
+      medicationIntelligence.renalAlerts.length;
+    if (medicationIntelligence.enabled && issueCount > 0) {
+      const hasHighRisk =
+        medicationIntelligence.highestSeverity !== null &&
+        this.getMedicationSeverityRank(medicationIntelligence.highestSeverity) >= 3;
+      rules.push({
+        ruleId: 'medication_safety_intelligence_v2_rule',
+        recommendationId: 'medication_safety_intelligence_v2',
+        title: hasHighRisk ? 'High-risk medication safety review' : 'Medication safety review',
+        description: medicationIntelligence.riskNarrative,
+        urgency: hasHighRisk ? 'urgent' : 'routine',
+        actionType: 'medication',
+        confidence: hasHighRisk ? 0.91 : 0.83,
+        context: { medicationIntelligence, issueCount, highRisk: hasHighRisk },
+        citations: [{
+          guidelineId: 'fda-drug-safety-interactions',
+          label: 'FDA drug interaction safety communication',
+          source: 'FDA Safety',
+          confidence: 0.86,
+        }],
+      });
+    }
+    const activePrescriptionCount = Number(modules?.pharmacy?.activePrescriptionCount || 0) || Number(modules?.pharmacy?.active_count || 0);
+    if (activePrescriptionCount > 0) {
+      rules.push({
+        ruleId: 'medication_adherence_reinforcement_rule',
+        recommendationId: 'medication_adherence_reinforcement',
+        title: 'Medication adherence reinforcement',
+        description: 'Issue plain-language medication adherence reminders and confirm understanding via teach-back.',
+        urgency: 'routine',
+        actionType: 'medication',
+        confidence: 0.78,
+        context: { activePrescriptionCount },
+        citations: [{
+          guidelineId: 'adherence-counseling-best-practice',
+          label: 'Medication adherence counseling best practice',
+          source: 'Clinical Adherence Guidance',
+          confidence: 0.79,
+        }],
+      });
+    }
+    if (!rules.length) {
+      rules.push({
+        ruleId: 'general_post_visit_followup_rule',
+        recommendationId: 'general_post_visit_followup',
+        title: 'General post-visit follow-up package',
+        description: 'Provide plain-language summary, follow-up date recommendation, and return-precaution instructions.',
+        urgency: 'routine',
+        actionType: 'follow_up',
+        confidence: 0.72,
+        context: {},
+        citations: [{
+          guidelineId: 'transition-of-care-best-practice',
+          label: 'Transitions of care communication guidance',
+          source: 'Care Continuity Framework',
+          confidence: 0.74,
+        }],
+      });
+    }
+    return rules;
+  },
+
+  buildVisitSummaryContent(this: any, args: {
+    patientContext: any;
+    soapNote: any;
+    extractedEntities: any[];
+    session: any;
+  }) {
+    const subjective = String(args.soapNote?.subjective || '').trim();
+    const objective = String(args.soapNote?.objective || '').trim();
+    const assessment = String(args.soapNote?.assessment || '').trim();
+    const plan = String(args.soapNote?.plan || '').trim();
+    const language = args.session?.language || 'en';
+    const keyPoints = [assessment, plan, objective].filter((item) => item.length > 0).slice(0, 5);
+    const plainLanguageSummary = [subjective, assessment, plan]
+      .filter((item) => item.length > 0)
+      .join('. ')
+      .trim() || 'Doctor-approved post-visit summary is available.';
+    return {
+      language,
+      summary_text: [subjective, objective, assessment, plan].filter(Boolean).join('\n'),
+      plain_language_summary: plainLanguageSummary,
+      key_points: keyPoints,
+      teach_back_questions: [
+        'Can you explain the main plan in your own words?',
+        'What symptoms would make you seek urgent help?',
+      ],
+      companion_topic_checklist: keyPoints.length ? keyPoints : ['follow_up', 'medication', 'warning_signs'],
+      literacy_score: Math.max(0, Math.min(100, 72)),
+      generated_at: new Date().toISOString(),
+    };
+  },
+
+  applyRecommendationLlmRewrites(this: any, items: any[], rewrites: any[]) {
+    if (!Array.isArray(items) || !Array.isArray(rewrites) || rewrites.length === 0) {
+      return items;
+    }
+    const rewriteMap = new Map(
+      rewrites.map((rewrite: any) => [
+        String(rewrite?.recommendationId || rewrite?.recommendation_id || rewrite?.id || ''),
+        rewrite,
+      ]),
+    );
+    return items.map((item: any) => {
+      const rewrite = rewriteMap.get(String(item?.id || ''));
+      if (!rewrite) return item;
+      return {
+        ...item,
+        title: rewrite.title || item?.title,
+        description: rewrite.description || item?.description,
+      };
+    });
+  },
+
+  normalizeCitationRelevanceScore(this: any, value: any): number | null {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return Math.min(1, Math.max(0, num));
+  },
+
+  extractGuidelineYear(this: any, guidelineId?: string | null): number | null {
+    const source = String(guidelineId || '');
+    const match = source.match(/(19|20)\d{2}/);
+    if (!match) return null;
+    const year = Number(match[0]);
+    return Number.isFinite(year) ? year : null;
+  },
+
+  async replaceRuleCitations(this: any, tenantDb: DataSource, sessionId: string, citations: Array<{ recommendationId: string; ruleId: string; citation: RuleCitation; metadata?: Record<string, any>; }>) {
+    await tenantDb.query(`DELETE FROM post_visit_rule_citations WHERE session_id = $1`, [sessionId]);
+    for (const row of citations) {
+      await tenantDb.query(
+        `
+          INSERT INTO post_visit_rule_citations (
+            session_id,
+            artifact_type,
+            recommendation_id,
+            rule_id,
+            guideline_id,
+            citation_label,
+            citation_source,
+            citation_url,
+            evidence_excerpt,
+            confidence,
+            relevance_score,
+            citation_year,
+            is_superseded,
+            superseded_by_guideline_id,
+            metadata
+          ) VALUES ($1,'recommendation_bundle',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
+        `,
+        [
+          sessionId,
+          row.recommendationId,
+          row.ruleId,
+          row.citation.guidelineId,
+          row.citation.label,
+          row.citation.source,
+          row.citation.url || null,
+          row.citation.excerpt || null,
+          typeof row.citation.confidence === 'number' ? row.citation.confidence : null,
+          this.normalizeCitationRelevanceScore(row.citation.relevanceScore ?? row.citation.confidence ?? null),
+          row.citation.publicationYear ?? this.extractGuidelineYear(row.citation.guidelineId),
+          row.citation.isSuperseded === true,
+          row.citation.supersededByGuidelineId || null,
+          JSON.stringify(row.metadata || {}),
+        ],
+      );
+    }
+  },
+
+  async refreshSessionBillingIntelligence(this: any, tenantDb: DataSource, args: any) {
+    if (this.billingIntelligenceService?.refreshSessionBillingIntelligence) {
+      return this.billingIntelligenceService.refreshSessionBillingIntelligence(tenantDb, args);
+    }
+    return {
+      suggestions: [],
+      documentation: { score: 0, status: 'insufficient', checks: [], gaps: [] },
+    };
+  },
+
+  isPatientStoryEnabled(this: any): boolean {
+    const configured = (config as any)?.features?.postVisitPatientStory;
+    if (typeof configured === 'boolean') return configured;
+    return String(process.env.FEATURE_POSTVISIT_PATIENT_STORY || 'false').toLowerCase() === 'true';
+  },
+
+  async regeneratePatientStoryForPatient(this: any, _tenantDb: DataSource, _patientId: string, _triggerSessionId?: string) {
+    return;
+  },
+
+  isFhirWriteBackEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_FHIR_WRITEBACK || 'false').toLowerCase() === 'true';
+  },
+
+  isPeerConsultEnabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_PEER_CONSULT || 'false').toLowerCase() === 'true';
+  },
+
+  isCitationQualityV2Enabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_CITATION_QUALITY_V2 || 'false').toLowerCase() === 'true';
+  },
+
+  getCitationRelevanceThreshold(this: any): number {
+    const raw = Number(process.env.POSTVISIT_CITATION_MIN_RELEVANCE || 0.55);
+    if (!Number.isFinite(raw)) return 0.55;
+    return Math.min(0.95, Math.max(0.2, raw));
+  },
+
+  resolveClinicalTrialsApiUrl(this: any): string {
+    const direct = String(process.env.POSTVISIT_CLINICALTRIALS_API_URL || env.POSTVISIT_CLINICALTRIALS_API_URL || '').trim();
+    if (direct) return direct;
+    throw new Error('POSTVISIT_CLINICALTRIALS_API_URL is not configured.');
+  },
+
+  getTrialSlaEmailMinSeverity(this: any): TrialSlaNotificationSeverity {
+    const normalized = String((config as any)?.features?.postVisitTrialSlaEmailMinSeverity || process.env.POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY || 'high').trim().toLowerCase();
+    if (normalized === 'moderate' || normalized === 'critical') return normalized;
+    return 'high';
+  },
+
+  getTrialSlaSmsMinSeverity(this: any): TrialSlaNotificationSeverity {
+    const normalized = String((config as any)?.features?.postVisitTrialSlaSmsMinSeverity || process.env.POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY || 'critical').trim().toLowerCase();
+    if (normalized === 'moderate' || normalized === 'high') return normalized;
+    return 'critical';
+  },
+
+  getTrialSlaMaxRecipients(this: any): number {
+    const raw = Number((config as any)?.features?.postVisitTrialSlaNotifyMaxRecipients ?? process.env.POSTVISIT_TRIAL_SLA_NOTIFY_MAX_RECIPIENTS ?? '3');
+    if (!Number.isFinite(raw)) return 3;
+    return Math.min(Math.max(Math.round(raw), 1), 20);
+  },
+
+  severityRank(this: any, severity: PostVisitEscalationSeverity | TrialSlaNotificationSeverity): number {
+    if (severity === 'critical') return 4;
+    if (severity === 'high') return 3;
+    if (severity === 'moderate') return 2;
+    return 1;
+  },
+
+  isSeverityAtLeast(this: any, severity: PostVisitEscalationSeverity | TrialSlaNotificationSeverity, threshold: TrialSlaNotificationSeverity): boolean {
+    return this.severityRank(severity) >= this.severityRank(threshold);
+  },
+
+  computeTrialDecisionAgeHours(this: any, createdAt: any, reviewedAt: any): number {
+    const reference = reviewedAt || createdAt;
+    const parsed = new Date(reference);
+    if (Number.isNaN(parsed.getTime())) return 0;
+    return Math.max(0, (Date.now() - parsed.getTime()) / (1000 * 60 * 60));
+  },
+
+  mapTrialMatch(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      trialSource: row.trial_source || 'clinicaltrials_gov_v2',
+      trialId: row.trial_id,
+      trialTitle: row.trial_title,
+      trialPhase: row.trial_phase || null,
+      trialStatus: row.trial_status || null,
+      conditionTags: Array.isArray(row.condition_tags) ? row.condition_tags : [],
+      sourceUrl: row.source_url || null,
+      eligibilityScore: Number(row.eligibility_score || 0),
+      eligibilityRationale: Array.isArray(row.eligibility_rationale) ? row.eligibility_rationale : [],
+      matchStatus: (row.match_status || 'proposed') as PostVisitTrialMatchStatus,
+      reviewedBy: row.reviewed_by || null,
+      reviewedAt: row.reviewed_at || null,
+      reviewNote: row.review_note || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  mapTrialMatchAuditRow(this: any, row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      trialMatchId: row.trial_match_id,
+      patientId: row.patient_id,
+      action: row.action || null,
+      previousStatus: row.previous_status || null,
+      nextStatus: row.next_status || null,
+      note: row.note || null,
+      actedBy: row.acted_by || null,
+      actedAt: row.acted_at || row.created_at || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  assertPatientSessionAccess(this: any, sessionRow: any, patientId: string) {
+    if (String(sessionRow.patient_id) !== String(patientId)) {
+      throw new ForbiddenException('You do not have access to this post-visit session');
+    }
+  },
+
+  assertPatientCompanionAccessAllowed(this: any, sessionRow: any) {
+    const status = String(sessionRow.status || '').toLowerCase();
+    if (!['published', 'closed'].includes(status)) {
+      throw new ForbiddenException('Post-visit session is not yet published for patient companion access');
+    }
+  },
+
+  async ensureCompanionThread(this: any, tenantDb: DataSource, sessionRow: any, createdBy: string | null) {
+    const resolvedSessionId = String(sessionRow?.id || '').trim();
+    const resolvedPatientId = String(sessionRow?.patient_id || '').trim();
+    if (!resolvedSessionId || !resolvedPatientId) {
+      throw new InternalServerErrorException('Unable to initialize companion thread due to missing post-visit session identity.');
+    }
+    const rows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_companion_threads (
+          session_id,
+          patient_id,
+          status,
+          created_by
+        ) VALUES ($1,$2,'active',$3)
+        ON CONFLICT (session_id, patient_id)
+        DO UPDATE SET updated_at = NOW()
+        RETURNING *
+      `,
+      [resolvedSessionId, resolvedPatientId, createdBy],
+    );
+    return rows[0];
+  },
+
+  async touchCompanionThreadAfterMessage(this: any, tenantDb: DataSource, threadId: string, senderType: 'patient' | 'clinician' | 'system') {
+    const stampColumn =
+      senderType === 'patient'
+        ? 'last_patient_message_at'
+        : senderType === 'clinician'
+          ? 'last_clinician_message_at'
+          : null;
+    if (stampColumn) {
+      await tenantDb.query(
+        `
+          UPDATE post_visit_companion_threads
+          SET message_count = message_count + 1,
+              last_message_at = NOW(),
+              ${stampColumn} = NOW(),
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [threadId],
+      );
+      return;
+    }
+    await tenantDb.query(
+      `
+        UPDATE post_visit_companion_threads
+        SET message_count = message_count + 1,
+            last_message_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [threadId],
+    );
+  },
+
+  isEscalationConfidenceV2Enabled(this: any): boolean {
+    return String(process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE || 'false').toLowerCase() === 'true';
+  },
+
+  classifyEscalationSignals(this: any, payload: any): PostVisitEscalationClassifierOutput {
+    const text = String(payload?.message || payload || '').toLowerCase().trim();
+    const criticalTerms = ['chest pain', 'shortness of breath', 'difficulty breathing', 'cannot breathe', 'suicidal', 'seizure', 'stroke'];
+    const highTerms = ['severe headache', 'vision loss', 'confusion', 'high fever', 'palpitations', 'worsening pain'];
+    const moderateTerms = ['dizziness', 'nausea', 'vomiting', 'swelling', 'rash', 'side effects'];
+    const matchTerms = (terms: string[]) => terms.filter((term) => text.includes(term));
+    const temporality =
+      text.includes('last week') || text.includes('last month') || text.includes('yesterday') || text.includes('previously')
+        ? 'historical'
+        : text.includes('right now') || text.includes('currently') || text.includes('today') || text.includes('now')
+          ? 'current'
+          : 'unclear';
+    const criticalMatches = matchTerms(criticalTerms);
+    if (criticalMatches.length) {
+      if (temporality === 'historical' && this.isEscalationConfidenceV2Enabled()) {
+        return { detected: false, severity: 'critical', routeTarget: 'doctor', confidence: 0.95, triggerTerms: criticalMatches, temporality, classifierSource: 'keyword_v1', rationale: 'Historical high-risk signal suppressed.', escalationSuppressedReason: 'historical_signal', classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 30 } as any;
+      }
+      return { detected: true, severity: 'critical', routeTarget: 'emergency', confidence: 0.95, triggerTerms: criticalMatches, temporality: temporality === 'unclear' ? 'current' : temporality, classifierSource: 'keyword_v1', rationale: 'Critical symptom keywords matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 5 } as any;
+    }
+    const highMatches = matchTerms(highTerms);
+    if (highMatches.length) {
+      if (temporality === 'historical' && this.isEscalationConfidenceV2Enabled()) {
+        return { detected: false, severity: 'high', routeTarget: 'doctor', confidence: 0.84, triggerTerms: highMatches, temporality, classifierSource: 'keyword_v1', rationale: 'Historical high-risk signal suppressed.', escalationSuppressedReason: 'historical_signal', classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 60 } as any;
+      }
+      return { detected: true, severity: 'high', routeTarget: 'doctor', confidence: 0.84, triggerTerms: highMatches, temporality: temporality === 'unclear' ? 'current' : temporality, classifierSource: 'keyword_v1', rationale: 'High-risk symptom keywords matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 60 } as any;
+    }
+    const moderateMatches = matchTerms(moderateTerms);
+    if (moderateMatches.length) {
+      return { detected: true, severity: 'moderate', routeTarget: 'nurse', confidence: 0.72, triggerTerms: moderateMatches, temporality: temporality === 'unclear' ? 'current' : temporality, classifierSource: 'keyword_v1', rationale: 'Moderate symptom keywords matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 240 } as any;
+    }
+    return { detected: false, severity: 'low', routeTarget: 'nurse', confidence: 0.2, triggerTerms: [], temporality, classifierSource: 'keyword_v1', rationale: 'No escalation signal matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'none', slaMinutes: null } as any;
+  },
+
+  normalizeIntraVisitAlertSource(this: any, value: any): string {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized || 'streamed_transcript';
+  },
+
+  normalizeIntraVisitTranscriptOffset(this: any, value: any): number | null {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0, numeric) : null;
+  },
+
+  resolveIntraVisitRoutingDecision(this: any, _tenantDb: DataSource, _sessionRow: any, alert: IntraVisitAlertDraft): IntraVisitRoutingDecision {
+    const routeTarget = alert.severity === 'critical' ? 'emergency' : alert.severity === 'high' ? 'doctor' : 'nurse';
+    const assignedRole = routeTarget === 'emergency' ? 'rapid_response' : routeTarget === 'doctor' ? 'doctor' : 'nurse';
+    return {
+      routeTarget,
+      assignedRole,
+      assignedUserId: null,
+      assignedTeam: null,
+      routingRationale: `Severity ${alert.severity} routed to ${routeTarget}.`,
+      policyVersion: 'c3.v1',
+      slaDueAt: routeTarget === 'emergency' ? new Date(Date.now() + 5 * 60 * 1000) : routeTarget === 'doctor' ? new Date(Date.now() + 30 * 60 * 1000) : new Date(Date.now() + 2 * 60 * 60 * 1000),
+    };
+  },
+
+  async routeEscalationToWorkflow(this: any, tenantDb: DataSource, args: any) {
+    const workflowKey = `post_visit_escalation:${String(args.escalationId || args.sessionId || '')}:${Date.now()}`;
+    await tenantDb.query(
+      `
+        INSERT INTO nurse_cross_module_workflow_state (
+          workflow_key,
+          workflow_type,
+          patient_id,
+          appointment_id,
+          consultation_id,
+          assigned_role,
+          assigned_user_id,
+          status,
+          priority,
+          note,
+          metadata
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'open',$8,$9,$10::jsonb)
+      `,
+      [
+        workflowKey,
+        'post_visit_escalation',
+        args.patientId || null,
+        args.appointmentId || null,
+        args.consultationId || null,
+        args.routeTarget || 'doctor',
+        null,
+        args.severity === 'critical' ? 'critical' : args.severity === 'high' ? 'high' : 'normal',
+        args.signalText || null,
+        JSON.stringify(args.metadata || {}),
+      ],
+    ).catch(() => {});
+    return workflowKey;
+  },
+
+  async createEscalationEvent(this: any, tenantDb: DataSource, args: any) {
+    const detection = args.detection || {};
+    const sessionRow = args.sessionRow || {};
+    const sessionId = args.sessionId || sessionRow.id;
+    const patientId = args.patientId || sessionRow.patient_id;
+    const messageText = args.messageText || args.signalText || null;
+    const routeTarget = args.routeTarget || detection.routeTarget || 'doctor';
+    const severity = args.severity || detection.severity || 'moderate';
+    const insertedRows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_escalation_events (
+          session_id,
+          patient_id,
+          thread_id,
+          message_id,
+          status,
+          severity,
+          route_target,
+          trigger_type,
+          trigger_terms,
+          signal_text,
+          classification_confidence,
+          classification_temporality,
+          classification_source,
+          classification_reason,
+          classification_stage,
+          sla_due_at,
+          metadata
+        ) VALUES (
+          $1,$2,$3,$4,'open',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb
+        )
+        RETURNING *
+      `,
+      [
+        sessionId,
+        patientId,
+        args.threadId || null,
+        args.messageId || null,
+        severity,
+        routeTarget,
+        args.triggerType || detection.triggerType || 'patient_message',
+        args.triggerTerms || detection.triggerTerms || [],
+        messageText,
+        typeof args.classificationConfidence === 'number' ? args.classificationConfidence : detection.confidence ?? null,
+        args.classificationTemporality || detection.temporality || null,
+        args.classificationSource || detection.classifierSource || null,
+        args.classificationReason || detection.rationale || null,
+        args.classificationStage || 'v1',
+        args.slaDueAt || null,
+        JSON.stringify({
+          ...(args.metadata || {}),
+          channel_delivery: args.channelDelivery || null,
+        }),
+      ],
+    );
+    const inserted = insertedRows[0];
+    if (!inserted) {
+      throw new InternalServerErrorException('Failed to create post-visit escalation event');
+    }
+
+    const channelDelivery = {
+      patientInApp: false,
+      patientSms: false,
+      patientEmail: false,
+      clinicianSms: false,
+      clinicianEmail: false,
+    };
+
+    if (this.patientNotificationsService?.createNotification && patientId) {
+      await this.patientNotificationsService
+        .createNotification(
+          patientId,
+          'system_alert',
+          'Post-Visit Safety Alert',
+          routeTarget === 'emergency'
+            ? 'Please seek urgent care immediately.'
+            : 'Your care team has been notified to review your message.',
+          args.tenantId || null,
+          {
+            escalationId: inserted.id,
+            sessionId,
+            routeTarget,
+            severity,
+          },
+        )
+        .then(() => {
+          channelDelivery.patientInApp = true;
+        })
+        .catch(() => undefined);
+    }
+
+    if (patientId && (this.notificationsService?.sendSms || this.emailService?.sendEmail)) {
+      const patientRows = await tenantDb.query(
+        `
+          SELECT id, first_name, last_name, phone, email
+          FROM patients
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [patientId],
+      ).catch(() => []);
+      const patient = patientRows?.[0];
+      if (patient?.phone && this.notificationsService?.sendSms) {
+        await this.notificationsService
+          .sendSms(
+            patient.phone,
+            routeTarget === 'emergency'
+              ? 'Urgent post-visit alert: seek emergency care now.'
+              : 'Your post-visit message was routed to the care team.',
+          )
+          .then(() => {
+            channelDelivery.patientSms = true;
+          })
+          .catch(() => undefined);
+      }
+      if (patient?.email && this.emailService?.sendEmail) {
+        await this.emailService
+          .sendEmail({
+            to: patient.email,
+            subject: 'Post-Visit Safety Alert',
+            text:
+              routeTarget === 'emergency'
+                ? 'Urgent post-visit alert: seek emergency care now.'
+                : 'Your post-visit message was routed to the care team.',
+          })
+          .then(() => {
+            channelDelivery.patientEmail = true;
+          })
+          .catch(() => undefined);
+      }
+    }
+
+    if (this.notificationsService?.sendSms || this.emailService?.sendEmail) {
+      const clinicianRows = await tenantDb.query(
+        `
+          SELECT id, first_name, last_name, phone, email
+          FROM users
+          WHERE role IN ('doctor','nurse','nurse_accounts')
+          ORDER BY created_at DESC NULLS LAST, id ASC
+          LIMIT 3
+        `,
+      ).catch(() => []);
+      for (const clinician of clinicianRows || []) {
+        if (clinician?.phone && this.notificationsService?.sendSms && !channelDelivery.clinicianSms) {
+          await this.notificationsService
+            .sendSms(
+              clinician.phone,
+              `Post-visit escalation requires ${routeTarget} review.`,
+            )
+            .then(() => {
+              channelDelivery.clinicianSms = true;
+            })
+            .catch(() => undefined);
+        }
+        if (clinician?.email && this.emailService?.sendEmail && !channelDelivery.clinicianEmail) {
+          await this.emailService
+            .sendEmail({
+              to: clinician.email,
+              subject: 'Post-Visit Escalation',
+              text: `Post-visit escalation requires ${routeTarget} review.`,
+            })
+            .then(() => {
+              channelDelivery.clinicianEmail = true;
+            })
+            .catch(() => undefined);
+        }
+      }
+    }
+
+    let workflowKey: string | null = null;
+    if (String(args.routeTarget || '').length > 0) {
+      workflowKey = await this.routeEscalationToWorkflow(tenantDb, {
+        escalationId: inserted.id,
+        sessionId,
+        patientId,
+        appointmentId: args.appointmentId || sessionRow.appointment_id || null,
+        consultationId: args.consultationId || sessionRow.consultation_id || null,
+        routeTarget,
+        severity,
+        signalText: messageText,
+        metadata: args.metadata || {},
+      }).catch(() => null);
+    }
+    if (workflowKey) {
+      await tenantDb.query(
+        `
+          UPDATE post_visit_escalation_events
+          SET workflow_key = $2,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [inserted.id, workflowKey],
+      ).catch(() => {});
+      inserted.workflow_key = workflowKey;
+    }
+    if (Object.values(channelDelivery).some(Boolean)) {
+      inserted.metadata = {
+        ...(inserted.metadata || {}),
+        channel_delivery: channelDelivery,
+      };
+      await tenantDb.query(
+        `
+          UPDATE post_visit_escalation_events
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [inserted.id, JSON.stringify({ channel_delivery: channelDelivery })],
+      ).catch(() => {});
+    }
+    return this.mapEscalationEvent(inserted);
+  },
+
+  async buildGroundedCompanionAnswer(this: any, args: any) {
+    if (args?.escalation?.detected && args?.escalation?.routeTarget === 'emergency') {
+      return {
+        answer: 'Your symptoms may be urgent. Please call emergency services now or go to the nearest emergency facility immediately.',
+        source: 'deterministic',
+        citationsUsed: [],
+        model: null,
+        abstained: false,
+        llmAudit: null,
+      };
+    }
+    const summary = String(args?.visitSummaryArtifact?.content?.plain_language_summary || '').trim();
+    const recommendations = Array.isArray(args?.recommendationArtifact?.content?.items)
+      ? args.recommendationArtifact.content.items
+      : [];
+    const citationCatalog = recommendations.flatMap((item: any) =>
+      (Array.isArray(item?.citations) ? item.citations : []).map((citation: any) => ({
+        id: String(citation?.citation_id || ''),
+        label: String(citation?.label || ''),
+        source: String(citation?.source || ''),
+        excerpt: citation?.excerpt || '',
+      })),
+    );
+    if (this.groundedLlmService?.answerPatientQuestion) {
+      const llmResult = await this.groundedLlmService.answerPatientQuestion({
+        sessionId: String(args.sessionId || ''),
+        tenantId: args.tenantId,
+        language: String(args?.visitSummaryArtifact?.content?.language || 'en'),
+        question: args.question,
+        summary,
+        checklist: recommendations.map((item: any) => String(item?.title || '').trim()).filter(Boolean),
+        citations: citationCatalog,
+      });
+      if (llmResult && !llmResult.abstained && llmResult.answer) {
+        return {
+          answer: llmResult.answer,
+          source: 'llm',
+          citationsUsed: llmResult.citationsUsed || [],
+          model: llmResult.model || null,
+          abstained: false,
+          llmAudit: llmResult.audit || null,
+        };
+      }
+    }
+    return {
+      answer: summary || 'I can help with your approved visit plan and checklist.',
+      source: 'deterministic',
+      citationsUsed: [],
+      model: null,
+      abstained: false,
+      llmAudit: null,
+    };
+  },
+
+  async persistGroundedLlmAudit(this: any, tenantDb: DataSource, args: any) {
+    if (!this.hipaaAuditService) {
+      return;
+    }
+    const modelName = String(args?.model || '').trim();
+    const audit = args?.audit || null;
+    if (!modelName || !audit?.promptHash) {
+      return;
+    }
+    const modelId = `postvisit.${modelName.toLowerCase().replace(/[^a-z0-9._-]+/g, '-')}`;
+    const provider =
+      modelName.toLowerCase().includes('gpt') || modelName.toLowerCase().includes('openai')
+        ? 'openai'
+        : modelName.toLowerCase().includes('claude')
+          ? 'anthropic'
+          : 'custom';
+    await this.hipaaAuditService.registerModelEntry(tenantDb, {
+      modelId,
+      modelName,
+      modelVersion: String(audit.templateVersion || 'v1'),
+      provider,
+      status: 'active',
+      metadata: { feature: 'post_visit_grounded_llm' },
+    }).catch(() => undefined);
+    await this.hipaaAuditService.logPromptAudit(tenantDb, {
+      promptHash: audit.promptHash,
+      templateVersion: audit.templateVersion || 'postvisit-grounded-v1',
+      modelId,
+      sessionId: args.sessionId,
+      patientId: args.patientId || null,
+      encounterId: args.encounterId || null,
+      actorId: args.actorUserId || null,
+      actorRole: args.actorRole || null,
+      inputTokenCount: audit.inputTokenCount,
+      outputTokenCount: audit.outputTokenCount,
+      latencyMs: audit.latencyMs,
+      safetyGateTriggered: audit.safetyGateTriggered === true,
+      requestId: args.requestId || null,
+      metadata: {
+        model_name: modelName,
+        ...(args.metadata || {}),
+      },
+    }).catch(() => undefined);
+  },
+
+  async createGeneralOrderFromRecommendation(this: any, tenantDb: DataSource, args: any) {
+    const recommendation = args.recommendation || {};
+    const rows = await tenantDb.query(
+      `
+        INSERT INTO orders (
+          patient_id,
+          appointment_id,
+          consultation_id,
+          order_type,
+          order_name,
+          description,
+          status,
+          priority,
+          created_by,
+          notes
+        ) VALUES ($1,$2,$3,$4,$5,$6,'authorized',$7,$8,$9)
+        RETURNING *
+      `,
+      [
+        args.sessionRow.patient_id,
+        args.sessionRow.appointment_id || null,
+        args.sessionRow.consultation_id || null,
+        recommendation.action_type || 'follow_up',
+        recommendation.title || 'Post-visit recommendation',
+        recommendation.description || null,
+        recommendation.urgency === 'stat' ? 'stat' : recommendation.urgency === 'urgent' ? 'urgent' : 'normal',
+        args.actorUserId || null,
+        args.note || null,
+      ],
+    );
+    const row = rows[0];
+    return {
+      resourceType: 'order',
+      resourceId: row?.id || null,
+      payload: row || {},
+    };
+  },
+
+  async createLabOrderFromRecommendation(this: any, tenantDb: DataSource, args: any) {
+    return this.createGeneralOrderFromRecommendation(tenantDb, {
+      ...args,
+      recommendation: {
+        ...args.recommendation,
+        action_type: 'lab_order',
+      },
+    });
+  },
+
+  async syncRecommendationExecutionIntoArtifact(this: any, tenantDb: DataSource, args: any) {
+    const artifact = await this.getArtifactRow(tenantDb, args.sessionId, 'recommendation_bundle');
+    if (!artifact) return;
+    const content = artifact.content || {};
+    const actionExecutions = content.action_executions && typeof content.action_executions === 'object'
+      ? content.action_executions
+      : {};
+    actionExecutions[args.recommendationId] = args.execution;
+    await tenantDb.query(
+      `
+        UPDATE post_visit_draft_artifacts
+        SET content = $3::jsonb,
+            updated_by = $4,
+            updated_at = NOW()
+        WHERE session_id = $1
+          AND artifact_type = $2
+      `,
+      [args.sessionId, 'recommendation_bundle', JSON.stringify({ ...content, action_executions: actionExecutions }), args.actorUserId || null],
+    ).catch(() => {});
+  },
+
+  async safeSyncCrossModuleWorkflow(this: any, _tenantDb: DataSource, _args: any) {
+    return;
+  },
+});

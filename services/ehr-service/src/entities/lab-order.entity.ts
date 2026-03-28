@@ -192,6 +192,39 @@ export class LabOrder {
 
   @Column({ name: 'payment_status', type: 'varchar', default: 'payment_confirmed' })
   paymentStatus: LabOrderPaymentStatus;
+  @Column({ name: 'clinical_indication', type: 'text', nullable: true })
+  clinicalIndication?: string;
+
+  @Column({ name: 'icd10_codes', type: 'text', array: true, nullable: true })
+  icd10Codes?: string[];
+
+  @Column({ name: 'order_set_id', type: 'uuid', nullable: true })
+  orderSetId?: string;
+
+  @Column({ name: 'ordering_provider', type: 'uuid', nullable: true })
+  orderingProviderValue?: string;
+
+  @Column({ name: 'result_acknowledged', type: 'boolean', nullable: true, default: false })
+  resultAcknowledged: boolean = false;
+
+  @Column({ name: 'result_acknowledged_at', type: 'timestamptz', nullable: true })
+  resultAcknowledgedAt?: Date;
+
+  @Column({ name: 'result_acknowledged_by', type: 'uuid', nullable: true })
+  resultAcknowledgedBy?: string;
+
+  @Column({ name: 'result_reported_at', type: 'timestamptz', nullable: true })
+  resultReportedAt?: Date;
+
+  @Column({ name: 'specimen_collected_at', type: 'timestamptz', nullable: true })
+  specimenCollectedAt?: Date;
+
+  @Column({ name: 'specimen_received_at', type: 'timestamptz', nullable: true })
+  specimenReceivedAt?: Date;
+
+  @Column({ name: 'test_catalog_id', type: 'uuid', nullable: true })
+  testCatalogId?: string;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -8,6 +8,7 @@ import { ehrApi, clinicalTemplateApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import { AiOutputWrapper } from './AiOutputWrapper';
 import ClinicalTemplateLibrary from './ClinicalTemplateLibrary';
 
 interface Patient {
@@ -226,6 +227,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
       
       setAllNotes(sortedNotes);
     } catch {
+      showError('Error', 'Failed to load notes');
     } finally {
       setLoading(false);
     }
@@ -1053,48 +1055,74 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
   return (
     <div className="w-full max-w-full space-y-4 sm:space-y-6 overflow-x-hidden">
       {cdssInsights && (
-        <div className="w-full rounded-xl sm:rounded-2xl border border-indigo-200 bg-white shadow-sm p-3 sm:p-5 space-y-2 sm:space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-600 rounded-xl">
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-900">CDSS Insights</p>
-              <p className="text-xs text-slate-500">Based on the most recent nursing note.</p>
-            </div>
+        <AiOutputWrapper
+          label="Nursing CDSS Insights"
+          confidence={cdssInsights?.confidence}
+          abstained={cdssInsights?.abstained}
+          abstain_reason={cdssInsights?.abstain_reason}
+          citations={cdssInsights?.citations}
+          className="w-full"
+        >
+          <div className="space-y-2 sm:space-y-3">
+            <p className="text-xs text-slate-500">Based on the most recent nursing note.</p>
+
+            {Array.isArray(cdssInsights?.recommendations) && cdssInsights.recommendations.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-1">Recommendations</p>
+                <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                  {(cdssInsights.recommendations as string[]).map((rec, idx) => (
+                    <li key={`rec-${idx}`}>{rec}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {Array.isArray(cdssInsights?.alerts) && cdssInsights.alerts.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-amber-600 mb-1">Alerts</p>
+                <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+                  {(cdssInsights.alerts as string[]).map((alert, idx) => (
+                    <li key={`alert-${idx}`}>{alert}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {Array.isArray(cdssInsights?.diagnosis?.suggested_diagnoses) && cdssInsights.diagnosis.suggested_diagnoses.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-1">Likely Diagnoses</p>
+                <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                  {cdssInsights.diagnosis.suggested_diagnoses.slice(0, 3).map((diag: any, idx: number) => (
+                    <li key={`diag-${idx}`}>
+                      {diag.diagnosis || diag.condition}
+                      {diag.probability && ` (${Math.round(diag.probability * 100)}%)`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {Array.isArray(cdssInsights?.careGaps?.gaps) && cdssInsights.careGaps.gaps.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-amber-600 mb-1">Care Gaps</p>
+                <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                  {cdssInsights.careGaps.gaps.slice(0, 3).map((gap: any, idx: number) => (
+                    <li key={`gap-${idx}`}>{gap?.description || gap}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {Array.isArray(cdssInsights?.recommendedInterventions) && cdssInsights.recommendedInterventions.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-1">Documented Interventions</p>
+                <p className="text-xs text-slate-500">
+                  {cdssInsights.recommendedInterventions.join(' · ')}
+                </p>
+              </div>
+            )}
           </div>
-          {Array.isArray(cdssInsights?.diagnosis?.suggested_diagnoses) && cdssInsights.diagnosis.suggested_diagnoses.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-slate-600 mb-1">Likely Diagnoses</p>
-              <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
-                {cdssInsights.diagnosis.suggested_diagnoses.slice(0, 3).map((diag: any, idx: number) => (
-                  <li key={`diag-${idx}`}>
-                    {diag.diagnosis || diag.condition}
-                    {diag.probability && ` (${Math.round(diag.probability * 100)}%)`}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {Array.isArray(cdssInsights?.careGaps?.gaps) && cdssInsights.careGaps.gaps.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-amber-600 mb-1">Care Gaps</p>
-              <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
-                {cdssInsights.careGaps.gaps.slice(0, 3).map((gap: any, idx: number) => (
-                  <li key={`gap-${idx}`}>{gap?.description || gap}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {Array.isArray(cdssInsights?.recommendedInterventions) && cdssInsights.recommendedInterventions.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-slate-600 mb-1">Documented Interventions</p>
-              <p className="text-xs text-slate-500">
-                {cdssInsights.recommendedInterventions.join(' · ')}
-              </p>
-            </div>
-          )}
-        </div>
+        </AiOutputWrapper>
       )}
 
       {renderContent()}

@@ -3,12 +3,936 @@ import { DataSource } from 'typeorm';
 import { MedicalAidClaim, ClaimStatus, MedicalAidProvider } from '../entities/medical-aid-claim.entity';
 import { Bill } from '../entities/billing.entity';
 import { MedicalAidApiService } from './medical-aid-api.service';
+import { ClaimDenialPrediction } from '../entities/claim-denial-prediction.entity';
+import { FinancialClearanceAssessment } from '../entities/financial-clearance-assessment.entity';
+import { PriorAuthorizationDraft } from '../entities/prior-authorization-draft.entity';
+
+export interface ClaimReadinessIssue {
+  code: string;
+  message: string;
+}
 
 @Injectable()
 export class ClaimsService {
   private readonly logger = new Logger(ClaimsService.name);
 
   constructor(private readonly medicalAidApiService?: MedicalAidApiService) {}
+
+  private clampLimit(value: any, fallback = 50, max = 200) {
+    const parsed = Number.parseInt(String(value || fallback), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return fallback;
+    }
+    return Math.min(parsed, max);
+  }
+
+  private parseJsonObject<T = any>(value: any, fallback: T): T {
+    if (value === null || value === undefined) {
+      return fallback;
+    }
+    if (typeof value === 'object') {
+      return value as T;
+    }
+    try {
+      return JSON.parse(String(value)) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private parseArray(value: any): string[] {
+    if (Array.isArray(value)) {
+      return value.filter(Boolean).map((item) => String(item));
+    }
+    if (typeof value === 'string' && value.trim()) {
+      return [value.trim()];
+    }
+    return [];
+  }
+
+  private normalizeDate(value: any): Date | null {
+    if (!value) {
+      return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  }
+
+  private dateOnly(value: Date | null): string | null {
+    if (!value) {
+      return null;
+    }
+    return value.toISOString().split('T')[0];
+  }
+
+  private isMissingSchemaError(error: unknown) {
+    const code = (error as any)?.code;
+    return code === '42P01' || code === '42703';
+  }
+
+  private async safeQuery(tenantDb: DataSource, sql: string, params: any[] = []) {
+    try {
+      return await tenantDb.query(sql, params);
+    } catch (error) {
+      if (!this.isMissingSchemaError(error)) {
+        throw error;
+      }
+      return [];
+    }
+  }
+
+  private hasAttachmentOfType(claimData: Record<string, any>, expectedTypes: string[]) {
+    const attachments = Array.isArray(claimData?.attachments)
+      ? claimData.attachments
+      : Array.isArray(claimData?.documents)
+        ? claimData.documents
+        : [];
+
+    return attachments.some((attachment: any) => {
+      const type = String(
+        attachment?.documentType || attachment?.type || attachment?.category || attachment || '',
+      )
+        .trim()
+        .toLowerCase();
+      return expectedTypes.includes(type);
+    });
+  }
+
+  private buildClaimIssue(code: string, message: string): ClaimReadinessIssue {
+    return { code, message };
+  }
+
+  private toCurrencyAmount(value: any): number {
+    const parsed = Number(value || 0);
+    return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0;
+  }
+
+  private classifyDenialRisk(score: number) {
+    if (score >= 70) {
+      return 'high';
+    }
+    if (score >= 40) {
+      return 'medium';
+    }
+    return 'low';
+  }
+
+  private buildDenialPrediction(args: {
+    claimId: string;
+    blockers: ClaimReadinessIssue[];
+    warnings: ClaimReadinessIssue[];
+    missingDocuments: ClaimReadinessIssue[];
+    latestRejection?: { change_reason?: string | null } | null;
+    preAuthStatus?: string | null;
+    insuranceVerified?: boolean | null;
+  }) {
+    const drivers: Array<Record<string, any>> = [];
+    for (const blocker of args.blockers) {
+      drivers.push({ severity: 'blocker', code: blocker.code, message: blocker.message });
+    }
+    for (const warning of args.warnings.slice(0, 5)) {
+      drivers.push({ severity: 'warning', code: warning.code, message: warning.message });
+    }
+
+    let riskScore = args.blockers.length * 24 + args.warnings.length * 9 + args.missingDocuments.length * 11;
+    if (args.latestRejection) {
+      riskScore += 12;
+    }
+    if (args.preAuthStatus && args.preAuthStatus.toLowerCase() !== 'approved') {
+      riskScore += 10;
+    }
+    if (args.insuranceVerified === false) {
+      riskScore += 8;
+    }
+    riskScore = Math.min(100, Math.max(0, Number(riskScore.toFixed(2))));
+
+    const recommendedActions = Array.from(
+      new Set(
+        [
+          ...args.blockers.map((issue) => `Resolve ${issue.code.replace(/_/g, ' ')}.`),
+          ...args.missingDocuments.map((issue) => `Attach ${issue.code.replace(/^missing_/, '').replace(/_/g, ' ')}.`),
+          args.latestRejection ? 'Review the previous denial reason before submission.' : null,
+          args.preAuthStatus && args.preAuthStatus.toLowerCase() !== 'approved'
+            ? 'Obtain approved pre-authorization before submission.'
+            : null,
+          args.insuranceVerified === false ? 'Complete front-desk eligibility verification.' : null,
+        ].filter(Boolean) as string[],
+      ),
+    ).slice(0, 8);
+
+    return {
+      claimId: args.claimId,
+      riskScore,
+      riskLevel: this.classifyDenialRisk(riskScore),
+      blockersCount: args.blockers.length,
+      warningsCount: args.warnings.length,
+      missingDocumentsCount: args.missingDocuments.length,
+      drivers,
+      recommendedActions,
+      modelVersion: 'rules.v1',
+    };
+  }
+
+  private async persistClaimDenialPrediction(
+    tenantDb: DataSource,
+    prediction: {
+      claimId: string;
+      riskScore: number;
+      riskLevel: string;
+      blockersCount: number;
+      warningsCount: number;
+      missingDocumentsCount: number;
+      drivers: Array<Record<string, any>>;
+      recommendedActions: string[];
+      modelVersion: string;
+    },
+  ) {
+    const repository = tenantDb.getRepository(ClaimDenialPrediction);
+    return repository.save(
+      repository.create({
+        blockersCount: prediction.blockersCount,
+        claimId: prediction.claimId,
+        drivers: prediction.drivers,
+        missingDocumentsCount: prediction.missingDocumentsCount,
+        modelVersion: prediction.modelVersion,
+        recommendedActions: prediction.recommendedActions,
+        riskLevel: prediction.riskLevel,
+        riskScore: prediction.riskScore,
+        warningsCount: prediction.warningsCount,
+      }),
+    );
+  }
+
+  private async getLatestEligibilitySignal(
+    tenantDb: DataSource,
+    patientId: string | null,
+    medicalAidName: string,
+    memberNumber: string,
+  ) {
+    if (!patientId && !medicalAidName && !memberNumber) {
+      return null;
+    }
+
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+        SELECT
+          status,
+          confidence,
+          coverage_flags,
+          response_payload,
+          checked_at
+        FROM insurance_eligibility_checks
+        WHERE ($1::uuid IS NULL OR patient_id = $1::uuid)
+          AND ($2::text = '' OR LOWER(COALESCE(provider_name, '')) = LOWER($2))
+          AND ($3::text = '' OR COALESCE(member_number, '') = $3)
+        ORDER BY checked_at DESC, created_at DESC
+        LIMIT 1
+      `,
+      [patientId || null, medicalAidName || '', memberNumber || ''],
+    );
+
+    return rows[0] || null;
+  }
+
+  private deriveFinancialClearance(args: {
+    claimId: string;
+    patientId: string | null;
+    billId: string | null;
+    appointmentId: string | null;
+    claimAmount: number;
+    blockers: ClaimReadinessIssue[];
+    readinessStatus: string;
+    preAuth: any | null;
+    claimData: Record<string, any>;
+    appointment: any | null;
+    insuranceSignal: any | null;
+  }) {
+    const insuranceStatus = String(args.insuranceSignal?.status || '').toLowerCase();
+    const eligibilityStatus =
+      insuranceStatus ||
+      (args.appointment?.insurance_verified === true
+        ? 'verified_active'
+        : args.appointment?.insurance_verified === false
+          ? 'verification_required'
+          : 'unknown');
+
+    const authorizationRequired = Boolean(
+      args.claimData.requiresPreauthorization ||
+        args.claimData.requiresPreAuth ||
+        args.preAuth ||
+        ['mri', 'ct', 'surgery', 'procedure'].includes(String(args.claimData.procedureType || '').toLowerCase()),
+    );
+    const authorizationStatus = args.preAuth ? String(args.preAuth.status || '').toLowerCase() : null;
+
+    let coverageRatio = 0;
+    const responsePayload = this.parseJsonObject<Record<string, any>>(args.insuranceSignal?.response_payload, {});
+    const memberDetails = this.parseJsonObject<Record<string, any>>(responsePayload?.memberDetails, {});
+    const rawCoverage =
+      memberDetails.coveragePercentage ??
+      memberDetails.coverage_percent ??
+      args.claimData.coveragePercentage ??
+      args.claimData.coveragePercent ??
+      null;
+    const parsedCoverage = Number(rawCoverage);
+
+    if (Number.isFinite(parsedCoverage) && parsedCoverage > 0) {
+      coverageRatio = parsedCoverage > 1 ? parsedCoverage / 100 : parsedCoverage;
+    } else if (eligibilityStatus === 'verified_active') {
+      coverageRatio = 0.8;
+    }
+
+    if (authorizationRequired && authorizationStatus && authorizationStatus !== 'approved') {
+      coverageRatio = Math.min(coverageRatio, 0.5);
+    }
+    if (eligibilityStatus === 'verification_failed' || eligibilityStatus === 'ineligible') {
+      coverageRatio = 0;
+    }
+
+    const payerEstimatedAmount = Number((args.claimAmount * coverageRatio).toFixed(2));
+    const estimatedResponsibility = Number((args.claimAmount - payerEstimatedAmount).toFixed(2));
+
+    const blockers = args.blockers
+      .filter((issue) =>
+        issue.code.includes('preauthorization') ||
+        issue.code.includes('payer') ||
+        issue.code.includes('member_number') ||
+        issue.code.includes('insurance') ||
+        issue.code.includes('clinical_documentation') ||
+        issue.code.includes('diagnosis'),
+      )
+      .map((issue) => ({ code: issue.code, message: issue.message }));
+
+    let recommendedNextStep = 'Ready for claim submission.';
+    if (eligibilityStatus === 'verification_required' || eligibilityStatus === 'unknown') {
+      recommendedNextStep = 'Complete payer eligibility verification before submission.';
+    } else if (eligibilityStatus === 'verification_failed' || eligibilityStatus === 'ineligible') {
+      recommendedNextStep = 'Resolve eligibility failure or collect self-pay deposit before submission.';
+    } else if (authorizationRequired && authorizationStatus !== 'approved') {
+      recommendedNextStep = 'Obtain approved pre-authorization before submission.';
+    } else if (args.readinessStatus === 'blocked') {
+      recommendedNextStep = 'Resolve readiness blockers before financial clearance.';
+    }
+
+    return {
+      patientId: args.patientId || null,
+      billId: args.billId || null,
+      claimId: args.claimId,
+      appointmentId: args.appointmentId || null,
+      eligibilityStatus,
+      estimatedResponsibility,
+      payerEstimatedAmount,
+      authorizationRequired,
+      authorizationStatus,
+      blockers,
+      recommendedNextStep,
+      assessmentData: {
+        claimAmount: args.claimAmount,
+        readinessStatus: args.readinessStatus,
+        coverageRatio,
+        insuranceSignal: args.insuranceSignal
+          ? {
+              status: args.insuranceSignal.status,
+              checkedAt: args.insuranceSignal.checked_at || null,
+              confidence:
+                args.insuranceSignal.confidence === null || args.insuranceSignal.confidence === undefined
+                  ? null
+                  : Number(args.insuranceSignal.confidence),
+              coverageFlags: args.insuranceSignal.coverage_flags || [],
+            }
+          : null,
+      },
+    };
+  }
+
+  private async persistFinancialClearanceAssessment(
+    tenantDb: DataSource,
+    assessment: {
+      patientId: string | null;
+      billId: string | null;
+      claimId: string | null;
+      appointmentId: string | null;
+      eligibilityStatus: string;
+      estimatedResponsibility: number | null;
+      payerEstimatedAmount: number | null;
+      authorizationRequired: boolean;
+      authorizationStatus: string | null;
+      blockers: Array<Record<string, any>>;
+      recommendedNextStep: string | null;
+      assessmentData: Record<string, any>;
+    },
+  ) {
+    const repository = tenantDb.getRepository(FinancialClearanceAssessment);
+    return repository.save(
+      repository.create({
+        assessmentData: assessment.assessmentData,
+        authorizationRequired: assessment.authorizationRequired,
+        authorizationStatus: assessment.authorizationStatus,
+        billId: assessment.billId,
+        blockers: assessment.blockers,
+        claimId: assessment.claimId,
+        eligibilityStatus: assessment.eligibilityStatus,
+        estimatedResponsibility: assessment.estimatedResponsibility,
+        patientId: assessment.patientId,
+        payerEstimatedAmount: assessment.payerEstimatedAmount,
+        appointmentId: assessment.appointmentId,
+        recommendedNextStep: assessment.recommendedNextStep,
+      }),
+    );
+  }
+
+  async getClaimReadiness(id: string, tenantDb: DataSource) {
+    const [claimRow] = await tenantDb.query(`SELECT * FROM medical_aid_claims WHERE id = $1`, [id]);
+
+    if (!claimRow) {
+      throw new NotFoundException('Claim not found');
+    }
+
+    const claimData = this.parseJsonObject<Record<string, any>>(claimRow.claim_data, {});
+    const diagnosisCodes = this.parseArray(claimRow.diagnosis_codes);
+    const primaryDiagnosisCode = String(claimRow.primary_diagnosis_code || '').trim();
+    const patientId = String(claimRow.patient_id || '').trim();
+    const billingId = String(claimRow.billing_id || '').trim() || null;
+    const preAuthorizationId = String(claimRow.pre_authorization_id || '').trim() || null;
+
+    const [patientRows, billRows, preAuthRows, patientDocumentRows, recentRecordRows, recentNursingNoteRows, historyRows] =
+      await Promise.all([
+        patientId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT id, first_name, last_name, patient_number FROM patients WHERE id = $1 LIMIT 1`,
+              [patientId],
+            )
+          : Promise.resolve([]),
+        billingId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT * FROM billing WHERE id = $1 LIMIT 1`,
+              [billingId],
+            )
+          : Promise.resolve([]),
+        preAuthorizationId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT * FROM pre_authorization_requests WHERE id = $1 LIMIT 1`,
+              [preAuthorizationId],
+            )
+          : Promise.resolve([]),
+        patientId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT document_type, COUNT(*)::int AS count
+               FROM patient_documents
+               WHERE patient_id = $1
+               GROUP BY document_type`,
+              [patientId],
+            )
+          : Promise.resolve([]),
+        patientId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT COUNT(*)::int AS count
+               FROM medical_records
+               WHERE patient_id = $1
+                 AND created_at >= NOW() - INTERVAL '90 days'`,
+              [patientId],
+            )
+          : Promise.resolve([]),
+        patientId
+          ? this.safeQuery(
+              tenantDb,
+              `SELECT COUNT(*)::int AS count
+               FROM nursing_notes
+               WHERE patient_id = $1
+                 AND recorded_at >= NOW() - INTERVAL '30 days'`,
+              [patientId],
+            )
+          : Promise.resolve([]),
+        this.safeQuery(
+          tenantDb,
+          `SELECT status, change_reason, created_at
+           FROM claim_status_history
+           WHERE claim_id = $1
+           ORDER BY created_at DESC
+           LIMIT 5`,
+          [id],
+        ),
+      ]);
+
+    const patient = patientRows[0] || null;
+    const bill = billRows[0] || null;
+    const preAuth = preAuthRows[0] || null;
+    const appointmentId =
+      String(claimData.appointmentId || '').trim() ||
+      String(bill?.appointment_id || '').trim() ||
+      null;
+
+    const [appointmentRows] = await Promise.all([
+      appointmentId
+        ? this.safeQuery(
+            tenantDb,
+            `SELECT id, appointment_date, insurance_verified, primary_diagnosis_code, primary_diagnosis_description, diagnosis_codes
+             FROM appointments
+             WHERE id = $1
+             LIMIT 1`,
+            [appointmentId],
+          )
+        : Promise.resolve([]),
+    ]);
+    const appointment = appointmentRows[0] || null;
+
+    const billDiagnosisCodes = this.parseArray(bill?.diagnosis_codes);
+    const appointmentDiagnosisCodes = this.parseArray(appointment?.diagnosis_codes);
+    const allDiagnosisCodes = Array.from(
+      new Set([
+        ...diagnosisCodes,
+        ...billDiagnosisCodes,
+        ...appointmentDiagnosisCodes,
+      ].filter(Boolean)),
+    );
+    const resolvedPrimaryDiagnosis =
+      primaryDiagnosisCode ||
+      String(bill?.primary_diagnosis_code || '').trim() ||
+      String(appointment?.primary_diagnosis_code || '').trim();
+
+    const documentCounts = Object.fromEntries(
+      (patientDocumentRows || []).map((row: any) => [String(row.document_type), Number(row.count || 0)]),
+    ) as Record<string, number>;
+
+    const recentMedicalRecords = Number(recentRecordRows[0]?.count || 0);
+    const recentNursingNotes = Number(recentNursingNoteRows[0]?.count || 0);
+    const clinicalNotesPresent =
+      Boolean(String(claimData.clinicalNotes || '').trim()) ||
+      Boolean(String(bill?.notes || '').trim()) ||
+      Boolean(String(preAuth?.clinical_notes || '').trim()) ||
+      recentMedicalRecords > 0 ||
+      recentNursingNotes > 0;
+
+    const blockers: ClaimReadinessIssue[] = [];
+    const warnings: ClaimReadinessIssue[] = [];
+    const missingDocuments: ClaimReadinessIssue[] = [];
+
+    if (!patientId || !patient) {
+      blockers.push(this.buildClaimIssue('missing_patient', 'Claim is not linked to a valid patient.'));
+    }
+    if (!String(claimRow.medical_aid_name || '').trim()) {
+      blockers.push(this.buildClaimIssue('missing_payer', 'Medical aid provider is required before submission.'));
+    }
+    if (!String(claimRow.member_number || '').trim()) {
+      blockers.push(this.buildClaimIssue('missing_member_number', 'Member number is required before submission.'));
+    }
+    if (!(Number(claimRow.claim_amount || 0) > 0)) {
+      blockers.push(this.buildClaimIssue('invalid_claim_amount', 'Claim amount must be greater than zero.'));
+    }
+    if (!resolvedPrimaryDiagnosis && allDiagnosisCodes.length === 0) {
+      blockers.push(this.buildClaimIssue('missing_diagnosis', 'Primary diagnosis or diagnosis codes must be documented.'));
+    }
+    if (!clinicalNotesPresent) {
+      blockers.push(this.buildClaimIssue('missing_clinical_documentation', 'Clinical documentation is missing for this claim.'));
+    }
+    if (!billingId && !appointmentId && !String(claimData.procedureId || '').trim()) {
+      warnings.push(
+        this.buildClaimIssue(
+          'missing_encounter_reference',
+          'Claim is not linked to a bill, appointment, or procedure reference.',
+        ),
+      );
+    }
+    if (appointment && appointment.insurance_verified === false) {
+      warnings.push(
+        this.buildClaimIssue(
+          'insurance_not_verified',
+          'Appointment insurance verification is still false; front-desk eligibility may be incomplete.',
+        ),
+      );
+    }
+
+    if (preAuthorizationId && !preAuth) {
+      blockers.push(
+        this.buildClaimIssue(
+          'missing_preauthorization_record',
+          'Claim references a pre-authorization that could not be found.',
+        ),
+      );
+    } else if (preAuth) {
+      const preAuthStatus = String(preAuth.status || '').toLowerCase();
+      if (preAuthStatus !== 'approved') {
+        blockers.push(
+          this.buildClaimIssue(
+            'preauthorization_not_approved',
+            `Pre-authorization is ${preAuth.status || 'not approved'} and must be approved before claim submission.`,
+          ),
+        );
+      }
+      const expiryDate = this.normalizeDate(preAuth.expiry_date);
+      if (expiryDate && expiryDate.getTime() < Date.now()) {
+        blockers.push(
+          this.buildClaimIssue('preauthorization_expired', 'Linked pre-authorization has expired.'),
+        );
+      }
+    } else if (claimData.requiresPreauthorization === true || claimData.requiresPreAuth === true) {
+      blockers.push(
+        this.buildClaimIssue(
+          'missing_preauthorization',
+          'This claim is marked as requiring pre-authorization but no approved record is linked.',
+        ),
+      );
+    }
+
+    const requiredDocumentTypes = new Set<string>();
+    const procedureType = String(claimData.procedureType || '').trim().toLowerCase();
+    if (procedureType === 'lab') {
+      requiredDocumentTypes.add('lab_result');
+    }
+    if (procedureType === 'imaging') {
+      requiredDocumentTypes.add('imaging_result');
+    }
+    if (Array.isArray(claimData.requiredDocuments)) {
+      for (const required of claimData.requiredDocuments) {
+        requiredDocumentTypes.add(String(required).trim().toLowerCase());
+      }
+    }
+    if (!documentCounts.insurance_card && !this.hasAttachmentOfType(claimData, ['insurance_card', 'insurance-card'])) {
+      missingDocuments.push(
+        this.buildClaimIssue(
+          'missing_insurance_card',
+          'No insurance card document is attached to the patient record.',
+        ),
+      );
+      warnings.push(
+        this.buildClaimIssue(
+          'missing_insurance_card',
+          'Insurance card is missing from patient documents, which increases denial risk.',
+        ),
+      );
+    }
+    for (const requiredType of requiredDocumentTypes) {
+      const hasDocument =
+        Number(documentCounts[requiredType] || 0) > 0 ||
+        this.hasAttachmentOfType(claimData, [requiredType, requiredType.replace(/_/g, '-')]);
+      if (!hasDocument) {
+        const issue = this.buildClaimIssue(
+          `missing_${requiredType}`,
+          `Required supporting document "${requiredType}" is missing.`,
+        );
+        missingDocuments.push(issue);
+        blockers.push(issue);
+      }
+    }
+
+    const latestRejection = (historyRows || []).find((row: any) => String(row.status || '').toLowerCase() === 'rejected');
+    if (latestRejection?.change_reason || claimRow.rejection_reason) {
+      warnings.push(
+        this.buildClaimIssue(
+          'prior_denial_history',
+          `Claim has prior denial history: ${latestRejection?.change_reason || claimRow.rejection_reason}.`,
+        ),
+      );
+    }
+
+    const status = blockers.length > 0 ? 'blocked' : warnings.length > 0 ? 'at_risk' : 'ready';
+    const readinessScore = Math.max(0, 100 - blockers.length * 25 - warnings.length * 8);
+    const denialPrediction = this.buildDenialPrediction({
+      claimId: id,
+      blockers,
+      warnings,
+      missingDocuments,
+      latestRejection,
+      preAuthStatus: preAuth?.status || null,
+      insuranceVerified: appointment?.insurance_verified ?? null,
+    });
+    const persistedDenialPrediction = await this.persistClaimDenialPrediction(tenantDb, denialPrediction);
+    const insuranceSignal = await this.getLatestEligibilitySignal(
+      tenantDb,
+      patientId || null,
+      String(claimRow.medical_aid_name || ''),
+      String(claimRow.member_number || ''),
+    );
+    const financialClearance = this.deriveFinancialClearance({
+      claimId: id,
+      patientId: patientId || null,
+      billId: billingId,
+      appointmentId,
+      claimAmount: this.toCurrencyAmount(claimRow.claim_amount),
+      blockers,
+      readinessStatus: status,
+      preAuth,
+      claimData,
+      appointment,
+      insuranceSignal,
+    });
+    const persistedFinancialClearance = await this.persistFinancialClearanceAssessment(
+      tenantDb,
+      financialClearance,
+    );
+
+    return {
+      claimId: id,
+      claimNumber: claimRow.claim_number,
+      status,
+      readyToSubmit: blockers.length === 0,
+      readinessScore,
+      blockers,
+      warnings,
+      missingDocuments,
+      evidence: {
+        patient: patient
+          ? {
+              id: patient.id,
+              patientNumber: patient.patient_number,
+              patientName: [patient.first_name, patient.last_name].filter(Boolean).join(' ').trim(),
+            }
+          : null,
+        billId: billingId,
+        appointmentId,
+        encounterLinked: Boolean(billingId || appointmentId || claimData.procedureId),
+        primaryDiagnosisCode: resolvedPrimaryDiagnosis || null,
+        diagnosisCodes: allDiagnosisCodes,
+        clinicalNotesPresent,
+        recentMedicalRecords,
+        recentNursingNotes,
+        insuranceVerified: appointment?.insurance_verified ?? null,
+        preAuthorization: preAuth
+          ? {
+              id: preAuth.id,
+              status: preAuth.status,
+              expiryDate: this.dateOnly(this.normalizeDate(preAuth.expiry_date)),
+              externalPreAuthId: preAuth.external_preauth_id || null,
+            }
+          : null,
+        supportingDocuments: {
+          insuranceCardCount: Number(documentCounts.insurance_card || 0),
+          medicalReportCount: Number(documentCounts.medical_report || 0),
+          labResultCount: Number(documentCounts.lab_result || 0),
+          imagingResultCount: Number(documentCounts.imaging_result || 0),
+          prescriptionCount: Number(documentCounts.prescription || 0),
+        },
+      },
+      financial: {
+        claimAmount: Number(claimRow.claim_amount || 0),
+        payer: claimRow.medical_aid_name,
+        memberNumber: claimRow.member_number,
+        createdAt: claimRow.created_at,
+        submissionDate: claimRow.submission_date,
+      },
+      denialPrediction: {
+        id: persistedDenialPrediction.id,
+        riskScore: Number(persistedDenialPrediction.riskScore),
+        riskLevel: persistedDenialPrediction.riskLevel,
+        blockersCount: persistedDenialPrediction.blockersCount,
+        warningsCount: persistedDenialPrediction.warningsCount,
+        missingDocumentsCount: persistedDenialPrediction.missingDocumentsCount,
+        drivers: persistedDenialPrediction.drivers || [],
+        recommendedActions: persistedDenialPrediction.recommendedActions || [],
+        modelVersion: persistedDenialPrediction.modelVersion,
+        predictedAt: persistedDenialPrediction.predictedAt,
+      },
+      financialClearance: {
+        id: persistedFinancialClearance.id,
+        eligibilityStatus: persistedFinancialClearance.eligibilityStatus,
+        estimatedResponsibility:
+          persistedFinancialClearance.estimatedResponsibility === null ||
+          persistedFinancialClearance.estimatedResponsibility === undefined
+            ? null
+            : Number(persistedFinancialClearance.estimatedResponsibility),
+        payerEstimatedAmount:
+          persistedFinancialClearance.payerEstimatedAmount === null ||
+          persistedFinancialClearance.payerEstimatedAmount === undefined
+            ? null
+            : Number(persistedFinancialClearance.payerEstimatedAmount),
+        authorizationRequired: persistedFinancialClearance.authorizationRequired,
+        authorizationStatus: persistedFinancialClearance.authorizationStatus || null,
+        blockers: persistedFinancialClearance.blockers || [],
+        recommendedNextStep: persistedFinancialClearance.recommendedNextStep || null,
+        assessedAt: persistedFinancialClearance.assessedAt,
+      },
+    };
+  }
+
+  async getClaimReadinessWorklist(query: any, tenantDb: DataSource) {
+    const limit = this.clampLimit(query?.limit, 50, 200);
+    const statuses = String(query?.statuses || 'draft,rejected,submitted,processing')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+
+    const rows = await tenantDb.query(
+      `
+      SELECT id, status, created_at, submission_date
+      FROM medical_aid_claims
+      WHERE status = ANY($1)
+      ORDER BY
+        CASE status
+          WHEN 'rejected' THEN 1
+          WHEN 'draft' THEN 2
+          WHEN 'submitted' THEN 3
+          WHEN 'processing' THEN 4
+          ELSE 5
+        END,
+        created_at DESC
+      LIMIT $2
+      `,
+      [statuses, limit],
+    );
+
+    const items = await Promise.all(
+      rows.map(async (row: any) => {
+        const readiness = await this.getClaimReadiness(row.id, tenantDb);
+        return {
+          claimId: row.id,
+          claimStatus: row.status,
+          createdAt: row.created_at,
+          submissionDate: row.submission_date,
+          ...readiness,
+        };
+      }),
+    );
+
+    const summary = {
+      total: items.length,
+      ready: items.filter((item) => item.status === 'ready').length,
+      atRisk: items.filter((item) => item.status === 'at_risk').length,
+      blocked: items.filter((item) => item.status === 'blocked').length,
+      missingDiagnosis: items.filter((item) =>
+        item.blockers.some((issue) => issue.code === 'missing_diagnosis'),
+      ).length,
+      missingClinicalDocumentation: items.filter((item) =>
+        item.blockers.some((issue) => issue.code === 'missing_clinical_documentation'),
+      ).length,
+      missingSupportingDocuments: items.filter((item) => item.missingDocuments.length > 0).length,
+      preAuthorizationIssues: items.filter((item) =>
+        item.blockers.some((issue) => issue.code.includes('preauthorization')),
+      ).length,
+    };
+
+    return {
+      generatedAt: new Date().toISOString(),
+      filters: {
+        statuses,
+        limit,
+      },
+      summary,
+      items,
+    };
+  }
+
+  async getFinancialClearance(id: string, tenantDb: DataSource) {
+    const readiness = await this.getClaimReadiness(id, tenantDb);
+    return {
+      claimId: readiness.claimId,
+      claimNumber: readiness.claimNumber,
+      status: readiness.status,
+      readyToSubmit: readiness.readyToSubmit,
+      financialClearance: readiness.financialClearance,
+      denialPrediction: readiness.denialPrediction,
+      blockers: readiness.blockers,
+      warnings: readiness.warnings,
+      missingDocuments: readiness.missingDocuments,
+      financial: readiness.financial,
+    };
+  }
+
+  async generatePriorAuthorizationDraft(id: string, tenantDb: DataSource) {
+    const readiness = await this.getClaimReadiness(id, tenantDb);
+    const [claimRow] = await tenantDb.query(`SELECT * FROM medical_aid_claims WHERE id = $1`, [id]);
+
+    if (!claimRow) {
+      throw new NotFoundException('Claim not found');
+    }
+
+    const claimData = this.parseJsonObject<Record<string, any>>(claimRow.claim_data, {});
+    const requestType = String(
+      claimData.requestType || claimData.procedureType || claimData.appointmentType || 'consultation',
+    )
+      .trim()
+      .toLowerCase();
+    const diagnosisSummary = [
+      readiness.evidence?.primaryDiagnosisCode || null,
+      ...(Array.isArray(readiness.evidence?.diagnosisCodes) ? readiness.evidence.diagnosisCodes : []),
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const procedureSummary = Array.from(
+      new Set(
+        [
+          claimData.procedureType,
+          claimData.procedureId ? `procedure:${claimData.procedureId}` : null,
+          claimData.appointmentType,
+        ].filter(Boolean),
+      ),
+    ).join(', ');
+    const supportingDocuments = Object.entries(readiness.evidence?.supportingDocuments || {})
+      .map(([documentType, count]) => ({
+        documentType,
+        count: Number(count || 0),
+      }))
+      .filter((item) => item.count > 0);
+
+    const justificationParts = [
+      `Claim ${readiness.claimNumber} requires payer review before submission.`,
+      diagnosisSummary ? `Diagnosis context: ${diagnosisSummary}.` : null,
+      procedureSummary ? `Service context: ${procedureSummary}.` : null,
+      readiness.financial?.claimAmount
+        ? `Requested amount: ${this.toCurrencyAmount(readiness.financial.claimAmount).toFixed(2)}.`
+        : null,
+      readiness.blockers.length > 0
+        ? `Current blockers: ${readiness.blockers.map((issue) => issue.code).join(', ')}.`
+        : null,
+      readiness.financialClearance?.recommendedNextStep
+        ? `Financial clearance next step: ${readiness.financialClearance.recommendedNextStep}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const repository = tenantDb.getRepository(PriorAuthorizationDraft);
+    const draft = await repository.save(
+      repository.create({
+        appointmentId: readiness.evidence?.appointmentId || null,
+        billId: readiness.evidence?.billId || null,
+        claimId: id,
+        diagnosisSummary: diagnosisSummary || null,
+        draftData: {
+          claimReadinessStatus: readiness.status,
+          denialPrediction: readiness.denialPrediction,
+          financialClearance: readiness.financialClearance,
+          evidence: readiness.evidence,
+        },
+        justification: justificationParts || null,
+        medicalAidName: String(claimRow.medical_aid_name || '').trim() || 'unknown',
+        memberNumber: String(claimRow.member_number || '').trim() || null,
+        patientId: String(claimRow.patient_id || '').trim() || null,
+        procedureSummary: procedureSummary || null,
+        requestType,
+        requestedAmount: this.toCurrencyAmount(claimRow.claim_amount),
+        status: 'draft',
+        supportingDocuments,
+      }),
+    );
+
+    return {
+      id: draft.id,
+      claimId: draft.claimId,
+      patientId: draft.patientId,
+      billId: draft.billId,
+      appointmentId: draft.appointmentId,
+      medicalAidName: draft.medicalAidName,
+      memberNumber: draft.memberNumber,
+      requestType: draft.requestType,
+      requestedAmount: draft.requestedAmount === null || draft.requestedAmount === undefined ? null : Number(draft.requestedAmount),
+      diagnosisSummary: draft.diagnosisSummary || null,
+      procedureSummary: draft.procedureSummary || null,
+      justification: draft.justification || null,
+      supportingDocuments: draft.supportingDocuments || [],
+      status: draft.status,
+      createdAt: draft.createdAt,
+      updatedAt: draft.updatedAt,
+      draftData: draft.draftData || {},
+    };
+  }
   
   async createClaim(createClaimDto: any, tenantDb: DataSource) {
     const claimRepository = tenantDb.getRepository(MedicalAidClaim);
@@ -372,6 +1296,14 @@ export class ClaimsService {
       throw new NotFoundException('Claim not found');
     }
 
+    const readiness = await this.getClaimReadiness(id, tenantDb);
+    if (!readiness.readyToSubmit) {
+      throw new BadRequestException({
+        message: 'Claim is not ready for submission',
+        blockers: readiness.blockers,
+      });
+    }
+
     // Simulate medical aid submission
     claim.status = ClaimStatus.SUBMITTED;
     claim.submissionDate = new Date();
@@ -711,6 +1643,15 @@ export class ClaimsService {
       throw new BadRequestException('Only draft claims can be submitted');
     }
 
+    const readiness = await this.getClaimReadiness(id, tenantDb);
+    if (!readiness.readyToSubmit) {
+      throw new BadRequestException({
+        message: 'Claim is not ready for submission',
+        blockers: readiness.blockers,
+        warnings: readiness.warnings,
+      });
+    }
+
     const previousStatus = claim.status;
     const startTime = Date.now();
 
@@ -820,6 +1761,8 @@ export class ClaimsService {
       throw new BadRequestException('Claim has not been submitted yet');
     }
 
+    let latestClaim = claim;
+
     // If API service available and external claim ID exists, check via API
     if (this.medicalAidApiService && (claim as any).externalClaimId) {
       try {
@@ -829,11 +1772,41 @@ export class ClaimsService {
           tenantDb,
         );
 
+        const normalizedExternalStatus = String(statusResult.status || '').trim().toLowerCase();
+        const paidStatuses = new Set(['paid', 'settled', 'payment_confirmed', 'reimbursed']);
+        const approvedStatuses = new Set(['approved', 'successful', 'success', 'accepted', 'authorised', 'authorized']);
+        const rejectedStatuses = new Set(['rejected', 'declined', 'denied', 'failed', 'void']);
+        const processingStatuses = new Set([
+          'processing',
+          'pending',
+          'queued',
+          'submitted',
+          'in_review',
+          'under_review',
+          'on_hold',
+          'suspended',
+        ]);
+
         // Update claim with status from API
-        await this.processClaimResponse(id, {
+        latestClaim = await this.processClaimResponse(id, {
           status: statusResult.status,
-          approved: statusResult.status === 'approved' || statusResult.status === 'paid',
-          rejected: statusResult.status === 'rejected',
+          externalClaimId:
+            (statusResult as any)?.details?.claimId ||
+            (statusResult as any)?.details?.referenceNumber ||
+            (claim as any).externalClaimId,
+          referenceNumber:
+            (statusResult as any)?.details?.referenceNumber ||
+            (statusResult as any)?.details?.claimId ||
+            (claim as any).externalClaimId,
+          approved: approvedStatuses.has(normalizedExternalStatus),
+          rejected: rejectedStatuses.has(normalizedExternalStatus),
+          processing: processingStatuses.has(normalizedExternalStatus),
+          paid: paidStatuses.has(normalizedExternalStatus),
+          reason:
+            normalizedExternalStatus === 'suspended'
+              ? 'Claim/member suspended by medical aid provider.'
+              : undefined,
+          paidAmount: paidStatuses.has(normalizedExternalStatus) ? statusResult.approvedAmount : undefined,
           approvedAmount: statusResult.approvedAmount,
           rejectionReason: statusResult.rejectionReason,
           details: statusResult.details,
@@ -844,9 +1817,9 @@ export class ClaimsService {
     }
 
     // Update last check time
-    (claim as any).lastStatusCheckAt = new Date();
-    (claim as any).nextStatusCheckAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await claimRepository.save(claim);
+    (latestClaim as any).lastStatusCheckAt = new Date();
+    (latestClaim as any).nextStatusCheckAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await claimRepository.save(latestClaim);
 
     // Get status history
     const history = await this.getClaimStatusHistory(id, tenantDb);
@@ -854,8 +1827,8 @@ export class ClaimsService {
     return {
       claim: await this.getClaimById(id, tenantDb),
       statusHistory: history,
-      lastChecked: (claim as any).lastStatusCheckAt,
-      nextCheck: (claim as any).nextStatusCheckAt,
+      lastChecked: (latestClaim as any).lastStatusCheckAt,
+      nextCheck: (latestClaim as any).nextStatusCheckAt,
     };
   }
 
@@ -871,26 +1844,62 @@ export class ClaimsService {
     }
 
     const previousStatus = claim.status;
+    const externalStatus = String(responseData.status || responseData.claimStatus || '')
+      .trim()
+      .toLowerCase();
+
+    const paidStatuses = new Set(['paid', 'settled', 'payment_confirmed', 'reimbursed']);
+    const approvedStatuses = new Set(['approved', 'successful', 'success', 'accepted', 'authorised', 'authorized']);
+    const rejectedStatuses = new Set(['rejected', 'declined', 'denied', 'failed', 'void']);
+    const processingStatuses = new Set([
+      'processing',
+      'pending',
+      'queued',
+      'submitted',
+      'in_review',
+      'under_review',
+      'on_hold',
+      'suspended',
+    ]);
+
+    const isPaid = responseData.paid === true || paidStatuses.has(externalStatus);
+    const isApproved =
+      responseData.approved === true || (approvedStatuses.has(externalStatus) && !isPaid);
+    const isRejected = responseData.rejected === true || rejectedStatuses.has(externalStatus);
+    const isProcessing = responseData.processing === true || processingStatuses.has(externalStatus);
 
     // Update claim based on response
-    if (responseData.approved) {
+    if (isPaid) {
+      claim.status = ClaimStatus.PAID;
+      claim.approvedAmount =
+        responseData.paidAmount || responseData.approvedAmount || claim.approvedAmount || claim.claimAmount;
+      claim.rejectionReason = null;
+    } else if (isApproved) {
       claim.status = ClaimStatus.APPROVED;
       claim.approvedAmount = responseData.approvedAmount || claim.claimAmount;
-    } else if (responseData.rejected) {
+      claim.rejectionReason = null;
+    } else if (isRejected) {
       claim.status = ClaimStatus.REJECTED;
       claim.rejectionReason = responseData.rejectionReason || responseData.reason;
-    } else if (responseData.processing) {
+    } else if (isProcessing) {
       claim.status = ClaimStatus.PROCESSING;
-    } else if (responseData.paid) {
-      claim.status = ClaimStatus.PAID;
-      claim.approvedAmount = responseData.paidAmount || claim.approvedAmount;
     }
 
     claim.responseDate = new Date();
-    (claim as any).externalClaimId = responseData.externalClaimId || responseData.referenceNumber;
+    (claim as any).externalClaimId =
+      responseData.externalClaimId ||
+      responseData.referenceNumber ||
+      (claim as any).externalClaimId ||
+      null;
     (claim as any).apiResponseData = responseData;
+    (claim as any).externalStatus = externalStatus || null;
 
     const savedClaim = await claimRepository.save(claim);
+
+    const statusChangeReason =
+      responseData.rejectionReason ||
+      responseData.reason ||
+      (externalStatus ? `Status updated from medical aid: ${externalStatus}` : 'Status updated from medical aid');
 
     // Log status change
     await this.logClaimStatusChange(
@@ -899,21 +1908,31 @@ export class ClaimsService {
       savedClaim.status,
       previousStatus,
       null,
-      responseData.rejectionReason || 'Status updated from medical aid',
+      statusChangeReason,
       responseData
     );
 
     // Update submission record if exists
     await tenantDb.query(
-      `UPDATE claim_submissions 
-       SET response_payload = $1, responded_at = NOW(), submission_status = $2
-       WHERE claim_id = $3 AND responded_at IS NULL
-       ORDER BY submitted_at DESC LIMIT 1`,
+      `WITH latest_submission AS (
+         SELECT id
+         FROM claim_submissions
+         WHERE claim_id = $3
+           AND responded_at IS NULL
+         ORDER BY submitted_at DESC
+         LIMIT 1
+       )
+       UPDATE claim_submissions cs
+       SET response_payload = $1,
+           responded_at = NOW(),
+           submission_status = $2
+       FROM latest_submission
+       WHERE cs.id = latest_submission.id`,
       [
         JSON.stringify(responseData),
-        responseData.approved || responseData.paid ? 'success' : responseData.rejected ? 'failed' : 'pending',
+        isApproved || isPaid ? 'success' : isRejected ? 'failed' : 'pending',
         claim.id,
-      ]
+      ],
     );
 
     return savedClaim;

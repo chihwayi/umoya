@@ -68,6 +68,14 @@ export class PatientPortalController {
     return this.patientAuthService.register(registerDto, req.tenantId);
   }
 
+  @Post('register/assess')
+  @ApiOperation({ summary: 'Assess patient portal registration readiness', description: 'Run registration-intelligence checks before creating the portal account' })
+  @ApiResponse({ status: 200, description: 'Registration readiness assessed' })
+  @ApiResponse({ status: 400, description: 'Invalid registration data' })
+  async assessRegistration(@Body() registerDto: PatientRegisterDto, @Req() req: RequestWithTenant) {
+    return this.patientAuthService.assessRegistration(registerDto, req.tenantId);
+  }
+
   @Post('login')
   @ApiOperation({ summary: 'Patient portal login', description: 'Login to patient portal' })
   @ApiResponse({ status: 200, description: 'Login successful' })
@@ -145,12 +153,16 @@ export class PatientPortalController {
   @ApiOperation({ summary: 'Get available time slots', description: 'Get available time slots for a doctor on a specific date' })
   @ApiQuery({ name: 'doctorId', required: true, description: 'Doctor ID' })
   @ApiQuery({ name: 'date', required: true, description: 'Date in YYYY-MM-DD format' })
+  @ApiQuery({ name: 'includeStates', required: false, description: 'Include full slot state payload (available/booked/unavailable/past)' })
   async getAvailableTimeSlots(
     @Query('doctorId') doctorId: string,
     @Query('date') date: string,
+    @Query('includeStates') includeStates: string,
     @Req() req: RequestWithTenant & { user: any },
   ) {
-    return this.patientPortalAppointmentService.getAvailableTimeSlots(doctorId, date, req.tenantId);
+    const payload = await this.patientPortalAppointmentService.getAvailableTimeSlots(doctorId, date, req.tenantId);
+    const withStates = String(includeStates || '').toLowerCase() === 'true';
+    return withStates ? payload : payload.availableSlots;
   }
 
   @Get('appointments')
@@ -463,6 +475,16 @@ export class PatientPortalController {
     return this.patientPortalService.getPatientBill(patientId, id, req.tenantId);
   }
 
+  @Get('bills/:id/quote')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient bill quote', description: 'Get patient-responsibility guidance and quote signals for a specific bill' })
+  @ApiParam({ name: 'id', description: 'Bill ID' })
+  async getBillQuote(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientBillQuote(patientId, id, req.tenantId);
+  }
+
   // Vitals
   @Get('vitals')
   @UseGuards(JwtAuthGuard)
@@ -575,6 +597,35 @@ export class PatientPortalController {
       throw new Error('Patient ID not found in token');
     }
     return this.patientPortalService.getPatientDashboardSummary(patientId, req.tenantId);
+  }
+
+  @Get('patient-ai/followups')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List patient AI follow-ups', description: 'Get active and historical patient-facing AI follow-up tasks for the authenticated patient' })
+  async getPatientAiFollowups(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientAiFollowups(patientId, req.tenantId);
+  }
+
+  @Put('patient-ai/followups/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update patient AI follow-up state', description: 'Allow the authenticated patient to acknowledge or complete an AI-guided follow-up task' })
+  @ApiParam({ name: 'id', description: 'Patient follow-up orchestration ID' })
+  async updatePatientAiFollowup(
+    @Param('id') id: string,
+    @Body() body: { status?: 'open' | 'in_progress' | 'completed' | 'dismissed'; reminderState?: 'pending' | 'sent' | 'acknowledged' },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.updatePatientAiFollowup(patientId, req.tenantId, id, body);
   }
 
   // Post-Visit AI Companion
@@ -2251,7 +2302,52 @@ export class PatientPortalController {
     if (!visit) {
       throw new Error('ED visit not found or access denied');
     }
-    
+
     return visit;
+  }
+
+  // ── AI Health Insights ─────────────────────────────────────────────────────
+
+  @Get('ai-insights')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get AI-generated personalised health insights for the logged-in patient' })
+  async getHealthInsights(@Req() req: any) {
+    const patientId: string = req.user?.patientId || req.user?.id;
+    const tenantId: string = req.tenantId || req.headers?.['x-tenant-id'];
+    return this.patientPortalService.getPatientHealthInsights(patientId, tenantId);
+  }
+
+  // ── AI Health Summary (Sprint 113) ────────────────────────────────────────
+
+  @Get('health-summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get AI health summary for the logged-in patient' })
+  async getHealthSummary(@Req() req: any) {
+    const patientId: string = req.user?.patientId || req.user?.id || req.user?.sub;
+    const tenantId: string = req.tenantId || req.headers?.['x-tenant-id'];
+    const insights = await this.patientPortalService.getPatientHealthInsights(patientId, tenantId);
+    return {
+      summary: insights?.summary || insights?.clinical_summary || 'Your health is being monitored by our AI system.',
+      riskLevel: insights?.riskLevel || insights?.risk_level || 'low',
+      pendingActions: insights?.pendingActions || 0,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  @Put('followups/:id/outcome')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Record patient outcome for an AI followup' })
+  async recordFollowupOutcome(
+    @Req() req: any,
+    @Param('id') followupId: string,
+    @Body() dto: { outcome: string; notes?: string },
+  ) {
+    const patientId: string = req.user?.patientId || req.user?.id || req.user?.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    await tenantDb.query(
+      `UPDATE patient_followup_orchestrations SET resolution_status = $1, resolved_at = NOW() WHERE id = $2 AND patient_id = $3`,
+      [dto.outcome, followupId, patientId],
+    );
+    return { status: 'updated', followupId, outcome: dto.outcome };
   }
 }

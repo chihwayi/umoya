@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { config as envConfig } from '@medicore/config';
 import {
   CreateDigitalPrescriptionDto,
   SignPrescriptionDto,
@@ -8,6 +9,7 @@ import {
 @Injectable()
 export class DigitalPrescriptionService {
   private readonly logger = new Logger(DigitalPrescriptionService.name);
+  private readonly frontendUrl = String(process.env.FRONTEND_URL || envConfig.publicUrls.staffApp || '').replace(/\/+$/, '');
 
   private ensureTenantDb(tenantDb: DataSource) {
     if (!tenantDb) {
@@ -181,7 +183,11 @@ export class DigitalPrescriptionService {
 
     // TODO: Generate PDF using pdfkit or similar
     // For now, return a placeholder URL
-    const pdfUrl = `${process.env.FRONTEND_URL}/prescriptions/${prescriptionId}/pdf`;
+    if (!this.frontendUrl) {
+      throw new Error('FRONTEND_URL is not configured. Set FRONTEND_URL or PUBLIC_APP_BASE_URL.');
+    }
+
+    const pdfUrl = `${this.frontendUrl}/prescriptions/${prescriptionId}/pdf`;
 
     // Update prescription with PDF URL
     await tenantDb.query(
@@ -227,4 +233,3 @@ export class DigitalPrescriptionService {
     };
   }
 }
-

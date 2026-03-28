@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Clock, Plus, Edit, Trash2, XCircle } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface AppointmentTemplate {
   id: string;
@@ -23,6 +24,7 @@ const AppointmentTemplatesPanel: React.FC<AppointmentTemplatesPanelProps> = ({
   tenantSlug,
 }) => {
   const { showError, showSuccess } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const [templates, setTemplates] = useState<AppointmentTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -76,7 +78,14 @@ const AppointmentTemplatesPanel: React.FC<AppointmentTemplatesPanelProps> = ({
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!window.confirm('Are you sure you want to delete this template?')) return;
+    const shouldProceed = await confirm({
+      title: 'Delete Template',
+      message: 'Are you sure you want to delete this template?',
+      confirmText: 'Delete',
+      cancelText: 'Keep Template',
+      type: 'danger',
+    });
+    if (!shouldProceed) return;
 
     try {
       const token = localStorage.getItem('ehr_token');
@@ -111,7 +120,9 @@ const AppointmentTemplatesPanel: React.FC<AppointmentTemplatesPanelProps> = ({
   }
 
   return (
-    <div className="space-y-4">
+    <>
+      {Dialog}
+      <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">
           Click a template to quickly create an appointment with pre-filled details
@@ -312,9 +323,9 @@ const AppointmentTemplatesPanel: React.FC<AppointmentTemplatesPanelProps> = ({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
 export default AppointmentTemplatesPanel;
-

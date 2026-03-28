@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Shield, AlertTriangle, Activity, TrendingUp, Users, 
-  Loader2, Calendar, BarChart3, ArrowLeft
+import {
+  Shield, AlertTriangle, Activity, Users,
+  Loader2, Calendar, BarChart3, ArrowLeft, ClipboardCheck,
+  Brain, Search, BookOpen, X
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
-import { ehrAxios } from '../services/api';
+import { cdssApi, ehrAxios } from '../services/api';
+import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
+import PromptDialog from '../components/PromptDialog';
+import ModalPortal from '../components/ModalPortal';
 
-const InfectionControlDashboard: React.FC = () => {
+interface InfectionControlDashboardProps {
+  embedded?: boolean;
+}
+
+const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const token = localStorage.getItem('ehr_token') || '';
   const [user, setUser] = useState<any>(null);
 
@@ -27,6 +35,50 @@ const InfectionControlDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [hhCompliance, setHhCompliance] = useState<any>(null);
   const [deviceRates, setDeviceRates] = useState<any>(null);
+  const [antimicrobialReport, setAntimicrobialReport] = useState<any>(null);
+  const [stewardshipWorklist, setStewardshipWorklist] = useState<any>({ summary: null, items: [] });
+  const [infectionWorklist, setInfectionWorklist] = useState<any>({ summary: null, items: [] });
+  const [outbreakSignals, setOutbreakSignals] = useState<any>({ summary: null, items: [] });
+  const [operationalBrief, setOperationalBrief] = useState<any>(null);
+  const [reviewingStewardshipId, setReviewingStewardshipId] = useState<string | null>(null);
+  const [reviewingInfectionId, setReviewingInfectionId] = useState<string | null>(null);
+  const [isolationActionId, setIsolationActionId] = useState<string | null>(null);
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
+  // Dialog state for stewardship review (replaces 6 browser dialogs)
+  const [stewardshipModal, setStewardshipModal] = useState<{
+    item: any;
+    recommendation: string;
+    appropriateIndication: boolean;
+    appropriateDose: boolean;
+    appropriateDuration: boolean;
+    deEscalationOpportunity: boolean;
+    deEscalationNotes: string;
+  } | null>(null);
+
+  // Dialog state for infection review (replaces 5 browser dialogs)
+  const [infectionModal, setInfectionModal] = useState<{
+    item: any;
+    investigationNotes: string;
+    rootCause: string;
+    reportedToCdc: boolean;
+    markResolved: boolean;
+    outcome: string;
+  } | null>(null);
+
+  // Dialog state for isolation order (replaces 2 browser prompts)
+  const [isolationOrderModal, setIsolationOrderModal] = useState<{
+    item: any;
+    isolationType: string;
+    reason: string;
+  } | null>(null);
+
+  // Dialog state for discontinue isolation (replaces 1 browser prompt)
+  const [discontinuePrompt, setDiscontinuePrompt] = useState<{ isolation: any; value: string } | null>(null);
+
   const [hhDepartment, setHhDepartment] = useState('');
   const [hhOpportunity, setHhOpportunity] = useState('before_patient_contact');
   const [hhPerformed, setHhPerformed] = useState(true);
@@ -46,27 +98,29 @@ const InfectionControlDashboard: React.FC = () => {
     try {
       setLoading(true);
 
-      // Load infections
-      const infectionsResponse = await ehrAxios.get('/infection-control/infections', {
-        params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
-        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-      });
-      setInfections(infectionsResponse.data || []);
-
-      // Load HAI metrics
-      const metricsResponse = await ehrAxios.get('/infection-control/metrics/hai', {
-        params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
-        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-      });
-      setMetrics(metricsResponse.data);
-
-      // Load active isolations
-      const isolationsResponse = await ehrAxios.get('/infection-control/isolation/active', {
-        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-      });
-      setIsolations(isolationsResponse.data || []);
-
-      const [hhRes, deviceRes] = await Promise.all([
+      const [
+        infectionsResponse,
+        metricsResponse,
+        isolationsResponse,
+        hhRes,
+        deviceRes,
+        antimicrobialRes,
+        stewardshipRes,
+        worklistRes,
+        outbreaksRes,
+        operationalBriefRes,
+      ] = await Promise.all([
+        ehrAxios.get('/infection-control/infections', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }),
+        ehrAxios.get('/infection-control/metrics/hai', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }),
+        ehrAxios.get('/infection-control/isolation/active', {
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }),
         ehrAxios.get('/infection-control/hand-hygiene/compliance', {
           params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
           headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
@@ -75,9 +129,37 @@ const InfectionControlDashboard: React.FC = () => {
           params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
           headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
         }).catch(() => ({ data: null })),
+        ehrAxios.get('/infection-control/antimicrobial/report', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: null })),
+        ehrAxios.get('/infection-control/stewardship/worklist', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate, limit: 20 },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { summary: null, items: [] } })),
+        ehrAxios.get('/infection-control/worklist', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate, limit: 20 },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { summary: null, items: [] } })),
+        ehrAxios.get('/infection-control/outbreak-signals', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate, limit: 8 },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { summary: null, items: [] } })),
+        ehrAxios.get('/infection-control/operational-brief', {
+          params: { startDate: dateRange.startDate, endDate: dateRange.endDate, limit: 100 },
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: null })),
       ]);
+      setInfections(infectionsResponse.data || []);
+      setMetrics(metricsResponse.data);
+      setIsolations(isolationsResponse.data || []);
       setHhCompliance(hhRes.data);
       setDeviceRates(deviceRes.data);
+      setAntimicrobialReport(antimicrobialRes.data || null);
+      setStewardshipWorklist(stewardshipRes.data || { summary: null, items: [] });
+      setInfectionWorklist(worklistRes.data || { summary: null, items: [] });
+      setOutbreakSignals(outbreaksRes.data || { summary: null, items: [] });
+      setOperationalBrief(operationalBriefRes.data || null);
     } catch (error) {
       showError('Error', 'Failed to load infection control data');
     } finally {
@@ -108,9 +190,193 @@ const InfectionControlDashboard: React.FC = () => {
     }
   };
 
+  const getStewardshipRiskColor = (riskLevel: string) => {
+    const risk = String(riskLevel || '').toLowerCase();
+    if (risk === 'high') return 'bg-red-100 text-red-800 border-red-300';
+    if (risk === 'moderate') return 'bg-amber-100 text-amber-800 border-amber-300';
+    return 'bg-green-100 text-green-800 border-green-300';
+  };
+
+  const getWorklistRiskColor = (riskLevel: string) => {
+    const risk = String(riskLevel || '').toLowerCase();
+    if (risk === 'high') return 'bg-red-100 text-red-800 border-red-300';
+    if (risk === 'moderate') return 'bg-orange-100 text-orange-800 border-orange-300';
+    return 'bg-green-100 text-green-800 border-green-300';
+  };
+
+  const formatStewardshipField = (value: string | null | undefined) =>
+    String(value || 'not documented')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+
+  const handleReviewStewardship = (item: any) => {
+    setStewardshipModal({
+      item,
+      recommendation: item?.stewardship_recommendation || '',
+      appropriateIndication: true,
+      appropriateDose: true,
+      appropriateDuration: true,
+      deEscalationOpportunity: false,
+      deEscalationNotes: item?.de_escalation_notes || '',
+    });
+  };
+
+  const submitStewardshipReview = async () => {
+    if (!stewardshipModal) return;
+    const { item, recommendation, appropriateIndication, appropriateDose, appropriateDuration, deEscalationOpportunity, deEscalationNotes } = stewardshipModal;
+    try {
+      setReviewingStewardshipId(item.id);
+      await ehrAxios.put(
+        `/infection-control/antimicrobial/${item.id}/review`,
+        {
+          recommendation: recommendation.trim() || 'Reviewed - continue current therapy with daily reassessment.',
+          appropriateIndication,
+          appropriateDose,
+          appropriateDuration,
+          deEscalationOpportunity,
+          deEscalationNotes: deEscalationOpportunity ? (deEscalationNotes.trim() || null) : null,
+        },
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+      );
+      showSuccess('Stewardship review saved', 'Antimicrobial review has been documented.');
+      setStewardshipModal(null);
+      loadData();
+    } catch (error: any) {
+      showError('Error', error.response?.data?.message || 'Failed to save antimicrobial review');
+    } finally {
+      setReviewingStewardshipId(null);
+    }
+  };
+
+  const handleReviewInfection = (item: any) => {
+    setInfectionModal({
+      item,
+      investigationNotes: item?.investigation_notes || '',
+      rootCause: item?.root_cause || '',
+      reportedToCdc: false,
+      markResolved: false,
+      outcome: item?.outcome || '',
+    });
+  };
+
+  const submitInfectionReview = async () => {
+    if (!infectionModal) return;
+    const { item, investigationNotes, rootCause, reportedToCdc, markResolved, outcome } = infectionModal;
+    if (!investigationNotes.trim()) {
+      showError('Required', 'Investigation notes are required.');
+      return;
+    }
+    try {
+      setReviewingInfectionId(item.id);
+      await ehrAxios.put(
+        `/infection-control/infections/${item.id}/review`,
+        {
+          investigationNotes: investigationNotes.trim(),
+          rootCause: rootCause.trim() || null,
+          reportedToCdc,
+          markResolved,
+          outcome: markResolved ? (outcome.trim() || null) : null,
+        },
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+      );
+      showSuccess('Infection review saved', 'Clinical IPC review has been documented.');
+      setInfectionModal(null);
+      loadData();
+    } catch (error: any) {
+      showError('Error', error.response?.data?.message || 'Failed to save infection review');
+    } finally {
+      setReviewingInfectionId(null);
+    }
+  };
+
+  const handleOrderIsolation = (item: any) => {
+    setIsolationOrderModal({
+      item,
+      isolationType: item?.active_isolation_type || 'contact',
+      reason: item?.mdro_signal
+        ? `${item.infection_type || 'Infection'} with MDRO risk - initiate transmission-based precautions.`
+        : `${item.infection_type || 'Infection'} transmission risk precautions.`,
+    });
+  };
+
+  const submitIsolationOrder = async () => {
+    if (!isolationOrderModal) return;
+    const { item, isolationType, reason } = isolationOrderModal;
+    if (!isolationType.trim() || !reason.trim()) {
+      showError('Required', 'Both isolation type and reason are required.');
+      return;
+    }
+    try {
+      setIsolationActionId(item.id);
+      await ehrAxios.post(
+        '/infection-control/isolation',
+        {
+          patientId: item.patient_id,
+          admissionId: item.admission_id || null,
+          isolationType: isolationType.trim().toLowerCase(),
+          reason: reason.trim(),
+          organism: item.organism || null,
+        },
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+      );
+      showSuccess('Isolation ordered', 'Isolation precautions are now active for this patient.');
+      setIsolationOrderModal(null);
+      loadData();
+    } catch (error: any) {
+      showError('Error', error.response?.data?.message || 'Failed to order isolation');
+    } finally {
+      setIsolationActionId(null);
+    }
+  };
+
+  const handleDiscontinueIsolation = (isolation: any) => {
+    setDiscontinuePrompt({ isolation, value: 'Clinical criteria met, discontinue isolation precautions.' });
+  };
+
+  const submitDiscontinueIsolation = async () => {
+    if (!discontinuePrompt || !discontinuePrompt.value.trim()) {
+      showError('Required', 'A reason is required to discontinue isolation.');
+      return;
+    }
+    const { isolation, value } = discontinuePrompt;
+    try {
+      setIsolationActionId(isolation.id);
+      await ehrAxios.post(
+        `/infection-control/isolation/${isolation.id}/discontinue`,
+        { reason: value.trim() },
+        { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+      );
+      showSuccess('Isolation discontinued', 'Isolation precaution status has been updated.');
+      setDiscontinuePrompt(null);
+      loadData();
+    } catch (error: any) {
+      showError('Error', error.response?.data?.message || 'Failed to discontinue isolation');
+    } finally {
+      setIsolationActionId(null);
+    }
+  };
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      const response = await cdssApi.searchGuidelines(guidelineQuery.trim(), token, tenantSlug);
+      setGuidelineResults(response.data?.citations || []);
+    } catch {
+      showError('Error', 'Failed to search infection-control guidance');
+      setGuidelineResults([]);
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className={`flex items-center justify-center ${embedded ? 'py-12' : 'min-h-screen'}`}>
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-green-600 mx-auto mb-4" />
           <p className="text-slate-600">Loading infection control...</p>
@@ -120,31 +386,33 @@ const InfectionControlDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-green-600 to-emerald-700 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                  <Shield className="w-8 h-8" />
-                  Infection Control & Epidemiology
-                </h1>
-                <p className="text-green-100 mt-1">HAI surveillance & antimicrobial stewardship</p>
+    <>
+    <div className={embedded ? '' : 'min-h-screen bg-slate-50'}>
+      {!embedded && (
+        <div className="bg-gradient-to-r from-green-600 to-emerald-700 text-white shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h1 className="text-3xl font-bold flex items-center gap-3">
+                    <Shield className="w-8 h-8" />
+                    Infection Control & Epidemiology
+                  </h1>
+                  <p className="text-green-100 mt-1">HAI surveillance & antimicrobial stewardship</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${embedded ? 'pb-4' : 'pt-8 pb-8'}`}>
         {/* Date Range */}
         <div className="flex items-center gap-4 mb-6">
           <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm">
@@ -164,6 +432,16 @@ const InfectionControlDashboard: React.FC = () => {
             />
           </div>
         </div>
+
+      <div className="mb-6">
+        <ModuleGeneralReportCard
+          moduleKey="infection_control"
+          title="Infection Control"
+          tenantSlug={tenantSlug || ''}
+          token={token}
+          accentClass="from-emerald-50 via-white to-teal-50"
+        />
+      </div>
 
         {/* HAI Metrics */}
       {metrics && (
@@ -206,6 +484,250 @@ const InfectionControlDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Operational Brief */}
+      <div className="mb-6 rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">Operational Brief</h2>
+          <button
+            onClick={loadData}
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+          >
+            Refresh Brief
+          </button>
+        </div>
+
+        {!operationalBrief ? (
+          <p className="text-sm text-slate-600">Operational brief unavailable for this window.</p>
+        ) : (
+          <>
+            <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-red-700">High Risk</p>
+                <p className="mt-1 text-2xl font-bold text-red-800">
+                  {(operationalBrief.summary?.highRiskInfections || 0) + (operationalBrief.summary?.stewardshipHighRisk || 0)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Isolation Gaps</p>
+                <p className="mt-1 text-2xl font-bold text-orange-800">{operationalBrief.summary?.isolationGaps ?? 0}</p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Diagnostic Gaps</p>
+                <p className="mt-1 text-2xl font-bold text-amber-800">{operationalBrief.summary?.diagnosticWorkupGaps ?? 0}</p>
+              </div>
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Coding Gaps</p>
+                <p className="mt-1 text-2xl font-bold text-violet-800">
+                  {(operationalBrief.summary?.infectionCodingGaps || 0) + (operationalBrief.summary?.stewardshipCodingGaps || 0)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Prolonged Empiric</p>
+                <p className="mt-1 text-2xl font-bold text-rose-800">
+                  {operationalBrief.summary?.prolongedEmpiricWithoutCulture ?? 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">CDSS Coverage</p>
+                <p className="mt-1 text-2xl font-bold text-cyan-800">{operationalBrief.summary?.cdssCoveragePercent ?? 0}%</p>
+              </div>
+            </div>
+
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full bg-cyan-100 px-2.5 py-1 font-semibold text-cyan-800">
+                Outbreak clusters: {operationalBrief.summary?.outbreakHighRiskClusters ?? 0}
+              </span>
+              <span className="rounded-full bg-teal-100 px-2.5 py-1 font-semibold text-teal-800">
+                HH compliance: {operationalBrief.summary?.handHygieneOverallRate ?? '--'}
+                {operationalBrief.summary?.handHygieneOverallRate !== null && operationalBrief.summary?.handHygieneOverallRate !== undefined ? '%' : ''}
+              </span>
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
+                Stewardship overdue: {operationalBrief.summary?.stewardshipOverdue ?? 0}
+              </span>
+            </div>
+
+            {Array.isArray(operationalBrief.highPriorityQueue) && operationalBrief.highPriorityQueue.length > 0 && (
+              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">High-Priority Queue</p>
+                <div className="space-y-2">
+                  {operationalBrief.highPriorityQueue.slice(0, 5).map((item: any) => (
+                    <div key={`${item.source}-${item.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {item.patientName} {item.patientNumber ? `(${item.patientNumber})` : ''}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {String(item.source || '').toUpperCase()} • {item.focusLabel || 'Clinical item'} • {String(item.riskLevel || 'low').toUpperCase()} risk
+                      </p>
+                      {Array.isArray(item.cdssFlags) && item.cdssFlags.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {item.cdssFlags.slice(0, 2).map((flag: string, idx: number) => (
+                            <span
+                              key={`${item.source}-${item.id}-flag-${idx}`}
+                              className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+                            >
+                              {flag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {Array.isArray(operationalBrief.recommendations) && operationalBrief.recommendations.length > 0 && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">Recommended Actions</p>
+                <ul className="space-y-1 text-sm text-emerald-900">
+                  {operationalBrief.recommendations.slice(0, 5).map((rec: string, idx: number) => (
+                    <li key={`infection-brief-rec-${idx}`}>- {rec}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Clinical Worklist + Outbreak Signals */}
+      <div className="mb-6 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+            <Shield className="h-5 w-5 text-emerald-700" />
+            Infection Control Clinical Worklist
+          </h2>
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+            Doctor prioritization
+          </span>
+        </div>
+
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-5">
+          <div className="rounded-xl border border-red-200 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">High Risk</p>
+            <p className="mt-1 text-2xl font-bold text-red-700">{infectionWorklist?.summary?.highRisk ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-orange-200 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Moderate Risk</p>
+            <p className="mt-1 text-2xl font-bold text-orange-700">{infectionWorklist?.summary?.moderateRisk ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Unresolved</p>
+            <p className="mt-1 text-2xl font-bold text-amber-700">{infectionWorklist?.summary?.unresolved ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-violet-200 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">No Isolation</p>
+            <p className="mt-1 text-2xl font-bold text-violet-700">{infectionWorklist?.summary?.withoutIsolation ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-cyan-200 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">MDRO Signals</p>
+            <p className="mt-1 text-2xl font-bold text-cyan-700">{infectionWorklist?.summary?.mdroSignals ?? 0}</p>
+          </div>
+        </div>
+
+        {Array.isArray(infectionWorklist?.items) && infectionWorklist.items.length > 0 ? (
+          <div className="space-y-3">
+            {infectionWorklist.items.slice(0, 6).map((item: any) => (
+              <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-bold text-slate-900">
+                        {item.first_name} {item.last_name}
+                      </h3>
+                      {item.patient_number && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {item.patient_number}
+                        </span>
+                      )}
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getWorklistRiskColor(item.risk_level)}`}>
+                        {String(item.risk_level || 'low').toUpperCase()} RISK
+                      </span>
+                      {item.active_isolation_id ? (
+                        <span className="rounded-full border border-green-200 bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800">
+                          Isolation active
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-violet-200 bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                          Isolation missing
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">
+                      {item.infection_type}
+                      {item.infection_site ? ` • ${item.infection_site}` : ''}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Onset: {String(item.onset_type || 'unknown').replace(/_/g, ' ')} ·
+                      Organism: {item.organism || 'Not documented'} ·
+                      Days open: {item.days_since_infection ?? 0}
+                    </p>
+                    {Array.isArray(item.recommended_actions) && item.recommended_actions.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {item.recommended_actions.slice(0, 2).map((action: string, idx: number) => (
+                          <p key={`${item.id}-worklist-action-${idx}`} className="text-xs text-slate-700">
+                            • {action}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 lg:max-w-[40%] lg:justify-end">
+                    {!item.active_isolation_id && (
+                      <button
+                        type="button"
+                        onClick={() => handleOrderIsolation(item)}
+                        disabled={isolationActionId === item.id}
+                        className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                      >
+                        {isolationActionId === item.id ? 'Saving...' : 'Order Isolation'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleReviewInfection(item)}
+                      disabled={reviewingInfectionId === item.id}
+                      className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {reviewingInfectionId === item.id ? 'Saving...' : 'Document Review'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+            No infection-control worklist items in the selected period.
+          </div>
+        )}
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Outbreak Watch</p>
+          {Array.isArray(outbreakSignals?.items) && outbreakSignals.items.length > 0 ? (
+            <div className="space-y-2">
+              {outbreakSignals.items.slice(0, 4).map((signal: any, idx: number) => (
+                <div key={`${signal.infection_type}-${signal.organism}-${idx}`} className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-800">
+                      {signal.infection_type} • {signal.organism}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getWorklistRiskColor(signal.risk_level)}`}>
+                      {String(signal.risk_level || 'low').toUpperCase()} CLUSTER
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Cases: {signal.case_count} · Active: {signal.active_count} · Patients: {signal.distinct_patients}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">No active outbreak clusters detected for this date range.</p>
+          )}
+        </div>
+      </div>
+
       {/* Active Isolations */}
       {isolations.length > 0 && (
         <div className="mb-6">
@@ -246,6 +768,16 @@ const InfectionControlDashboard: React.FC = () => {
                     ))}
                   </div>
                 )}
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => handleDiscontinueIsolation(isolation)}
+                    disabled={isolationActionId === isolation.id}
+                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    {isolationActionId === isolation.id ? 'Saving...' : 'Discontinue Isolation'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -330,6 +862,170 @@ const InfectionControlDashboard: React.FC = () => {
         )}
         </div>
 
+        {/* Antimicrobial Stewardship CDSS Panel */}
+        <div className="mb-6 rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 to-teal-50 p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+              <ClipboardCheck className="h-5 w-5 text-cyan-700" />
+              Antimicrobial Stewardship CDSS
+            </h2>
+            <span className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800">
+              48-72h timeout focus
+            </span>
+          </div>
+
+          <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-red-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Review Pending</p>
+              <p className="mt-1 text-2xl font-bold text-red-700">{stewardshipWorklist?.summary?.reviewPending ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-orange-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Overdue Review</p>
+              <p className="mt-1 text-2xl font-bold text-orange-700">{stewardshipWorklist?.summary?.overdueReview ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">De-escalation</p>
+              <p className="mt-1 text-2xl font-bold text-amber-700">
+                {stewardshipWorklist?.summary?.deEscalationOpportunities ?? antimicrobialReport?.deEscalationOpportunities ?? 0}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Guideline Variance</p>
+              <p className="mt-1 text-2xl font-bold text-slate-800">{antimicrobialReport?.guidelineVarianceCount ?? 0}</p>
+            </div>
+          </div>
+
+          {Array.isArray(stewardshipWorklist?.items) && stewardshipWorklist.items.length > 0 ? (
+            <div className="space-y-3">
+              {stewardshipWorklist.items.slice(0, 6).map((item: any) => (
+                <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-bold text-slate-900">
+                          {item.first_name} {item.last_name}
+                        </h3>
+                        {item.patient_number && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                            {item.patient_number}
+                          </span>
+                        )}
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getStewardshipRiskColor(item.risk_level)}`}>
+                          {String(item.risk_level || 'low').toUpperCase()} RISK
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-800">{item.antibiotic_name}</p>
+                      <p className="text-xs text-slate-600">
+                        Class: {formatStewardshipField(item.antibiotic_class)} · Route: {formatStewardshipField(item.route)} ·
+                        Therapy day: {item.therapy_day || 0}
+                        {item.planned_duration_days ? `/${item.planned_duration_days}` : ''}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-600">
+                        Strategy: {formatStewardshipField(item.empiric_or_targeted)} · Culture sent: {item.culture_sent ? 'Yes' : 'No'}
+                      </p>
+                      {Array.isArray(item.recommended_actions) && item.recommended_actions.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {item.recommended_actions.slice(0, 2).map((action: string, idx: number) => (
+                            <p key={`${item.id}-action-${idx}`} className="text-xs text-slate-700">
+                              • {action}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleReviewStewardship(item)}
+                      disabled={reviewingStewardshipId === item.id}
+                      className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+                    >
+                      {reviewingStewardshipId === item.id ? 'Saving...' : 'Document Review'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+              No stewardship review items in the selected period.
+            </div>
+          )}
+        </div>
+
+        {/* Infection Prevention Guidance AI */}
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-emerald-100 p-2">
+                <Brain className="h-5 w-5 text-emerald-700" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900">Infection Prevention Guidance (AI/CDSS)</h3>
+                <p className="text-sm text-slate-500">Search WHO/CDC-aligned practices for outbreaks, isolation and stewardship.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowGuidelineSearch((prev) => !prev)}
+              className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+            >
+              {showGuidelineSearch ? 'Hide Search' : 'Search Guidance'}
+            </button>
+          </div>
+
+          {showGuidelineSearch && (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={guidelineQuery}
+                    onChange={(e) => setGuidelineQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleGuidelineSearch();
+                    }}
+                    placeholder="Search e.g. 'contact precautions for MRSA', 'CLABSI prevention bundle', 'antibiotic timeout checklist'"
+                    className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-4 focus:border-transparent focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <button
+                  onClick={handleGuidelineSearch}
+                  disabled={loadingGuidelines || !guidelineQuery.trim()}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {loadingGuidelines ? 'Searching...' : 'Search'}
+                </button>
+              </div>
+
+              {guidelineResults.length > 0 && (
+                <div className="grid gap-3">
+                  {guidelineResults.slice(0, 3).map((result, idx) => (
+                    <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <BookOpen className="mt-1 h-5 w-5 shrink-0 text-emerald-700" />
+                        <div>
+                          <h4 className="font-medium text-slate-900">{result.source || `Guideline ${idx + 1}`}</h4>
+                          <p className="mt-1 text-sm leading-relaxed text-slate-600">{result.text}</p>
+                          {result.url && (
+                            <a
+                              href={result.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 inline-block text-xs text-emerald-700 hover:underline"
+                            >
+                              View Source
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Hand Hygiene Compliance Panel (K4) */}
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
@@ -356,9 +1052,23 @@ const InfectionControlDashboard: React.FC = () => {
               </div>
             </div>
           )}
+          {Array.isArray(hhCompliance?.byDepartment) && hhCompliance.byDepartment.length > 0 && (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Department Compliance</p>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                {hhCompliance.byDepartment.slice(0, 6).map((entry: any) => (
+                  <div key={entry.department} className="rounded-lg bg-slate-50 p-2">
+                    <p className="text-xs font-semibold text-slate-700">{entry.department}</p>
+                    <p className="text-sm font-bold text-slate-900">{entry.complianceRate}%</p>
+                    <p className="text-[11px] text-slate-500">{entry.performed}/{entry.total} opportunities</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
             <p className="text-xs font-semibold text-slate-700 mb-2">Record Observation</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
               <input value={hhDepartment} onChange={(e) => setHhDepartment(e.target.value)} placeholder="Department" className="rounded-lg border border-slate-200 px-3 py-2 text-xs" />
               <select value={hhOpportunity} onChange={(e) => setHhOpportunity(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">
                 <option value="before_patient_contact">Before patient contact</option>
@@ -372,6 +1082,14 @@ const InfectionControlDashboard: React.FC = () => {
                 <option value="soap_and_water">Soap and water</option>
                 <option value="none">None</option>
               </select>
+              <select
+                value={hhPerformed ? 'yes' : 'no'}
+                onChange={(e) => setHhPerformed(e.target.value === 'yes')}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
+              >
+                <option value="yes">Performed</option>
+                <option value="no">Missed</option>
+              </select>
               <button
                 onClick={async () => {
                   try {
@@ -381,8 +1099,11 @@ const InfectionControlDashboard: React.FC = () => {
                       handHygienePerformed: hhPerformed,
                       method: hhMethod,
                     }, { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } });
+                    showSuccess('Observation recorded', 'Hand hygiene observation captured.');
                     loadData();
-                  } catch { /* ignore */ }
+                  } catch {
+                    showError('Error', 'Failed to record hand hygiene observation');
+                  }
                 }}
                 className="bg-teal-600 text-white text-xs font-semibold rounded-lg px-3 py-2 hover:bg-teal-700"
               >
@@ -426,8 +1147,219 @@ const InfectionControlDashboard: React.FC = () => {
 
       </div>
     </div>
+
+    {/* ── Stewardship Review Modal ── */}
+    {stewardshipModal && (
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold text-slate-800">Antimicrobial Stewardship Review</h2>
+              <button onClick={() => setStewardshipModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Recommendation</label>
+                <input
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={stewardshipModal.recommendation}
+                  onChange={(e) => setStewardshipModal((p) => p ? { ...p, recommendation: e.target.value } : p)}
+                  placeholder="de-escalate, continue, stop, etc."
+                />
+              </div>
+              {(
+                [
+                  { key: 'appropriateIndication', label: 'Indication appropriate?' },
+                  { key: 'appropriateDose', label: 'Dose appropriate?' },
+                  { key: 'appropriateDuration', label: 'Duration appropriate?' },
+                  { key: 'deEscalationOpportunity', label: 'De-escalation opportunity?' },
+                ] as const
+              ).map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-sm text-slate-700">{label}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setStewardshipModal((p) => p ? { ...p, [key]: true } : p)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${stewardshipModal[key] ? 'bg-green-100 border-green-400 text-green-700' : 'bg-white border-slate-300 text-slate-500'}`}
+                    >Yes</button>
+                    <button
+                      onClick={() => setStewardshipModal((p) => p ? { ...p, [key]: false } : p)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!stewardshipModal[key] ? 'bg-red-100 border-red-400 text-red-700' : 'bg-white border-slate-300 text-slate-500'}`}
+                    >No</button>
+                  </div>
+                </div>
+              ))}
+              {stewardshipModal.deEscalationOpportunity && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">De-escalation Notes</label>
+                  <textarea
+                    rows={3}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={stewardshipModal.deEscalationNotes}
+                    onChange={(e) => setStewardshipModal((p) => p ? { ...p, deEscalationNotes: e.target.value } : p)}
+                    placeholder="Document de-escalation plan..."
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end p-4 border-t">
+              <button onClick={() => setStewardshipModal(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={submitStewardshipReview}
+                disabled={!!reviewingStewardshipId}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {reviewingStewardshipId ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Save Review
+              </button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    )}
+
+    {/* ── Infection Review Modal ── */}
+    {infectionModal && (
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold text-slate-800">IPC Infection Review</h2>
+              <button onClick={() => setInfectionModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Investigation Notes <span className="text-red-500">*</span></label>
+                <textarea
+                  rows={4}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={infectionModal.investigationNotes}
+                  onChange={(e) => setInfectionModal((p) => p ? { ...p, investigationNotes: e.target.value } : p)}
+                  placeholder="IPC findings, containment actions, follow-up plan..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Root Cause (optional)</label>
+                <input
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={infectionModal.rootCause}
+                  onChange={(e) => setInfectionModal((p) => p ? { ...p, rootCause: e.target.value } : p)}
+                  placeholder="Root cause analysis..."
+                />
+              </div>
+              {(
+                [
+                  { key: 'reportedToCdc', label: 'Report to public health / CDC?' },
+                  { key: 'markResolved', label: 'Mark infection case as resolved?' },
+                ] as const
+              ).map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="text-sm text-slate-700">{label}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setInfectionModal((p) => p ? { ...p, [key]: true } : p)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${infectionModal[key] ? 'bg-green-100 border-green-400 text-green-700' : 'bg-white border-slate-300 text-slate-500'}`}
+                    >Yes</button>
+                    <button
+                      onClick={() => setInfectionModal((p) => p ? { ...p, [key]: false } : p)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!infectionModal[key] ? 'bg-red-100 border-red-400 text-red-700' : 'bg-white border-slate-300 text-slate-500'}`}
+                    >No</button>
+                  </div>
+                </div>
+              ))}
+              {infectionModal.markResolved && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Outcome Summary (optional)</label>
+                  <textarea
+                    rows={2}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={infectionModal.outcome}
+                    onChange={(e) => setInfectionModal((p) => p ? { ...p, outcome: e.target.value } : p)}
+                    placeholder="Resolved outcome notes..."
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end p-4 border-t">
+              <button onClick={() => setInfectionModal(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={submitInfectionReview}
+                disabled={!!reviewingInfectionId}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {reviewingInfectionId ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Save Review
+              </button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    )}
+
+    {/* ── Isolation Order Modal ── */}
+    {isolationOrderModal && (
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold text-slate-800">Order Isolation Precautions</h2>
+              <button onClick={() => setIsolationOrderModal(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Isolation Type</label>
+                <select
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={isolationOrderModal.isolationType}
+                  onChange={(e) => setIsolationOrderModal((p) => p ? { ...p, isolationType: e.target.value } : p)}
+                >
+                  <option value="contact">Contact</option>
+                  <option value="droplet">Droplet</option>
+                  <option value="airborne">Airborne</option>
+                  <option value="protective">Protective (Reverse)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Reason <span className="text-red-500">*</span></label>
+                <textarea
+                  rows={3}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={isolationOrderModal.reason}
+                  onChange={(e) => setIsolationOrderModal((p) => p ? { ...p, reason: e.target.value } : p)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end p-4 border-t">
+              <button onClick={() => setIsolationOrderModal(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={submitIsolationOrder}
+                disabled={!!isolationActionId}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {isolationActionId ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Order Isolation
+              </button>
+            </div>
+          </div>
+        </div>
+      </ModalPortal>
+    )}
+
+    {/* ── Discontinue Isolation Prompt ── */}
+    <PromptDialog
+      isOpen={!!discontinuePrompt}
+      onCancel={() => setDiscontinuePrompt(null)}
+      onConfirm={submitDiscontinueIsolation}
+      title="Discontinue Isolation Precautions"
+      message="Provide a reason for discontinuing isolation. This will be recorded in the patient's IPC record."
+      value={discontinuePrompt?.value || ''}
+      onChange={(v) => setDiscontinuePrompt((p) => p ? { ...p, value: v } : p)}
+      placeholder="Clinical criteria met, discontinue isolation precautions."
+      type="warning"
+      confirmText="Discontinue"
+    />
+    </>
   );
 };
 
 export default InfectionControlDashboard;
-

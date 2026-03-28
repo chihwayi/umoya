@@ -1,7 +1,9 @@
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL || '';
+import { runtimeUrls } from '../config/runtime';
 
-if (!process.env.REACT_APP_EHR_API_URL) {
-  console.warn('REACT_APP_EHR_API_URL is missing in environment variables. Patient Portal may not function correctly.');
+const API_BASE_URL = runtimeUrls.ehrApi;
+
+if (!API_BASE_URL) {
+  console.warn('Patient Portal API URL is missing. Configure REACT_APP_API_BASE_URL or REACT_APP_EHR_API_URL.');
 }
 
 const _genRid = (): string => {
@@ -105,6 +107,7 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     params.append('doctorId', doctorId);
     params.append('date', date);
+    params.append('includeStates', 'true');
 
     const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/available-slots?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     _ensureOk(response, 'Failed to fetch available time slots');
@@ -344,6 +347,21 @@ export const patientPortalApi = {
     return response.json();
   },
 
+  getBillQuote: async (id: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/bills/${id}/quote`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    if (!response.ok) {
+      let msg = 'Failed to fetch bill quote';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
+    }
+    return response.json();
+  },
+
   // Vitals
   getVitals: async (token: string, tenantSlug: string, filters?: { startDate?: string; endDate?: string; limit?: number }) => {
     const params = new URLSearchParams();
@@ -476,6 +494,84 @@ export const patientPortalApi = {
   getDashboardSummary: async (token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/dashboard/summary`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     _ensureOk(response, 'Failed to fetch dashboard summary');
+    return response.json();
+  },
+
+  getAiFollowups: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/patient-ai/followups`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch AI follow-ups');
+    return response.json();
+  },
+
+  updateAiFollowup: async (
+    followupId: string,
+    data: { status?: 'open' | 'in_progress' | 'completed' | 'dismissed'; reminderState?: 'pending' | 'sent' | 'acknowledged' },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/patient-ai/followups/${followupId}`, {
+      method: 'PUT',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: JSON.stringify(data),
+    });
+    _ensureOk(response, 'Failed to update AI follow-up');
+    return response.json();
+  },
+
+  listPostVisitSessions: async (token: string, tenantSlug: string, filters?: { limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    if (filters?.offset) params.append('offset', String(filters.offset));
+    const response = await fetch(`${API_BASE_URL}/patient-portal/post-visit/sessions?${params.toString()}`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch post-visit sessions');
+    return response.json();
+  },
+
+  getPostVisitSummary: async (sessionId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/post-visit/sessions/${sessionId}/summary`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch post-visit summary');
+    return response.json();
+  },
+
+  getPostVisitMessages: async (sessionId: string, token: string, tenantSlug: string, filters?: { limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    if (filters?.offset) params.append('offset', String(filters.offset));
+    const response = await fetch(`${API_BASE_URL}/patient-portal/post-visit/sessions/${sessionId}/messages?${params.toString()}`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch post-visit companion messages');
+    return response.json();
+  },
+
+  sendPostVisitMessage: async (sessionId: string, data: { message: string; language?: string; messageType?: string }, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/post-visit/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: JSON.stringify(data),
+    });
+    _ensureOk(response, 'Failed to send post-visit companion message');
+    return response.json();
+  },
+
+  acknowledgePostVisit: async (
+    sessionId: string,
+    data: { acknowledgementType: 'teach_back' | 'medication_adherence' | 'follow_up_commitment' | 'warning_sign_understanding'; acknowledged?: boolean; details?: Record<string, any> },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/post-visit/sessions/${sessionId}/acknowledgements`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: JSON.stringify(data),
+    });
+    _ensureOk(response, 'Failed to record post-visit acknowledgement');
     return response.json();
   },
 
@@ -849,6 +945,17 @@ export const patientPortalApi = {
   getEDVisitDetails: async (visitId: string, token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/ed-visits/${visitId}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     _ensureOk(response, 'Failed to fetch ED visit details');
+    return response.json();
+  },
+
+  getHealthSummary: async (token: string, tenantSlug: string): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/health-summary`, {
+      headers: _withRid({
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-ID': tenantSlug,
+      }),
+    });
+    if (!response.ok) return null;
     return response.json();
   },
 };

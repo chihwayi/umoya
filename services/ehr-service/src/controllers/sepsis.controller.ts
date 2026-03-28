@@ -33,6 +33,12 @@ export class SepsisController {
     return this.sepsisService.updateBundleElement(id, data.element, data.value, tenantDb);
   }
 
+  @Put('bundles/:id/notes')
+  async updateBundleNotes(@Param('id') id: string, @Body() data: any, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.sepsisService.updateBundleNotes(id, data.notes || '', tenantDb);
+  }
+
   @Get('alerts')
   async getSepsisAlerts(@Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -46,8 +52,60 @@ export class SepsisController {
     const end = endDate ? new Date(endDate) : new Date();
     return this.sepsisService.getBundleCompliance(start, end, tenantDb);
   }
+
+  @Get('bundles/worklist')
+  async getBundleWorklist(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('includeCompleted') includeCompleted: string,
+    @Query('focus') focus: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    const parsedLimit = Number(limit);
+    const includeDone = String(includeCompleted || '').toLowerCase() === 'true';
+
+    return this.sepsisService.getBundleWorklist(tenantDb, {
+      startDate: start,
+      endDate: end,
+      includeCompleted: includeDone,
+      focus,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
+  /**
+   * POST /sepsis/risk-score
+   * Calculate qSOFA, SIRS, NEWS2 and composite sepsis probability from raw vitals.
+   * Does NOT persist — use for real-time monitoring and nurse copilot.
+   */
+  @Post('risk-score')
+  calculateRiskScore(@Body() vitals: any) {
+    return this.sepsisService.calculateRiskFromVitals(vitals);
+  }
+
+  @Get('operational-brief')
+  async getOperationalBrief(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('includeCompleted') includeCompleted: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    const parsedLimit = Number(limit);
+    const includeDone = String(includeCompleted || '').toLowerCase() === 'true';
+
+    return this.sepsisService.getOperationalBrief(tenantDb, {
+      startDate: start,
+      endDate: end,
+      includeCompleted: includeDone,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
 }
-
-
-
-

@@ -440,4 +440,138 @@ describe('EarlyWarningService', () => {
       expect(result.alertTriggered).toBe(false);
     });
   });
+
+  describe('recordNews2Score - baseline-aware escalation workflow', () => {
+    it('records baseline comparisons and creates a linked escalation task', async () => {
+      const nurseTaskService = {
+        createTask: jest.fn().mockResolvedValue({ id: 'nurse-task-1' }),
+        updateTask: jest.fn(),
+      };
+      const workflowService = new EarlyWarningService(nurseTaskService as any);
+
+      let scoreRow: any = null;
+      const baselineRepo = {
+        find: jest.fn().mockResolvedValue([
+          {
+            patientId: 'pat-1',
+            metricName: 'heartRate',
+            baselineValue: 72,
+            lowerBound: 62,
+            upperBound: 82,
+            sampleCount: 6,
+          },
+        ]),
+      };
+      const scoreRepo = {
+        create: jest.fn().mockImplementation((payload) => payload),
+        save: jest.fn().mockImplementation(async (payload) => {
+          scoreRow = { id: 'ews-1', ...payload };
+          return scoreRow;
+        }),
+        findOne: jest.fn(),
+      };
+      const escalationRows: any[] = [];
+      const escalationRepo = {
+        create: jest.fn().mockImplementation((payload) => payload),
+        save: jest.fn().mockImplementation(async (payload) => {
+          if (!payload.id) {
+            const row = { id: `esc-${escalationRows.length + 1}`, ...payload };
+            escalationRows.push(row);
+            return row;
+          }
+          const index = escalationRows.findIndex((row) => row.id === payload.id);
+          if (index >= 0) escalationRows[index] = { ...escalationRows[index], ...payload };
+          return payload;
+        }),
+        find: jest.fn().mockResolvedValue([]),
+      };
+      const tenantDb = {
+        getRepository: jest.fn().mockImplementation((entity) => {
+          if (entity.name === 'PatientVitalBaseline') return baselineRepo;
+          if (entity.name === 'PatientEarlyWarningScore') return scoreRepo;
+          if (entity.name === 'ClinicalEscalationTask') return escalationRepo;
+          return null;
+        }),
+      };
+
+      const result = await workflowService.recordNews2Score(tenantDb as any, {
+        patientId: 'pat-1',
+        heartRate: 128,
+        respiratoryRate: 24,
+        spo2: 93,
+        temperature: 38.4,
+        systolicBp: 102,
+        consciousness: 'alert',
+      });
+
+      expect(result.alertTriggered).toBe(true);
+      expect(result.escalationTaskId).toBe('esc-1');
+      expect(result.componentScores.baselineComparisons).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            metric: 'heartRate',
+            baselineValue: 72,
+            currentValue: 128,
+            outsideExpectedRange: true,
+          }),
+        ]),
+      );
+      expect(result.explanationSummary).toContain('heartRate');
+      expect(nurseTaskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          patientId: 'pat-1',
+          taskType: 'deterioration_review',
+          sourceType: 'clinical_escalation',
+          sourceId: 'esc-1',
+        }),
+        tenantDb,
+      );
+    });
+
+    it('acknowledges linked escalation tasks and moves nurse task to in_progress', async () => {
+      const nurseTaskService = {
+        createTask: jest.fn(),
+        updateTask: jest.fn().mockResolvedValue({}),
+      };
+      const workflowService = new EarlyWarningService(nurseTaskService as any);
+
+      const savedScore = {
+        id: 'ews-ack-1',
+        patientId: 'pat-1',
+        alertAcknowledgedAt: null,
+        alertAcknowledgedBy: null,
+      };
+      const scoreRepo = {
+        findOne: jest.fn().mockResolvedValue(savedScore),
+        save: jest.fn().mockImplementation(async (payload) => payload),
+      };
+      const escalationRows = [
+        {
+          id: 'esc-1',
+          earlyWarningScoreId: 'ews-ack-1',
+          nurseTaskId: 'nurse-task-1',
+          status: 'open',
+          acknowledgedAt: null,
+          acknowledgedBy: null,
+        },
+      ];
+      const escalationRepo = {
+        find: jest.fn().mockResolvedValue(escalationRows),
+        save: jest.fn().mockImplementation(async (payload) => payload),
+      };
+      const tenantDb = {
+        getRepository: jest.fn().mockImplementation((entity) => {
+          if (entity.name === 'PatientEarlyWarningScore') return scoreRepo;
+          if (entity.name === 'ClinicalEscalationTask') return escalationRepo;
+          return null;
+        }),
+      };
+
+      const result = await workflowService.acknowledgeAlert(tenantDb as any, 'ews-ack-1', 'user-1');
+
+      expect(result.alertAcknowledgedBy).toBe('user-1');
+      expect(escalationRows[0].status).toBe('acknowledged');
+      expect(nurseTaskService.updateTask).toHaveBeenCalledWith('nurse-task-1', { status: 'in_progress' }, tenantDb);
+    });
+  });
 });

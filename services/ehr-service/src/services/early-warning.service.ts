@@ -1,6 +1,10 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PatientEarlyWarningScore } from '../entities/patient-early-warning-score.entity';
+import { PatientVitalBaseline } from '../entities/patient-vital-baseline.entity';
+import { ClinicalEscalationTask } from '../entities/clinical-escalation-task.entity';
+import { NurseTask } from '../entities/nurse-task.entity';
+import { NurseTaskService } from './nurse-task.service';
 
 export interface News2Input {
   patientId: string;
@@ -22,8 +26,29 @@ interface ComponentScore {
   rationale: string;
 }
 
+interface BaselineComparison {
+  metric: string;
+  currentValue: number;
+  baselineValue: number;
+  lowerBound: number | null;
+  upperBound: number | null;
+  delta: number;
+  percentDelta: number | null;
+  outsideExpectedRange: boolean;
+}
+
 @Injectable()
 export class EarlyWarningService {
+  constructor(@Optional() private readonly nurseTaskService?: NurseTaskService) {}
+
+  private readonly baselineMetricMap: Array<{ metric: string; payloadKey: keyof News2Input }> = [
+    { metric: 'respiratoryRate', payloadKey: 'respiratoryRate' },
+    { metric: 'spo2', payloadKey: 'spo2' },
+    { metric: 'temperature', payloadKey: 'temperature' },
+    { metric: 'systolicBp', payloadKey: 'systolicBp' },
+    { metric: 'heartRate', payloadKey: 'heartRate' },
+  ];
+
   private scoreRespiratoryRate(rr: number | null | undefined): ComponentScore {
     if (rr == null || Number.isNaN(rr)) {
       return { parameter: 'respiratoryRate', value: null, score: 0, rationale: 'missing' };
@@ -163,9 +188,190 @@ export class EarlyWarningService {
     };
   }
 
+  private async getBaselineComparisons(tenantDb: DataSource, payload: News2Input): Promise<BaselineComparison[]> {
+    const currentMetrics = this.baselineMetricMap
+      .map(({ metric, payloadKey }) => ({
+        metric,
+        currentValue: payload[payloadKey],
+      }))
+      .filter((item): item is { metric: string; currentValue: number } => item.currentValue != null && !Number.isNaN(Number(item.currentValue)))
+      .map((item) => ({ ...item, currentValue: Number(item.currentValue) }));
+
+    if (currentMetrics.length === 0) {
+      return [];
+    }
+
+    const baselineRows = await tenantDb.getRepository(PatientVitalBaseline).find({
+      where: { patientId: payload.patientId },
+    });
+
+    return currentMetrics
+      .map((item) => {
+        const baseline = baselineRows.find((row) => row.metricName === item.metric);
+        if (!baseline || baseline.sampleCount < 3 || baseline.baselineValue == null) {
+          return null;
+        }
+
+        const baselineValue = Number(baseline.baselineValue);
+        const lowerBound = baseline.lowerBound == null ? null : Number(baseline.lowerBound);
+        const upperBound = baseline.upperBound == null ? null : Number(baseline.upperBound);
+        const delta = Number((item.currentValue - baselineValue).toFixed(2));
+        const percentDelta = baselineValue === 0 ? null : Number((((item.currentValue - baselineValue) / baselineValue) * 100).toFixed(2));
+        const outsideExpectedRange =
+          (lowerBound != null && item.currentValue < lowerBound) ||
+          (upperBound != null && item.currentValue > upperBound);
+
+        return {
+          metric: item.metric,
+          currentValue: item.currentValue,
+          baselineValue,
+          lowerBound,
+          upperBound,
+          delta,
+          percentDelta,
+          outsideExpectedRange,
+        };
+      })
+      .filter((item): item is BaselineComparison => Boolean(item));
+  }
+
+  private buildExplanation(
+    calc: ReturnType<EarlyWarningService['calculateNews2']>,
+    comparisons: BaselineComparison[],
+  ) {
+    const elevatedComponents = calc.components.filter((component) => component.score > 0);
+    const significantBaselineChanges = comparisons.filter((comparison) => comparison.outsideExpectedRange);
+
+    const drivers = [
+      ...elevatedComponents.map((component) => `${component.parameter} scored ${component.score}`),
+      ...significantBaselineChanges.map((comparison) => {
+        const direction = comparison.delta >= 0 ? 'above' : 'below';
+        return `${comparison.metric} ${Math.abs(comparison.delta).toFixed(1)} ${direction} baseline`;
+      }),
+    ];
+
+    const recommendedActions: string[] = [];
+    if (calc.riskLevel === 'high') {
+      recommendedActions.push('Immediate nurse and clinician review');
+      recommendedActions.push('Repeat full vitals within 15 minutes');
+    } else if (calc.riskLevel === 'medium') {
+      recommendedActions.push('Urgent nurse review');
+      recommendedActions.push('Repeat focused vitals within 30 minutes');
+    } else if (calc.alertTriggered) {
+      recommendedActions.push('Review abnormal component and reassess patient');
+    }
+
+    if (significantBaselineChanges.length > 0) {
+      recommendedActions.push('Compare against patient baseline trend before closing alert');
+    }
+
+    const summary =
+      drivers.length > 0
+        ? `NEWS2 ${calc.totalScore} (${calc.riskLevel}) driven by ${drivers.join(', ')}.`
+        : `NEWS2 ${calc.totalScore} (${calc.riskLevel}) with no major abnormal drivers beyond available vitals.`;
+
+    return {
+      summary,
+      drivers,
+      recommendedActions,
+      significantBaselineChanges,
+    };
+  }
+
+  private deriveEscalationSeverity(riskLevel: 'low' | 'low_medium' | 'medium' | 'high'): string {
+    switch (riskLevel) {
+      case 'high':
+        return 'critical';
+      case 'medium':
+        return 'high';
+      case 'low_medium':
+        return 'medium';
+      default:
+        return 'low';
+    }
+  }
+
+  private deriveEscalationDueAt(riskLevel: 'low' | 'low_medium' | 'medium' | 'high'): Date {
+    const dueAt = new Date();
+    const minutes =
+      riskLevel === 'high' ? 15 :
+      riskLevel === 'medium' ? 30 :
+      riskLevel === 'low_medium' ? 120 :
+      240;
+    dueAt.setMinutes(dueAt.getMinutes() + minutes);
+    return dueAt;
+  }
+
+  private async createEscalationTask(
+    tenantDb: DataSource,
+    savedScore: PatientEarlyWarningScore,
+    explanation: ReturnType<EarlyWarningService['buildExplanation']>,
+  ): Promise<string | null> {
+    if (!savedScore.alertTriggered) {
+      return null;
+    }
+
+    const escalationRepo = tenantDb.getRepository(ClinicalEscalationTask);
+    const severity = this.deriveEscalationSeverity(savedScore.riskLevel || 'medium');
+    const escalationTask = escalationRepo.create({
+      patientId: savedScore.patientId,
+      earlyWarningScoreId: savedScore.id,
+      nurseTaskId: null,
+      sourceModule: 'early_warning',
+      sourceReferenceId: savedScore.vitalsId,
+      escalationType: 'deterioration_review',
+      severity,
+      status: 'open',
+      title: `NEWS2 escalation for patient ${savedScore.patientId}`,
+      summary: explanation.summary,
+      recommendedAction: explanation.recommendedActions.join('. ') || null,
+      assignedTo: null,
+      dueAt: this.deriveEscalationDueAt(savedScore.riskLevel || 'medium'),
+      acknowledgedBy: null,
+      acknowledgedAt: null,
+      completedBy: null,
+      completedAt: null,
+      evidence: {
+        totalScore: savedScore.totalScore,
+        riskLevel: savedScore.riskLevel,
+        components: savedScore.componentScores?.components || [],
+      },
+      metadata: {
+        explanationDrivers: explanation.drivers,
+        baselineComparisons: savedScore.componentScores?.baselineComparisons || [],
+      },
+    });
+
+    const savedEscalationTask = await escalationRepo.save(escalationTask);
+
+    if (this.nurseTaskService) {
+      const nurseTask = await this.nurseTaskService.createTask(
+        {
+          patientId: savedScore.patientId,
+          assignedBySystem: true,
+          taskType: 'deterioration_review',
+          priority: severity === 'critical' ? 'urgent' : 'high',
+          title: 'Review patient deterioration alert',
+          description: explanation.summary,
+          dueDate: savedEscalationTask.dueAt ? savedEscalationTask.dueAt.toISOString() : undefined,
+          sourceType: 'clinical_escalation',
+          sourceId: savedEscalationTask.id,
+        },
+        tenantDb,
+      );
+
+      savedEscalationTask.nurseTaskId = nurseTask.id;
+      await escalationRepo.save(savedEscalationTask);
+    }
+
+    return savedEscalationTask.id;
+  }
+
   async recordNews2Score(tenantDb: DataSource, payload: News2Input) {
     if (!payload.patientId) throw new BadRequestException('patientId is required');
     const calc = this.calculateNews2(payload);
+    const baselineComparisons = await this.getBaselineComparisons(tenantDb, payload);
+    const explanation = this.buildExplanation(calc, baselineComparisons);
 
     const repo = tenantDb.getRepository(PatientEarlyWarningScore);
     const row = repo.create({
@@ -177,6 +383,10 @@ export class EarlyWarningService {
       componentScores: {
         components: calc.components,
         input: payload,
+        baselineComparisons,
+        explanationSummary: explanation.summary,
+        explanationDrivers: explanation.drivers,
+        recommendedActions: explanation.recommendedActions,
       },
       vitalsId: payload.vitalsId ?? null,
       calculatedAt: new Date(),
@@ -186,7 +396,13 @@ export class EarlyWarningService {
     });
 
     const saved = await repo.save(row);
-    return saved;
+    const escalationTaskId = await this.createEscalationTask(tenantDb, saved, explanation);
+    return {
+      ...saved,
+      escalationTaskId,
+      explanationSummary: explanation.summary,
+      recommendedActions: explanation.recommendedActions,
+    };
   }
 
   async listScoresForPatient(tenantDb: DataSource, patientId: string, limit = 50) {
@@ -217,7 +433,31 @@ export class EarlyWarningService {
     if (!row) throw new BadRequestException('Score not found');
     row.alertAcknowledgedAt = new Date();
     row.alertAcknowledgedBy = userId ?? null;
-    return await repo.save(row);
+    const saved = await repo.save(row);
+
+    const escalationRepo = tenantDb.getRepository(ClinicalEscalationTask);
+    const linkedTasks = await escalationRepo.find({
+      where: { earlyWarningScoreId: row.id },
+    });
+
+    for (const task of linkedTasks) {
+      task.status = 'acknowledged';
+      task.acknowledgedAt = row.alertAcknowledgedAt;
+      task.acknowledgedBy = userId ?? null;
+      await escalationRepo.save(task);
+
+      if (task.nurseTaskId && this.nurseTaskService) {
+        await this.nurseTaskService.updateTask(task.nurseTaskId, { status: 'in_progress' }, tenantDb);
+      } else if (task.nurseTaskId) {
+        const nurseTaskRepo = tenantDb.getRepository(NurseTask);
+        const nurseTask = await nurseTaskRepo.findOne({ where: { id: task.nurseTaskId } });
+        if (nurseTask) {
+          nurseTask.status = 'in_progress';
+          await nurseTaskRepo.save(nurseTask);
+        }
+      }
+    }
+
+    return saved;
   }
 }
-

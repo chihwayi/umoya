@@ -13,6 +13,13 @@ interface Doctor {
   specialization?: string;
 }
 
+interface SlotState {
+  iso: string;
+  time: string;
+  status: 'available' | 'booked' | 'unavailable' | 'past';
+  reason?: string | null;
+}
+
 const RequestAppointmentPage: React.FC = () => {
   const { token, patient } = usePatientAuth();
   const navigate = useNavigate();
@@ -20,6 +27,7 @@ const RequestAppointmentPage: React.FC = () => {
   
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [slotStates, setSlotStates] = useState<SlotState[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingDoctors, setLoadingDoctors] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -64,6 +72,7 @@ const RequestAppointmentPage: React.FC = () => {
       loadAvailableSlots();
     } else {
       setAvailableSlots([]);
+      setSlotStates([]);
     }
   }, [formData.doctorId, formData.appointmentDate]);
 
@@ -158,10 +167,32 @@ const RequestAppointmentPage: React.FC = () => {
         token!,
         tenantSlug,
       );
-      setAvailableSlots(Array.isArray(data) ? data : []);
+      if (Array.isArray(data)) {
+        setAvailableSlots(data);
+        setSlotStates(
+          data.map((slot) => {
+            const slotDate = new Date(slot);
+            return {
+              iso: slot,
+              time: `${slotDate.getHours().toString().padStart(2, '0')}:${slotDate.getMinutes().toString().padStart(2, '0')}`,
+              status: 'available',
+              reason: null,
+            } as SlotState;
+          }),
+        );
+      } else {
+        const normalizedSlots = Array.isArray(data?.slots) ? data.slots : [];
+        setSlotStates(normalizedSlots);
+        setAvailableSlots(
+          Array.isArray(data?.availableSlots)
+            ? data.availableSlots
+            : normalizedSlots.filter((slot: SlotState) => slot.status === 'available').map((slot: SlotState) => slot.iso),
+        );
+      }
     } catch (err: any) {
       console.error('Failed to load available slots:', err);
       setAvailableSlots([]);
+      setSlotStates([]);
     } finally {
       setLoadingSlots(false);
     }
@@ -494,33 +525,60 @@ const RequestAppointmentPage: React.FC = () => {
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
                 </div>
-              ) : availableSlots.length === 0 ? (
+              ) : slotStates.length === 0 && availableSlots.length === 0 ? (
                 <p className="text-gray-600 text-center py-4">No available time slots for this date</p>
               ) : (
+                <>
+                <div className="mb-3 flex flex-wrap gap-2 text-xs font-semibold">
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">Available</span>
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">Booked</span>
+                  <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-slate-700">Unavailable</span>
+                  <span className="rounded-full border border-slate-300 bg-slate-200 px-2 py-1 text-slate-700">Past</span>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {availableSlots.map((slot) => {
-                    const slotDate = new Date(slot);
-                    const hours = slotDate.getHours().toString().padStart(2, '0');
-                    const minutes = slotDate.getMinutes().toString().padStart(2, '0');
-                    const timeString = `${hours}:${minutes}`;
+                  {(slotStates.length > 0
+                    ? slotStates
+                    : availableSlots.map((slot) => {
+                        const slotDate = new Date(slot);
+                        return {
+                          iso: slot,
+                          time: `${slotDate.getHours().toString().padStart(2, '0')}:${slotDate.getMinutes().toString().padStart(2, '0')}`,
+                          status: 'available',
+                          reason: null,
+                        } as SlotState;
+                      })).map((slot) => {
+                    const slotDate = new Date(slot.iso);
+                    const timeString = slot.time;
                     const isSelected = formData.appointmentTime === timeString;
+                    const isDisabled = slot.status !== 'available';
+                    const statusClass =
+                      slot.status === 'available'
+                        ? isSelected
+                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg ring-2 ring-purple-300'
+                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                        : slot.status === 'booked'
+                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                        : slot.status === 'unavailable'
+                        ? 'bg-slate-100 text-slate-600 border border-slate-300'
+                        : 'bg-slate-200 text-slate-500 border border-slate-300';
                     return (
                       <button
-                        key={slot}
+                        key={slot.iso}
                         type="button"
-                        onClick={() => handleTimeSlotSelect(slot)}
-                        disabled={false}
-                        className={`px-4 py-3 rounded-xl font-semibold transition-all transform hover:scale-105 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                          isSelected
-                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg ring-2 ring-purple-300'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95'
-                        }`}
+                        onClick={() => handleTimeSlotSelect(slot.iso)}
+                        disabled={isDisabled}
+                        className={`px-4 py-3 rounded-xl font-semibold transition-all text-left ${
+                          isDisabled ? 'cursor-not-allowed opacity-80' : 'transform hover:scale-105 cursor-pointer active:scale-95'
+                        } ${statusClass}`}
                       >
-                        {format(slotDate, 'h:mm a')}
+                        <div className="text-sm font-bold">{format(slotDate, 'h:mm a')}</div>
+                        <div className="mt-1 text-[11px] uppercase tracking-wide opacity-80">{slot.status}</div>
+                        {slot.reason && <div className="mt-1 text-[11px] opacity-80">{slot.reason}</div>}
                       </button>
                     );
                   })}
                 </div>
+                </>
               )}
             </div>
           )}
@@ -725,4 +783,3 @@ const RequestAppointmentPage: React.FC = () => {
 };
 
 export default RequestAppointmentPage;
-

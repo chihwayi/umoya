@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsDateString, IsEnum, MinLength, IsPhoneNumber } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsDateString, IsEnum, MinLength, IsBoolean, IsInt, IsNumber, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum Gender {
@@ -94,6 +94,34 @@ export class CreatePatientDto {
   @IsOptional()
   @IsString()
   medicalHistory?: string;
+
+  // ── Extended demographics (Sprint 60) ─────────────────────────────────────
+  @IsOptional() @IsString() ethnicity?: string;
+  @IsOptional() @IsString() race?: string;
+  @ApiProperty({ example: 'en', required: false })
+  @IsOptional() @IsString() preferredLanguage?: string;
+  @IsOptional() @IsString() nationality?: string;
+  @IsOptional() @IsString() countryOfBirth?: string;
+  @IsOptional() @IsString() religion?: string;
+  @IsOptional() @IsBoolean() interpreterRequired?: boolean;
+  @IsOptional() @IsString() maritalStatus?: string;
+  @IsOptional() @IsString() occupation?: string;
+  @IsOptional() @IsString() employmentStatus?: string;
+  @IsOptional() @IsString() educationLevel?: string;
+  @IsOptional() @IsBoolean() disabilityStatus?: boolean;
+  @IsOptional() @IsString() disabilityType?: string;
+  /** never | former | current */
+  @IsOptional() @IsString() smokingStatus?: string;
+  @IsOptional() @IsNumber() packYears?: number;
+  /** none | occasional | moderate | heavy */
+  @IsOptional() @IsString() alcoholUse?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(12) auditCScore?: number;
+  @IsOptional() @IsBoolean() substanceUse?: boolean;
+  @IsOptional() @IsString() substanceUseDetails?: string;
+  /** not_pregnant | pregnant | postpartum | unknown */
+  @IsOptional() @IsString() pregnancyStatus?: string;
+  @IsOptional() @IsInt() gestationalAgeWeeks?: number;
+  @IsOptional() @IsBoolean() advanceDirectiveOnFile?: boolean;
 }
 
 export class UpdatePatientDto {
@@ -166,6 +194,30 @@ export class UpdatePatientDto {
   @IsOptional()
   @IsString()
   medicalHistory?: string;
+
+  // ── Extended demographics (Sprint 60) ─────────────────────────────────────
+  @IsOptional() @IsString() ethnicity?: string;
+  @IsOptional() @IsString() race?: string;
+  @IsOptional() @IsString() preferredLanguage?: string;
+  @IsOptional() @IsString() nationality?: string;
+  @IsOptional() @IsString() countryOfBirth?: string;
+  @IsOptional() @IsString() religion?: string;
+  @IsOptional() @IsBoolean() interpreterRequired?: boolean;
+  @IsOptional() @IsString() maritalStatus?: string;
+  @IsOptional() @IsString() occupation?: string;
+  @IsOptional() @IsString() employmentStatus?: string;
+  @IsOptional() @IsString() educationLevel?: string;
+  @IsOptional() @IsBoolean() disabilityStatus?: boolean;
+  @IsOptional() @IsString() disabilityType?: string;
+  @IsOptional() @IsString() smokingStatus?: string;
+  @IsOptional() @IsNumber() packYears?: number;
+  @IsOptional() @IsString() alcoholUse?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(12) auditCScore?: number;
+  @IsOptional() @IsBoolean() substanceUse?: boolean;
+  @IsOptional() @IsString() substanceUseDetails?: string;
+  @IsOptional() @IsString() pregnancyStatus?: string;
+  @IsOptional() @IsInt() gestationalAgeWeeks?: number;
+  @IsOptional() @IsBoolean() advanceDirectiveOnFile?: boolean;
 }
 
 export class PatientQueryDto {

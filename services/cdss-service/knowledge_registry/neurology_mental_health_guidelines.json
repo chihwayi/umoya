@@ -1,0 +1,94 @@
+[
+  {
+    "knowledge_id": "stroke-triage-2026-01",
+    "condition": "stroke_triage",
+    "aliases": ["stroke triage", "acute stroke assessment"],
+    "title": "Acute Stroke Triage Guidance",
+    "source_name": "ESO/AHA Acute Stroke Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-10",
+    "reviewed_at": "2026-03-01",
+    "specialty": "neurology",
+    "module": "stroke_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["stroke", "thrombolysis", "thrombectomy", "FAST", "neurology"],
+    "recommendation_blocks": [
+      "Treat focal neurologic deficits with suspected acute onset as stroke until proven otherwise and activate time-critical imaging review immediately.",
+      "Document last-known-well time explicitly so thrombolysis and thrombectomy eligibility are not lost.",
+      "Escalate immediately when stroke mimic is uncertain but disabling deficits are present."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "seizure-classification-2026-01",
+    "condition": "seizure_classification",
+    "aliases": ["seizure classification", "epilepsy seizure assessment"],
+    "title": "Seizure Classification Guidance",
+    "source_name": "ILAE Seizure Classification Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-11",
+    "reviewed_at": "2026-03-01",
+    "specialty": "neurology",
+    "module": "epilepsy_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["seizure", "epilepsy", "generalized", "focal", "EEG"],
+    "recommendation_blocks": [
+      "Classify seizure events by onset, awareness, and motor features rather than using nonspecific convulsion labels.",
+      "Escalate first seizure, prolonged seizure, or focal deficit presentations for urgent imaging and metabolic review.",
+      "Review adherence, precipitating factors, and rescue-plan availability for patients with known epilepsy."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "headache-diagnosis-2026-01",
+    "condition": "headache_diagnosis",
+    "aliases": ["headache diagnosis", "headache red flag assessment"],
+    "title": "Headache Diagnostic Guidance",
+    "source_name": "ICHD/NICE Headache Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-12",
+    "reviewed_at": "2026-03-01",
+    "specialty": "neurology",
+    "module": "headache_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["headache", "migraine", "thunderclap", "red flags", "neurology"],
+    "recommendation_blocks": [
+      "Separate primary headache patterns from secondary red-flag presentations before starting routine symptomatic treatment.",
+      "Escalate thunderclap onset, progressive headache, meningitic features, or focal deficits for urgent neuroimaging or lumbar puncture.",
+      "Track disability and recurrence burden when planning prophylaxis for recurrent primary headache disorders."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "mental-health-screening-2026-01",
+    "condition": "mental_health_screening",
+    "aliases": ["mental health screening", "behavioral health screening"],
+    "title": "Mental Health Screening Guidance",
+    "source_name": "PHQ/GAD/C-SSRS Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-13",
+    "reviewed_at": "2026-03-01",
+    "specialty": "mental_health",
+    "module": "screening_and_crisis",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["mental health", "PHQ-9", "GAD-7", "screening", "suicide risk"],
+    "recommendation_blocks": [
+      "Interpret mental-health screening scores alongside suicide-risk signals and functional impairment rather than score totals alone.",
+      "Escalate same-day review when self-harm risk, psychosis, severe agitation, or inability to maintain safety is present.",
+      "Document follow-up interval, safety planning, and escalation criteria explicitly when symptoms are moderate or worsening."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

@@ -52,8 +52,11 @@ CREATE INDEX IF NOT EXISTS idx_snomed_relationships_destination ON snomed_relati
 CREATE INDEX IF NOT EXISTS idx_snomed_relationships_type ON snomed_relationships(type_id);
 
 -- Materialized View for Search
+-- description_id is included so we can create a UNIQUE index enabling
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY (non-blocking during imports)
 CREATE MATERIALIZED VIEW IF NOT EXISTS snomed_search_view AS
-SELECT 
+SELECT
+    d.description_id,
     c.concept_id,
     d.term,
     d.type_id as term_type,
@@ -63,6 +66,8 @@ FROM snomed_concepts c
 JOIN snomed_descriptions d ON c.concept_id = d.concept_id
 WHERE c.active = true AND d.active = true;
 
+-- UNIQUE index is required for CONCURRENTLY refresh
+CREATE UNIQUE INDEX IF NOT EXISTS idx_snomed_search_description_id ON snomed_search_view(description_id);
 CREATE INDEX IF NOT EXISTS idx_snomed_search_vector ON snomed_search_view USING gin(search_vector);
 CREATE INDEX IF NOT EXISTS idx_snomed_search_concept_id ON snomed_search_view(concept_id);
 

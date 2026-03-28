@@ -90,6 +90,42 @@ export class PharmacyInventory {
 
   @Column({ name: 'updated_by', type: 'uuid', nullable: true })
   updatedById?: string;
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  barcode?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  category?: string;
+
+  @Column({ name: 'cost_per_unit', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  costPerUnit?: number;
+
+  @Column({ name: 'generic_name', type: 'varchar', length: 255, nullable: true })
+  genericName?: string;
+
+  @Column({ name: 'max_stock_level', type: 'int', nullable: true })
+  maxStockLevel?: number;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  name?: string;
+
+  @Column({ nullable: true })
+  notes?: string;
+
+  @Column({ name: 'selling_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  sellingPrice?: number;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  sku?: string;
+
+  @Column({ name: 'snomed_code', type: 'varchar', length: 50, nullable: true })
+  snomedCode?: string;
+
+  @Column({ name: 'snomed_term', type: 'text', nullable: true })
+  snomedTerm?: string;
+
+  @Column({ name: 'unit_of_measure', type: 'varchar', length: 50, nullable: true })
+  unitOfMeasure?: string;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

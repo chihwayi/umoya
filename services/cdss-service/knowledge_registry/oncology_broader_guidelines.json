@@ -1,0 +1,71 @@
+[
+  {
+    "knowledge_id": "oncology-targeted-therapy-2026-01",
+    "condition": "oncology_targeted_therapy",
+    "aliases": ["oncology targeted therapy", "targeted therapy oncology"],
+    "title": "Oncology Targeted Therapy Guidance",
+    "source_name": "NCCN/ESMO Oncology Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-02",
+    "reviewed_at": "2026-03-01",
+    "specialty": "oncology",
+    "module": "targeted_therapy",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["oncology", "targeted therapy", "biomarker", "precision medicine"],
+    "recommendation_blocks": [
+      "Tie targeted therapy recommendations to validated biomarkers, tumor type, and prior treatment exposure rather than biomarker presence alone.",
+      "Confirm line of therapy, performance status, and organ function before escalating to targeted regimens.",
+      "Document biomarker rationale and monitoring plan clearly when recommending targeted treatment."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "oncology-neutropenic-fever-2026-01",
+    "condition": "neutropenic_fever_oncology",
+    "aliases": ["oncology neutropenic fever", "chemotherapy fever neutropenia"],
+    "title": "Oncology Neutropenic Fever Guidance",
+    "source_name": "IDSA Oncology Infection Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-03",
+    "reviewed_at": "2026-03-01",
+    "specialty": "oncology",
+    "module": "supportive_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["neutropenic fever", "oncology", "chemotherapy", "sepsis"],
+    "recommendation_blocks": [
+      "Treat neutropenic fever as a time-critical oncologic emergency with prompt broad-spectrum empiric coverage.",
+      "Risk-stratify for outpatient management only after hemodynamic stability, expected neutropenia course, and social safety are reviewed.",
+      "Escalate immediately when shock, pneumonia, line infection, or profound persistent neutropenia is suspected."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "oncology-survivorship-2026-01",
+    "condition": "oncology_survivorship_care",
+    "aliases": ["oncology survivorship care", "cancer survivorship"],
+    "title": "Oncology Survivorship Guidance",
+    "source_name": "ASCO Survivorship Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-04",
+    "reviewed_at": "2026-03-01",
+    "specialty": "oncology",
+    "module": "survivorship",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["survivorship", "late effects", "recurrence monitoring", "rehabilitation"],
+    "recommendation_blocks": [
+      "Use a structured survivorship plan that covers recurrence surveillance, late toxicities, and preventive care.",
+      "Coordinate psychosocial, fertility, pain, and rehabilitation needs rather than limiting follow-up to recurrence checks alone.",
+      "Document ownership of follow-up tasks clearly between oncology and primary care."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

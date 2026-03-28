@@ -465,8 +465,21 @@ export class ReferralService {
   async getReferralAnalytics(filters: any, tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
-    const stats = await tenantDb.query(`
-      SELECT 
+    const params: any[] = [];
+    let paramIndex = 1;
+    const conditions: string[] = [];
+    if (filters.startDate) {
+      conditions.push(`referral_date >= $${paramIndex++}`);
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      conditions.push(`referral_date <= $${paramIndex++}`);
+      params.push(filters.endDate);
+    }
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const stats = await tenantDb.query(
+      `SELECT 
         COUNT(*) as total_referrals,
         COUNT(*) FILTER (WHERE status = 'pending') as pending,
         COUNT(*) FILTER (WHERE status = 'sent') as sent,
@@ -480,36 +493,35 @@ export class ReferralService {
           THEN appointment_completed_date - referral_date 
         END) as avg_completion_days
       FROM referrals
-      WHERE 1=1
-      ${filters.startDate ? `AND referral_date >= '${filters.startDate}'` : ''}
-      ${filters.endDate ? `AND referral_date <= '${filters.endDate}'` : ''}
-    `);
+      ${whereClause}`,
+      params,
+    );
 
-    const byType = await tenantDb.query(`
-      SELECT referral_type, COUNT(*) as count
+    const byType = await tenantDb.query(
+      `SELECT referral_type, COUNT(*) as count
       FROM referrals
-      WHERE 1=1
-      ${filters.startDate ? `AND referral_date >= '${filters.startDate}'` : ''}
-      ${filters.endDate ? `AND referral_date <= '${filters.endDate}'` : ''}
+      ${whereClause}
       GROUP BY referral_type
-      ORDER BY count DESC
-    `);
+      ORDER BY count DESC`,
+      params,
+    );
 
-    const bySpecialty = await tenantDb.query(`
-      SELECT specialty, COUNT(*) as count
+    const bySpecialty = await tenantDb.query(
+      `SELECT specialty, COUNT(*) as count
       FROM referrals
-      WHERE specialty IS NOT NULL
-      ${filters.startDate ? `AND referral_date >= '${filters.startDate}'` : ''}
-      ${filters.endDate ? `AND referral_date <= '${filters.endDate}'` : ''}
+      WHERE specialty IS NOT NULL ${conditions.length ? `AND ${conditions.join(' AND ')}` : ''}
       GROUP BY specialty
       ORDER BY count DESC
-      LIMIT 10
-    `);
+      LIMIT 10`,
+      params,
+    );
 
     return {
+      period: { startDate: filters.startDate ?? null, endDate: filters.endDate ?? null },
       summary: stats[0],
       byType,
       bySpecialty,
+      generatedAt: new Date().toISOString(),
     };
   }
 }

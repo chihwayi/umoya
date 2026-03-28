@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   AlertCircle, AlertTriangle, Clock, User, Users,
   ArrowLeft, RefreshCw, TrendingUp, Ambulance, X,
@@ -11,6 +11,7 @@ import EDTrackingBoard from '../components/EDTrackingBoard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import ModalPortal from '../components/ModalPortal';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import { useConfirmation } from '../hooks/useConfirmation';
 import {
   buildSharedContextTags,
@@ -31,8 +32,10 @@ interface EDMetrics {
 const EDDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showError, showSuccess } = useNotification();
   const { confirm, Dialog } = useConfirmation();
+  const isEmbedded = location.pathname.includes('/doctor/emergency');
   
   const [user, setUser] = useState<any>(null);
   const [metrics, setMetrics] = useState<EDMetrics | null>(null);
@@ -242,47 +245,66 @@ const EDDashboard: React.FC = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={isEmbedded ? 'bg-transparent' : 'min-h-screen bg-slate-50'}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 to-orange-700 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/${user.role === 'doctor' ? 'doctor' : user.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                  <AlertCircle className="w-8 h-8" />
-                  Emergency Department
-                </h1>
-                <p className="text-red-100 mt-1">Real-time ED tracking, triage, and patient flow management</p>
+      {!isEmbedded && (
+        <div className="bg-gradient-to-r from-red-600 to-orange-700 text-white shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/${user.role === 'doctor' ? 'doctor' : user.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h1 className="text-3xl font-bold flex items-center gap-3">
+                    <AlertCircle className="w-8 h-8" />
+                    Emergency Department
+                  </h1>
+                  <p className="text-red-100 mt-1">Real-time ED tracking, triage, and patient flow management</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowRegisterModal(true)}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
-              >
-                <User className="w-4 h-4" />
-                Register Patient
-              </button>
-              <button
-                onClick={handleRefresh}
-                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowRegisterModal(true)}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  Register Patient
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Statistics Cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
+        {isEmbedded && (
+          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+            <button
+              onClick={() => setShowRegisterModal(true)}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-orange-600 text-white text-sm font-medium shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+            >
+              <User className="w-4 h-4" />
+              Register Patient
+            </button>
+            <button
+              onClick={handleRefresh}
+              className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
@@ -656,50 +678,7 @@ const EDDashboard: React.FC = () => {
                 ) : guidelineResults.length > 0 ? (
                   <div className="space-y-4">
                     {guidelineResults.map((result, index) => (
-                      <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex gap-3">
-                          <div className="mt-1 min-w-[24px]">
-                            <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold">
-                              {index + 1}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-slate-900 leading-tight">
-                                {result.source || 'Clinical Guideline'}
-                              </h4>
-                              {result.confidence && (
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
-                                  result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
-                                  result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                  'bg-red-50 text-red-700 border-red-100'
-                                }`}>
-                                  {Math.round(result.confidence * 100)}% Match
-                                </span>
-                              )}
-                            </div>
-                            <div className="prose prose-sm max-w-none text-slate-700">
-                              <p className="whitespace-pre-wrap">{result.text}</p>
-                              {result.recommendation && (
-                                <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                                  <strong className="block text-blue-900 text-xs uppercase tracking-wide mb-1">Recommendation</strong>
-                                  <p className="text-blue-800 text-sm m-0">{result.recommendation}</p>
-                                </div>
-                              )}
-                            </div>
-                            {result.url && (
-                              <a 
-                                href={result.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="inline-flex items-center mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
-                              >
-                                View Source Document
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <GuidelineCitationCard key={index} result={result} index={index} />
                     ))}
                   </div>
                 ) : (

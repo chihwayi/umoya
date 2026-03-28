@@ -1,26 +1,11 @@
-import axios from 'axios';
 import { PostVisitGroundedLlmService } from './post-visit-grounded-llm.service';
 
-jest.mock('axios');
-
 describe('PostVisitGroundedLlmService', () => {
-  const mockedAxios = axios as jest.Mocked<typeof axios>;
-  const originalEnv = { ...process.env };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env = { ...originalEnv };
   });
 
-  afterAll(() => {
-    process.env = originalEnv;
-  });
-
-  it('returns null when LLM key is not configured', async () => {
-    delete process.env.POSTVISIT_LLM_API_KEY;
-    delete process.env.OPENAI_API_KEY;
-    delete process.env.WHISPER_API_KEY;
-
+  it('returns null when governed CDSS is not configured', async () => {
     const service = new PostVisitGroundedLlmService();
     const result = await service.answerPatientQuestion({
       sessionId: 'session-1',
@@ -31,29 +16,23 @@ describe('PostVisitGroundedLlmService', () => {
     });
 
     expect(result).toBeNull();
-    expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
   it('accepts grounded patient answer when citation IDs are valid', async () => {
-    process.env.POSTVISIT_LLM_API_KEY = 'test-key';
-    mockedAxios.post.mockResolvedValue({
-      data: {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                abstain: false,
-                answer: 'Please follow your blood pressure follow-up in one week.',
-                citations_used: ['cit-1'],
-                urgent_signal: false,
-              }),
-            },
-          },
-        ],
-      },
-    } as any);
+    const cdssService = {
+      requestGovernedJson: jest.fn().mockResolvedValue({
+        json: {
+          abstain: false,
+          answer: 'Please follow your blood pressure follow-up in one week.',
+          citations_used: ['cit-1'],
+          urgent_signal: false,
+        },
+        model: 'governed-postvisit-answer',
+        audit: { promptHash: 'hash', templateVersion: 'postvisit-patient-answer-v1' },
+      }),
+    };
 
-    const service = new PostVisitGroundedLlmService();
+    const service = new PostVisitGroundedLlmService(cdssService as any);
     const result = await service.answerPatientQuestion({
       sessionId: 'session-1',
       question: 'When is my follow-up?',
@@ -66,30 +45,32 @@ describe('PostVisitGroundedLlmService', () => {
       expect.objectContaining({
         abstained: false,
         citationsUsed: ['cit-1'],
+        model: 'governed-postvisit-answer',
       }),
+    );
+    expect(cdssService.requestGovernedJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        useCase: 'post_visit_patient_answer',
+      }),
+      undefined,
     );
   });
 
   it('rejects patient answer when citation IDs are outside allow-list', async () => {
-    process.env.POSTVISIT_LLM_API_KEY = 'test-key';
-    mockedAxios.post.mockResolvedValue({
-      data: {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                abstain: false,
-                answer: 'Unsafe ungrounded answer',
-                citations_used: ['unknown-citation'],
-                urgent_signal: false,
-              }),
-            },
-          },
-        ],
-      },
-    } as any);
+    const cdssService = {
+      requestGovernedJson: jest.fn().mockResolvedValue({
+        json: {
+          abstain: false,
+          answer: 'Unsafe ungrounded answer',
+          citations_used: ['unknown-citation'],
+          urgent_signal: false,
+        },
+        model: 'governed-postvisit-answer',
+        audit: { promptHash: 'hash', templateVersion: 'postvisit-patient-answer-v1' },
+      }),
+    };
 
-    const service = new PostVisitGroundedLlmService();
+    const service = new PostVisitGroundedLlmService(cdssService as any);
     const result = await service.answerPatientQuestion({
       sessionId: 'session-1',
       question: 'Can I skip medication?',
@@ -102,26 +83,21 @@ describe('PostVisitGroundedLlmService', () => {
   });
 
   it('classifies escalation signals with normalized confidence and temporality', async () => {
-    process.env.POSTVISIT_LLM_API_KEY = 'test-key';
-    mockedAxios.post.mockResolvedValue({
-      data: {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                severity: 'high',
-                route_target: 'doctor',
-                temporality: 'current',
-                confidence: 0.84,
-                rationale: 'Current severe symptom language',
-              }),
-            },
-          },
-        ],
-      },
-    } as any);
+    const cdssService = {
+      requestGovernedJson: jest.fn().mockResolvedValue({
+        json: {
+          severity: 'high',
+          route_target: 'doctor',
+          temporality: 'current',
+          confidence: 0.84,
+          rationale: 'Current severe symptom language',
+        },
+        model: 'governed-postvisit-escalation',
+        audit: { promptHash: 'hash', templateVersion: 'postvisit-escalation-v2' },
+      }),
+    };
 
-    const service = new PostVisitGroundedLlmService();
+    const service = new PostVisitGroundedLlmService(cdssService as any);
     const result = await service.classifyEscalationSignal({
       sessionId: 'session-1',
       message: 'I have severe headache right now',
@@ -135,6 +111,7 @@ describe('PostVisitGroundedLlmService', () => {
         routeTarget: 'doctor',
         temporality: 'current',
         confidence: 0.84,
+        model: 'governed-postvisit-escalation',
       }),
     );
   });

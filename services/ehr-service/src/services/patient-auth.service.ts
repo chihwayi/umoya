@@ -1,11 +1,13 @@
 import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { DataSource, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { config as envConfig } from '@medicore/config';
 import { Patient } from '../entities/patient.entity';
 import { TenantService } from './tenant.service';
 import { EmailService } from './email.service';
+import { RegistrationIntelligenceService } from './registration-intelligence.service';
 
 export interface PatientRegisterDto {
   patientNumber: string;
@@ -20,6 +22,20 @@ export interface PatientLoginDto {
   password: string;
 }
 
+export interface PatientRegistrationAssessment {
+  patient: {
+    id: string;
+    patientNumber: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    phone?: string | null;
+  };
+  portalAccessEnabled: boolean;
+  emailConflict: boolean;
+  intakeAssessment: any;
+}
+
 export interface PatientPasswordResetDto {
   email: string;
 }
@@ -32,12 +48,22 @@ export interface PatientPasswordResetConfirmDto {
 @Injectable()
 export class PatientAuthService {
   private readonly logger = new Logger(PatientAuthService.name);
+  private readonly portalBaseUrl = String(process.env.PORTAL_BASE_URL || envConfig.publicUrls.patientPortal || '').replace(/\/+$/, '');
 
   constructor(
     private jwtService: JwtService,
     private tenantService: TenantService,
     private emailService: EmailService,
+    private registrationIntelligenceService: RegistrationIntelligenceService,
   ) {}
+
+  private getPortalLink(path: string): string {
+    if (!this.portalBaseUrl) {
+      throw new Error('PORTAL_BASE_URL is not configured. Set PORTAL_BASE_URL or PUBLIC_APP_BASE_URL.');
+    }
+
+    return `${this.portalBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  }
 
   private async getPatientRepository(tenantId: string): Promise<Repository<Patient>> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
@@ -47,10 +73,26 @@ export class PatientAuthService {
     return connection.getRepository(Patient);
   }
 
-  async register(registerDto: PatientRegisterDto, tenantId: string): Promise<any> {
-    const patientRepository = await this.getPatientRepository(tenantId);
+  private parseDateOfBirth(input: string): Date {
+    if (input.includes('/')) {
+      const [day, month, year] = input.split('/');
+      return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+    }
 
-    // Find patient by patient number
+    return new Date(input);
+  }
+
+  private normalizeDateOnly(input: Date): Date {
+    return new Date(input.getFullYear(), input.getMonth(), input.getDate());
+  }
+
+  private async resolvePortalRegistrationContext(registerDto: PatientRegisterDto, tenantId: string) {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const patientRepository = connection.getRepository(Patient);
     const patient = await patientRepository.findOne({
       where: { patientNumber: registerDto.patientNumber },
     });
@@ -59,30 +101,78 @@ export class PatientAuthService {
       throw new NotFoundException('Patient not found. Please contact the clinic to register.');
     }
 
-    // Verify date of birth
-    // Handle both string and Date formats from database
-    const patientDob = patient.dateOfBirth instanceof Date 
-      ? patient.dateOfBirth 
+    const patientDob = patient.dateOfBirth instanceof Date
+      ? patient.dateOfBirth
       : new Date(patient.dateOfBirth);
-    
-    // Parse the incoming date (could be dd/mm/yyyy or yyyy-mm-dd)
-    let dob: Date;
-    if (registerDto.dateOfBirth.includes('/')) {
-      // Handle dd/mm/yyyy format
-      const [day, month, year] = registerDto.dateOfBirth.split('/');
-      dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    } else {
-      // Handle yyyy-mm-dd format
-      dob = new Date(registerDto.dateOfBirth);
-    }
-    
-    // Compare dates (ignore time)
-    const patientDobDate = new Date(patientDob.getFullYear(), patientDob.getMonth(), patientDob.getDate());
-    const inputDobDate = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
-    
+    const inputDob = this.parseDateOfBirth(registerDto.dateOfBirth);
+    const patientDobDate = this.normalizeDateOnly(patientDob);
+    const inputDobDate = this.normalizeDateOnly(inputDob);
+
     if (patientDobDate.getTime() !== inputDobDate.getTime()) {
       throw new BadRequestException('Date of birth does not match our records.');
     }
+
+    const existingPatient = await patientRepository.findOne({
+      where: { email: registerDto.email, portalAccessEnabled: true },
+    });
+
+    return {
+      connection,
+      patientRepository,
+      patient,
+      existingPatient,
+    };
+  }
+
+  private buildRegistrationAssessmentPayload(patient: Patient, registerDto: PatientRegisterDto) {
+    return {
+      patientId: patient.id,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      dateOfBirth: patient.dateOfBirth,
+      gender: patient.gender,
+      nationalId: patient.nationalId,
+      phone: registerDto.phone || patient.phone,
+      email: registerDto.email,
+      address: patient.address,
+      city: patient.city,
+      emergencyContactName: patient.emergencyContactName,
+      emergencyContactPhone: patient.emergencyContactPhone,
+      nextOfKinName: patient.nextOfKinName,
+      nextOfKinPhone: patient.nextOfKinPhone,
+      insuranceProvider: patient.insuranceProvider || patient.medicalAidProvider,
+      insuranceNumber: patient.insuranceNumber || patient.medicalAidNumber,
+      medicalAidPlan: patient.medicalAidPlan,
+    };
+  }
+
+  async assessRegistration(registerDto: PatientRegisterDto, tenantId: string): Promise<PatientRegistrationAssessment> {
+    const { connection, patient, existingPatient } = await this.resolvePortalRegistrationContext(registerDto, tenantId);
+
+    const intakeAssessment = await this.registrationIntelligenceService.assessRegistrationIntake(
+      connection,
+      this.buildRegistrationAssessmentPayload(patient, registerDto),
+      { persist: false },
+    );
+
+    return {
+      patient: {
+        id: patient.id,
+        patientNumber: patient.patientNumber,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        email: patient.email || null,
+        phone: patient.phone || null,
+      },
+      portalAccessEnabled: Boolean(patient.portalAccessEnabled),
+      emailConflict: Boolean(existingPatient && existingPatient.id !== patient.id),
+      intakeAssessment,
+    };
+  }
+
+  async register(registerDto: PatientRegisterDto, tenantId: string): Promise<any> {
+    const { connection, patientRepository, patient, existingPatient } =
+      await this.resolvePortalRegistrationContext(registerDto, tenantId);
 
     // Check if email matches or update it
     // Allow email update if patient doesn't have one, or if it matches
@@ -97,14 +187,15 @@ export class PatientAuthService {
       throw new BadRequestException('Portal access is already enabled for this patient.');
     }
 
-    // Check if email is already in use
-    const existingPatient = await patientRepository.findOne({
-      where: { email: registerDto.email, portalAccessEnabled: true },
-    });
-
     if (existingPatient && existingPatient.id !== patient.id) {
       throw new BadRequestException('This email is already registered to another patient.');
     }
+
+    const intakeAssessment = await this.registrationIntelligenceService.assessRegistrationIntake(
+      connection,
+      this.buildRegistrationAssessmentPayload(patient, registerDto),
+      { persist: true, actorUserId: null },
+    );
 
     // Hash password
     const passwordHash = await bcrypt.hash(registerDto.password, 10);
@@ -136,7 +227,7 @@ export class PatientAuthService {
             <p>Dear ${patient.firstName} ${patient.lastName},</p>
             <p>Thank you for registering for the MediCore Patient Portal. Please verify your email address by clicking the link below:</p>
             <p style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.PORTAL_BASE_URL}/patient/verify-email?token=${verificationToken}" 
+              <a href="${this.getPortalLink(`/patient/verify-email?token=${verificationToken}`)}" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
                 Verify Email Address
               </a>
@@ -162,6 +253,7 @@ export class PatientAuthService {
         lastName: patient.lastName,
         email: patient.email,
       },
+      intakeAssessment,
     };
   }
 
@@ -298,7 +390,7 @@ export class PatientAuthService {
             <p>Dear ${patient.firstName} ${patient.lastName},</p>
             <p>You requested to reset your password. Click the link below to reset it:</p>
             <p style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.PORTAL_BASE_URL}/patient/reset-password?token=${resetToken}" 
+              <a href="${this.getPortalLink(`/patient/reset-password?token=${resetToken}`)}" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
                 Reset Password
               </a>
@@ -473,4 +565,3 @@ export class PatientAuthService {
     };
   }
 }
-

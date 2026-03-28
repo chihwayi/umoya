@@ -95,6 +95,42 @@ export class RevenueCycleController {
     return this.revenueCycleService.getPendingChargesForDoctor(userId, tenantDb);
   }
 
+  @Get('charges/worklist')
+  @ApiOperation({ summary: 'Get doctor charge worklist with SLA/risk scoring' })
+  @ApiResponse({ status: 200, description: 'Charge worklist retrieved' })
+  async getDoctorChargeWorklist(
+    @Query('doctorId') doctorId: string,
+    @Query('includeResolved') includeResolved: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = doctorId || ((req.user as any)?.userId ?? (req.user as any)?.id);
+    const parsedLimit = Number(limit);
+    return this.revenueCycleService.getDoctorChargeWorklist(userId, tenantDb, {
+      includeResolved: String(includeResolved || '').toLowerCase() === 'true',
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
+  @Get('operational-brief')
+  @ApiOperation({ summary: 'Get revenue cycle operational brief for physician queue handoff' })
+  @ApiResponse({ status: 200, description: 'Operational brief retrieved' })
+  async getOperationalBrief(
+    @Query('doctorId') doctorId: string,
+    @Query('includeResolved') includeResolved: string,
+    @Query('limit') limit: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = doctorId || ((req.user as any)?.userId ?? (req.user as any)?.id);
+    const parsedLimit = Number(limit);
+    return this.revenueCycleService.getOperationalBrief(userId, tenantDb, {
+      includeResolved: String(includeResolved || '').toLowerCase() === 'true',
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
   @Get('charges/review/admission/:admissionId')
   @ApiOperation({ summary: 'Review charges for admission' })
   @ApiResponse({ status: 200, description: 'Charge review retrieved' })
@@ -191,6 +227,4 @@ export class RevenueCycleController {
     return this.revenueCycleService.markNotificationRead(notificationId, ((req.user as any)?.userId ?? (req.user as any)?.id), tenantDb);
   }
 }
-
-
 

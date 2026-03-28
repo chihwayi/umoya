@@ -17,10 +17,11 @@ export class AnalyticsMetric {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ name: 'metric_name', type: 'varchar', length: 100 })
   metricName: string;
 
   @Column({
+    name: 'metric_category',
     type: 'varchar',
     length: 50,
     nullable: true,
@@ -28,22 +29,22 @@ export class AnalyticsMetric {
   })
   metricCategory?: MetricCategory;
 
-  @Column({ type: 'date' })
+  @Column({ name: 'metric_date', type: 'date' })
   metricDate: Date;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  @Column({ name: 'metric_value', type: 'decimal', precision: 15, scale: 2, nullable: true })
   metricValue?: number;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ name: 'metric_unit', type: 'varchar', length: 50, nullable: true })
   metricUnit?: string;
 
   @Column({ type: 'jsonb', default: {} })
   dimensions: Record<string, any>;
 
-  @Column({ type: 'timestamptz', default: () => 'NOW()' })
+  @Column({ name: 'calculated_at', type: 'timestamptz', default: () => 'NOW()' })
   calculatedAt: Date;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'calculation_method', type: 'varchar', length: 255, nullable: true })
   calculationMethod?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
@@ -52,5 +53,4 @@ export class AnalyticsMetric {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
-
 

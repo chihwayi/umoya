@@ -7,7 +7,8 @@ describe('TranscriptionService local whisper proxy forwarding', () => {
   });
 
   it('forwards tenant and authorization headers to local whisper service', async () => {
-    const service = new TranscriptionService();
+    const service = new TranscriptionService() as any;
+    service.LOCAL_WHISPER_URL = process.env.LOCAL_WHISPER_URL;
     const axiosPostSpy = jest.spyOn(axios, 'post').mockResolvedValue({
       data: {
         transcription: {
@@ -25,7 +26,7 @@ describe('TranscriptionService local whisper proxy forwarding', () => {
       mimetype: 'audio/wav',
     } as Express.Multer.File;
 
-    const result = await (service as any).transcribeWithLocalWhisper(
+    const result = await service.transcribeWithLocalWhisper(
       file,
       { language: 'en', temperature: 0, prompt: 'clinical prompt' },
       { tenantId: 'tenant-a', authorization: 'Bearer clinician-token' },

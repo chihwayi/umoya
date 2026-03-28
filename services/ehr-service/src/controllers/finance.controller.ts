@@ -78,6 +78,12 @@ export class FinanceController {
     return this.financeService.getTransactionStatus(req.tenantDb, id);
   }
 
+  @Get('transactions/:id/quote')
+  @ApiOperation({ summary: 'Generate and persist a patient financial quote for a transaction' })
+  async getPatientQuote(@Request() req: RequestWithTenant, @Param('id') id: string) {
+    return this.financeService.generatePatientQuote(req.tenantDb, id);
+  }
+
   @Get('transactions/:id/invoice.pdf')
   @ApiOperation({ summary: 'Download invoice PDF for a transaction' })
   async downloadInvoicePdf(

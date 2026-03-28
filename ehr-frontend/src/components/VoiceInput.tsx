@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Mic, MicOff, Square, Loader2 } from 'lucide-react';
+import { getSocketOriginFromApiUrl, runtimeUrls } from '../config/runtime';
 
 export interface VoiceCommand {
   type: string;
@@ -33,8 +34,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
 
   useEffect(() => {
     const token = localStorage.getItem('ehr_token');
-    const apiUrl = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3000';
-    const socket = io(`${apiUrl}/voice`, {
+    const socketOrigin = getSocketOriginFromApiUrl(runtimeUrls.ehrApi);
+    const socket = io(`${socketOrigin}/voice`, {
       auth: { token },
       transports: ['websocket'],
       autoConnect: true,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
@@ -29,6 +29,85 @@ export class NurseWorklistController {
   @ApiResponse({ status: 200, description: 'Cross-module escalation feed fetched' })
   async getCrossModuleFeed(@Request() req: RequestWithTenant) {
     return this.nurseWorklistService.getCrossModuleEscalationFeed(req.tenantDb);
+  }
+
+  @Get('clinical-escalations')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Get nurse-facing clinical escalation feed for deterioration, triage, and remote-monitoring alerts' })
+  @ApiResponse({ status: 200, description: 'Clinical escalation feed fetched' })
+  async getClinicalEscalationFeed(
+    @Query('status') status: string,
+    @Query('severity') severity: string,
+    @Query('includeCompleted') includeCompletedRaw: string,
+    @Query('limit') limitRaw: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    const parsedLimit = Number(limitRaw);
+    return this.nurseWorklistService.getClinicalEscalationFeed(req.tenantDb, {
+      status,
+      severity,
+      includeCompleted: String(includeCompletedRaw || '').toLowerCase() === 'true',
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
+
+  @Post('clinical-escalations/:id/ack')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Acknowledge a clinical escalation task and linked alerts' })
+  @ApiResponse({ status: 200, description: 'Clinical escalation acknowledged' })
+  async acknowledgeClinicalEscalation(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.acknowledgeClinicalEscalation(
+      req.tenantDb,
+      user,
+      id,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
+  @Post('clinical-escalations/:id/complete')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Complete a clinical escalation task and linked nurse/remote-monitoring items' })
+  @ApiResponse({ status: 200, description: 'Clinical escalation completed' })
+  async completeClinicalEscalation(
+    @Param('id') id: string,
+    @Body() body: { note?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.completeClinicalEscalation(
+      req.tenantDb,
+      user,
+      id,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
+  @Get('doctor-sync-feed')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Get doctor synchronization feed for handoffs, critical results, triage, and doctor-routed follow-up' })
+  @ApiResponse({ status: 200, description: 'Doctor synchronization feed fetched' })
+  async getDoctorSyncFeed(
+    @Query('focus') focus: string,
+    @Query('includeAcknowledged') includeAcknowledgedRaw: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.nurseWorklistService.getDoctorSynchronizationFeed(req.tenantDb, {
+      focus,
+      includeAcknowledged: String(includeAcknowledgedRaw || '').toLowerCase() === 'true',
+    });
   }
 
   @Get('analytics/outcomes')
@@ -537,6 +616,7 @@ export class NurseWorklistController {
   }
 
   @Post('tasks/:taskId/complete')
+  @Patch('tasks/:taskId/complete')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Persist server-scoped task completion for current user' })
   @ApiResponse({ status: 200, description: 'Task completion recorded' })

@@ -10,7 +10,7 @@ describe('CDSS contract drift guard', () => {
   it('keeps EHR CDSS endpoints aligned with cdss-service routes', () => {
     const ehrCdssService = readRepoFile('services', 'ehr-service', 'src', 'services', 'cdss.service.ts');
     const cdssMain = readRepoFile('services', 'cdss-service', 'main.py');
-    const apiReference = readRepoFile('docs', 'cdss', 'api-reference.md');
+    const apiReference = readRepoFile('docs', 'MEDICORE_SYSTEM_REFERENCE.md');
 
     const ehrPaths = Array.from(
       ehrCdssService.matchAll(/postWithPolicy<[^>]*>\(\s*'[^']+',\s*'([^']+)'/g),

@@ -50,6 +50,7 @@ export class ClinicalOutcome {
   patient: Patient;
 
   @Column({
+    name: 'outcome_type',
     type: 'varchar',
     length: 50,
     enum: OutcomeType,
@@ -59,22 +60,23 @@ export class ClinicalOutcome {
   @Column({ type: 'varchar', length: 255, nullable: true })
   condition?: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ name: 'snomed_code', type: 'varchar', length: 50, nullable: true })
   snomedCode?: string;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'baseline_date', type: 'date', nullable: true })
   baselineDate?: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'outcome_date', type: 'date', nullable: true })
   outcomeDate?: Date;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({ name: 'outcome_value', type: 'decimal', precision: 10, scale: 2, nullable: true })
   outcomeValue?: number;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ name: 'outcome_unit', type: 'varchar', length: 50, nullable: true })
   outcomeUnit?: string;
 
   @Column({
+    name: 'outcome_status',
     type: 'varchar',
     length: 50,
     nullable: true,
@@ -127,5 +129,4 @@ export class ClinicalOutcome {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
-
 

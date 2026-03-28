@@ -3,9 +3,12 @@ import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
 import * as FormData from 'form-data';
+import { config as envConfig } from '@medicore/config';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
+import { PatientConsentService } from './patient-consent.service';
 import { createHash, createHmac, randomUUID } from 'crypto';
 import { MetricsService } from './metrics.service';
+import { HipaaAuditService } from './hipaa-audit.service';
 import { CROSS_REACTIVITY_MAP, DRUG_CLASS_MEMBERS, CrossReactivityEntry } from '../config/allergy-cross-reactivity';
 
 export interface AllergyWarning {
@@ -14,6 +17,194 @@ export interface AllergyWarning {
   medication: string;
   crossReactivity: boolean;
   message: string;
+}
+
+export interface PatientAdherenceAssistantResponse {
+  reply: string;
+  intent: 'adherence_check' | 'side_effect' | 'refill_request' | 'cost_barrier' | 'general' | 'urgent';
+  adherenceConcern: boolean;
+  requiresClinicianFollowUp: boolean;
+  urgency: 'routine' | 'urgent';
+  confidence: number;
+  model: string;
+  abstained: boolean;
+  abstainReason?: string | null;
+  reasoning?: string;
+  evidence?: Array<{ source: string; section?: string; strength?: string }>;
+  governance?: Record<string, any>;
+}
+
+export interface PatientSymptomCheckResponse {
+  differential: Array<{ condition: string; probability: number; urgency: string; nextStep: string }>;
+  triageLevel: 'emergency' | 'urgent' | 'routine' | 'self_care';
+  recommendedAction: string;
+  confidence: number;
+  model: string;
+  abstained: boolean;
+  abstainReason?: string | null;
+  evidence?: Array<{ source: string; section?: string; strength?: string }>;
+  governance?: Record<string, any>;
+}
+
+export interface PatientSummarizationResponse {
+  summary?: string;
+  one_liner?: string;
+  text?: string;
+  clinical_summary?: string;
+  active_problems?: any[];
+  current_medications?: any[];
+  allergies?: any[];
+  last_lab_abnormalities?: any[];
+  last_imaging_findings?: any[];
+  model?: string;
+  abstained?: boolean;
+  abstain_reason?: string | null;
+  governance?: Record<string, any>;
+}
+
+export interface AmbientTranscriptionStreamResponse {
+  transcript: string;
+  entities: {
+    diagnoses: Array<{ text: string; icd?: string; confidence: number }>;
+    medications: Array<{ name: string; dose?: string; route?: string }>;
+    allergies: Array<{ allergen: string; reaction?: string }>;
+    orders: Array<{ type: string; description: string; urgency?: string }>;
+    vitals: Array<{ type: string; value: string }>;
+    alerts: Array<{ type: string; message: string; severity: string }>;
+  };
+  draftNote: {
+    subjective?: string;
+    objective?: string;
+    assessment?: string;
+    plan?: string;
+  };
+  model?: string;
+  abstained?: boolean;
+  abstainReason?: string | null;
+  governance?: Record<string, any>;
+}
+
+export interface InboxTriageResponse {
+  priority: 'critical' | 'urgent' | 'routine' | 'informational';
+  priority_reason: string;
+  triage_score: number;
+  triage_model: string;
+  due_by_hours?: number;
+  draft_reply?: string;
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface RadiologyAnalysisResponse {
+  findings: Array<Record<string, any>>;
+  top_finding?: string;
+  confidence?: number;
+  heatmap_key?: string | null;
+  model_version?: string;
+  modality?: string;
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface PgxCheckResponse {
+  drug: string;
+  alerts: Array<Record<string, any>>;
+  safe: boolean;
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface FormularyOptimizeResponse {
+  recommendation: string;
+  generic_alternative?: string;
+  branded_cost?: number;
+  generic_cost?: number;
+  saving_amount?: number;
+  evidence_equivalence?: string;
+  medical_aid_coverage?: boolean;
+  medical_aid_tier?: number;
+  reason?: string;
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface DermatologyDecisionResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface NutritionDecisionResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface EducationGenerationResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface AutoCodingExtractionResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface IotAnalysisResponse extends Record<string, any> {
+  alerts?: Array<Record<string, any>>;
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface SchedulingPredictionResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface SmartDefaultsSuggestionResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface AntimicrobialDecisionResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface SupplyChainPredictionResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface ModelPerformanceResponse extends Record<string, any> {
+  governance?: Record<string, any>;
+  abstained?: boolean;
+}
+
+export interface RegistrationDocumentAnalysisResponse {
+  documentType: string;
+  structuredPayload: Record<string, any>;
+  summary?: string | null;
+  flags?: string[];
+  confidence?: number | null;
+  model?: string;
+  governance?: Record<string, any>;
+  abstained?: boolean;
+  abstainReason?: string | null;
+}
+
+export interface GovernedJsonCompletionResponse {
+  json: Record<string, any>;
+  model: string;
+  audit?: Record<string, any>;
+  governance?: Record<string, any>;
+}
+
+export interface CareGapDetectionOptions {
+  tenantId?: string;
+  tenantDb?: DataSource;
+  patientId?: string;
+  context?: string;
+  specialty?: string;
+  module?: string;
 }
 
 @Injectable()
@@ -40,8 +231,12 @@ export class CdssService {
     private readonly whoSmartGuidelinesService?: WhoSmartGuidelinesService,
     @Optional() @Inject(MetricsService)
     private readonly metricsService?: MetricsService,
+    @Optional() @Inject(HipaaAuditService)
+    private readonly hipaaAuditService?: HipaaAuditService,
+    @Optional() @Inject(PatientConsentService)
+    private readonly patientConsentService?: PatientConsentService,
   ) {
-    this.cdssServiceUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
+    this.cdssServiceUrl = String(process.env.CDSS_SERVICE_URL || envConfig.urls.cdssService || '').trim();
     this.cdssServiceToken = process.env.CDSS_SERVICE_TOKEN;
     this.cdssServiceJwtSecret = process.env.CDSS_SERVICE_JWT_SECRET || undefined;
     this.cdssServiceJwtIssuer = process.env.CDSS_SERVICE_AUTH_ISSUER || 'medicore.ehr-service';
@@ -53,6 +248,10 @@ export class CdssService {
     this.retryBaseDelayMs = this.parsePositiveInt(process.env.CDSS_OUTBOUND_RETRY_BASE_MS, 200);
     this.circuitFailureThreshold = this.parsePositiveInt(process.env.CDSS_CIRCUIT_BREAKER_FAIL_THRESHOLD, 5);
     this.circuitOpenMs = this.parsePositiveInt(process.env.CDSS_CIRCUIT_BREAKER_OPEN_MS, 30000);
+
+    if (!this.cdssServiceUrl) {
+      throw new Error('CDSS service URL is not configured. Set CDSS_SERVICE_URL, SERVICE_CDSS_URL, or SERVICE_BASE_URL.');
+    }
 
     this.cdssClient = axios.create({
       baseURL: this.cdssServiceUrl,
@@ -212,6 +411,68 @@ export class CdssService {
     this.metricsService.recordCdssAbstention(eventType, reason, tenantId);
   }
 
+  private async recordGovernedPromptAudit(payload: {
+    tenantDb?: DataSource;
+    tenantId?: string;
+    useCase: string;
+    source: string;
+    model?: string;
+    patientId?: string | null;
+    encounterId?: string | null;
+    requestBody?: Record<string, any>;
+    responseSummary?: Record<string, any>;
+    governance?: Record<string, any>;
+  }): Promise<void> {
+    if (!payload.tenantDb || !this.hipaaAuditService) {
+      return;
+    }
+
+    try {
+      const promptHash = createHash('sha256')
+        .update(JSON.stringify(payload.requestBody || {}))
+        .digest('hex');
+      const modelId = String(payload.model || 'unknown_model');
+      const provider = String(
+        payload.governance?.vendor_id ||
+        payload.governance?.vendorId ||
+        payload.governance?.provider ||
+        'local',
+      );
+
+      await this.hipaaAuditService.registerModelEntry(payload.tenantDb, {
+        modelId,
+        modelName: modelId,
+        modelVersion: String(process.env.CDSS_MODEL_VERSION || modelId),
+        provider,
+        status: 'active',
+        metadata: {
+          source: payload.source,
+          useCase: payload.useCase,
+          tenantId: payload.tenantId || null,
+        },
+      });
+
+      await this.hipaaAuditService.logPromptAudit(payload.tenantDb, {
+        promptHash,
+        templateVersion: 'sprint111_moas11_v1',
+        modelId,
+        patientId: payload.patientId || null,
+        encounterId: payload.encounterId || null,
+        requestId: randomUUID(),
+        safetyGateTriggered: payload.responseSummary?.abstained === true,
+        metadata: {
+          source: payload.source,
+          useCase: payload.useCase,
+          tenantId: payload.tenantId || null,
+          governance: payload.governance || {},
+          responseSummary: payload.responseSummary || {},
+        },
+      });
+    } catch (error: any) {
+      this.logger.warn(`Governed prompt audit failed for ${payload.useCase}: ${error?.message || error}`);
+    }
+  }
+
   private async postWithPolicy<T>(
     eventType: string,
     path: string,
@@ -274,6 +535,9 @@ export class CdssService {
     }
     if (normalizedPath === '/patient/summarize' && upperMethod === 'POST') {
       return 'cdss.copilot.summary.write';
+    }
+    if (normalizedPath === '/registration/documents/analyze' && upperMethod === 'POST') {
+      return 'cdss.copilot.registration.write';
     }
     if (normalizedPath === '/guidelines/search' && upperMethod === 'POST') {
       return 'cdss.copilot.guidelines.read';
@@ -378,6 +642,33 @@ export class CdssService {
     }
   }
 
+  async checkDrugInteractionsAdvanced(params: {
+    patientId: string;
+    newDrug: string;
+    currentMedications: string[];
+    allergies: string[];
+  }): Promise<{ interactions: Array<{ severity: string; severity_score: number; interactingDrug: string; clinical_significance: string; [key: string]: any }> }> {
+    try {
+      const responseData = await this.postWithPolicy<any>(
+        'drug_interactions_advanced',
+        '/drugs/interactions/advanced',
+        {
+          patient_id: params.patientId,
+          new_drug: params.newDrug,
+          current_medications: params.currentMedications,
+          allergies: params.allergies,
+        },
+        15000,
+      );
+      return {
+        interactions: responseData.interactions || [],
+      };
+    } catch (error: any) {
+      this.logger.warn(`checkDrugInteractionsAdvanced failed: ${error.message}`);
+      return { interactions: [] };
+    }
+  }
+
   /**
    * Run Zimbabwe HIV testing algorithm via Python CDSS service
    */
@@ -402,16 +693,84 @@ export class CdssService {
   }
 
   /**
-   * Basic drug interaction checking (fallback) - DISABLED
+   * Basic drug interaction checking (fallback) — curated local table.
+   * Covers the highest-risk pairs relevant to Zimbabwe TB/HIV/malaria co-treatment context.
+   * Conservative: only flags known dangerous pairs, never clears unknown combinations.
    */
   private async basicDrugInteractionCheck(drugIds: string[]) {
-    // Return empty result to avoid fake data
+    const KNOWN_INTERACTIONS: Array<{
+      drugA: string; drugB: string;
+      severity: 'critical' | 'major' | 'moderate';
+      description: string;
+      recommendation: string;
+    }> = [
+      // TB/HIV co-treatment — high prevalence in Zimbabwe
+      { drugA: 'rifampicin', drugB: 'efavirenz', severity: 'major', description: 'Rifampicin induces CYP3A4, reducing efavirenz levels ~26%. Sub-therapeutic ARV levels risk treatment failure.', recommendation: 'Increase efavirenz to 800mg/day or switch regimen per national TB/HIV guidelines.' },
+      { drugA: 'rifampicin', drugB: 'nevirapine', severity: 'critical', description: 'Rifampicin reduces nevirapine AUC ~58%. High risk of virological failure.', recommendation: 'Avoid. Use efavirenz-based regimen per WHO TB/HIV co-treatment guidelines.' },
+      { drugA: 'rifampicin', drugB: 'lopinavir', severity: 'critical', description: 'Rifampicin reduces lopinavir levels >75%. Combination not recommended.', recommendation: 'Avoid or use super-boosted LPV/r (400/400mg BD). Consult HIV specialist.' },
+      { drugA: 'rifampicin', drugB: 'dolutegravir', severity: 'major', description: 'Rifampicin reduces dolutegravir AUC ~54%.', recommendation: 'Double dolutegravir to 50mg BD when co-administered with rifampicin.' },
+      { drugA: 'rifampicin', drugB: 'warfarin', severity: 'major', description: 'Rifampicin is a strong CYP2C9 inducer — INR may fall dramatically.', recommendation: 'Monitor INR weekly. Warfarin dose may need to increase 2–5-fold. Recheck until stable.' },
+      // Anticoagulant bleeding risk
+      { drugA: 'warfarin', drugB: 'aspirin', severity: 'major', description: 'Additive bleeding risk — platelet inhibition plus anticoagulation.', recommendation: 'Avoid unless strong indication. If necessary, use lowest aspirin dose and monitor for bleeding.' },
+      { drugA: 'warfarin', drugB: 'ibuprofen', severity: 'major', description: 'NSAIDs inhibit platelets, cause GI erosion and may elevate INR.', recommendation: 'Avoid NSAIDs. Use paracetamol for analgesia. Monitor INR if unavoidable.' },
+      { drugA: 'warfarin', drugB: 'metronidazole', severity: 'major', description: 'Metronidazole inhibits CYP2C9 — INR can double within days.', recommendation: 'Reduce warfarin ~50% empirically. Check INR every 2–3 days during metronidazole course.' },
+      { drugA: 'warfarin', drugB: 'fluconazole', severity: 'major', description: 'Potent CYP2C9 inhibitor — INR may double within 48h.', recommendation: 'Reduce warfarin dose. Monitor INR every 2–3 days. Consider alternative antifungal.' },
+      { drugA: 'warfarin', drugB: 'cotrimoxazole', severity: 'major', description: 'Cotrimoxazole inhibits CYP2C9 — significant INR elevation. Common in HIV patients on CTX prophylaxis.', recommendation: 'Monitor INR closely and reduce warfarin dose as needed.' },
+      // Cardiac
+      { drugA: 'digoxin', drugB: 'amiodarone', severity: 'critical', description: 'Amiodarone doubles digoxin levels — high risk of digoxin toxicity (bradycardia, AV block, arrhythmia).', recommendation: 'Reduce digoxin dose 50% on starting amiodarone. Monitor digoxin levels and ECG.' },
+      { drugA: 'digoxin', drugB: 'clarithromycin', severity: 'major', description: 'Clarithromycin inhibits P-glycoprotein — digoxin levels rise significantly.', recommendation: 'Monitor for digoxin toxicity. Consider dose reduction or alternative antibiotic.' },
+      { drugA: 'digoxin', drugB: 'erythromycin', severity: 'major', description: 'Erythromycin raises digoxin levels and also prolongs QT.', recommendation: 'Monitor digoxin levels. Use azithromycin as alternative if QTc not already prolonged.' },
+      // QT prolongation — critical in malaria treatment context
+      { drugA: 'artemether', drugB: 'amiodarone', severity: 'critical', description: 'Both prolong QT — risk of torsades de pointes.', recommendation: 'Avoid. Use alternative antimalarial. If unavoidable, continuous ECG monitoring required.' },
+      { drugA: 'artemether', drugB: 'ciprofloxacin', severity: 'major', description: 'Additive QT prolongation.', recommendation: 'Use with caution. Obtain baseline ECG. Avoid if QTc >450ms.' },
+      { drugA: 'halofantrine', drugB: 'lumefantrine', severity: 'critical', description: 'Severe additive QT prolongation — risk of fatal arrhythmia.', recommendation: 'Contraindicated. Do not combine.' },
+      // Renal / metabolic
+      { drugA: 'metformin', drugB: 'contrast', severity: 'major', description: 'Contrast can cause AKI, impairing metformin excretion — lactic acidosis risk.', recommendation: 'Hold metformin 48h before and after iodinated contrast. Check renal function before restarting.' },
+      { drugA: 'cotrimoxazole', drugB: 'ramipril', severity: 'major', description: 'Both raise potassium — life-threatening hyperkalemia risk, especially in CKD.', recommendation: 'Monitor potassium within 1 week. Avoid in CKD stage 3b+.' },
+      { drugA: 'cotrimoxazole', drugB: 'lisinopril', severity: 'major', description: 'Both raise potassium — common in HIV patients on CTX prophylaxis and ACE inhibitors.', recommendation: 'Monitor potassium closely. Avoid in advanced CKD.' },
+      { drugA: 'lithium', drugB: 'ibuprofen', severity: 'critical', description: 'NSAIDs reduce renal lithium clearance — lithium toxicity risk (tremor, confusion, seizures).', recommendation: 'Contraindicated. Use paracetamol. Check lithium level urgently if inadvertent co-prescription.' },
+      // Cytotoxic / antibiotic
+      { drugA: 'methotrexate', drugB: 'ibuprofen', severity: 'critical', description: 'NSAIDs reduce methotrexate clearance — severe toxicity risk (myelosuppression, mucositis).', recommendation: 'Contraindicated during methotrexate therapy. Use paracetamol only.' },
+      { drugA: 'ciprofloxacin', drugB: 'theophylline', severity: 'major', description: 'Ciprofloxacin inhibits CYP1A2 — theophylline levels rise, risk of toxicity.', recommendation: 'Reduce theophylline 30–50% or use alternative antibiotic. Monitor theophylline levels.' },
+      { drugA: 'linezolid', drugB: 'fluoxetine', severity: 'critical', description: 'Linezolid is an MAOI — serotonin syndrome risk with SSRIs.', recommendation: 'Contraindicated. Discontinue SSRI ≥2 weeks before starting linezolid.' },
+      { drugA: 'linezolid', drugB: 'sertraline', severity: 'critical', description: 'Serotonin syndrome risk (linezolid MAOI + SSRI).', recommendation: 'Contraindicated. See linezolid + fluoxetine guidance.' },
+    ];
+
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedIds = drugIds.map(normalize);
+
+    const interactions: any[] = [];
+    for (const pair of KNOWN_INTERACTIONS) {
+      const a = normalize(pair.drugA);
+      const b = normalize(pair.drugB);
+      const aMatch = normalizedIds.some(id => id.includes(a) || a.includes(id));
+      const bMatch = normalizedIds.some(id => id.includes(b) || b.includes(id));
+      if (aMatch && bMatch) {
+        interactions.push({
+          drugA: pair.drugA, drugB: pair.drugB,
+          severity: pair.severity,
+          description: pair.description,
+          recommendation: pair.recommendation,
+          source: 'local_fallback',
+        });
+      }
+    }
+
+    const severity_summary = {
+      critical: interactions.filter(i => i.severity === 'critical').length,
+      major: interactions.filter(i => i.severity === 'major').length,
+      moderate: interactions.filter(i => i.severity === 'moderate').length,
+      minor: 0,
+    };
+
     return {
-      hasInteractions: false,
-      interactions: [],
-      severity_summary: { critical: 0, major: 0, moderate: 0, minor: 0 },
-      recommendations: [],
-      source: 'fallback_empty',
+      hasInteractions: interactions.length > 0,
+      interactions,
+      severity_summary,
+      recommendations: interactions.map(i => i.recommendation),
+      source: 'local_fallback',
+      cdss_unavailable: true,
+      warning: 'CDSS service unavailable. Showing local interaction table (critical pairs only). Full checking requires CDSS service.',
     };
   }
 
@@ -419,7 +778,7 @@ export class CdssService {
    * Diagnostic assistance using Python CDSS service
    * Uses intelligent endpoint (rule-based + AI) if available, falls back to rule-based
    */
-  async diagnosisAssist(symptoms: any, useIntelligent: boolean = true, tenantId?: string) {
+  async diagnosisAssist(symptoms: any, useIntelligent: boolean = true, tenantId?: string, tenantDb?: DataSource) {
     try {
       // Handle different input formats
       let symptomList: string[] = [];
@@ -457,7 +816,10 @@ export class CdssService {
               gender: symptoms.gender,
               vitals: symptoms.vitals,
               labs: symptoms.labs,
-              conditions: symptoms.conditions || symptoms.diagnoses || []
+              conditions: symptoms.conditions || symptoms.diagnoses || [],
+              context: symptoms.context || undefined,
+              specialty: symptoms.specialty || undefined,
+              module: symptoms.module || undefined,
             },
             age: symptoms.age || undefined,
             gender: symptoms.gender || undefined,
@@ -467,6 +829,44 @@ export class CdssService {
             20000,
             tenantId,
           );
+          await this.recordGovernedPromptAudit({
+            tenantDb,
+            tenantId,
+            useCase: 'cdss_intelligent_diagnosis',
+            source: 'cdss_service',
+            model: String(
+              intelligentData?.model ||
+              intelligentData?.model_trace?.llm_model ||
+              intelligentData?.provenance?.model_trace?.llm_model ||
+              intelligentData?.ai_models_used?.llm ||
+              'intelligent_diagnosis_proxy',
+            ),
+            patientId: symptoms?.patientId || null,
+            encounterId: symptoms?.encounterId || null,
+            requestBody: {
+              symptomCount: normalizedSymptoms.length,
+              symptomSample: normalizedSymptoms.slice(0, 5),
+              hasVitals: !!symptoms.vitals,
+              hasLabs: !!symptoms.labs,
+              hasClinicalNotes: !!hasClinicalNotes,
+              age: symptoms.age || null,
+              gender: symptoms.gender || null,
+              context: symptoms.context || null,
+              conditions: Array.isArray(symptoms.conditions || symptoms.diagnoses)
+                ? (symptoms.conditions || symptoms.diagnoses).slice(0, 10)
+                : [],
+            },
+            responseSummary: {
+              suggestedDiagnosisCount: Array.isArray(intelligentData?.suggested_diagnoses)
+                ? intelligentData.suggested_diagnoses.length
+                : 0,
+              redFlagCount: Array.isArray(intelligentData?.red_flags) ? intelligentData.red_flags.length : 0,
+              aiEnabled: Boolean(intelligentData?.ai_enabled),
+              abstained: intelligentData?.abstained === true,
+              confidenceBand: intelligentData?.confidence_band || null,
+            },
+            governance: intelligentData?.governance || {},
+          });
           this.logger.log(`Intelligent CDSS response received (AI enabled: ${intelligentData?.ai_enabled})`);
           
           // Return intelligent results if available
@@ -529,21 +929,202 @@ export class CdssService {
     }
   }
 
+  async patientAdherenceAssist(
+    payload: {
+      patientId: string;
+      sessionId?: string;
+      message: string;
+      medications?: string[];
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+    },
+    tenantId?: string,
+  ): Promise<PatientAdherenceAssistantResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'patient_adherence_chat',
+      '/patient/adherence-chat',
+      {
+        patient_id: payload.patientId,
+        session_id: payload.sessionId,
+        message: payload.message,
+        medications: payload.medications || [],
+        history: payload.history || [],
+      },
+      15000,
+      tenantId,
+    );
+
+    return {
+      reply: String(responseData?.reply || '').trim(),
+      intent: responseData?.intent || 'general',
+      adherenceConcern: Boolean(responseData?.adherence_concern),
+      requiresClinicianFollowUp: Boolean(responseData?.requires_clinician_follow_up),
+      urgency: responseData?.urgency === 'urgent' ? 'urgent' : 'routine',
+      confidence: Number(responseData?.confidence || 0),
+      model: String(responseData?.model || 'cdss_patient_adherence_guardrail'),
+      abstained: Boolean(responseData?.abstained),
+      abstainReason: responseData?.abstain_reason || null,
+      reasoning: responseData?.reasoning || '',
+      evidence: Array.isArray(responseData?.evidence) ? responseData.evidence : [],
+      governance: responseData?.governance || {},
+    };
+  }
+
+  async patientSymptomCheck(
+    payload: {
+      symptoms: string[];
+      durationDays?: number;
+      severity?: string;
+      patientContext?: Record<string, any>;
+    },
+    tenantId?: string,
+  ): Promise<PatientSymptomCheckResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'patient_symptom_check',
+      '/symptom-check',
+      {
+        symptoms: payload.symptoms || [],
+        duration_days: payload.durationDays,
+        severity: payload.severity,
+        patient_context: payload.patientContext || {},
+      },
+      12000,
+      tenantId,
+    );
+
+    return {
+      differential: Array.isArray(responseData?.differential) ? responseData.differential : [],
+      triageLevel: responseData?.triage_level || 'routine',
+      recommendedAction: responseData?.recommended_action || 'Schedule appointment with your doctor.',
+      confidence: Number(responseData?.confidence || 0),
+      model: String(responseData?.model || 'symptom_check_rules_v1'),
+      abstained: Boolean(responseData?.abstained),
+      abstainReason: responseData?.abstain_reason || null,
+      evidence: Array.isArray(responseData?.evidence) ? responseData.evidence : [],
+      governance: responseData?.governance || {},
+    };
+  }
+
   /**
-   * Basic diagnostic assistance (fallback) - DISABLED
+   * Basic diagnostic assistance (fallback) — local rule-based engine.
+   * Tuned for Zimbabwe disease burden: TB, HIV, Malaria, Cholera co-prevalence.
+   * Conservative: only surfaces diagnoses with clear symptom support.
    */
   private async basicDiagnosisAssist(symptoms: any) {
-    this.logger.warn(`[FALLBACK] Basic diagnosis assist triggered but disabled to prevent fake data.`);
-    
+    let symptomText = '';
+    if (typeof symptoms === 'string') {
+      symptomText = symptoms.toLowerCase();
+    } else if (symptoms?.symptoms) {
+      symptomText = (Array.isArray(symptoms.symptoms)
+        ? symptoms.symptoms.join(' ')
+        : String(symptoms.symptoms)).toLowerCase();
+    }
+    if (symptoms?.chiefComplaint) symptomText += ' ' + String(symptoms.chiefComplaint).toLowerCase();
+    if (symptoms?.clinicalNotes) symptomText += ' ' + String(symptoms.clinicalNotes).toLowerCase();
+
+    const age = Number(symptoms?.age) || null;
+
+    const has = (pattern: RegExp) => pattern.test(symptomText);
+    const hasFever            = has(/fever|pyrexia|febrile|high.?temp/);
+    const hasCough            = has(/cough|haemoptysis|hemoptysis|sputum/);
+    const hasChestPain        = has(/chest.?pain|chest.?tight|pleuritic/);
+    const hasSob              = has(/short.?ness.?of.?breath|dyspn[oe]a|sob|difficulty.?breath/);
+    const hasProlongedCough   = has(/chronic.?cough|cough.*\d+.?week|week.*cough|cough.*month/);
+    const hasNightSweats      = has(/night.?sweat/);
+    const hasWeightLoss       = has(/weight.?loss|losing.?weight|wasting/);
+    const hasRigors           = has(/rigor|chills|shivering/);
+    const hasDiarrhea         = has(/diarr[h]?[o]?ea|loose.?stool|watery.?stool|bloody.?stool/);
+    const hasVomiting         = has(/vomit|nausea/);
+    const hasHeadache         = has(/headache|head.?ache/);
+    const hasAlteredConsciousness = has(/confused|confusion|unconsci|altered.?mental|seizure/);
+    const hasAbdoPain         = has(/abdomin|abdo.?pain|stomach.?pain|epigastric/);
+    const hasDysuria          = has(/dysuria|burning.?urin|frequency|urgency/);
+    const hasPalpitations     = has(/palpitation|fast.?heart|racing.?heart/);
+    const hasSyncope          = has(/syncope|faint|collapse|pass.?out/);
+
+    type Confidence = 'high' | 'moderate' | 'low';
+    const diagnoses: Array<{ diagnosis: string; probability: number; confidence: Confidence; reasoning: string }> = [];
+    const redFlags: string[] = [];
+    const recommendedTests: string[] = [];
+
+    // Malaria — high base prevalence in Zimbabwe
+    if (hasFever && hasRigors) {
+      diagnoses.push({ diagnosis: 'Malaria', probability: 0.60, confidence: 'moderate', reasoning: 'Fever with rigors is classic presentation of malaria in endemic Zimbabwe.' });
+      recommendedTests.push('Malaria RDT or thick/thin blood film');
+      if (hasAlteredConsciousness) redFlags.push('Altered consciousness with fever — consider cerebral malaria. Urgent IV artesunate required.');
+    } else if (hasFever) {
+      diagnoses.push({ diagnosis: 'Malaria', probability: 0.35, confidence: 'low', reasoning: 'Fever in Zimbabwe — malaria must be excluded regardless of other findings.' });
+      recommendedTests.push('Malaria RDT');
+    }
+
+    // Pulmonary TB — key triggers per WHO W4SS criteria
+    if (hasProlongedCough || (hasCough && hasNightSweats) || (hasCough && hasWeightLoss)) {
+      const tbProb = (hasProlongedCough && (hasNightSweats || hasWeightLoss)) ? 0.65 : 0.45;
+      diagnoses.push({ diagnosis: 'Pulmonary Tuberculosis', probability: tbProb, confidence: tbProb >= 0.6 ? 'moderate' : 'low', reasoning: 'WHO W4SS criteria met: cough ≥2 weeks and/or constitutional symptoms (night sweats, weight loss).' });
+      recommendedTests.push('Sputum GeneXpert MTB/RIF', 'Chest X-ray', 'HIV test (TB/HIV co-infection screening)');
+      if (hasWeightLoss && hasNightSweats && hasCough) redFlags.push('Classic TB symptom triad: cough + weight loss + night sweats. Initiate TB investigations urgently and institute infection control precautions.');
+    }
+
+    // Community-acquired pneumonia
+    if (hasFever && hasCough && hasSob) {
+      diagnoses.push({ diagnosis: 'Community-Acquired Pneumonia', probability: 0.55, confidence: 'moderate', reasoning: 'Fever + productive cough + dyspnoea triad is consistent with pneumonia.' });
+      recommendedTests.push('Chest X-ray', 'Full Blood Count', 'Blood culture (if hospitalised)');
+      redFlags.push('Dyspnoea with fever — assess SpO2 urgently. SpO2 <94% requires supplemental oxygen and prompt antibiotic therapy.');
+    }
+
+    // Typhoid
+    if (hasFever && hasAbdoPain && !hasRigors && age !== null && age > 5) {
+      diagnoses.push({ diagnosis: 'Typhoid Fever', probability: 0.30, confidence: 'low', reasoning: 'Sustained fever with abdominal symptoms without rigors in a school-age or older patient.' });
+      recommendedTests.push('Blood culture (gold standard)', 'Widal test (limited specificity)', 'Full Blood Count');
+    }
+
+    // Cholera / acute gastroenteritis
+    if (hasDiarrhea && hasVomiting) {
+      const severity = has(/rice.?water|profuse|watery/) ? 0.55 : 0.35;
+      diagnoses.push({ diagnosis: 'Acute Gastroenteritis / Cholera', probability: severity, confidence: severity > 0.45 ? 'moderate' : 'low', reasoning: 'Diarrhoea and vomiting — cholera must be considered in Zimbabwe, especially during outbreak periods.' });
+      recommendedTests.push('Stool microscopy and culture', 'Electrolytes (dehydration severity)', 'Cholera RDT if available');
+      redFlags.push('Assess hydration status immediately. Severe dehydration can be fatal within hours. Start ORS or IV fluids per WHO dehydration plan.');
+    }
+
+    // Bacterial meningitis
+    if (hasFever && hasHeadache && hasAlteredConsciousness) {
+      diagnoses.push({ diagnosis: 'Bacterial Meningitis', probability: 0.55, confidence: 'moderate', reasoning: 'Fever + headache + altered consciousness = meningism triad until proven otherwise.' });
+      recommendedTests.push('Lumbar puncture (after fundoscopy/CT if raised ICP suspected)', 'Blood cultures', 'Blood glucose and FBC');
+      redFlags.push('EMERGENCY: Fever + altered consciousness + headache. Administer empiric ceftriaxone IV immediately if bacterial meningitis suspected — do not delay treatment awaiting LP.');
+    }
+
+    // ACS / cardiac chest pain
+    if (hasChestPain && (hasSob || hasPalpitations || hasSyncope)) {
+      diagnoses.push({ diagnosis: 'Acute Coronary Syndrome', probability: 0.40, confidence: 'low', reasoning: 'Chest pain with associated cardiac symptoms warrants urgent ACS workup.' });
+      recommendedTests.push('12-lead ECG (urgent)', 'Troponin', 'Chest X-ray');
+      redFlags.push('Chest pain with dyspnoea or syncope — obtain 12-lead ECG immediately. STEMI requires thrombolysis within 30 minutes of diagnosis.');
+    }
+
+    // UTI
+    if (hasDysuria && !hasFever) {
+      diagnoses.push({ diagnosis: 'Urinary Tract Infection', probability: 0.55, confidence: 'moderate', reasoning: 'Dysuria/frequency without fever suggests lower UTI.' });
+      recommendedTests.push('Urine dipstick', 'Midstream urine culture and sensitivity');
+    }
+
+    diagnoses.sort((a, b) => b.probability - a.probability);
+    const topDiagnoses = diagnoses.slice(0, 5).map(d => ({
+      diagnosis: d.diagnosis,
+      probability: d.probability,
+      confidence: d.confidence,
+      reasoning: d.reasoning,
+      matching_symptoms: [],
+      source: 'local_fallback',
+    }));
+
     return {
-      suggested_diagnoses: [],
-      recommended_tests: [],
-      red_flags: [],
-      differentialDiagnoses: [],
-      recommendedTests: [],
-      urgencyLevel: 'unknown',
-      source: 'fallback_empty',
-      error: 'CDSS service unavailable'
+      suggested_diagnoses: topDiagnoses,
+      recommended_tests: [...new Set(recommendedTests)],
+      red_flags: redFlags,
+      differentialDiagnoses: topDiagnoses,
+      recommendedTests: [...new Set(recommendedTests)],
+      urgencyLevel: redFlags.length > 0 ? 'high' : diagnoses.some(d => d.probability >= 0.5) ? 'moderate' : 'low',
+      source: 'local_fallback',
+      cdss_unavailable: true,
+      warning: 'CDSS service unavailable. Showing local rule-based fallback. Results are indicative only — must be validated clinically.',
     };
   }
 
@@ -551,36 +1132,8 @@ export class CdssService {
    * Get clinical guidelines from Python CDSS service
    * Now integrates WHO Smart Guidelines if available
    */
-  async getGuidelines(condition: string, patientData?: any, tenantId?: string) {
-    // Try WHO Smart Guidelines first (if service available)
-    if (this.whoSmartGuidelinesService) {
-      try {
-        const whoGuidelines = await this.whoSmartGuidelinesService.getRecommendations(condition, patientData);
-        if (whoGuidelines && whoGuidelines.length > 0) {
-          this.logger.log(`Using WHO Smart Guidelines for: ${condition}`);
-          return {
-            guidelines: whoGuidelines.map(g => ({
-              title: g.title,
-              description: g.description,
-              source: 'WHO Smart Guidelines',
-              priority: g.priority
-            })),
-            recommendations: whoGuidelines.map(g => g.description),
-            contraindications: [],
-            medication_warnings: [],
-            evidence_level: 'high', // WHO Smart Guidelines are evidence-based
-            matched_condition: condition,
-            source: 'who_smart_guidelines',
-            whoGuidelines: whoGuidelines
-          };
-        }
-      } catch (error: any) {
-        this.logger.debug(`WHO Smart Guidelines not available: ${error.message}`);
-        // Continue to CDSS guidelines
-      }
-    }
-    
-    // Fallback to CDSS guidelines
+  async getGuidelines(condition: string, patientData?: any, tenantId?: string, tenantDb?: DataSource) {
+    // Governed CDSS knowledge layer is the primary source.
     try {
       const responseData = await this.postWithPolicy<any>(
         'guidelines_check',
@@ -591,10 +1144,39 @@ export class CdssService {
         patient_gender: patientData?.gender,
         comorbidities: patientData?.comorbidities || patientData?.conditions || [],
         medications: patientData?.medications || [],
+        specialty: patientData?.specialty || null,
+        module: patientData?.module || null,
         },
         10000,
         tenantId,
       );
+      await this.recordGovernedPromptAudit({
+        tenantDb,
+        tenantId,
+        useCase: 'cdss_guidelines_check',
+        source: 'cdss_service',
+        model: String(responseData?.model || 'guidelines_check_proxy'),
+        patientId: patientData?.patientId || null,
+        encounterId: patientData?.encounterId || null,
+        requestBody: {
+          condition,
+          patientAge: patientData?.age ?? null,
+          patientGender: patientData?.gender ?? null,
+          comorbidityCount: Array.isArray(patientData?.comorbidities || patientData?.conditions)
+            ? (patientData?.comorbidities || patientData?.conditions).length
+            : 0,
+          medicationCount: Array.isArray(patientData?.medications) ? patientData.medications.length : 0,
+          specialty: patientData?.specialty || null,
+          module: patientData?.module || null,
+        },
+        responseSummary: {
+          recommendationCount: Array.isArray(responseData?.recommendations) ? responseData.recommendations.length : 0,
+          contraindicationCount: Array.isArray(responseData?.contraindications) ? responseData.contraindications.length : 0,
+          evidenceLevel: responseData?.evidence_level || null,
+          abstained: responseData?.abstained === true,
+        },
+        governance: responseData?.governance || {},
+      });
 
       return {
         guidelines: responseData.guidelines || [],
@@ -604,10 +1186,42 @@ export class CdssService {
         evidence_level: responseData.evidence_level,
         matched_condition: responseData.matched_condition,
         source: 'advanced_cdss',
+        knowledge_metadata: responseData.knowledge_metadata || null,
+        abstained: responseData.abstained === true,
+        abstain_reason: responseData.abstain_reason || null,
       };
     } catch (error: any) {
       this.logger.warn(`CDSS guidelines unavailable: ${error.message}`);
-      // Fallback to basic guidelines
+      if (this.whoSmartGuidelinesService) {
+        try {
+          const whoGuidelines = await this.whoSmartGuidelinesService.getRecommendations(condition, patientData);
+          if (whoGuidelines && whoGuidelines.length > 0) {
+            this.logger.log(`Using WHO Smart Guidelines fallback for: ${condition}`);
+            return {
+              guidelines: whoGuidelines.map(g => ({
+                title: g.title,
+                description: g.description,
+                source: 'WHO Smart Guidelines',
+                priority: g.priority
+              })),
+              recommendations: whoGuidelines.map(g => g.description),
+              contraindications: [],
+              medication_warnings: [],
+              evidence_level: 'high',
+              matched_condition: condition,
+              source: 'who_smart_guidelines',
+              knowledge_metadata: {
+                source_name: 'WHO Smart Guidelines',
+                source_version: 'fhir-local',
+                fallback_used: true,
+              },
+              whoGuidelines: whoGuidelines
+            };
+          }
+        } catch (whoError: any) {
+          this.logger.debug(`WHO Smart Guidelines fallback unavailable: ${whoError.message}`);
+        }
+      }
       return this.basicGetGuidelines(condition);
     }
   }
@@ -615,16 +1229,60 @@ export class CdssService {
   /**
    * Search for clinical guidelines using RAG and WHO Smart Guidelines
    */
-  async searchGuidelines(query: string, limit: number = 5, patientContext?: any, tenantId?: string) {
+  async searchGuidelines(query: string, limit: number = 5, patientContext?: any, tenantId?: string, tenantDb?: DataSource) {
     const results = {
       query,
       citations: [],
       count: 0,
-      error: null
+      error: null,
+      governed_corpus_used: false,
     };
 
     try {
-      // 1. Search WHO Smart Guidelines (Local)
+      // 1. Search governed CDSS knowledge layer
+      try {
+        const responseData = await this.postWithPolicy<any>(
+          'guidelines_search',
+          '/guidelines/search',
+          {
+          query,
+          limit,
+          patient_context: patientContext,
+          specialty: patientContext?.specialty || null,
+          module: patientContext?.module || null,
+          },
+          15000,
+          tenantId,
+        );
+        await this.recordGovernedPromptAudit({
+          tenantDb,
+          tenantId,
+          useCase: 'cdss_guidelines_search',
+          source: 'cdss_service',
+          model: String(responseData?.model || 'guidelines_search_proxy'),
+          patientId: patientContext?.patientId || null,
+          encounterId: patientContext?.encounterId || null,
+          requestBody: {
+            query,
+            limit,
+            patientContextKeys: Object.keys(patientContext || {}).sort(),
+            specialty: patientContext?.specialty || null,
+            module: patientContext?.module || null,
+          },
+          responseSummary: {
+            citationCount: Array.isArray(responseData?.citations) ? responseData.citations.length : 0,
+            abstained: responseData?.abstained === true,
+          },
+          governance: responseData?.governance || {},
+        });
+        if (responseData && responseData.citations) {
+          results.citations.push(...responseData.citations);
+        }
+      } catch (error: any) {
+        this.logger.warn(`CDSS guideline search failed: ${error.message}`);
+      }
+
+      // 2. Add WHO local search as fallback/supplementary source
       if (this.whoSmartGuidelinesService) {
         try {
           const whoResults = await this.whoSmartGuidelinesService.search(query);
@@ -634,32 +1292,16 @@ export class CdssService {
               text: r.description || r.title,
               source: r.source,
               url: null,
-              score: 1.0 // High confidence for local matches
+              score: 1.0,
+              metadata: {
+                governed_source: true,
+                source_version: 'fhir-local',
+              },
             })));
           }
-        } catch (err) {
+        } catch (err: any) {
           this.logger.warn(`WHO Smart Guidelines search failed: ${err.message}`);
         }
-      }
-
-      // 2. Search External CDSS (RAG)
-      try {
-        const responseData = await this.postWithPolicy<any>(
-          'guidelines_search',
-          '/guidelines/search',
-          {
-          query,
-          limit,
-          patient_context: patientContext
-          },
-          15000,
-          tenantId,
-        );
-        if (responseData && responseData.citations) {
-          results.citations.push(...responseData.citations);
-        }
-      } catch (error: any) {
-        this.logger.warn(`CDSS guideline search failed: ${error.message}`);
       }
       
       // If no results found (either from WHO or CDSS), use fallback
@@ -670,6 +1312,7 @@ export class CdssService {
       }
       
       results.count = results.citations.length;
+      results.governed_corpus_used = results.citations.some((citation: any) => citation?.metadata?.governed_source);
       return results;
       
     } catch (error: any) {
@@ -717,35 +1360,575 @@ export class CdssService {
     }
   }
 
-  /**
-   * Basic guideline search (fallback) - NOW DISABLED to prevent fake data
-   */
-  private basicSearchGuidelines(query: string) {
-    // We intentionally return empty results here to avoid showing
-    // hardcoded/outdated/fake guidelines when the AI service is down.
-    this.logger.warn(`[FALLBACK] Basic search triggered for query "${query}" but disabled to prevent fake data.`);
-    
+  async patientSummarize(
+    payload: {
+      patientId?: string;
+      patientName?: string;
+      dob?: string | Date | null;
+      gender?: string;
+      clinicalNotes?: string[];
+      recentVitals?: Record<string, any>;
+      age?: number;
+      encounterId?: string;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<PatientSummarizationResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'patient_summarize',
+      '/patient/summarize',
+      {
+        patient_id: payload.patientId,
+        patient_name: payload.patientName,
+        dob: payload.dob,
+        gender: payload.gender,
+        clinical_notes: payload.clinicalNotes || [],
+        recent_vitals: payload.recentVitals || {},
+        age: payload.age,
+      },
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'cdss_patient_summarize',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'patient_summarization_proxy'),
+      patientId: payload.patientId || null,
+      encounterId: payload.encounterId || null,
+      requestBody: {
+        hasPatientIdentity: !!payload.patientName,
+        clinicalNoteCount: Array.isArray(payload.clinicalNotes) ? payload.clinicalNotes.length : 0,
+        hasRecentVitals: !!payload.recentVitals && Object.keys(payload.recentVitals).length > 0,
+        age: payload.age ?? null,
+        gender: payload.gender || null,
+      },
+      responseSummary: {
+        summaryPresent: Boolean(
+          responseData?.summary ||
+          responseData?.one_liner ||
+          responseData?.text ||
+          responseData?.clinical_summary,
+        ),
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async analyzeRegistrationDocument(
+    payload: {
+      documentType: string;
+      extractedText: string;
+      fileName?: string;
+      mimeType?: string;
+      language?: string;
+      patientId?: string;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<RegistrationDocumentAnalysisResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'registration_document_analyze',
+      '/registration/documents/analyze',
+      {
+        document_type: payload.documentType,
+        extracted_text: payload.extractedText,
+        file_name: payload.fileName,
+        mime_type: payload.mimeType,
+        language: payload.language || 'en',
+        patient_id: payload.patientId,
+      },
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'registration_document_intelligence',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'registration_document_intelligence_proxy'),
+      patientId: payload.patientId || null,
+      requestBody: {
+        documentType: payload.documentType,
+        fileName: payload.fileName || null,
+        mimeType: payload.mimeType || null,
+        language: payload.language || 'en',
+        extractedTextLength: payload.extractedText?.length || 0,
+      },
+      responseSummary: {
+        fieldCount: Object.keys(responseData?.structured_payload || {}).length,
+        flagCount: Array.isArray(responseData?.flags) ? responseData.flags.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
     return {
-      query,
-      citations: [],
-      count: 0,
-      error: null
+      documentType: String(responseData?.document_type || payload.documentType || 'unknown'),
+      structuredPayload: responseData?.structured_payload || {},
+      summary: responseData?.summary || null,
+      flags: Array.isArray(responseData?.flags) ? responseData.flags : [],
+      confidence:
+        responseData?.confidence === null || responseData?.confidence === undefined
+          ? null
+          : Number(responseData.confidence),
+      model: responseData?.model || 'registration_document_intelligence_proxy',
+      governance: responseData?.governance || {},
+      abstained: responseData?.abstained === true,
+      abstainReason: responseData?.abstain_reason || null,
+    };
+  }
+
+  async requestGovernedJson(
+    payload: {
+      useCase: string;
+      schemaDescription: string;
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+      templateVersion?: string;
+      temperature?: number;
+      sessionId?: string;
+      patientId?: string;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<GovernedJsonCompletionResponse> {
+    // Consent check — only for direct patient-context calls
+    if (payload.patientId && tenantDb && this.patientConsentService) {
+      await this.patientConsentService.requireAiConsent(payload.patientId, 'cdss_ai_processing', tenantDb);
+    }
+
+    const responseData = await this.postWithPolicy<any>(
+      `governed_json_${payload.useCase}`,
+      '/governed/json',
+      {
+        use_case: payload.useCase,
+        schema_description: payload.schemaDescription,
+        messages: payload.messages,
+        template_version: payload.templateVersion || 'governed-json-v1',
+        temperature: payload.temperature ?? 0.1,
+        session_id: payload.sessionId || null,
+        patient_id: payload.patientId || null,
+      },
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: payload.useCase,
+      source: 'cdss_service',
+      model: String(responseData?.model || 'governed_json_proxy'),
+      patientId: payload.patientId || null,
+      encounterId: payload.sessionId || null,
+      requestBody: {
+        messageCount: payload.messages.length,
+        schemaLength: payload.schemaDescription.length,
+        templateVersion: payload.templateVersion || 'governed-json-v1',
+      },
+      responseSummary: {
+        jsonKeys: Object.keys(responseData?.json || {}).length,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return {
+      json: responseData?.json || {},
+      model: String(responseData?.model || 'governed_json_proxy'),
+      audit: responseData?.audit || {},
+      governance: responseData?.governance || {},
+    };
+  }
+
+  async ambientTranscriptionStream(
+    payload: {
+      sessionId: string;
+      audioBase64: string;
+      context?: Record<string, any>;
+      patientId?: string;
+      appointmentId?: string;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<AmbientTranscriptionStreamResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'ambient_transcription_stream',
+      '/transcription/stream',
+      {
+        audio: payload.audioBase64,
+        session_id: payload.sessionId,
+        context: payload.context || {},
+      },
+      20000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'voice_soap_generation',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'ambient_transcription_proxy'),
+      patientId: payload.patientId || null,
+      encounterId: payload.appointmentId || null,
+      requestBody: {
+        sessionId: payload.sessionId,
+        audioLength: payload.audioBase64?.length || 0,
+        contextKeys: Object.keys(payload.context || {}).sort(),
+      },
+      responseSummary: {
+        transcriptPresent: Boolean(responseData?.transcript),
+        diagnosisCount: Array.isArray(responseData?.entities?.diagnoses) ? responseData.entities.diagnoses.length : 0,
+        orderCount: Array.isArray(responseData?.entities?.orders) ? responseData.entities.orders.length : 0,
+        alertCount: Array.isArray(responseData?.entities?.alerts) ? responseData.entities.alerts.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return {
+      transcript: String(responseData?.transcript || ''),
+      entities: {
+        diagnoses: Array.isArray(responseData?.entities?.diagnoses) ? responseData.entities.diagnoses : [],
+        medications: Array.isArray(responseData?.entities?.medications) ? responseData.entities.medications : [],
+        allergies: Array.isArray(responseData?.entities?.allergies) ? responseData.entities.allergies : [],
+        orders: Array.isArray(responseData?.entities?.orders) ? responseData.entities.orders : [],
+        vitals: Array.isArray(responseData?.entities?.vitals) ? responseData.entities.vitals : [],
+        alerts: Array.isArray(responseData?.entities?.alerts) ? responseData.entities.alerts : [],
+      },
+      draftNote: responseData?.draft_note || {},
+      model: responseData?.model || 'ambient_transcription_proxy',
+      abstained: responseData?.abstained === true,
+      abstainReason: responseData?.abstain_reason || null,
+      governance: responseData?.governance || {},
+    };
+  }
+
+  async triageInboxItem(
+    payload: {
+      sourceType: string;
+      title: string;
+      content: string;
+      patientId?: string;
+      sourceId?: string;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<InboxTriageResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'inbox_triage',
+      '/inbox/triage',
+      {
+        source_type: payload.sourceType,
+        title: payload.title,
+        content: payload.content,
+        patient_id: payload.patientId,
+      },
+      10000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'inbox_triage',
+      source: 'cdss_service',
+      model: String(responseData?.triage_model || responseData?.model || 'inbox_triage_proxy'),
+      patientId: payload.patientId || null,
+      requestBody: {
+        sourceType: payload.sourceType,
+        sourceId: payload.sourceId || null,
+        titleLength: payload.title?.length || 0,
+        contentLength: payload.content?.length || 0,
+      },
+      responseSummary: {
+        priority: responseData?.priority || 'routine',
+        triageScore: Number(responseData?.triage_score || 0),
+        hasDraftReply: Boolean(responseData?.draft_reply),
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return {
+      priority: responseData?.priority || 'routine',
+      priority_reason: responseData?.priority_reason || 'Default triage.',
+      triage_score: Number(responseData?.triage_score || 0),
+      triage_model: String(responseData?.triage_model || responseData?.model || 'inbox_triage_proxy'),
+      due_by_hours: responseData?.due_by_hours,
+      draft_reply: responseData?.draft_reply,
+      governance: responseData?.governance || {},
+      abstained: responseData?.abstained === true,
     };
   }
 
   /**
-   * Basic guidelines (fallback) - NOW DISABLED to prevent fake data
+   * Basic guideline search (fallback) — keyword-to-guideline mapping.
+   * Returns key clinical points from local evidence base when CDSS is offline.
+   */
+  private basicSearchGuidelines(query: string) {
+    const q = query.toLowerCase();
+
+    const KEYWORD_MAP: Record<string, string[]> = {
+      tuberculosis: [
+        'New DS-TB: 2HRZE intensive phase + 4HR continuation (WHO 2022)',
+        'DOT (Directly Observed Therapy) recommended for entire treatment course',
+        'Screen all household contacts; offer LTBI treatment to contacts aged <5 or HIV+',
+        'MDR-TB: refer to national MDR-TB programme immediately — do not treat empirically',
+        'TB/HIV co-treatment: start ART within 2–8 weeks of TB treatment initiation',
+      ],
+      malaria: [
+        'Uncomplicated falciparum malaria first-line: Artemether-Lumefantrine 6-dose over 3 days',
+        'Take AL with food or milk for optimal absorption',
+        'Severe malaria: IV Artesunate 2.4mg/kg at 0h, 12h, 24h then daily — admit to hospital',
+        'Pregnant women first trimester: quinine + clindamycin; AL acceptable from second trimester',
+        'Check G6PD before primaquine for P. vivax radical cure',
+      ],
+      hiv: [
+        'Test and Treat: start ART same day as HIV diagnosis',
+        'Preferred first-line Zimbabwe: TDF + 3TC + DTG (dolutegravir-based)',
+        'Viral load at 6 months then annually if suppressed (<1000 copies/mL)',
+        'Cotrimoxazole prophylaxis: all patients with CD4 <200 or WHO stage 3/4',
+        'TB screening at every visit using W4SS (cough, fever, night sweats, weight loss)',
+      ],
+      hypertension: [
+        'Target BP <140/90 for most adults; <130/80 for diabetes or CKD',
+        'First-line: ACE inhibitor (or ARB) ± calcium channel blocker ± thiazide diuretic',
+        'Lifestyle: low-sodium diet, exercise 150min/week, weight loss, limit alcohol',
+        'Hypertensive emergency (BP ≥180/120 + organ damage): IV labetalol or nitroprusside',
+        'Avoid ACE inhibitors/ARBs in pregnancy — use methyldopa or nifedipine SR',
+      ],
+      diabetes: [
+        'Target HbA1c <7% for most; <8% for elderly with comorbidities',
+        'First-line: Metformin 500mg BD with meals, titrate to 1000mg BD',
+        'Annual: HbA1c, foot exam, eye exam, microalbuminuria, renal function, lipids',
+        'Stop metformin if eGFR <30mL/min — renal dose adjustment required',
+        'Add SGLT2 inhibitor or GLP-1 agonist if CVD or CKD present',
+      ],
+      sepsis: [
+        'Hour-1 bundle: blood cultures x2, serum lactate, IV broad-spectrum antibiotics, 30ml/kg crystalloid',
+        'IV antibiotics must be given within 1 hour of sepsis recognition',
+        'Target MAP ≥65mmHg — start noradrenaline if fluids insufficient',
+        'Lactate >4mmol/L = septic shock — ICU admission required',
+        'Re-evaluate haemodynamic status at 1h and 3h after resuscitation',
+      ],
+      pneumonia: [
+        'CURB-65 scoring: Confusion, Urea >7, RR >30, BP <90/60, Age >65',
+        'CURB-65 0–1: outpatient amoxicillin 500mg TDS × 5 days',
+        'CURB-65 ≥2: hospital admission, IV amoxicillin-clavulanate or ceftriaxone',
+        'SpO2 target ≥94% — start O2 if below threshold',
+        'HIV test in all pneumonia patients in Zimbabwe (Pneumocystis jirovecii risk)',
+      ],
+      cholera: [
+        'Assess dehydration: WHO Plan A (mild), Plan B (moderate ORS), Plan C (severe IV Ringer\'s)',
+        'Adults: ORS 75ml/kg over 4h for moderate dehydration',
+        'Antibiotic: doxycycline 300mg single dose (adults); azithromycin for children/pregnant',
+        'Zinc supplementation for children <5 years (10–20mg/day × 10–14 days)',
+        'Isolation and case notification to district health office within 24h',
+      ],
+      heart_failure: [
+        'HFrEF cornerstone: ACE inhibitor (or ARB) + beta-blocker + spironolactone',
+        'Daily weight monitoring — escalate if >2kg gain over 2 days',
+        'Furosemide for congestion — titrate to euvolaemia',
+        'Fluid restriction <1.5L/day in decompensated HF',
+        'Avoid NSAIDs, diltiazem/verapamil in HFrEF, thiazolidinediones, high-sodium diet',
+      ],
+    };
+
+    const citations: Array<{ title: string; text: string; source: string; url: null; score: number }> = [];
+    for (const [topic, points] of Object.entries(KEYWORD_MAP)) {
+      if (q.includes(topic) || topic.split('_').some(w => q.includes(w))) {
+        for (const point of points.slice(0, 3)) {
+          citations.push({ title: `${topic.replace(/_/g, ' ')} — key guideline point`, text: point, source: 'Local Clinical Guidelines (Fallback)', url: null, score: 0.75 });
+        }
+      }
+    }
+    // Partial word match if no direct hit
+    if (citations.length === 0) {
+      for (const [topic, points] of Object.entries(KEYWORD_MAP)) {
+        const words = q.split(/\s+/).filter(w => w.length > 3);
+        if (words.some(w => topic.includes(w) || w.includes(topic.split('_')[0]))) {
+          citations.push({ title: `${topic.replace(/_/g, ' ')} — related guideline`, text: points[0], source: 'Local Clinical Guidelines (Fallback)', url: null, score: 0.4 });
+          break;
+        }
+      }
+    }
+
+    return {
+      query,
+      citations,
+      count: citations.length,
+      error: null,
+      source: 'local_fallback',
+      cdss_unavailable: true,
+    };
+  }
+
+  /**
+   * Basic guidelines (fallback) — curated local evidence-based guideline map.
+   * Covers 10 conditions with highest clinical burden in Zimbabwe.
    */
   private async basicGetGuidelines(condition: string) {
-    // Return empty/generic structure to avoid hardcoded fake guidelines
+    type GuidelineEntry = { title: string; source: string; recommendations: string[]; contraindications: Record<string, string> };
+    const LOCAL_GUIDELINES: Record<string, GuidelineEntry> = {
+      hypertension: {
+        title: 'Hypertension Management',
+        source: 'WHO/JNC 2023',
+        recommendations: [
+          'Target BP <140/90 for most adults; <130/80 for diabetes or CKD',
+          'First-line: ACE inhibitor (or ARB) + thiazide diuretic ± calcium channel blocker',
+          'Lifestyle modifications: low-sodium diet, exercise 150min/week, weight loss, limit alcohol',
+          'Hypertensive urgency: oral amlodipine or captopril. Emergency (+ organ damage): IV labetalol',
+          'Monitor BP every 4 weeks until controlled, then every 3–6 months',
+        ],
+        contraindications: { pregnancy: 'Avoid ACE inhibitors/ARBs. Use methyldopa or nifedipine SR.' },
+      },
+      tuberculosis: {
+        title: 'TB Treatment — WHO 2022 Guidelines',
+        source: 'WHO 2022 / MOHCC Zimbabwe',
+        recommendations: [
+          'New DS-TB: 2HRZE (intensive) / 4HR (continuation) — total 6 months',
+          'DOT (Directly Observed Therapy) for entire treatment course',
+          'Test for HIV at diagnosis — co-treatment required',
+          'MDR-TB: refer to national MDR-TB programme — do not treat empirically',
+          'Notify district TB coordinator within 3 days of diagnosis',
+          'Contact tracing: screen all household contacts; offer LTBI treatment to <5 years or HIV+',
+        ],
+        contraindications: { liver_disease: 'Pyrazinamide and isoniazid — monitor LFTs. Withhold if transaminases >5× ULN.' },
+      },
+      malaria: {
+        title: 'Malaria Treatment — Zimbabwe National Guidelines',
+        source: 'MOHCC Zimbabwe 2023',
+        recommendations: [
+          'Uncomplicated falciparum: Artemether-Lumefantrine (AL) 6-dose over 3 days',
+          'Take AL with food or milk for optimal absorption',
+          'Severe/complicated: IV Artesunate 2.4mg/kg at 0h, 12h, 24h then daily — admit',
+          'Treat severe anaemia (Hb <8g/dL) concurrently',
+          'Pregnant women first trimester: quinine + clindamycin; AL acceptable from second trimester',
+          'Check G6PD before primaquine for P. vivax radical cure',
+        ],
+        contraindications: { first_trimester: 'Avoid artemisinin combinations in first trimester. Use quinine + clindamycin.' },
+      },
+      hiv: {
+        title: 'HIV/ART Management',
+        source: 'WHO 2021 / MOHCC Zimbabwe',
+        recommendations: [
+          'Test and Treat: start ART same day as HIV diagnosis',
+          'Preferred first-line: TDF + 3TC + DTG (dolutegravir-based)',
+          'Viral load at 6 months, then annually if suppressed',
+          'Cotrimoxazole prophylaxis: CD4 <200 or WHO stage 3/4',
+          'TB screening at every visit (W4SS: cough, fever, night sweats, weight loss)',
+          'Isoniazid Preventive Therapy (IPT) for all HIV+ without active TB',
+        ],
+        contraindications: { pregnancy: 'TDF + 3TC + DTG preferred in pregnancy. Discuss efavirenz risks in first trimester.' },
+      },
+      diabetes: {
+        title: 'Type 2 Diabetes Management',
+        source: 'ADA 2024',
+        recommendations: [
+          'Target HbA1c <7% for most; <8% for elderly/complex comorbidities',
+          'First-line: Metformin 500mg BD with meals, titrate to 1000mg BD',
+          'Add SGLT2 inhibitor or GLP-1 agonist if CVD or CKD present',
+          'Monitor: HbA1c q3–6mo until stable, then annually; foot exam, eye exam, microalbuminuria, renal function annually',
+          'Lifestyle: low glycaemic diet, 150min moderate exercise/week',
+        ],
+        contraindications: { renal_impairment: 'Stop metformin if eGFR <30mL/min. Contrast dye: hold metformin 48h before and after.' },
+      },
+      pneumonia: {
+        title: 'Community-Acquired Pneumonia',
+        source: 'WHO/BTS Guidelines',
+        recommendations: [
+          'Assess severity with CURB-65 (Confusion, Urea >7, RR >30, BP <90/60, Age >65)',
+          'CURB-65 0–1: outpatient amoxicillin 500mg TDS × 5 days',
+          'CURB-65 ≥2: hospital admission, IV amoxicillin-clavulanate or ceftriaxone',
+          'CURB-65 3–5: consider ICU, broad-spectrum IV antibiotics',
+          'SpO2 target ≥94% — start O2 if below threshold',
+          'HIV test in all hospitalised pneumonia patients in Zimbabwe',
+        ],
+        contraindications: { penicillin_allergy: 'Mild CAP: azithromycin monotherapy or doxycycline.' },
+      },
+      sepsis: {
+        title: 'Sepsis Management — Surviving Sepsis Campaign',
+        source: 'SSC 2021',
+        recommendations: [
+          'Hour-1 Bundle: blood cultures ×2, serum lactate, IV broad-spectrum antibiotics, 30ml/kg crystalloid',
+          'IV antibiotics within 1 hour of recognition',
+          'Target MAP ≥65mmHg — noradrenaline if fluids insufficient',
+          'Lactate >4mmol/L = septic shock — ICU admission required',
+          'Re-assess at 1h and 3h post-resuscitation',
+        ],
+        contraindications: {},
+      },
+      heart_failure: {
+        title: 'Heart Failure Management',
+        source: 'ESC/ACC 2022',
+        recommendations: [
+          'HFrEF: ACE inhibitor + beta-blocker + spironolactone as cornerstone',
+          'Daily weight monitoring — escalate if >2kg in 2 days',
+          'Furosemide for congestion — titrate to euvolaemia',
+          'Fluid restriction <1.5L/day in decompensated HF',
+          'Avoid NSAIDs, CCBs (diltiazem/verapamil), thiazolidinediones, high-sodium diet',
+        ],
+        contraindications: { hypotension: 'Hold ACE inhibitor/ARB if systolic BP <90mmHg.' },
+      },
+      asthma: {
+        title: 'Asthma Management — GINA 2024',
+        source: 'GINA 2024',
+        recommendations: [
+          'Low-dose ICS (budesonide 200–400mcg/day) + SABA PRN for steps 1–2',
+          'Low-dose ICS-LABA maintenance for step 3',
+          'Acute exacerbation: salbutamol 4–8 puffs q20min × 3, systemic corticosteroids',
+          'SpO2 <92% or severe: hospital admission, O2, IV magnesium sulfate 2g over 20min',
+          'Assess and avoid triggers: dust, smoke, aspirin/NSAIDs, cold air',
+        ],
+        contraindications: { pregnancy: 'Preferred ICS in pregnancy: budesonide. SABAs are safe.' },
+      },
+      copd: {
+        title: 'COPD Management — GOLD 2024',
+        source: 'GOLD 2024',
+        recommendations: [
+          'Smoking cessation — single most important intervention',
+          'SABA (salbutamol) for symptom relief; add LAMA (tiotropium) for persistent symptoms',
+          'LAMA + LABA for breathlessness despite monotherapy',
+          'ICS-containing regimens for ≥2 exacerbations/year or ≥1 hospitalisation',
+          'Annual influenza vaccination; pneumococcal vaccination',
+        ],
+        contraindications: {},
+      },
+    };
+
+    const key = condition.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const guideline = LOCAL_GUIDELINES[key] ?? Object.entries(LOCAL_GUIDELINES).find(([k]) => key.includes(k) || k.includes(key.split('_')[0]))?.[1];
+
+    if (guideline) {
+      return {
+        guidelines: [{ condition, guidelines: guideline.recommendations }],
+        recommendations: guideline.recommendations,
+        contraindications: Object.entries(guideline.contraindications).map(([k, v]) => `${k}: ${v}`),
+        medication_warnings: [],
+        evidence_level: 'high',
+        matched_condition: condition,
+        source: 'local_fallback',
+        cdss_unavailable: true,
+        warning: 'CDSS service unavailable. Showing local evidence-based guidelines. Verify with current national protocols.',
+      };
+    }
+
     return {
-      guidelines: [{ condition, guidelines: ['Guideline service unavailable'] }],
-      recommendations: [],
+      guidelines: [{ condition, guidelines: ['No local guideline found. Consult current national protocols or UpToDate.'] }],
+      recommendations: ['Consult current national treatment protocols for this condition.'],
       contraindications: [],
       medication_warnings: [],
       evidence_level: 'unknown',
       matched_condition: condition,
-      source: 'fallback_empty',
+      source: 'local_fallback_empty',
+      cdss_unavailable: true,
     };
   }
 
@@ -755,6 +1938,18 @@ export class CdssService {
   async riskAssessment(patientData: any, tenantDb?: DataSource, tenantId?: string) {
     try {
       const { patientId, age, gender, vitals, medicalHistory, medications, diagnoses, labResults } = patientData;
+      const normalizedDiagnoses = Array.isArray(diagnoses || medicalHistory)
+        ? (diagnoses || medicalHistory).map((entry: any) => {
+            if (typeof entry === 'string') return entry;
+            return String(entry?.name || entry?.description || entry?.code || 'unknown');
+          })
+        : [];
+      const normalizedMedications = Array.isArray(medications)
+        ? medications.map((entry: any) => {
+            if (typeof entry === 'string') return entry;
+            return String(entry?.name || entry?.drug_name || entry?.medication || 'unknown');
+          })
+        : [];
       
       // Fetch historical data if database connection available
       let historicalData: any = {};
@@ -793,9 +1988,22 @@ export class CdssService {
       const requestPayload: any = {
         patient_id: patientId || 'unknown',
         vitals: formattedVitals,
-        medications: medications || [],
-        diagnoses: diagnoses || medicalHistory || [],
+        medications: normalizedMedications,
+        diagnoses: normalizedDiagnoses,
         lab_results: labResults,
+        context: patientData?.context || null,
+        specialty: patientData?.specialty || null,
+        module: patientData?.module || null,
+        patient_context: {
+          age: age || null,
+          gender: gender || null,
+          specialty: patientData?.specialty || null,
+          module: patientData?.module || null,
+          is_pregnant:
+            patientData?.isPregnant === true ||
+            patientData?.pregnant === true ||
+            String(patientData?.pregnancyStatus || '').toLowerCase() === 'pregnant',
+        },
       };
 
       // Add historical data for trend analysis if available
@@ -900,14 +2108,91 @@ export class CdssService {
       return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS duplicate therapy detection unavailable: ${error.message}`);
-      return {
-        has_duplicates: false, // Default to false but warn
-        duplicates: [],
-        warnings: ['CDSS service unavailable - duplicate check failed'],
-        summary: { total_medications: medications.length },
-        source: 'error'
-      };
+      return this.localDuplicateTherapyCheck([...medications, ...(prescriptions || [])]);
     }
+  }
+
+  private localDuplicateTherapyCheck(allMeds: any[]) {
+    // Therapeutic class groupings for duplicate/concurrent-class detection
+    const DRUG_CLASSES: Record<string, string[]> = {
+      nsaid: ['ibuprofen', 'naproxen', 'diclofenac', 'aspirin', 'indomethacin', 'meloxicam', 'celecoxib', 'piroxicam', 'ketorolac', 'mefenamic'],
+      ace_inhibitor: ['lisinopril', 'enalapril', 'ramipril', 'captopril', 'perindopril', 'quinapril', 'fosinopril', 'benazepril'],
+      arb: ['losartan', 'valsartan', 'irbesartan', 'candesartan', 'olmesartan', 'telmisartan'],
+      beta_blocker: ['atenolol', 'metoprolol', 'propranolol', 'bisoprolol', 'carvedilol', 'nebivolol', 'labetalol'],
+      statin: ['atorvastatin', 'simvastatin', 'rosuvastatin', 'pravastatin', 'fluvastatin', 'lovastatin'],
+      opioid: ['morphine', 'codeine', 'tramadol', 'oxycodone', 'fentanyl', 'pethidine', 'buprenorphine', 'hydrocodone'],
+      benzodiazepine: ['diazepam', 'lorazepam', 'clonazepam', 'alprazolam', 'midazolam', 'temazepam', 'nitrazepam', 'oxazepam'],
+      ssri: ['fluoxetine', 'sertraline', 'paroxetine', 'citalopram', 'escitalopram', 'fluvoxamine'],
+      sulfonyl_urea: ['glibenclamide', 'glipizide', 'gliclazide', 'glimepiride', 'tolbutamide', 'gliquidone'],
+      fluoroquinolone: ['ciprofloxacin', 'levofloxacin', 'moxifloxacin', 'ofloxacin', 'norfloxacin'],
+      arv_nnrti: ['efavirenz', 'nevirapine', 'rilpivirine', 'doravirine', 'etravirine'],
+      arv_nrti: ['tenofovir', 'lamivudine', 'emtricitabine', 'zidovudine', 'abacavir', 'stavudine'],
+      arv_insti: ['dolutegravir', 'raltegravir', 'elvitegravir', 'bictegravir', 'cabotegravir'],
+    };
+
+    const normalize = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const extractName = (m: any): string =>
+      normalize(m?.name ?? m?.medication_name ?? m?.medicationName ?? m?.drug ?? '');
+
+    const names = allMeds.map(extractName).filter(Boolean);
+
+    const duplicates: any[] = [];
+    const classHits: Record<string, string[]> = {};
+
+    // Exact name duplicates
+    const nameCount: Record<string, number> = {};
+    for (const n of names) nameCount[n] = (nameCount[n] ?? 0) + 1;
+    for (const [name, count] of Object.entries(nameCount)) {
+      if (count > 1) {
+        duplicates.push({
+          type: 'exact_duplicate',
+          drug: name,
+          count,
+          severity: 'major',
+          message: `Duplicate prescription: ${name} appears ${count} times`,
+          recommendation: `Review and consolidate duplicate ${name} prescriptions`,
+        });
+      }
+    }
+
+    // Therapeutic class duplicates
+    for (const [className, drugs] of Object.entries(DRUG_CLASSES)) {
+      const matches = names.filter(n => drugs.some(d => n.includes(normalize(d)) || normalize(d).includes(n)));
+      if (matches.length > 1) classHits[className] = matches;
+    }
+    for (const [className, matches] of Object.entries(classHits)) {
+      // ACE + ARB is a known dangerous combination (not just duplicate class)
+      if (className === 'arb' && classHits['ace_inhibitor']) continue; // handled below
+      duplicates.push({
+        type: 'same_class',
+        drugClass: className.replace('_', ' '),
+        drugs: matches,
+        severity: className === 'opioid' || className === 'benzodiazepine' ? 'major' : 'moderate',
+        message: `Multiple ${className.replace(/_/g, ' ')} agents: ${matches.join(', ')}`,
+        recommendation: `Review concurrent ${className.replace(/_/g, ' ')} use — generally avoid duplicate class prescriptions`,
+      });
+    }
+    // ACE + ARB combination (dual RAAS blockade)
+    if (classHits['ace_inhibitor'] && classHits['arb']) {
+      duplicates.push({
+        type: 'dangerous_class_combination',
+        drugClass: 'dual_raas_blockade',
+        drugs: [...classHits['ace_inhibitor'], ...classHits['arb']],
+        severity: 'major',
+        message: `ACE inhibitor + ARB combination (dual RAAS blockade) — risk of AKI and hyperkalemia`,
+        recommendation: 'Avoid dual RAAS blockade. Use one agent only per ONTARGET trial evidence.',
+      });
+    }
+
+    return {
+      has_duplicates: duplicates.length > 0,
+      duplicates,
+      warnings: duplicates.length === 0 ? [] : ['Duplicate therapy detected — review prescriptions'],
+      summary: { total_medications: allMeds.length, duplicate_count: duplicates.length },
+      source: 'local_fallback',
+      cdss_unavailable: true,
+    };
   }
 
   /**
@@ -936,16 +2221,129 @@ export class CdssService {
       return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS high-risk medication check unavailable: ${error.message}`);
-      return {
-        has_high_risk_medications: false, // Default to false but warn
-        beers_criteria_alerts: [],
-        stopp_criteria_alerts: [],
-        high_alert_medications: [],
-        summary: { total_medications: medications.length },
-        warnings: ['CDSS service unavailable - high risk check failed'],
-        source: 'error'
-      };
+      return this.localHighRiskMedicationCheck(medications, patientAge, patientGender, renalFunction);
     }
+  }
+
+  private localHighRiskMedicationCheck(
+    medications: any[],
+    patientAge?: number,
+    patientGender?: string,
+    renalFunction?: number,
+  ) {
+    const normalize = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const names = medications.map(m =>
+      normalize(m?.name ?? m?.medication_name ?? m?.medicationName ?? m?.drug ?? ''),
+    ).filter(Boolean);
+
+    const high_alert_medications: any[] = [];
+    const beers_criteria_alerts: any[] = [];
+    const renal_alerts: any[] = [];
+
+    // WHO high-alert medications (ISMP list) — severe harm potential
+    const WHO_HIGH_ALERT: Array<{ drug: string; alert: string; recommendation: string }> = [
+      { drug: 'warfarin', alert: 'Anticoagulant — high bleeding risk. Narrow therapeutic index.', recommendation: 'Monitor INR regularly. Review concurrent medications for interactions.' },
+      { drug: 'heparin', alert: 'Anticoagulant — IV heparin errors cause fatal haemorrhage.', recommendation: 'Use weight-based protocols. Verify dose independently before administration.' },
+      { drug: 'insulin', alert: 'High-alert: insulin errors cause severe hypoglycaemia.', recommendation: 'Double-check dose, type, and route. Use insulin-specific syringes.' },
+      { drug: 'digoxin', alert: 'Narrow therapeutic index. Toxicity risk with hypokalaemia.', recommendation: 'Monitor digoxin levels, renal function, and potassium. Target 0.5–0.9 ng/mL.' },
+      { drug: 'lithium', alert: 'Narrow therapeutic index. Toxicity with dehydration or NSAIDs.', recommendation: 'Monitor lithium levels every 3–6 months. Avoid NSAIDs and ACE inhibitors.' },
+      { drug: 'methotrexate', alert: 'Cytotoxic at high doses. Fatal errors documented with daily instead of weekly dosing.', recommendation: 'Confirm weekly dosing for non-oncology use. Avoid NSAIDs.' },
+      { drug: 'morphine', alert: 'Opioid — respiratory depression risk. High diversion potential.', recommendation: 'Start low, titrate. Monitor respiratory rate. Naloxone available.' },
+      { drug: 'fentanyl', alert: 'Potent opioid — 100× morphine potency. Patch errors cause fatalities.', recommendation: 'Patch: no cutting, no heat exposure. IV: dose in micrograms, not milligrams.' },
+      { drug: 'potassium', alert: 'Concentrated potassium IV — cardiac arrest risk if given undiluted.', recommendation: 'Never give undiluted IV bolus. Max 20 mmol/h peripheral, 40 mmol/h central.' },
+      { drug: 'amiodarone', alert: 'Multiple organ toxicities (pulmonary, thyroid, hepatic, corneal). Many drug interactions.', recommendation: 'Annual TFT, LFT, CXR. Review all concurrent medications for interactions.' },
+      { drug: 'cyclophosphamide', alert: 'Cytotoxic — bone marrow suppression, haemorrhagic cystitis.', recommendation: 'Adequate hydration. Monitor FBC. Mesna for haemorrhagic cystitis prevention.' },
+      { drug: 'phenytoin', alert: 'Narrow therapeutic index. Non-linear pharmacokinetics.', recommendation: 'Monitor phenytoin levels. Many drug interactions — review concurrent medications.' },
+    ];
+
+    for (const entry of WHO_HIGH_ALERT) {
+      const key = normalize(entry.drug);
+      if (names.some(n => n.includes(key) || key.includes(n))) {
+        high_alert_medications.push({
+          drug: entry.drug,
+          category: 'who_high_alert',
+          alert: entry.alert,
+          recommendation: entry.recommendation,
+        });
+      }
+    }
+
+    // Beers criteria (AGS 2023) — medications potentially inappropriate in adults ≥65
+    if (patientAge !== undefined && patientAge >= 65) {
+      const BEERS: Array<{ drug: string; concern: string; recommendation: string }> = [
+        { drug: 'ibuprofen', concern: 'NSAIDs: GI bleeding, renal impairment, fluid retention in older adults.', recommendation: 'Avoid NSAIDs in ≥65 unless alternatives inadequate. Use PPI if NSAID required.' },
+        { drug: 'naproxen', concern: 'NSAID — same Beers concerns as ibuprofen.', recommendation: 'Avoid in older adults. Paracetamol preferred for pain.' },
+        { drug: 'diclofenac', concern: 'NSAID — Beers criteria. Cardiovascular and renal risk in elderly.', recommendation: 'Avoid. Consider topical diclofenac for localised pain.' },
+        { drug: 'diazepam', concern: 'Benzodiazepine — fall and fracture risk, cognitive impairment, paradoxical excitation in elderly.', recommendation: 'Avoid. If insomnia: CBT-I first. If anxiety: SSRI. Taper existing BZDs slowly.' },
+        { drug: 'lorazepam', concern: 'Benzodiazepine — Beers criteria: increased fall risk and cognitive decline in ≥65.', recommendation: 'Avoid. Consider buspirone or low-dose SSRI for anxiety.' },
+        { drug: 'amitriptyline', concern: 'Tricyclic antidepressant — anticholinergic, sedating, QT prolonging. Beers criteria.', recommendation: 'Avoid for depression. SSRI preferred. Use low-dose for neuropathic pain only if necessary.' },
+        { drug: 'chlorpheniramine', concern: 'First-gen antihistamine — anticholinergic (confusion, urinary retention, dry mouth) in elderly.', recommendation: 'Use non-sedating antihistamine (loratadine, cetirizine) instead.' },
+        { drug: 'promethazine', concern: 'Anticholinergic antihistamine — Beers criteria. High fall and confusion risk in ≥65.', recommendation: 'Avoid. Use prochlorperazine cautiously for nausea or metoclopramide short-term.' },
+        { drug: 'digoxin', concern: 'Avoid >0.125mg/day in ≥65 — reduced renal clearance raises toxicity risk.', recommendation: 'Target 0.0625–0.125mg/day in older adults. Monitor levels and renal function.' },
+        { drug: 'amiodarone', concern: 'Thyroid toxicity risk higher in elderly. Many interactions.', recommendation: 'Use sotalol or dronedarone as alternatives for AF where possible.' },
+        { drug: 'glibenclamide', concern: 'Long-acting sulphonylurea — prolonged hypoglycaemia risk in elderly with erratic eating.', recommendation: 'Use shorter-acting gliclazide or non-sulphonylurea agent.' },
+      ];
+
+      for (const entry of BEERS) {
+        const key = normalize(entry.drug);
+        if (names.some(n => n.includes(key) || key.includes(n))) {
+          beers_criteria_alerts.push({
+            drug: entry.drug,
+            concern: entry.concern,
+            recommendation: entry.recommendation,
+            criteria: 'AGS_Beers_2023',
+          });
+        }
+      }
+    }
+
+    // Renal dosing flags — when renalFunction (eGFR) is low
+    if (renalFunction !== undefined && renalFunction < 45) {
+      const RENAL_ADJUST: Array<{ drug: string; eGFRThreshold: number; concern: string; recommendation: string }> = [
+        { drug: 'metformin', eGFRThreshold: 30, concern: 'Lactic acidosis risk when eGFR <30.', recommendation: 'Withhold metformin if eGFR <30 mL/min. Halve dose if eGFR 30–45.' },
+        { drug: 'ibuprofen', eGFRThreshold: 45, concern: 'NSAIDs reduce GFR — can precipitate AKI in CKD.', recommendation: 'Avoid NSAIDs if eGFR <45. Use paracetamol.' },
+        { drug: 'naproxen', eGFRThreshold: 45, concern: 'NSAID — nephrotoxic in CKD.', recommendation: 'Avoid if eGFR <45.' },
+        { drug: 'digoxin', eGFRThreshold: 45, concern: 'Digoxin renally cleared — accumulation risk in CKD.', recommendation: 'Reduce dose 50% if eGFR 30–45. Avoid if eGFR <30 or use with close monitoring.' },
+        { drug: 'lithium', eGFRThreshold: 45, concern: 'Lithium renally excreted — toxicity in CKD.', recommendation: 'Reduce dose. Monitor lithium levels frequently. Avoid if eGFR <30.' },
+        { drug: 'tenofovir', eGFRThreshold: 50, concern: 'TDF is nephrotoxic — renal tubular dysfunction.', recommendation: 'Use TAF (tenofovir alafenamide) instead of TDF if eGFR <50. Monitor creatinine 3-monthly.' },
+        { drug: 'cotrimoxazole', eGFRThreshold: 30, concern: 'High-dose cotrimoxazole requires dose reduction in renal impairment.', recommendation: 'Halve dose if eGFR 15–30. Avoid if eGFR <15 (unless no alternative).' },
+      ];
+
+      for (const entry of RENAL_ADJUST) {
+        if (renalFunction < entry.eGFRThreshold) {
+          const key = normalize(entry.drug);
+          if (names.some(n => n.includes(key) || key.includes(n))) {
+            renal_alerts.push({
+              drug: entry.drug,
+              eGFR: renalFunction,
+              concern: entry.concern,
+              recommendation: entry.recommendation,
+            });
+          }
+        }
+      }
+    }
+
+    const allAlerts = [...high_alert_medications, ...beers_criteria_alerts, ...renal_alerts];
+
+    return {
+      has_high_risk_medications: allAlerts.length > 0,
+      high_alert_medications,
+      beers_criteria_alerts,
+      renal_alerts,
+      stopp_criteria_alerts: [],
+      summary: {
+        total_medications: medications.length,
+        high_alert_count: high_alert_medications.length,
+        beers_count: beers_criteria_alerts.length,
+        renal_count: renal_alerts.length,
+      },
+      warnings: allAlerts.length > 0
+        ? ['High-risk medications identified — clinical review required']
+        : [],
+      source: 'local_fallback',
+      cdss_unavailable: true,
+    };
   }
 
   /**
@@ -955,7 +2353,8 @@ export class CdssService {
     patientAge?: number,
     patientGender?: string,
     visitHistory?: any[],
-    diagnoses?: string[]
+    diagnoses?: string[],
+    options?: CareGapDetectionOptions,
   ) {
     try {
       const responseData = await this.postWithPolicy<any>(
@@ -965,10 +2364,42 @@ export class CdssService {
         patient_age: patientAge,
         patient_gender: patientGender,
         visit_history: visitHistory || [],
-        diagnoses: diagnoses || []
+        diagnoses: diagnoses || [],
+        context: options?.context || null,
+        specialty: options?.specialty || null,
+        module: options?.module || null,
+        patient_context: {
+          age: patientAge ?? null,
+          gender: patientGender || null,
+          specialty: options?.specialty || null,
+          module: options?.module || null,
+        },
         },
         15000,
+        options?.tenantId,
       );
+      await this.recordGovernedPromptAudit({
+        tenantDb: options?.tenantDb,
+        tenantId: options?.tenantId,
+        useCase: 'care_gap_detection',
+        source: 'cdss_service',
+        model: String(responseData?.model || 'care_gap_detection_proxy'),
+        patientId: options?.patientId || null,
+        requestBody: {
+          patientAge: patientAge ?? null,
+          patientGender: patientGender || null,
+          visitHistoryCount: Array.isArray(visitHistory) ? visitHistory.length : 0,
+          diagnosisCount: Array.isArray(diagnoses) ? diagnoses.length : 0,
+          context: options?.context || null,
+          specialty: options?.specialty || null,
+          module: options?.module || null,
+        },
+        responseSummary: {
+          gapCount: Array.isArray(responseData?.gaps) ? responseData.gaps.length : Array.isArray(responseData) ? responseData.length : 0,
+          abstained: responseData?.abstained === true,
+        },
+        governance: responseData?.governance || {},
+      });
       return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS care gap detection unavailable: ${error.message}`);
@@ -980,6 +2411,647 @@ export class CdssService {
         source: 'error'
       };
     }
+  }
+
+  async predictDeteriorationRisk(
+    payload: {
+      patientId: string;
+      admissionId?: string;
+      vitals?: Record<string, any>;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<any> {
+    const responseData = await this.postWithPolicy<any>(
+      'risk_deterioration',
+      '/risk/deterioration',
+      {
+        patientId: payload.patientId,
+        admissionId: payload.admissionId,
+        vitals: payload.vitals || {},
+      },
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'risk_deterioration',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'risk_deterioration_proxy'),
+      patientId: payload.patientId || null,
+      encounterId: payload.admissionId || null,
+      requestBody: {
+        hasVitals: !!payload.vitals,
+        vitalKeys: Object.keys(payload.vitals || {}).sort(),
+      },
+      responseSummary: {
+        score: responseData?.score ?? null,
+        eventType: responseData?.event_type || null,
+        timeframeHours: responseData?.timeframe_hours ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async predictReadmissionRisk(
+    payload: {
+      patientId: string;
+      dischargeId?: string;
+      clinicalData?: Record<string, any>;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<any> {
+    const requestBody = {
+      patientId: payload.patientId,
+      dischargeId: payload.dischargeId,
+      ...(payload.clinicalData || {}),
+    };
+    const responseData = await this.postWithPolicy<any>(
+      'risk_readmission',
+      '/risk/readmission',
+      requestBody,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'risk_readmission',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'risk_readmission_proxy'),
+      patientId: payload.patientId || null,
+      encounterId: payload.dischargeId || null,
+      requestBody: {
+        clinicalKeys: Object.keys(payload.clinicalData || {}).sort(),
+      },
+      responseSummary: {
+        risk: responseData?.risk ?? null,
+        category: responseData?.category || null,
+        followupDays: responseData?.followup_days ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async analyzeRadiologyStudy(
+    payload: {
+      studyId: string;
+      patientId: string;
+      modality: string;
+      bodyPart?: string;
+      storageKey: string;
+    },
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<RadiologyAnalysisResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'radiology_analyze',
+      '/radiology/analyze',
+      {
+        studyId: payload.studyId,
+        patientId: payload.patientId,
+        modality: payload.modality,
+        bodyPart: payload.bodyPart,
+        storageKey: payload.storageKey,
+      },
+      60000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'radiology_analysis',
+      source: 'cdss_service',
+      model: String(responseData?.model_version || responseData?.model || 'radiology_analysis_proxy'),
+      patientId: payload.patientId || null,
+      encounterId: payload.studyId || null,
+      requestBody: {
+        modality: payload.modality,
+        bodyPart: payload.bodyPart || null,
+        hasStorageKey: Boolean(payload.storageKey),
+      },
+      responseSummary: {
+        findingCount: Array.isArray(responseData?.findings) ? responseData.findings.length : 0,
+        topFinding: responseData?.top_finding || null,
+        confidence: responseData?.confidence ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return {
+      findings: Array.isArray(responseData?.findings) ? responseData.findings : [],
+      top_finding: responseData?.top_finding,
+      confidence: responseData?.confidence,
+      heatmap_key: responseData?.heatmap_key,
+      model_version: responseData?.model_version,
+      modality: responseData?.modality,
+      governance: responseData?.governance || {},
+      abstained: responseData?.abstained === true,
+    };
+  }
+
+  async checkPgx(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<PgxCheckResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'pgx_check',
+      '/pgx/check',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'pgx_check',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'pgx_check_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        drug: payload?.drug || null,
+        geneKeys: Object.keys(payload || {})
+          .filter((key) => key !== 'patientId' && key !== 'drug')
+          .sort(),
+      },
+      responseSummary: {
+        alertCount: Array.isArray(responseData?.alerts) ? responseData.alerts.length : 0,
+        safe: responseData?.safe !== false,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return {
+      drug: String(responseData?.drug || payload?.drug || ''),
+      alerts: Array.isArray(responseData?.alerts) ? responseData.alerts : [],
+      safe: responseData?.safe !== false,
+      governance: responseData?.governance || {},
+      abstained: responseData?.abstained === true,
+    };
+  }
+
+  async optimizeFormulary(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<FormularyOptimizeResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'formulary_optimize',
+      '/formulary/optimize',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'formulary_optimization',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'formulary_optimize_proxy'),
+      patientId: payload?.patientId || null,
+      encounterId: payload?.prescriptionId || null,
+      requestBody: {
+        brandedDrug: payload?.brandedDrug || null,
+        hasMedicalAidScheme: Boolean(payload?.medicalAidScheme),
+        diagnosisCount: Array.isArray(payload?.diagnoses) ? payload.diagnoses.length : 0,
+      },
+      responseSummary: {
+        recommendation: responseData?.recommendation || null,
+        savingAmount: responseData?.saving_amount ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return {
+      recommendation: String(responseData?.recommendation || 'keep_branded'),
+      generic_alternative: responseData?.generic_alternative,
+      branded_cost: responseData?.branded_cost,
+      generic_cost: responseData?.generic_cost,
+      saving_amount: responseData?.saving_amount,
+      evidence_equivalence: responseData?.evidence_equivalence,
+      medical_aid_coverage: responseData?.medical_aid_coverage,
+      medical_aid_tier: responseData?.medical_aid_tier,
+      reason: responseData?.reason,
+      governance: responseData?.governance || {},
+      abstained: responseData?.abstained === true,
+    };
+  }
+
+  async palliativePrognosis(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<Record<string, any>> {
+    const responseData = await this.postWithPolicy<any>(
+      'palliative_prognosis',
+      '/palliative/prognosis',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'palliative_prognosis',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'palliative_prognosis_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        ecog_ps: payload?.ecog_ps ?? null,
+        kps: payload?.kps ?? null,
+        primary_diagnosis: payload?.primary_diagnosis || null,
+      },
+      responseSummary: {
+        phase_of_illness: responseData?.phase_of_illness || null,
+        survival_estimate: responseData?.survival_estimate || null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async palliativeOpioidConvert(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<Record<string, any>> {
+    const responseData = await this.postWithPolicy<any>(
+      'palliative_opioid_convert',
+      '/palliative/opioid/convert',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'palliative_opioid_convert',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'palliative_opioid_convert_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        drug: payload?.drug || null,
+        target_drug: payload?.target_drug || null,
+        route: payload?.route || null,
+        target_route: payload?.target_route || null,
+      },
+      responseSummary: {
+        adjusted_dose_mg_24h: responseData?.adjusted_dose_mg_24h ?? null,
+        alertCount: Array.isArray(responseData?.alerts) ? responseData.alerts.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async palliativeSymptomManage(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<Record<string, any>> {
+    const responseData = await this.postWithPolicy<any>(
+      'palliative_symptom_manage',
+      '/palliative/symptom/manage',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'palliative_symptom_manage',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'palliative_symptom_manage_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        symptom: payload?.symptom || null,
+        severity: payload?.severity ?? null,
+        oral_route_available: payload?.oral_route_available ?? null,
+        is_last_days_of_life: payload?.is_last_days_of_life ?? null,
+      },
+      responseSummary: {
+        suggestionCount: Array.isArray(responseData?.pharmacological_suggestions)
+          ? responseData.pharmacological_suggestions.length
+          : 0,
+        alertCount: Array.isArray(responseData?.alerts) ? responseData.alerts.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async classifyDermatologyLesion(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<DermatologyDecisionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'dermatology_lesion_classify',
+      '/dermatology/lesion/classify',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'dermatology_lesion_classify',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'dermatology_lesion_classify_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        morphology: payload?.morphology || null,
+        location: payload?.location || null,
+        diameter_mm: payload?.diameter_mm ?? null,
+      },
+      responseSummary: {
+        urgency: responseData?.urgency || null,
+        biopsy_recommended: responseData?.biopsy_recommended ?? null,
+        differentialCount: Array.isArray(responseData?.differentials) ? responseData.differentials.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async calculateDermatologyBurnFluid(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<DermatologyDecisionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'dermatology_burn_fluid',
+      '/dermatology/burn/fluid',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'dermatology_burn_fluid',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'dermatology_burn_fluid_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        weight_kg: payload?.weight_kg ?? null,
+        tbsa_percent: payload?.tbsa_percent ?? null,
+        burn_depth: payload?.burn_depth || null,
+        inhalation_injury: payload?.inhalation_injury ?? null,
+      },
+      responseSummary: {
+        parkland_total_ml: responseData?.parkland_total_ml ?? null,
+        referralCount: Array.isArray(responseData?.referral_criteria) ? responseData.referral_criteria.length : 0,
+        alertCount: Array.isArray(responseData?.alerts) ? responseData.alerts.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async screenNutritionRisk(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<NutritionDecisionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'nutrition_screen',
+      '/nutrition/screen',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'nutrition_screen',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'nutrition_screen_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        tool: payload?.tool || null,
+        age_years: payload?.age_years ?? null,
+      },
+      responseSummary: {
+        risk_category: responseData?.risk_category || null,
+        total_score: responseData?.total_score ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async prescribeNutritionPlan(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<NutritionDecisionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'nutrition_prescribe',
+      '/nutrition/prescribe',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'nutrition_prescribe',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'nutrition_prescribe_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        route: payload?.route || null,
+        weight_kg: payload?.weight_kg ?? null,
+        stress_factor: payload?.stress_factor || null,
+      },
+      responseSummary: {
+        tee_kcal: responseData?.tee_kcal ?? null,
+        protein_target_g: responseData?.protein_target_g ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async assessNutritionRefeedingRisk(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<NutritionDecisionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'nutrition_refeeding_risk',
+      '/nutrition/refeeding-risk',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'nutrition_refeeding_risk',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'nutrition_refeeding_risk_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        duration_starvation_days: payload?.duration_starvation_days ?? null,
+        bmi: payload?.bmi ?? null,
+      },
+      responseSummary: {
+        risk_level: responseData?.risk_level || null,
+        alertCount: Array.isArray(responseData?.alerts) ? responseData.alerts.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async generatePatientEducation(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<EducationGenerationResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'education_generate',
+      '/education/generate',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'patient_education_generation',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'patient_education_generation_proxy'),
+      patientId: payload?.patient_id || payload?.patientId || null,
+      encounterId: payload?.encounterId || null,
+      requestBody: {
+        topic: payload?.topic || null,
+        language: payload?.language || null,
+        reading_level: payload?.reading_level ?? payload?.readingLevel ?? null,
+      },
+      responseSummary: {
+        contentPresent: Boolean(responseData?.content),
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async screenSdohRisk(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<Record<string, any>> {
+    const responseData = await this.postWithPolicy<any>(
+      'sdoh_screen',
+      '/sdoh/screen',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'sdoh_screen',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'sdoh_screen_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        tool: payload?.tool || payload?.tool_used || null,
+        responseKeys: Object.keys(payload?.responses || payload || {}).sort(),
+      },
+      responseSummary: {
+        positiveDomainCount: Array.isArray(responseData?.positive_domains) ? responseData.positive_domains.length : 0,
+        overallRisk: responseData?.overall_risk || null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async matchSdohResources(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<Record<string, any>> {
+    const responseData = await this.postWithPolicy<any>(
+      'sdoh_resource_match',
+      '/sdoh/resource/match',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'sdoh_resource_match',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'sdoh_resource_match_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        requested_categories: payload?.requested_categories || [],
+        positiveDomainCount: Array.isArray(payload?.positive_domains) ? payload.positive_domains.length : 0,
+        candidateResourceCount: Array.isArray(payload?.available_resources) ? payload.available_resources.length : 0,
+      },
+      responseSummary: {
+        matchCount: Array.isArray(responseData?.matches) ? responseData.matches.length : 0,
+        unmetCount: Array.isArray(responseData?.unmet_categories) ? responseData.unmet_categories.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
   }
 
   /**
@@ -1078,18 +3150,53 @@ export class CdssService {
   }
 
   /**
-   * Basic risk assessment (fallback) - DISABLED
+   * Basic risk assessment (fallback) — wires to existing vitals safety logic
+   * plus age and diagnosis-based risk stratification.
    */
   private async basicRiskAssessment(patientData: any) {
-    this.logger.warn(`[FALLBACK] Basic risk assessment triggered but disabled to prevent fake data.`);
+    const vitals = patientData?.vitals || {};
+    const age = Number(patientData?.age) || null;
+    const diagnoses: string[] = Array.isArray(patientData?.diagnoses)
+      ? patientData.diagnoses
+      : typeof patientData?.diagnoses === 'string'
+        ? [patientData.diagnoses]
+        : [];
 
+    // Leverage the existing vitals safety analysis
+    const safetyResult = this.applyVitalsSafetyOverrides(null, vitals);
+
+    // Age-based risk factors
+    const ageFactors: Array<{ factor: string; impact: string }> = [];
+    if (age !== null) {
+      if (age >= 65) ageFactors.push({ factor: 'Age ≥65 — increased vulnerability to adverse outcomes', impact: 'moderate' });
+      if (age < 5)  ageFactors.push({ factor: 'Age <5 — high vulnerability, paediatric protocols required', impact: 'moderate' });
+    }
+
+    // Diagnosis-based risk elevations
+    const diagText = diagnoses.join(' ').toLowerCase();
+    const diagFactors: Array<{ factor: string; impact: string }> = [];
+    if (/diabetes|diabetic/.test(diagText))           diagFactors.push({ factor: 'Diabetes mellitus — increased infection risk and impaired wound healing', impact: 'moderate' });
+    if (/hiv|aids/.test(diagText))                    diagFactors.push({ factor: 'HIV/AIDS — immunosuppression increases infection severity and atypical presentation risk', impact: 'major' });
+    if (/\btb\b|tuberculosis/.test(diagText))         diagFactors.push({ factor: 'Active TB — airborne infection control precautions required', impact: 'major' });
+    if (/heart.?fail|cardiac|cardiomyopath/.test(diagText)) diagFactors.push({ factor: 'Cardiac disease — haemodynamic monitoring required', impact: 'major' });
+    if (/renal|kidney|\bckd\b/.test(diagText))        diagFactors.push({ factor: 'Renal impairment — adjust drug doses; monitor fluid balance', impact: 'moderate' });
+    if (/malaria/.test(diagText))                     diagFactors.push({ factor: 'Malaria — monitor for progression to severe disease (cerebral, severe anaemia)', impact: 'moderate' });
+
+    // Elevate risk level if major diagnosis factors present
+    let finalLevel = safetyResult.riskLevel;
+    if (diagFactors.some(f => f.impact === 'major') && (finalLevel === 'low' || finalLevel === 'unknown')) {
+      finalLevel = 'moderate';
+    }
+
+    const scoreMap: Record<string, number> = { critical: 0.9, high: 0.7, moderate: 0.4, low: 0.2, unknown: 0.0 };
     return {
-      overall_score: 0,
-      risk_level: 'unknown',
-      factors: [],
-      recommendations: [],
-      source: 'fallback_empty',
-      error: 'CDSS service unavailable'
+      overall_score: scoreMap[finalLevel] ?? 0.0,
+      risk_level: finalLevel,
+      factors: [...safetyResult.factors, ...ageFactors, ...diagFactors],
+      recommendations: safetyResult.recommendations,
+      source: 'local_fallback',
+      cdss_unavailable: true,
+      warning: 'CDSS service unavailable. Risk assessment based on vitals safety rules and known diagnoses only. Full ML-based scoring requires CDSS service.',
     };
   }
 
@@ -1257,9 +3364,13 @@ export class CdssService {
         gender: triageInput.gender,
         labs: triageInput.labs,
         conditions: triageInput.conditions || triageInput.diagnoses || [],
+        context: triageInput.context || 'emergency_triage',
+        specialty: triageInput.specialty || 'acute_care',
+        module: triageInput.module || 'emergency_triage',
       },
       true,
       tenantId,
+      tenantDb,
     );
 
     let risk: any = null;
@@ -1275,6 +3386,9 @@ export class CdssService {
             medications: triageInput.medications || [],
             medicalHistory: triageInput.medicalHistory || [],
             labResults: triageInput.labs,
+            context: triageInput.context || 'emergency_triage',
+            specialty: triageInput.specialty || 'acute_care',
+            module: triageInput.module || 'emergency_triage',
           },
           tenantDb,
           tenantId,
@@ -1357,7 +3471,7 @@ export class CdssService {
     };
   }
 
-  async generateNurseNoteDraft(payload: any, tenantId?: string) {
+  async generateNurseNoteDraft(payload: any, tenantId?: string, tenantDb?: DataSource) {
     const noteInput = payload || {};
     const noteFragments: string[] = [];
     if (noteInput.chiefComplaint) noteFragments.push(`Chief complaint: ${noteInput.chiefComplaint}`);
@@ -1390,6 +3504,26 @@ export class CdssService {
         15000,
         tenantId,
       );
+      await this.recordGovernedPromptAudit({
+        tenantDb,
+        tenantId,
+        useCase: 'cdss_patient_summarize',
+        source: 'cdss_service',
+        model: String(responseData?.model || 'patient_summarization_proxy'),
+        patientId: noteInput?.patientId || null,
+        encounterId: noteInput?.encounterId || null,
+        requestBody: {
+          noteFragmentCount: noteFragments.length,
+          hasVitalsContext: !!noteInput.vitals,
+          age: noteInput.age || null,
+          gender: noteInput.gender || null,
+        },
+        responseSummary: {
+          draftPresent: Boolean(responseData?.summary || responseData?.one_liner || responseData?.text),
+          abstained: responseData?.abstained === true,
+        },
+        governance: responseData?.governance || {},
+      });
 
       const draftText = responseData?.summary || responseData?.one_liner || responseData?.text || '';
       const recommendationSummary = draftText ? 'Generated nursing note draft' : 'No draft generated';
@@ -1427,7 +3561,7 @@ export class CdssService {
     }
   }
 
-  async generateNurseHandoffSummary(payload: any, tenantId?: string) {
+  async generateNurseHandoffSummary(payload: any, tenantId?: string, tenantDb?: DataSource) {
     const handoffInput = payload || {};
     const summaryNotes: string[] = [];
 
@@ -1467,6 +3601,26 @@ export class CdssService {
         15000,
         tenantId,
       );
+      await this.recordGovernedPromptAudit({
+        tenantDb,
+        tenantId,
+        useCase: 'cdss_patient_summarize',
+        source: 'cdss_service',
+        model: String(responseData?.model || 'patient_summarization_proxy'),
+        patientId: handoffInput?.patientId || null,
+        encounterId: handoffInput?.encounterId || null,
+        requestBody: {
+          summarySectionCount: summaryNotes.length,
+          hasVitalsContext: !!handoffInput.vitals,
+          age: handoffInput.age || null,
+          gender: handoffInput.gender || null,
+        },
+        responseSummary: {
+          summaryPresent: Boolean(responseData?.summary || responseData?.one_liner || responseData?.text),
+          abstained: responseData?.abstained === true,
+        },
+        governance: responseData?.governance || {},
+      });
 
       const summary = responseData?.summary || responseData?.one_liner || responseData?.text || '';
       const recommendationSummary = summary ? 'Generated nurse handoff summary' : 'No handoff summary generated';
@@ -1693,5 +3847,569 @@ export class CdssService {
         source: 'error',
       };
     }
+  }
+
+  async extractClinicalCodes(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<AutoCodingExtractionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'clinical_code_extraction',
+      '/nlp/extract-codes',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'clinical_code_extraction',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'clinical_code_extraction_proxy'),
+      patientId: payload?.patientId || null,
+      encounterId: payload?.encounterId || null,
+      requestBody: {
+        noteId: payload?.noteId || null,
+        noteLength: typeof payload?.noteText === 'string' ? payload.noteText.length : 0,
+      },
+      responseSummary: {
+        icdCount: Array.isArray(responseData?.suggestedIcd10Codes) ? responseData.suggestedIcd10Codes.length : 0,
+        cptCount: Array.isArray(responseData?.suggestedCptCodes) ? responseData.suggestedCptCodes.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async analyzeIotReadings(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<IotAnalysisResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'iot_analysis',
+      '/iot/analyze',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'iot_analysis',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'iot_analysis_proxy'),
+      patientId: payload?.patientId || null,
+      requestBody: {
+        readingCount: Array.isArray(payload?.readings) ? payload.readings.length : 0,
+        readingTypes: Array.isArray(payload?.readings)
+          ? Array.from(new Set(payload.readings.map((reading: Record<string, any>) => String(reading?.type || '')).filter(Boolean))).sort()
+          : [],
+      },
+      responseSummary: {
+        alertCount: Array.isArray(responseData?.alerts) ? responseData.alerts.length : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async predictSchedulingRisk(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<SchedulingPredictionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'scheduling_prediction',
+      '/scheduling/predict',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'scheduling_prediction',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'scheduling_prediction_proxy'),
+      requestBody: {
+        appointmentId: payload?.appointmentId || null,
+        visitType: payload?.visitType || payload?.visit_type || null,
+      },
+      responseSummary: {
+        noShowProbability: responseData?.no_show_probability ?? null,
+        cancelProbability: responseData?.cancel_probability ?? null,
+        recommendedDuration: responseData?.recommended_duration ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async suggestFormDefaults(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<SmartDefaultsSuggestionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'smart_form_defaults',
+      '/forms/suggest-defaults',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'smart_form_defaults',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'smart_form_defaults_proxy'),
+      requestBody: {
+        formName: payload?.formName || payload?.form_name || null,
+        contextKeys: Object.keys(payload?.context || payload || {}).sort(),
+      },
+      responseSummary: {
+        defaultCount: responseData?.defaults && typeof responseData.defaults === 'object'
+          ? Object.keys(responseData.defaults).length
+          : 0,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async recommendEmpiricalAntimicrobial(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<AntimicrobialDecisionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'antimicrobial_empirical',
+      '/antimicrobial/empirical',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'antimicrobial_empirical',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'antimicrobial_empirical_proxy'),
+      patientId: payload?.patientId || null,
+      encounterId: payload?.encounterId || null,
+      requestBody: {
+        syndrome: payload?.syndrome || payload?.infectionSyndrome || payload?.infection_site || null,
+        severity: payload?.severity || null,
+      },
+      responseSummary: {
+        recommendation: responseData?.recommendation || null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async recommendAntimicrobialDeescalation(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<AntimicrobialDecisionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'antimicrobial_deescalation',
+      '/antimicrobial/deescalate',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'antimicrobial_deescalation',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'antimicrobial_deescalation_proxy'),
+      patientId: payload?.patientId || null,
+      encounterId: payload?.encounterId || null,
+      requestBody: {
+        organism: payload?.organism || payload?.organism_isolated || null,
+        currentRegimen: payload?.current_regimen || payload?.currentRegimen || null,
+      },
+      responseSummary: {
+        recommendation: responseData?.recommendation || null,
+        action: responseData?.action || null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async predictSupplyStockout(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<SupplyChainPredictionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'supply_stockout_prediction',
+      '/supply/stockout-predict',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'supply_stockout_prediction',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'supply_stockout_prediction_proxy'),
+      requestBody: {
+        drugName: payload?.drugName || null,
+        currentStock: payload?.currentStock ?? null,
+        avgDailyConsumption: payload?.avgDailyConsumption ?? null,
+      },
+      responseSummary: {
+        seasonalFactor: responseData?.seasonal_factor ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async evaluateModelPerformance(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<ModelPerformanceResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'model_performance',
+      '/model/performance',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'model_performance',
+      source: 'cdss_service',
+      model: String(responseData?.model || 'model_performance_proxy'),
+      requestBody: {
+        modelName: payload?.modelName || null,
+        period: payload?.period || null,
+        sampleCount: Array.isArray(payload?.outcomes) ? payload.outcomes.length : 0,
+      },
+      responseSummary: {
+        auc: responseData?.auc_roc ?? null,
+        brier: responseData?.brier_score ?? null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
+  async predictClaimDenial(payload: Record<string, any>, tenantId?: string): Promise<{
+    risk_score: number;
+    confidence: number;
+    threshold_action: 'allow' | 'warn' | 'block';
+    top_reasons: Array<{ code: string; description: string; weight: number }>;
+    model_version: string;
+    feature_snapshot: Record<string, any>;
+  }> {
+    return this.postWithPolicy<any>('denial_prediction', '/cdss/claims/denial-prediction', { payload }, 15000, tenantId);
+  }
+
+  async generateAppealTemplateCdss(payload: Record<string, any>, tenantId?: string): Promise<{
+    draft_letter: string;
+    denial_reason_code: string;
+    rag_sources: Array<{ documentId: string; title: string; excerpt: string; relevanceScore: number }>;
+    model_version: string;
+  }> {
+    return this.postWithPolicy<any>('appeal_template', '/cdss/claims/appeal-template', { payload }, 20000, tenantId);
+  }
+
+  async checkPdmpDrug(payload: {
+    drug_name: string;
+    dea_schedule: string | null;
+    daily_dose_mg: number;
+    other_active_controlled_prescriptions: any[];
+    prior_substance_abuse_flags: any[];
+  }, tenantId?: string): Promise<{
+    risk_level: string;
+    risk_score: number;
+    morphine_milligram_equivalent: number | null;
+    dispensing_blocked: boolean;
+    prescriber_alerts: any[];
+    other_active_prescriptions: any[];
+    cdss_recommendation: string;
+  }> {
+    return this.postWithPolicy<any>('pdmp_check', '/cdss/pharmacy/pdmp-check', { payload }, 10000, tenantId);
+  }
+
+  async stratifyPatientRisk(payload: Record<string, unknown>, tenantId?: string): Promise<{
+    tier: string;
+    composite_score: number;
+    chronic_condition_score: number;
+    vitals_trend_score: number;
+    adherence_score: number;
+    sdoh_score: number;
+    no_show_rate: number;
+    lab_trend_score: number;
+    contributing_factors: Array<{ factor: string; weight: number; value: string }>;
+    recommended_actions: Array<{ action: string; priority: number; dueWithinDays: number }>;
+    model_version: string;
+  }> {
+    return this.postWithPolicy<any>('risk_stratification', '/cdss/risk/stratify', { payload }, 15000, tenantId);
+  }
+
+  async ocrInsuranceCard(
+    imageBase64: string,
+    tenantId?: string,
+  ): Promise<{
+    member_id: string | null;
+    group_number: string | null;
+    plan_name: string | null;
+    payer_name: string | null;
+    effective_date: string | null;
+    expiry_date: string | null;
+    confidence: number;
+    raw_ocr_text: string;
+  }> {
+    return this.postWithPolicy<any>(
+      'insurance_ocr',
+      '/cdss/registration/ocr-insurance-card',
+      { image_base64: imageBase64 },
+      30000,
+      tenantId,
+    );
+  }
+
+  async getSdohQuestions(tenantId?: string): Promise<{ questions: unknown[] }> {
+    return this.postWithPolicy<any>(
+      'sdoh_questions',
+      '/cdss/registration/sdoh-questions',
+      {},
+      10000,
+      tenantId,
+    );
+  }
+
+  async scoreSdoh(
+    payload: { patient_id?: string; answers: Record<string, number> },
+    tenantId?: string,
+  ): Promise<{
+    risk_factors: string[];
+    overall_risk_level: string;
+    total_risk_domains: number;
+    domain_scores: Record<string, unknown>;
+    referrals: unknown[];
+    model_version: string;
+  }> {
+    return this.postWithPolicy<any>(
+      'sdoh_risk_score',
+      '/cdss/registration/sdoh-score',
+      payload,
+      15000,
+      tenantId,
+    );
+  }
+
+  async generateAttentionMap(
+    payload: {
+      imaging_order_id: string;
+      draft_report_text: string;
+      findings: unknown[];
+      image_width?: number;
+      image_height?: number;
+    },
+    tenantId?: string,
+  ): Promise<{
+    heatmap_regions: Array<{
+      x: number; y: number; width: number; height: number;
+      confidence: number; finding_label: string; finding_type: string; color: string;
+    }>;
+    model_version: string;
+  }> {
+    return this.postWithPolicy<any>(
+      'radiology_attention_map',
+      '/cdss/imaging/attention-map',
+      { payload },
+      15000,
+      tenantId,
+    );
+  }
+
+  // ── Sprint 119: Clinical Order Intelligence ─────────────────────────────
+  async suggestOrderSets(payload: {
+    diagnoses?: string[];
+    active_medications?: string[];
+    chief_complaint?: string;
+    vitals_flags?: string[];
+    patient_age?: number;
+    encounter_type?: string;
+  }, tenantId?: string): Promise<any> {
+    try {
+      return await this.postWithPolicy<any>('order_intelligence', '/order/suggest-sets', payload, 6000, tenantId);
+    } catch { return { suggestions: [], abstained: true, abstain_reason: 'safety_gate_triggered' }; }
+  }
+
+  async checkImagingAppropriateness(payload: {
+    modality: string;
+    study_type: string;
+    clinical_indication: string;
+    diagnoses?: string[];
+    patient_age?: number;
+    prior_imaging?: string[];
+  }, tenantId?: string): Promise<any> {
+    try {
+      return await this.postWithPolicy<any>('order_intelligence', '/order/imaging-appropriateness', payload, 5000, tenantId);
+    } catch { return { appropriateness_status: 'needs_context', blocking_issues: [], abstained: true }; }
+  }
+
+  async predictPriorAuth(payload: {
+    order_type: string;
+    order_name: string;
+    cpt_code?: string;
+    icd10_codes?: string[];
+    payer_name?: string;
+    patient_age?: number;
+  }, tenantId?: string): Promise<any> {
+    try {
+      return await this.postWithPolicy<any>('order_intelligence', '/order/prior-auth-predict', payload, 4000, tenantId);
+    } catch { return { requires_prior_auth: false, likelihood: 0, abstained: true }; }
+  }
+
+  async checkLabReorder(payload: {
+    test_codes: string[];
+    test_names: string[];
+    recent_labs: any[];
+    lookback_days?: number;
+  }, tenantId?: string): Promise<any> {
+    try {
+      return await this.postWithPolicy<any>('order_intelligence', '/lab/reorder-check', payload, 4000, tenantId);
+    } catch { return { flags: [], abstained: true }; }
+  }
+
+  // ── Sprint 120: Nursing Intelligence Suite ────────────────────────────
+  async generateNursingCarePlan(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('nursing_intelligence', '/nursing/care-plan', payload, 6000, tenantId); }
+    catch { return { care_plan: [], abstained: true, abstain_reason: 'safety_gate_triggered' }; }
+  }
+
+  async generateSBAR(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('nursing_intelligence', '/nursing/sbar', payload, 5000, tenantId); }
+    catch { return { sbar: {}, abstained: true, abstain_reason: 'safety_gate_triggered' }; }
+  }
+
+  async assessFallRisk(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('nursing_intelligence', '/nursing/fall-risk', payload, 4000, tenantId); }
+    catch { return { total_score: 0, risk_level: 'unknown', abstained: true }; }
+  }
+
+  async stageWound(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('nursing_intelligence', '/nursing/wound-staging', payload, 5000, tenantId); }
+    catch { return { stage: null, care_recommendations: [], abstained: true }; }
+  }
+
+  // ── Sprint 121: Medication Reconciliation AI ──────────────────────────
+  async reconcileMedications(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('medication_reconciliation', '/medication/reconciliation', payload, 6000, tenantId); }
+    catch { return { discrepancies: [], abstained: true, abstain_reason: 'safety_gate_triggered' }; }
+  }
+
+  async checkPDMP(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('medication_reconciliation', '/medication/pdmp-check', payload, 4000, tenantId); }
+    catch { return { detected_controlled: [], pdmp_query_required: false, abstained: true }; }
+  }
+
+  // ── Sprint 122: Discharge Intelligence ───────────────────────────────
+  async getDischargeIntelligence(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('discharge_intelligence', '/discharge/intelligence', payload, 7000, tenantId); }
+    catch { return { readmission_risk: 'unknown', discharge_summary: {}, abstained: true }; }
+  }
+
+  async getFollowUpTiming(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('discharge_intelligence', '/discharge/follow-up-timing', payload, 5000, tenantId); }
+    catch { return { follow_up_appointments: [], abstained: true }; }
+  }
+
+  // ── Sprint 123: AI Self-Learning Hardening ────────────────────────────
+  async runShadowEval(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('self_learning', '/self-learning/shadow-eval', payload, 5000, tenantId); }
+    catch { return { divergence_flagged: false, abstained: true }; }
+  }
+
+  async runBiasAudit(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('self_learning', '/self-learning/bias-audit', payload, 6000, tenantId); }
+    catch { return { bias_report: [], abstained: true }; }
+  }
+
+  async detectAuditAnomalies(payload: any, tenantId?: string): Promise<any> {
+    try { return await this.postWithPolicy<any>('self_learning', '/self-learning/audit-anomaly', payload, 5000, tenantId); }
+    catch { return { anomalies: [], abstained: true }; }
+  }
+
+  async getModelVersions(tenantId?: string): Promise<Record<string, any>> {
+    try {
+      const res = await this.postWithPolicy<any>('ops', '/fl/model-version', { surface: 'all' }, 5000, tenantId);
+      return (res as any)?.versions ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  async ingestKnowledgeDocument(payload: {
+    documentId: string;
+    tenantId: string;
+    fileBase64: string;
+    mimeType: string;
+    metadata: Record<string, any>;
+  }): Promise<{ chunkCount: number; embeddingModel: string }> {
+    const response = await this.postWithPolicy<any>('knowledge_ingest', '/knowledge/ingest', {
+      document_id: payload.documentId,
+      tenant_id: payload.tenantId,
+      file_base64: payload.fileBase64,
+      mime_type: payload.mimeType,
+      metadata: payload.metadata,
+    }, 120000, payload.tenantId);
+    return { chunkCount: response.chunk_count, embeddingModel: response.embedding_model };
+  }
+
+  async searchKnowledge(query: string, tenantId: string, filters?: {
+    specialty?: string;
+    documentType?: string;
+    topK?: number;
+  }): Promise<any[]> {
+    await this.recordGovernedPromptAudit({ useCase: 'knowledge_search', source: 'rag_retrieval', tenantId });
+    const response = await this.postWithPolicy<any>('knowledge_search', '/knowledge/search', {
+      query,
+      tenant_id: tenantId,
+      filters: filters || {},
+      top_k: filters?.topK || 5,
+    }, 15000, tenantId);
+    return response.results || [];
   }
 }

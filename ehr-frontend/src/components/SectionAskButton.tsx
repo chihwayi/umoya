@@ -82,7 +82,10 @@ export const SectionAskButton: React.FC<Props> = ({
             </button>
           </div>
           {answer && (
-            <div className="mt-2 rounded border bg-white p-2 text-sm text-gray-700">{answer}</div>
+            <div className="mt-2 rounded border bg-white p-2 text-sm text-gray-700">
+              {answer}
+              <p className="mt-1 text-[10px] text-gray-400">AI-generated · clinician review required</p>
+            </div>
           )}
         </div>
       )}

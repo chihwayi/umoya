@@ -155,6 +155,14 @@ export class AnalyticsController {
     return this.reportBuilderService.getExecutionHistory(req.tenantDb, id, page, limit);
   }
 
+  @Post('seed-default-templates')
+  @ApiOperation({ summary: 'Seed default report templates for this tenant (idempotent)' })
+  @ApiResponse({ status: 200, description: 'Default templates seeded' })
+  async seedDefaultTemplates(@Req() req: RequestWithTenant) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.reportBuilderService.seedDefaultTemplates(req.tenantDb, userId);
+  }
+
   // Scheduled Reports Endpoints
   @Post('schedules')
   @ApiOperation({ summary: 'Create a scheduled report' })

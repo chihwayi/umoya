@@ -1,0 +1,75 @@
+{
+  "appName": "MediCore Clinical",
+  "subtitle": "AI-First Clinical Companion",
+  "bundleId": "com.medicore.clinical",
+  "version": "1.0.0",
+
+  "shortDescription": "AI-powered ward rounds, SOAP dictation, escalations & patient care — built for clinicians.",
+
+  "fullDescription": "MediCore Clinical is a world-class, AI-first electronic health record companion designed for doctors, nurses, and patients in modern healthcare facilities.\n\nFOR DOCTORS:\n• Smart ward rounds with AI patient summaries, SLA timers, and vital trend sparklines\n• Voice dictation → AI-drafted SOAP notes awaiting your signature\n• CDSS tools: drug interactions, dose calculator, WHO guidelines, diagnosis suggestions\n• Real-time escalation inbox with live SLA countdown timers\n• HIPAA-secure messaging with colleagues and patients\n\nFOR NURSES:\n• Shift worklist with AI copilot task prioritisation\n• Triage dashboard with ESI scoring assistance\n• Live vitals entry with instant AI interpretation and escalation\n• Quick-reply secure messaging\n\nFOR PATIENTS:\n• Plain-language visit summary: understand your diagnosis and treatment plan\n• Ask AI about any part of your care — citation-grounded answers\n• Medication adherence tracker with 7-day history\n• Bill management with EcoCash, OneMoney, card, and bank transfer payment\n• Connected health devices: Apple Health, Fitbit, Google Fit, Samsung Health, Garmin, Withings\n• Medical records vault: view, share, and ask AI about your documents\n\nSECURITY & COMPLIANCE:\n• HIPAA end-to-end encrypted messaging\n• All sessions audit-logged\n• Screen privacy overlay prevents OS screenshots of patient data\n• Automatic session lock after 5 minutes of inactivity\n• Biometric authentication (Face ID / Fingerprint)",
+
+  "keywords": [
+    "EMR", "EHR", "clinical", "doctor", "nurse", "patient",
+    "HIPAA", "medical", "healthcare", "AI", "telemedicine",
+    "ward rounds", "SOAP notes", "dictation", "vitals",
+    "medication", "escalation", "MediCore"
+  ],
+
+  "category": {
+    "ios":     "Medical",
+    "android": "Medical"
+  },
+
+  "contentRating": {
+    "ios":     "12+",
+    "android": "PEGI 3"
+  },
+
+  "supportUrl":  "https://support.medicore.app",
+  "marketingUrl": "https://medicore.app",
+  "privacyUrl":  "https://medicore.app/privacy",
+
+  "screenshots": {
+    "ios": {
+      "6.9inch": [
+        "screenshots/ios/6.9/01-ward-rounds.png",
+        "screenshots/ios/6.9/02-postvisit-soap.png",
+        "screenshots/ios/6.9/03-voice-dictation.png",
+        "screenshots/ios/6.9/04-escalation-inbox.png",
+        "screenshots/ios/6.9/05-nurse-vitals.png",
+        "screenshots/ios/6.9/06-patient-home.png",
+        "screenshots/ios/6.9/07-patient-ai-chat.png",
+        "screenshots/ios/6.9/08-health-labs.png",
+        "screenshots/ios/6.9/09-medications.png",
+        "screenshots/ios/6.9/10-bills-payment.png"
+      ]
+    },
+    "android": {
+      "phone": [
+        "screenshots/android/phone/01-ward-rounds.png",
+        "screenshots/android/phone/02-postvisit-soap.png",
+        "screenshots/android/phone/03-voice-dictation.png",
+        "screenshots/android/phone/04-escalation-inbox.png",
+        "screenshots/android/phone/05-nurse-vitals.png",
+        "screenshots/android/phone/06-patient-home.png",
+        "screenshots/android/phone/07-patient-ai-chat.png",
+        "screenshots/android/phone/08-health-labs.png",
+        "screenshots/android/phone/09-medications.png",
+        "screenshots/android/phone/10-bills-payment.png"
+      ]
+    }
+  },
+
+  "releaseNotes": {
+    "en-US": "Initial release of MediCore Clinical — AI-first ward rounds, voice SOAP dictation, real-time escalation inbox, nurse shift management, and the full patient companion suite including medication tracking, bills, and health records."
+  },
+
+  "easBuildCommands": {
+    "development": "eas build --profile development --platform all",
+    "preview":     "eas build --profile preview --platform all",
+    "production":  "eas build --profile production --platform all",
+    "submitIos":   "eas submit --profile production --platform ios",
+    "submitAndroid": "eas submit --profile production --platform android",
+    "update":      "eas update --channel production --message \"OTA patch\""
+  }
+}

@@ -4,6 +4,7 @@ import { doctorAvailabilityApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import DatePicker from './DatePicker';
 import { formatDateForAPI, formatDateToDDMMYYYY } from '../utils/dateUtils';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface DoctorAvailability {
   id: string;
@@ -30,6 +31,7 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
   onClose,
 }) => {
   const { showSuccess, showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const [availabilities, setAvailabilities] = useState<DoctorAvailability[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -161,7 +163,14 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this unavailability period?')) {
+    const shouldProceed = await confirm({
+      title: 'Delete Unavailability Period',
+      message: 'Are you sure you want to delete this unavailability period?',
+      confirmText: 'Delete',
+      cancelText: 'Keep',
+      type: 'danger',
+    });
+    if (!shouldProceed) {
       return;
     }
 
@@ -199,19 +208,22 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+    <>
+      {Dialog}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 flex items-center justify-between">
+        <div className="flex items-center justify-between bg-gradient-to-r from-sky-600 via-cyan-600 to-indigo-700 p-6 text-white">
           <div>
             <h2 className="text-2xl font-bold">Manage Availability</h2>
-            <p className="text-blue-100 text-sm mt-1">Mark days or times when you're unavailable</p>
+            <p className="mt-1 text-sm text-cyan-100">Mark days or times when you're unavailable</p>
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/40 bg-white/15 text-white shadow-sm transition-colors hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/70"
+            aria-label="Close availability manager"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -225,7 +237,7 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
                 setEditingId(null);
                 setShowForm(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:from-cyan-700 hover:to-indigo-700 hover:shadow-md"
             >
               <Plus className="h-5 w-5" />
               Add Unavailability Period
@@ -234,14 +246,14 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
 
           {/* Form */}
           {showForm && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            <div className="mb-6 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-indigo-50 p-6">
+              <h3 className="mb-4 text-lg font-semibold text-slate-800">
                 {editingId ? 'Edit' : 'Add'} Unavailability Period
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
                       Start Date <span className="text-red-500">*</span>
                     </label>
                     <DatePicker
@@ -250,14 +262,14 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
                       End Date (optional)
                     </label>
                     <DatePicker
                       value={formData.endDate}
                       onChange={(val) => setFormData({ ...formData, endDate: val })}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="mt-1 text-xs text-slate-500">
                       Leave empty for single day
                     </p>
                   </div>
@@ -269,9 +281,9 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
                     id="isAllDay"
                     checked={formData.isAllDay}
                     onChange={(e) => setFormData({ ...formData, isAllDay: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
                   />
-                  <label htmlFor="isAllDay" className="text-sm font-medium text-gray-700">
+                  <label htmlFor="isAllDay" className="text-sm font-medium text-slate-700">
                     All Day
                   </label>
                 </div>
@@ -279,32 +291,32 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
                 {!formData.isAllDay && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
                         Start Time
                       </label>
                       <input
                         type="time"
                         value={formData.startTime}
                         onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-transparent focus:ring-2 focus:ring-cyan-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
                         End Time
                       </label>
                       <input
                         type="time"
                         value={formData.endTime}
                         onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-transparent focus:ring-2 focus:ring-cyan-500"
                       />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
                     Reason (optional)
                   </label>
                   <input
@@ -312,12 +324,12 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
                     value={formData.reason}
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     placeholder="e.g., Vacation, Conference, Personal"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-transparent focus:ring-2 focus:ring-cyan-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
                     Notes (optional)
                   </label>
                   <textarea
@@ -325,14 +337,14 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     placeholder="Additional details..."
                     rows={3}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-800 focus:border-transparent focus:ring-2 focus:ring-cyan-500"
                   />
                 </div>
 
                 <div className="flex gap-3">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-cyan-700 hover:to-indigo-700"
                   >
                     {editingId ? 'Update' : 'Add'} Unavailability
                   </button>
@@ -343,7 +355,7 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
                       setEditingId(null);
                       resetForm();
                     }}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                    className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-200"
                   >
                     Cancel
                   </button>
@@ -354,10 +366,10 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
 
           {/* List */}
           {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading...</div>
+            <div className="py-8 text-center text-slate-500">Loading...</div>
           ) : !Array.isArray(availabilities) || availabilities.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+            <div className="py-8 text-center text-slate-500">
+              <AlertCircle className="mx-auto mb-3 h-12 w-12 text-slate-400" />
               <p>No unavailability periods set</p>
               <p className="text-sm mt-1">Add one to prevent appointments during that time</p>
             </div>
@@ -366,13 +378,13 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
               {availabilities.map((availability) => (
                 <div
                   key={availability.id}
-                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                  className="rounded-xl border border-slate-200 bg-gradient-to-r from-white to-slate-50 p-4 transition-shadow hover:shadow-md"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <Calendar className="h-5 w-5 text-blue-600" />
-                        <span className="font-semibold text-gray-800">
+                        <Calendar className="h-5 w-5 text-cyan-600" />
+                        <span className="font-semibold text-slate-800">
                           {formatDate(availability.startDate)}
                           {availability.endDate && availability.endDate !== availability.startDate && (
                             <> - {formatDate(availability.endDate)}</>
@@ -380,42 +392,42 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
                         </span>
                       </div>
                       {!availability.isAllDay && availability.startTime && availability.endTime && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                          <Clock className="h-4 w-4" />
+                        <div className="mb-2 flex items-center gap-2 text-sm text-slate-600">
+                          <Clock className="h-4 w-4 text-indigo-600" />
                           <span>
                             {availability.startTime} - {availability.endTime}
                           </span>
                         </div>
                       )}
                       {availability.isAllDay && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                        <div className="mb-2 flex items-center gap-2 text-sm text-slate-600">
                           <CheckCircle className="h-4 w-4 text-green-600" />
                           <span className="text-green-700 font-medium">All Day</span>
                         </div>
                       )}
                       {availability.reason && (
-                        <p className="text-sm text-gray-600 mb-1">
+                        <p className="mb-1 text-sm text-slate-600">
                           <span className="font-medium">Reason:</span> {availability.reason}
                         </p>
                       )}
                       {availability.notes && (
-                        <p className="text-sm text-gray-500">{availability.notes}</p>
+                        <p className="text-sm text-slate-500">{availability.notes}</p>
                       )}
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleEdit(availability)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 transition-colors hover:bg-cyan-100"
                         title="Edit"
                       >
-                        <Edit className="h-5 w-5" />
+                        <Edit className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(availability.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 transition-colors hover:bg-rose-100"
                         title="Delete"
                       >
-                        <Trash2 className="h-5 w-5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -426,17 +438,17 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 p-4 bg-gray-50">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm text-blue-800">
+        <div className="border-t border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-xl border border-cyan-200 bg-gradient-to-r from-cyan-50 via-white to-indigo-50 p-3">
+            <p className="text-sm text-slate-700">
               <strong>Note:</strong> When you mark yourself as unavailable, nurses and receptionists will not be able to schedule appointments during those times.
             </p>
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
 export default DoctorAvailabilityManager;
-

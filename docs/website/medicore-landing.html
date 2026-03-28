@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediCore EHR — Intelligent Clinical Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0a0f1a;
+    --ink2: #1a2235;
+    --slate: #3a4a6b;
+    --muted: #8a96b0;
+    --line: rgba(255,255,255,0.08);
+    --teal: #00c4a0;
+    --teal2: #00e8be;
+    --amber: #f5a623;
+    --surface: rgba(255,255,255,0.04);
+    --surface2: rgba(255,255,255,0.07);
+    --white: #f0f4ff;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Geist', sans-serif;
+    background: var(--ink);
+    color: var(--white);
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* NOISE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.018;
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 3rem;
+    backdrop-filter: blur(20px);
+    background: rgba(10,15,26,0.75);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 0.6rem;
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 12px var(--teal);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 12px var(--teal); }
+    50% { opacity: 0.6; box-shadow: 0 0 24px var(--teal2); }
+  }
+
+  .nav-links { display: flex; gap: 2rem; align-items: center; }
+  .nav-links a {
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.2s;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .nav-links a:hover { color: var(--white); }
+
+  .nav-cta {
+    background: var(--teal);
+    color: var(--ink) !important;
+    padding: 0.5rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 600 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    font-size: 0.85rem !important;
+    transition: background 0.2s, transform 0.15s !important;
+  }
+  .nav-cta:hover { background: var(--teal2) !important; transform: translateY(-1px); }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 8rem 2rem 4rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-glow {
+    position: absolute;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 900px;
+    height: 600px;
+    background: radial-gradient(ellipse, rgba(0,196,160,0.12) 0%, rgba(0,196,160,0.04) 40%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-glow2 {
+    position: absolute;
+    bottom: -10%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(ellipse, rgba(245,166,35,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0,196,160,0.1);
+    border: 1px solid rgba(0,196,160,0.25);
+    border-radius: 100px;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--teal2);
+    margin-bottom: 2rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 8px var(--teal);
+  }
+
+  .hero h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    max-width: 900px;
+    animation: fadeUp 0.7s 0.1s ease both;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    color: var(--teal);
+  }
+
+  .hero-sub {
+    font-size: clamp(1rem, 1.8vw, 1.2rem);
+    color: var(--muted);
+    max-width: 580px;
+    margin: 1.5rem auto 2.5rem;
+    line-height: 1.7;
+    font-weight: 400;
+    animation: fadeUp 0.7s 0.2s ease both;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    animation: fadeUp 0.7s 0.3s ease both;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--teal);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 0.85rem 2rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.2s;
+    box-shadow: 0 0 30px rgba(0,196,160,0.25);
+  }
+  .btn-primary:hover {
+    background: var(--teal2);
+    transform: translateY(-2px);
+    box-shadow: 0 0 50px rgba(0,196,160,0.4);
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--white);
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 0.85rem 1.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .btn-ghost:hover { border-color: rgba(255,255,255,0.2); background: var(--surface); }
+
+  /* COMPLIANCE STRIP */
+  .compliance-strip {
+    margin-top: 4rem;
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    animation: fadeUp 0.7s 0.4s ease both;
+  }
+
+  .comp-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .comp-icon {
+    width: 18px; height: 18px;
+    color: var(--teal);
+    flex-shrink: 0;
+  }
+
+  .comp-divider {
+    width: 1px; height: 20px;
+    background: var(--line);
+  }
+
+  /* DASHBOARD PREVIEW */
+  .dashboard-preview {
+    margin: 0 auto;
+    max-width: 1100px;
+    padding: 0 2rem 5rem;
+    animation: fadeUp 0.8s 0.5s ease both;
+  }
+
+  .screen-frame {
+    background: var(--ink2);
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    box-shadow: 0 40px 120px rgba(0,0,0,0.6), 0 0 60px rgba(0,196,160,0.06);
+  }
+
+  .screen-bar {
+    background: rgba(255,255,255,0.03);
+    padding: 0.8rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .screen-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .screen-content {
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 200px 1fr 1fr;
+    gap: 1rem;
+    min-height: 260px;
+  }
+
+  .screen-sidebar {
+    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    padding: 1rem;
+    border: 1px solid var(--line);
+  }
+
+  .sidebar-item {
+    padding: 0.5rem 0.6rem;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 2px;
+    font-family: 'Geist Mono', monospace;
+  }
+
+  .sidebar-item.active {
+    background: rgba(0,196,160,0.1);
+    color: var(--teal2);
+    border-left: 2px solid var(--teal);
+  }
+
+  .screen-panel {
+    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    padding: 1rem;
+  }
+
+  .panel-header {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 0.8rem;
+    font-weight: 600;
+  }
+
+  .ai-alert {
+    background: rgba(0,196,160,0.08);
+    border: 1px solid rgba(0,196,160,0.2);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.71rem;
+    color: var(--teal2);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    line-height: 1.4;
+  }
+
+  .warn-alert {
+    background: rgba(245,166,35,0.08);
+    border-color: rgba(245,166,35,0.2);
+    color: var(--amber);
+  }
+
+  .vital-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.72rem;
+    font-family: 'Geist Mono', monospace;
+  }
+
+  .vital-val { color: var(--teal2); font-weight: 600; }
+  .vital-label { color: var(--muted); }
+
+  /* SECTIONS */
+  section { padding: 5rem 2rem; max-width: 1100px; margin: 0 auto; }
+
+  .section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--teal);
+    margin-bottom: 0.8rem;
+  }
+
+  .section-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 1rem;
+  }
+
+  .section-sub {
+    color: var(--muted);
+    max-width: 540px;
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+
+  /* WHY MEDICORE */
+  .why-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 3rem;
+  }
+
+  .why-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1.8rem;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .why-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--teal), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .why-card:hover {
+    border-color: rgba(0,196,160,0.2);
+    background: var(--surface2);
+    transform: translateY(-3px);
+  }
+
+  .why-card:hover::before { opacity: 1; }
+
+  .card-icon {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    background: rgba(0,196,160,0.1);
+    border: 1px solid rgba(0,196,160,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+  }
+
+  .card-icon.amber {
+    background: rgba(245,166,35,0.1);
+    border-color: rgba(245,166,35,0.2);
+  }
+
+  .card-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
+  }
+
+  .card-text { font-size: 0.88rem; color: var(--muted); line-height: 1.6; }
+
+  /* AI SECTION */
+  .ai-section {
+    background: linear-gradient(135deg, rgba(0,196,160,0.05) 0%, transparent 60%);
+    border: 1px solid rgba(0,196,160,0.1);
+    border-radius: 20px;
+    padding: 4rem;
+    position: relative;
+    overflow: hidden;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .ai-section::after {
+    content: 'AI';
+    position: absolute;
+    right: -1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'Instrument Serif', serif;
+    font-size: 18rem;
+    color: rgba(0,196,160,0.03);
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .ai-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 2.5rem;
+  }
+
+  .ai-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    transition: all 0.2s;
+  }
+
+  .ai-item:hover { border-color: rgba(0,196,160,0.2); background: var(--surface2); }
+
+  .ai-bullet {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+    margin-top: 0.5rem;
+    flex-shrink: 0;
+    box-shadow: 0 0 8px var(--teal);
+  }
+
+  .ai-text { font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
+  .ai-text strong { color: var(--white); display: block; margin-bottom: 0.2rem; font-size: 0.9rem; }
+
+  /* MODULES */
+  .modules-scroll {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-top: 2.5rem;
+  }
+
+  .module-chip {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    cursor: default;
+  }
+
+  .module-chip:hover { border-color: rgba(0,196,160,0.25); color: var(--white); background: var(--surface2); }
+  .module-chip span { font-size: 1rem; }
+
+  /* INTEROP */
+  .interop-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+
+  .interop-badge {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.6rem 1.1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: 'Geist Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    transition: all 0.2s;
+  }
+
+  .interop-badge:hover { color: var(--teal2); border-color: rgba(0,196,160,0.3); }
+  .interop-badge.highlight { color: var(--teal2); border-color: rgba(0,196,160,0.3); background: rgba(0,196,160,0.06); }
+
+  /* COMPARE TABLE */
+  .compare-wrap {
+    overflow-x: auto;
+    margin-top: 2.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+
+  thead tr {
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--line);
+  }
+
+  th {
+    padding: 1rem 1.2rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  th.highlight { color: var(--teal2); }
+
+  td {
+    padding: 0.85rem 1.2rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    vertical-align: middle;
+  }
+
+  td.highlight { color: var(--white); font-weight: 500; }
+  td:first-child { color: var(--white); font-weight: 500; }
+
+  .check { color: var(--teal); font-size: 1rem; }
+  .cross { color: rgba(255,255,255,0.2); font-size: 1rem; }
+  .partial { color: var(--amber); font-size: 0.75rem; }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* SECURITY */
+  .sec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 2.5rem;
+  }
+
+  .sec-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    padding: 1.2rem;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+
+  .sec-icon { color: var(--teal); font-size: 1.1rem; flex-shrink: 0; margin-top: 0.1rem; }
+  .sec-title { font-size: 0.88rem; font-weight: 600; margin-bottom: 0.2rem; }
+  .sec-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+
+  /* FORM SECTION */
+  .form-section {
+    background: var(--ink2);
+    border-top: 1px solid var(--line);
+    padding: 5rem 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .form-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 600px; height: 400px;
+    background: radial-gradient(ellipse, rgba(0,196,160,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .form-inner {
+    max-width: 640px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .field.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  input, select, textarea {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    color: var(--white);
+    font-size: 0.9rem;
+    font-family: 'Geist', sans-serif;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: rgba(0,196,160,0.4);
+    box-shadow: 0 0 0 3px rgba(0,196,160,0.08);
+  }
+
+  input::placeholder, textarea::placeholder { color: var(--slate); }
+  select option { background: var(--ink2); }
+
+  textarea { resize: vertical; min-height: 90px; }
+
+  .checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 0.4rem;
+  }
+
+  .checkbox-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .checkbox-pill input[type="checkbox"] {
+    width: 12px; height: 12px;
+    padding: 0;
+    accent-color: var(--teal);
+    cursor: pointer;
+  }
+
+  .checkbox-pill:has(input:checked) {
+    border-color: rgba(0,196,160,0.35);
+    background: rgba(0,196,160,0.08);
+    color: var(--teal2);
+  }
+
+  .submit-btn {
+    width: 100%;
+    margin-top: 1.5rem;
+    background: var(--teal);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 1rem;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Geist', sans-serif;
+    box-shadow: 0 0 30px rgba(0,196,160,0.2);
+    letter-spacing: 0.01em;
+  }
+
+  .submit-btn:hover {
+    background: var(--teal2);
+    transform: translateY(-2px);
+    box-shadow: 0 0 50px rgba(0,196,160,0.4);
+  }
+
+  .form-note {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.78rem;
+    color: var(--slate);
+  }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 2rem 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  footer p { font-size: 0.8rem; color: var(--slate); }
+
+  .footer-tags {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .footer-tag {
+    font-size: 0.72rem;
+    font-family: 'Geist Mono', monospace;
+    color: var(--slate);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* SUCCESS */
+  .success-msg {
+    display: none;
+    text-align: center;
+    padding: 2rem;
+    background: rgba(0,196,160,0.08);
+    border: 1px solid rgba(0,196,160,0.2);
+    border-radius: 12px;
+    margin-top: 1.5rem;
+  }
+
+  .success-msg.show { display: block; }
+  .success-msg h3 { font-family: 'Instrument Serif', serif; font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .success-msg p { font-size: 0.88rem; color: var(--muted); }
+
+  @media (max-width: 768px) {
+    nav { padding: 1rem 1.5rem; }
+    .nav-links { display: none; }
+    .screen-content { grid-template-columns: 1fr; }
+    .ai-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+    .ai-section { padding: 2rem; }
+    section { padding: 3rem 1.5rem; }
+    footer { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    MediCore
+  </div>
+  <div class="nav-links">
+    <a href="#ai">AI Engine</a>
+    <a href="#modules">Modules</a>
+    <a href="#interop">Interop</a>
+    <a href="#security">Security</a>
+    <a href="#access" class="nav-cta">Request Access</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" style="max-width:100%; padding-top:8rem;">
+  <div class="hero-glow"></div>
+  <div class="hero-glow2"></div>
+
+  <div class="badge">Multi-Tenant EHR Platform · Early Access</div>
+
+  <h1>The EHR that thinks<br><em>alongside you.</em></h1>
+
+  <p class="hero-sub">
+    MediCore is a next-generation clinical platform built for modern healthcare — with AI-driven decision support, full FHIR R4 interoperability, and specialty modules from HIV to oncology, all in one unified system.
+  </p>
+
+  <div class="hero-actions">
+    <a href="#access" class="btn-primary">
+      ✦ Request Early Access
+    </a>
+    <a href="#why" class="btn-ghost">
+      See what's different →
+    </a>
+  </div>
+
+  <div class="compliance-strip">
+    <div class="comp-item">
+      <svg class="comp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      HIPAA Compliant
+    </div>
+    <div class="comp-divider"></div>
+    <div class="comp-item">
+      <svg class="comp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      FHIR R4
+    </div>
+    <div class="comp-divider"></div>
+    <div class="comp-item">
+      <svg class="comp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      SNOMED CT · ICD-10
+    </div>
+    <div class="comp-divider"></div>
+    <div class="comp-item">
+      <svg class="comp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="2" y="3" width="20" height="14" rx="2"/>
+        <line x1="8" y1="21" x2="16" y2="21"/>
+        <line x1="12" y1="17" x2="12" y2="21"/>
+      </svg>
+      WHO SMART Guidelines
+    </div>
+    <div class="comp-divider"></div>
+    <div class="comp-item">
+      <svg class="comp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+      HL7 · CCDA · DHIS2
+    </div>
+  </div>
+</section>
+
+<!-- DASHBOARD PREVIEW -->
+<div class="dashboard-preview reveal">
+  <div class="screen-frame">
+    <div class="screen-bar">
+      <div class="screen-dot" style="background:#ff5f57"></div>
+      <div class="screen-dot" style="background:#ffbd2e"></div>
+      <div class="screen-dot" style="background:#28c840"></div>
+      <span style="font-size:0.7rem;color:var(--slate);margin-left:0.8rem;font-family:'Geist Mono',monospace">medicore · ehr-frontend · Patient: Tendai M.</span>
+    </div>
+    <div class="screen-content">
+      <div class="screen-sidebar">
+        <div class="sidebar-item active">⊕ Dashboard</div>
+        <div class="sidebar-item">♡ Vitals</div>
+        <div class="sidebar-item">⊞ Orders</div>
+        <div class="sidebar-item">℞ Prescriptions</div>
+        <div class="sidebar-item">⊡ Labs</div>
+        <div class="sidebar-item">◈ CDSS Alerts</div>
+        <div class="sidebar-item">⊙ HIV Registry</div>
+        <div class="sidebar-item">⊛ Imaging</div>
+        <div class="sidebar-item">⊟ Revenue Cycle</div>
+      </div>
+      <div class="screen-panel">
+        <div class="panel-header">🤖 AI Clinical Alerts</div>
+        <div class="ai-alert">
+          <span>⚠</span>
+          <span><strong>Drug Interaction</strong> Rifampicin ↔ Efavirenz: Reduces ART plasma levels by ~35%. Consider dose adjustment.</span>
+        </div>
+        <div class="ai-alert">
+          <span>✦</span>
+          <span><strong>CDSS Suggestion</strong> VL unsuppressed for 6 months. WHO guideline recommends Enhanced Adherence Counselling + regimen review.</span>
+        </div>
+        <div class="ai-alert warn-alert">
+          <span>⚡</span>
+          <span><strong>Post-Visit Follow-up</strong> Patient missed ARV refill by 12 days. Auto-escalated for outreach.</span>
+        </div>
+        <div class="ai-alert" style="background:rgba(100,100,255,0.06);border-color:rgba(100,100,255,0.2);color:#a0aaff">
+          <span>◈</span>
+          <span><strong>Diagnostic AI</strong> Presentation consistent with Stage 3 HIV. Consider TB screening and OI prophylaxis.</span>
+        </div>
+      </div>
+      <div class="screen-panel">
+        <div class="panel-header">📊 Patient Vitals</div>
+        <div class="vital-row"><span class="vital-label">Viral Load</span><span class="vital-val">&gt;1000 c/mL ⚠</span></div>
+        <div class="vital-row"><span class="vital-label">CD4 Count</span><span class="vital-val">182 cells/μL</span></div>
+        <div class="vital-row"><span class="vital-label">BP</span><span class="vital-val">138/88 mmHg</span></div>
+        <div class="vital-row"><span class="vital-label">Weight</span><span class="vital-val">58 kg (↓4kg)</span></div>
+        <div class="vital-row"><span class="vital-label">eGFR</span><span class="vital-val">62 mL/min ✓</span></div>
+        <div class="vital-row"><span class="vital-label">Regimen</span><span class="vital-val" style="font-size:0.65rem">TDF/3TC/EFV</span></div>
+        <div style="margin-top:0.8rem;padding:0.5rem;background:rgba(0,196,160,0.06);border-radius:5px;font-size:0.68rem;color:var(--teal2);font-family:'Geist Mono',monospace">
+          ✦ Post-visit AI summary generated · FHIR exported · DHIS2 synced
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WHY MEDICORE -->
+<section id="why" style="max-width:1100px;">
+  <div class="reveal">
+    <div class="section-label">Why MediCore</div>
+    <h2 class="section-title">Built different from day one.</h2>
+    <p class="section-sub">Traditional EHRs were built for billing. MediCore was built for clinical excellence — with the AI and interoperability infrastructure modern medicine demands.</p>
+  </div>
+
+  <div class="why-grid">
+    <div class="why-card reveal">
+      <div class="card-icon">🧠</div>
+      <div class="card-title">AI That Thinks With You</div>
+      <p class="card-text">Real-time CDSS with drug interactions, diagnostic suggestions, dosing, risk scoring, lab interpretation, and post-visit intelligence — not just passive alerts.</p>
+    </div>
+    <div class="why-card reveal">
+      <div class="card-icon">🔗</div>
+      <div class="card-title">True Interoperability</div>
+      <p class="card-text">FHIR R4, HL7, CCDA, SNOMED CT, ICD-10, WHO SMART Guidelines, and DHIS2 — native to the platform. Not an afterthought add-on.</p>
+    </div>
+    <div class="why-card reveal">
+      <div class="card-icon">🏥</div>
+      <div class="card-title">One System, Every Setting</div>
+      <p class="card-text">Outpatient, inpatient, ED, OR, specialty, and community — one unified platform rather than a dozen disconnected tools patched together.</p>
+    </div>
+    <div class="why-card reveal">
+      <div class="card-icon amber">📱</div>
+      <div class="card-title">Mobile-First Patient App</div>
+      <p class="card-text">Patients manage appointments, view results, track medications, message their care team, and access telemedicine from a purpose-built mobile portal.</p>
+    </div>
+    <div class="why-card reveal">
+      <div class="card-icon amber">🌍</div>
+      <div class="card-title">Designed for Your Region</div>
+      <p class="card-text">Built with SADC/Zimbabwe deployment context, medical-aid integration, and resource-limited environment realities — not just ported from elsewhere.</p>
+    </div>
+    <div class="why-card reveal">
+      <div class="card-icon">🏢</div>
+      <div class="card-title">Multi-Tenant Architecture</div>
+      <p class="card-text">Every clinic gets their own isolated database, scoped access, and independent configuration — with platform-level analytics across all tenants.</p>
+    </div>
+  </div>
+</section>
+
+<!-- AI ENGINE -->
+<div style="padding:0 2rem;">
+<div class="ai-section reveal" id="ai">
+  <div class="section-label">AI & CDSS Engine</div>
+  <h2 class="section-title" style="max-width:500px;">The intelligence layer<br>built into every encounter.</h2>
+  <p class="section-sub" style="margin-top:0.5rem;">MediCore's CDSS service runs as a dedicated AI engine, connecting to every clinical workflow — from prescription to discharge.</p>
+
+  <div class="ai-grid">
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>Drug-Drug & Food-Drug Interactions</strong>Advanced interaction checks with severity grading and clinical context, including ART regimen conflicts.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>Intelligent Diagnosis Support</strong>AI-assisted differential diagnosis with confidence scoring, mapped to SNOMED/ICD-10 codes.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>Post-Visit AI Workflows</strong>Automated follow-up intelligence, missed-appointment detection, and outreach escalation queues.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>Clinical Guideline Checks</strong>WHO SMART Guidelines, care gap detection, and protocol adherence scoring in real time.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>Lab Interpretation Engine</strong>AI-powered result interpretation with critical alert escalation and trend analysis.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>Risk Scoring & Dosing</strong>Patient risk stratification and weight/renal-adjusted dosing recommendations at point of care.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>HIV Testing Algorithm</strong>AI-guided HIV testing protocols, regimen optimization, and EAC session scheduling intelligence.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>Patient Summarization</strong>One-click AI patient summaries for handoffs, referrals, and ward rounds — with PHI protection built in.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>High-Risk Medication Detection</strong>Duplicate therapy, high-alert medication flags, and BCMA integration for medication safety.</div>
+    </div>
+    <div class="ai-item">
+      <div class="ai-bullet"></div>
+      <div class="ai-text"><strong>Voice Transcription Support</strong>Clinical note transcription to reduce documentation burden and keep doctors facing patients.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- SPECIALTY MODULES -->
+<section id="modules">
+  <div class="reveal">
+    <div class="section-label">Specialty Modules</div>
+    <h2 class="section-title">Every specialty. One platform.</h2>
+    <p class="section-sub">Dedicated workflows — not generic forms relabeled — for the programs that matter most to your patients.</p>
+  </div>
+
+  <div class="modules-scroll reveal">
+    <div class="module-chip"><span>🔴</span> HIV / ART Program</div>
+    <div class="module-chip"><span>🎗️</span> Oncology</div>
+    <div class="module-chip"><span>🫀</span> Cardiology</div>
+    <div class="module-chip"><span>🩺</span> Diabetes Care</div>
+    <div class="module-chip"><span>👁️</span> Ophthalmology</div>
+    <div class="module-chip"><span>🤰</span> Maternity / OBS</div>
+    <div class="module-chip"><span>💉</span> Immunizations</div>
+    <div class="module-chip"><span>🧪</span> Laboratory</div>
+    <div class="module-chip"><span>🩻</span> Radiology</div>
+    <div class="module-chip"><span>💊</span> Pharmacy</div>
+    <div class="module-chip"><span>🚨</span> Emergency Dept.</div>
+    <div class="module-chip"><span>🛏️</span> Bed Management</div>
+    <div class="module-chip"><span>🔬</span> Infection Control</div>
+    <div class="module-chip"><span>🩸</span> Blood Bank</div>
+    <div class="module-chip"><span>🧬</span> Sepsis Protocol</div>
+    <div class="module-chip"><span>🏥</span> Operating Room</div>
+    <div class="module-chip"><span>📋</span> Case Management</div>
+    <div class="module-chip"><span>💰</span> Revenue Cycle</div>
+    <div class="module-chip"><span>🌍</span> Population Health</div>
+    <div class="module-chip"><span>📱</span> Patient Portal</div>
+    <div class="module-chip"><span>📞</span> Telemedicine</div>
+    <div class="module-chip"><span>⚖️</span> Prior Auth</div>
+  </div>
+</section>
+
+<!-- INTEROPERABILITY -->
+<section id="interop" style="background:var(--surface);border-radius:20px;border:1px solid var(--line);">
+  <div class="reveal">
+    <div class="section-label">Interoperability</div>
+    <h2 class="section-title">Speaks every standard<br>your systems do.</h2>
+    <p class="section-sub">MediCore doesn't live in a silo. Native support for global health data standards means your data moves freely, securely, and correctly.</p>
+  </div>
+
+  <div class="interop-badges reveal">
+    <div class="interop-badge highlight">FHIR R4</div>
+    <div class="interop-badge highlight">HL7 v2</div>
+    <div class="interop-badge highlight">SNOMED CT</div>
+    <div class="interop-badge highlight">ICD-10</div>
+    <div class="interop-badge">CCDA</div>
+    <div class="interop-badge">DHIS2</div>
+    <div class="interop-badge">WHO SMART</div>
+    <div class="interop-badge">Medical Aid Claims</div>
+    <div class="interop-badge">HL7 CCDA Export</div>
+    <div class="interop-badge">SADC Compliant</div>
+    <div class="interop-badge">REST API</div>
+    <div class="interop-badge">Swagger / OpenAPI</div>
+  </div>
+
+  <p style="margin-top:1.5rem;font-size:0.82rem;color:var(--slate);">
+    All FHIR resources, HL7 messages, and CCDA exports are patient-scoped and tenant-isolated. Every API endpoint is documented and versioned.
+  </p>
+</section>
+
+<!-- COMPARISON -->
+<section>
+  <div class="reveal">
+    <div class="section-label">How We Compare</div>
+    <h2 class="section-title">MediCore vs. traditional EHRs.</h2>
+  </div>
+
+  <div class="compare-wrap reveal">
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="highlight">MediCore</th>
+          <th>Legacy EHR</th>
+          <th>Paper / Hybrid</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AI Clinical Decision Support</td>
+          <td class="highlight"><span class="check">✓</span> Built-in, real-time</td>
+          <td><span class="partial">Add-on, expensive</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>FHIR R4 Native</td>
+          <td class="highlight"><span class="check">✓</span> Full R4 support</td>
+          <td><span class="partial">Partial / V3</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>HIV / ART Program Module</td>
+          <td class="highlight"><span class="check">✓</span> Dedicated workflow</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>Post-Visit AI Follow-Up</td>
+          <td class="highlight"><span class="check">✓</span> Automated</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>Patient Mobile Portal</td>
+          <td class="highlight"><span class="check">✓</span> Full-featured</td>
+          <td><span class="partial">Basic appointment only</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>Multi-Tenant / Cloud-Native</td>
+          <td class="highlight"><span class="check">✓</span> Per-tenant DB</td>
+          <td><span class="partial">Shared / on-premise</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>HIPAA Audit Logging</td>
+          <td class="highlight"><span class="check">✓</span> Append-only logs</td>
+          <td><span class="partial">Varies</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>Revenue Cycle Intelligence</td>
+          <td class="highlight"><span class="check">✓</span> Denial prevention</td>
+          <td><span class="partial">Basic billing</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>WHO SMART Guidelines</td>
+          <td class="highlight"><span class="check">✓</span> Integrated</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- SECURITY -->
+<section id="security">
+  <div class="reveal">
+    <div class="section-label">Security & Compliance</div>
+    <h2 class="section-title">Defence-in-depth,<br>from code to cloud.</h2>
+  </div>
+
+  <div class="sec-grid reveal">
+    <div class="sec-item">
+      <div class="sec-icon">🔐</div>
+      <div>
+        <div class="sec-title">HIPAA Audit Logs</div>
+        <div class="sec-desc">Append-only, immutable audit trail on every clinical action. Compliant by design, not configuration.</div>
+      </div>
+    </div>
+    <div class="sec-item">
+      <div class="sec-icon">🛡️</div>
+      <div>
+        <div class="sec-title">2FA Everywhere</div>
+        <div class="sec-desc">Two-factor authentication for all clinical staff with setup, verify, and login completion flows.</div>
+      </div>
+    </div>
+    <div class="sec-item">
+      <div class="sec-icon">🔒</div>
+      <div>
+        <div class="sec-title">PHI Redaction</div>
+        <div class="sec-desc">CDSS service strips PHI before external AI calls. Egress allowlists prevent unintended data leakage.</div>
+      </div>
+    </div>
+    <div class="sec-item">
+      <div class="sec-icon">🏢</div>
+      <div>
+        <div class="sec-title">Tenant Isolation</div>
+        <div class="sec-desc">Every clinic's data lives in a dedicated database. Zero cross-tenant data access, ever.</div>
+      </div>
+    </div>
+    <div class="sec-item">
+      <div class="sec-icon">🔑</div>
+      <div>
+        <div class="sec-title">Key Rotation</div>
+        <div class="sec-desc">CDSS encryption with key rotation support. Signed URLs for stored assets. JWT with tenant scoping.</div>
+      </div>
+    </div>
+    <div class="sec-item">
+      <div class="sec-icon">📡</div>
+      <div>
+        <div class="sec-title">Observability</div>
+        <div class="sec-desc">Prometheus metrics + Grafana dashboards. Request IDs on every API response. Fail-fast checks on startup.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- REQUEST ACCESS FORM -->
+<div class="form-section" id="access">
+  <div class="form-inner">
+    <div style="text-align:center;" class="reveal">
+      <div class="section-label" style="justify-content:center;display:flex;">Early Access Program</div>
+      <h2 class="section-title">Ready to see it in action?</h2>
+      <p class="section-sub" style="margin:0.5rem auto 0;text-align:center;">We're onboarding a select cohort of clinicians to pilot MediCore. Tell us about your practice and we'll set up your access within 48 hours.</p>
+    </div>
+
+    <form id="accessForm" class="reveal" onsubmit="handleSubmit(event)" style="margin-top:2rem;">
+      <div class="form-grid">
+        <div class="field">
+          <label>First Name</label>
+          <input type="text" placeholder="Dr. Tendai" required>
+        </div>
+        <div class="field">
+          <label>Last Name</label>
+          <input type="text" placeholder="Moyo" required>
+        </div>
+        <div class="field">
+          <label>Email Address</label>
+          <input type="email" placeholder="doctor@clinic.co.zw" required>
+        </div>
+        <div class="field">
+          <label>Phone / WhatsApp</label>
+          <input type="tel" placeholder="+263 7X XXX XXXX">
+        </div>
+        <div class="field">
+          <label>Specialty / Role</label>
+          <select required>
+            <option value="" disabled selected>Select specialty...</option>
+            <option>General Practitioner</option>
+            <option>HIV / Infectious Disease</option>
+            <option>Oncologist</option>
+            <option>Cardiologist</option>
+            <option>Obstetrician / Gynaecologist</option>
+            <option>Paediatrician</option>
+            <option>Surgeon</option>
+            <option>Nurse / Clinical Officer</option>
+            <option>Hospital Administrator</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Facility / Practice Name</label>
+          <input type="text" placeholder="Avenues Clinic, Harare" required>
+        </div>
+        <div class="field full">
+          <label>How many patients do you see per week?</label>
+          <select>
+            <option value="" disabled selected>Select range...</option>
+            <option>1–20</option>
+            <option>21–50</option>
+            <option>51–100</option>
+            <option>100–300</option>
+            <option>300+</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label>Which modules interest you most?</label>
+          <div class="checkboxes">
+            <label class="checkbox-pill"><input type="checkbox"> HIV / ART</label>
+            <label class="checkbox-pill"><input type="checkbox"> Oncology</label>
+            <label class="checkbox-pill"><input type="checkbox"> Cardiology</label>
+            <label class="checkbox-pill"><input type="checkbox"> Diabetes</label>
+            <label class="checkbox-pill"><input type="checkbox"> AI Diagnosis</label>
+            <label class="checkbox-pill"><input type="checkbox"> CDSS Alerts</label>
+            <label class="checkbox-pill"><input type="checkbox"> Patient Portal</label>
+            <label class="checkbox-pill"><input type="checkbox"> Telemedicine</label>
+            <label class="checkbox-pill"><input type="checkbox"> Revenue Cycle</label>
+            <label class="checkbox-pill"><input type="checkbox"> FHIR / Interop</label>
+            <label class="checkbox-pill"><input type="checkbox"> Lab / Radiology</label>
+            <label class="checkbox-pill"><input type="checkbox"> Maternity</label>
+          </div>
+        </div>
+        <div class="field full">
+          <label>What problem are you most trying to solve? (optional)</label>
+          <textarea placeholder="e.g. Too much time on documentation, missing follow-ups, drug interaction errors, poor patient engagement..."></textarea>
+        </div>
+        <div class="field full">
+          <label>Current system</label>
+          <select>
+            <option value="" disabled selected>What are you using today?</option>
+            <option>Paper records</option>
+            <option>Spreadsheets</option>
+            <option>WhatsApp / informal digital</option>
+            <option>Another EHR system</option>
+            <option>Custom / in-house system</option>
+            <option>Nothing yet</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="submit-btn">
+        ✦ Request My Early Access
+      </button>
+
+      <p class="form-note">We review every request personally. You'll hear from us within 48 hours. No sales calls — just a setup walkthrough.</p>
+    </form>
+
+    <div class="success-msg" id="successMsg">
+      <div style="font-size:2rem;margin-bottom:0.5rem;">✦</div>
+      <h3>You're on the list.</h3>
+      <p>We've received your request and will reach out within 48 hours with your access credentials and a brief onboarding walkthrough.</p>
+      <p style="margin-top:0.5rem;color:var(--teal2);font-size:0.82rem;">Look out for an email from the MediCore team.</p>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div>
+    <div class="logo" style="margin-bottom:0.4rem;">
+      <div class="logo-dot"></div>
+      MediCore EHR
+    </div>
+    <p>Intelligent clinical infrastructure for modern healthcare.</p>
+  </div>
+  <div class="footer-tags">
+    <span class="footer-tag">FHIR R4</span>
+    <span class="footer-tag">HIPAA</span>
+    <span class="footer-tag">SNOMED CT</span>
+    <span class="footer-tag">HL7</span>
+    <span class="footer-tag">DHIS2</span>
+    <span class="footer-tag">WHO SMART</span>
+    <span class="footer-tag">Multi-Tenant</span>
+  </div>
+</footer>
+
+<script>
+  // Scroll reveal
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        setTimeout(() => entry.target.classList.add('visible'), i * 80);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // Form submit
+  function handleSubmit(e) {
+    e.preventDefault();
+    document.getElementById('accessForm').style.display = 'none';
+    document.getElementById('successMsg').classList.add('show');
+    window.scrollTo({ top: document.getElementById('successMsg').offsetTop - 100, behavior: 'smooth' });
+  }
+</script>
+
+</body>
+</html>

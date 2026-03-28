@@ -33,6 +33,7 @@ import ModalPortal from '../components/ModalPortal';
 import ReportTemplateForm from '../components/ReportTemplateForm';
 import ScheduleConfigForm from '../components/ScheduleConfigForm';
 import OutcomeRecordingForm from '../components/OutcomeRecordingForm';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 const StatCard: React.FC<{
   title: string;
@@ -71,6 +72,7 @@ const AnalyticsDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess, showInfo } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -261,7 +263,14 @@ const AnalyticsDashboard: React.FC = () => {
 
   const handleDeleteTemplate = async (templateId: string) => {
     if (!tenantSlug || !token) return;
-    if (!window.confirm('Are you sure you want to delete this template?')) return;
+    const shouldProceed = await confirm({
+      title: 'Delete Template',
+      message: 'Are you sure you want to delete this template?',
+      confirmText: 'Delete',
+      cancelText: 'Keep',
+      type: 'danger',
+    });
+    if (!shouldProceed) return;
 
     try {
       await analyticsApi.deleteTemplate(tenantSlug, token, templateId);
@@ -274,7 +283,14 @@ const AnalyticsDashboard: React.FC = () => {
 
   const handleDeleteSchedule = async (scheduleId: string) => {
     if (!tenantSlug || !token) return;
-    if (!window.confirm('Are you sure you want to delete this schedule?')) return;
+    const shouldProceed = await confirm({
+      title: 'Delete Schedule',
+      message: 'Are you sure you want to delete this schedule?',
+      confirmText: 'Delete',
+      cancelText: 'Keep',
+      type: 'danger',
+    });
+    if (!shouldProceed) return;
 
     try {
       await analyticsApi.deleteSchedule(tenantSlug, token, scheduleId);
@@ -303,7 +319,9 @@ const AnalyticsDashboard: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
+    <>
+      {Dialog}
+      <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -736,7 +754,14 @@ const AnalyticsDashboard: React.FC = () => {
                           </button>
                           <button
                             onClick={async () => {
-                              if (!window.confirm('Are you sure you want to delete this outcome?')) return;
+                              const shouldProceed = await confirm({
+                                title: 'Delete Outcome',
+                                message: 'Are you sure you want to delete this outcome?',
+                                confirmText: 'Delete',
+                                cancelText: 'Keep',
+                                type: 'danger',
+                              });
+                              if (!shouldProceed) return;
                               try {
                                 await analyticsApi.deleteOutcome(tenantSlug!, token, outcome.id);
                                 showSuccess('Outcome deleted successfully', 'The outcome has been deleted successfully.');
@@ -875,9 +900,9 @@ const AnalyticsDashboard: React.FC = () => {
           onSuccess={loadDashboardData}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
 export default AnalyticsDashboard;
-

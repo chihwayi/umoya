@@ -18,11 +18,34 @@ import { FhirController } from './controllers/fhir.controller';
 import { Hl7Controller } from './controllers/hl7.controller';
 import { ClaimsController } from './controllers/claims.controller';
 import { CdssController } from './controllers/cdss.controller';
+import { CdssDecisionLogController } from './controllers/cdss-decision-log.controller';
+import { NurseTaskController } from './controllers/nurse-task.controller';
+import { AmbientController } from './controllers/ambient.controller';
+import { EncounterPrechartController } from './controllers/encounter-prechart.controller';
+import { InboxController } from './controllers/inbox.controller';
+import { TbController } from './controllers/tb.controller';
+import { PediatricsController } from './controllers/pediatrics.controller';
+import { MentalHealthController } from './controllers/mental-health.controller';
+import { MalariaController } from './controllers/malaria.controller';
+import { GeriatricsController } from './controllers/geriatrics.controller';
+import { NeurologyController } from './controllers/neurology.controller';
+import { PulmonologyController } from './controllers/pulmonology.controller';
+import { NephrologyController } from './controllers/nephrology.controller';
+import { DermatologyController } from './controllers/dermatology.controller';
+import { PalliativeController } from './controllers/palliative.controller';
+import { NutritionController } from './controllers/nutrition.controller';
+import { IcuController } from './controllers/icu.controller';
+import { SdohController } from './controllers/sdoh.controller';
+import { NtdController } from './controllers/ntd.controller';
+import { PmtctController } from './controllers/pmtct.controller';
+import { PepfarMerController } from './controllers/pepfar-mer.controller';
 import { Dhis2Controller } from './controllers/dhis2.controller';
 import { ReportsController } from './controllers/reports.controller';
 import { NotificationsController } from './controllers/notifications.controller';
 import { PaymentsController } from './controllers/payments.controller';
 import { UsersController } from './controllers/users.controller';
+import { StaffController } from './controllers/staff.controller';
+import { GovernedController } from './controllers/governed.controller';
 import { VitalsController } from './controllers/vitals.controller';
 import { TriageController } from './controllers/triage.controller';
 import { NursingNotesController } from './controllers/nursing-notes.controller';
@@ -58,6 +81,8 @@ import { HipaaAuditController } from './controllers/hipaa-audit.controller';
 import { AdminAuditController } from './controllers/admin-audit.controller';
 import { QualityMeasuresController } from './controllers/quality-measures.controller';
 import { PharmacyController } from './controllers/pharmacy.controller';
+import { KnowledgeController } from './controllers/knowledge.controller';
+import { ClaimsAiController } from './controllers/claims-ai.controller';
 import { DoctorAvailabilityController } from './controllers/doctor-availability.controller';
 import { TelemedicineController } from './controllers/telemedicine.controller';
 import { AnalyticsController } from './controllers/analytics.controller';
@@ -104,6 +129,31 @@ import { MedicationSafetyController } from './controllers/medication-safety.cont
 import { EncounterCodingController } from './controllers/encounter-coding.controller';
 import { SchedulingIntelligenceController } from './controllers/scheduling-intelligence.controller';
 import { MlAdminController } from './controllers/ml-admin.controller';
+import { AutoCodingController } from './controllers/auto-coding.controller';
+import { PgxController } from './controllers/pgx.controller';
+import { AntibiogramController } from './controllers/antibiogram.controller';
+import { AiExplainabilityController } from './controllers/ai-explainability.controller';
+import { StreamingDiagnosisController } from './controllers/streaming-diagnosis.controller';
+import { SmartSchedulingController } from './controllers/smart-scheduling.controller';
+import { SmartDefaultsController } from './controllers/smart-defaults.controller';
+import { EncounterCopilotController } from './controllers/encounter-copilot.controller';
+import { FormularyOptimizationController } from './controllers/formulary-optimization.controller';
+import { PredictiveRiskController } from './controllers/predictive-risk.controller';
+import { FederatedLearningController } from './controllers/federated-learning.controller';
+import { HimisReportingController } from './controllers/himis-reporting.controller';
+import { FhirInboundController } from './controllers/fhir-inbound.controller';
+import { MultilingualEducationController } from './controllers/multilingual-education.controller';
+import { OfflineSyncController } from './controllers/offline-sync.controller';
+import { IotController } from './controllers/iot.controller';
+import { RadiologyAiController } from './controllers/radiology-ai.controller';
+import { AlertDeliveryController } from './controllers/alert-delivery.controller';
+import { ModelMonitoringController } from './controllers/model-monitoring.controller';
+import { PatientAiController } from './controllers/patient-ai.controller';
+import { ClinicalTrialMatchingController } from './controllers/clinical-trial-matching.controller';
+import { SupplyChainAiController } from './controllers/supply-chain-ai.controller';
+import { ModelRegistryController } from './controllers/model-registry.controller';
+import { StaffNotificationsController } from './controllers/staff-notifications.controller';
+import { RegistrationIntelligenceController } from './controllers/registration-intelligence.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -120,7 +170,32 @@ import { Hl7Service } from './services/hl7.service';
 import { TenantService } from './services/tenant.service';
 import { ClaimsService } from './services/claims.service';
 import { CdssService } from './services/cdss.service';
+import { CdssDecisionLogService } from './services/cdss-decision-log.service';
+import { CdssOutcomeBatchService } from './services/cdss-outcome-batch.service';
+import { NurseTaskService } from './services/nurse-task.service';
+import { CareGapSchedulerService } from './services/care-gap-scheduler.service';
+import { AmbientService } from './services/ambient.service';
+import { AmbientGateway } from './gateways/ambient.gateway';
+import { AppointmentPrecharterService } from './services/appointment-precharter.service';
+import { InboxTriageService } from './services/inbox-triage.service';
+import { InboxGateway } from './gateways/inbox.gateway';
+import { TbService } from './services/tb.service';
+import { PediatricsService } from './services/pediatrics.service';
+import { MentalHealthService } from './services/mental-health.service';
+import { MalariaService } from './services/malaria.service';
+import { GeriatricsService } from './services/geriatrics.service';
+import { NeurologyService } from './services/neurology.service';
+import { PulmonologyService } from './services/pulmonology.service';
+import { NephrologyService } from './services/nephrology.service';
+import { DermatologyService } from './services/dermatology.service';
+import { PalliativeService } from './services/palliative.service';
+import { NutritionService } from './services/nutrition.service';
+import { IcuService } from './services/icu.service';
+import { SdohService } from './services/sdoh.service';
+import { NtdService } from './services/ntd.service';
+import { PmtctService } from './services/pmtct.service';
 import { Dhis2Service } from './services/dhis2.service';
+import { Dhis2SchedulerService } from './services/dhis2-scheduler.service';
 import { ReportsService } from './services/reports.service';
 import { NotificationsService } from './services/notifications.service';
 import { PaymentsService } from './services/payments.service';
@@ -174,6 +249,7 @@ import { CcdaService } from './services/ccda.service';
 import { HipaaAuditService } from './services/hipaa-audit.service';
 import { FhirValidatorService } from './fhir/validators/fhir-validator.service';
 import { PharmacyService } from './services/pharmacy.service';
+import { PharmacyIntelligenceService } from './services/pharmacy-intelligence.service';
 import { DoctorAvailabilityService } from './services/doctor-availability.service';
 import { TelemedicineService } from './services/telemedicine.service';
 import { TelemedicineVideoService } from './services/telemedicine-video.service';
@@ -239,6 +315,11 @@ import { QualityMeasuresService } from './services/quality-measures.service';
 import { NurseWorklistService } from './services/nurse-worklist.service';
 import { PostVisitService } from './services/post-visit.service';
 import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.service';
+import { PostVisitEscalationService } from './services/post-visit-escalation.service';
+import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
+import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
+import { PostVisitSessionService } from './services/post-visit-session.service';
+import { PostVisitDraftService } from './services/post-visit-draft.service';
 import { PopulationHealthService } from './services/population-health.service';
 import { PracticeManagementService } from './services/practice-management.service';
 import { PriorAuthorizationService } from './services/prior-authorization.service';
@@ -254,6 +335,41 @@ import { MlFeedbackService } from './services/ml-feedback.service';
 import { MlModelsService } from './services/ml-models.service';
 import { MedicalNlpService } from './services/medical-nlp.service';
 import { TemplateFallbackService } from './services/template-fallback.service';
+import { AutoCodingService } from './services/auto-coding.service';
+import { PgxService } from './services/pgx.service';
+import { AntibiogramService } from './services/antibiogram.service';
+import { AiExplainabilityService } from './services/ai-explainability.service';
+import { StreamingDiagnosisService } from './services/streaming-diagnosis.service';
+import { SmartSchedulingService } from './services/smart-scheduling.service';
+import { SmartDefaultsService } from './services/smart-defaults.service';
+import { EncounterCopilotService } from './services/encounter-copilot.service';
+import { FormularyOptimizationService } from './services/formulary-optimization.service';
+import { PredictiveRiskService } from './services/predictive-risk.service';
+import { FederatedLearningService } from './services/federated-learning.service';
+import { HimisReportingService } from './services/himis-reporting.service';
+import { FhirInboundService } from './services/fhir-inbound.service';
+import { MultilingualEducationService } from './services/multilingual-education.service';
+import { OfflineSyncService } from './services/offline-sync.service';
+import { IotService } from './services/iot.service';
+import { RadiologyAiService } from './services/radiology-ai.service';
+import { AlertDeliveryService } from './services/alert-delivery.service';
+import { ModelMonitoringService } from './services/model-monitoring.service';
+import { PatientAiService } from './services/patient-ai.service';
+import { ClinicalTrialMatchingService } from './services/clinical-trial-matching.service';
+import { SupplyChainAiService } from './services/supply-chain-ai.service';
+import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
+import { TelemedicineGateway } from './gateways/telemedicine.gateway';
+import { ModelRegistryService } from './services/model-registry.service';
+import { TelemedicinePostVisitBridgeService } from './services/telemedicine-postvisit-bridge.service';
+import { StaffNotificationsService } from './services/staff-notifications.service';
+import { RegistrationIntelligenceService } from './services/registration-intelligence.service';
+import { KnowledgeIngestService } from './services/knowledge-ingest.service';
+import { ClaimsAiService } from './services/claims-ai.service';
+import { RiskStratificationService } from './services/risk-stratification.service';
+import { OutcomeCollectionService } from './services/outcome-collection.service';
+import { RegistrationAiService } from './services/registration-ai.service';
+import { RegistrationAiController } from './controllers/registration-ai.controller';
+import { DicomController } from './controllers/dicom.controller';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -292,11 +408,34 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     Hl7Controller,
     ClaimsController,
     CdssController,
+    CdssDecisionLogController,
+    NurseTaskController,
+    AmbientController,
+    EncounterPrechartController,
+    InboxController,
+    TbController,
+    PediatricsController,
+    MentalHealthController,
+    MalariaController,
+    GeriatricsController,
+    NeurologyController,
+    PulmonologyController,
+    NephrologyController,
+    DermatologyController,
+    PalliativeController,
+    NutritionController,
+    IcuController,
+    SdohController,
+    NtdController,
+    PmtctController,
+    PepfarMerController,
     Dhis2Controller,
     ReportsController,
     NotificationsController,
     PaymentsController,
     UsersController,
+    StaffController,
+    GovernedController,
     VitalsController,
     TriageController,
     NursingNotesController,
@@ -378,6 +517,35 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EncounterCodingController,
     SchedulingIntelligenceController,
     MlAdminController,
+    AutoCodingController,
+    PgxController,
+    AntibiogramController,
+    AiExplainabilityController,
+    StreamingDiagnosisController,
+    SmartSchedulingController,
+    SmartDefaultsController,
+    EncounterCopilotController,
+    FormularyOptimizationController,
+    PredictiveRiskController,
+    FederatedLearningController,
+    HimisReportingController,
+    FhirInboundController,
+    MultilingualEducationController,
+    OfflineSyncController,
+    IotController,
+    RadiologyAiController,
+    AlertDeliveryController,
+    ModelMonitoringController,
+    PatientAiController,
+    ClinicalTrialMatchingController,
+    SupplyChainAiController,
+    ModelRegistryController,
+    StaffNotificationsController,
+    RegistrationIntelligenceController,
+    KnowledgeController,
+    ClaimsAiController,
+    RegistrationAiController,
+    DicomController,
   ],
   providers: [
     AuthService,
@@ -396,6 +564,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClaimsService,
     CdssService,
     Dhis2Service,
+    Dhis2SchedulerService,
     ReportsService,
     NotificationsService,
     PaymentsService,
@@ -437,6 +606,30 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TerminologyImportService,
     Icd10Service,
     CdssHookService,
+    CdssDecisionLogService,
+    CdssOutcomeBatchService,
+    NurseTaskService,
+    CareGapSchedulerService,
+    AmbientService,
+    AmbientGateway,
+    AppointmentPrecharterService,
+    InboxTriageService,
+    InboxGateway,
+    TbService,
+    PediatricsService,
+    MentalHealthService,
+    MalariaService,
+    GeriatricsService,
+    NeurologyService,
+    PulmonologyService,
+    NephrologyService,
+    DermatologyService,
+    PalliativeService,
+    NutritionService,
+    IcuService,
+    SdohService,
+    NtdService,
+    PmtctService,
     SpecialtyAutomationService,
     MetricsService,
     MedicationHistoryService,
@@ -452,9 +645,12 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MinimumNecessaryGuard,
     QualityMeasuresService,
     PharmacyService,
+    PharmacyIntelligenceService,
     DoctorAvailabilityService,
     TelemedicineService,
     TelemedicineVideoService,
+    TelemedicineGateway,
+    TelemedicinePostVisitBridgeService,
     RemoteMonitoringService,
     TelemedicineConsentService,
     DigitalPrescriptionService,
@@ -513,6 +709,11 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NurseWorklistService,
     PostVisitGroundedLlmService,
     PostVisitService,
+    PostVisitEscalationService,
+    PostVisitBillingIntelligenceService,
+    PostVisitCompanionMemoryService,
+    PostVisitSessionService,
+    PostVisitDraftService,
     PopulationHealthService,
     PracticeManagementService,
     PriorAuthorizationService,
@@ -528,6 +729,37 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MlModelsService,
     MedicalNlpService,
     TemplateFallbackService,
+    AutoCodingService,
+    PgxService,
+    AntibiogramService,
+    AiExplainabilityService,
+    StreamingDiagnosisService,
+    SmartSchedulingService,
+    SmartDefaultsService,
+    EncounterCopilotService,
+    FormularyOptimizationService,
+    PredictiveRiskService,
+    FederatedLearningService,
+    HimisReportingService,
+    FhirInboundService,
+    MultilingualEducationService,
+    OfflineSyncService,
+    IotService,
+    RadiologyAiService,
+    AlertDeliveryService,
+    ModelMonitoringService,
+    PatientAiService,
+    ClinicalTrialMatchingService,
+    SupplyChainAiService,
+    ModelRegistryService,
+    StaffNotificationsService,
+    RegistrationIntelligenceService,
+    KnowledgeIngestService,
+    ClaimsAiService,
+    RiskStratificationService,
+    OutcomeCollectionService,
+    RegistrationAiService,
+    CriticalAlertGateway,
     VoiceTranscriptionGateway,
     RolesGuard,
     JwtStrategy,

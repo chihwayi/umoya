@@ -31,6 +31,25 @@ describe('CdssService nurse copilot metrics instrumentation', () => {
     );
 
     expect(result.riskLevel).toBe('high');
+    expect((service as any).diagnosisAssist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'emergency_triage',
+        specialty: 'acute_care',
+        module: 'emergency_triage',
+      }),
+      true,
+      'tenant-a',
+      undefined,
+    );
+    expect((service as any).riskAssessment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'emergency_triage',
+        specialty: 'acute_care',
+        module: 'emergency_triage',
+      }),
+      undefined,
+      'tenant-a',
+    );
     expect(metricsMock.recordNurseCopilotRecommendation).toHaveBeenCalledWith('triage', 'high');
     expect(metricsMock.recordNurseCopilotTimeToTriage).toHaveBeenCalledTimes(1);
     expect((metricsMock.recordNurseCopilotTimeToTriage as jest.Mock).mock.calls[0][0]).toBeGreaterThan(0);

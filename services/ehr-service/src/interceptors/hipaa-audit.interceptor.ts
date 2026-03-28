@@ -133,6 +133,18 @@ export class HipaaAuditInterceptor implements NestInterceptor {
     if (lowerRoute.includes('cdss/guidelines/search')) {
       return HipaaAuditAction.CDSS_GUIDELINES_SEARCH;
     }
+    if (lowerRoute.includes('cdss/diagnosis/suggest/intelligent')) {
+      return HipaaAuditAction.CDSS_INTELLIGENT_DIAGNOSIS;
+    }
+    if (lowerRoute.includes('cdss/patient/summarize')) {
+      return HipaaAuditAction.CDSS_PATIENT_SUMMARIZE;
+    }
+    if (lowerRoute.includes('cdss/patient/adherence-chat')) {
+      return HipaaAuditAction.CDSS_PATIENT_ADHERENCE_CHAT;
+    }
+    if (lowerRoute.includes('cdss/symptom-check')) {
+      return HipaaAuditAction.CDSS_PATIENT_SYMPTOM_CHECK;
+    }
     if (lowerRoute.includes('cdss/triage/analyze')) {
       return HipaaAuditAction.CDSS_TRIAGE_ANALYZE;
     }
@@ -360,4 +372,3 @@ export class HipaaAuditInterceptor implements NestInterceptor {
     return fields;
   }
 }
-

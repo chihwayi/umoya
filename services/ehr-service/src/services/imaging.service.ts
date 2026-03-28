@@ -6,6 +6,12 @@ import { PAYMENT_STATUS } from '../constants/payment-status';
 import { TerminologyService, SnomedMapping } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
 import { StorageService } from './storage.service';
+import { CdssService } from './cdss.service';
+import { MinioService } from './minio.service';
+import { ImagingOrderAiReview } from '../entities/imaging-order-ai-review.entity';
+import { RadiologyReportDraft } from '../entities/radiology-report-draft.entity';
+import { RadiologyDiscrepancyReview } from '../entities/radiology-discrepancy-review.entity';
+import { IncidentalFindingFollowup } from '../entities/incidental-finding-followup.entity';
 
 @Injectable()
 export class ImagingService {
@@ -17,9 +23,52 @@ export class ImagingService {
     private readonly terminologyService: TerminologyService,
     private readonly cdssHookService: CdssHookService,
     private readonly storageService: StorageService,
+    private readonly cdssService: CdssService,
+    private readonly minioService: MinioService,
   ) {
     const ttlCandidate = Number(process.env.IMAGING_SIGNED_URL_TTL ?? 300);
     this.signedUrlTtlSeconds = Number.isFinite(ttlCandidate) && ttlCandidate > 0 ? ttlCandidate : 300;
+  }
+
+  private isMissingSchemaError(error: any): boolean {
+    const code = String(error?.code || '').toUpperCase();
+    const message = String(error?.message || '').toLowerCase();
+    return code === '42P01' || code === '42703' || message.includes('does not exist');
+  }
+
+  private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
+    try {
+      const result = await tenantDb.query(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = $1
+        ) AS exists
+        `,
+        [tableName],
+      );
+      return !!result[0]?.exists;
+    } catch (error: any) {
+      this.logger.warn(`Failed table existence check for ${tableName}: ${error.message}`);
+      return false;
+    }
+  }
+
+  private getDefaultDoctorResultsPayload() {
+    return {
+      results: [],
+      counts: {
+        total: 0,
+        awaiting_payment: 0,
+        pending: 0,
+        awaiting_ack: 0,
+        completed: 0,
+        critical: 0,
+        cancelled: 0,
+      },
+    };
   }
 
   // ===== MODALITIES & STUDY TYPES =====
@@ -269,13 +318,510 @@ export class ImagingService {
       this.logger.warn(`CDSS hook failed for imaging order ${order.id}: ${error instanceof Error ? error.message : error}`);
     }
 
+    let aiReview: ImagingOrderAiReview | null = null;
+    try {
+      aiReview = await this.prepareOrderAiReview(tenantDb, order.id, tenantId, userId);
+    } catch (error) {
+      this.logger.warn(`Imaging AI review failed for order ${order.id}: ${error instanceof Error ? error.message : error}`);
+    }
+
     this.logger.log(
       `Created imaging order ${orderNumber} for patient ${patient_id} (${paymentStatus})`,
     );
     return {
       ...order,
       cdssInsights,
+      aiReview,
     };
+  }
+
+  async prepareOrderAiReview(tenantDb: DataSource, orderId: string, tenantId?: string, userId?: string) {
+    const order = await tenantDb.query(
+      `
+      SELECT
+        io.id,
+        io.patient_id,
+        io.study_type_id,
+        io.priority,
+        io.order_status,
+        io.payment_status,
+        io.clinical_indication,
+        io.clinical_history,
+        io.suspected_diagnosis,
+        io.ordered_at,
+        st.study_name,
+        st.study_code,
+        st.body_part,
+        st.preparation_instructions,
+        st.contrast_required,
+        m.modality_name,
+        m.modality_code,
+        p.date_of_birth,
+        p.gender
+      FROM imaging_orders io
+      INNER JOIN imaging_study_types st ON st.id = io.study_type_id
+      INNER JOIN imaging_modalities m ON m.id = st.modality_id
+      INNER JOIN patients p ON p.id = io.patient_id
+      WHERE io.id = $1
+      `,
+      [orderId],
+    );
+
+    if (order.length === 0) {
+      throw new NotFoundException(`Imaging order with ID ${orderId} not found`);
+    }
+
+    const row = order[0];
+    const reviewRepo = tenantDb.getRepository(ImagingOrderAiReview);
+    const age = row.date_of_birth ? this.calculateAge(row.date_of_birth) : null;
+    const guidelines = await this.cdssService.getGuidelines(
+      `${row.study_name} imaging appropriateness`,
+      {
+        age,
+        gender: row.gender ?? null,
+        conditions: [row.suspected_diagnosis, row.clinical_indication].filter(Boolean),
+        specialty: 'radiology',
+        module: 'imaging_appropriateness',
+        patientId: row.patient_id,
+      },
+      tenantId,
+      tenantDb,
+    );
+    const protocolSearch = await this.cdssService.searchGuidelines(
+      `${row.modality_code || row.modality_name} ${row.study_name} protocol ${row.clinical_indication || row.body_part || ''}`.trim(),
+      5,
+      {
+        specialty: 'radiology',
+        module: 'imaging_appropriateness',
+        patientId: row.patient_id,
+      },
+      tenantId,
+      tenantDb,
+    );
+
+    const duplicateOrders = await tenantDb.query(
+      `
+      SELECT id, ordered_at, order_status
+      FROM imaging_orders
+      WHERE patient_id = $1
+        AND study_type_id = $2
+        AND id <> $3
+        AND ordered_at >= NOW() - INTERVAL '30 days'
+        AND order_status <> 'cancelled'
+      ORDER BY ordered_at DESC
+      LIMIT 3
+      `,
+      [row.patient_id, row.study_type_id, row.id],
+    );
+
+    const supportingSignals = [
+      ...(Array.isArray(guidelines.recommendations)
+        ? guidelines.recommendations.slice(0, 4).map((recommendation: string) => ({
+            code: 'guideline_recommendation',
+            message: recommendation,
+          }))
+        : []),
+      ...(Array.isArray(protocolSearch.citations)
+        ? protocolSearch.citations.slice(0, 4).map((citation: any) => ({
+            code: 'protocol_citation',
+            message: citation.title || citation.text || 'Protocol citation',
+            source: citation.source || null,
+          }))
+        : []),
+      ...(row.preparation_instructions
+        ? [{
+            code: 'preparation_instructions',
+            message: row.preparation_instructions,
+          }]
+        : []),
+    ];
+
+    const blockingIssues: Array<Record<string, any>> = [];
+    if (!String(row.clinical_indication || '').trim()) {
+      blockingIssues.push({
+        code: 'missing_clinical_indication',
+        message: 'Clinical indication is missing or too sparse for confident imaging appropriateness review.',
+        severity: 'high',
+      });
+    }
+    if (duplicateOrders.length > 0) {
+      blockingIssues.push({
+        code: 'recent_similar_imaging_order',
+        message: 'Patient already has a similar imaging order in the last 30 days.',
+        severity: 'medium',
+        metadata: duplicateOrders.map((item: any) => ({
+          orderId: item.id,
+          orderedAt: item.ordered_at,
+          status: item.order_status,
+        })),
+      });
+    }
+    if (row.contrast_required) {
+      blockingIssues.push({
+        code: 'contrast_review_required',
+        message: 'Contrast requirement should be confirmed against renal function, allergy history, and local protocol before acquisition.',
+        severity: 'medium',
+      });
+    }
+
+    const recommendedAlternatives = [];
+    if (duplicateOrders.length > 0) {
+      recommendedAlternatives.push({
+        type: 'review_existing_study',
+        message: 'Review recent imaging or existing report before repeating the study.',
+      });
+    }
+    if (String(row.priority || '').toLowerCase() === 'stat' && !duplicateOrders.length) {
+      recommendedAlternatives.push({
+        type: 'radiologist_protocol_confirmation',
+        message: 'Escalate to radiologist if protocol or contrast approach needs immediate confirmation.',
+      });
+    }
+
+    const appropriatenessStatus = blockingIssues.some((issue) => issue.code === 'missing_clinical_indication')
+      ? 'needs_context'
+      : blockingIssues.length > 0
+        ? 'acceptable_with_caution'
+        : supportingSignals.length > 0
+          ? 'supported'
+          : 'needs_context';
+
+    const protocolSummary = {
+      modality: row.modality_code || row.modality_name,
+      studyName: row.study_name,
+      bodyPart: row.body_part,
+      preparationInstructions: row.preparation_instructions || null,
+      contrastRequired: Boolean(row.contrast_required),
+      paymentStatus: row.payment_status,
+    };
+
+    const review = await reviewRepo.save(
+      reviewRepo.create({
+        imagingOrderId: row.id,
+        patientId: row.patient_id,
+        studyTypeId: row.study_type_id,
+        reviewedBy: userId ?? null,
+        reviewStatus: 'generated',
+        appropriatenessStatus,
+        protocolSummary,
+        supportingSignals,
+        blockingIssues,
+        recommendedAlternatives,
+        guidelineCitations: Array.isArray(protocolSearch.citations) ? protocolSearch.citations.slice(0, 5) : [],
+        rationale: this.buildImagingOrderReviewRationale({
+          studyName: row.study_name,
+          appropriatenessStatus,
+          blockingIssueCount: blockingIssues.length,
+          supportingSignalCount: supportingSignals.length,
+        }),
+        governance: {
+          governedPath: true,
+          workstream: 'MOAS-08',
+          source: 'imaging_order_review',
+          guidelineSource: guidelines.source || null,
+          governedCorpusUsed:
+            'governed_corpus_used' in protocolSearch && protocolSearch.governed_corpus_used === true,
+        },
+      }),
+    );
+
+    return review;
+  }
+
+  async getOrderAiReview(tenantDb: DataSource, orderId: string) {
+    return tenantDb.getRepository(ImagingOrderAiReview).findOne({
+      where: { imagingOrderId: orderId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async generateReportDraft(tenantDb: DataSource, studyId: string, tenantId?: string, userId?: string) {
+    const study = await tenantDb.query(
+      `
+      SELECT
+        s.id,
+        s.imaging_order_id,
+        s.patient_id,
+        s.study_description,
+        s.technique,
+        s.study_status,
+        st.study_name,
+        st.body_part,
+        st.preparation_instructions,
+        st.contrast_required,
+        m.modality_name,
+        m.modality_code,
+        io.clinical_indication,
+        io.clinical_history,
+        io.suspected_diagnosis,
+        p.date_of_birth,
+        p.gender
+      FROM imaging_studies s
+      INNER JOIN imaging_study_types st ON st.id = s.study_type_id
+      INNER JOIN imaging_modalities m ON m.id = st.modality_id
+      INNER JOIN imaging_orders io ON io.id = s.imaging_order_id
+      INNER JOIN patients p ON p.id = s.patient_id
+      WHERE s.id = $1
+      `,
+      [studyId],
+    );
+
+    if (study.length === 0) {
+      throw new NotFoundException(`Study with ID ${studyId} not found`);
+    }
+
+    const row = study[0];
+    const aiFinding = await this.getLatestRadiologyFindingForStudy(
+      tenantDb,
+      row.imaging_order_id,
+      row.patient_id,
+    );
+    const age = row.date_of_birth ? this.calculateAge(row.date_of_birth) : null;
+    const guidelines = await this.cdssService.getGuidelines(
+      `${row.study_name} radiology report draft`,
+      {
+        age,
+        gender: row.gender ?? null,
+        conditions: [row.suspected_diagnosis, row.clinical_indication].filter(Boolean),
+        specialty: 'radiology',
+        module: 'reporting',
+        patientId: row.patient_id,
+      },
+      tenantId,
+      tenantDb,
+    );
+    const citations = await this.cdssService.searchGuidelines(
+      `${row.modality_code || row.modality_name} ${row.study_name} structured radiology report ${row.clinical_indication || row.body_part || ''}`.trim(),
+      5,
+      {
+        specialty: 'radiology',
+        module: 'reporting',
+        patientId: row.patient_id,
+      },
+      tenantId,
+      tenantDb,
+    );
+
+    const findingsList = Array.isArray(aiFinding?.findings) ? aiFinding.findings : [];
+    const draftFindings =
+      findingsList.length > 0
+        ? findingsList
+            .slice(0, 4)
+            .map((finding: any) => {
+              const confidence = finding.confidence ? ` (${Math.round(Number(finding.confidence) * 100)}% confidence)` : '';
+              const region = finding.region ? `${finding.region}: ` : '';
+              return `${region}${finding.label || finding.finding || 'Finding'}${confidence}.`;
+            })
+            .join(' ')
+        : `No AI findings were available for ${row.study_name}. Correlate reported findings with the clinical indication and acquired images.`;
+
+    const draftImpression =
+      (aiFinding?.topFinding || aiFinding?.top_finding)
+        ? `${aiFinding?.topFinding || aiFinding?.top_finding}. Correlate with the study images and clinical indication before final signoff.`
+        : `Correlate ${row.study_name} findings with ${row.clinical_indication || 'the documented clinical indication'} before final interpretation.`;
+
+    const recommendationPool = [
+      ...(row.contrast_required
+        ? ['Confirm renal function and allergy review before contrast-dependent interpretation or repeat imaging.']
+        : []),
+      ...(Array.isArray(guidelines.recommendations) ? guidelines.recommendations.slice(0, 2) : []),
+      ...(aiFinding?.alerted ? ['Prioritize direct clinician notification and explicit follow-up planning for the flagged finding.'] : []),
+    ].filter(Boolean);
+
+    const structuredDraft = {
+      structured_findings: findingsList.slice(0, 5).map((finding: any, index: number) => ({
+        id: `ai-finding-${index + 1}`,
+        region: finding.region || row.body_part || row.study_name,
+        finding: finding.label || finding.finding || row.study_name,
+        significance: this.mapRadiologyFindingSeverity(finding.severity, aiFinding?.overallConfidence),
+        recommendation: recommendationPool[0] || null,
+      })),
+      ai_summary: {
+        topFinding: aiFinding?.topFinding || aiFinding?.top_finding || null,
+        overallConfidence: aiFinding?.overallConfidence ?? aiFinding?.overall_confidence ?? null,
+        modelVersion: aiFinding?.modelVersion || aiFinding?.model_version || null,
+      },
+    };
+
+    const draftRepo = tenantDb.getRepository(RadiologyReportDraft);
+    return draftRepo.save(
+      draftRepo.create({
+        imagingStudyId: row.id,
+        imagingOrderId: row.imaging_order_id,
+        patientId: row.patient_id,
+        aiFindingId: aiFinding?.id ?? null,
+        generatedBy: userId ?? null,
+        draftStatus: aiFinding ? 'generated' : 'needs_manual_review',
+        draftFindings,
+        draftImpression,
+        draftRecommendations: recommendationPool.join(' ') || null,
+        structuredDraft,
+        supportingEvidence: [
+          ...(findingsList.slice(0, 4).map((finding: any) => ({
+            type: 'radiology_ai_finding',
+            label: finding.label || finding.finding || null,
+            region: finding.region || null,
+            confidence: finding.confidence ?? null,
+            severity: finding.severity ?? null,
+          })) || []),
+          ...(Array.isArray(guidelines.recommendations)
+            ? guidelines.recommendations.slice(0, 3).map((recommendation: string) => ({
+                type: 'guideline_recommendation',
+                message: recommendation,
+              }))
+            : []),
+        ],
+        guidelineCitations: Array.isArray(citations.citations) ? citations.citations.slice(0, 5) : [],
+        governance: {
+          governedPath: true,
+          workstream: 'MOAS-08',
+          source: 'radiology_report_draft',
+          guidelineSource: guidelines.source || null,
+          governedCorpusUsed: 'governed_corpus_used' in citations && citations.governed_corpus_used === true,
+        },
+      }),
+    );
+  }
+
+  async getStudyReportDraft(tenantDb: DataSource, studyId: string) {
+    return tenantDb.getRepository(RadiologyReportDraft).findOne({
+      where: { imagingStudyId: studyId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async listReportDiscrepancyReviews(tenantDb: DataSource, reportId: string) {
+    return tenantDb.getRepository(RadiologyDiscrepancyReview).find({
+      where: { imagingReportId: reportId },
+      order: { createdAt: 'DESC' },
+      take: 5,
+    });
+  }
+
+  async listReportIncidentalFollowups(tenantDb: DataSource, reportId: string) {
+    return tenantDb.getRepository(IncidentalFindingFollowup).find({
+      where: { imagingReportId: reportId },
+      order: { createdAt: 'DESC' },
+      take: 10,
+    });
+  }
+
+  async resolveDiscrepancyReview(
+    tenantDb: DataSource,
+    reviewId: string,
+    payload: { review_status?: string; resolution_notes?: string | null } = {},
+    userId?: string,
+  ) {
+    const repo = tenantDb.getRepository(RadiologyDiscrepancyReview);
+    const review = await repo.findOneBy({ id: reviewId });
+
+    if (!review) {
+      throw new NotFoundException(`Discrepancy review with ID ${reviewId} not found`);
+    }
+
+    const reviewStatus = String(payload.review_status || 'resolved').trim().toLowerCase();
+    if (!['resolved', 'dismissed', 'escalated'].includes(reviewStatus)) {
+      throw new BadRequestException('Invalid discrepancy review status');
+    }
+
+    const updated = await repo.save({
+      ...review,
+      reviewedBy: userId ?? review.reviewedBy ?? null,
+      resolvedAt: new Date(),
+      reviewStatus,
+      resolutionNotes: payload.resolution_notes?.trim() || null,
+      governance: {
+        ...(review.governance || {}),
+        resolutionStatus: reviewStatus,
+        resolutionUpdatedAt: new Date().toISOString(),
+      },
+    });
+
+    if (reviewStatus === 'escalated') {
+      const followupRepo = tenantDb.getRepository(IncidentalFindingFollowup);
+      const followup = await followupRepo.findOne({
+        where: {
+          imagingReportId: review.imagingReportId,
+          status: 'open',
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (followup) {
+        await followupRepo.save({
+          ...followup,
+          status: 'acknowledged',
+          acknowledgedBy: userId ?? followup.acknowledgedBy ?? null,
+          acknowledgedAt: followup.acknowledgedAt || new Date(),
+          resolutionNotes: payload.resolution_notes?.trim() || followup.resolutionNotes || null,
+          governance: {
+            ...(followup.governance || {}),
+            escalationSource: 'radiology_discrepancy_review',
+            escalationReviewId: reviewId,
+          },
+        });
+      }
+    }
+
+    return updated;
+  }
+
+  async acknowledgeIncidentalFollowup(
+    tenantDb: DataSource,
+    followupId: string,
+    payload: { resolution_notes?: string | null } = {},
+    userId?: string,
+  ) {
+    const repo = tenantDb.getRepository(IncidentalFindingFollowup);
+    const followup = await repo.findOneBy({ id: followupId });
+
+    if (!followup) {
+      throw new NotFoundException(`Incidental follow-up with ID ${followupId} not found`);
+    }
+
+    if (followup.status === 'completed') {
+      throw new BadRequestException('Completed follow-up cannot be acknowledged again');
+    }
+
+    return repo.save({
+      ...followup,
+      status: 'acknowledged',
+      acknowledgedBy: userId ?? followup.acknowledgedBy ?? null,
+      acknowledgedAt: followup.acknowledgedAt || new Date(),
+      resolutionNotes: payload.resolution_notes?.trim() || followup.resolutionNotes || null,
+      governance: {
+        ...(followup.governance || {}),
+        acknowledgedAt: new Date().toISOString(),
+      },
+    });
+  }
+
+  async completeIncidentalFollowup(
+    tenantDb: DataSource,
+    followupId: string,
+    payload: { resolution_notes?: string | null } = {},
+    userId?: string,
+  ) {
+    const repo = tenantDb.getRepository(IncidentalFindingFollowup);
+    const followup = await repo.findOneBy({ id: followupId });
+
+    if (!followup) {
+      throw new NotFoundException(`Incidental follow-up with ID ${followupId} not found`);
+    }
+
+    return repo.save({
+      ...followup,
+      status: 'completed',
+      acknowledgedBy: followup.acknowledgedBy ?? userId ?? null,
+      acknowledgedAt: followup.acknowledgedAt || new Date(),
+      completedBy: userId ?? followup.completedBy ?? null,
+      completedAt: new Date(),
+      resolutionNotes: payload.resolution_notes?.trim() || followup.resolutionNotes || null,
+      governance: {
+        ...(followup.governance || {}),
+        completedAt: new Date().toISOString(),
+      },
+    });
   }
 
   async getOrders(tenantDb: DataSource, filters: { status?: string; priority?: string } = {}) {
@@ -350,29 +896,67 @@ export class ImagingService {
       throw new NotFoundException(`Order with ID ${orderId} not found`);
     }
 
-    return order[0];
+    const aiReview = await this.getOrderAiReview(tenantDb, orderId).catch(() => null);
+    return { ...order[0], aiReview };
   }
 
   async getPatientOrders(tenantDb: DataSource, patientId: string) {
     const orders = await tenantDb.query(
       `
-      SELECT 
+      SELECT
         io.*,
         st.study_name,
         m.modality_name,
         m.modality_code,
-        u.first_name || ' ' || u.last_name as ordering_provider_name
+        u.first_name || ' ' || u.last_name as ordering_provider_name,
+        r.id as report_id,
+        ior.ai_summary as ai_review_summary
       FROM imaging_orders io
       INNER JOIN imaging_study_types st ON st.id = io.study_type_id
       INNER JOIN imaging_modalities m ON m.id = st.modality_id
       INNER JOIN users u ON u.id = io.ordering_provider
+      LEFT JOIN imaging_studies s ON s.imaging_order_id = io.id
+      LEFT JOIN imaging_reports r ON r.imaging_study_id = s.id
+      LEFT JOIN imaging_order_ai_reviews ior ON ior.imaging_order_id = io.id
       WHERE io.patient_id = $1
       ORDER BY io.ordered_at DESC
       `,
       [patientId],
     );
 
-    return { orders, total: orders.length };
+    return {
+      orders: orders.map((o: any) => ({ ...o, reportId: o.report_id ?? null })),
+      total: orders.length,
+    };
+  }
+
+  private calculateAge(dateOfBirth: string | Date) {
+    const dob = new Date(dateOfBirth);
+    if (Number.isNaN(dob.getTime())) {
+      return null;
+    }
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDelta = today.getMonth() - dob.getMonth();
+    if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dob.getDate())) {
+      age -= 1;
+    }
+    return age;
+  }
+
+  private buildImagingOrderReviewRationale(input: {
+    studyName: string;
+    appropriatenessStatus: string;
+    blockingIssueCount: number;
+    supportingSignalCount: number;
+  }) {
+    if (input.appropriatenessStatus === 'supported') {
+      return `${input.studyName} is supported by governed radiology guidance and protocol signals.`;
+    }
+    if (input.appropriatenessStatus === 'acceptable_with_caution') {
+      return `${input.studyName} can proceed with caution because ${input.blockingIssueCount} review item(s) require protocol or radiologist confirmation.`;
+    }
+    return `${input.studyName} needs more context before appropriateness can be confidently confirmed.`;
   }
 
   async scheduleOrder(tenantDb: DataSource, orderId: string, scheduledDate: string) {
@@ -577,13 +1161,23 @@ export class ImagingService {
     // Get images
     const images = await this.getStudyImages(tenantDb, studyId);
 
+    const reportDraft = await this.getStudyReportDraft(tenantDb, studyId).catch(() => null);
     // Get report if exists
     const report = await this.getReportByStudyId(tenantDb, studyId);
+    const discrepancyReviews = report?.id
+      ? await this.listReportDiscrepancyReviews(tenantDb, report.id).catch(() => [])
+      : [];
+    const incidentalFollowups = report?.id
+      ? await this.listReportIncidentalFollowups(tenantDb, report.id).catch(() => [])
+      : [];
 
     return {
       ...study[0],
       images: images.images,
       report: report || null,
+      reportDraft,
+      discrepancyReviews,
+      incidentalFollowups,
     };
   }
 
@@ -873,6 +1467,7 @@ export class ImagingService {
       imaging_study_id,
       imaging_order_id,
       patient_id,
+      report_draft_id,
       clinical_history,
       technique,
       findings,
@@ -942,6 +1537,13 @@ export class ImagingService {
       [imaging_study_id],
     );
 
+    if (report_draft_id) {
+      await tenantDb.getRepository(RadiologyReportDraft).update(report_draft_id, {
+        linkedReportId: result[0].id,
+        draftStatus: 'applied',
+      });
+    }
+
     this.logger.log(`Created imaging report for study ${imaging_study_id}`);
     return result[0];
   }
@@ -949,13 +1551,16 @@ export class ImagingService {
   async getReportById(tenantDb: DataSource, reportId: string) {
     const report = await tenantDb.query(
       `
-      SELECT 
+      SELECT
         r.*,
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number,
         drafted_u.first_name || ' ' || drafted_u.last_name as drafted_by_name,
         signed_u.first_name || ' ' || signed_u.last_name as signed_by_name,
-        amended_u.first_name || ' ' || amended_u.last_name as amended_by_name
+        amended_u.first_name || ' ' || amended_u.last_name as amended_by_name,
+        signed_u.first_name || ' ' || signed_u.last_name as "radiologistName",
+        COALESCE(r.signed_at, r.created_at) as "reportedAt",
+        r.ai_review_summary as "aiSummary"
       FROM imaging_reports r
       INNER JOIN patients p ON p.id = r.patient_id
       LEFT JOIN users drafted_u ON drafted_u.id = r.drafted_by
@@ -970,7 +1575,14 @@ export class ImagingService {
       throw new NotFoundException(`Report with ID ${reportId} not found`);
     }
 
-    return report[0];
+    const discrepancyReviews = await this.listReportDiscrepancyReviews(tenantDb, reportId).catch(() => []);
+    const incidentalFollowups = await this.listReportIncidentalFollowups(tenantDb, reportId).catch(() => []);
+
+    return {
+      ...report[0],
+      discrepancyReviews,
+      incidentalFollowups,
+    };
   }
 
   async getReportByStudyId(tenantDb: DataSource, studyId: string) {
@@ -990,7 +1602,18 @@ export class ImagingService {
       [studyId],
     );
 
-    return report.length > 0 ? report[0] : null;
+    if (report.length === 0) {
+      return null;
+    }
+
+    const discrepancyReviews = await this.listReportDiscrepancyReviews(tenantDb, report[0].id).catch(() => []);
+    const incidentalFollowups = await this.listReportIncidentalFollowups(tenantDb, report[0].id).catch(() => []);
+
+    return {
+      ...report[0],
+      discrepancyReviews,
+      incidentalFollowups,
+    };
   }
 
   async updateReport(tenantDb: DataSource, reportId: string, reportData: any) {
@@ -1103,8 +1726,14 @@ export class ImagingService {
       [result[0].imaging_order_id],
     );
 
+    const postWorkflow = await this.syncRadiologyPostReportWorkflow(tenantDb, reportId, userId);
+
     this.logger.log(`Signed imaging report ${reportId} by user ${userId}`);
-    return result[0];
+    return {
+      ...result[0],
+      discrepancyReview: postWorkflow.discrepancyReview,
+      incidentalFollowup: postWorkflow.incidentalFollowup,
+    };
   }
 
   async amendReport(tenantDb: DataSource, reportId: string, amendmentData: any, userId?: string) {
@@ -1144,8 +1773,14 @@ export class ImagingService {
       [result[0].imaging_study_id],
     );
 
+    const postWorkflow = await this.syncRadiologyPostReportWorkflow(tenantDb, reportId, userId);
+
     this.logger.warn(`Amended imaging report ${reportId}: ${amendment_reason}`);
-    return result[0];
+    return {
+      ...result[0],
+      discrepancyReview: postWorkflow.discrepancyReview,
+      incidentalFollowup: postWorkflow.incidentalFollowup,
+    };
   }
 
   async getReportTemplates(tenantDb: DataSource, filters: { modalityId?: string; studyTypeId?: string } = {}) {
@@ -1254,234 +1889,259 @@ export class ImagingService {
     doctorId: string,
     options: { status?: string; patientId?: string } = {},
   ) {
-    const params: any[] = [doctorId];
-    const conditions: string[] = ['io.ordering_provider = $1'];
+    const requiredTables = [
+      'imaging_orders',
+      'imaging_study_types',
+      'imaging_modalities',
+      'patients',
+      'imaging_studies',
+      'imaging_reports',
+      'imaging_report_acknowledgements',
+    ];
 
-    if (options.patientId) {
-      params.push(options.patientId);
-      conditions.push(`io.patient_id = $${params.length}`);
+    for (const tableName of requiredTables) {
+      if (!(await this.hasTable(tenantDb, tableName))) {
+        this.logger.warn(`${tableName} missing; returning default doctor imaging results payload`);
+        return this.getDefaultDoctorResultsPayload();
+      }
     }
 
-    const query = `
-      SELECT 
-        io.id as order_id,
-        io.order_number,
-        io.priority,
-        io.order_status,
-        io.payment_status,
-        io.finance_transaction_id,
-        io.fee_amount,
-        io.ordered_at,
-        io.study_type_id,
-        io.clinical_indication,
-        io.clinical_history,
-        io.suspected_diagnosis,
-        st.study_name,
-        st.study_code,
-        st.body_part,
-        m.modality_name,
-        m.modality_code,
-        p.id as patient_id,
-        p.first_name,
-        p.last_name,
-        p.patient_number,
-        p.date_of_birth,
-        p.gender,
-        s.id as study_id,
-        s.study_status,
-        s.study_date,
-        s.study_time,
-        s.created_at as study_created_at,
-        s.updated_at as study_updated_at,
-        s.radiologist_assigned,
-        s.technologist,
-        r.id as report_id,
-        r.report_status,
-        r.is_critical,
-        r.signed_at,
-        r.created_at as report_created_at,
-        r.updated_at as report_updated_at,
-        r.drafted_by,
-        r.signed_by,
-        r.structured_findings,
-        r.severity as report_severity,
-        r.follow_up_recommended,
-        r.follow_up_interval,
-        r.coded_diagnoses,
-        ack.id as acknowledgement_id,
-        ack.acknowledged_at,
-        ack.acknowledgment_notes
-      FROM imaging_orders io
-      INNER JOIN imaging_study_types st ON st.id = io.study_type_id
-      INNER JOIN imaging_modalities m ON m.id = st.modality_id
-      INNER JOIN patients p ON p.id = io.patient_id
-      LEFT JOIN imaging_studies s ON s.imaging_order_id = io.id
-      LEFT JOIN LATERAL (
-        SELECT rep.*
-        FROM imaging_reports rep
-        WHERE rep.imaging_study_id = s.id
-        ORDER BY rep.created_at DESC
-        LIMIT 1
-      ) r ON true
-      LEFT JOIN imaging_report_acknowledgements ack 
-        ON ack.imaging_report_id = r.id 
-        AND ack.doctor_id = io.ordering_provider
-      WHERE ${conditions.join(' AND ')}
-      ORDER BY io.ordered_at DESC
-      LIMIT 200
-    `;
+    try {
+      const params: any[] = [doctorId];
+      const conditions: string[] = ['io.ordering_provider = $1'];
 
-    const rows = await tenantDb.query(query, params);
-
-    const mapped = rows.map((row: any) => {
-      const workflowStatus = this.resolveDoctorWorkflowStatus(row);
-      let structuredFindings: any = {};
-      if (row.structured_findings) {
-        if (typeof row.structured_findings === 'string') {
-          try {
-            structuredFindings = JSON.parse(row.structured_findings);
-          } catch (error) {
-            structuredFindings = {};
-          }
-        } else {
-          structuredFindings = row.structured_findings;
-        }
+      if (options.patientId) {
+        params.push(options.patientId);
+        conditions.push(`io.patient_id = $${params.length}`);
       }
 
-      let codedDiagnoses: any[] = [];
-      if (row.coded_diagnoses) {
-        if (typeof row.coded_diagnoses === 'string') {
-          try {
-            codedDiagnoses = JSON.parse(row.coded_diagnoses);
-          } catch (error) {
-            codedDiagnoses = [];
+      const query = `
+        SELECT 
+          io.id as order_id,
+          io.order_number,
+          io.priority,
+          io.order_status,
+          io.payment_status,
+          io.finance_transaction_id,
+          io.fee_amount,
+          io.ordered_at,
+          io.study_type_id,
+          io.clinical_indication,
+          io.clinical_history,
+          io.suspected_diagnosis,
+          st.study_name,
+          st.study_code,
+          st.body_part,
+          m.modality_name,
+          m.modality_code,
+          p.id as patient_id,
+          p.first_name,
+          p.last_name,
+          p.patient_number,
+          p.date_of_birth,
+          p.gender,
+          s.id as study_id,
+          s.study_status,
+          s.study_date,
+          s.study_time,
+          s.created_at as study_created_at,
+          s.updated_at as study_updated_at,
+          s.radiologist_assigned,
+          s.technologist,
+          r.id as report_id,
+          r.report_status,
+          r.is_critical,
+          r.signed_at,
+          r.created_at as report_created_at,
+          r.updated_at as report_updated_at,
+          r.drafted_by,
+          r.signed_by,
+          r.structured_findings,
+          r.severity as report_severity,
+          r.follow_up_recommended,
+          r.follow_up_interval,
+          r.coded_diagnoses,
+          ack.id as acknowledgement_id,
+          ack.acknowledged_at,
+          ack.acknowledgment_notes
+        FROM imaging_orders io
+        INNER JOIN imaging_study_types st ON st.id = io.study_type_id
+        INNER JOIN imaging_modalities m ON m.id = st.modality_id
+        INNER JOIN patients p ON p.id = io.patient_id
+        LEFT JOIN imaging_studies s ON s.imaging_order_id = io.id
+        LEFT JOIN LATERAL (
+          SELECT rep.*
+          FROM imaging_reports rep
+          WHERE rep.imaging_study_id = s.id
+          ORDER BY rep.created_at DESC
+          LIMIT 1
+        ) r ON true
+        LEFT JOIN imaging_report_acknowledgements ack 
+          ON ack.imaging_report_id = r.id 
+          AND ack.doctor_id = io.ordering_provider
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY io.ordered_at DESC
+        LIMIT 200
+      `;
+
+      const rows = await tenantDb.query(query, params);
+
+      const mapped = rows.map((row: any) => {
+        const workflowStatus = this.resolveDoctorWorkflowStatus(row);
+        let structuredFindings: any = {};
+        if (row.structured_findings) {
+          if (typeof row.structured_findings === 'string') {
+            try {
+              structuredFindings = JSON.parse(row.structured_findings);
+            } catch (error) {
+              structuredFindings = {};
+            }
+          } else {
+            structuredFindings = row.structured_findings;
           }
-        } else {
-          codedDiagnoses = row.coded_diagnoses;
         }
-      }
 
-      const requiresFollowUp = row.follow_up_recommended && !row.acknowledged_at;
-
-      return {
-        order: {
-          id: row.order_id,
-          number: row.order_number,
-          priority: row.priority,
-          status: row.order_status,
-          payment_status: row.payment_status,
-          finance_transaction_id: row.finance_transaction_id,
-          fee_amount:
-            row.fee_amount !== null && row.fee_amount !== undefined
-              ? Number(row.fee_amount)
-              : null,
-          ordered_at: row.ordered_at,
-          clinical_indication: row.clinical_indication,
-          clinical_history: row.clinical_history,
-          suspected_diagnosis: row.suspected_diagnosis,
-          study_type_id: row.study_type_id,
-          study_name: row.study_name,
-          study_code: row.study_code,
-          body_part: row.body_part,
-          modality_name: row.modality_name,
-          modality_code: row.modality_code,
-        },
-        patient: {
-          id: row.patient_id,
-          first_name: row.first_name,
-          last_name: row.last_name,
-          patient_number: row.patient_number,
-          date_of_birth: row.date_of_birth,
-          gender: row.gender,
-          full_name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
-        },
-        study: row.study_id
-          ? {
-              id: row.study_id,
-              status: row.study_status,
-              study_date: row.study_date,
-              study_time: row.study_time,
-              created_at: row.study_created_at,
-              updated_at: row.study_updated_at,
-              radiologist_assigned: row.radiologist_assigned,
-              technologist: row.technologist,
+        let codedDiagnoses: any[] = [];
+        if (row.coded_diagnoses) {
+          if (typeof row.coded_diagnoses === 'string') {
+            try {
+              codedDiagnoses = JSON.parse(row.coded_diagnoses);
+            } catch (error) {
+              codedDiagnoses = [];
             }
-          : null,
-        report: row.report_id
-          ? {
-              id: row.report_id,
-              status: row.report_status,
-              is_critical: row.is_critical,
-              signed_at: row.signed_at,
-              created_at: row.report_created_at,
-              updated_at: row.report_updated_at,
-              drafted_by: row.drafted_by,
-              signed_by: row.signed_by,
-              structured_findings: structuredFindings,
-              severity: row.report_severity,
-              follow_up_recommended: row.follow_up_recommended,
-              follow_up_interval: row.follow_up_interval,
-              coded_diagnoses: codedDiagnoses,
-            }
-          : null,
-        acknowledgement: row.acknowledgement_id
-          ? {
-              id: row.acknowledgement_id,
-              acknowledged_at: row.acknowledged_at,
-              notes: row.acknowledgment_notes,
-            }
-          : null,
-        workflow_status: workflowStatus,
-        is_action_required: (row.is_critical || requiresFollowUp) && !row.acknowledged_at,
-      };
-    });
+          } else {
+            codedDiagnoses = row.coded_diagnoses;
+          }
+        }
 
-    const counts = {
-      total: mapped.length,
-      awaiting_payment: mapped.filter(
-        (item) => item.workflow_status === 'awaiting_payment',
-      ).length,
-      pending: mapped.filter(
-        (item) =>
-          !['acknowledged', 'cancelled'].includes(item.workflow_status),
-      ).length,
-      awaiting_ack: mapped.filter((item) => item.workflow_status === 'awaiting_acknowledgement').length,
-      completed: mapped.filter((item) => item.workflow_status === 'acknowledged').length,
-      critical: mapped.filter((item) => item.report?.is_critical && !item.acknowledgement).length,
-      cancelled: mapped.filter((item) => item.workflow_status === 'cancelled').length,
-    };
+        const requiresFollowUp = row.follow_up_recommended && !row.acknowledged_at;
 
-    let filtered = mapped;
-    switch ((options.status || '').toLowerCase()) {
-      case 'pending':
-        filtered = mapped.filter(
+        return {
+          order: {
+            id: row.order_id,
+            number: row.order_number,
+            priority: row.priority,
+            status: row.order_status,
+            payment_status: row.payment_status,
+            finance_transaction_id: row.finance_transaction_id,
+            fee_amount:
+              row.fee_amount !== null && row.fee_amount !== undefined
+                ? Number(row.fee_amount)
+                : null,
+            ordered_at: row.ordered_at,
+            clinical_indication: row.clinical_indication,
+            clinical_history: row.clinical_history,
+            suspected_diagnosis: row.suspected_diagnosis,
+            study_type_id: row.study_type_id,
+            study_name: row.study_name,
+            study_code: row.study_code,
+            body_part: row.body_part,
+            modality_name: row.modality_name,
+            modality_code: row.modality_code,
+          },
+          patient: {
+            id: row.patient_id,
+            first_name: row.first_name,
+            last_name: row.last_name,
+            patient_number: row.patient_number,
+            date_of_birth: row.date_of_birth,
+            gender: row.gender,
+            full_name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+          },
+          study: row.study_id
+            ? {
+                id: row.study_id,
+                status: row.study_status,
+                study_date: row.study_date,
+                study_time: row.study_time,
+                created_at: row.study_created_at,
+                updated_at: row.study_updated_at,
+                radiologist_assigned: row.radiologist_assigned,
+                technologist: row.technologist,
+              }
+            : null,
+          report: row.report_id
+            ? {
+                id: row.report_id,
+                status: row.report_status,
+                is_critical: row.is_critical,
+                signed_at: row.signed_at,
+                created_at: row.report_created_at,
+                updated_at: row.report_updated_at,
+                drafted_by: row.drafted_by,
+                signed_by: row.signed_by,
+                structured_findings: structuredFindings,
+                severity: row.report_severity,
+                follow_up_recommended: row.follow_up_recommended,
+                follow_up_interval: row.follow_up_interval,
+                coded_diagnoses: codedDiagnoses,
+              }
+            : null,
+          acknowledgement: row.acknowledgement_id
+            ? {
+                id: row.acknowledgement_id,
+                acknowledged_at: row.acknowledged_at,
+                notes: row.acknowledgment_notes,
+              }
+            : null,
+          workflow_status: workflowStatus,
+          is_action_required: (row.is_critical || requiresFollowUp) && !row.acknowledged_at,
+        };
+      });
+
+      const counts = {
+        total: mapped.length,
+        awaiting_payment: mapped.filter(
+          (item) => item.workflow_status === 'awaiting_payment',
+        ).length,
+        pending: mapped.filter(
           (item) =>
             !['acknowledged', 'cancelled'].includes(item.workflow_status),
-        );
-        break;
-      case 'completed':
-        filtered = mapped.filter((item) => item.workflow_status === 'acknowledged');
-        break;
-      case 'critical':
-        filtered = mapped.filter((item) => item.report?.is_critical && !item.acknowledgement);
-        break;
-      case 'awaiting_ack':
-        filtered = mapped.filter((item) => item.workflow_status === 'awaiting_acknowledgement');
-        break;
-      case 'awaiting_payment':
-        filtered = mapped.filter((item) => item.workflow_status === 'awaiting_payment');
-        break;
-      case 'cancelled':
-        filtered = mapped.filter((item) => item.workflow_status === 'cancelled');
-        break;
-      default:
-        break;
-    }
+        ).length,
+        awaiting_ack: mapped.filter((item) => item.workflow_status === 'awaiting_acknowledgement').length,
+        completed: mapped.filter((item) => item.workflow_status === 'acknowledged').length,
+        critical: mapped.filter((item) => item.report?.is_critical && !item.acknowledgement).length,
+        cancelled: mapped.filter((item) => item.workflow_status === 'cancelled').length,
+      };
 
-    return {
-      results: filtered,
-      counts,
-    };
+      let filtered = mapped;
+      switch ((options.status || '').toLowerCase()) {
+        case 'pending':
+          filtered = mapped.filter(
+            (item) =>
+              !['acknowledged', 'cancelled'].includes(item.workflow_status),
+          );
+          break;
+        case 'completed':
+          filtered = mapped.filter((item) => item.workflow_status === 'acknowledged');
+          break;
+        case 'critical':
+          filtered = mapped.filter((item) => item.report?.is_critical && !item.acknowledgement);
+          break;
+        case 'awaiting_ack':
+          filtered = mapped.filter((item) => item.workflow_status === 'awaiting_acknowledgement');
+          break;
+        case 'awaiting_payment':
+          filtered = mapped.filter((item) => item.workflow_status === 'awaiting_payment');
+          break;
+        case 'cancelled':
+          filtered = mapped.filter((item) => item.workflow_status === 'cancelled');
+          break;
+        default:
+          break;
+      }
+
+      return {
+        results: filtered,
+        counts,
+      };
+    } catch (error: any) {
+      if (this.isMissingSchemaError(error)) {
+        this.logger.warn(`Doctor imaging results fallback due to missing schema: ${error.message}`);
+        return this.getDefaultDoctorResultsPayload();
+      }
+      throw error;
+    }
   }
 
   async acknowledgeReport(
@@ -1688,6 +2348,314 @@ export class ImagingService {
     }
   }
 
+  private async getLatestRadiologyFindingForStudy(
+    tenantDb: DataSource,
+    imagingOrderId: string,
+    patientId: string,
+  ) {
+    const findings = await tenantDb.query(
+      `
+      SELECT
+        raf.*,
+        ds.id as dicom_study_id,
+        ds.study_uid,
+        ds.storage_key,
+        ds.acquired_at
+      FROM dicom_studies ds
+      INNER JOIN radiology_ai_findings raf ON raf.study_id = ds.id
+      WHERE ds.patient_id = $1
+        AND (ds.imaging_order_id = $2 OR ds.imaging_order_id IS NULL)
+      ORDER BY
+        CASE WHEN ds.imaging_order_id = $2 THEN 0 ELSE 1 END,
+        raf.analyzed_at DESC
+      LIMIT 1
+      `,
+      [patientId, imagingOrderId],
+    );
+
+    return findings[0] || null;
+  }
+
+  private mapRadiologyFindingSeverity(rawSeverity?: string | null, confidence?: number | null): string {
+    const normalized = String(rawSeverity || '').toLowerCase();
+    if (normalized === 'critical' || (confidence ?? 0) >= 0.9) {
+      return 'critical';
+    }
+    if (normalized === 'high' || normalized === 'significant') {
+      return 'significant';
+    }
+    if (normalized === 'moderate') {
+      return 'moderate';
+    }
+    return 'minor';
+  }
+
+  private async syncRadiologyPostReportWorkflow(
+    tenantDb: DataSource,
+    reportId: string,
+    userId?: string,
+  ) {
+    const rows = await tenantDb.query(
+      `
+      SELECT
+        r.*,
+        s.study_description,
+        s.study_status,
+        s.imaging_order_id,
+        io.patient_id,
+        io.clinical_indication,
+        io.suspected_diagnosis,
+        st.study_name,
+        st.body_part,
+        m.modality_name,
+        m.modality_code
+      FROM imaging_reports r
+      INNER JOIN imaging_studies s ON s.id = r.imaging_study_id
+      INNER JOIN imaging_orders io ON io.id = r.imaging_order_id
+      INNER JOIN imaging_study_types st ON st.id = s.study_type_id
+      INNER JOIN imaging_modalities m ON m.id = st.modality_id
+      WHERE r.id = $1
+      `,
+      [reportId],
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundException(`Report with ID ${reportId} not found`);
+    }
+
+    const report = rows[0];
+    const aiFinding = await this.getLatestRadiologyFindingForStudy(
+      tenantDb,
+      report.imaging_order_id,
+      report.patient_id,
+    );
+    const discrepancyReview = await this.createRadiologyDiscrepancyReview(
+      tenantDb,
+      report,
+      aiFinding,
+      userId,
+    );
+    const incidentalFollowup = await this.upsertIncidentalFindingFollowup(
+      tenantDb,
+      report,
+      discrepancyReview,
+      aiFinding,
+      userId,
+    );
+
+    return { discrepancyReview, incidentalFollowup };
+  }
+
+  private async createRadiologyDiscrepancyReview(
+    tenantDb: DataSource,
+    report: any,
+    aiFinding: any,
+    userId?: string,
+  ) {
+    const reviewRepo = tenantDb.getRepository(RadiologyDiscrepancyReview);
+    const aiLabels = Array.isArray(aiFinding?.findings)
+      ? aiFinding.findings
+          .map((finding: any) => String(finding.label || finding.finding || '').trim())
+          .filter(Boolean)
+      : [];
+    const reportText = [
+      report.findings,
+      report.impression,
+      report.critical_findings,
+      report.recommendations,
+    ]
+      .map((value: any) => String(value || '').toLowerCase())
+      .join(' ');
+    const matchedAiLabels = aiLabels.filter((label: string) => reportText.includes(label.toLowerCase()));
+    const unmatchedAiLabels = aiLabels.filter((label: string) => !reportText.includes(label.toLowerCase()));
+
+    const discrepancyStatus = !aiFinding
+      ? 'no_ai_comparison'
+      : unmatchedAiLabels.length === 0 && aiLabels.length > 0
+        ? 'aligned'
+        : matchedAiLabels.length > 0
+          ? 'partially_aligned'
+          : 'needs_review';
+
+    return reviewRepo.save(
+      reviewRepo.create({
+        imagingStudyId: report.imaging_study_id,
+        imagingOrderId: report.imaging_order_id,
+        imagingReportId: report.id,
+        patientId: report.patient_id,
+        aiFindingId: aiFinding?.id ?? null,
+        reviewedBy: userId ?? null,
+        reviewStatus: 'generated',
+        discrepancyStatus,
+        aiSummary: {
+          topFinding: aiFinding?.top_finding || aiFinding?.topFinding || null,
+          overallConfidence: aiFinding?.overall_confidence ?? aiFinding?.overallConfidence ?? null,
+          findings: Array.isArray(aiFinding?.findings) ? aiFinding.findings : [],
+        },
+        reportSummary: {
+          impression: report.impression || null,
+          findings: report.findings || null,
+          severity: report.severity || null,
+          isCritical: Boolean(report.is_critical),
+          followUpRecommended: Boolean(report.follow_up_recommended),
+        },
+        discrepancySummary: {
+          matchedAiLabels,
+          unmatchedAiLabels,
+          reportStatus: report.report_status,
+        },
+        rationale: !aiFinding
+          ? 'No radiology AI finding was available for direct discrepancy comparison.'
+          : discrepancyStatus === 'aligned'
+            ? 'Radiologist report content covers the AI-labeled findings without unresolved gaps.'
+            : discrepancyStatus === 'partially_aligned'
+              ? 'Radiologist report partially addresses the AI-labeled findings, but some AI suggestions remain unmatched and should be reviewed.'
+              : 'Radiologist report does not clearly address the highest-priority AI-labeled findings and should be reviewed for reconciliation.',
+        governance: {
+          governedPath: true,
+          workstream: 'MOAS-08',
+          source: 'radiology_discrepancy_review',
+        },
+      }),
+    );
+  }
+
+  private async upsertIncidentalFindingFollowup(
+    tenantDb: DataSource,
+    report: any,
+    discrepancyReview: RadiologyDiscrepancyReview,
+    aiFinding: any,
+    userId?: string,
+  ) {
+    const structuredFindings = this.parseJsonValue(report.structured_findings, []);
+    const significantStructuredFindings = Array.isArray(structuredFindings)
+      ? structuredFindings.filter((finding: any) =>
+          ['significant', 'critical'].includes(String(finding?.significance || '').toLowerCase()),
+        )
+      : [];
+    const severity = this.normalizeIncidentSeverity(
+      report.severity,
+      Boolean(report.is_critical),
+      significantStructuredFindings.length > 0,
+      aiFinding?.alerted === true,
+    );
+    const followupNeeded =
+      Boolean(report.is_critical) ||
+      Boolean(report.follow_up_recommended) ||
+      significantStructuredFindings.length > 0 ||
+      discrepancyReview.discrepancyStatus === 'needs_review';
+
+    if (!followupNeeded) {
+      return null;
+    }
+
+    const repo = tenantDb.getRepository(IncidentalFindingFollowup);
+    const existing = await repo.findOne({
+      where: {
+        imagingReportId: report.id,
+        status: 'open',
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const title = `Radiology follow-up: ${aiFinding?.top_finding || report.study_name || 'incidental finding'}`;
+    const summaryParts = [
+      report.is_critical ? 'Report contains critical findings.' : null,
+      report.follow_up_recommended ? `Follow-up recommended${report.follow_up_interval ? ` ${report.follow_up_interval}` : ''}.` : null,
+      significantStructuredFindings.length > 0
+        ? `${significantStructuredFindings.length} structured finding(s) marked significant or critical.`
+        : null,
+      discrepancyReview.discrepancyStatus === 'needs_review'
+        ? 'AI discrepancy review flagged unresolved items for radiologist/clinician reconciliation.'
+        : null,
+    ].filter(Boolean);
+    const summary = summaryParts.join(' ');
+    const recommendedAction =
+      report.recommendations ||
+      report.critical_findings ||
+      significantStructuredFindings
+        .map((finding: any) => finding.recommendation)
+        .filter(Boolean)
+        .join(' ') ||
+      'Confirm patient communication, clinician acknowledgment, and concrete imaging follow-up steps.';
+
+    const dueAt = this.offsetDueAt(severity === 'critical' ? 4 : severity === 'significant' ? 24 : 72);
+    const payload = {
+      imagingStudyId: report.imaging_study_id,
+      imagingOrderId: report.imaging_order_id,
+      imagingReportId: report.id,
+      patientId: report.patient_id,
+      createdBy: userId ?? null,
+      status: 'open',
+      followupType: 'incidental_finding_followup',
+      severity,
+      title,
+      summary,
+      recommendedAction,
+      dueAt,
+      evidence: {
+        discrepancyStatus: discrepancyReview.discrepancyStatus,
+        aiFindingId: aiFinding?.id ?? null,
+        topFinding: aiFinding?.top_finding || aiFinding?.topFinding || null,
+        isCritical: Boolean(report.is_critical),
+        followUpRecommended: Boolean(report.follow_up_recommended),
+        followUpInterval: report.follow_up_interval || null,
+        structuredFindingCount: significantStructuredFindings.length,
+      },
+      governance: {
+        governedPath: true,
+        workstream: 'MOAS-08',
+        source: 'incidental_finding_followup',
+      },
+    };
+
+    if (existing) {
+      return repo.save({
+        ...existing,
+        ...payload,
+      });
+    }
+
+    return repo.save(repo.create(payload));
+  }
+
+  private normalizeIncidentSeverity(
+    rawSeverity: string | null | undefined,
+    isCritical: boolean,
+    hasSignificantStructuredFinding: boolean,
+    aiAlerted: boolean,
+  ) {
+    const normalized = String(rawSeverity || '').toLowerCase();
+    if (isCritical || normalized === 'critical' || aiAlerted) {
+      return 'critical';
+    }
+    if (normalized === 'significant' || hasSignificantStructuredFinding) {
+      return 'significant';
+    }
+    if (normalized === 'moderate') {
+      return 'moderate';
+    }
+    return 'minor';
+  }
+
+  private offsetDueAt(hoursFromNow: number) {
+    return new Date(Date.now() + hoursFromNow * 60 * 60 * 1000);
+  }
+
+  private parseJsonValue<T>(value: any, fallback: T): T {
+    if (value === null || value === undefined) {
+      return fallback;
+    }
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as T;
+      } catch (error) {
+        return fallback;
+      }
+    }
+    return value as T;
+  }
+
   private async getReportOrderId(tenantDb: DataSource, reportId: string): Promise<string> {
     const report = await tenantDb.query(
       `
@@ -1725,5 +2693,50 @@ export class ImagingService {
       );
     }
   }
-}
 
+  // ─── Sprint 117: DICOM Viewer + AI Heatmap ───────────────────────────────
+
+  async getAiDraftForOrder(tenantDb: DataSource, orderId: string): Promise<{
+    patientId?: string;
+    reportText?: string;
+    findings?: any[];
+    confidence?: number | null;
+    heatmapRegions?: any[];
+  } | null> {
+    const rows = await tenantDb.query(
+      `SELECT patient_id, draft_findings, draft_impression, structured_draft, heatmap_regions
+       FROM radiology_report_drafts
+       WHERE imaging_order_id = $1
+       ORDER BY created_at DESC LIMIT 1`,
+      [orderId],
+    );
+    if (rows.length === 0) return null;
+    const structured = rows[0].structured_draft ?? {};
+    return {
+      patientId: rows[0].patient_id,
+      reportText: [rows[0].draft_findings, rows[0].draft_impression].filter(Boolean).join('\n\n'),
+      findings: structured.findings ?? [],
+      confidence: structured.confidence != null ? Number(structured.confidence) : null,
+      heatmapRegions: rows[0].heatmap_regions ?? [],
+    };
+  }
+
+  async saveHeatmapRegions(tenantDb: DataSource, orderId: string, regions: unknown[]): Promise<void> {
+    await tenantDb.query(
+      `UPDATE radiology_report_drafts
+       SET heatmap_regions = $1
+       WHERE imaging_order_id = $2`,
+      [JSON.stringify(regions), orderId],
+    );
+  }
+
+  async uploadDicomToMinio(objectKey: string, buffer: Buffer, contentType: string): Promise<void> {
+    const bucket = process.env.MINIO_BUCKET ?? 'medicore-dicom';
+    await this.minioService.uploadBuffer(bucket, objectKey, buffer, contentType);
+  }
+
+  async getDicomBuffer(objectKey: string): Promise<Buffer> {
+    const bucket = process.env.MINIO_BUCKET ?? 'medicore-dicom';
+    return this.minioService.getObjectBuffer(bucket, objectKey);
+  }
+}

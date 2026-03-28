@@ -26,6 +26,24 @@ export class ImmunizationController {
     private readonly tenantService: TenantService,
   ) {}
 
+  @Get('report/coverage')
+  @ApiOperation({ summary: 'Get immunization coverage report by antigen and optional age group' })
+  async getCoverageReport(
+    @Query('periodStart') periodStart: string | undefined,
+    @Query('periodEnd') periodEnd: string | undefined,
+    @Query('antigen') antigen: string | undefined,
+    @Query('ageGroup') ageGroup: string | undefined,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.immunizationService.getCoverageReport(tenantDb, {
+      periodStart,
+      periodEnd,
+      antigen,
+      ageGroup: ageGroup === 'false' || ageGroup === '0' ? 'none' : ageGroup,
+    });
+  }
+
   @Get('schedules')
   @ApiOperation({ summary: 'Get immunization schedules (routine and/or travel)' })
   async getSchedules(

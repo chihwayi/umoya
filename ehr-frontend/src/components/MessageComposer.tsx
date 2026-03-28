@@ -125,24 +125,24 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white via-slate-50 to-blue-50 shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900">New Message</h2>
+        <div className="flex items-center justify-between border-b border-blue-200/60 bg-gradient-to-r from-blue-600 to-indigo-700 p-5 text-white">
+          <h2 className="text-2xl font-bold">New Message</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="rounded-lg p-2 transition hover:bg-white/20"
           >
-            <X className="w-5 h-5 text-gray-600" />
+            <X className="w-5 h-5 text-white" />
           </button>
         </div>
 
         {/* Form */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 bg-white/75">
           {/* Recipient Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               Send To
             </label>
             <div className="flex items-center gap-4 mb-3">
@@ -152,10 +152,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                   value="user"
                   checked={recipientType === 'user'}
                   onChange={(e) => setRecipientType(e.target.value as 'user')}
-                  className="text-blue-600"
+                  className="text-blue-600 focus:ring-blue-500"
                 />
                 <User className="w-4 h-4" />
-                <span className="text-sm">Specific User</span>
+                <span className="text-sm text-slate-700">Specific User</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -163,10 +163,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                   value="role"
                   checked={recipientType === 'role'}
                   onChange={(e) => setRecipientType(e.target.value as 'role')}
-                  className="text-blue-600"
+                  className="text-blue-600 focus:ring-blue-500"
                 />
                 <Users className="w-4 h-4" />
-                <span className="text-sm">Role</span>
+                <span className="text-sm text-slate-700">Role</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -174,10 +174,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                   value="team"
                   checked={recipientType === 'team'}
                   onChange={(e) => setRecipientType(e.target.value as 'team')}
-                  className="text-blue-600"
+                  className="text-blue-600 focus:ring-blue-500"
                 />
                 <Users className="w-4 h-4" />
-                <span className="text-sm">Team</span>
+                <span className="text-sm text-slate-700">Team</span>
               </label>
             </div>
 
@@ -185,7 +185,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <select
                 value={formData.recipient_id}
                 onChange={(e) => setFormData({ ...formData, recipient_id: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="">Select a user...</option>
                 {users.map((user) => (
@@ -200,7 +200,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <select
                 value={formData.recipient_role}
                 onChange={(e) => setFormData({ ...formData, recipient_role: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="">Select a role...</option>
                 <option value="doctor">Doctors</option>
@@ -218,14 +218,14 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 value={formData.recipient_team}
                 onChange={(e) => setFormData({ ...formData, recipient_team: e.target.value })}
                 placeholder="Enter team name..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
             )}
           </div>
 
           {/* Subject */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               Subject
             </label>
             <input
@@ -233,20 +233,20 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               value={formData.subject}
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               placeholder="Enter subject..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
           {/* Message Type and Priority */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Type
               </label>
               <select
                 value={formData.message_type}
                 onChange={(e) => setFormData({ ...formData, message_type: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="message">Message</option>
                 <option value="task">Task</option>
@@ -256,13 +256,13 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Priority
               </label>
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="low">Low</option>
                 <option value="normal">Normal</option>
@@ -276,21 +276,21 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           <div>
             <button
               onClick={() => setShowTemplates(!showTemplates)}
-              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+              className="flex items-center gap-2 text-sm font-medium text-blue-700 hover:text-blue-800"
             >
               <FileText className="w-4 h-4" />
               {showTemplates ? 'Hide Templates' : 'Use Template'}
             </button>
             {showTemplates && templates.length > 0 && (
-              <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-2 max-h-40 overflow-y-auto">
+              <div className="mt-2 max-h-40 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/80 p-3">
                 {templates.map((template) => (
                   <button
                     key={template.id}
                     onClick={() => handleApplyTemplate(template.id)}
-                    className="w-full text-left px-3 py-2 bg-white rounded hover:bg-blue-50 transition-colors"
+                    className="w-full rounded bg-white px-3 py-2 text-left transition-colors hover:bg-blue-50"
                   >
-                    <div className="font-medium text-sm text-gray-900">{template.name}</div>
-                    <div className="text-xs text-gray-500">{template.category}</div>
+                    <div className="text-sm font-medium text-slate-900">{template.name}</div>
+                    <div className="text-xs text-slate-500">{template.category}</div>
                   </button>
                 ))}
               </div>
@@ -299,7 +299,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
           {/* Message */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               Message
             </label>
             <textarea
@@ -307,7 +307,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               onChange={(e) => setFormData({ ...formData, message_text: e.target.value })}
               placeholder="Type your message..."
               rows={8}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full resize-none rounded-lg border border-slate-300 bg-white px-4 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
@@ -318,25 +318,25 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 type="checkbox"
                 checked={formData.requires_response}
                 onChange={(e) => setFormData({ ...formData, requires_response: e.target.checked })}
-                className="rounded text-blue-600"
+                className="rounded text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-sm text-gray-700">Requires response</span>
+              <span className="text-sm text-slate-700">Requires response</span>
             </label>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+        <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-white/85 p-6">
           <button
             onClick={onClose}
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            className="rounded-lg border border-slate-300 px-6 py-2 text-slate-700 hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSend}
             disabled={sending}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-2 text-white hover:from-blue-700 hover:to-indigo-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="w-4 h-4" />
             {sending ? 'Sending...' : 'Send Message'}
@@ -346,4 +346,3 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     </div>
   );
 };
-

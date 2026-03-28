@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Download,
 } from 'lucide-react';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 interface InventoryItem {
   id: string;
@@ -57,6 +58,7 @@ interface Drug {
 const PharmacyInventory: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { showSuccess, showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
   
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -223,7 +225,14 @@ const PharmacyInventory: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this inventory item?')) return;
+    const shouldProceed = await confirm({
+      title: 'Delete Inventory Item',
+      message: 'Are you sure you want to delete this inventory item?',
+      confirmText: 'Delete',
+      cancelText: 'Keep',
+      type: 'danger',
+    });
+    if (!shouldProceed) return;
     try {
       // Note: Delete endpoint may not exist yet, handle gracefully
       showError('Delete not implemented', 'Please contact support');
@@ -268,7 +277,9 @@ const PharmacyInventory: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      {Dialog}
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -755,9 +766,9 @@ const PharmacyInventory: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
 export default PharmacyInventory;
-

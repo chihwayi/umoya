@@ -6,6 +6,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { ReportTemplate } from './report-template.entity';
@@ -31,6 +32,7 @@ export class ReportExecution {
   id: string;
 
   @Column({ name: 'report_template_id', type: 'uuid', nullable: true })
+  @Index('idx_report_executions_template_id')
   reportTemplateId?: string;
 
   @ManyToOne(() => ReportTemplate, { nullable: true })
@@ -38,6 +40,7 @@ export class ReportExecution {
   reportTemplate?: ReportTemplate;
 
   @Column({ name: 'scheduled_report_id', type: 'uuid', nullable: true })
+  @Index('idx_report_executions_scheduled_id')
   scheduledReportId?: string;
 
   @ManyToOne(() => ScheduledReport, { nullable: true })
@@ -45,6 +48,7 @@ export class ReportExecution {
   scheduledReport?: ScheduledReport;
 
   @Column({
+    name: 'execution_type',
     type: 'varchar',
     length: 20,
     enum: ExecutionType,
@@ -52,16 +56,18 @@ export class ReportExecution {
   executionType: ExecutionType;
 
   @Column({ name: 'executed_by', type: 'uuid', nullable: true })
+  @Index('idx_report_executions_executed_by')
   executedById?: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'executed_by' })
   executedBy?: User;
 
-  @Column({ type: 'timestamptz', default: () => 'NOW()' })
+  @Column({ name: 'execution_time', type: 'timestamptz', default: () => 'NOW()' })
+  @Index('idx_report_executions_execution_time')
   executionTime: Date;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ name: 'duration_ms', type: 'int', nullable: true })
   durationMs?: number;
 
   @Column({
@@ -70,18 +76,19 @@ export class ReportExecution {
     default: ExecutionStatus.PENDING,
     enum: ExecutionStatus,
   })
+  @Index('idx_report_executions_status')
   status: ExecutionStatus;
 
-  @Column({ type: 'jsonb', default: {} })
+  @Column({ name: 'filters_applied', type: 'jsonb', default: {} })
   filtersApplied: Record<string, any>;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ name: 'result_count', type: 'int', nullable: true })
   resultCount?: number;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'file_url', type: 'text', nullable: true })
   fileUrl?: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage?: string;
 
   @Column({ type: 'jsonb', default: {} })
@@ -93,5 +100,4 @@ export class ReportExecution {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
-
 

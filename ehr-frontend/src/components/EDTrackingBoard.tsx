@@ -24,6 +24,7 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
   const [loading, setLoading] = useState(true);
   const [filterESI, setFilterESI] = useState('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [loadFailureCount, setLoadFailureCount] = useState(0);
   const [selectedVisit, setSelectedVisit] = useState<any>(null);
   const [showDispositionModal, setShowDispositionModal] = useState(false);
 
@@ -46,10 +47,18 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
     try {
       const response = await ehrApi.getEDTrackingBoard(token, tenantSlug);
       setVisits(response.data || []);
+      setLoadFailureCount(0);
       setLoading(false);
     } catch (error) {
-      console.error('Failed to load ED board:', error);
-      showError('Error', 'Failed to load ED tracking board');
+      const nextFailureCount = loadFailureCount + 1;
+      setLoadFailureCount(nextFailureCount);
+      if (nextFailureCount === 1) {
+        showError('Error', 'Failed to load ED tracking board');
+      }
+      if (nextFailureCount >= 3 && autoRefresh) {
+        setAutoRefresh(false);
+        showError('Auto-refresh paused', 'ED tracking board auto-refresh paused after repeated failures.');
+      }
       setLoading(false);
     }
   };
@@ -336,6 +345,39 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
                     )}
                   </div>
 
+                  {/* AI Triage Recommendation */}
+                  {visit.ai_triage_flag && (
+                    <div className={`mb-4 rounded-lg border px-3 py-2 flex items-start gap-2 ${
+                      visit.ai_triage_flag === 'critical' || visit.ai_triage_flag === 'high'
+                        ? 'bg-red-50 border-red-200'
+                        : visit.ai_triage_flag === 'moderate'
+                        ? 'bg-amber-50 border-amber-200'
+                        : 'bg-blue-50 border-blue-200'
+                    }`}>
+                      <Sparkles className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
+                        visit.ai_triage_flag === 'critical' || visit.ai_triage_flag === 'high'
+                          ? 'text-red-600'
+                          : visit.ai_triage_flag === 'moderate'
+                          ? 'text-amber-600'
+                          : 'text-blue-600'
+                      }`} />
+                      <div className="min-w-0">
+                        <span className={`text-xs font-semibold uppercase tracking-wide ${
+                          visit.ai_triage_flag === 'critical' || visit.ai_triage_flag === 'high'
+                            ? 'text-red-700'
+                            : visit.ai_triage_flag === 'moderate'
+                            ? 'text-amber-700'
+                            : 'text-blue-700'
+                        }`}>
+                          AI: {visit.ai_triage_flag}
+                        </span>
+                        {visit.ai_triage_note && (
+                          <p className="text-xs text-slate-600 mt-0.5 leading-snug">{visit.ai_triage_note}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Footer Info */}
                   <div className="flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm text-slate-600 pt-4 border-t border-slate-200">
                     <div className="flex items-center gap-2">
@@ -384,4 +426,3 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
 };
 
 export default EDTrackingBoard;
-

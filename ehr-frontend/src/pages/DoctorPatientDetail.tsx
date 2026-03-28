@@ -3,17 +3,32 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
-  Pill,
-  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit
+  Pill, Baby,
+  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import ModalPortal from '../components/ModalPortal';
 import ProblemListModal from '../components/ProblemListModal';
 import AllergiesModal from '../components/AllergiesModal';
 import VoiceInput from '../components/VoiceInput';
+import PatientSdohTab from '../components/PatientSdohTab';
+import CareGapPanel from '../components/CareGapPanel';
+import TbDashboard from '../components/TbDashboard';
+import PediatricsDashboard from '../components/PediatricsDashboard';
+import MentalHealthDashboard from '../components/MentalHealthDashboard';
+import MalariaDashboard from '../components/MalariaDashboard';
+import GeriatricsDashboard from '../components/GeriatricsDashboard';
+import NeurologyDashboard from '../components/NeurologyDashboard';
+import PulmonologyDashboard from '../components/PulmonologyDashboard';
+import NephrologyDashboard from '../components/NephrologyDashboard';
+import DermatologyDashboard from '../components/DermatologyDashboard';
+import PalliativeDashboard from '../components/PalliativeDashboard';
+import NutritionDashboard from '../components/NutritionDashboard';
+import IcuDashboard from '../components/IcuDashboard';
 
 interface Patient {
   id: string;
@@ -51,15 +66,27 @@ interface Appointment {
   };
 }
 
-const DoctorPatientDetail: React.FC = () => {
+interface DoctorPatientDetailProps {
+  embedded?: boolean;
+}
+
+const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = false }) => {
   const { tenantSlug, patientId } = useParams<{ tenantSlug: string; patientId: string }>();
   const navigate = useNavigate();
   const { showError } = useNotification();
+  const currentUser = (() => {
+    try {
+      const userData = localStorage.getItem('ehr_user');
+      return userData ? JSON.parse(userData) : null;
+    } catch {
+      return null;
+    }
+  })();
   
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology' | 'nephrology' | 'dermatology' | 'palliative' | 'nutrition' | 'icu'>('overview');
 
   // AI/RAG State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -150,9 +177,6 @@ const DoctorPatientDetail: React.FC = () => {
       if (!token) return;
 
       // Get current user to filter appointments by doctor
-      const userData = localStorage.getItem('ehr_user');
-      const currentUser = userData ? JSON.parse(userData) : null;
-      
       if (!currentUser) return;
 
       // Fetch appointments for the last 30 days
@@ -390,7 +414,13 @@ const DoctorPatientDetail: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+      <div
+        className={
+          embedded
+            ? 'flex items-center justify-center rounded-2xl border border-slate-200/60 bg-white/80 py-16'
+            : 'min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center'
+        }
+      >
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-slate-600">Loading patient details...</p>
@@ -401,16 +431,22 @@ const DoctorPatientDetail: React.FC = () => {
 
   if (!patient) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+      <div
+        className={
+          embedded
+            ? 'flex items-center justify-center rounded-2xl border border-slate-200/60 bg-white/80 py-16'
+            : 'min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center'
+        }
+      >
         <div className="text-center">
           <User className="w-16 h-16 text-slate-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-slate-900 mb-2">Patient Not Found</h2>
           <p className="text-slate-600 mb-4">The patient you're looking for doesn't exist or you don't have access.</p>
           <button
-            onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
+            onClick={() => navigate(`/ehr/${tenantSlug}/doctor/patients`)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Back to Dashboard
+            Back to Patients
           </button>
         </div>
       </div>
@@ -418,18 +454,26 @@ const DoctorPatientDetail: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className={embedded ? '' : 'min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'}>
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-slate-200/50 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
+      <div
+        className={
+          embedded
+            ? 'mb-5 rounded-2xl border border-slate-200/70 bg-gradient-to-r from-white via-slate-50 to-blue-50 p-5 shadow-sm'
+            : 'bg-white/80 backdrop-blur-sm shadow-lg border-b border-slate-200/50 sticky top-0 z-10'
+        }
+      >
+        <div className={embedded ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'}>
+          <div className={`flex items-center justify-between ${embedded ? 'min-h-0' : 'h-20'}`}>
             <div className="flex items-center gap-6">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-                className="p-3 hover:bg-slate-100 rounded-xl transition-all duration-200 group"
-              >
-                <ArrowLeft className="w-5 h-5 text-slate-600 group-hover:text-slate-900 transition-colors" />
-              </button>
+              {!embedded && (
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/patients`)}
+                  className="p-3 hover:bg-slate-100 rounded-xl transition-all duration-200 group"
+                >
+                  <ArrowLeft className="w-5 h-5 text-slate-600 group-hover:text-slate-900 transition-colors" />
+                </button>
+              )}
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
                   <User className="w-7 h-7 text-white" />
@@ -467,7 +511,7 @@ const DoctorPatientDetail: React.FC = () => {
 
       {/* Navigation Tabs */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={embedded ? 'px-4' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'}>
           <nav className="flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
@@ -502,12 +546,155 @@ const DoctorPatientDetail: React.FC = () => {
               <FileText className="w-4 h-4 inline mr-2" />
               Medical History
             </button>
+            <button
+              onClick={() => setActiveTab('sdoh')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'sdoh'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Brain className="w-4 h-4 inline mr-2" />
+              SDOH
+            </button>
+            <button
+              onClick={() => setActiveTab('tb')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'tb'
+                  ? 'border-red-500 text-red-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Activity className="w-4 h-4 inline mr-2" />
+              TB
+            </button>
+            <button
+              onClick={() => setActiveTab('pediatrics')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'pediatrics'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Baby className="w-4 h-4 inline mr-2" />
+              Pediatrics
+            </button>
+            <button
+              onClick={() => setActiveTab('mental-health')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'mental-health'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Brain className="w-4 h-4 inline mr-2" />
+              Mental Health
+            </button>
+            <button
+              onClick={() => setActiveTab('malaria')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'malaria'
+                  ? 'border-rose-500 text-rose-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Activity className="w-4 h-4 inline mr-2" />
+              Malaria
+            </button>
+            <button
+              onClick={() => setActiveTab('geriatrics')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'geriatrics'
+                  ? 'border-teal-500 text-teal-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <UserCheck className="w-4 h-4 inline mr-2" />
+              Geriatrics
+            </button>
+            <button
+              onClick={() => setActiveTab('neurology')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'neurology'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Zap className="w-4 h-4 inline mr-2" />
+              Neurology
+            </button>
+            <button
+              onClick={() => setActiveTab('pulmonology')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'pulmonology'
+                  ? 'border-sky-500 text-sky-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Wind className="w-4 h-4 inline mr-2" />
+              Pulmonology
+            </button>
+            <button
+              onClick={() => setActiveTab('nephrology')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'nephrology'
+                  ? 'border-teal-500 text-teal-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Droplets className="w-4 h-4 inline mr-2" />
+              Nephrology
+            </button>
+            <button
+              onClick={() => setActiveTab('dermatology')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'dermatology'
+                  ? 'border-rose-500 text-rose-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Eye className="w-4 h-4 inline mr-2" />
+              Dermatology
+            </button>
+            <button
+              onClick={() => setActiveTab('palliative')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'palliative'
+                  ? 'border-violet-500 text-violet-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <HeartHandshake className="w-4 h-4 inline mr-2" />
+              Palliative
+            </button>
+            <button
+              onClick={() => setActiveTab('nutrition')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'nutrition'
+                  ? 'border-lime-500 text-lime-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Salad className="w-4 h-4 inline mr-2" />
+              Nutrition
+            </button>
+            <button
+              onClick={() => setActiveTab('icu')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'icu'
+                  ? 'border-slate-600 text-slate-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Activity className="w-4 h-4 inline mr-2" />
+              ICU
+            </button>
           </nav>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={embedded ? 'px-4 py-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Patient Information */}
@@ -683,6 +870,17 @@ const DoctorPatientDetail: React.FC = () => {
                   </p>
                 )}
               </div>
+
+              {/* AI Care Gaps (Sprint 62) */}
+              {patientId && (
+                <div className="bg-gradient-to-br from-white to-indigo-50 rounded-2xl shadow-lg border border-indigo-200/50 p-6">
+                  <CareGapPanel
+                    patientId={patientId}
+                    tenantSlug={tenantSlug!}
+                    token={localStorage.getItem('ehr_token') || ''}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -851,6 +1049,168 @@ const DoctorPatientDetail: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'sdoh' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <PatientSdohTab
+              patientId={patientId}
+              tenantSlug={tenantSlug!}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
+          </div>
+        )}
+
+        {activeTab === 'tb' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <TbDashboard
+              patientId={patientId}
+              tenantSlug={tenantSlug!}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
+          </div>
+        )}
+
+        {activeTab === 'pediatrics' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <PediatricsDashboard
+              patientId={patientId}
+              patientDob={patient?.dateOfBirth}
+              patientGender={patient?.gender}
+              tenantSlug={tenantSlug!}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
+          </div>
+        )}
+
+        {activeTab === 'mental-health' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-purple-900 mb-4 flex items-center gap-2">
+              <Brain className="w-5 h-5" /> Mental Health
+            </h2>
+            <MentalHealthDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'malaria' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-rose-900 mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5" /> Malaria Case Management
+            </h2>
+            <MalariaDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'geriatrics' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-teal-900 mb-4 flex items-center gap-2">
+              <UserCheck className="w-5 h-5" /> Geriatrics & Frailty
+            </h2>
+            <GeriatricsDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'neurology' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
+              <Zap className="w-5 h-5" /> Neurology
+            </h2>
+            <NeurologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'pulmonology' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-sky-900 mb-4 flex items-center gap-2">
+              <Wind className="w-5 h-5" /> Pulmonology
+            </h2>
+            <PulmonologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'nephrology' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-teal-900 mb-4 flex items-center gap-2">
+              <Droplets className="w-5 h-5" /> Nephrology
+            </h2>
+            <NephrologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'dermatology' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-rose-900 mb-4 flex items-center gap-2">
+              <Eye className="w-5 h-5" /> Dermatology
+            </h2>
+            <DermatologyDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'palliative' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-violet-900 mb-4 flex items-center gap-2">
+              <HeartHandshake className="w-5 h-5" /> Palliative Care
+            </h2>
+            <PalliativeDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'nutrition' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-lime-900 mb-4 flex items-center gap-2">
+              <Salad className="w-5 h-5" /> Nutrition & Dietetics
+            </h2>
+            <NutritionDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
+
+        {activeTab === 'icu' && patientId && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5" /> ICU / Critical Care
+            </h2>
+            <IcuDashboard
+              patientId={patientId}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug!}
+            />
+          </div>
+        )}
       </div>
 
       {/* AI Guideline Search Modal */}
@@ -988,46 +1348,7 @@ const DoctorPatientDetail: React.FC = () => {
                 <div className="space-y-4">
                   {guidelineResults.length > 0 ? (
                     guidelineResults.map((result, index) => (
-                      <div key={index} className="bg-white border border-blue-100 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200 group">
-                        <div className="flex items-start justify-between mb-3">
-                          <h4 className="text-base font-bold text-slate-800 flex items-center gap-2 group-hover:text-blue-700 transition-colors">
-                            <BookOpen className="w-4 h-4 text-blue-500" />
-                            {result.source || 'Clinical Guideline'}
-                          </h4>
-                          {result.confidence && (
-                            <span className={`text-xs font-bold px-2 py-1 rounded-lg border ${
-                              result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-200' :
-                              result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                              'bg-red-50 text-red-700 border-red-200'
-                            }`}>
-                              {Math.round(result.confidence * 100)}% Confidence
-                            </span>
-                          )}
-                        </div>
-                        
-                        <p className="text-slate-600 mb-4 leading-relaxed text-sm">{result.text}</p>
-                        
-                        {result.recommendation && (
-                          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl mb-4">
-                            <strong className="flex items-center gap-2 text-blue-800 mb-2 text-sm">
-                              <Sparkles className="w-4 h-4 text-blue-600" />
-                              Recommendation
-                            </strong>
-                            <p className="text-blue-900 text-sm">{result.recommendation}</p>
-                          </div>
-                        )}
-
-                        {result.url && (
-                          <a 
-                            href={result.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            View Source Document <ArrowRight className="w-4 h-4 ml-1" />
-                          </a>
-                        )}
-                      </div>
+                      <GuidelineCitationCard key={index} result={result} />
                     ))
                   ) : (
                     !loadingGuidelines && (

@@ -1,0 +1,169 @@
+{
+  "startedAt": "2026-03-12T09:46:45.275Z",
+  "environment": {
+    "EHR_BASE_URL": "http://localhost:3013",
+    "EHR_API_BASE": "http://localhost:3013/api",
+    "TENANT_ID": "kids-clinic",
+    "doctorEmail": "mumu@gmail.com"
+  },
+  "artifacts": {
+    "doctorUserId": "021d5b24-678e-44cc-acca-d6734b9002a9",
+    "patient": {
+      "id": "29c527ca-bd99-4c94-8396-29e500c9872e",
+      "patientNumber": "KID805973693",
+      "name": "Tele0880 Post5276"
+    },
+    "consultation": {
+      "id": "0c072a0f-312e-40f8-a249-5e6ec0768fad",
+      "scheduledStartTime": "2026-03-12T09:51:45.994Z"
+    },
+    "meetingUrl": "http://localhost:3000/telemedicine/room/room_0c072a0f_1773308806034",
+    "monitoringAlertCount": 1
+  },
+  "steps": [
+    {
+      "label": "Doctor login",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/auth/login",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMjFkNWIyNC02NzhlLTQ0Y2MtYWNjYS1kNjczNGI5MDAyYTkiLCJlbWFpbCI6Im11bXVAZ21haWwuY29tIiwicm9sZSI6ImRvY3RvciIsImZpcnN0TmFtZSI6Ik11bXUiLCJsYXN0TmFtZSI6Ik11bXUiLCJpYXQiOjE3NzMzMDg4MDUsImV4cCI6MTc3MzMzNzYwNX0.7Tz7br9z1RZu2whdkRu6_G7Yx8WZLtWAQPsaS1aicL8\",\"mustChangePassword\":false,\"user\":{\"id\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"email\":\"mumu@gmail.com\",\"firstName\":\"Mumu\",\"lastName\":\"Mumu\",\"role\":\"doctor\",\"specialization\":\"\",\"mustChangePassword..."
+    },
+    {
+      "label": "Patient create",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/patients",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"firstName\":\"Tele0880\",\"lastName\":\"Post5276\",\"dateOfBirth\":\"1992-03-10\",\"gender\":\"female\",\"nationalId\":\"63-08805276-T-90\",\"phone\":\"+2637708805276\",\"email\":\"tele.post.08805276@example.com\",\"address\":\"11 Workflow Avenue\",\"city\":\"Harare\",\"emergencyContactName\":\"Tele Smoke\",\"emergencyContactPhone\":\"+2637808805276\",\"medicalHistory\":\"Telemedicine and post-visit AI smoke test\",\"patientNumber\":\"KID805973693\",\"medicalAidProvider\":null,\"medicalAidNumber\":null,\"bloodType\":null,\"allergies\":null,\"portalPass..."
+    },
+    {
+      "label": "Telemedicine consultation create",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/consultations",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"0c072a0f-312e-40f8-a249-5e6ec0768fad\",\"appointment_id\":null,\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"doctor_id\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"consultation_type\":\"video\",\"meeting_room_id\":\"room_0c072a0f_1773308806034\",\"meeting_url\":\"http://localhost:3000/telemedicine/room/room_0c072a0f_1773308806034\",\"meeting_password\":\"394360\",\"scheduled_start_time\":\"2026-03-12T09:51:45.994Z\",\"actual_start_time\":null,\"actual_end_time\":null,\"duration_minutes\":null,\"connection_quality\"..."
+    },
+    {
+      "label": "Telemedicine join doctor",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/join",
+      "status": 201,
+      "error": null,
+      "responsePreview": "[{\"id\":\"0c072a0f-312e-40f8-a249-5e6ec0768fad\",\"appointment_id\":null,\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"doctor_id\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"consultation_type\":\"video\",\"meeting_room_id\":\"room_0c072a0f_1773308806034\",\"meeting_url\":\"http://localhost:3000/telemedicine/room/room_0c072a0f_1773308806034\",\"meeting_password\":\"394360\",\"scheduled_start_time\":\"2026-03-12T09:51:45.994Z\",\"actual_start_time\":\"2026-03-12T09:46:46.166Z\",\"actual_end_time\":null,\"duration_minutes\":nu..."
+    },
+    {
+      "label": "Telemedicine join patient",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/join",
+      "status": 201,
+      "error": null,
+      "responsePreview": "[{\"id\":\"0c072a0f-312e-40f8-a249-5e6ec0768fad\",\"appointment_id\":null,\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"doctor_id\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"consultation_type\":\"video\",\"meeting_room_id\":\"room_0c072a0f_1773308806034\",\"meeting_url\":\"http://localhost:3000/telemedicine/room/room_0c072a0f_1773308806034\",\"meeting_password\":\"394360\",\"scheduled_start_time\":\"2026-03-12T09:51:45.994Z\",\"actual_start_time\":\"2026-03-12T09:46:46.166Z\",\"actual_end_time\":null,\"duration_minutes\":nu..."
+    },
+    {
+      "label": "Telemedicine meeting URL",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/meeting-url",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"meetingUrl\":\"http://localhost:3000/telemedicine/room/room_0c072a0f_1773308806034\",\"meetingPassword\":\"394360\",\"meetingRoomId\":\"room_0c072a0f_1773308806034\"}"
+    },
+    {
+      "label": "Telemedicine technical issue",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/technical-issue",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"8c77f85c-153e-4dd1-b92d-1575712696ba\",\"consultation_id\":\"0c072a0f-312e-40f8-a249-5e6ec0768fad\",\"log_type\":\"connection_issue\",\"severity\":\"medium\",\"description\":\"Smoke test transient jitter event\",\"resolution\":null,\"resolved\":false,\"resolved_at\":null,\"resolved_by\":null,\"created_at\":\"2026-03-12T09:46:46.212Z\",\"updated_at\":\"2026-03-12T09:46:46.212Z\"}"
+    },
+    {
+      "label": "Telemedicine connection quality",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/connection-quality?role=doctor&quality=good",
+      "status": 201,
+      "error": null,
+      "responsePreview": "[{\"id\":\"0c072a0f-312e-40f8-a249-5e6ec0768fad\",\"appointment_id\":null,\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"doctor_id\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"consultation_type\":\"video\",\"meeting_room_id\":\"room_0c072a0f_1773308806034\",\"meeting_url\":\"http://localhost:3000/telemedicine/room/room_0c072a0f_1773308806034\",\"meeting_password\":\"394360\",\"scheduled_start_time\":\"2026-03-12T09:51:45.994Z\",\"actual_start_time\":\"2026-03-12T09:46:46.166Z\",\"actual_end_time\":null,\"duration_minutes\":nu..."
+    },
+    {
+      "label": "Telemedicine grant consent",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/consents",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"3cdf4ad7-9977-4e13-80d6-f644b8c4e954\",\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"consent_type\":\"general_telehealth\",\"consent_status\":\"granted\",\"consent_date\":\"2026-03-12T09:46:46.253Z\",\"expiry_date\":null,\"revoked_date\":null,\"consent_document_url\":null,\"ip_address\":null,\"user_agent\":null,\"witnessed_by\":null,\"notes\":null,\"created_at\":\"2026-03-12T09:46:46.253Z\",\"updated_at\":\"2026-03-12T09:46:46.253Z\"}"
+    },
+    {
+      "label": "Telemedicine check consent",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/telemedicine/consents/check?patientId=29c527ca-bd99-4c94-8396-29e500c9872e&consentType=general_telehealth",
+      "status": 200,
+      "error": null,
+      "responsePreview": "{\"hasConsent\":true,\"patientId\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"consentType\":\"general_telehealth\"}"
+    },
+    {
+      "label": "Telemedicine monitoring normal",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/monitoring/readings",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"0863593a-9cbe-4674-a9a2-cd6cbba2a8ce\",\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"monitoring_type\":\"blood_glucose\",\"device_name\":null,\"device_model\":null,\"reading_value\":\"128.00\",\"reading_unit\":\"mg/dL\",\"reading_date\":\"2026-03-12T09:46:46.276Z\",\"uploaded_by\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"device_synced\":false,\"notes\":\"Normal follow-up value\",\"alert_triggered\":false,\"alert_severity\":null,\"created_at\":\"2026-03-12T09:46:46.276Z\",\"updated_at\":\"2026-03-12T09:46:46.276Z\"}"
+    },
+    {
+      "label": "Telemedicine monitoring critical",
+      "ok": true,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/monitoring/readings",
+      "status": 201,
+      "error": null,
+      "responsePreview": "{\"id\":\"8e2a47ba-5dde-43e5-a437-fcb2884b1964\",\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"monitoring_type\":\"blood_glucose\",\"device_name\":null,\"device_model\":null,\"reading_value\":\"282.00\",\"reading_unit\":\"mg/dL\",\"reading_date\":\"2026-03-12T09:46:46.284Z\",\"uploaded_by\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"device_synced\":false,\"notes\":\"Critical smoke test alert value\",\"alert_triggered\":true,\"alert_severity\":\"high\",\"created_at\":\"2026-03-12T09:46:46.284Z\",\"updated_at\":\"2026-03-12T09:46:46.28..."
+    },
+    {
+      "label": "Telemedicine monitoring alerts list",
+      "ok": true,
+      "method": "GET",
+      "url": "http://localhost:3013/api/telemedicine/monitoring/alerts",
+      "status": 200,
+      "error": null,
+      "responsePreview": "[{\"id\":\"8e2a47ba-5dde-43e5-a437-fcb2884b1964\",\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"monitoring_type\":\"blood_glucose\",\"device_name\":null,\"device_model\":null,\"reading_value\":\"282.00\",\"reading_unit\":\"mg/dL\",\"reading_date\":\"2026-03-12T09:46:46.284Z\",\"uploaded_by\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"device_synced\":false,\"notes\":\"Critical smoke test alert value\",\"alert_triggered\":true,\"alert_severity\":\"high\",\"created_at\":\"2026-03-12T09:46:46.284Z\",\"updated_at\":\"2026-03-12T09:46:46.2..."
+    },
+    {
+      "label": "Telemedicine end consultation",
+      "ok": false,
+      "method": "POST",
+      "url": "http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/end",
+      "status": 201,
+      "error": "HTTP 201 for POST http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/end",
+      "responsePreview": "[{\"id\":\"0c072a0f-312e-40f8-a249-5e6ec0768fad\",\"appointment_id\":null,\"patient_id\":\"29c527ca-bd99-4c94-8396-29e500c9872e\",\"doctor_id\":\"021d5b24-678e-44cc-acca-d6734b9002a9\",\"consultation_type\":\"video\",\"meeting_room_id\":\"room_0c072a0f_1773308806034\",\"meeting_url\":\"http://localhost:3000/telemedicine/room/room_0c072a0f_1773308806034\",\"meeting_password\":\"394360\",\"scheduled_start_time\":\"2026-03-12T09:51:45.994Z\",\"actual_start_time\":\"2026-03-12T09:46:46.166Z\",\"actual_end_time\":\"2026-03-12T09:46:46.303Z\"..."
+    },
+    {
+      "label": "End consultation and verify completion (exception)",
+      "ok": false,
+      "method": "N/A",
+      "url": "N/A",
+      "status": null,
+      "error": "Telemedicine end consultation failed: HTTP 201 for POST http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/end",
+      "responsePreview": "",
+      "critical": true
+    }
+  ],
+  "summary": {
+    "total": 15,
+    "passed": 13,
+    "failed": 2,
+    "criticalFailed": 1
+  },
+  "completedAt": "2026-03-12T09:46:46.315Z",
+  "failure": "Telemedicine end consultation failed: HTTP 201 for POST http://localhost:3013/api/telemedicine/consultations/0c072a0f-312e-40f8-a249-5e6ec0768fad/end"
+}

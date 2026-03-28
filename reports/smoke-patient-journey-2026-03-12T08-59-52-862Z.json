@@ -1,0 +1,46 @@
+{
+  "startedAt": "2026-03-12T08:59:52.862Z",
+  "environment": {
+    "EHR_BASE_URL": "http://localhost:3013",
+    "EHR_API_BASE": "http://localhost:3013/api",
+    "DEMO_BASE_URL": "http://localhost:3004",
+    "TENANT_ID": "kids-clinic",
+    "MEDICAL_AID_NAME": "cimas"
+  },
+  "actors": {
+    "doctorEmail": "mumu@gmail.com",
+    "adminEmail": "gina@gmail.com"
+  },
+  "artifacts": {},
+  "steps": [
+    {
+      "label": "Doctor login",
+      "ok": false,
+      "method": "POST",
+      "url": "http://localhost:3013/api/auth/login",
+      "status": null,
+      "error": "fetch failed",
+      "responsePreview": ""
+    },
+    {
+      "label": "Login as doctor (exception)",
+      "ok": false,
+      "method": "N/A",
+      "url": "N/A",
+      "status": null,
+      "error": "Doctor login failed: fetch failed",
+      "responsePreview": "",
+      "critical": true
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "criticalFailed": 1,
+    "apiSteps": 1,
+    "exceptionSteps": 1
+  },
+  "finishedAt": "2026-03-12T08:59:52.923Z",
+  "fatalError": "Doctor login failed: fetch failed"
+}

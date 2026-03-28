@@ -6,6 +6,7 @@ import {
   Thermometer, Droplets, Eye, Activity as ActivityIcon, Sparkles
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
+import { GuidelineRecommendationCard } from '../components/GuidelineRecommendationCard';
 import { ehrApi, chartApi } from '../services/api';
 import { formatDateTimeToDDMMYYYYHHMM, formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
@@ -1112,10 +1113,17 @@ const NursePatientSummary: React.FC = () => {
                     </div>
                   )}
                   {vitalsCopilotResult && (
-                    <div className="mt-3 rounded-lg bg-white p-3 border border-blue-100 text-sm text-slate-700 space-y-1">
-                      <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div className="rounded-lg bg-white p-3 border border-blue-100 text-slate-700">
+                        <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                      </div>
                       {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
-                        <p><strong>Top Recommendation:</strong> {String(vitalsCopilotResult.recommendations[0])}</p>
+                        <GuidelineRecommendationCard
+                          data={{
+                            recommendation: String(vitalsCopilotResult.recommendations[0]),
+                            evidence_level: vitalsCopilotResult.riskLevel === 'high' ? 'High' : vitalsCopilotResult.riskLevel === 'medium' ? 'Medium' : 'Low',
+                          }}
+                        />
                       )}
                       <div className="mt-2 flex gap-2">
                         <button type="button" onClick={() => handleVitalsCopilotDecision('accept')} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>

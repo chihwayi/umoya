@@ -1,0 +1,40 @@
+{
+  "dataset_version": "2026-03-26.smart-defaults.v1",
+  "description": "Clinically material smart-defaults release-gate baseline dataset.",
+  "k": 3,
+  "cases": [
+    {
+      "id": "sd-001",
+      "query": "Default CBC/CMP order set for new sepsis workup",
+      "expected": {
+        "relevant_citation_ids": ["sepsis-initial-workup-defaults"],
+        "supporting_citation_ids": ["sepsis-initial-workup-defaults"],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [{ "id": "sepsis-initial-workup-defaults", "title": "Sepsis initial diagnostic workup defaults" }],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Use the initial sepsis diagnostic defaults and let the clinician tailor them to the presentation."
+        }
+      }
+    },
+    {
+      "id": "sd-002",
+      "query": "Procedure defaults without procedure type or patient age",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the procedural context is incomplete."
+        }
+      }
+    }
+  ]
+}

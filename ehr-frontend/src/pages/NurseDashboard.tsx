@@ -19,6 +19,7 @@ import VitalsPanel from '../components/VitalsPanel';
 import TriageQueue from '../components/TriageQueue';
 import PatientAssessment from '../components/PatientAssessment';
 import NursingNotes from '../components/NursingNotes';
+import { NursingIntelligencePanel } from '../components/NursingIntelligencePanel';
 import TaskManagement from '../components/TaskManagement';
 import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
 import HIVNursePanel from '../components/HIVNursePanel';
@@ -30,7 +31,7 @@ import { MaternityWithSmartForms } from '../components/Maternity';
 import CervicalCancerScreeningComponent from '../components/CervicalCancerScreeningComponent';
 import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
 import HIVStockManagement from '../components/HIVStockManagement';
-import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
+import HivReportsPanel from '../components/HivReportsPanel';
 import MaternityDashboard from '../components/MaternityDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
@@ -38,6 +39,19 @@ import LabResultsViewer from '../components/LabResultsViewer';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { GuidelineRecommendationCard } from '../components/GuidelineRecommendationCard';
+import {
+  cacheTenantBranding,
+  formatTenantDisplayName,
+  getBrandInitials,
+  readCachedTenantBranding,
+} from '../utils/tenantBranding';
+import {
+  hasModuleAccess,
+  notifyTenantSubscriptionStatus,
+  getBillingToneClasses,
+} from '../utils/tenantSubscription';
 
 interface Patient {
   id: string;
@@ -203,11 +217,14 @@ const NurseDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showWarning } = useNotification();
 
-  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [tenantInfo, setTenantInfo] = useState<any>(() => {
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    return cachedBranding ? { clinicName: cachedBranding.clinicName, logoUrl: cachedBranding.logoUrl } : null;
+  });
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'monthly-return' | 'who-workflow' | 'maternity' | 'triage' | 'vitals'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals'>('dashboard');
   const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -965,7 +982,7 @@ const NurseDashboard: React.FC = () => {
           { label: 'Quality Metrics', tab: 'quality-metrics', icon: BarChart3 },
           { label: 'Stock Management', tab: 'stock-management', icon: Package },
           { label: 'LTFU Management', tab: 'ltfu', icon: Clock },
-          { label: 'Monthly Return', tab: 'monthly-return', icon: FileText },
+          { label: 'Reports & DHIS2', tab: 'hiv-reports', icon: FileText },
           { label: 'Guided WHO Workflow', tab: 'who-workflow', icon: Activity },
         ]
       },
@@ -980,7 +997,11 @@ const NurseDashboard: React.FC = () => {
           { label: 'Maternity Workspace', tab: 'maternity', icon: Heart },
         ]
       }
-    ];
+    ].filter((item) => {
+      if (item.section === 'hiv') return hasModuleAccess(tenantInfo, 'hiv');
+      if (item.section === 'maternity') return hasModuleAccess(tenantInfo, 'maternity');
+      return true;
+    });
   };
 
   // AI Guideline Search State
@@ -1268,11 +1289,27 @@ const NurseDashboard: React.FC = () => {
 
   // Fetch tenant info
   useEffect(() => {
+    if (!tenantSlug) return;
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    if (cachedBranding) {
+      setTenantInfo((prev: any) => ({
+        ...(prev || {}),
+        clinicName: prev?.clinicName || cachedBranding.clinicName,
+        logoUrl: prev?.logoUrl || cachedBranding.logoUrl,
+      }));
+    }
+  }, [tenantSlug]);
+
+  useEffect(() => {
     const fetchTenantInfo = async () => {
         try {
           const response = await tenantApi.getTenantBySlug(tenantSlug!);
           if (response.data) {
             setTenantInfo(response.data);
+            cacheTenantBranding(tenantSlug!, {
+              clinicName: response.data.clinicName,
+              logoUrl: response.data.logoUrl,
+            });
           }
         } catch {
         }
@@ -1312,7 +1349,7 @@ const NurseDashboard: React.FC = () => {
 
   // Load Quality Metrics and LTFU when in HIV section
   useEffect(() => {
-    if (activeSection === 'hiv' && (activeTab === 'quality-metrics' || activeTab === 'ltfu' || activeTab === 'monthly-return')) {
+    if (activeSection === 'hiv' && (activeTab === 'quality-metrics' || activeTab === 'ltfu' || activeTab === 'hiv-reports')) {
       const token = localStorage.getItem('ehr_token');
       if (!token || !tenantSlug) return;
 
@@ -1545,7 +1582,15 @@ const NurseDashboard: React.FC = () => {
       { icon: FileText, label: 'Nursing Notes', desc: 'Document care provided', color: 'from-green-500 to-emerald-500', action: () => setActiveTab('notes') },
       { icon: TestTube, label: 'HIV Testing', desc: 'Perform HIV test', color: 'from-emerald-600 to-teal-700', action: () => setShowHivTestingModal(true) },
       { icon: FolderOpen, label: 'Shared Documents', desc: 'View shared patient documents', color: 'from-violet-500 to-purple-600', action: () => setShowSharedDocumentsModal(true), badge: sharedDocumentsCount > 0 ? sharedDocumentsCount : undefined },
-    ];
+    ].filter((action) => {
+      if (action.label === 'Emergency Dept') return hasModuleAccess(tenantInfo, 'emergency');
+      if (action.label === 'Operating Room') return hasModuleAccess(tenantInfo, 'operating_room');
+      if (action.label === 'Blood Bank') return hasModuleAccess(tenantInfo, 'blood_bank');
+      if (action.label === 'Sepsis Management') return hasModuleAccess(tenantInfo, 'emergency');
+      if (action.label === 'Infection Control') return hasModuleAccess(tenantInfo, 'infection_control');
+      if (action.label === 'HIV Testing') return hasModuleAccess(tenantInfo, 'hiv');
+      return true;
+    });
   };
 
   const queueStats = getQueueStats();
@@ -1563,6 +1608,25 @@ const NurseDashboard: React.FC = () => {
     { label: 'Awaiting Payment', value: queueStats.awaitingPayment.toString(), icon: CreditCard, color: 'text-amber-600' },
     { label: 'Cross-Module', value: crossModuleSummary.total.toString(), icon: Sparkles, color: 'text-indigo-600' },
   ];
+  const billingSummary = tenantInfo?.billingSummary;
+  const billingTone = getBillingToneClasses(billingSummary);
+  const tenantDisplayName = formatTenantDisplayName(tenantSlug, tenantInfo?.clinicName);
+  const tenantInitials = getBrandInitials(tenantDisplayName);
+  const subscriptionMiniLabel = (() => {
+    if (!billingSummary) return null;
+    const days = billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining;
+    const ends = billingSummary.accessEndsAt
+      ? new Date(billingSummary.accessEndsAt).toLocaleDateString('en-GB')
+      : null;
+    if (days !== null && days !== undefined && ends) return `${days}d · ends ${ends}`;
+    if (days !== null && days !== undefined) return `${days}d remaining`;
+    if (ends) return `ends ${ends}`;
+    return null;
+  })();
+
+  useEffect(() => {
+    notifyTenantSubscriptionStatus(tenantInfo, { showWarning, showError });
+  }, [tenantInfo, showWarning, showError]);
 
   const handleExecuteOrder = (orderId: string) => {
     setExecutingOrderId(orderId);
@@ -3116,19 +3180,24 @@ const NurseDashboard: React.FC = () => {
       <aside className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white z-50 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 shadow-2xl flex flex-col`}>
         {/* Logo Section */}
         <div className="p-6 border-b border-slate-700/50 relative">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {tenantInfo?.logoUrl ? (
-              <div className="h-10 w-10 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden">
-                <img src={tenantInfo.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center overflow-hidden">
+                <img src={tenantInfo.logoUrl} alt={`${tenantDisplayName} logo`} className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="h-10 w-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
-                <Stethoscope className="h-6 w-6 text-white" />
+              <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 flex items-center justify-center overflow-hidden">
+                <span className="text-xs font-bold tracking-wide text-white">{tenantInitials}</span>
               </div>
             )}
-            <div>
-              <h1 className="font-bold text-lg leading-tight">{tenantInfo?.clinicName || 'Medicore'}</h1>
+            <div className="min-w-0">
+              <h1 className="font-bold text-lg leading-tight truncate">{tenantDisplayName}</h1>
               <p className="text-xs text-slate-400">Nurse Portal</p>
+              {billingSummary && (
+                <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${billingTone.pill}`}>
+                  {billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining ?? 'N/A'}d
+                </span>
+              )}
             </div>
             {/* Mobile Close Button */}
             <button 
@@ -3223,9 +3292,14 @@ const NurseDashboard: React.FC = () => {
                 <Menu className="w-6 h-6" />
               </button>
               <div className="hidden sm:block">
-                <h1 className="text-lg font-bold text-slate-900">
-                  Nurse Dashboard
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold text-slate-900">Nurse Dashboard</h1>
+                  {subscriptionMiniLabel && (
+                    <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${billingTone.pill}`}>
+                      {subscriptionMiniLabel}
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-600">Patient Care Management</p>
               </div>
             </div>
@@ -4165,12 +4239,19 @@ const NurseDashboard: React.FC = () => {
                 </button>
               </div>
               {vitalsCopilotResult && (
-                <div className="mt-3 text-sm text-slate-700 space-y-1">
-                  <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-lg bg-white p-2 border border-blue-100 text-sm text-slate-700">
+                    <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                  </div>
                   {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
-                    <p><strong>Top Recommendation:</strong> {String(vitalsCopilotResult.recommendations[0])}</p>
+                    <GuidelineRecommendationCard
+                      data={{
+                        recommendation: String(vitalsCopilotResult.recommendations[0]),
+                        evidence_level: vitalsCopilotResult.riskLevel === 'high' ? 'High' : vitalsCopilotResult.riskLevel === 'medium' ? 'Medium' : 'Low',
+                      }}
+                    />
                   )}
-                  <div className="mt-2 flex gap-2">
+                  <div className="flex gap-2">
                     <button type="button" onClick={() => handleCopilotDecision('vitals', 'accept', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
                     <button type="button" onClick={() => handleCopilotDecision('vitals', 'modify', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
                     <button type="button" onClick={() => handleCopilotDecision('vitals', 'reject', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
@@ -4551,6 +4632,14 @@ const NurseDashboard: React.FC = () => {
                 copilotProvenance={notesCopilotProvenance}
                 copilotDraftPatientId={selectedPatient?.id}
               />
+              {selectedPatient && (
+                <NursingIntelligencePanel
+                  patientId={selectedPatient.id}
+                  diagnoses={[]}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug || ''}
+                />
+              )}
             </div>
           );
         })()}
@@ -4753,8 +4842,8 @@ const NurseDashboard: React.FC = () => {
             )}
           </div>
         )}
-        {activeSection === 'hiv' && activeTab === 'monthly-return' && (
-          <HIVMonthlyReturnForm tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
+        {activeSection === 'hiv' && activeTab === 'hiv-reports' && (
+          <HivReportsPanel tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
         )}
         {activeSection === 'hiv' && activeTab === 'who-workflow' && (
           <div className="bg-white rounded-xl shadow-lg p-6">
@@ -5378,50 +5467,7 @@ const NurseDashboard: React.FC = () => {
                 ) : guidelineResults.length > 0 ? (
                   <div className="space-y-4">
                     {guidelineResults.map((result, index) => (
-                      <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex gap-3">
-                          <div className="mt-1 min-w-[24px]">
-                            <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold">
-                              {index + 1}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-slate-900 leading-tight">
-                                {result.source || 'Clinical Guideline'}
-                              </h4>
-                              {result.confidence && (
-                                <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
-                                  result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
-                                  result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                  'bg-red-50 text-red-700 border-red-100'
-                                }`}>
-                                  {Math.round(result.confidence * 100)}% Match
-                                </span>
-                              )}
-                            </div>
-                            <div className="prose prose-sm max-w-none text-slate-700">
-                              <p className="whitespace-pre-wrap">{result.text}</p>
-                              {result.recommendation && (
-                                <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                                  <strong className="block text-blue-900 text-xs uppercase tracking-wide mb-1">Recommendation</strong>
-                                  <p className="text-blue-800 text-sm m-0">{result.recommendation}</p>
-                                </div>
-                              )}
-                            </div>
-                            {result.url && (
-                              <a 
-                                href={result.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="inline-flex items-center mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
-                              >
-                                View Source Document
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <GuidelineCitationCard key={index} result={result} index={index} />
                     ))}
                   </div>
                 ) : (

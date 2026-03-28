@@ -2,12 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Baby, LogOut, ArrowLeft, Search, BookOpen, X, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import MaternityDoctorView from '../components/MaternityDoctorView';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { ehrApi } from '../services/api';
 import { GuidelineResult } from '../types/guidelines';
 import ModalPortal from '../components/ModalPortal';
 
-const MaternityDoctorDashboard: React.FC = () => {
+interface MaternityDoctorDashboardProps {
+  embedded?: boolean;
+}
+
+const MaternityDoctorDashboard: React.FC<MaternityDoctorDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -63,8 +68,8 @@ const MaternityDoctorDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-white to-rose-50">
-      {/* Header */}
+    <div className={`${embedded ? '' : 'min-h-screen '}bg-gradient-to-br from-pink-50 via-white to-rose-50`}>
+      {!embedded && (
       <div className="bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -112,6 +117,7 @@ const MaternityDoctorDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* AI Guideline Search Modal */}
       {showGuidelineSearch && (
@@ -166,47 +172,7 @@ const MaternityDoctorDashboard: React.FC = () => {
                 {guidelineResults.length > 0 ? (
                   <div className="space-y-4">
                     {guidelineResults.map((result, idx) => (
-                      <div key={idx} className="bg-white p-5 rounded-2xl shadow-sm border border-pink-100 hover:shadow-md transition-shadow group">
-                        <div className="flex items-start justify-between mb-3">
-                          <h4 className="font-bold text-slate-900 leading-tight flex items-center gap-2">
-                            <div className="w-1 h-6 bg-pink-500 rounded-full"></div>
-                            {result.source || 'Clinical Guideline'}
-                          </h4>
-                          {result.confidence && (
-                            <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
-                              result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                              result.confidence > 0.5 ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                              'bg-rose-50 text-rose-700 border-rose-100'
-                            }`}>
-                              {Math.round(result.confidence * 100)}% Match
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-slate-600 text-base leading-relaxed whitespace-pre-wrap mb-4 pl-3">{result.text}</p>
-                        
-                        {result.recommendation && (
-                          <div className="mb-4 ml-3 p-4 bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-100 rounded-xl">
-                            <h5 className="text-xs font-bold text-pink-800 uppercase tracking-wide mb-2 flex items-center gap-2">
-                              <Sparkles className="w-3 h-3" />
-                              Key Recommendation
-                            </h5>
-                            <p className="text-sm font-medium text-slate-800">{result.recommendation}</p>
-                          </div>
-                        )}
-
-                        {result.url && (
-                          <div className="ml-3 flex justify-end">
-                            <a 
-                              href={result.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="inline-flex items-center text-sm font-medium text-pink-600 hover:text-pink-700 hover:underline bg-pink-50 hover:bg-pink-100 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              View Source Protocol <ArrowRight className="w-4 h-4 ml-1.5" />
-                            </a>
-                          </div>
-                        )}
-                      </div>
+                      <GuidelineCitationCard key={idx} result={result} />
                     ))}
                   </div>
                 ) : (

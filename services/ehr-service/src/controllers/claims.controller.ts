@@ -40,11 +40,39 @@ export class ClaimsController {
     return this.claimsService.getDashboardSummary(req.tenantDb);
   }
 
+  @Get('readiness/worklist')
+  @ApiOperation({ summary: 'Get claim readiness and denial-prevention worklist' })
+  @ApiResponse({ status: 200, description: 'Claim readiness worklist retrieved' })
+  async getClaimReadinessWorklist(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.claimsService.getClaimReadinessWorklist(query, req.tenantDb);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all claims with filtering' })
   @ApiResponse({ status: 200, description: 'Claims retrieved successfully' })
   async getClaims(@Query() query: any, @Request() req: RequestWithTenant) {
     return this.claimsService.getClaims(query, req.tenantDb);
+  }
+
+  @Get(':id/readiness')
+  @ApiOperation({ summary: 'Get claim readiness, missing-document, and denial-risk analysis' })
+  @ApiResponse({ status: 200, description: 'Claim readiness analysis retrieved' })
+  async getClaimReadiness(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.getClaimReadiness(id, req.tenantDb);
+  }
+
+  @Get(':id/financial-clearance')
+  @ApiOperation({ summary: 'Get financial clearance assessment and denial prediction for a claim' })
+  @ApiResponse({ status: 200, description: 'Financial clearance retrieved' })
+  async getFinancialClearance(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.getFinancialClearance(id, req.tenantDb);
+  }
+
+  @Post(':id/prior-authorization-draft')
+  @ApiOperation({ summary: 'Generate and persist a prior-authorization draft from claim readiness' })
+  @ApiResponse({ status: 201, description: 'Prior-authorization draft generated' })
+  async generatePriorAuthorizationDraft(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.generatePriorAuthorizationDraft(id, req.tenantDb);
   }
 
   @Get(':id')

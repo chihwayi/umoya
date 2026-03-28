@@ -1,38 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
-import { CreditCard, Calendar, ArrowLeft, AlertCircle, CheckCircle, Clock, DollarSign, FileText, Filter, Download, Receipt } from 'lucide-react';
+import { CreditCard, Calendar, ArrowLeft, AlertCircle, CheckCircle, DollarSign, Filter, Download, Receipt } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const BillsPage: React.FC = () => {
-  const { token, patient } = usePatientAuth();
+  const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const [bills, setBills] = useState<any[]>([]);
+  const [billQuotes, setBillQuotes] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  useEffect(() => {
-    loadBills();
-  }, [statusFilter]);
+  const loadBillQuotes = useCallback(async (billRows: any[]) => {
+    const quoteEligibleStatuses = new Set(['pending', 'sent', 'overdue', 'paid']);
+    const eligibleBills = billRows.filter((bill) => quoteEligibleStatuses.has(String(bill?.status || '').toLowerCase()));
 
-  const loadBills = async () => {
+    if (!eligibleBills.length) {
+      setBillQuotes({});
+      return;
+    }
+
+    const quoteResults = await Promise.allSettled(
+      eligibleBills.map(async (bill) => [
+        bill.id,
+        await patientPortalApi.getBillQuote(String(bill.id), token!, tenantSlug),
+      ] as const),
+    );
+
+    const nextQuotes: Record<string, any> = {};
+    quoteResults.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        const [billId, quote] = result.value;
+        nextQuotes[billId] = quote;
+      }
+    });
+    setBillQuotes(nextQuotes);
+  }, [tenantSlug, token]);
+
+  const loadBills = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
       console.log('Loading bills...', { tenantSlug, statusFilter });
       const data = await patientPortalApi.getBills(token!, tenantSlug, { status: statusFilter !== 'all' ? statusFilter : undefined });
       console.log('Bills response:', data, 'Type:', Array.isArray(data) ? 'array' : typeof data, 'Length:', Array.isArray(data) ? data.length : 'N/A');
-      setBills(Array.isArray(data) ? data : []);
+      const nextBills = Array.isArray(data) ? data : [];
+      setBills(nextBills);
+      await loadBillQuotes(nextBills);
     } catch (err: any) {
       console.error('Error loading bills:', err);
       setError(err.message || 'Failed to load bills');
+      setBillQuotes({});
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadBillQuotes, statusFilter, tenantSlug, token]);
+
+  useEffect(() => {
+    loadBills();
+  }, [loadBills]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -56,6 +86,23 @@ const BillsPage: React.FC = () => {
   };
 
   const totalPending = bills.filter(b => b.status === 'pending' || b.status === 'sent').reduce((sum, b) => sum + parseFloat(b.totalAmount || 0), 0);
+
+  const formatMoney = (value: any) => `$${parseFloat(value || 0).toFixed(2)}`;
+
+  const getQuoteTone = (quoteStatus: string) => {
+    switch (String(quoteStatus || '').toLowerCase()) {
+      case 'verified_quote':
+        return 'bg-emerald-50 border-emerald-200 text-emerald-900';
+      case 'blocked_quote':
+        return 'bg-red-50 border-red-200 text-red-900';
+      case 'self_pay':
+        return 'bg-yellow-50 border-yellow-200 text-yellow-900';
+      case 'settled':
+        return 'bg-green-50 border-green-200 text-green-900';
+      default:
+        return 'bg-blue-50 border-blue-200 text-blue-900';
+    }
+  };
 
   if (loading) {
     return (
@@ -227,6 +274,51 @@ const BillsPage: React.FC = () => {
                         )}
                       </div>
                     </div>
+
+                    {billQuotes[bill.id] && (
+                      <div className={`mt-4 rounded-xl border p-4 ${getQuoteTone(billQuotes[bill.id].quoteStatus)}`}>
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">Payment Guidance</p>
+                              <p className="text-sm font-semibold">
+                                {billQuotes[bill.id].recommendedNextStep || 'Review your quote before paying this bill.'}
+                              </p>
+                            </div>
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold border border-current/20">
+                              {String(billQuotes[bill.id].quoteStatus || 'estimate_only').replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                            <div>
+                              <p className="opacity-70">Estimated patient responsibility</p>
+                              <p className="font-bold">{formatMoney(billQuotes[bill.id].estimatedPatientResponsibility)}</p>
+                            </div>
+                            <div>
+                              <p className="opacity-70">Estimated payer amount</p>
+                              <p className="font-bold">{formatMoney(billQuotes[bill.id].estimatedPayerAmount)}</p>
+                            </div>
+                            <div>
+                              <p className="opacity-70">Confidence</p>
+                              <p className="font-bold capitalize">{String(billQuotes[bill.id].quoteConfidence || 'medium').replace(/_/g, ' ')}</p>
+                            </div>
+                          </div>
+                          {Array.isArray(billQuotes[bill.id].blockers) && billQuotes[bill.id].blockers.length > 0 && (
+                            <div className="rounded-lg bg-white/70 p-3 text-sm">
+                              <p className="font-semibold mb-2">Action blockers</p>
+                              <ul className="space-y-1">
+                                {billQuotes[bill.id].blockers.map((blocker: any, idx: number) => (
+                                  <li key={idx} className="flex items-start gap-2">
+                                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                    <span>{blocker?.message || blocker?.code || 'Coverage confirmation is still pending.'}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {bill.notes && (
                       <div className="mt-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3">

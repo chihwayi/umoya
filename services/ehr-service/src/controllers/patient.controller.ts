@@ -121,4 +121,25 @@ export class PatientController {
   async deactivatePatient(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.patientService.deactivatePatient(id, req.tenantDb);
   }
+
+  // ── SDOH endpoints (Sprint 60) ─────────────────────────────────────────────
+
+  @Get(':id/sdoh')
+  @ApiOperation({ summary: 'Get SDOH assessments for a patient' })
+  @ApiResponse({ status: 200, description: 'SDOH assessments retrieved successfully' })
+  async getPatientSdoh(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.patientService.getPatientSdoh(id, req.tenantDb);
+  }
+
+  @Post(':id/sdoh')
+  @ApiOperation({ summary: 'Create SDOH assessment for a patient' })
+  @ApiResponse({ status: 201, description: 'SDOH assessment created successfully' })
+  async createPatientSdoh(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @Request() req: RequestWithTenant
+  ) {
+    const userId = (req as any).user?.sub;
+    return this.patientService.createPatientSdoh(id, body, userId, req.tenantDb);
+  }
 }

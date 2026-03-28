@@ -4,13 +4,23 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Tenants table
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     "clinicName" VARCHAR(255) NOT NULL,
     subdomain VARCHAR(100) UNIQUE NOT NULL,
     "databaseName" VARCHAR(100) NOT NULL,
     "connectionString" TEXT,
     "subscriptionTier" VARCHAR(50) DEFAULT 'basic' CHECK ("subscriptionTier" IN ('basic', 'professional', 'enterprise')),
+    "subscriptionMode" VARCHAR(20) NOT NULL DEFAULT 'paid' CHECK ("subscriptionMode" IN ('demo', 'paid')),
+    "packagePreset" VARCHAR(20) NOT NULL DEFAULT 'full_ehr' CHECK ("packagePreset" IN ('full_ehr', 'claims_only')),
+    "subscriptionState" VARCHAR(20) NOT NULL DEFAULT 'active' CHECK ("subscriptionState" IN ('demo', 'active', 'grace', 'suspended', 'expired')),
+    "packageName" VARCHAR(120),
+    "enabledModules" JSONB NOT NULL DEFAULT '["finance","nurse_general"]'::jsonb,
+    "billingEndsAt" TIMESTAMP WITH TIME ZONE,
+    "demoExpiresAt" TIMESTAMP WITH TIME ZONE,
+    "graceEndsAt" TIMESTAMP WITH TIME ZONE,
+    "autoDeleteAt" TIMESTAMP WITH TIME ZONE,
+    "suspensionWarningDays" INTEGER NOT NULL DEFAULT 5 CHECK ("suspensionWarningDays" >= 1 AND "suspensionWarningDays" <= 30),
     status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'suspended', 'cancelled')),
     "contactEmail" VARCHAR(255) NOT NULL,
     "contactPhone" VARCHAR(50),
@@ -23,8 +33,31 @@ CREATE TABLE tenants (
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Per-tenant DHIS2 integration settings (tenant -> DHIS2 auth + org mapping)
+CREATE TABLE IF NOT EXISTS tenant_dhis2_config (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE UNIQUE,
+    base_url TEXT NOT NULL,
+    api_version VARCHAR(10) DEFAULT '40',
+    auth_type VARCHAR(20) NOT NULL DEFAULT 'pat' CHECK (auth_type IN ('pat', 'basic')),
+    pat TEXT,
+    username VARCHAR(255),
+    password TEXT,
+    org_unit_id VARCHAR(64) NOT NULL,
+    tracked_entity_type_id VARCHAR(64),
+    dataset_id VARCHAR(64),
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    scheduled_sync_enabled BOOLEAN NOT NULL DEFAULT false,
+    scheduled_retry_limit INTEGER NOT NULL DEFAULT 20 CHECK (scheduled_retry_limit >= 1 AND scheduled_retry_limit <= 200),
+    alert_lookback_hours INTEGER NOT NULL DEFAULT 24 CHECK (alert_lookback_hours >= 1 AND alert_lookback_hours <= 720),
+    alert_error_threshold INTEGER NOT NULL DEFAULT 10 CHECK (alert_error_threshold >= 1 AND alert_error_threshold <= 10000),
+    alert_webhook_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Tenant users table (for master database user management)
-CREATE TABLE tenant_users (
+CREATE TABLE IF NOT EXISTS tenant_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     "tenantId" UUID REFERENCES tenants(id) ON DELETE CASCADE,
     "firstName" VARCHAR(100) NOT NULL,
@@ -110,7 +143,7 @@ CREATE TABLE IF NOT EXISTS cdss_model_registry (
 CREATE INDEX IF NOT EXISTS idx_cdss_model_registry_status ON cdss_model_registry(status);
 
 -- Tenant analytics table
-CREATE TABLE tenant_analytics (
+CREATE TABLE IF NOT EXISTS tenant_analytics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     "tenantId" UUID REFERENCES tenants(id) ON DELETE CASCADE,
     "totalUsers" INTEGER DEFAULT 0,
@@ -123,7 +156,7 @@ CREATE TABLE tenant_analytics (
 );
 
 -- Admin users table (for super admin management)
-CREATE TABLE admin_users (
+CREATE TABLE IF NOT EXISTS admin_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     "passwordHash" VARCHAR(255) NOT NULL,
@@ -141,8 +174,51 @@ CREATE TABLE admin_users (
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Backup scheduler configuration (single global row for super-admin backup automation)
+CREATE TABLE IF NOT EXISTS backup_schedules (
+    scope_key VARCHAR(32) PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    frequency VARCHAR(20) NOT NULL DEFAULT 'daily' CHECK (frequency IN ('daily')),
+    run_time VARCHAR(5) NOT NULL DEFAULT '02:00',
+    timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
+    retention_days INTEGER NOT NULL DEFAULT 30 CHECK (retention_days >= 1 AND retention_days <= 3650),
+    last_run_at TIMESTAMP WITH TIME ZONE,
+    last_run_status VARCHAR(20) NOT NULL DEFAULT 'never' CHECK (last_run_status IN ('never', 'success', 'failed')),
+    last_error TEXT,
+    next_run_at TIMESTAMP WITH TIME ZONE,
+    updated_by UUID REFERENCES admin_users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO backup_schedules (scope_key, enabled, frequency, run_time, timezone, retention_days)
+VALUES ('global', false, 'daily', '02:00', 'UTC', 30)
+ON CONFLICT (scope_key) DO NOTHING;
+
+-- Runtime endpoint overrides for platform monitor + AI runtime tests
+CREATE TABLE IF NOT EXISTS runtime_endpoint_configs (
+    scope_key VARCHAR(32) PRIMARY KEY,
+    tenant_service_url TEXT,
+    ehr_service_url TEXT,
+    cdss_service_url TEXT,
+    medical_aid_demo_url TEXT,
+    super_admin_web_url TEXT,
+    ehr_frontend_url TEXT,
+    ollama_base_url TEXT,
+    whisper_path TEXT,
+    ocr_path TEXT,
+    ollama_tags_path TEXT,
+    updated_by UUID REFERENCES admin_users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO runtime_endpoint_configs (scope_key)
+VALUES ('global')
+ON CONFLICT (scope_key) DO NOTHING;
+
 -- Audit logs table
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     "userId" UUID REFERENCES admin_users(id),
     action VARCHAR(100) NOT NULL,
@@ -156,14 +232,24 @@ CREATE TABLE audit_logs (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_tenants_subdomain ON tenants(subdomain);
-CREATE INDEX idx_tenants_status ON tenants(status);
-CREATE INDEX idx_tenant_users_tenant_id ON tenant_users("tenantId");
-CREATE INDEX idx_tenant_users_email ON tenant_users(email);
-CREATE INDEX idx_tenant_analytics_tenant_id ON tenant_analytics("tenantId");
-CREATE INDEX idx_admin_users_email ON admin_users(email);
-CREATE INDEX idx_audit_logs_user_id ON audit_logs("userId");
-CREATE INDEX idx_audit_logs_created_at ON audit_logs("createdAt");
+CREATE INDEX IF NOT EXISTS idx_tenants_subdomain ON tenants(subdomain);
+CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+CREATE INDEX IF NOT EXISTS idx_tenants_subscription_mode ON tenants("subscriptionMode");
+CREATE INDEX IF NOT EXISTS idx_tenants_package_preset ON tenants("packagePreset");
+CREATE INDEX IF NOT EXISTS idx_tenants_subscription_state ON tenants("subscriptionState");
+CREATE INDEX IF NOT EXISTS idx_tenants_billing_ends_at ON tenants("billingEndsAt");
+CREATE INDEX IF NOT EXISTS idx_tenants_demo_expires_at ON tenants("demoExpiresAt");
+CREATE INDEX IF NOT EXISTS idx_tenant_dhis2_config_tenant_id ON tenant_dhis2_config(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_tenant_dhis2_config_enabled ON tenant_dhis2_config(enabled);
+CREATE INDEX IF NOT EXISTS idx_tenant_dhis2_config_scheduled_sync_enabled ON tenant_dhis2_config(scheduled_sync_enabled);
+CREATE INDEX IF NOT EXISTS idx_tenant_users_tenant_id ON tenant_users("tenantId");
+CREATE INDEX IF NOT EXISTS idx_tenant_users_email ON tenant_users(email);
+CREATE INDEX IF NOT EXISTS idx_tenant_analytics_tenant_id ON tenant_analytics("tenantId");
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
+CREATE INDEX IF NOT EXISTS idx_backup_schedules_next_run_at ON backup_schedules(next_run_at);
+CREATE INDEX IF NOT EXISTS idx_runtime_endpoint_configs_updated_at ON runtime_endpoint_configs(updated_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs("userId");
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs("createdAt");
 
 -- Insert default super admin user (password: medicore123)
 INSERT INTO admin_users (email, "passwordHash", "firstName", "lastName", role, "mustChangePassword")

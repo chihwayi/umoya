@@ -1,0 +1,48 @@
+[
+  {
+    "knowledge_id": "pediatric-growth-assessment-2026-01",
+    "condition": "growth_assessment",
+    "aliases": ["pediatric growth assessment", "child growth assessment"],
+    "title": "Pediatric Growth Assessment Guidance",
+    "source_name": "WHO Child Growth Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-31",
+    "reviewed_at": "2026-03-01",
+    "specialty": "pediatrics",
+    "module": "growth_and_development",
+    "target_population": "children",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["growth", "waz", "haz", "whz", "muac", "nutrition"],
+    "recommendation_blocks": [
+      "Interpret pediatric growth using age-appropriate anthropometric standards rather than isolated raw measurements.",
+      "Escalate quickly when severe wasting, edema, or low MUAC suggests severe acute malnutrition.",
+      "Trend measurements over time so faltering growth prompts dietary, social, and medical review."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "developmental-milestone-assessment-2026-01",
+    "condition": "developmental_milestone_assessment",
+    "aliases": ["developmental milestone assessment", "milestone delay assessment"],
+    "title": "Developmental Milestone Assessment Guidance",
+    "source_name": "CDC/WHO Developmental Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-02-01",
+    "reviewed_at": "2026-03-01",
+    "specialty": "pediatrics",
+    "module": "growth_and_development",
+    "target_population": "children",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["development", "milestones", "speech", "motor", "delay"],
+    "recommendation_blocks": [
+      "Assess developmental milestones against age-appropriate expectations across gross motor, fine motor, language, and social domains.",
+      "Escalate referral when multiple domains are delayed, regression is reported, or red-flag milestones are missed.",
+      "Document follow-up timing clearly so borderline concerns are not left unreviewed."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

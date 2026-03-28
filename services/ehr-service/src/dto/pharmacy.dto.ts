@@ -11,6 +11,7 @@ import {
   IsUUID,
   Max,
   Min,
+  MinLength,
   ValidateIf,
   IsArray,
   ValidateNested,
@@ -447,6 +448,33 @@ export class CreateDispensingDto {
   @Max(100)
   @IsOptional()
   coveragePercentage?: number;
+
+  @ApiPropertyOptional({ description: 'Prepared medication review ID used for this dispensing' })
+  @IsUUID()
+  @IsOptional()
+  medicationReviewId?: string;
+
+  @ApiPropertyOptional({ description: 'Selected substitution recommendation IDs', type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  selectedSubstitutionRecommendationIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Selected stewardship review IDs', type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  stewardshipReviewIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Whether the pharmacist explicitly reviewed the AI guidance before dispensing' })
+  @IsBoolean()
+  @IsOptional()
+  aiReviewAcknowledged?: boolean;
+
+  @ApiPropertyOptional({ description: 'Persisted AI review summary captured at dispense time' })
+  @IsObject()
+  @IsOptional()
+  aiReviewSummary?: Record<string, any>;
 
   @ApiPropertyOptional({ description: 'Notes' })
   @IsString()
@@ -936,4 +964,58 @@ export class UpdateAlertDto {
   notes?: string;
 }
 
+export class ContraindicationOverrideDto {
+  @IsUUID()
+  patientId: string;
+
+  @IsString()
+  @MinLength(20, { message: 'Override reason must be at least 20 characters for audit purposes' })
+  overrideReason: string;
+
+  @IsString()
+  drugName: string;
+
+  @IsString()
+  interactingDrug: string;
+
+  @IsString()
+  @IsOptional()
+  medicationName?: string;
+
+  @IsString()
+  @IsOptional()
+  genericName?: string;
+
+  @IsString()
+  @IsOptional()
+  strength?: string;
+
+  @IsString()
+  @IsOptional()
+  form?: string;
+
+  @IsString()
+  @IsOptional()
+  dosage?: string;
+
+  @IsString()
+  @IsOptional()
+  frequency?: string;
+
+  @IsString()
+  @IsOptional()
+  route?: string;
+
+  @IsString()
+  @IsOptional()
+  quantity?: string;
+
+  @IsString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsString()
+  @IsOptional()
+  instructions?: string;
+}
 

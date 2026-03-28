@@ -12,7 +12,19 @@ import {
   AlertCircle, Bed, Baby, DollarSign
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
-import { ehrApi, tenantApi } from '../services/api';
+import { ehrApi, tenantApi, cdssApi } from '../services/api';
+import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
+import {
+  cacheTenantBranding,
+  formatTenantDisplayName,
+  getBrandInitials,
+  readCachedTenantBranding,
+} from '../utils/tenantBranding';
+import {
+  getBillingToneClasses,
+  isTenantRouteAvailable,
+  notifyTenantSubscriptionStatus,
+} from '../utils/tenantSubscription';
 
 interface User {
   id: string;
@@ -60,9 +72,12 @@ interface PostVisitTrialSlaAccountabilitySnapshot {
 const EHRDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showSuccess, showInfo, showError } = useNotification();
+  const { showSuccess, showInfo, showError, showWarning } = useNotification();
   const [user, setUser] = useState<User | null>(null);
-  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [tenantInfo, setTenantInfo] = useState<any>(() => {
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    return cachedBranding ? { clinicName: cachedBranding.clinicName, logoUrl: cachedBranding.logoUrl } : null;
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -133,7 +148,8 @@ const EHRDashboard: React.FC = () => {
           { icon: FileText, label: 'Medical Records', desc: 'Patient history & notes', color: 'from-purple-500 to-indigo-500' },
           { icon: Pill, label: 'Prescriptions', desc: 'Medication management', color: 'from-orange-500 to-red-500' },
           { icon: TestTube, label: 'Lab Orders', desc: 'Request & review tests', color: 'from-pink-500 to-rose-500' },
-          { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-violet-500 to-purple-500' },
+          { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-violet-500 to-purple-500', route: 'analytics' },
+          { icon: FileText, label: 'Reports', desc: 'View and export reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
           { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board, ESI triage & metrics', color: 'from-red-600 to-orange-600', route: 'emergency' },
           { icon: Bed, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', route: 'bed-management' },
           { icon: Activity, label: 'Operating Room', desc: 'OR scheduling, surgical cases & implant tracking', color: 'from-indigo-600 to-purple-600', route: 'operating-room' },
@@ -158,7 +174,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Building, label: 'Practice Mgmt', desc: 'Fee schedules, superbills & insurance verification', color: 'from-emerald-600 to-teal-600', route: 'practice-management' },
           { icon: FileText, label: 'Prior Auth', desc: 'Prior authorization workflow', color: 'from-indigo-600 to-purple-600', route: 'prior-authorizations' },
           { icon: Mail, label: 'Recall Campaigns', desc: 'Bulk SMS/email outreach', color: 'from-fuchsia-700 to-rose-700', route: 'campaigns' },
-          { icon: DollarSign, label: 'Multi-Currency', desc: 'Exchange rates & medical aid stubs', color: 'from-amber-600 to-orange-600', route: 'multi-currency' },
+          { icon: DollarSign, label: 'Multi-Currency', desc: 'Exchange rates & medical aid billing', color: 'from-amber-600 to-orange-600', route: 'multi-currency' },
           { icon: FileText, label: 'CDI Program', desc: 'Physician queries, DRG impact & documentation quality', color: 'from-blue-600 to-indigo-600', route: 'cdi' },
           { icon: Users, label: 'Population Health', desc: 'Registry, preventive care & recall lists', color: 'from-teal-600 to-cyan-600', route: 'population-health' },
           { icon: AlertTriangle, label: 'Sepsis Management', desc: 'SEP-1 bundle tracking, qSOFA & SIRS screening', color: 'from-red-600 to-orange-600', route: 'sepsis' },
@@ -166,6 +182,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
           { icon: Baby, label: 'Maternity', desc: 'Obstetric care & deliveries', color: 'from-pink-500 to-rose-500', route: 'nurse/maternity' },
           { icon: FileText, label: 'Care Plans', desc: 'Nursing care plans', color: 'from-green-500 to-emerald-500', route: 'nurse/care-plans' },
+          { icon: FileText, label: 'Reports', desc: 'Lab & immunization reports (view/export)', color: 'from-violet-500 to-purple-500', route: 'reports' },
         ];
       case 'radiologist':
         return [
@@ -175,7 +192,6 @@ const EHRDashboard: React.FC = () => {
       case 'receptionist':
         return [
           ...baseActions,
-          { icon: CreditCard, label: 'Billing', desc: 'Payments & invoices', color: 'from-yellow-500 to-orange-500' },
           { icon: Bell, label: 'Notifications', desc: 'Patient alerts', color: 'from-indigo-500 to-blue-500' },
         ];
       case 'pharmacist':
@@ -199,6 +215,7 @@ const EHRDashboard: React.FC = () => {
         return [
           { icon: CreditCard, label: 'Accounts Dashboard', desc: 'Financial overview & KPIs', color: 'from-amber-500 to-orange-500', route: 'accounts' },
           { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial overview', color: 'from-purple-500 to-pink-500', route: 'billing' },
+          { icon: FileText, label: 'Reports', desc: 'View and export all reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
           { icon: FileText, label: 'Medical Aid Claims', desc: 'File, track & manage claims', color: 'from-emerald-500 to-teal-500', route: 'claims' },
           { icon: BarChart3, label: 'Revenue Analytics', desc: 'Track income by service line', color: 'from-purple-500 to-pink-500', route: 'accounts/analytics' },
           { icon: FileText, label: 'Billing Queue', desc: 'Manage outstanding invoices', color: 'from-indigo-500 to-slate-500', route: 'accounts?status=pending' },
@@ -206,6 +223,8 @@ const EHRDashboard: React.FC = () => {
       case 'admin':
         return [
           { icon: Users, label: 'User Management', desc: 'Manage staff accounts, roles & permissions', color: 'from-slate-500 to-gray-500', route: 'users' },
+          { icon: FileText, label: 'Reports', desc: 'View and export all reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
+          { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial reports', color: 'from-purple-500 to-pink-500', route: 'billing' },
           { icon: Shield, label: 'HIPAA Compliance', desc: 'Audit logs, breach detection & compliance', color: 'from-indigo-500 to-blue-500', route: 'hipaa-compliance' },
           { icon: Eye, label: 'Audit Logs', desc: 'System activity & access logs', color: 'from-purple-500 to-violet-500', route: 'hipaa-compliance' },
           { icon: Database, label: 'Data Management', desc: 'Backup, restore & data migration', color: 'from-blue-500 to-cyan-500', route: 'data' },
@@ -241,13 +260,75 @@ const EHRDashboard: React.FC = () => {
     refundRequests: 0,
   });
 
+  const [radiologistStats, setRadiologistStats] = useState({
+    unassignedStudies: 0,
+    myQueue: 0,
+    draftReports: 0,
+    criticalFindings: 0,
+  });
+
+  const [defaultStats, setDefaultStats] = useState({
+    todayAppointments: 0,
+    activePatients: 0,
+    pendingResults: 0,
+    messages: 0,
+  });
+
   useEffect(() => {
     if (user?.role === 'admin') {
       loadAdminStats();
     } else if (user?.role === 'accounts') {
       loadAccountStats();
+    } else if (user?.role === 'radiologist') {
+      loadRadiologistStats();
+    } else {
+      loadDefaultStats();
     }
   }, [user]);
+
+  const loadRadiologistStats = async () => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token || !tenantSlug) return;
+    try {
+      const [pendingRes, allRes] = await Promise.allSettled([
+        ehrApi.getImagingStudies(tenantSlug, token, { status: 'pending' }),
+        ehrApi.getImagingStudies(tenantSlug, token),
+      ]);
+      if (pendingRes.status === 'fulfilled') {
+        const studies = pendingRes.value.data?.studies || pendingRes.value.data || [];
+        setRadiologistStats(prev => ({ ...prev, unassignedStudies: Array.isArray(studies) ? studies.length : 0 }));
+      }
+      if (allRes.status === 'fulfilled') {
+        const studies: any[] = allRes.value.data?.studies || allRes.value.data || [];
+        if (Array.isArray(studies)) {
+          setRadiologistStats(prev => ({
+            ...prev,
+            myQueue: studies.filter((s: any) => s.assigned_radiologist_id === user?.id || s.radiologistId === user?.id).length,
+            draftReports: studies.filter((s: any) => s.report_status === 'draft' || s.reportStatus === 'draft').length,
+            criticalFindings: studies.filter((s: any) => s.findings_critical || s.critical || s.priority === 'stat').length,
+          }));
+        }
+      }
+    } catch { /* non-blocking */ }
+  };
+
+  const loadDefaultStats = async () => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token || !tenantSlug) return;
+    const today = new Date().toISOString().split('T')[0];
+    const [apptRes, patientRes, labRes, inboxRes] = await Promise.allSettled([
+      ehrApi.getAppointments(token, tenantSlug, { date: today }),
+      ehrApi.getPatients(token, tenantSlug, 1, 1),
+      ehrApi.getLabOrders({ status: 'pending' }, token, tenantSlug),
+      cdssApi.getInboxCounts(token, tenantSlug),
+    ]);
+    setDefaultStats({
+      todayAppointments: apptRes.status === 'fulfilled' ? (Array.isArray(apptRes.value.data) ? apptRes.value.data.length : (apptRes.value.data?.total || 0)) : 0,
+      activePatients: patientRes.status === 'fulfilled' ? (patientRes.value.data?.total || 0) : 0,
+      pendingResults: labRes.status === 'fulfilled' ? (Array.isArray(labRes.value.data) ? labRes.value.data.length : (labRes.value.data?.total || 0)) : 0,
+      messages: inboxRes.status === 'fulfilled' ? (inboxRes.value.data?.unread || inboxRes.value.data?.total || 0) : 0,
+    });
+  };
 
   const loadAccountStats = async () => {
     try {
@@ -269,11 +350,27 @@ const EHRDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!tenantSlug) return;
+    const cachedBranding = readCachedTenantBranding(tenantSlug);
+    if (cachedBranding) {
+      setTenantInfo((prev: any) => ({
+        ...(prev || {}),
+        clinicName: prev?.clinicName || cachedBranding.clinicName,
+        logoUrl: prev?.logoUrl || cachedBranding.logoUrl,
+      }));
+    }
+  }, [tenantSlug]);
+
+  useEffect(() => {
     const fetchTenantInfo = async () => {
       try {
         const response = await tenantApi.getTenantBySlug(tenantSlug!);
         if (response.data) {
           setTenantInfo(response.data);
+          cacheTenantBranding(tenantSlug!, {
+            clinicName: response.data.clinicName,
+            logoUrl: response.data.logoUrl,
+          });
         }
       } catch (error) {
         console.error('Error fetching tenant info:', error);
@@ -284,6 +381,10 @@ const EHRDashboard: React.FC = () => {
       fetchTenantInfo();
     }
   }, [tenantSlug]);
+
+  useEffect(() => {
+    notifyTenantSubscriptionStatus(tenantInfo, { showWarning, showError });
+  }, [tenantInfo, showWarning, showError]);
 
   const loadAdminStats = async () => {
     try {
@@ -412,10 +513,10 @@ const EHRDashboard: React.FC = () => {
     }
     if (role === 'radiologist') {
       return [
-        { label: 'Unassigned Studies', value: '18', icon: Camera, color: 'text-purple-600' },
-        { label: 'My Queue', value: '6', icon: Users, color: 'text-indigo-600' },
-        { label: 'Draft Reports', value: '2', icon: FileText, color: 'text-amber-600' },
-        { label: 'Critical Findings', value: '1', icon: AlertTriangle, color: 'text-red-600' },
+        { label: 'Unassigned Studies', value: radiologistStats.unassignedStudies.toString(), icon: Camera, color: 'text-purple-600' },
+        { label: 'My Queue', value: radiologistStats.myQueue.toString(), icon: Users, color: 'text-indigo-600' },
+        { label: 'Draft Reports', value: radiologistStats.draftReports.toString(), icon: FileText, color: 'text-amber-600' },
+        { label: 'Critical Findings', value: radiologistStats.criticalFindings.toString(), icon: AlertTriangle, color: radiologistStats.criticalFindings > 0 ? 'text-red-600' : 'text-green-600' },
       ];
     }
     if (role === 'accounts') {
@@ -427,14 +528,21 @@ const EHRDashboard: React.FC = () => {
       ];
     }
     return [
-      { label: 'Today\'s Appointments', value: '12', icon: Calendar, color: 'text-blue-600' },
-      { label: 'Active Patients', value: '248', icon: Users, color: 'text-emerald-600' },
-      { label: 'Pending Results', value: '5', icon: TestTube, color: 'text-orange-600' },
-      { label: 'Messages', value: '3', icon: Bell, color: 'text-purple-600' },
+      { label: 'Today\'s Appointments', value: defaultStats.todayAppointments.toString(), icon: Calendar, color: 'text-blue-600' },
+      { label: 'Active Patients', value: defaultStats.activePatients.toLocaleString(), icon: Users, color: 'text-emerald-600' },
+      { label: 'Pending Results', value: defaultStats.pendingResults.toString(), icon: TestTube, color: 'text-orange-600' },
+      { label: 'Messages', value: defaultStats.messages.toString(), icon: Bell, color: 'text-purple-600' },
     ];
   };
 
   if (!user) return null;
+  const billingSummary = tenantInfo?.billingSummary;
+  const billingTone = getBillingToneClasses(billingSummary);
+  const tenantDisplayName = formatTenantDisplayName(tenantSlug, tenantInfo?.clinicName);
+  const tenantInitials = getBrandInitials(tenantDisplayName);
+  const visibleRoleActions = getRoleActions(user.role).filter((action: any) =>
+    isTenantRouteAvailable(tenantInfo, action.route),
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -447,24 +555,20 @@ const EHRDashboard: React.FC = () => {
       <div className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-800 via-slate-900 to-gray-900 border-r border-slate-700/50 z-50 transform transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              {tenantInfo?.logoUrl ? (
-                <div className="h-10 w-10 bg-white p-1 rounded-xl flex items-center justify-center overflow-hidden">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 overflow-hidden flex items-center justify-center">
+                {tenantInfo?.logoUrl ? (
                   <img 
                     src={tenantInfo.logoUrl} 
-                    alt={`${tenantInfo.clinicName} Logo`} 
-                    className="w-full h-full object-contain"
+                    alt={`${tenantDisplayName} logo`} 
+                    className="h-full w-full object-cover"
                   />
-                </div>
-              ) : (
-                <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
-                  <Stethoscope className="w-6 h-6 text-white" />
-                </div>
-              )}
-              <div>
-                <h2 className="font-bold text-white">
-                  {tenantInfo?.clinicName ? tenantInfo.clinicName : 'MediCore'}
-                </h2>
+                ) : (
+                  <span className="text-xs font-bold tracking-wide text-white">{tenantInitials}</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-bold text-white truncate">{tenantDisplayName}</h2>
                 <p className="text-xs text-slate-300">EHR System</p>
               </div>
             </div>
@@ -631,12 +735,19 @@ const EHRDashboard: React.FC = () => {
                 <Bell className="w-5 h-5 text-white" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
               </button>
+              {billingSummary && (
+                <div className={`hidden md:inline-flex items-center rounded-full px-3 py-2 text-xs font-semibold ${billingTone.pill}`}>
+                  {billingSummary.daysUntilSuspension ?? billingSummary.daysRemaining ?? 'N/A'}d
+                </div>
+              )}
             </div>
           </div>
         </header>
 
         {/* Dashboard Content */}
         <main className="p-6">
+          <TenantSubscriptionBanner tenantInfo={tenantInfo} />
+
           {/* Quick Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {getQuickStats(user.role).map((stat, index) => (
@@ -667,7 +778,7 @@ const EHRDashboard: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {getRoleActions(user.role).map((action, index) => (
+              {visibleRoleActions.map((action, index) => (
                 <button
                   key={index}
                   onClick={() => (action as any).route && navigate(`/ehr/${tenantSlug}/${(action as any).route}`)}

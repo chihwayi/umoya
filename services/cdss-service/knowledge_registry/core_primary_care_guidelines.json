@@ -1,0 +1,134 @@
+[
+  {
+    "knowledge_id": "htn-primary-care-2026-01",
+    "condition": "hypertension",
+    "aliases": ["htn", "high blood pressure"],
+    "title": "Hypertension Management Guidance",
+    "source_name": "WHO SMART Hypertension Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-15",
+    "reviewed_at": "2026-03-01",
+    "specialty": "primary_care",
+    "module": "chronic_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["bp", "hypertension", "ace inhibitor", "arb"],
+    "recommendation_blocks": [
+      "Target BP <140/90 mmHg for most adults.",
+      "Target BP <130/80 mmHg when diabetes or chronic kidney disease is present.",
+      "Start lifestyle measures alongside pharmacologic therapy when persistent elevation exists.",
+      "Use ACE inhibitor or ARB as first-line treatment unless contraindicated."
+    ],
+    "contraindications": [
+      {
+        "label": "pregnancy",
+        "match_terms": ["pregnancy", "pregnant"],
+        "reason": "Avoid ACE inhibitors and ARBs in pregnancy; use pregnancy-safe alternatives.",
+        "severity": "major"
+      },
+      {
+        "label": "hyperkalemia",
+        "match_terms": ["hyperkalemia"],
+        "reason": "RAAS blockers can worsen hyperkalemia; review potassium before initiating.",
+        "severity": "moderate"
+      }
+    ],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "t2dm-primary-care-2026-01",
+    "condition": "diabetes_type2",
+    "aliases": ["type 2 diabetes", "t2dm", "dm2"],
+    "title": "Type 2 Diabetes Management Guidance",
+    "source_name": "ADA Diabetes Care Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-05",
+    "reviewed_at": "2026-03-01",
+    "specialty": "primary_care",
+    "module": "chronic_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["diabetes", "hba1c", "metformin", "sglt2"],
+    "recommendation_blocks": [
+      "Target HbA1c <7% for most adults unless individualized goals are required.",
+      "Use metformin first-line unless renal function or intolerance prevents it.",
+      "Prefer SGLT2 inhibitor or GLP-1 agonist when ASCVD, heart failure, or CKD is present.",
+      "Review HbA1c every 3 to 6 months and maintain annual eye and foot checks."
+    ],
+    "contraindications": [
+      {
+        "label": "renal_impairment",
+        "match_terms": ["renal_impairment", "ckd", "chronic kidney disease"],
+        "reason": "Metformin use becomes unsafe with severe renal impairment; confirm eGFR before initiation.",
+        "severity": "major"
+      }
+    ],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "cap-adult-2025-10",
+    "condition": "pneumonia",
+    "aliases": ["cap", "community acquired pneumonia"],
+    "title": "Adult Community-Acquired Pneumonia Guidance",
+    "source_name": "IDSA/ATS CAP Guidance",
+    "source_version": "2025.10",
+    "source_published_at": "2025-10-01",
+    "reviewed_at": "2026-02-20",
+    "specialty": "acute_care",
+    "module": "infectious_disease",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["pneumonia", "cap", "ceftriaxone", "azithromycin"],
+    "recommendation_blocks": [
+      "Use a severity tool such as CURB-65 or PSI to guide disposition.",
+      "For inpatient empirical therapy, consider ceftriaxone plus azithromycin when appropriate.",
+      "Reassess response within 48 to 72 hours and narrow therapy when cultures or trajectory allow."
+    ],
+    "contraindications": [
+      {
+        "label": "penicillin_allergy",
+        "match_terms": ["penicillin_allergy"],
+        "reason": "Avoid beta-lactam empirical choices when severe beta-lactam allergy exists.",
+        "severity": "major"
+      }
+    ],
+    "medication_warnings": [
+      {
+        "match_terms": ["warfarin"],
+        "message": "Monitor INR closely because common pneumonia antibiotics can interact with warfarin."
+      }
+    ]
+  },
+  {
+    "knowledge_id": "uti-adult-2024-12",
+    "condition": "uti",
+    "aliases": ["urinary tract infection", "cystitis"],
+    "title": "Urinary Tract Infection Guidance",
+    "source_name": "IDSA UTI Adaptation",
+    "source_version": "2024.12",
+    "source_published_at": "2024-12-01",
+    "reviewed_at": "2025-01-10",
+    "specialty": "primary_care",
+    "module": "infectious_disease",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "moderate",
+    "keywords": ["uti", "cystitis", "nitrofurantoin", "trimethoprim"],
+    "recommendation_blocks": [
+      "Treat uncomplicated cystitis with a short-course first-line antibiotic when culture and local resistance patterns allow.",
+      "Use broader or parenteral coverage for pyelonephritis or systemic features."
+    ],
+    "contraindications": [
+      {
+        "label": "pregnancy",
+        "match_terms": ["pregnancy", "pregnant"],
+        "reason": "Avoid trimethoprim-sulfamethoxazole and fluoroquinolones in pregnancy when alternatives are available.",
+        "severity": "major"
+      }
+    ],
+    "medication_warnings": []
+  }
+]

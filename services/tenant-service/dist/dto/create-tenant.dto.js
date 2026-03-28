@@ -56,4 +56,57 @@ __decorate([
     (0, class_validator_1.IsEnum)(tenant_entity_1.SubscriptionTier),
     __metadata("design:type", String)
 ], CreateTenantDto.prototype, "subscriptionTier", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(['demo', 'paid']),
+    __metadata("design:type", String)
+], CreateTenantDto.prototype, "subscriptionMode", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(['full_ehr', 'claims_only']),
+    __metadata("design:type", String)
+], CreateTenantDto.prototype, "packagePreset", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(120),
+    __metadata("design:type", String)
+], CreateTenantDto.prototype, "packageName", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], CreateTenantDto.prototype, "enabledModules", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(365),
+    __metadata("design:type", Number)
+], CreateTenantDto.prototype, "demoDurationDays", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsDateString)(),
+    __metadata("design:type", String)
+], CreateTenantDto.prototype, "demoExpiresAt", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsDateString)(),
+    __metadata("design:type", String)
+], CreateTenantDto.prototype, "billingEndsAt", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.Max)(60),
+    __metadata("design:type", Number)
+], CreateTenantDto.prototype, "gracePeriodDays", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(30),
+    __metadata("design:type", Number)
+], CreateTenantDto.prototype, "suspensionWarningDays", void 0);
 //# sourceMappingURL=create-tenant.dto.js.map

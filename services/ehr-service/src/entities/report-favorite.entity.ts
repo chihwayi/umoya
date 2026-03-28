@@ -30,7 +30,7 @@ export class ReportFavorite {
   @JoinColumn({ name: 'report_template_id' })
   reportTemplate: ReportTemplate;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'custom_name', type: 'varchar', length: 255, nullable: true })
   customName?: string;
 
   @Column({ type: 'int', default: 0 })
@@ -39,5 +39,4 @@ export class ReportFavorite {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
-
 

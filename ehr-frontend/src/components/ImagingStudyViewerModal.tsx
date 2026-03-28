@@ -21,6 +21,7 @@ import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import ImagingDicomViewport from './ImagingDicomViewport';
 import ImagingReportComposer from './ImagingReportComposer';
+import { DicomViewer } from './DicomViewer';
 import ModalPortal from './ModalPortal';
 import ConfirmationDialog from './ConfirmationDialog';
 
@@ -694,6 +695,19 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {tab === 'report' && study && study.dicom_study_uid && study.primary_series_uid && study.primary_instance_uid && (
+                <div className="px-8 pt-6 bg-white">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-2">DICOM Images with AI Heatmap</h4>
+                  <DicomViewer
+                    orderId={study.id}
+                    studyUid={study.dicom_study_uid}
+                    seriesUid={study.primary_series_uid}
+                    instanceUid={study.primary_instance_uid}
+                    className="w-full"
+                  />
                 </div>
               )}
 

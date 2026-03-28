@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ehrApi, cdssApi } from '../services/api';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import { useNotification } from '../components/GlobalNotification';
 import { useConfirmation } from '../hooks/useConfirmation';
 import ModalPortal from '../components/ModalPortal';
@@ -119,7 +120,11 @@ const STATUS_BADGE: Record<string, string> = {
   transferred_out: 'bg-purple-100 text-purple-700',
 };
 
-const OncologyDashboard: React.FC = () => {
+interface OncologyDashboardProps {
+  embedded?: boolean;
+}
+
+const OncologyDashboard: React.FC<OncologyDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess, showInfo } = useNotification();
@@ -1239,7 +1244,8 @@ const OncologyDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={`${embedded ? '' : 'min-h-screen '}bg-slate-50`}>
+      {!embedded && (
       <header className="bg-gradient-to-r from-purple-700 via-fuchsia-600 to-rose-500 border-b border-fuchsia-400 shadow">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between text-white">
           <div className="flex items-start gap-3">
@@ -1279,6 +1285,7 @@ const OncologyDashboard: React.FC = () => {
           </div>
         </div>
       </header>
+      )}
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* AI Guideline Search - Oncology Context */}
@@ -1338,38 +1345,7 @@ const OncologyDashboard: React.FC = () => {
                 <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Relevant Citations</h3>
                   {guidelineResults.map((result, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-fuchsia-200 transition-colors">
-                      <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-semibold text-slate-900 leading-tight text-sm">{result.source || 'Clinical Guideline'}</h4>
-                          {result.confidence && (
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                              result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                              result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                              'bg-red-50 text-red-700 border-red-100'
-                            }`}>
-                              {Math.round(result.confidence * 100)}%
-                            </span>
-                          )}
-                      </div>
-                      <p className="text-sm text-slate-700 leading-relaxed mb-2 whitespace-pre-wrap">
-                        {result.text}
-                      </p>
-                      
-                      {result.recommendation && (
-                        <div className="mb-2 p-2 bg-fuchsia-50 border border-fuchsia-100 rounded-md">
-                          <h5 className="text-xs font-bold text-fuchsia-800 uppercase tracking-wide mb-1">Recommendation</h5>
-                          <p className="text-sm text-fuchsia-900">{result.recommendation}</p>
-                        </div>
-                      )}
-
-                      {result.url && (
-                         <div className="mt-2">
-                            <a href={result.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-fuchsia-600 hover:text-fuchsia-700 font-medium hover:underline">
-                              <BookOpen className="w-3 h-3 mr-1" /> View Source
-                            </a>
-                         </div>
-                      )}
-                    </div>
+                    <GuidelineCitationCard key={idx} result={result} />
                   ))}
                 </div>
               )}

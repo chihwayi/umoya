@@ -93,10 +93,8 @@ export class Prescription {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  // Note: updated_at column doesn't exist in database schema
-  // Updates are handled by trigger update_prescriptions_updated_at
-  // @UpdateDateColumn({ name: 'updated_at' })
-  // updatedAt: Date;
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 
   // Virtual/optional fields that don't exist in database but may be used in code
   // These are handled via type assertions when needed

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { runtimeUrls } from '../config/runtime';
 
 interface Patient {
   id: string;
@@ -18,17 +19,51 @@ interface PatientAuthContextType {
   isLinked: boolean;
   login: (email: string, password: string, tenantSlug: string) => Promise<void>;
   register: (data: RegisterData, tenantSlug: string) => Promise<void>;
+  assessRegistration: (data: RegisterData, tenantSlug: string) => Promise<RegistrationAssessment>;
   logout: () => void;
   linkAccount: (data: LinkAccountData, tenantSlug: string) => Promise<void>;
   loading: boolean;
 }
 
-interface RegisterData {
+export interface RegisterData {
   patientNumber: string;
   email: string;
   password: string;
   dateOfBirth: string;
   phone?: string;
+}
+
+export interface RegistrationAssessment {
+  patient: {
+    id: string;
+    patientNumber: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    phone?: string | null;
+  };
+  portalAccessEnabled: boolean;
+  emailConflict: boolean;
+  intakeAssessment: {
+    completenessScore: number;
+    missingFields: string[];
+    suspectedDuplicateCount: number;
+    duplicateCandidates: Array<{
+      patientId: string;
+      patientNumber: string;
+      firstName: string;
+      lastName: string;
+      matchScore: number;
+      reasons: string[];
+    }>;
+    coverageRiskLevel: string;
+    coverageFlags: string[];
+    consentReady: boolean;
+    consentMissingItems: string[];
+    frontDeskSummary: string;
+    nurseSummary: string;
+    clinicianSummary: string;
+  };
 }
 
 interface LinkAccountData {
@@ -40,11 +75,11 @@ interface LinkAccountData {
 
 const PatientAuthContext = createContext<PatientAuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL;
+const API_BASE_URL = runtimeUrls.ehrApi;
 
-  if (!API_BASE_URL) {
-    console.warn('REACT_APP_EHR_API_URL is not defined');
-  }
+if (!API_BASE_URL) {
+  console.warn('Patient Portal API URL is not defined');
+}
 
 export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -55,7 +90,6 @@ export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ childre
     // Check for stored auth
     const storedToken = localStorage.getItem('patient_token');
     const storedPatient = localStorage.getItem('patient_data');
-    const storedTenant = localStorage.getItem('patient_tenant');
 
     if (storedToken && storedPatient) {
       setToken(storedToken);
@@ -129,6 +163,25 @@ export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
+  const assessRegistration = async (data: RegisterData, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/register/assess`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantSlug,
+      },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json().catch(() => ({ message: 'Registration assessment failed' }));
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Registration assessment failed');
+    }
+
+    return result as RegistrationAssessment;
+  };
+
   const linkAccount = async (data: LinkAccountData, tenantSlug: string) => {
     if (!token) {
       throw new Error('Not authenticated');
@@ -181,6 +234,7 @@ export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ childre
         isLinked: patient?.isLinked || false,
         login,
         register,
+        assessRegistration,
         logout,
         linkAccount,
         loading,
@@ -198,4 +252,3 @@ export const usePatientAuth = () => {
   }
   return context;
 };
-

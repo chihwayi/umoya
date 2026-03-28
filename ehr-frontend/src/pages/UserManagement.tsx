@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Users, Plus, Edit, Trash2, Key, UserCheck, UserX, Search, Filter, ArrowLeft } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Users, Plus, Edit, Key, UserCheck, UserX, Search, Filter } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
 import CreateUserModal from '../components/CreateUserModal';
 import EditUserModal from '../components/EditUserModal';
 import PasswordDisplayModal from '../components/PasswordDisplayModal';
+import AdminNavigationShell from '../components/AdminNavigationShell';
 
 interface User {
   id: string;
@@ -23,7 +24,6 @@ interface User {
 
 const UserManagement: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -149,23 +149,16 @@ const UserManagement: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-      </div>
+      <AdminNavigationShell title="User Management" subtitle="Manage clinic staff and permissions">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+        </div>
+      </AdminNavigationShell>
     );
   }
 
   return (
-    <div className="p-6">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate(`/ehr/${tenantSlug}/dashboard`)}
-        className="flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-4 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span className="text-sm">Back to Dashboard</span>
-      </button>
-
+    <AdminNavigationShell title="User Management" subtitle="Manage clinic staff and permissions">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -342,7 +335,7 @@ const UserManagement: React.FC = () => {
         email={resetUser?.email || ''}
         tempPassword={resetUser?.tempPassword || ''}
       />
-    </div>
+    </AdminNavigationShell>
   );
 };
 

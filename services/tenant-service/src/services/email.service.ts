@@ -9,6 +9,23 @@ export interface EmailTemplate {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
+  private readonly adminAppUrl = String(
+    process.env.WEB_APP_URL ||
+      (process.env.PUBLIC_APP_BASE_URL
+        ? `${String(process.env.PUBLIC_APP_BASE_URL).replace(/\/+$/, '')}${String(
+            process.env.PUBLIC_ADMIN_APP_PATH || '/admin',
+          ).startsWith('/') ? process.env.PUBLIC_ADMIN_APP_PATH || '/admin' : `/${process.env.PUBLIC_ADMIN_APP_PATH || 'admin'}`}`
+        : ''),
+  ).replace(/\/+$/, '');
+  private readonly tenantAppProtocol = String(process.env.REACT_APP_PROTOCOL || 'https').trim().replace(/:$/, '');
+
+  private buildAdminLink(path: string): string {
+    if (!this.adminAppUrl) {
+      throw new Error('WEB_APP_URL is not configured. Set WEB_APP_URL or PUBLIC_APP_BASE_URL.');
+    }
+
+    return `${this.adminAppUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  }
 
   async sendEmail(template: EmailTemplate) {
     // In production, integrate with SendGrid, AWS SES, or similar
@@ -23,6 +40,7 @@ export class EmailService {
   }
 
   async sendWelcomeEmail(tenantEmail: string, tenantName: string, subdomain: string, tempPassword: string) {
+    const tenantUrl = `${this.tenantAppProtocol}://${subdomain}.${process.env.SYSTEM_DOMAIN || 'medicore.co.zw'}`;
     const template: EmailTemplate = {
       to: tenantEmail,
       subject: 'Welcome to MediCore - Your EHR System is Ready!',
@@ -34,7 +52,7 @@ export class EmailService {
         <h3>Your Account Details:</h3>
         <ul>
           <li><strong>Clinic:</strong> ${tenantName}</li>
-          <li><strong>System URL:</strong> https://${subdomain}.${process.env.SYSTEM_DOMAIN || 'medicore.co.zw'}</li>
+          <li><strong>System URL:</strong> ${tenantUrl}</li>
           <li><strong>Login Email:</strong> ${tenantEmail}</li>
           <li><strong>Temporary Password:</strong> ${tempPassword}</li>
         </ul>
@@ -65,7 +83,7 @@ export class EmailService {
         <h2>Password Reset Request</h2>
         <p>You requested a password reset for your MediCore account.</p>
         <p>Click the link below to reset your password:</p>
-        <p><a href="https://admin.medicore.co.zw/reset-password?token=${resetToken}">Reset Password</a></p>
+        <p><a href="${this.buildAdminLink(`/reset-password?token=${resetToken}`)}">Reset Password</a></p>
         <p>This link will expire in 1 hour.</p>
         <p>If you didn't request this, please ignore this email.</p>
         <p>Best regards,<br>MediCore Team</p>

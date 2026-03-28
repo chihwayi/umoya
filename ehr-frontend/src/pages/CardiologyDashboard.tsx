@@ -30,6 +30,7 @@ import { useNotification } from '../components/GlobalNotification';
 import CardiologyEncounterModal from '../components/CardiologyEncounterModal';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
 
 interface CardiologyEncounter {
   id: string;
@@ -135,7 +136,11 @@ const paymentStatusColors: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-700 border-red-200',
 };
 
-const CardiologyDashboard: React.FC = () => {
+interface CardiologyDashboardProps {
+  embedded?: boolean;
+}
+
+const CardiologyDashboard: React.FC<CardiologyDashboardProps> = ({ embedded = false }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess, showInfo } = useNotification();
@@ -340,7 +345,8 @@ const CardiologyDashboard: React.FC = () => {
   if (!currentUser) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-100">
+    <div className={`${embedded ? '' : 'min-h-screen '}bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-100`}>
+      {!embedded && (
       <header className="sticky top-0 z-30 border-b border-slate-700/60 bg-slate-900/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
@@ -377,6 +383,7 @@ const CardiologyDashboard: React.FC = () => {
           </div>
         </div>
       </header>
+      )}
 
       <main className="mx-auto max-w-7xl px-4 py-8">
         {/* Summary cards */}
@@ -860,34 +867,7 @@ const CardiologyDashboard: React.FC = () => {
                 {guidelineResults.length > 0 ? (
                   <div className="space-y-4">
                     {guidelineResults.map((result, idx) => (
-                      <div key={idx} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                        <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-semibold text-gray-900 leading-tight">{result.source || 'Clinical Guideline'}</h4>
-                          {result.confidence && (
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
-                              result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                              result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                              'bg-red-50 text-red-700 border-red-100'
-                            }`}>
-                              Confidence: {Math.round(result.confidence * 100)}%
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap mb-3">{result.text}</p>
-                        
-                        {result.recommendation && (
-                          <div className="mb-3 p-3 bg-rose-50 border border-rose-100 rounded-md">
-                            <h5 className="text-xs font-bold text-rose-800 uppercase tracking-wide mb-1">Recommendation</h5>
-                            <p className="text-sm text-rose-900">{result.recommendation}</p>
-                          </div>
-                        )}
-
-                        {result.url && (
-                          <a href={result.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-sm text-rose-600 hover:text-rose-700 font-medium hover:underline">
-                            View Source Document <ArrowRight className="w-3 h-3 ml-1" />
-                          </a>
-                        )}
-                      </div>
+                      <GuidelineCitationCard key={idx} result={result} />
                     ))}
                   </div>
                 ) : (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Calendar, Clock, Users, TrendingUp, Activity, Plus,
   AlertCircle, CheckCircle, Loader2, ArrowLeft
@@ -14,9 +14,11 @@ import PreferenceCardManager from '../components/PreferenceCardManager';
 const ORDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showError, showSuccess } = useNotification();
   const token = localStorage.getItem('ehr_token') || '';
   const currentUser = JSON.parse(localStorage.getItem('ehr_user') || '{}');
+  const isEmbedded = location.pathname.includes('/doctor/operating-room');
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [orAvailability, setOrAvailability] = useState<any[]>([]);
@@ -95,7 +97,7 @@ const ORDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className={`flex items-center justify-center ${isEmbedded ? 'min-h-[320px]' : 'min-h-screen'}`}>
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-indigo-600 mx-auto mb-4" />
           <p className="text-slate-600">Loading operating rooms...</p>
@@ -105,47 +107,67 @@ const ORDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={isEmbedded ? 'bg-transparent' : 'min-h-screen bg-slate-50'}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/${currentUser?.role === 'doctor' ? 'doctor' : currentUser?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                  <Activity className="w-8 h-8" />
-                  Operating Room Dashboard
-                </h1>
-                <p className="text-indigo-100 mt-1">Surgical scheduling and management</p>
+      {!isEmbedded && (
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/${currentUser?.role === 'doctor' ? 'doctor' : currentUser?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h1 className="text-3xl font-bold flex items-center gap-3">
+                    <Activity className="w-8 h-8" />
+                    Operating Room Dashboard
+                  </h1>
+                  <p className="text-indigo-100 mt-1">Surgical scheduling and management</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPreferenceCards(true)}
-                className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
-              >
-                Preference Cards
-              </button>
-              <button
-                onClick={() => setShowScheduleModal(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold"
-              >
-                <Plus className="w-5 h-5" />
-                Schedule Surgery
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPreferenceCards(true)}
+                  className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
+                >
+                  Preference Cards
+                </button>
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold"
+                >
+                  <Plus className="w-5 h-5" />
+                  Schedule Surgery
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
+        {isEmbedded && (
+          <div className="mb-4 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPreferenceCards(true)}
+              className="px-4 py-2 rounded-lg border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 transition-colors text-sm font-semibold"
+            >
+              Preference Cards
+            </button>
+            <button
+              onClick={() => setShowScheduleModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm hover:shadow-md transition-all text-sm font-semibold"
+            >
+              <Plus className="w-4 h-4" />
+              Schedule Surgery
+            </button>
+          </div>
+        )}
         {/* Date Selector & View Toggle */}
         <div className="flex items-center gap-4 mb-6">
           <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm">
@@ -361,4 +383,3 @@ const ORDashboard: React.FC = () => {
 };
 
 export default ORDashboard;
-

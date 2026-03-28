@@ -70,6 +70,18 @@ export class Drug {
 
   @OneToMany(() => DrugInteraction, interaction => interaction.drug2)
   interactionsAsDrug2: DrugInteraction[];
+  @Column({ name: 'average_unit_cost_usd', type: 'numeric', precision: 10, scale: 4, nullable: true })
+  averageUnitCostUsd?: number;
+
+  @Column({ name: 'bioequivalent_group', type: 'varchar', length: 100, nullable: true })
+  bioequivalentGroup?: string;
+
+  @Column({ name: 'formulary_tier', type: 'int', nullable: true })
+  formularyTier?: number;
+
+  @Column({ name: 'generic_name_canonical', type: 'varchar', length: 255, nullable: true })
+  genericNameCanonical?: string;
+
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

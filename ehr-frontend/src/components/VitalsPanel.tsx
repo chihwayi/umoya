@@ -6,6 +6,7 @@ import {
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { ehrApi } from '../services/api';
 import { GuidelineRecommendationCard, ClinicalRecommendation } from './GuidelineRecommendationCard';
+import { AiOutputWrapper } from './AiOutputWrapper';
 import { useNotification } from '../components/GlobalNotification';
 import {
   ResponsiveContainer,
@@ -103,6 +104,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
   const [bmi, setBmi] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(patient || null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+  const [savedNewsScore, setSavedNewsScore] = useState<number | null>(null);
   const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
   const [copilotDecisionSaving, setCopilotDecisionSaving] = useState(false);
   const [trendOverview, setTrendOverview] = useState<VitalTrendsResponse | null>(null);
@@ -275,19 +277,21 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
 
       const vitalsData = {
         patientId: selectedPatient.id,
-        bloodPressure: `${vitals.bloodPressureSystolic}/${vitals.bloodPressureDiastolic}`,
-        heartRate: vitals.heartRate,
-        temperature: vitals.temperature,
-        oxygenSaturation: vitals.oxygenSaturation,
-        respiratoryRate: vitals.respiratoryRate,
-        weight: vitals.weight,
-        height: vitals.height,
-        bmi: bmi,
-        painLevel: vitals.painLevel,
-        bloodGlucose: vitals.bloodGlucose,
-        notes: vitals.notes,
+        // Send as separate integers — service stores both INT columns AND derives the legacy string
+        bloodPressureSystolic:  vitals.bloodPressureSystolic  || undefined,
+        bloodPressureDiastolic: vitals.bloodPressureDiastolic || undefined,
+        heartRate:        vitals.heartRate        || undefined,
+        temperature:      vitals.temperature      || undefined,
+        oxygenSaturation: vitals.oxygenSaturation || undefined,
+        respiratoryRate:  vitals.respiratoryRate  || undefined,
+        weight:           vitals.weight           || undefined,
+        height:           vitals.height           || undefined,
+        bmi:              bmi                     || undefined,
+        painLevel:        vitals.painLevel        || undefined,
+        bloodGlucose:     vitals.bloodGlucose     || undefined,
+        notes:            vitals.notes            || undefined,
         recordedAt: new Date().toISOString(),
-        recordedBy: JSON.parse(localStorage.getItem('ehr_user') || '{}').id
+        recordedBy: JSON.parse(localStorage.getItem('ehr_user') || '{}').id,
       };
 
       const response = await ehrApi.recordVitals(vitalsData, token, tenantSlug);
@@ -295,7 +299,9 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
         response.data?.cdssInsights ??
         response.data?.vitals?.cdssInsights ??
         null;
+      const news2 = response.data?.vitals?.newsScore ?? response.data?.newsScore ?? null;
       setCdssInsights(insights);
+      setSavedNewsScore(typeof news2 === 'number' ? news2 : null);
       setCopilotDecisionNote('');
       showSuccess('Success', 'Vitals recorded successfully');
       fetchVitalsTrend(selectedPatient.id);
@@ -562,7 +568,45 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
             )}
           </div>
 
+          {/* NEWS2 Score Badge */}
+          {savedNewsScore !== null && (() => {
+            const risk = savedNewsScore >= 7 ? 'high' : savedNewsScore >= 5 ? 'medium' : savedNewsScore >= 1 ? 'low' : 'minimal';
+            const colours: Record<string, string> = {
+              high:    'border-red-300 bg-red-50 text-red-800',
+              medium:  'border-amber-300 bg-amber-50 text-amber-800',
+              low:     'border-yellow-300 bg-yellow-50 text-yellow-800',
+              minimal: 'border-green-300 bg-green-50 text-green-800',
+            };
+            const labels: Record<string, string> = {
+              high:    'High Risk — Emergency review required',
+              medium:  'Medium Risk — Urgent review within 1 hour',
+              low:     'Low Risk — Monitor, reassess in 4–6 h',
+              minimal: 'Minimal Risk — Routine monitoring',
+            };
+            return (
+              <div className={`flex items-center gap-4 p-4 rounded-xl border ${colours[risk]}`}>
+                <div className="flex flex-col items-center min-w-[56px]">
+                  <span className="text-3xl font-bold leading-none">{savedNewsScore}</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide mt-0.5">NEWS2</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{labels[risk]}</p>
+                  <p className="text-xs mt-0.5 opacity-70">Auto-calculated from vitals · Royal College of Physicians 2017</p>
+                </div>
+              </div>
+            );
+          })()}
+
           {cdssInsights?.risk && (
+            <AiOutputWrapper
+              label="Vitals Risk Insight"
+              confidence={cdssInsights.confidence}
+              abstained={cdssInsights.abstained}
+              abstain_reason={cdssInsights.abstain_reason}
+              certainty_level={cdssInsights.certainty_level}
+              citations={cdssInsights.citations}
+              model_id={cdssInsights.model_id}
+            >
             <div ref={insightsRef} className="p-5 rounded-2xl border border-indigo-200 bg-white shadow-sm">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
@@ -581,6 +625,25 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                   </p>
                   {typeof cdssInsights.risk.overall_score === 'number' && (
                     <p className="text-xs text-slate-500">Score: {cdssInsights.risk.overall_score.toFixed(1)}</p>
+                  )}
+                  {/* ML Deterioration Probability (Sprint 113) */}
+                  {cdssInsights.risk.deteriorationProbability != null && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-slate-500">ML Deterioration Risk:</span>
+                      <span className={`text-sm font-bold ${
+                        cdssInsights.risk.deteriorationProbability > 0.7 ? 'text-red-600' :
+                        cdssInsights.risk.deteriorationProbability > 0.4 ? 'text-amber-600' :
+                        'text-green-600'
+                      }`}>
+                        {(cdssInsights.risk.deteriorationProbability * 100).toFixed(0)}%
+                      </span>
+                      {cdssInsights.risk.deteriorationRiskHorizon && (
+                        <span className="text-xs text-slate-400">within {cdssInsights.risk.deteriorationRiskHorizon}h</span>
+                      )}
+                      {cdssInsights.risk.mlConfidence && (
+                        <span className="text-xs text-slate-400">({(cdssInsights.risk.mlConfidence * 100).toFixed(0)}% conf)</span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -640,6 +703,21 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                 </div>
               )}
 
+              {/* Interventions Section (Sprint 113) */}
+              {(cdssInsights?.risk?.interventions?.length > 0 || cdssInsights?.risk?.mlInterventions?.length > 0) && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-slate-600 mb-1">Recommended Interventions</p>
+                  <ul className="space-y-1">
+                    {[...(cdssInsights?.risk?.interventions || []), ...(cdssInsights?.risk?.mlInterventions || [])].map((item: any, i: number) => (
+                      <li key={i} className="text-xs text-slate-700 flex items-start gap-1">
+                        <span className="text-blue-500 mt-0.5">•</span>
+                        <span>{typeof item === 'string' ? item : item.action || item.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Guideline Citations */}
               {cdssInsights.risk.guideline_citations && cdssInsights.risk.guideline_citations.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-indigo-100">
@@ -675,6 +753,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                 </div>
               )}
             </div>
+            </AiOutputWrapper>
           )}
 
           {/* Guideline Search Section */}

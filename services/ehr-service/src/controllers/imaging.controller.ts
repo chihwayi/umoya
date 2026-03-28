@@ -78,6 +78,29 @@ export class ImagingController {
     return this.imagingService.getOrderById(req.tenantDb, id);
   }
 
+  @Post('orders/:id/ai-review')
+  @ApiOperation({ summary: 'Prepare or refresh governed AI order review for an imaging order' })
+  @ApiResponse({ status: 200, description: 'Imaging AI review prepared successfully' })
+  @Roles('radiologist', 'technologist', 'doctor', 'admin')
+  async prepareOrderAiReview(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.imagingService.prepareOrderAiReview(req.tenantDb, id, req.tenantId, userId);
+  }
+
+  @Get('orders/:id/ai-review')
+  @ApiOperation({ summary: 'Get latest governed AI order review for an imaging order' })
+  @ApiResponse({ status: 200, description: 'Latest imaging AI review' })
+  @Roles('radiologist', 'technologist', 'doctor', 'admin')
+  async getOrderAiReview(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+  ) {
+    return this.imagingService.getOrderAiReview(req.tenantDb, id);
+  }
+
   @Get('orders/patient/:patientId')
   @ApiOperation({ summary: 'Get patient imaging orders' })
   @ApiResponse({ status: 200, description: 'Patient imaging orders' })
@@ -218,6 +241,29 @@ export class ImagingController {
     return this.imagingService.createReport(req.tenantDb, reportData, userId);
   }
 
+  @Post('studies/:id/report-draft')
+  @ApiOperation({ summary: 'Generate governed AI report draft for a study' })
+  @ApiResponse({ status: 200, description: 'Radiology report draft generated successfully' })
+  @Roles('radiologist', 'admin')
+  async generateReportDraft(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.imagingService.generateReportDraft(req.tenantDb, id, req.tenantId, userId);
+  }
+
+  @Get('studies/:id/report-draft')
+  @ApiOperation({ summary: 'Get latest governed AI report draft for a study' })
+  @ApiResponse({ status: 200, description: 'Radiology report draft' })
+  @Roles('radiologist', 'doctor', 'admin')
+  async getStudyReportDraft(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+  ) {
+    return this.imagingService.getStudyReportDraft(req.tenantDb, id);
+  }
+
   @Get('reports/templates')
   @ApiOperation({ summary: 'Get report templates' })
   @ApiResponse({ status: 200, description: 'Report templates' })
@@ -263,6 +309,67 @@ export class ImagingController {
     @Body() reportData: any,
   ) {
     return this.imagingService.updateReport(req.tenantDb, id, reportData);
+  }
+
+  @Get('reports/:id/discrepancy-reviews')
+  @ApiOperation({ summary: 'Get discrepancy reviews for a report' })
+  @ApiResponse({ status: 200, description: 'Discrepancy review list' })
+  @Roles('radiologist', 'doctor', 'admin')
+  async getReportDiscrepancyReviews(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+  ) {
+    return this.imagingService.listReportDiscrepancyReviews(req.tenantDb, id);
+  }
+
+  @Get('reports/:id/incidental-followups')
+  @ApiOperation({ summary: 'Get incidental finding follow-up tasks for a report' })
+  @ApiResponse({ status: 200, description: 'Incidental finding follow-up list' })
+  @Roles('radiologist', 'doctor', 'admin')
+  async getReportIncidentalFollowups(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+  ) {
+    return this.imagingService.listReportIncidentalFollowups(req.tenantDb, id);
+  }
+
+  @Patch('discrepancy-reviews/:id/resolve')
+  @ApiOperation({ summary: 'Resolve or escalate a radiology discrepancy review' })
+  @ApiResponse({ status: 200, description: 'Discrepancy review updated successfully' })
+  @Roles('radiologist', 'admin')
+  async resolveDiscrepancyReview(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+    @Body() body: { review_status?: string; resolution_notes?: string },
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.imagingService.resolveDiscrepancyReview(req.tenantDb, id, body, userId);
+  }
+
+  @Patch('incidental-followups/:id/acknowledge')
+  @ApiOperation({ summary: 'Acknowledge a radiology incidental finding follow-up' })
+  @ApiResponse({ status: 200, description: 'Incidental follow-up acknowledged successfully' })
+  @Roles('radiologist', 'doctor', 'admin')
+  async acknowledgeIncidentalFollowup(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+    @Body() body: { resolution_notes?: string },
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.imagingService.acknowledgeIncidentalFollowup(req.tenantDb, id, body, userId);
+  }
+
+  @Patch('incidental-followups/:id/complete')
+  @ApiOperation({ summary: 'Complete a radiology incidental finding follow-up' })
+  @ApiResponse({ status: 200, description: 'Incidental follow-up completed successfully' })
+  @Roles('radiologist', 'doctor', 'admin')
+  async completeIncidentalFollowup(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+    @Body() body: { resolution_notes?: string },
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.imagingService.completeIncidentalFollowup(req.tenantDb, id, body, userId);
   }
 
   @Post('reports/:id/sign')
@@ -390,4 +497,3 @@ export class ImagingController {
     return this.imagingService.completeStudy(req.tenantDb, studyId, userId, body?.completion_notes);
   }
 }
-

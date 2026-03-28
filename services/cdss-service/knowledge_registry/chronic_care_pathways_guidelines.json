@@ -1,0 +1,71 @@
+[
+  {
+    "knowledge_id": "ckd-longitudinal-care-2026-01",
+    "condition": "chronic_kidney_disease",
+    "aliases": ["ckd", "chronic kidney disease"],
+    "title": "Chronic Kidney Disease Longitudinal Care Guidance",
+    "source_name": "KDIGO Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-07",
+    "reviewed_at": "2026-03-01",
+    "specialty": "nephrology",
+    "module": "chronic_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["ckd", "albuminuria", "egfr", "renal protection"],
+    "recommendation_blocks": [
+      "Track eGFR and albuminuria longitudinally and risk-stratify progression rather than reacting only to single results.",
+      "Optimize blood pressure, diabetes control, and kidney-protective therapy while reviewing nephrotoxic exposure.",
+      "Escalate referral when progressive decline, refractory electrolyte issues, or advanced-stage CKD emerges."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "heart-failure-longitudinal-pathway-2026-01",
+    "condition": "heart_failure_pathway",
+    "aliases": ["heart failure pathway", "hf chronic care"],
+    "title": "Heart Failure Longitudinal Pathway Guidance",
+    "source_name": "ACC/AHA Longitudinal HF Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-21",
+    "reviewed_at": "2026-03-01",
+    "specialty": "cardiology",
+    "module": "chronic_care",
+    "target_population": "adults",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["heart failure", "gdmt", "weights", "decompensation"],
+    "recommendation_blocks": [
+      "Use structured titration and monitoring plans so guideline-directed therapy is advanced deliberately over time.",
+      "Track symptoms, weights, renal function, and potassium after medication changes instead of waiting for crisis visits.",
+      "Escalate when recurrent admissions, hypotension, or persistent congestion signal failure of routine outpatient control."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  },
+  {
+    "knowledge_id": "diabetes-longitudinal-pathway-2026-01",
+    "condition": "diabetes_longitudinal_care",
+    "aliases": ["diabetes chronic care", "longitudinal diabetes care"],
+    "title": "Diabetes Longitudinal Care Pathway Guidance",
+    "source_name": "ADA Longitudinal Diabetes Adaptation",
+    "source_version": "2026.01",
+    "source_published_at": "2026-01-23",
+    "reviewed_at": "2026-03-01",
+    "specialty": "endocrinology",
+    "module": "chronic_care",
+    "target_population": "mixed",
+    "local_adaptation": true,
+    "evidence_level": "high",
+    "keywords": ["diabetes", "a1c", "retinopathy", "foot exam", "microalbumin"],
+    "recommendation_blocks": [
+      "Manage diabetes as a longitudinal program with scheduled HbA1c review, renal surveillance, retinal screening, and foot risk review.",
+      "Adjust therapy based on cardiovascular, renal, pregnancy, and hypoglycemia context rather than glucose values alone.",
+      "Close care gaps proactively when screening or complication-prevention milestones are overdue."
+    ],
+    "contraindications": [],
+    "medication_warnings": []
+  }
+]

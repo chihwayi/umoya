@@ -9,7 +9,6 @@ import {
   User,
   Clock,
   AlertCircle,
-  CheckCircle,
   X,
   Monitor,
   Settings,
@@ -19,16 +18,20 @@ import {
   RefreshCw,
   ChevronRight,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  ClipboardList,
 } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { GuidelineResult } from '../types/guidelines';
+import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 const TelemedicineConsultationPage: React.FC = () => {
   const { tenantSlug, consultationId } = useParams<{ tenantSlug: string; consultationId: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
 
   const [consultation, setConsultation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +40,7 @@ const TelemedicineConsultationPage: React.FC = () => {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isJoined, setIsJoined] = useState(false);
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
+  const [endingConsultation, setEndingConsultation] = useState(false);
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -45,6 +49,15 @@ const TelemedicineConsultationPage: React.FC = () => {
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
+  const currentUser = React.useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem('ehr_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     if (consultationId && tenantSlug && token) {
@@ -69,8 +82,13 @@ const TelemedicineConsultationPage: React.FC = () => {
   };
 
   const handleJoinConsultation = async () => {
+    const userId = currentUser?.id || currentUser?.userId || currentUser?.sub;
+    if (!userId) {
+      showError('Failed to join consultation', 'Missing current user ID. Please sign in again.');
+      return;
+    }
     try {
-      await ehrApi.joinTelemedicineConsultation(consultationId!, { role: 'doctor' }, token, tenantSlug!);
+      await ehrApi.joinTelemedicineConsultation(consultationId!, { role: 'doctor', userId }, token, tenantSlug!);
       setIsJoined(true);
       showSuccess('Joined consultation', 'You are now in the video call');
       
@@ -81,17 +99,43 @@ const TelemedicineConsultationPage: React.FC = () => {
     }
   };
 
-  const handleEndConsultation = async () => {
-    if (window.confirm('Are you sure you want to end this consultation?')) {
-      try {
-        // End consultation via API
-        await ehrApi.updateTelemedicineConsultation(consultationId!, { status: 'completed' }, token, tenantSlug!);
-        showSuccess('Consultation ended', 'Returning to dashboard...');
-        navigate(`/ehr/${tenantSlug}/telemedicine`);
-      } catch (error: any) {
-        showError('Failed to end consultation', error.response?.data?.message || 'Please try again');
+  const buildPostVisitUrl = () => {
+    const params = new URLSearchParams();
+    if (consultation?.patient_id) params.set('patientId', consultation.patient_id);
+    if (consultation?.appointment_id) params.set('appointmentId', consultation.appointment_id);
+    if (consultation?.id) params.set('consultationId', consultation.id);
+    params.set('sourceType', 'telemedicine');
+    return `/ehr/${tenantSlug}/post-visit/doctor?${params.toString()}`;
+  };
+
+  const handleEndConsultation = async (openPostVisit = false) => {
+    const shouldProceed = await confirm({
+      title: 'End Consultation',
+      message: 'Are you sure you want to end this consultation?',
+      confirmText: openPostVisit ? 'End & Open PostVisitAI' : 'End Consultation',
+      cancelText: 'Continue Call',
+      type: 'warning',
+    });
+    if (!shouldProceed) return;
+    setEndingConsultation(true);
+    try {
+      if (consultation?.status !== 'completed') {
+        await ehrApi.endTelemedicineConsultation(consultationId!, token, tenantSlug!);
       }
+      showSuccess(
+        'Consultation ended',
+        openPostVisit ? 'Opening PostVisitAI workspace...' : 'Returning to dashboard...',
+      );
+      navigate(openPostVisit ? buildPostVisitUrl() : `/ehr/${tenantSlug}/telemedicine`);
+    } catch (error: any) {
+      showError('Failed to end consultation', error.response?.data?.message || 'Please try again');
+    } finally {
+      setEndingConsultation(false);
     }
+  };
+
+  const handleEndAndOpenPostVisit = async () => {
+    await handleEndConsultation(true);
   };
 
   const handleGuidelineSearch = async () => {
@@ -151,7 +195,9 @@ const TelemedicineConsultationPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+    <>
+      {Dialog}
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
       {/* Header */}
       <div className="border-b border-white/10 bg-black/20 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -189,11 +235,20 @@ const TelemedicineConsultationPage: React.FC = () => {
                 <span className="text-sm capitalize">{connectionQuality}</span>
               </div>
               <button
-                onClick={handleEndConsultation}
-                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors flex items-center gap-2"
+                onClick={() => handleEndConsultation(false)}
+                disabled={endingConsultation}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white transition-colors flex items-center gap-2"
               >
                 <PhoneOff className="w-4 h-4" />
-                End Call
+                {endingConsultation ? 'Ending...' : 'End Call'}
+              </button>
+              <button
+                onClick={handleEndAndOpenPostVisit}
+                disabled={endingConsultation}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white transition-colors flex items-center gap-2"
+              >
+                <ClipboardList className="w-4 h-4" />
+                End + PostVisitAI
               </button>
             </div>
           </div>
@@ -268,8 +323,9 @@ const TelemedicineConsultationPage: React.FC = () => {
                     {isVideoEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
                   </button>
                   <button
-                    onClick={handleEndConsultation}
-                    className="p-3 rounded-full bg-red-600 hover:bg-red-700 transition-colors"
+                    onClick={() => handleEndConsultation(false)}
+                    disabled={endingConsultation}
+                    className="p-3 rounded-full bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                   >
                     <PhoneOff className="w-5 h-5" />
                   </button>
@@ -373,45 +429,7 @@ const TelemedicineConsultationPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {guidelineResults.length > 0 ? (
                 guidelineResults.map((result, index) => (
-                  <div key={index} className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="text-sm font-medium text-purple-300 flex items-center gap-2">
-                        <BookOpen className="w-3 h-3" />
-                        {result.source || 'Clinical Guideline'}
-                      </h4>
-                      {result.confidence && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                          result.confidence > 0.8 ? 'bg-green-500/20 text-green-300 border-green-500/30' :
-                          result.confidence > 0.5 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' :
-                          'bg-red-500/20 text-red-300 border-red-500/30'
-                        }`}>
-                          {Math.round(result.confidence * 100)}%
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-white/80 mb-3 leading-relaxed">{result.text}</p>
-                    
-                    {result.recommendation && (
-                      <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-xs mb-3">
-                        <strong className="flex items-center gap-1.5 text-purple-300 mb-1">
-                          <Sparkles className="w-3 h-3" />
-                          Recommendation
-                        </strong>
-                        <p className="text-purple-100">{result.recommendation}</p>
-                      </div>
-                    )}
-
-                    {result.url && (
-                      <a 
-                        href={result.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="inline-flex items-center text-xs text-purple-400 hover:text-purple-300 hover:underline mt-1"
-                      >
-                        View Source <ArrowRight className="w-3 h-3 ml-1" />
-                      </a>
-                    )}
-                  </div>
+                  <GuidelineCitationCard key={index} result={result} dark />
                 ))
               ) : (
                 <div className="text-center py-8 text-white/40">
@@ -424,9 +442,9 @@ const TelemedicineConsultationPage: React.FC = () => {
         </div>
       </div>
 
-    </div>
+      </div>
+    </>
   );
 };
 
 export default TelemedicineConsultationPage;
-

@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { CircuitBreaker } from '../utils/circuit-breaker';
 import { LruCache } from '../utils/lru-cache';
+import { CdssService } from './cdss.service';
 
 export interface GroundingCitation {
   id: string;
@@ -18,6 +18,7 @@ export interface GroundingCitation {
 export interface PostVisitDoctorPolishInput {
   sessionId: string;
   language?: string;
+  tenantId?: string;
   soapNote?: Record<string, any>;
   baseSummary: {
     summaryText?: string;
@@ -49,6 +50,7 @@ export interface PostVisitDoctorPolishOutput {
 export interface PostVisitPatientAnswerInput {
   sessionId: string;
   language?: string;
+  tenantId?: string;
   question: string;
   summary: string;
   checklist: string[];
@@ -70,6 +72,7 @@ export interface PostVisitPatientAnswerOutput {
 
 export interface PostVisitEscalationClassifierInput {
   sessionId?: string;
+  tenantId?: string;
   message: string;
   triggerTerms: string[];
   candidateSeverity: 'low' | 'moderate' | 'high' | 'critical';
@@ -99,25 +102,18 @@ export class PostVisitGroundedLlmService {
   private readonly logger = new Logger(PostVisitGroundedLlmService.name);
   private readonly enabled = String(process.env.POSTVISIT_GROUNDED_LLM_ENABLED || 'true').toLowerCase() !== 'false';
   private readonly circuitBreaker = new CircuitBreaker(5, 30000);
-  private readonly responseCache = new LruCache<{ json: any; audit: LlmAuditMetadata }>(200, 3600000);
-  private readonly apiUrl = String(process.env.POSTVISIT_LLM_API_URL || 'https://api.openai.com/v1/chat/completions');
-  private readonly apiModel = String(process.env.POSTVISIT_LLM_MODEL || 'gpt-4o-mini');
-  private readonly timeoutMs = Math.min(
-    Math.max(Number(process.env.POSTVISIT_LLM_TIMEOUT_MS || 12000), 3000),
-    45000,
-  );
+  private readonly responseCache = new LruCache<{ json: any; audit: LlmAuditMetadata; model: string }>(200, 3600000);
 
-  private get apiKey(): string {
-    return String(process.env.POSTVISIT_LLM_API_KEY || process.env.OPENAI_API_KEY || process.env.WHISPER_API_KEY || '').trim();
-  }
+  constructor(@Optional() private readonly cdssService?: CdssService) {}
 
   private canUseLlm() {
-    return this.enabled && this.apiKey.length > 0;
+    return this.enabled && Boolean(this.cdssService);
   }
 
   async draftReferralLetter(input: {
     sessionId: string;
     language?: string | null;
+    tenantId?: string;
     patientLabel?: string | null;
     clinicianLabel?: string | null;
     recipientLabel?: string | null;
@@ -166,13 +162,19 @@ export class PostVisitGroundedLlmService {
           },
         ],
         0.2,
+        {
+          useCase: 'post_visit_referral_letter',
+          templateVersion: 'postvisit-referral-letter-v1',
+          tenantId: input.tenantId,
+          sessionId: input.sessionId,
+        },
       );
 
       const json = llmResponse.json;
       if (json?.abstain === true) return null;
       const letterText = this.normalizeText(json?.letter_text, 3600);
       if (!letterText) return null;
-      return { letterText, model: this.apiModel, audit: llmResponse.audit };
+      return { letterText, model: llmResponse.model, audit: llmResponse.audit };
     } catch {
       return null;
     }
@@ -181,6 +183,7 @@ export class PostVisitGroundedLlmService {
   async draftClinicalNote(input: {
     sessionId: string;
     language?: string | null;
+    tenantId?: string;
     transcriptText?: string | null;
     soapNote?: Record<string, any> | null;
     visitSummary?: Record<string, any> | null;
@@ -223,13 +226,19 @@ export class PostVisitGroundedLlmService {
           },
         ],
         0.2,
+        {
+          useCase: 'post_visit_clinical_note',
+          templateVersion: 'postvisit-clinical-note-v1',
+          tenantId: input.tenantId,
+          sessionId: input.sessionId,
+        },
       );
 
       const json = llmResponse.json;
       if (json?.abstain === true) return null;
       const noteText = this.normalizeText(json?.note_text, 5200);
       if (!noteText) return null;
-      return { noteText, model: this.apiModel, audit: llmResponse.audit };
+      return { noteText, model: llmResponse.model, audit: llmResponse.audit };
     } catch {
       return null;
     }
@@ -282,6 +291,12 @@ export class PostVisitGroundedLlmService {
           },
         ],
         0.1,
+        {
+          useCase: 'post_visit_doctor_polish',
+          templateVersion: 'postvisit-doctor-polish-v1',
+          tenantId: input.tenantId,
+          sessionId: input.sessionId,
+        },
       );
       const json = llmResponse.json;
 
@@ -320,7 +335,7 @@ export class PostVisitGroundedLlmService {
         summaryText: this.normalizeText(json?.summary_text, 3000) || undefined,
         recommendationRewrites,
         citationsUsed,
-        model: this.apiModel,
+        model: llmResponse.model,
         audit: {
           ...llmResponse.audit,
           safetyGateTriggered: false,
@@ -389,6 +404,12 @@ export class PostVisitGroundedLlmService {
           },
         ],
         0.1,
+        {
+          useCase: 'post_visit_patient_answer',
+          templateVersion: 'postvisit-patient-answer-v1',
+          tenantId: input.tenantId,
+          sessionId: input.sessionId,
+        },
       );
       const json = llmResponse.json;
 
@@ -406,7 +427,7 @@ export class PostVisitGroundedLlmService {
         return {
           answer: '',
           citationsUsed,
-          model: this.apiModel,
+          model: llmResponse.model,
           abstained: true,
           abstainReason: this.normalizeText(json?.abstain_reason, 400) || 'Insufficient grounded context.',
           urgentSignal: json?.urgent_signal === true,
@@ -425,7 +446,7 @@ export class PostVisitGroundedLlmService {
       return {
         answer,
         citationsUsed,
-        model: this.apiModel,
+        model: llmResponse.model,
         abstained: false,
         urgentSignal: json?.urgent_signal === true,
         audit: {
@@ -486,6 +507,12 @@ export class PostVisitGroundedLlmService {
           },
         ],
         0.05,
+        {
+          useCase: 'post_visit_escalation_classification',
+          templateVersion: 'postvisit-escalation-v2',
+          tenantId: input.tenantId,
+          sessionId: input.sessionId,
+        },
       );
 
       const json = llmResponse.json || {};
@@ -514,7 +541,7 @@ export class PostVisitGroundedLlmService {
         temporality,
         confidence: Math.min(1, Math.max(0, confidenceRaw)),
         rationale: this.normalizeText(json?.rationale, 600) || undefined,
-        model: this.apiModel,
+        model: llmResponse.model,
         audit: {
           ...llmResponse.audit,
           templateVersion: 'postvisit-escalation-v2',
@@ -562,7 +589,18 @@ export class PostVisitGroundedLlmService {
     return Math.max(1, Math.ceil(String(text || '').length / 4));
   }
 
-  async requestJsonCompletion(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>, temperature = 0.1) {
+  async requestJsonCompletion(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    temperature = 0.1,
+    options?: {
+      useCase?: string;
+      templateVersion?: string;
+      tenantId?: string;
+      sessionId?: string;
+      patientId?: string;
+      schemaDescription?: string;
+    },
+  ) {
     const promptText = messages.map((message) => `${message.role}:${message.content}`).join('\n');
     const promptHash = createHash('sha256').update(promptText).digest('hex');
 
@@ -579,44 +617,46 @@ export class PostVisitGroundedLlmService {
       return null;
     }
 
+    if (!this.cdssService || !options?.useCase) {
+      return null;
+    }
+
     // 3. Make API call
     try {
       const startedAt = Date.now();
-      const response = await axios.post(
-        this.apiUrl,
+      const response = await this.cdssService.requestGovernedJson(
         {
-          model: this.apiModel,
-          temperature,
-          response_format: { type: 'json_object' },
+          useCase: options.useCase,
+          schemaDescription:
+            options.schemaDescription ||
+            '{"result":"Return a strict JSON object that matches the supplied prompt constraints."}',
           messages,
+          templateVersion: options.templateVersion || 'postvisit-grounded-v1',
+          temperature,
+          sessionId: options.sessionId,
+          patientId: options.patientId,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: this.timeoutMs,
-        },
+        options.tenantId,
       );
       const latencyMs = Date.now() - startedAt;
-
-      const content = response?.data?.choices?.[0]?.message?.content;
-      if (typeof content !== 'string' || content.trim().length === 0) {
+      const parsed = response?.json;
+      const content = JSON.stringify(parsed || {});
+      if (!parsed || content.trim().length === 0) {
         this.circuitBreaker.recordFailure();
         return null;
       }
 
-      const parsed = JSON.parse(content);
       const result = {
         json: parsed,
         audit: {
           promptHash,
-          templateVersion: 'postvisit-grounded-v1',
+          templateVersion: options.templateVersion || 'postvisit-grounded-v1',
           inputTokenCount: this.approximateTokenCount(promptText),
           outputTokenCount: this.approximateTokenCount(content),
           latencyMs,
           safetyGateTriggered: false,
         } as LlmAuditMetadata,
+        model: String(response?.model || 'governed_json_proxy'),
       };
 
       this.circuitBreaker.recordSuccess();
