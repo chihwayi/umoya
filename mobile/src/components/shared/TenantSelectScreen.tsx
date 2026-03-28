@@ -8,12 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, Camera } from 'expo-camera';
 import axios from 'axios';
 import { C, FONT, RADIUS } from '../../design/tokens';
-import { Icon, Card } from '../ui';
+import { Icon, Card, AiPulse } from '../ui';
 import { useAuthStore, Tenant } from '../../stores/useAuthStore';
 import { buildApiClient } from '../../services/api';
 import { TENANT_DISCOVERY_URL, ensurePublicApiBaseUrl } from '../../config/env';
 
-const MEDICORE_LOGO = require('../../../assets/medicore-logo.png');
 
 interface TenantSelectScreenProps {
   onSelected: () => void;
@@ -169,7 +168,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
       >
         {/* Hero */}
         <View style={styles.hero}>
-          <Image source={MEDICORE_LOGO} style={styles.medicareLogo} resizeMode="contain" />
+          <AiPulse size={72} active />
           <Text style={styles.headline}>Select Your Clinic</Text>
           <Text style={styles.sub}>
             Your clinic stays saved — you'll only see this screen once.
@@ -261,11 +260,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     marginBottom: 28,
-  },
-  medicareLogo: {
-    width: 220,
-    height: 80,
-    marginBottom: 20,
   },
   headline: {
     fontFamily: FONT.uiBk,

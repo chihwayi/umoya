@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Image } from 'react-native';
 import { C } from '../../design/tokens';
 
-const LOGO = require('../../../assets/icon.png');
+const LOGO = require('../../../assets/medicore-logo.png');
 
 interface AiPulseProps {
   size?: number;
@@ -54,7 +54,7 @@ export const AiPulse: React.FC<AiPulseProps> = ({ size = 48, active = true }) =>
       {active && <Animated.View style={ringStyle(ring1)} />}
       {active && <Animated.View style={ringStyle(ring2)} />}
       <View style={[styles.orb, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Image source={LOGO} style={{ width: size, height: size, borderRadius: size / 2 }} resizeMode="cover" />
+        <Image source={LOGO} style={{ width: size, height: size, borderRadius: size / 2 }} resizeMode="contain" />
       </View>
     </View>
   );
