@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { KnowledgeIngestService } from '../services/knowledge-ingest.service';
+import { CdssService } from '../services/cdss.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @ApiTags('Clinical Knowledge Base')
@@ -13,7 +14,10 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 @UseGuards(JwtAuthGuard)
 @Controller('knowledge')
 export class KnowledgeController {
-  constructor(private readonly knowledgeService: KnowledgeIngestService) {}
+  constructor(
+    private readonly knowledgeService: KnowledgeIngestService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   @Post('documents')
   @UseGuards(RolesGuard)
@@ -51,5 +55,26 @@ export class KnowledgeController {
   async deleteDocument(@Param('id') id: string, @Request() req: RequestWithTenant) {
     const tenantId = req.tenantId || 'default';
     return this.knowledgeService.deactivateDocument(id, tenantId, req.tenantDb);
+  }
+
+  /**
+   * Mobile guideline search — proxies to CDSS searchGuidelines.
+   * Called by mobile CdssService.guidelineSearch().
+   */
+  @Post('search')
+  @ApiOperation({ summary: 'Search clinical guidelines (mobile)' })
+  async searchGuidelines(
+    @Body() body: { query: string; top_k?: number; surface?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    const results = await this.cdssService.searchGuidelines(
+      body.query,
+      body.top_k ?? 5,
+      { module: body.surface ?? 'mobile_guidelines' },
+      req.tenantId ?? 'default',
+      req.tenantDb,
+    );
+    const list = (results as unknown as any[]) ?? [];
+    return { results: list, abstained: list.length === 0 };
   }
 }

@@ -329,4 +329,19 @@ export class CdssController {
   async detectAuditAnomalies(@Body() body: any, @Request() req: RequestWithTenant) {
     return this.cdssService.detectAuditAnomalies(body, req.tenantId);
   }
+
+  // ── Mobile: Knowledge / Guideline Search ─────────────────────────────
+  @Post('knowledge/search')
+  @Roles('nurse', 'doctor', 'admin')
+  async knowledgeSearch(@Body() body: { query: string; top_k?: number; surface?: string }, @Request() req: RequestWithTenant) {
+    const results = await this.cdssService.searchGuidelines(
+      body.query,
+      body.top_k ?? 5,
+      { module: body.surface ?? 'mobile_guidelines' },
+      req.tenantId,
+      req.tenantDb,
+    );
+    const list = (results as unknown as any[]) ?? [];
+    return { results: list, abstained: list.length === 0 };
+  }
 }

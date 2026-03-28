@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
@@ -616,6 +616,7 @@ export class NurseWorklistController {
   }
 
   @Post('tasks/:taskId/complete')
+  @Patch('tasks/:taskId/complete')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Persist server-scoped task completion for current user' })
   @ApiResponse({ status: 200, description: 'Task completion recorded' })

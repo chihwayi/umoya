@@ -903,23 +903,31 @@ export class ImagingService {
   async getPatientOrders(tenantDb: DataSource, patientId: string) {
     const orders = await tenantDb.query(
       `
-      SELECT 
+      SELECT
         io.*,
         st.study_name,
         m.modality_name,
         m.modality_code,
-        u.first_name || ' ' || u.last_name as ordering_provider_name
+        u.first_name || ' ' || u.last_name as ordering_provider_name,
+        r.id as report_id,
+        ior.ai_summary as ai_review_summary
       FROM imaging_orders io
       INNER JOIN imaging_study_types st ON st.id = io.study_type_id
       INNER JOIN imaging_modalities m ON m.id = st.modality_id
       INNER JOIN users u ON u.id = io.ordering_provider
+      LEFT JOIN imaging_studies s ON s.imaging_order_id = io.id
+      LEFT JOIN imaging_reports r ON r.imaging_study_id = s.id
+      LEFT JOIN imaging_order_ai_reviews ior ON ior.imaging_order_id = io.id
       WHERE io.patient_id = $1
       ORDER BY io.ordered_at DESC
       `,
       [patientId],
     );
 
-    return { orders, total: orders.length };
+    return {
+      orders: orders.map((o: any) => ({ ...o, reportId: o.report_id ?? null })),
+      total: orders.length,
+    };
   }
 
   private calculateAge(dateOfBirth: string | Date) {
@@ -1543,13 +1551,16 @@ export class ImagingService {
   async getReportById(tenantDb: DataSource, reportId: string) {
     const report = await tenantDb.query(
       `
-      SELECT 
+      SELECT
         r.*,
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number,
         drafted_u.first_name || ' ' || drafted_u.last_name as drafted_by_name,
         signed_u.first_name || ' ' || signed_u.last_name as signed_by_name,
-        amended_u.first_name || ' ' || amended_u.last_name as amended_by_name
+        amended_u.first_name || ' ' || amended_u.last_name as amended_by_name,
+        signed_u.first_name || ' ' || signed_u.last_name as "radiologistName",
+        COALESCE(r.signed_at, r.created_at) as "reportedAt",
+        r.ai_review_summary as "aiSummary"
       FROM imaging_reports r
       INNER JOIN patients p ON p.id = r.patient_id
       LEFT JOIN users drafted_u ON drafted_u.id = r.drafted_by

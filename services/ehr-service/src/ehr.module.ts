@@ -44,6 +44,8 @@ import { ReportsController } from './controllers/reports.controller';
 import { NotificationsController } from './controllers/notifications.controller';
 import { PaymentsController } from './controllers/payments.controller';
 import { UsersController } from './controllers/users.controller';
+import { StaffController } from './controllers/staff.controller';
+import { GovernedController } from './controllers/governed.controller';
 import { VitalsController } from './controllers/vitals.controller';
 import { TriageController } from './controllers/triage.controller';
 import { NursingNotesController } from './controllers/nursing-notes.controller';
@@ -432,6 +434,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NotificationsController,
     PaymentsController,
     UsersController,
+    StaffController,
+    GovernedController,
     VitalsController,
     TriageController,
     NursingNotesController,

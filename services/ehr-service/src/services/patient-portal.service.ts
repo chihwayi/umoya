@@ -103,6 +103,7 @@ export class PatientPortalService {
       priorityLevel: apt.priorityLevel || apt.priority_level,
       virtualMeetingUrl: apt.virtualMeetingUrl || apt.virtual_meeting_url,
       isTelehealth: apt.isTelehealth || apt.is_telehealth,
+      isTelemedicine: !!(apt.isTelehealth || apt.is_telehealth),
       feeAmount: apt.feeAmount || apt.fee_amount,
       paymentStatus: apt.paymentStatus || apt.payment_status,
       doctor: apt.doctor_id ? {
@@ -111,6 +112,11 @@ export class PatientPortalService {
         lastName: apt.doctor_last_name,
         specialization: apt.doctor_specialization,
       } : null,
+      // Mobile-friendly flat fields
+      doctorName: apt.doctor_id
+        ? `${apt.doctor_first_name ?? ''} ${apt.doctor_last_name ?? ''}`.trim() || null
+        : null,
+      doctorSpecialty: apt.doctor_specialization ?? null,
     }));
   }
 
