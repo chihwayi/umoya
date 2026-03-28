@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#080E1A"
+      "backgroundColor": "#ffffff"
     },
     "scheme": "medicore",
     "ios": {
