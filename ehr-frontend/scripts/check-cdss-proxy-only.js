@@ -25,11 +25,17 @@ const forbiddenRules = [
   },
 ];
 
+// Files that configure the dev proxy (server-side Node, not browser code)
+const serverSideExcludes = new Set(['setupProxy.js']);
+
 function walkFiles(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
+      continue;
+    }
+    if (serverSideExcludes.has(entry.name)) {
       continue;
     }
     const fullPath = path.join(dir, entry.name);
