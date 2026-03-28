@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -190,7 +190,15 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
                 <Card style={styles.resultCard}>
                   <View style={styles.resultRow}>
                     <View style={styles.clinicIcon}>
-                      <Icon name="stethoscope" size={20} color={C.teal} />
+                      {item.logoUrl ? (
+                        <Image
+                          source={{ uri: item.logoUrl }}
+                          style={styles.tenantLogoImg}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Icon name="stethoscope" size={20} color={C.teal} />
+                      )}
                     </View>
                     <View style={styles.clinicInfo}>
                       <Text style={styles.clinicName}>{item.name}</Text>
@@ -311,6 +319,12 @@ const styles = StyleSheet.create({
     backgroundColor: C.teal + '18',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  tenantLogoImg: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
   },
   clinicInfo: { flex: 1 },
   clinicName: { fontFamily: FONT.uiBd, fontSize: 14, color: C.textPrimary },

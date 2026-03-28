@@ -5,7 +5,6 @@ import {
   Platform, Alert, Animated, Image,
 } from 'react-native';
 
-const MEDICORE_LOGO = require('../../../assets/icon.png');
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -189,7 +188,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           {/* Clinic branding */}
           <View style={styles.clinicRow}>
             <View style={[styles.clinicLogo, { borderColor: accent + '44' }]}>
-              <Image source={MEDICORE_LOGO} style={styles.clinicLogoImg} resizeMode="cover" />
+              {tenant?.logoUrl ? (
+                <Image source={{ uri: tenant.logoUrl }} style={styles.clinicLogoImg} resizeMode="cover" />
+              ) : (
+                <Icon name="stethoscope" size={26} color={accent} />
+              )}
             </View>
             <View style={styles.clinicText}>
               <Text style={styles.clinicName}>{tenant?.name ?? 'MediCore'}</Text>
