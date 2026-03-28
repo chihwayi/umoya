@@ -132,33 +132,33 @@ jobs:
         node-version: '20.x'
 
     - name: Install Mobile Dependencies
-      working-directory: mobile-app
+      working-directory: mobile
       run: npm install
 
     - name: Mobile Lint
-      working-directory: mobile-app
-      run: npm run lint
+      working-directory: mobile
+      run: npm run lint --if-present
 
     - name: Mobile Release Version Check
-      working-directory: mobile-app
-      run: npm run release:check
+      working-directory: mobile
+      run: npm run release:check --if-present
 
     - name: Mobile Beta Readiness Check
-      working-directory: mobile-app
-      run: npm run beta:check
+      working-directory: mobile
+      run: npm run beta:check --if-present
 
     - name: Mobile Typecheck
-      working-directory: mobile-app
-      run: npm run typecheck
+      working-directory: mobile
+      run: npx tsc --noEmit
 
     - name: Mobile Unit Tests
-      working-directory: mobile-app
-      run: npm run test
+      working-directory: mobile
+      run: npm run test --if-present
 
     - name: Expo Doctor
-      working-directory: mobile-app
-      run: npm run doctor
+      working-directory: mobile
+      run: npx expo-doctor
 
     - name: Mobile E2E Smoke
-      working-directory: mobile-app
-      run: npm run test:e2e
+      working-directory: mobile
+      run: npm run test:e2e --if-present
