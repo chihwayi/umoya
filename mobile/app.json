@@ -7,8 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#080E1A",
-    "newArchEnabled": true,
-    "jsEngine": "hermes",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -19,7 +17,6 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.medicore.clinical",
       "buildNumber": "1",
-      "jsEngine": "hermes",
       "infoPlist": {
         "NSCameraUsageDescription": "MediCore uses the camera to scan clinic QR codes for secure login.",
         "NSFaceIDUsageDescription": "MediCore uses Face ID to securely authenticate clinical staff and protect patient data.",
@@ -60,7 +57,6 @@
     "android": {
       "package": "com.medicore.clinical",
       "versionCode": 1,
-      "jsEngine": "hermes",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#080E1A"
