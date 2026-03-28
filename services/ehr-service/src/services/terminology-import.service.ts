@@ -302,7 +302,7 @@ export class TerminologyImportService implements OnModuleDestroy {
     }
   }
 
-  private async processZipFile(job: ImportStatus, zipPath: string, type: 'snomed' | 'icd10') {
+  private async processZipFile(job: ImportStatus, zipPath: string, type: 'snomed' | 'icd10' | 'icd11') {
     const zip = new AdmZip(zipPath);
     const zipEntries = zip.getEntries();
     const extractPath = path.join(path.dirname(zipPath), `extract_${job.jobId}`);

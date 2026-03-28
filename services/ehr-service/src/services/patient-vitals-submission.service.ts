@@ -7,7 +7,7 @@ import { VitalsService } from './vitals.service';
 import { PatientNotificationsService } from './patient-notifications.service';
 import { HealthGoalsService } from './health-goals.service';
 
-interface GeneratedMonitoringAlert {
+export interface GeneratedMonitoringAlert {
   alertType: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   title: string;
