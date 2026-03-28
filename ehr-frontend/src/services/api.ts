@@ -97,6 +97,9 @@ export const tenantApi = {
     const response = await tenantAxios.get('/tenants/active');
     return { data: response.data };
   },
+  getTenantQrUrl: (tenantId: string): string => {
+    return `${TENANT_API_URL}/tenants/${tenantId}/qr`;
+  },
   getTenantBySlug: async (slug: string) => {
     const response = await tenantAxios.get(`/tenants/subdomain/${slug}`);
     return { data: response.data };

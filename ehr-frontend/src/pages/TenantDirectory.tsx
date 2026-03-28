@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tenantApi } from '../services/api';
-import { Search, ChevronLeft, ChevronRight, Building2, ArrowRight } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Building2, ArrowRight, QrCode } from 'lucide-react';
+import { TenantQRModal } from '../components/TenantQRModal';
 
 interface Tenant {
   id: string;
@@ -22,12 +23,13 @@ const TenantDirectory: React.FC = () => {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [qrTenant, setQrTenant] = useState<Tenant | null>(null);
 
   useEffect(() => {
     const fetchTenants = async () => {
       try {
         const response = await tenantApi.getActiveTenants();
-        setTenants(response.data);
+        setTenants(Array.isArray(response.data) ? response.data : []);
       } catch (err) {
         console.error('Failed to fetch tenants', err);
         setError('Failed to load clinic directory');
@@ -216,7 +218,15 @@ const TenantDirectory: React.FC = () => {
                     onClick={() => handleTenantSelect(tenant.subdomain)}
                     className="group relative flex cursor-pointer flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(14,24,41,0.98),rgba(8,14,26,0.98))] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-[#00C896]/30"
                   >
-                    <div className="absolute right-5 top-5 opacity-0 transition duration-300 group-hover:translate-x-1 group-hover:opacity-100">
+                    {/* QR button — top-right, stops propagation so card click doesn't fire */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setQrTenant(tenant); }}
+                      title="View / Print QR code"
+                      className="absolute right-5 top-5 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-[#00C896]/30 bg-[#00C896]/10 text-[#7DE8CA] opacity-0 transition duration-200 hover:bg-[#00C896]/25 group-hover:opacity-100"
+                    >
+                      <QrCode className="h-4 w-4" />
+                    </button>
+                    <div className="absolute right-5 top-5 opacity-0 transition duration-300 group-hover:translate-x-1 group-hover:opacity-100 group-hover:opacity-0">
                       <ArrowRight className="h-5 w-5 text-[#7DE8CA]" />
                     </div>
 
@@ -305,6 +315,10 @@ const TenantDirectory: React.FC = () => {
           </div>
         </footer>
       </div>
+
+      {qrTenant && (
+        <TenantQRModal tenant={qrTenant} onClose={() => setQrTenant(null)} />
+      )}
     </div>
   );
 };

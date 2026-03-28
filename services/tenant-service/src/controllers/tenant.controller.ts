@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException, NotFoundException, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException, NotFoundException, Res, Header } from '@nestjs/common';
+import * as QRCode from 'qrcode';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -133,6 +134,39 @@ export class TenantController {
     res.setHeader('Content-Type', file.contentType || 'application/octet-stream');
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.status(200).send(file.body);
+  }
+
+  @Get(':id/qr')
+  @ApiOperation({ summary: 'Generate QR code PNG for mobile clinic selection' })
+  @Header('Cache-Control', 'public, max-age=3600')
+  async getTenantQr(@Param('id') id: string, @Res() res: Response): Promise<void> {
+    const tenant = await this.tenantService.findById(id);
+
+    const ehrBase = (
+      process.env.PUBLIC_EHR_BASE_URL ||
+      (process.env.SERVER_HOST ? `http://${process.env.SERVER_HOST}:${process.env.PORT_EHR_SERVICE || '3013'}/api` : '') ||
+      process.env.SERVICE_EHR_URL ||
+      `http://localhost:${process.env.PORT_EHR_SERVICE || '3013'}/api`
+    ).replace(/\/$/, '');
+
+    const payload = JSON.stringify({
+      id: tenant.id,
+      slug: tenant.subdomain,
+      name: tenant.clinicName,
+      baseUrl: ehrBase.endsWith('/api') ? ehrBase : `${ehrBase}/api`,
+    });
+
+    const png = await QRCode.toBuffer(payload, {
+      type: 'png',
+      width: 600,
+      margin: 2,
+      color: { dark: '#080E1A', light: '#FFFFFF' },
+      errorCorrectionLevel: 'H',
+    });
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `inline; filename="${tenant.subdomain}-qr.png"`);
+    res.status(200).send(png);
   }
 
   @Get(':id')
