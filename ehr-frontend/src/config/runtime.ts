@@ -60,7 +60,7 @@ export const runtimeUrls = {
     process.env.REACT_APP_EHR_API_PATH || '/ehr-service/api',
   ),
   cdssApi: resolveUrl(
-    process.env.REACT_APP_CDSS_API_URL,
+    undefined,
     process.env.REACT_APP_API_BASE_URL,
     process.env.REACT_APP_CDSS_API_PATH || '/cdss-service',
   ),

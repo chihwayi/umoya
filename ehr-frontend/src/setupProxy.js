@@ -47,7 +47,7 @@ module.exports = function setupProxy(app) {
   const cdssServiceUrl = requireUrl(
     'CDSS service proxy target',
     resolveUrl(
-      process.env.CDSS_SERVICE_URL || process.env.SERVICE_CDSS_URL || 'http://cdss-service:8000',
+      process.env.CDSS_SERVICE_URL || process.env.SERVICE_CDSS_URL,
       process.env.SERVICE_BASE_URL,
       process.env.SERVICE_CDSS_PATH || '/cdss-service',
     ),
