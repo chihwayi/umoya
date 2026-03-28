@@ -11,6 +11,14 @@ interface ApplySchemaOptions {
     strict?: boolean;
     maxPasses?: number;
 }
+interface ApplySchemaResult {
+    pendingBundles: Array<{
+        bundleId: string;
+        version: string;
+        attempts: number;
+        lastError: string;
+    }>;
+}
 export declare class DatabaseProvisioningService {
     private dataSource;
     private readonly logger;
@@ -26,14 +34,22 @@ export declare class DatabaseProvisioningService {
     private enforceUserRoleConstraint;
     private getProvisioningBundles;
     getCoreSchemaStatements(): string[];
+    private getSprint111EncounterOrchestrationStatements;
+    private getSprint112RegistrationIntelligenceStatements;
+    private getSprint111PharmacyIntelligenceStatements;
+    private getSprint111RadiologyIntelligenceStatements;
+    private getSprint111PatientAiUnificationStatements;
+    private getSprint111AiReleaseGateStatements;
     private getDhis2SyncFoundationStatements;
     private getSprintH1PracticeManagementStatements;
     private getSprintH2PriorAuthorizationStatements;
     private getSprintH3PatientPortalStatements;
     private getSprintH4RecallCampaignStatements;
+    private getSprint111FinancialIntelligenceStatements;
     private getSprintI1TravelVaccineStatements;
     private getSprintI2MultiCurrencyMedicalAidStatements;
     private getSprintJ2EarlyWarningStatements;
+    private getSprint111VitalsOperationalStatements;
     private getGatewayConfigurationStatements;
     private getPortalEnhancementStatements;
     private getSprintL1ContinuousLearningStatements;
@@ -64,7 +80,7 @@ export declare class DatabaseProvisioningService {
     private getWhoSmartFormsDataSchemaStatements;
     createDatabase(databaseName: string): Promise<string>;
     private generateConnectionString;
-    applyClinicSchema(connectionString: string, options?: ApplySchemaOptions): Promise<void>;
+    applyClinicSchema(connectionString: string, options?: ApplySchemaOptions): Promise<ApplySchemaResult>;
     private getClinicSchema;
     private getSprint5SchemaStatements;
     private getSprint6DiabetesSchemaStatements;
@@ -144,6 +160,8 @@ export declare class DatabaseProvisioningService {
     private getSprint106TelemedicineFixesStatements;
     private getSprint107TelemedicinePostvisitBridgeStatements;
     private getSprint109NotificationPersistenceStatements;
+    private getSprint111SchemaCleanupStatements;
+    private getSprint111AiAuditHardeningStatements;
     private getSprint103ModelRegistryStatements;
     private getSprint96RadiologyAiStatements;
     private getSprint97AlertDeliveryStatements;
@@ -167,6 +185,15 @@ export declare class DatabaseProvisioningService {
     private getSprint81AutoCodingStatements;
     private getSprint80AdvancedHivPmtctPepfarStatements;
     private getSprint79NtdRegionalStatements;
+    private getSprint111EntityCompletenessStatements;
     private getSprint78SdohModuleStatements;
+    private getSprint112P0SafetyStatements;
+    private getSprint112FeedbackPersistenceStatements;
+    private getSprint113UiCompletenessStatements;
+    private getSprint114ClinicalRagStatements;
+    private getSprint115DenialPredictionStatements;
+    private getSprint116RiskStratSelfLearningStatements;
+    private getSprint117RegistrationAiStatements;
+    private getSprint117RadiologyViewerStatements;
 }
 export {};
