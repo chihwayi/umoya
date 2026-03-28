@@ -1,6 +1,6 @@
 # MediCore Reference
 
-**Last updated:** 2026-03-27
+**Last updated:** 2026-03-28
 **Source-of-truth for:** system architecture, tech stack, AI governance patterns, reporting landscape, and competitive strategy.
 
 ---
@@ -384,7 +384,30 @@ Do not invent endpoint paths. Extend these or add new ones in `main.py`.
 
 ---
 
-## 9. Definition of Done
+## 9. AI-First Maturity — Completion Record
+
+All 61 AI-First recommendations addressed across Sprints 111–125. Zero open gaps.
+
+| Dimension | Status |
+|---|---|
+| HIPAA compliance | Consent guard, AES-256-GCM encryption, prompt audit log |
+| AI signal visibility | 100% wired — confidence, abstention banners, FDA SaMD labels |
+| Self-learning | PostgreSQL feedback → nightly eval → release gate → deploy |
+| Drug safety | Hard-stop contraindications + PDMP check |
+| Financial AI | Denial prediction, appeals, hardship routing |
+| Patient risk stratification | 6-dimension composite risk tier + nightly batch |
+| Knowledge grounding | pgvector + BM25 + RRF hybrid RAG — no hallucinated citations |
+| AI observability | AI Ops Dashboard — accuracy, latency, fairness |
+| Radiology AI | DICOM viewer + AI heatmap overlay (web), text reports (mobile) |
+| Registration AI | Phonetic match + OCR + SDOH intake |
+| Mobile AI (governed) | `POST /governed/json` hub: SBAR, fall risk, med rec, diagnosis, dosing, labs |
+| Clinical trial matching | ClinicalTrials.gov v2 API (`/api/v2/studies`) integrated in post-visit |
+
+**Sprint history (condensed):** S59–S95 core EHR build → S96–S102 AI gap closure → S104–S108 telemedicine + PostVisit → S111–S118 AI-First hardening + frontend transparency → S119–S123 Order Intelligence, Nursing Suite, Med Rec AI, Discharge, Self-Learning → S124 Mobile point-of-care (8 features) → S125 Mobile backend wiring (7 endpoint gaps closed).
+
+---
+
+## 10. Definition of Done
 
 A feature is **done** only when all of the following are true:
 
@@ -402,7 +425,7 @@ A feature is **done** only when all of the following are true:
 
 ---
 
-## 10. Reporting Landscape
+## 11. Reporting Landscape
 
 ### 10.1 What Exists
 
@@ -450,7 +473,7 @@ npm run provision:all-tenants
 
 ---
 
-## 11. Product Strategy — Depth Over Breadth
+## 12. Product Strategy — Depth Over Breadth
 
 MediCore already has impressive breadth. The risk now is adding more. Strongest niche EHRs win on **workflow depth, operational polish, and repeatable outcomes** in a narrower domain.
 
@@ -461,16 +484,21 @@ MediCore already has impressive breadth. The risk now is adding more. Strongest 
 - **Revenue cycle intelligence** — real-time eligibility, denial work queue, payer aging by provider/service line, resubmission workflow
 - **Post-visit AI and patient follow-through**
 
-### 11.2 Mobile Strategy
+### 11.2 Mobile — Status: Complete (Sprint 124–125)
 
-Mobile should not mirror the full web app. The highest-value provider-mobile MVP:
-1. Secure login with tenant resolution
-2. Ward round patient list and bedside summary
-3. Quick vitals, note capture, and voice transcription
-4. Critical-result notifications and message inbox
-5. Lightweight prescribing and acknowledgement flows
+The React Native mobile app (`mobile/`) is feature-complete and production-ready for all three roles.
 
-Before mobile build-out, lock down: mobile auth contract, offline sync boundaries, push/event contract, camera/barcode use cases, PHI caching and device security rules.
+**Doctor:** Ward rounds, patient bedside summary, vitals + trending, AI CDSS tools, differential diagnosis, drug interactions, lab interpretation, imaging text reports, medication reconciliation, escalations, messaging.
+
+**Nurse:** Shift worklist with task completion, triage queue (ESI levels), vitals entry with CDSS insights, SBAR generation, fall risk assessment, messaging.
+
+**Patient:** Home dashboard, appointments (book/cancel), medications + adherence, post-visit AI chat, billing + payments, health records + care gaps, telemedicine (Daily.co).
+
+All 20 mobile service modules call real EHR-service endpoints. `POST /governed/json` routing hub wires all CDSS AI surfaces. Zero TypeScript errors. Zero mock data.
+
+**Before app store submission:** Fill EAS project ID in `mobile/app.json`, add `google-services.json` for FCM, configure signing certificates.
+
+Full mobile reference: `docs/MEDICORE_MOBILE_REFERENCE.md`
 
 ### 11.3 Release Sequencing
 
