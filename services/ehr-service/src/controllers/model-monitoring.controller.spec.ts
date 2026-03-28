@@ -7,7 +7,7 @@ describe('ModelMonitoringController', () => {
       recordOfflineEvalRun: jest.fn().mockResolvedValue(response),
     } as any;
 
-    const controller = new ModelMonitoringController(svc);
+    const controller = new ModelMonitoringController(svc, {} as any, {} as any, {} as any);
     const result = await controller.recordOfflineEval('kids-clinic', {
       subdomain: 'kids-clinic',
       aiSurface: 'patient_ai',

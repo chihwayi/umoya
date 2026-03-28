@@ -36,6 +36,7 @@ describe('AdminAuditController', () => {
 
     const result = await controller.getDisclosureReport(
       req,
+      {} as any,
       'patient-1',
       '2026-03-01T00:00:00.000Z',
       '2026-03-06T23:59:59.999Z',
@@ -55,7 +56,7 @@ describe('AdminAuditController', () => {
       tenantDb: { query: jest.fn() },
     } as any;
 
-    await expect(controller.getDisclosureReport(req, '', undefined, undefined)).rejects.toBeInstanceOf(
+    await expect(controller.getDisclosureReport(req, {} as any, '', undefined, undefined)).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });

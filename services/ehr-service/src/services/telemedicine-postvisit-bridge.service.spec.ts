@@ -2,19 +2,19 @@ import { TelemedicinePostVisitBridgeService, ConsultationRow } from './telemedic
 import { TelemedicineVideoService } from './telemedicine-video.service';
 
 // ── Mock axios (used by downloadBytes) ────────────────────────────────────────
+// downloadBytes uses `const { default: axios } = await import('axios')` then axios.get
+// so default.get and top-level get must be the same mock function
 
-jest.mock('axios', () => ({
-  get: jest.fn(),
-  create: jest.fn(() => ({ post: jest.fn(), get: jest.fn(), delete: jest.fn() })),
-  default: { get: jest.fn() },
-}));
+jest.mock('axios', () => {
+  const getFunc = jest.fn();
+  return {
+    get: getFunc,
+    create: jest.fn(() => ({ post: jest.fn(), get: jest.fn(), delete: jest.fn() })),
+    default: { get: getFunc },
+  };
+});
 
-// We need to intercept the dynamic import of axios inside downloadBytes
-const mockAxiosGet = jest.fn();
-jest.mock('axios', () => ({
-  get: mockAxiosGet,
-  create: jest.fn(() => ({ post: jest.fn(), get: jest.fn(), delete: jest.fn() })),
-}));
+const mockAxiosGet = (require('axios') as any).get as jest.Mock;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

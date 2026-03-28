@@ -284,6 +284,9 @@ export class TranscriptionService {
     // Preferred CDSS contract
     const nested = responseData?.transcription;
     if (nested && typeof nested === 'object') {
+      if (typeof nested.text !== 'string' || !nested.text.trim()) {
+        throw new Error('Invalid transcription response contract');
+      }
       return {
         text: this.normalizeTranscriptText(nested.text),
         language: this.normalizeLanguage(nested.language, fallbackLanguage),

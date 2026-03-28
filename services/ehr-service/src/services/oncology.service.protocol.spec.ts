@@ -5,7 +5,7 @@ const makeService = () => {
   const terminologyService = {};
 
   return {
-    service: new OncologyService(financeService as any, terminologyService as any),
+    service: new OncologyService(financeService as any, terminologyService as any, {} as any),
   };
 };
 

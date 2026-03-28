@@ -264,11 +264,13 @@ describe('PostVisitBillingIntelligenceService', () => {
       process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE = 'true';
 
       const query = jest.fn()
-        .mockResolvedValueOnce([])                           // SELECT existing suggestions
-        .mockResolvedValueOnce([])                           // DELETE stale suggestions
-        .mockResolvedValueOnce([makeSuggestionRow()])        // UPSERT suggestion
-        .mockResolvedValueOnce([])                           // INSERT audit log
-        .mockResolvedValueOnce([makeSuggestionRow()]);       // final SELECT for return value
+        .mockResolvedValueOnce([])                                           // SELECT existing suggestions
+        .mockResolvedValueOnce([])                                           // DELETE stale suggestions
+        .mockResolvedValueOnce([makeSuggestionRow()])                        // UPSERT draft 1
+        .mockResolvedValueOnce([])                                           // INSERT audit log draft 1
+        .mockResolvedValueOnce([makeSuggestionRow({ id: 'sug-2', code: '99213', code_type: 'cpt' })])  // UPSERT draft 2
+        .mockResolvedValueOnce([])                                           // INSERT audit log draft 2
+        .mockResolvedValueOnce([makeSuggestionRow()]);                       // final SELECT for return value
 
       const tenantDb = makeTenantDb(query);
 

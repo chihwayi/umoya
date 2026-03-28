@@ -22,7 +22,7 @@ const makeService = () => {
     { create: jest.fn() } as any, // appointmentService
     {} as any, // tenantService
     { validateConcept: jest.fn() } as any, // terminologyService
-    {} as any, // cdssService
+    { checkDrugInteractions: jest.fn().mockResolvedValue(null) } as any, // cdssService
   );
 };
 

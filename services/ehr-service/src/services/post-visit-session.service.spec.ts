@@ -208,26 +208,26 @@ describe('PostVisitSessionService', () => {
   describe('getPatientStoryLatest', () => {
     it('returns featureEnabled=false when feature is disabled', async () => {
       const tenantDb = makeTenantDb(jest.fn().mockResolvedValue([]));
-      process.env.FEATURE_PATIENT_STORY = 'false';
+      process.env.FEATURE_POSTVISIT_PATIENT_STORY = 'false';
 
       const result = await service.getPatientStoryLatest(tenantDb, 'patient-1');
 
       expect(result).toMatchObject({ featureEnabled: false, story: null });
-      delete process.env.FEATURE_PATIENT_STORY;
+      delete process.env.FEATURE_POSTVISIT_PATIENT_STORY;
     });
 
     it('returns story:null when no story row exists yet', async () => {
-      process.env.FEATURE_PATIENT_STORY = 'true';
+      process.env.FEATURE_POSTVISIT_PATIENT_STORY = 'true';
       const tenantDb = makeTenantDb(jest.fn().mockResolvedValue([]));
 
       const result = await service.getPatientStoryLatest(tenantDb, 'patient-1');
 
       expect(result).toMatchObject({ featureEnabled: true, story: null });
-      delete process.env.FEATURE_PATIENT_STORY;
+      delete process.env.FEATURE_POSTVISIT_PATIENT_STORY;
     });
 
     it('returns the latest story row when available', async () => {
-      process.env.FEATURE_PATIENT_STORY = 'true';
+      process.env.FEATURE_POSTVISIT_PATIENT_STORY = 'true';
       const tenantDb = makeTenantDb(
         jest.fn().mockResolvedValue([
           {
@@ -245,7 +245,7 @@ describe('PostVisitSessionService', () => {
 
       expect(result.story?.version).toBe(3);
       expect(result.version).toBe(3);
-      delete process.env.FEATURE_PATIENT_STORY;
+      delete process.env.FEATURE_POSTVISIT_PATIENT_STORY;
     });
   });
 
@@ -254,16 +254,16 @@ describe('PostVisitSessionService', () => {
   describe('getPatientStoryVersions', () => {
     it('returns empty list when feature is disabled', async () => {
       const tenantDb = makeTenantDb(jest.fn().mockResolvedValue([]));
-      process.env.FEATURE_PATIENT_STORY = 'false';
+      process.env.FEATURE_POSTVISIT_PATIENT_STORY = 'false';
 
       const result = await service.getPatientStoryVersions(tenantDb, 'patient-1');
 
       expect(result).toMatchObject({ featureEnabled: false, versions: [] });
-      delete process.env.FEATURE_PATIENT_STORY;
+      delete process.env.FEATURE_POSTVISIT_PATIENT_STORY;
     });
 
     it('returns version list ordered by version DESC', async () => {
-      process.env.FEATURE_PATIENT_STORY = 'true';
+      process.env.FEATURE_POSTVISIT_PATIENT_STORY = 'true';
       const tenantDb = makeTenantDb(
         jest.fn().mockResolvedValue([
           { id: 'story-3', version: 3, session_id: 's3', created_at: '' },
@@ -276,7 +276,7 @@ describe('PostVisitSessionService', () => {
 
       expect(result.versions).toHaveLength(3);
       expect(result.versions[0].version).toBe(3);
-      delete process.env.FEATURE_PATIENT_STORY;
+      delete process.env.FEATURE_POSTVISIT_PATIENT_STORY;
     });
   });
 
@@ -284,17 +284,17 @@ describe('PostVisitSessionService', () => {
 
   describe('getPatientStoryVersion', () => {
     it('returns story:null when the requested version does not exist', async () => {
-      process.env.FEATURE_PATIENT_STORY = 'true';
+      process.env.FEATURE_POSTVISIT_PATIENT_STORY = 'true';
       const tenantDb = makeTenantDb(jest.fn().mockResolvedValue([]));
 
       const result = await service.getPatientStoryVersion(tenantDb, 'patient-1', 99);
 
       expect(result).toMatchObject({ featureEnabled: true, story: null });
-      delete process.env.FEATURE_PATIENT_STORY;
+      delete process.env.FEATURE_POSTVISIT_PATIENT_STORY;
     });
 
     it('returns the specific story version', async () => {
-      process.env.FEATURE_PATIENT_STORY = 'true';
+      process.env.FEATURE_POSTVISIT_PATIENT_STORY = 'true';
       const tenantDb = makeTenantDb(
         jest.fn().mockResolvedValue([
           {
@@ -311,7 +311,7 @@ describe('PostVisitSessionService', () => {
       const result = await service.getPatientStoryVersion(tenantDb, 'patient-1', 2);
 
       expect(result.story?.version).toBe(2);
-      delete process.env.FEATURE_PATIENT_STORY;
+      delete process.env.FEATURE_POSTVISIT_PATIENT_STORY;
     });
   });
 });

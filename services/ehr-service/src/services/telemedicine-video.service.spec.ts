@@ -1,13 +1,16 @@
 import axios from 'axios';
 import { TelemedicineVideoService } from './telemedicine-video.service';
 
-jest.mock('axios', () => ({
-  create: jest.fn(() => ({
-    post: jest.fn(),
-    get: jest.fn(),
-    delete: jest.fn(),
-  })),
-}));
+jest.mock('axios', () => {
+  const mockAxios = {
+    create: jest.fn(() => ({
+      post: jest.fn(),
+      get: jest.fn(),
+      delete: jest.fn(),
+    })),
+  };
+  return { ...mockAxios, default: mockAxios, __esModule: true };
+});
 
 const mockAxiosInstance = {
   post: jest.fn(),
@@ -40,28 +43,29 @@ describe('TelemedicineVideoService', () => {
         data: { name: 'room-abc123', url: 'https://medicore.daily.co/room-abc123' },
       });
 
-      const result = await service.createMeetingRoom('consult-1');
+      const result = await service.createMeetingRoom('consult-1', 'patient-1', 'doctor-1');
 
       expect(result).toMatchObject({
-        roomName: 'room-abc123',
-        roomUrl: 'https://medicore.daily.co/room-abc123',
+        meetingRoomId: 'room-abc123',
+        meetingUrl: 'https://medicore.daily.co/room-abc123',
       });
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/rooms',
-        expect.objectContaining({ enable_recording: 'cloud' }),
+        expect.objectContaining({ properties: expect.objectContaining({ enable_recording: 'cloud' }) }),
       );
     });
 
     it('falls back to placeholder when DAILY_API_KEY is not set', async () => {
       delete process.env.DAILY_API_KEY;
-      const result = await service.createMeetingRoom('consult-1');
-      expect(result.roomUrl).toMatch(/placeholder|localhost|https:/);
+      service = new TelemedicineVideoService(); // re-create with no API key
+      const result = await service.createMeetingRoom('consult-1', 'patient-1', 'doctor-1');
+      expect(result.meetingUrl).toMatch(/placeholder|localhost|https:/);
       expect(mockAxiosInstance.post).not.toHaveBeenCalled();
     });
 
     it('propagates API errors', async () => {
       mockAxiosInstance.post.mockRejectedValueOnce(new Error('Daily API unavailable'));
-      await expect(service.createMeetingRoom('consult-fail')).rejects.toThrow('Daily API unavailable');
+      await expect(service.createMeetingRoom('consult-fail', 'patient-1', 'doctor-1')).rejects.toThrow('Daily API unavailable');
     });
   });
 
@@ -78,7 +82,7 @@ describe('TelemedicineVideoService', () => {
       expect(result).toBe('doctor-jwt-token');
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/meeting-tokens',
-        expect.objectContaining({ is_owner: true }),
+        expect.objectContaining({ properties: expect.objectContaining({ is_owner: true }) }),
       );
     });
 
@@ -91,7 +95,7 @@ describe('TelemedicineVideoService', () => {
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/meeting-tokens',
-        expect.objectContaining({ is_owner: false }),
+        expect.objectContaining({ properties: expect.objectContaining({ is_owner: false }) }),
       );
     });
   });
@@ -101,22 +105,22 @@ describe('TelemedicineVideoService', () => {
   describe('getMeetingStatus', () => {
     it('returns participant count from presence endpoint', async () => {
       mockAxiosInstance.get.mockResolvedValueOnce({
-        data: { present: { participants: ['p1', 'p2'] } },
+        data: { participants: { 'p1': {}, 'p2': {} } },
       });
 
-      const result = await service.getMeetingStatus('room-abc');
+      const result = await service.getMeetingStatus('consult-1', 'room-abc');
 
-      expect(result.participantCount).toBe(2);
+      expect(result.participants).toBe(2);
       expect(mockAxiosInstance.get).toHaveBeenCalledWith('/rooms/room-abc/presence');
     });
 
     it('returns zero participants when room is empty', async () => {
       mockAxiosInstance.get.mockResolvedValueOnce({
-        data: { present: { participants: [] } },
+        data: { participants: {} },
       });
 
-      const result = await service.getMeetingStatus('room-empty');
-      expect(result.participantCount).toBe(0);
+      const result = await service.getMeetingStatus('consult-1', 'room-empty');
+      expect(result.participants).toBe(0);
     });
   });
 
@@ -124,24 +128,23 @@ describe('TelemedicineVideoService', () => {
 
   describe('getRecording', () => {
     it('returns recording download url when available', async () => {
-      mockAxiosInstance.get.mockResolvedValueOnce({
-        data: {
-          data: [{ id: 'rec-1', download_url: 'https://cdn.daily.co/rec-1.mp4', duration: 300 }],
-        },
-      });
+      mockAxiosInstance.get
+        .mockResolvedValueOnce({
+          data: { data: [{ id: 'rec-1', status: 'finished', room_name: 'room-abc', duration: 300, start_ts: 0, max_participants: 2, share_token: '' }] },
+        })
+        .mockResolvedValueOnce({
+          data: { download_link: 'https://cdn.daily.co/rec-1.mp4' },
+        });
 
-      const result = await service.getRecording('room-abc');
+      const result = await service.getRecording('consult-1', 'room-abc');
 
-      expect(result).toMatchObject({
-        recordingId: 'rec-1',
-        downloadUrl: 'https://cdn.daily.co/rec-1.mp4',
-      });
+      expect(result).toBe('https://cdn.daily.co/rec-1.mp4');
     });
 
     it('returns null when no recordings exist yet', async () => {
       mockAxiosInstance.get.mockResolvedValueOnce({ data: { data: [] } });
 
-      const result = await service.getRecording('room-abc');
+      const result = await service.getRecording('consult-1', 'room-abc');
       expect(result).toBeNull();
     });
   });
@@ -158,26 +161,27 @@ describe('TelemedicineVideoService', () => {
     });
 
     it('returns recording on first attempt when available immediately', async () => {
-      mockAxiosInstance.get.mockResolvedValue({
-        data: {
-          data: [{ id: 'rec-1', download_url: 'https://cdn.daily.co/rec-1.mp4', duration: 180 }],
-        },
-      });
+      mockAxiosInstance.get
+        .mockResolvedValueOnce({
+          data: { data: [{ id: 'rec-1', status: 'finished', room_name: 'room-abc', duration: 180, start_ts: 0, max_participants: 2, share_token: '' }] },
+        })
+        .mockResolvedValueOnce({
+          data: { download_link: 'https://cdn.daily.co/rec-1.mp4' },
+        });
 
-      const promise = service.getRecordingWithRetry('room-abc', 3, 0);
+      const promise = service.getRecordingWithRetry('consult-1', 'room-abc', 3, 0);
       jest.runAllTimers();
       const result = await promise;
 
-      expect(result).toMatchObject({ recordingId: 'rec-1' });
-      expect(mockAxiosInstance.get).toHaveBeenCalledTimes(1);
+      expect(result).toBe('https://cdn.daily.co/rec-1.mp4');
+      expect(mockAxiosInstance.get).toHaveBeenCalledTimes(2);
     });
 
     it('returns null after exhausting all retry attempts', async () => {
+      jest.useRealTimers();
       mockAxiosInstance.get.mockResolvedValue({ data: { data: [] } });
 
-      const promise = service.getRecordingWithRetry('room-abc', 2, 0);
-      jest.runAllTimers();
-      const result = await promise;
+      const result = await service.getRecordingWithRetry('consult-1', 'room-abc', 2, 0);
 
       expect(result).toBeNull();
       expect(mockAxiosInstance.get).toHaveBeenCalledTimes(2);

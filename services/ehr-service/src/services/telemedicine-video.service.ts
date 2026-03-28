@@ -89,9 +89,14 @@ export class TelemedicineVideoService {
   async endMeeting(consultationId: string, meetingRoomId: string): Promise<void> {
     if (!this.apiKey) return;
 
+    // Eject all participants; if eject fails the room may already be empty — still try to delete
     try {
-      // Eject all participants then delete the room
       await this.daily.post(`/rooms/${meetingRoomId}/eject`);
+    } catch (e: any) {
+      this.logger.warn(`Could not eject participants from ${meetingRoomId}: ${e?.message}`);
+    }
+
+    try {
       await this.daily.delete(`/rooms/${meetingRoomId}`);
       this.logger.log(`Daily.co room deleted: ${meetingRoomId} (consultation ${consultationId})`);
     } catch (e: any) {
