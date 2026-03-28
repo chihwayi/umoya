@@ -308,6 +308,20 @@ body.ehr-theme header[class*='bg-gradient-to-r'][class*='from-blue-600'][class*=
   color: #e8f0ff !important;
 }
 
+/* Dropdown menus inside the header must NOT inherit the nav text color —
+   they sit on a white bg so need dark text. Higher specificity wins. */
+body.ehr-theme header[class*='sticky'][class*='top-0'] [data-dropdown] [class*='absolute'] :is(h1, h2, h3, h4, p, span, a, button, svg),
+body.ehr-theme header[class*='bg-gradient-to-r'] [data-dropdown] [class*='absolute'] :is(h1, h2, h3, h4, p, span, a, button, svg) {
+  color: #1e293b !important;
+}
+
+/* Sign-out / destructive items keep their red */
+body.ehr-theme header[class*='sticky'][class*='top-0'] [data-dropdown] [class*='absolute'] [class*='text-red'] :is(span, svg),
+body.ehr-theme header[class*='sticky'][class*='top-0'] [data-dropdown] [class*='absolute'] button[class*='text-red'],
+body.ehr-theme header[class*='sticky'][class*='top-0'] [data-dropdown] [class*='absolute'] button[class*='text-red'] :is(span, svg) {
+  color: #dc2626 !important;
+}
+
 body.ehr-theme footer {
   background: linear-gradient(130deg, var(--ehr-nav-start), #102742 58%, #153b5c) !important;
   border-top: 1px solid rgba(191, 211, 237, 0.2);
