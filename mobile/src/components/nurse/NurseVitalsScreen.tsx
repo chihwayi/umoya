@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, Dot } from '..
 import { EscalateModal } from './NurseShiftScreen';
 import { PatientsService } from '../../services/patients';
 import { VitalsService } from '../../services/vitals';
+import { CdssService } from '../../services/cdss';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -211,6 +212,7 @@ export const NurseVitalsScreen: React.FC = () => {
   const [saving,          setSaving]          = useState(false);
   const [saved,           setSaved]           = useState(false);
   const [showEscalate,    setShowEscalate]    = useState(false);
+  const [doctors,         setDoctors]         = useState<{ id: string; name: string; role: string; available: boolean }[]>([]);
 
   // Load recent ward patients on mount
   useEffect(() => {
@@ -223,6 +225,18 @@ export const NurseVitalsScreen: React.FC = () => {
           mrn:  p.mrn ?? p.id,
         }))
       ))
+      .catch(() => {});
+  }, []);
+
+  // Load available doctors for escalation
+  useEffect(() => {
+    CdssService.getAvailableDoctors()
+      .then(list => setDoctors(list.map(d => ({
+        id:        d.id,
+        name:      d.name,
+        role:      d.role ?? d.specialty ?? 'Physician',
+        available: d.available,
+      }))))
       .catch(() => {});
   }, []);
 
@@ -240,8 +254,36 @@ export const NurseVitalsScreen: React.FC = () => {
     if (filledCount < 3) return;
     setInterpreting(true);
     setInterpretation(null);
-    await new Promise((r) => setTimeout(r, 1000));
-    const result = buildInterpretation(values);
+
+    let result: AiInterpretation | null = null;
+
+    // Try CDSS deterioration risk if patient is selected
+    if (selectedPatient) {
+      try {
+        const deteriorationResult = await CdssService.getDeteriorationRisk(selectedPatient.id);
+        if (deteriorationResult) {
+          // Map CDSS deterioration result to AiInterpretation
+          const localFlags = buildInterpretation(values).flags;
+          const tier = deteriorationResult.tier;
+          const hasCrit = tier === 'critical';
+          const hasHigh = tier === 'high';
+          const narrative = hasCrit
+            ? `CDSS: ${(deteriorationResult.probability * 100).toFixed(0)}% deterioration risk (Critical). ${deteriorationResult.interventions.slice(0, 2).join('. ')}.`
+            : hasHigh
+            ? `CDSS: ${(deteriorationResult.probability * 100).toFixed(0)}% deterioration risk (High). Monitor closely.`
+            : `CDSS: ${(deteriorationResult.probability * 100).toFixed(0)}% deterioration risk. ${buildInterpretation(values).narrative}`;
+          result = { narrative, flags: localFlags };
+        }
+      } catch {
+        // fall through to local logic
+      }
+    }
+
+    // Fall back to local threshold logic if CDSS unavailable
+    if (!result) {
+      result = buildInterpretation(values);
+    }
+
     setInterpretation(result);
     setInterpreting(false);
     Animated.spring(resultAnim, { toValue: 1, tension: 60, friction: 14, useNativeDriver: true }).start();
@@ -449,6 +491,7 @@ export const NurseVitalsScreen: React.FC = () => {
       <EscalateModal
         visible={showEscalate}
         patientName={selectedPatient?.name ?? ''}
+        doctors={doctors}
         onClose={() => setShowEscalate(false)}
         onSend={() => setShowEscalate(false)}
       />

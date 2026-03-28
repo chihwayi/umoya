@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -67,78 +67,6 @@ function mapApiPrescription(p: any, idx: number): Medication {
   };
 }
 
-// ─── Placeholder (fallback if API unavailable) ────────────────────────────────
-
-const MOCK_MEDS: Medication[] = [
-  {
-    id: 'm1',
-    name: 'Aspirin',
-    dose: '100mg',
-    schedule: 'Morning with food',
-    time: '08:00',
-    color: C.teal,
-    takenToday: false,
-    adherence: ['taken','taken','taken','missed','taken','taken','future'],
-    adherencePct: 83,
-    note: 'Take with food to protect your stomach. Do not stop without asking your doctor.',
-    prescribedBy: 'Your doctor',
-    prescribedDate: '22 Mar 2026',
-    refillDaysLeft: 24,
-    mechanism: 'Aspirin is a blood thinner that prevents platelets (tiny blood cells) from sticking together and forming clots. After a heart attack, this helps keep your heart arteries open.',
-    warnings: ['Do not stop suddenly — stopping can increase clot risk', 'Take with food or milk', 'Tell your dentist you take aspirin before any procedures'],
-  },
-  {
-    id: 'm2',
-    name: 'Ticagrelor',
-    dose: '90mg',
-    schedule: 'Morning & evening',
-    time: '08:00 / 20:00',
-    color: C.blue,
-    takenToday: true,
-    adherence: ['taken','taken','missed','taken','taken','taken','future'],
-    adherencePct: 83,
-    note: 'Take BOTH doses every day. Missing doses significantly increases your risk of another heart attack.',
-    prescribedBy: 'Your doctor',
-    prescribedDate: '22 Mar 2026',
-    refillDaysLeft: 24,
-    mechanism: 'Ticagrelor blocks the P2Y12 receptor on platelets, preventing them from clumping together. Together with Aspirin (dual antiplatelet therapy), it significantly reduces the risk of another heart attack after stent placement.',
-    warnings: ['Never miss a dose', 'You may notice more bruising or bleeding than usual — this is expected', 'Do not take ibuprofen or other NSAIDs without asking your doctor'],
-  },
-  {
-    id: 'm3',
-    name: 'Atorvastatin',
-    dose: '80mg',
-    schedule: 'Bedtime',
-    time: '22:00',
-    color: C.purple,
-    takenToday: false,
-    adherence: ['taken','missed','taken','taken','taken','taken','future'],
-    adherencePct: 83,
-    note: 'Take at night — statins work better overnight. Do not eat grapefruit.',
-    prescribedBy: 'Your doctor',
-    prescribedDate: '22 Mar 2026',
-    refillDaysLeft: 24,
-    mechanism: 'Atorvastatin blocks HMG-CoA reductase, an enzyme your liver uses to make cholesterol. By reducing LDL ("bad") cholesterol, it slows the build-up of fatty deposits in your heart arteries and reduces inflammation in the artery walls.',
-    warnings: ['Avoid grapefruit and grapefruit juice', 'Report muscle aches or weakness immediately', 'A blood test will check your liver function after 4 weeks'],
-  },
-  {
-    id: 'm4',
-    name: 'Metoprolol',
-    dose: '25mg',
-    schedule: 'Morning',
-    time: '08:00',
-    color: C.amber,
-    takenToday: false,
-    adherence: ['taken','taken','taken','taken','taken','taken','future'],
-    adherencePct: 100,
-    note: 'Do not skip doses. Do not stop suddenly — wean off under doctor supervision if needed.',
-    prescribedBy: 'Your doctor',
-    prescribedDate: '22 Mar 2026',
-    refillDaysLeft: 24,
-    mechanism: 'Metoprolol is a beta-blocker. It blocks adrenaline from making your heart beat faster and harder, which reduces the workload on your heart while it recovers from the heart attack. It also helps control your blood pressure.',
-    warnings: ['Do not stop suddenly — this can cause a rebound heart rate increase', 'You may feel more tired, especially in the first week', 'Tell your doctor if your heart rate is below 50 beats per minute'],
-  },
-];
 
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -356,12 +284,14 @@ export const PatientMedsScreen: React.FC = () => {
     if (!patientId) return;
     PrescriptionsService.forPatient(patientId)
       .then(list => setMeds((list ?? []).map(mapApiPrescription)))
-      .catch(() => setMeds(MOCK_MEDS));
+      .catch(() => setMeds([]));
   }, [user?.id]);
 
   const takenToday = meds.filter((m) => m.takenToday).length;
   const totalToday = meds.length;
-  const overallPct = Math.round(meds.reduce((s, m) => s + m.adherencePct, 0) / meds.length);
+  const overallPct = meds.length > 0
+    ? Math.round(meds.reduce((s, m) => s + m.adherencePct, 0) / meds.length)
+    : 0;
 
   const handleMark = useCallback((id: string) => {
     setMeds((prev) => prev.map((m) => m.id === id ? { ...m, takenToday: true } : m));
@@ -408,7 +338,11 @@ export const PatientMedsScreen: React.FC = () => {
         {/* Medication cards */}
         <View>
           <SectionHeader action={`${takenToday} of ${totalToday} done`}>Today's Schedule</SectionHeader>
-          {meds.map((med) => (
+          {meds.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No medications on file</Text>
+            </View>
+          ) : meds.map((med) => (
             <MedCard key={med.id} med={med} onMark={handleMark} onDetail={setDetail} />
           ))}
         </View>
@@ -454,4 +388,6 @@ const styles = StyleSheet.create({
     gap: 7, paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1,
   },
   markBtnText: { fontFamily: FONT.uiBd, fontSize: 13 },
+  emptyState: { alignItems: 'center', paddingVertical: 32 },
+  emptyStateText: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textMuted },
 });

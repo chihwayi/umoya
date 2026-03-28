@@ -25,6 +25,10 @@ export interface VitalTrend {
   readings: { value: number; recordedAt: string }[];
   latest: number;
   status: 'normal' | 'warning' | 'critical';
+  normalLow?: number;
+  normalHigh?: number;
+  warnLow?: number;
+  warnHigh?: number;
 }
 
 export interface RecordVitalsDto {

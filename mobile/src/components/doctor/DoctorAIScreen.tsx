@@ -23,6 +23,7 @@ import {
   AiBadge,
   AiPulse,
 } from '../ui';
+import { CdssService, InteractionResult, DosingResult, RiskScoreResult, GuidelineResult, DiagnosisResult, LabInterpretResult } from '../../services/cdss';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,43 +123,126 @@ const CDSS_TOOLS: {
   },
 ];
 
-// ─── Mock CDSS results ────────────────────────────────────────────────────────
+// ─── CDSS result mappers ──────────────────────────────────────────────────────
 
-const MOCK_RESULTS: Record<string, CdssResult> = {
-  'aspirin warfarin': {
-    id: 'r1',
-    tool: 'interactions',
-    severity: 'HIGH',
-    title: 'Aspirin + Warfarin — Major Interaction',
-    body: 'Concomitant use significantly increases bleeding risk. Aspirin inhibits platelet aggregation; warfarin inhibits coagulation factors. Combined effect is synergistic and unpredictable.\n\nIf combination is clinically necessary (e.g., mechanical heart valve + AF), reduce aspirin to 75–100 mg/day, monitor INR closely (target 2.0–3.0), and counsel patient on bleeding signs.',
-    evidence: 'WHO EML 2023 · ESC/ACC Guidelines 2022 · CDSS-verified',
-  },
-  'chads2': {
-    id: 'r2',
-    tool: 'risk',
-    severity: 'INFO',
-    title: 'CHADS₂ Score — AF Stroke Risk',
-    body: 'C — Congestive heart failure (1 pt)\nH — Hypertension (1 pt)\nA — Age ≥ 75 (1 pt)\nD — Diabetes (1 pt)\nS₂ — Prior stroke/TIA (2 pts)\n\nScore 0: Low risk (aspirin or no therapy)\nScore 1: Moderate (anticoagulation recommended)\nScore ≥ 2: High risk (anticoagulation strongly recommended)',
-    evidence: 'Gage et al. JAMA 2001 · ESC Guidelines on AF 2020',
-  },
-  'troponin 2.4': {
-    id: 'r3',
-    tool: 'lab',
-    severity: 'HIGH',
-    title: 'Troponin-I 2.4 μg/L — Elevated, Clinical Urgency',
-    body: 'Troponin-I 2.4 μg/L is significantly above the 99th percentile URL (< 0.04 μg/L for most assays).\n\nIn the context of chest pain, this is consistent with acute myocardial injury. Differential includes:\n• NSTEMI (most likely with typical symptoms)\n• Type 2 MI (demand ischaemia: tachycardia, sepsis, hypotension)\n• Myocarditis\n• PE with RV strain\n\nAction: 12-lead ECG immediately. Serial troponin in 3h. Cardiology review. Dual antiplatelet if NSTEMI confirmed.',
-    evidence: 'ESC Guidelines NSTEMI 2020 · Fourth Universal Definition of MI',
-  },
-};
+function mapInteractionResult(q: string, r: InteractionResult): CdssResult {
+  if (r.abstained || !r.interactions.length) {
+    return {
+      id: 'rx', tool: 'interactions', severity: 'INFO',
+      title: 'AI unavailable',
+      body: 'Drug interaction data could not be retrieved at this time. Please consult your formulary or pharmacist.',
+      evidence: `Confidence: N/A`,
+    };
+  }
+  const major = r.interactions.filter(i => i.severity === 'major');
+  const sev: CdssResultSeverity = major.length ? 'HIGH' : r.interactions.some(i => i.severity === 'moderate') ? 'MED' : 'LOW';
+  const lines = r.interactions.map(i =>
+    `${i.drug1} + ${i.drug2} (${i.severity.toUpperCase()})\n${i.description}\nRecommendation: ${i.recommendation}`
+  ).join('\n\n');
+  return {
+    id: 'rx', tool: 'interactions', severity: sev,
+    title: `Drug Interactions — ${q}`,
+    body: lines,
+    evidence: `Confidence: ${(r.confidence * 100).toFixed(0)}% · CDSS-verified`,
+  };
+}
 
-const getDefaultResult = (query: string, tool: CdssTool): CdssResult => ({
-  id: 'rx',
-  tool,
-  severity: 'INFO',
-  title: `CDSS Result — "${query}"`,
-  body: `Clinical guidance retrieved for: ${query}\n\nThis result is based on WHO Smart Guidelines and peer-reviewed evidence. Review in the context of the patient's complete clinical picture.\n\nKey considerations:\n• Verify patient-specific factors (weight, renal function, allergies)\n• Cross-reference with local formulary\n• Document rationale for any deviation from guidelines`,
-  evidence: 'WHO Smart Guidelines 2023 · CDSS Knowledge Base v4.1',
-});
+function mapDosingResult(q: string, r: DosingResult): CdssResult {
+  if (r.abstained || !r.recommendation) {
+    return {
+      id: 'rx', tool: 'dose', severity: 'INFO',
+      title: 'AI unavailable',
+      body: 'Dosing guidance could not be retrieved at this time. Please consult your formulary.',
+      evidence: `Confidence: N/A`,
+    };
+  }
+  const adjustments = r.adjustments.length ? `\n\nAdjustments:\n${r.adjustments.map(a => `• ${a}`).join('\n')}` : '';
+  const citations = r.citations.length ? r.citations.join(' · ') : 'CDSS Knowledge Base';
+  return {
+    id: 'rx', tool: 'dose', severity: 'INFO',
+    title: `Dose — ${q}`,
+    body: `${r.recommendation}\n\nDose: ${r.dose}\nRoute: ${r.route}\nFrequency: ${r.frequency}${adjustments}`,
+    evidence: `${citations} · Confidence: ${(r.confidence * 100).toFixed(0)}%`,
+  };
+}
+
+function mapRiskResult(q: string, r: RiskScoreResult): CdssResult {
+  if (r.abstained) {
+    return {
+      id: 'rx', tool: 'risk', severity: 'INFO',
+      title: 'AI unavailable',
+      body: 'Risk score could not be calculated at this time.',
+      evidence: `Confidence: N/A`,
+    };
+  }
+  const recs = r.recommendations.length ? `\n\nRecommendations:\n${r.recommendations.map(rec => `• ${rec}`).join('\n')}` : '';
+  const citations = r.citations.length ? r.citations.join(' · ') : 'CDSS Knowledge Base';
+  return {
+    id: 'rx', tool: 'risk', severity: 'INFO',
+    title: `Risk Score — ${q}`,
+    body: `${r.interpretation}${r.score !== null ? `\n\nScore: ${r.score}` : ''}${recs}`,
+    evidence: `${citations} · Confidence: ${(r.confidence * 100).toFixed(0)}%`,
+  };
+}
+
+function mapGuidelineResult(q: string, r: GuidelineResult): CdssResult {
+  if (r.abstained || !r.results.length) {
+    return {
+      id: 'rx', tool: 'guidelines', severity: 'INFO',
+      title: 'AI unavailable',
+      body: 'No guideline results found for this query.',
+      evidence: `Confidence: N/A`,
+    };
+  }
+  const top = r.results[0];
+  const others = r.results.slice(1).map(g => `• ${g.title} (${g.source})`).join('\n');
+  return {
+    id: 'rx', tool: 'guidelines', severity: 'INFO',
+    title: top.title,
+    body: `${top.content}${others ? `\n\nAdditional results:\n${others}` : ''}`,
+    evidence: `${top.source} · Confidence: ${(top.confidence * 100).toFixed(0)}%`,
+  };
+}
+
+function mapDiagnosisResult(q: string, r: DiagnosisResult): CdssResult {
+  if (r.abstained || !r.differentials.length) {
+    return {
+      id: 'rx', tool: 'dx', severity: 'INFO',
+      title: 'AI unavailable',
+      body: 'Differential diagnosis could not be generated at this time.',
+      evidence: `Confidence: N/A`,
+    };
+  }
+  const lines = r.differentials.map(d =>
+    `${d.diagnosis} (${d.icd}) — ${(d.probability * 100).toFixed(0)}%\n${d.reasoning}`
+  ).join('\n\n');
+  return {
+    id: 'rx', tool: 'dx', severity: 'INFO',
+    title: `Differentials — ${q}`,
+    body: lines,
+    evidence: `Confidence: ${(r.confidence * 100).toFixed(0)}% · CDSS-verified`,
+  };
+}
+
+function mapLabResult(q: string, r: LabInterpretResult): CdssResult {
+  if (r.abstained || !r.interpretation) {
+    return {
+      id: 'rx', tool: 'lab', severity: 'INFO',
+      title: 'AI unavailable',
+      body: 'Lab interpretation could not be retrieved at this time.',
+      evidence: `Confidence: N/A`,
+    };
+  }
+  const sevMap: Record<string, CdssResultSeverity> = {
+    critical: 'HIGH', high: 'HIGH', moderate: 'MED', normal: 'LOW', unknown: 'INFO',
+  };
+  return {
+    id: 'rx', tool: 'lab', severity: sevMap[r.severity] ?? 'INFO',
+    title: `Lab — ${q}`,
+    body: `${r.interpretation}\n\nTrend: ${r.trend}\nAction: ${r.action}`,
+    evidence: `Confidence: ${(r.confidence * 100).toFixed(0)}% · CDSS-verified`,
+  };
+}
 
 // ─── Severity helpers ──────────────────────────────────────────────────────────
 
@@ -169,44 +253,22 @@ const SEV_COLOR: Record<CdssResultSeverity, string> = {
   INFO: C.blue,
 };
 
-// ─── Mock dictation result ────────────────────────────────────────────────────
+// ─── CDSS dictation helper ────────────────────────────────────────────────────
 
-const MOCK_DICTATE_RESULT: DictateResult = {
-  confidence: 94,
-  soap: [
-    {
-      key: 'S',
-      label: 'Subjective',
-      content: `47-year-old male presenting with 2-day history of progressive shortness of breath and bilateral leg swelling. Reports orthopnoea — sleeping on 3 pillows. No chest pain. Known IHD, previous MI 3 years ago. Non-compliant with furosemide for past week.`,
-    },
-    {
-      key: 'O',
-      label: 'Objective',
-      content: `Vitals: HR 104 bpm, BP 148/92 mmHg, SpO₂ 91% on room air, RR 22/min, Temp 36.8°C.\n\nExamination: Distressed. JVP elevated 8 cm. Bibasal crackles. Bilateral pitting oedema +2 to knees. Heart sounds include S3 gallop.`,
-    },
-    {
-      key: 'A',
-      label: 'Assessment',
-      content: `1. Decompensated heart failure — likely precipitated by medication non-compliance.\n2. Hypoxia (SpO₂ 91%) — requires supplemental oxygen.\n3. Hypertension — poorly controlled in context of fluid overload.`,
-    },
-    {
-      key: 'P',
-      label: 'Plan',
-      content: `1. Admit to medical ward.\n2. IV furosemide 80mg STAT then 40mg BD.\n3. O₂ via nasal cannula — target SpO₂ ≥ 95%.\n4. Daily weights, strict fluid balance.\n5. Echo within 24h.\n6. BNP, renal function, electrolytes.\n7. Cardiology consult.\n8. Medication adherence counselling prior to discharge.`,
-    },
-  ],
-  medications: [
-    { name: 'Furosemide', dose: '80mg STAT then 40mg BD', route: 'IV', frequency: 'BD' },
-    { name: 'Oxygen therapy', dose: '2–4L/min', route: 'Nasal cannula', frequency: 'Continuous' },
-  ],
-  investigations: [
-    { type: 'BNP', urgency: 'STAT' },
-    { type: 'U&E / Renal function', urgency: 'STAT' },
-    { type: 'ECG', urgency: 'URGENT' },
-    { type: 'Chest X-ray', urgency: 'URGENT' },
-    { type: 'Echocardiogram', urgency: 'ROUTINE' },
-  ],
-};
+async function fetchDictateResult(patientContext: string): Promise<DictateResult | null> {
+  try {
+    const { api } = await import('../../services/api');
+    const res = await api.post<{ result: DictateResult }>('/governed/json', {
+      surface:    'voice_dictation_mobile',
+      task:       'transcribe_and_structure',
+      payload:    { patientContext, format: 'SOAP' },
+      governance: { require_citations: false, abstain_if_uncertain: true, phi_guard: true },
+    });
+    return res.data?.result ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // ─── CDSS Screen ──────────────────────────────────────────────────────────────
 
@@ -215,12 +277,7 @@ const CDSSScreen: React.FC = () => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CdssResult | null>(null);
-  const [recentQueries, setRecentQueries] = useState<string[]>([
-    'aspirin warfarin',
-    'troponin 2.4 chest pain',
-    'chads2',
-    'metformin eGFR 35',
-  ]);
+  const [recentQueries, setRecentQueries] = useState<string[]>([]);
 
   const activeDef = CDSS_TOOLS.find((t) => t.key === activeTool);
 
@@ -229,15 +286,48 @@ const CDSSScreen: React.FC = () => {
     setLoading(true);
     setResult(null);
 
-    const q = query.toLowerCase().trim();
-    await new Promise((r) => setTimeout(r, 900));
+    const q = query.trim();
+    let res: CdssResult;
 
-    const matched = Object.keys(MOCK_RESULTS).find((k) => q.includes(k));
-    const res = matched ? MOCK_RESULTS[matched] : getDefaultResult(query, activeTool);
+    try {
+      if (activeTool === 'interactions') {
+        const drugs = q.split(/[\s,]+/).filter(Boolean);
+        const r = await CdssService.checkInteractions(drugs);
+        res = mapInteractionResult(q, r);
+      } else if (activeTool === 'dose') {
+        const r = await CdssService.dosing(q);
+        res = mapDosingResult(q, r);
+      } else if (activeTool === 'risk') {
+        const r = await CdssService.riskScore(q);
+        res = mapRiskResult(q, r);
+      } else if (activeTool === 'guidelines') {
+        const r = await CdssService.guidelineSearch(q);
+        res = mapGuidelineResult(q, r);
+      } else if (activeTool === 'dx') {
+        const r = await CdssService.diagnosisSuggest(q);
+        res = mapDiagnosisResult(q, r);
+      } else {
+        // lab
+        const parts = q.split(/\s+/);
+        const test = parts[0] ?? q;
+        const value = parts[1] ?? '';
+        const unit = parts[2] ?? '';
+        const context = parts.slice(3).join(' ');
+        const r = await CdssService.interpretLab(test, value, unit, context || undefined);
+        res = mapLabResult(q, r);
+      }
+    } catch {
+      res = {
+        id: 'rx', tool: activeTool, severity: 'INFO',
+        title: 'AI unavailable',
+        body: 'Clinical decision support is unavailable at this time.',
+        evidence: 'Confidence: N/A',
+      };
+    }
+
     setResult(res);
-
-    if (!recentQueries.includes(query)) {
-      setRecentQueries((prev) => [query, ...prev].slice(0, 6));
+    if (!recentQueries.includes(q)) {
+      setRecentQueries((prev) => [q, ...prev].slice(0, 6));
     }
     setLoading(false);
   }, [query, activeTool, recentQueries]);
@@ -545,11 +635,17 @@ const DictateScreen: React.FC = () => {
       setRecordingState('recording');
     } else if (recordingState === 'recording') {
       setRecordingState('processing');
-      await new Promise((r) => setTimeout(r, 1800));
-      setEditedSoap(MOCK_DICTATE_RESULT.soap.map((s) => ({ ...s })));
-      setResult(MOCK_DICTATE_RESULT);
-      setRecordingState('result');
-      setExpandedKey('S');
+      const dictResult = await fetchDictateResult(patient);
+      if (dictResult) {
+        setEditedSoap(dictResult.soap.map((s) => ({ ...s })));
+        setResult(dictResult);
+        setRecordingState('result');
+        setExpandedKey(dictResult.soap[0]?.key ?? 'S');
+      } else {
+        // CDSS abstained — show empty state, go back to idle
+        setRecordingState('idle');
+        Alert.alert('AI Unavailable', 'Voice dictation AI is not available at this time. Please type your notes manually.');
+      }
     }
   };
 

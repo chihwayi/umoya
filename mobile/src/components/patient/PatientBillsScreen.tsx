@@ -63,57 +63,6 @@ function mapApiBill(b: any): Invoice {
   };
 }
 
-// ─── Placeholder bills (used as fallback) ────────────────────────────────────
-
-const MOCK_INVOICES: Invoice[] = [
-  {
-    id: 'INV-2240',
-    description: 'Cardiac Care Unit — 2 days',
-    date: '22 Mar 2026',
-    amount: 480,
-    status: 'due',
-    items: [
-      { description: 'CCU admission (2 days)',       amount: 320 },
-      { description: 'Coronary angiogram procedure', amount: 120 },
-      { description: 'ECG × 3',                      amount: 40  },
-    ],
-  },
-  {
-    id: 'INV-2241',
-    description: 'Medications — post-discharge',
-    date: '22 Mar 2026',
-    amount: 68,
-    status: 'due',
-    items: [
-      { description: 'Ticagrelor 90mg × 60 tablets', amount: 48 },
-      { description: 'Metoprolol 25mg × 30 tablets', amount: 12 },
-      { description: 'Dispensing fee',                amount: 8  },
-    ],
-  },
-  {
-    id: 'INV-2235',
-    description: 'Cardiology consultation',
-    date: '08 Mar 2026',
-    amount: 85,
-    status: 'medaid',
-    insurer: 'PSMAS Medical Aid',
-    items: [
-      { description: 'Specialist consultation',  amount: 85 },
-    ],
-  },
-  {
-    id: 'INV-2198',
-    description: 'General Practice visit + labs',
-    date: '08 Feb 2026',
-    amount: 62,
-    status: 'paid',
-    items: [
-      { description: 'GP consultation',    amount: 35 },
-      { description: 'Lipid panel',        amount: 18 },
-      { description: 'HbA1c',             amount: 9  },
-    ],
-  },
-];
 
 // ─── Payment method definitions ───────────────────────────────────────────────
 
@@ -556,7 +505,7 @@ export const PatientBillsScreen: React.FC = () => {
     if (!patientId) return;
     BillingService.forPatient(patientId)
       .then(list => setInvoices((list ?? []).map(mapApiBill)))
-      .catch(() => setInvoices(MOCK_INVOICES));
+      .catch(() => setInvoices([]));
   }, [user?.id]);
 
   const dueInvoices  = invoices.filter((i) => i.status === 'due');
@@ -614,6 +563,17 @@ export const PatientBillsScreen: React.FC = () => {
             </View>
             <Text style={mainStyles.allClearTitle}>All paid up</Text>
             <Text style={mainStyles.allClearSub}>No outstanding balances.</Text>
+          </View>
+        )}
+
+        {/* Empty state — no invoices at all */}
+        {invoices.length === 0 && (
+          <View style={mainStyles.allClear}>
+            <View style={mainStyles.allClearIcon}>
+              <Icon name="check" size={28} color={C.textMuted} />
+            </View>
+            <Text style={mainStyles.allClearTitle}>No invoices</Text>
+            <Text style={mainStyles.allClearSub}>No billing records found.</Text>
           </View>
         )}
 

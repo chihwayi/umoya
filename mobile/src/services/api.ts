@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { ensurePublicApiBaseUrl } from '../config/env';
+import { ensurePublicApiBaseUrl, EHR_BASE_OVERRIDE } from '../config/env';
 
 let _apiInstance: AxiosInstance | null = null;
 
@@ -41,6 +41,12 @@ export function buildApiClient(baseUrl: string): AxiosInstance {
 
   _apiInstance = instance;
   return instance;
+}
+
+// In dev mode, pre-seed the API client with the EHR override so that
+// screens work without tenant discovery when EXPO_PUBLIC_EHR_BASE is set.
+if (EHR_BASE_OVERRIDE) {
+  buildApiClient(EHR_BASE_OVERRIDE);
 }
 
 export function getApiClient(): AxiosInstance {

@@ -29,6 +29,17 @@ function requireEnv(name: string): string {
 
 const rawBase = ensureUrlProtocol(requireEnv('EXPO_PUBLIC_API_BASE'));
 
+/**
+ * Optional direct EHR base URL — used ONLY when bypassing tenant discovery
+ * in local development (set EXPO_PUBLIC_EHR_BASE in .env).
+ * After login, buildApiClient() is called with the real tenant EHR URL,
+ * which takes precedence over this value.
+ */
+export const EHR_BASE_OVERRIDE: string | null =
+  process.env['EXPO_PUBLIC_EHR_BASE']?.trim()
+    ? ensureUrlProtocol(process.env['EXPO_PUBLIC_EHR_BASE']!.trim())
+    : null;
+
 function replaceDevLoopbackHost(url: URL): URL {
   if (
     Platform.OS === 'android' &&

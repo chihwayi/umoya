@@ -17,6 +17,7 @@ import { LabOrdersService } from '../../services/labOrders';
 import { PostVisitService } from '../../services/postVisit';
 import { AppointmentsService, ApiAppointment } from '../../services/appointments';
 import { MessagesService } from '../../services/messages';
+import { CdssService, CareGapResult, RiskTierResult } from '../../services/cdss';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,8 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
   const [labs,         setLabs]         = useState<HomeLab[]>([]);
   const [appointment,  setAppointment]  = useState<HomeAppointment | null>(null);
   const [unreadCount,  setUnreadCount]  = useState(0);
+  const [careGaps,     setCareGaps]     = useState<CareGapResult[]>([]);
+  const [riskTier,     setRiskTier]     = useState<RiskTierResult | null>(null);
 
   useEffect(() => {
     Animated.loop(
@@ -172,6 +175,15 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
       });
       if (results.length > 0) setLabs(results.slice(0, 3));
     }).catch(() => {});
+
+    // Load CDSS care gaps and risk tier
+    CdssService.getPatientCareGaps(id).then(gaps => {
+      if (gaps.length > 0) setCareGaps(gaps);
+    }).catch(() => {});
+
+    CdssService.getPatientRiskTier(id).then(tier => {
+      if (tier) setRiskTier(tier);
+    }).catch(() => {});
   }, [user?.id]);
 
   const goToPostVisit = () => {
@@ -199,6 +211,55 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
             )}
           </TouchableOpacity>
         </View>
+
+        {/* AI Risk Tier Alert */}
+        {riskTier && (riskTier.tier === 'Critical' || riskTier.tier === 'High') && (
+          <Card
+            accent={riskTier.tier === 'Critical' ? C.red : C.amber}
+            style={styles.riskAlert}
+          >
+            <View style={styles.riskAlertRow}>
+              <AiBadge text="AI Risk" />
+              <Badge
+                color={riskTier.tier === 'Critical' ? C.red : C.amber}
+                size="xs"
+              >
+                {riskTier.tier}
+              </Badge>
+            </View>
+            <Text style={styles.riskAlertText}>
+              Your health risk has been assessed as {riskTier.tier.toLowerCase()}.
+              {riskTier.recommended_actions?.[0] ? ` ${riskTier.recommended_actions[0]}` : ' Please follow up with your care team.'}
+            </Text>
+          </Card>
+        )}
+
+        {/* Care Gap Card */}
+        {careGaps.length > 0 && (
+          <Card accent={C.purple} style={styles.careGapCard}>
+            <View style={styles.careGapHeader}>
+              <AiBadge text="Care Gaps" />
+              <Badge color={C.purple} size="xs">{careGaps.length}</Badge>
+            </View>
+            {careGaps.slice(0, 2).map(gap => (
+              <View key={gap.id} style={styles.careGapRow}>
+                <Dot
+                  color={gap.priority === 'high' ? C.red : gap.priority === 'medium' ? C.amber : C.blue}
+                  size={7}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.careGapDesc}>{gap.description}</Text>
+                  {gap.dueDate ? (
+                    <Text style={styles.careGapDue}>Due: {new Date(gap.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+            {careGaps.length > 2 && (
+              <Text style={styles.careGapMore}>+{careGaps.length - 2} more care gaps</Text>
+            )}
+          </Card>
+        )}
 
         {/* PostVisit AI hero banner */}
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -390,4 +451,13 @@ const styles = StyleSheet.create({
   apptDay: { fontFamily: FONT.uiBk, fontSize: 20, color: C.blue, letterSpacing: -0.5, marginTop: -2 },
   apptTitle: { fontFamily: FONT.uiBd, fontSize: 14, color: C.textPrimary },
   apptMeta: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, marginTop: 2 },
+  riskAlert: { gap: 8 },
+  riskAlertRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  riskAlertText: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textPrimary, lineHeight: 19 },
+  careGapCard: { gap: 10 },
+  careGapHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  careGapRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  careGapDesc: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textPrimary, lineHeight: 18 },
+  careGapDue: { fontFamily: FONT.mono, fontSize: 10, color: C.textMuted, marginTop: 2 },
+  careGapMore: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, textAlign: 'center' },
 });
