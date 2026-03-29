@@ -70,6 +70,7 @@ describe('cdssApi proxy routing', () => {
           'X-Tenant-ID': 'tenant-a',
           Authorization: 'Bearer token-abc',
         },
+        timeout: 55000,
       },
     );
   });
