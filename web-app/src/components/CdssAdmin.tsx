@@ -116,6 +116,35 @@ export const CdssAdmin: React.FC = () => {
   });
   const [ingestionHistory, setIngestionHistory] = useState<any[]>([]);
   const [ingestionSearch, setIngestionSearch] = useState<string>('');
+  const [seedStatus, setSeedStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [seedProgress, setSeedProgress] = useState<{ seeded: number; total: number; current_label: string; started_at: number | null; finished_at: number | null; error: string | null }>({ seeded: 0, total: 32, current_label: '', started_at: null, finished_at: null, error: null });
+  const [seedNow, setSeedNow] = useState(Date.now() / 1000);
+  const seedPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopSeedPoll = () => { if (seedPollRef.current) { clearInterval(seedPollRef.current); seedPollRef.current = null; } };
+
+  const handleSeedGuidelines = async () => {
+    setSeedStatus('running');
+    setSeedProgress({ seeded: 0, total: 32, current_label: '', started_at: Date.now() / 1000, finished_at: null, error: null });
+    stopSeedPoll();
+    try {
+      const res = await cdssAdminAPI.seedGuidelines();
+      const jobId = res.jobId;
+      seedPollRef.current = setInterval(async () => {
+        try {
+          const d = await cdssAdminAPI.getSeedProgress(jobId);
+          setSeedProgress({ seeded: d.seeded, total: d.total, current_label: d.current_label, started_at: d.started_at, finished_at: d.finished_at, error: d.error });
+          setSeedNow(Date.now() / 1000);
+          if (d.status === 'done') { stopSeedPoll(); setSeedStatus('done'); }
+          if (d.status === 'error') { stopSeedPoll(); setSeedStatus('error'); }
+        } catch { /* poll silently */ }
+      }, 500);
+    } catch (e: any) {
+      setSeedProgress(p => ({ ...p, error: e?.response?.data?.detail || e?.message || 'Unknown error' }));
+      setSeedStatus('error');
+    }
+  };
+
+  useEffect(() => () => stopSeedPoll(), []);
   const [auditSortKey, setAuditSortKey] = useState<'time' | 'actor' | 'action'>(() => {
     try { return (localStorage.getItem('cdssAdmin.auditSortKey') as any) || 'time'; } catch { return 'time'; }
   });
@@ -799,7 +828,7 @@ export const CdssAdmin: React.FC = () => {
           <div>
             <label className="block text-xs text-[#8FA8CC] uppercase mb-1">LLM Model Name</label>
             <input
-              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white bg-[#0D1829] placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#2B7FFF]/30 focus:border-[#2B7FFF]/50"
               value={settings?.llm_model_name || ''}
               onChange={(e) => setSettings({ ...settings, llm_model_name: e.target.value })}
             />
@@ -807,7 +836,7 @@ export const CdssAdmin: React.FC = () => {
           <div>
             <label className="block text-xs text-[#8FA8CC] uppercase mb-1">LLM API URL</label>
             <input
-              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white bg-[#0D1829] placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#2B7FFF]/30 focus:border-[#2B7FFF]/50"
               value={settings?.llm_api_url || ''}
               onChange={(e) => setSettings({ ...settings, llm_api_url: e.target.value })}
             />
@@ -815,19 +844,19 @@ export const CdssAdmin: React.FC = () => {
           <div>
             <label className="block text-xs text-[#8FA8CC] uppercase mb-1">RAG Enabled</label>
             <select
-              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white bg-[#0D1829] focus:outline-none focus:ring-2 focus:ring-[#2B7FFF]/30 focus:border-[#2B7FFF]/50"
               value={String(settings?.rag_enabled ?? true)}
               onChange={(e) => setSettings({ ...settings, rag_enabled: e.target.value === 'true' })}
             >
-              <option value="true">true</option>
-              <option value="false">false</option>
+              <option value="true" className="bg-[#0D1829]">true</option>
+              <option value="false" className="bg-[#0D1829]">false</option>
             </select>
           </div>
           <div>
             <label className="block text-xs text-[#8FA8CC] uppercase mb-1">Cache TTL (seconds)</label>
             <input
               type="number"
-              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
+              className="w-full border border-white/[0.10] rounded-2xl px-3 py-2 text-sm text-white bg-[#0D1829] focus:outline-none focus:ring-2 focus:ring-[#2B7FFF]/30 focus:border-[#2B7FFF]/50"
               value={String(settings?.cache_ttl_seconds ?? 300)}
               onChange={(e) => setSettings({ ...settings, cache_ttl_seconds: Number(e.target.value || 0) })}
             />
@@ -882,6 +911,14 @@ export const CdssAdmin: React.FC = () => {
           >
             Flush Cache
           </button>
+          <button
+            onClick={handleSeedGuidelines}
+            disabled={seedStatus === 'running'}
+            className="px-4 py-2 rounded-2xl bg-emerald-700 text-white disabled:opacity-50 shadow-sm hover:bg-emerald-800 transition w-full sm:w-auto"
+            title="Seed ChromaDB with 32 WHO/evidence-based guideline chunks and rebuild BM25 index"
+          >
+            {seedStatus === 'running' ? 'Seeding...' : seedStatus === 'done' ? 'Re-seed Guidelines' : 'Seed Guidelines'}
+          </button>
           <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
             <label className="text-xs text-[#8FA8CC]">Auto-refresh</label>
             <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
@@ -907,6 +944,39 @@ export const CdssAdmin: React.FC = () => {
             </div>
           </div>
         </div>
+        {(seedStatus === 'running' || seedStatus === 'done' || seedStatus === 'error') && (() => {
+          const elapsed = seedProgress.started_at ? (seedStatus === 'done' && seedProgress.finished_at ? seedProgress.finished_at - seedProgress.started_at : seedNow - seedProgress.started_at) : 0;
+          const pct = seedProgress.total > 0 ? Math.round((seedProgress.seeded / seedProgress.total) * 100) : 0;
+          const rate = elapsed > 0 && seedProgress.seeded > 0 ? seedProgress.seeded / elapsed : null;
+          const eta = rate && seedStatus === 'running' ? (seedProgress.total - seedProgress.seeded) / rate : null;
+          const fmt = (s: number) => s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+          return (
+            <div className="rounded-2xl border border-white/[0.10] bg-[#0A1525] p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-[#7DE8CA]">{seedStatus === 'done' ? 'Seed complete' : seedStatus === 'error' ? 'Seed failed' : 'Seeding guidelines...'}</span>
+                <span className="tabular-nums text-[#7A92B8]">{seedProgress.seeded} / {seedProgress.total}</span>
+              </div>
+              {seedStatus !== 'error' && (
+                <>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                    <div className="h-2 rounded-full bg-[#00C896] transition-all duration-300" style={{ width: `${pct}%`, boxShadow: seedStatus === 'running' ? '0 0 8px rgba(0,200,150,0.5)' : 'none' }} />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-[#587296]">
+                    <span>{pct}%{seedStatus === 'running' && eta !== null ? ` · ~${fmt(eta)} left` : ''}</span>
+                    <span>Elapsed: {fmt(elapsed)}</span>
+                  </div>
+                  {seedStatus === 'running' && seedProgress.current_label && (
+                    <p className="truncate text-[11px] text-[#4A6080]">{seedProgress.current_label}</p>
+                  )}
+                  {seedStatus === 'done' && (
+                    <p className="text-[11px] text-[#7DE8CA]">BM25 index rebuilt · {seedProgress.total} chunks in ChromaDB</p>
+                  )}
+                </>
+              )}
+              {seedStatus === 'error' && <p className="text-[11px] text-[#FF7D92]">{seedProgress.error}</p>}
+            </div>
+          );
+        })()}
         <div>
           <div className="flex items-center justify-between mt-2 mb-1">
             <div className="text-xs font-semibold text-[#8FA8CC] uppercase">Jobs</div>
@@ -1105,7 +1175,7 @@ export const CdssAdmin: React.FC = () => {
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto border border-white/[0.07] rounded-xl bg-white">
+        <div className="overflow-x-auto border border-white/[0.07] rounded-xl bg-[#080E1A]">
           <table className="w-full text-sm">
             <thead className="bg-[#080E1A] border-b border-white/[0.07] text-left text-[#8FA8CC] uppercase text-xs">
               <tr>

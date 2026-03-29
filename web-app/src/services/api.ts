@@ -514,6 +514,14 @@ export const cdssAdminAPI = {
       return { data: response.data, rateLimit: { limit, remaining, reset } };
     }
   },
+  seedGuidelines: async (): Promise<any> => {
+    const response = await api.post('/cdss-admin/admin/seed-guidelines', null, { headers: { ...getOwnerHeaders() }, timeout: 10000 });
+    return response.data;
+  },
+  getSeedProgress: async (jobId: string): Promise<any> => {
+    const response = await api.get(`/cdss-admin/admin/seed-guidelines/progress/${jobId}`, { headers: { ...getOwnerHeaders() }, timeout: 5000 });
+    return response.data;
+  },
   reindex: async (): Promise<any> => {
     const response = await api.post('/cdss-admin/admin/reindex', null, { headers: { ...getOwnerHeaders() } });
     const limit = Number(response.headers['x-ratelimit-limit'] || 0);
