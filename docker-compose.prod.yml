@@ -340,9 +340,9 @@ services:
     ports:
       - "${PORT_EHR_FRONTEND:-3000}:80"
     environment:
-      - TENANT_SERVICE_INTERNAL_URL=http://medicore-tenant-service:3001
-      - EHR_SERVICE_INTERNAL_URL=http://medicore-ehr-service:3013
-      - CDSS_SERVICE_INTERNAL_URL=http://medicore-cdss-service:8000
+      - SERVICE_TENANT_URL=${SERVICE_TENANT_URL:-http://tenant-service:3001}
+      - SERVICE_EHR_URL=${SERVICE_EHR_URL:-http://ehr-service:3013}
+      - SERVICE_CDSS_URL=${SERVICE_CDSS_URL:-http://cdss-service:8000}
     depends_on:
       - tenant-service
       - ehr-service
@@ -359,7 +359,7 @@ services:
     ports:
       - "${PORT_PATIENT_PORTAL:-3015}:80"
     environment:
-      - EHR_SERVICE_INTERNAL_URL=http://medicore-ehr-service:3013
+      - SERVICE_EHR_URL=${SERVICE_EHR_URL:-http://ehr-service:3013}
     depends_on:
       - ehr-service
     networks:

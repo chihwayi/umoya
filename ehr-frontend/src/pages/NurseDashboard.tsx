@@ -5410,84 +5410,97 @@ const NurseDashboard: React.FC = () => {
       {showGuidelineSearch && (
         <ModalPortal>
           <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl max-h-[85vh] overflow-hidden bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 flex flex-col">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-5 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-xl">
-                  <BookOpen className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">AI Clinical Guidelines</h3>
-                  <p className="text-sm text-blue-100">Evidence-based nursing protocols & guidelines</p>
-                </div>
-              </div>
-              <button onClick={() => setShowGuidelineSearch(false)} className="p-2 rounded-lg hover:bg-white/20 text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-hidden flex flex-col h-full">
-              <div className="flex gap-2 mb-6 shrink-0">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={guidelineQuery}
-                    onChange={(e) => setGuidelineQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                    placeholder="Search for nursing protocols (e.g., 'Sepsis protocol', 'Fall prevention', 'IV administration')..."
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
-                    autoFocus
-                  />
+            <div className="w-full max-w-4xl max-h-[85vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col"
+              style={{ background: 'linear-gradient(145deg, #1e3a5f 0%, #0f2744 100%)', border: '1px solid rgba(99,179,237,0.15)' }}>
+
+              {/* Header */}
+              <div className="px-6 py-4 flex items-center justify-between shrink-0"
+                style={{ borderBottom: '1px solid rgba(99,179,237,0.12)', background: 'rgba(255,255,255,0.04)' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: 'rgba(59,130,246,0.25)', border: '1px solid rgba(59,130,246,0.35)' }}>
+                    <BookOpen className="w-4 h-4" style={{ color: '#93c5fd' }} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold" style={{ color: '#e2e8f0' }}>AI Clinical Guidelines</h3>
+                    <p className="text-xs" style={{ color: '#64748b' }}>Evidence-based nursing protocols · RAG-powered</p>
+                  </div>
                 </div>
                 <button
-                  onClick={handleGuidelineSearch}
-                  disabled={loadingGuidelines || !guidelineQuery.trim()}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-semibold rounded-xl hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  onClick={() => setShowGuidelineSearch(false)}
+                  title="Close"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ color: '#94a3b8', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.12)'; (e.currentTarget as HTMLButtonElement).style.color = '#e2e8f0'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
                 >
-                  {loadingGuidelines ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Searching...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5" />
-                      Search
-                    </>
-                  )}
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
+              {/* Search bar */}
+              <div className="px-6 pt-5 pb-4 shrink-0">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#64748b' }} />
+                    <input
+                      type="text"
+                      value={guidelineQuery}
+                      onChange={(e) => setGuidelineQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                      placeholder="Search protocols (e.g. Sepsis, Fall prevention, IV administration)…"
+                      className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                      style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)', color: '#e2e8f0' }}
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    onClick={handleGuidelineSearch}
+                    disabled={loadingGuidelines || !guidelineQuery.trim()}
+                    className="px-5 py-2.5 text-sm font-semibold rounded-xl flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: 'linear-gradient(135deg,#3b82f6,#4f46e5)', color: '#fff', boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }}
+                  >
+                    {loadingGuidelines ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" />Searching…</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" />Search</>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Results */}
+              <div className="flex-1 overflow-y-auto min-h-0 px-6 pb-2 custom-scrollbar">
                 {loadingGuidelines ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-slate-500">
-                    <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-3" />
-                    <p>Analyzing clinical guidelines...</p>
+                  <div className="flex flex-col items-center justify-center h-48" style={{ color: '#64748b' }}>
+                    <Loader2 className="w-9 h-9 animate-spin mb-3" style={{ color: '#3b82f6' }} />
+                    <p className="text-sm">Querying clinical knowledge base…</p>
                   </div>
                 ) : guidelineResults.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {guidelineResults.map((result, index) => (
-                      <GuidelineCitationCard key={index} result={result} index={index} />
+                      <GuidelineCitationCard key={index} result={result} index={index} dark />
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-slate-500">
-                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <BookOpen className="w-8 h-8 text-slate-400" />
+                  <div className="flex flex-col items-center justify-center h-48 text-center">
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <BookOpen className="w-6 h-6" style={{ color: '#64748b' }} />
                     </div>
-                    <p className="text-lg font-medium text-slate-700">No guidelines found</p>
-                    <p className="text-sm">Try searching for a specific condition, procedure, or medication.</p>
+                    <p className="text-sm font-medium" style={{ color: '#94a3b8' }}>Type a query and press Search</p>
+                    <p className="text-xs mt-1" style={{ color: '#475569' }}>Try a condition, drug, or procedure name</p>
                   </div>
                 )}
               </div>
-              
-              <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-500 text-center shrink-0">
-                AI-assisted results should be verified against official hospital protocols.
+
+              {/* Footer */}
+              <div className="px-6 py-3 text-center text-xs shrink-0"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.06)', color: '#475569' }}>
+                AI-assisted — verify against official hospital protocols before acting
               </div>
             </div>
           </div>
-        </div>
         </ModalPortal>
       )}
       </div>

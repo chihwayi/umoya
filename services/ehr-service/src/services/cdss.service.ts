@@ -1240,6 +1240,13 @@ export class CdssService {
 
     try {
       // 1. Search governed CDSS knowledge layer
+      // Timeout is higher than other calls because the CDSS RAG + optional LLM synthesis
+      // can take up to 45 s when the local LLM (Ollama) is cold. Configured via
+      // CDSS_GUIDELINES_SEARCH_TIMEOUT_MS env var (default 50 s).
+      const guidelinesTimeoutMs = this.parsePositiveInt(
+        process.env.CDSS_GUIDELINES_SEARCH_TIMEOUT_MS,
+        50000,
+      );
       try {
         const responseData = await this.postWithPolicy<any>(
           'guidelines_search',
@@ -1251,7 +1258,7 @@ export class CdssService {
           specialty: patientContext?.specialty || null,
           module: patientContext?.module || null,
           },
-          15000,
+          guidelinesTimeoutMs,
           tenantId,
         );
         await this.recordGovernedPromptAudit({
