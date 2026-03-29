@@ -3212,7 +3212,10 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
                     analysis = None
             if analysis is None:
                 print(f"[CDSS] Generating analysis for patient context...")
-                _llm_wall_timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", "45"))
+                # Guidelines search uses its own shorter timeout so the full endpoint
+                # responds well within the EHR-service caller's window.
+                # Override with LLM_GUIDELINES_TIMEOUT_SECONDS; falls back to 20 s.
+                _llm_wall_timeout = int(os.getenv("LLM_GUIDELINES_TIMEOUT_SECONDS", "20"))
                 try:
                     analysis = await asyncio.wait_for(
                         diagnostic_assistant.llm_provider.generate_response(
