@@ -46,7 +46,7 @@ USER cdssuser
 EXPOSE 8000
 
 # Health check (using curl or python http.client)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=35s --start-period=30s --retries=3 \
     CMD python -c "import http.client; conn = http.client.HTTPConnection('localhost', 8000); conn.request('GET', '/health'); r = conn.getresponse(); exit(0 if r.status == 200 else 1)" || exit 1
 
 # Run the application

@@ -1716,8 +1716,9 @@ const NurseDashboard: React.FC = () => {
       } else {
         setGuidelineResults([]);
       }
-    } catch {
-      showError('Error', 'Failed to search guidelines');
+    } catch (err: any) {
+      const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
+      showError('Error', isTimeout ? 'Guidelines search timed out — LLM is busy. Citations may still be available.' : 'Failed to search guidelines');
     } finally {
       setLoadingGuidelines(false);
     }

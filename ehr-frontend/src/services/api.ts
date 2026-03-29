@@ -9818,12 +9818,23 @@ export const cdssApi = {
     return { data: response.data };
   },
 
+  seedGuidelines: async () => {
+    const response = await ehrAxios.post('/cdss-service/admin/seed-guidelines', {}, { timeout: 10000 });
+    return { data: response.data as { ok: boolean; jobId: string } };
+  },
+
+  getSeedProgress: async (jobId: string) => {
+    const response = await ehrAxios.get(`/cdss-service/admin/seed-guidelines/progress/${jobId}`, { timeout: 5000 });
+    return { data: response.data as { status: string; seeded: number; total: number; current_label: string; started_at: number | null; finished_at: number | null; error: string | null } };
+  },
+
   searchGuidelines: async (query: string, token: string, tenantSlug: string, limit: number = 5, patientContext?: any) => {
     const response = await ehrAxios.post('/cdss/guidelines/search', { query, limit, patient_context: patientContext }, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,
       },
+      timeout: 55000,
     });
     return { data: response.data };
   },

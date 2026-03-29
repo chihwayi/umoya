@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { tenantApi } from '../services/api';
-import { Search, ChevronLeft, ChevronRight, Building2, ArrowRight, QrCode } from 'lucide-react';
+import { tenantApi, cdssApi } from '../services/api';
+import { Search, ChevronLeft, ChevronRight, Building2, ArrowRight, QrCode, Database } from 'lucide-react';
 import { TenantQRModal } from '../components/TenantQRModal';
 
 interface Tenant {
@@ -15,6 +15,66 @@ interface Tenant {
 
 const ITEMS_PER_PAGE = 9;
 
+interface SeedProgress { seeded: number; total: number; current_label: string; started_at: number | null; finished_at: number | null; error: string | null; }
+
+const SeedGuidelinesPanel: React.FC<{ status: 'idle' | 'running' | 'done' | 'error'; progress: SeedProgress; onSeed: () => void }> = ({ status, progress, onSeed }) => {
+  const [now, setNow] = React.useState(Date.now() / 1000);
+  React.useEffect(() => {
+    if (status !== 'running') return;
+    const t = setInterval(() => setNow(Date.now() / 1000), 500);
+    return () => clearInterval(t);
+  }, [status]);
+
+  const elapsed = progress.started_at ? (status === 'done' && progress.finished_at ? progress.finished_at - progress.started_at : now - progress.started_at) : 0;
+  const pct = progress.total > 0 ? Math.round((progress.seeded / progress.total) * 100) : 0;
+  const rate = elapsed > 0 && progress.seeded > 0 ? progress.seeded / elapsed : null;
+  const eta = rate && status === 'running' ? (progress.total - progress.seeded) / rate : null;
+
+  const fmt = (s: number) => s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <button
+        onClick={onSeed}
+        disabled={status === 'running'}
+        className="inline-flex items-center gap-2 rounded-full border border-[#00C896]/30 bg-[#00C896]/10 px-5 py-3 text-sm font-medium text-[#7DE8CA] transition hover:border-[#00C896]/60 hover:bg-[#00C896]/20 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {status === 'running' ? <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#00C896]" /> : <Database className="h-4 w-4" />}
+        {status === 'running' ? 'Seeding...' : status === 'done' ? 'Re-seed Guidelines' : 'Seed CDSS Guidelines'}
+      </button>
+
+      {(status === 'running' || status === 'done') && (
+        <div className="w-72 rounded-2xl border border-white/10 bg-[#0A1525]/90 p-4 shadow-lg backdrop-blur-xl">
+          <div className="mb-2 flex items-center justify-between text-xs">
+            <span className="font-semibold text-[#7DE8CA]">{status === 'done' ? 'Complete' : 'Seeding guidelines...'}</span>
+            <span className="tabular-nums text-[#7A92B8]">{progress.seeded} / {progress.total}</span>
+          </div>
+          <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-2 rounded-full bg-[#00C896] transition-all duration-300"
+              style={{ width: `${pct}%`, boxShadow: status === 'running' ? '0 0 8px rgba(0,200,150,0.6)' : 'none' }}
+            />
+          </div>
+          <div className="flex justify-between text-[11px] text-[#587296]">
+            <span>{pct}%{status === 'running' && eta !== null ? ` · ~${fmt(eta)} left` : ''}</span>
+            <span>Elapsed: {fmt(elapsed)}</span>
+          </div>
+          {status === 'running' && progress.current_label && (
+            <p className="mt-2 truncate text-[11px] text-[#4A6080]" title={progress.current_label}>{progress.current_label}</p>
+          )}
+          {status === 'done' && (
+            <p className="mt-2 text-[11px] text-[#7DE8CA]">BM25 index rebuilt · {progress.total} chunks in ChromaDB</p>
+          )}
+        </div>
+      )}
+
+      {status === 'error' && (
+        <span className="max-w-xs text-right text-xs text-[#FF7D92]">{progress.error}</span>
+      )}
+    </div>
+  );
+};
+
 const TenantDirectory: React.FC = () => {
   const navigate = useNavigate();
   const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
@@ -24,6 +84,35 @@ const TenantDirectory: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [qrTenant, setQrTenant] = useState<Tenant | null>(null);
+  const [seedStatus, setSeedStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [seedProgress, setSeedProgress] = useState<{ seeded: number; total: number; current_label: string; started_at: number | null; finished_at: number | null; error: string | null }>({ seeded: 0, total: 32, current_label: '', started_at: null, finished_at: null, error: null });
+  const seedPollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPoll = () => { if (seedPollRef.current) { clearInterval(seedPollRef.current); seedPollRef.current = null; } };
+
+  const handleSeedGuidelines = async () => {
+    setSeedStatus('running');
+    setSeedProgress({ seeded: 0, total: 32, current_label: '', started_at: Date.now() / 1000, finished_at: null, error: null });
+    stopPoll();
+    try {
+      const res = await cdssApi.seedGuidelines();
+      const jobId = res.data.jobId;
+      seedPollRef.current = setInterval(async () => {
+        try {
+          const prog = await cdssApi.getSeedProgress(jobId);
+          const d = prog.data;
+          setSeedProgress({ seeded: d.seeded, total: d.total, current_label: d.current_label, started_at: d.started_at, finished_at: d.finished_at, error: d.error });
+          if (d.status === 'done') { stopPoll(); setSeedStatus('done'); }
+          if (d.status === 'error') { stopPoll(); setSeedStatus('error'); }
+        } catch { /* poll silently */ }
+      }, 500);
+    } catch (err: any) {
+      setSeedProgress(p => ({ ...p, error: err?.response?.data?.detail || err?.message || 'Unknown error' }));
+      setSeedStatus('error');
+    }
+  };
+
+  React.useEffect(() => () => stopPoll(), []);
 
   useEffect(() => {
     const fetchTenants = async () => {
@@ -111,6 +200,11 @@ const TenantDirectory: React.FC = () => {
                 >
                   Request test access
                 </button>
+                <SeedGuidelinesPanel
+                  status={seedStatus}
+                  progress={seedProgress}
+                  onSeed={handleSeedGuidelines}
+                />
                 <div className="relative w-full md:max-w-md">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
                     <Search className="h-5 w-5 text-[#587296]" />

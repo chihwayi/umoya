@@ -2368,6 +2368,59 @@ async def admin_ingest(file: Optional[UploadFile] = File(None), owner: str = Dep
             pass
     return {"started": True, "jobId": job_id}
 
+_SEED_JOBS: Dict[str, Any] = {}
+_SEED_JOBS_LOCK = threading.Lock()
+
+def _run_seed_job(job_id: str) -> None:
+    import time
+    with _SEED_JOBS_LOCK:
+        _SEED_JOBS[job_id]["status"] = "running"
+        _SEED_JOBS[job_id]["started_at"] = time.time()
+
+    def _progress(seeded: int, total: int, label: str) -> None:
+        with _SEED_JOBS_LOCK:
+            _SEED_JOBS[job_id]["seeded"] = seeded
+            _SEED_JOBS[job_id]["total"] = total
+            _SEED_JOBS[job_id]["current_label"] = label
+
+    try:
+        from seed_guidelines import seed
+        result = seed(progress_callback=_progress)
+        # Rebuild BM25 in-memory index so searches pick up the seeded docs immediately
+        if diagnostic_assistant and diagnostic_assistant.rag_engine:
+            diagnostic_assistant.rag_engine._build_bm25_index()
+        with _SEED_JOBS_LOCK:
+            _SEED_JOBS[job_id]["status"] = "done"
+            _SEED_JOBS[job_id]["seeded"] = result.get("seeded", 0)
+            _SEED_JOBS[job_id]["total"] = result.get("total", 0)
+            _SEED_JOBS[job_id]["finished_at"] = time.time()
+    except Exception as exc:
+        with _SEED_JOBS_LOCK:
+            _SEED_JOBS[job_id]["status"] = "error"
+            _SEED_JOBS[job_id]["error"] = str(exc)
+
+
+@app.post("/admin/seed-guidelines")
+async def admin_seed_guidelines():
+    """Start a background seed job. Returns jobId for polling progress."""
+    import uuid, time
+    job_id = str(uuid.uuid4())
+    with _SEED_JOBS_LOCK:
+        _SEED_JOBS[job_id] = {"status": "pending", "seeded": 0, "total": len(__import__('seed_guidelines').GUIDELINES), "current_label": "", "started_at": None, "finished_at": None, "error": None}
+    threading.Thread(target=_run_seed_job, args=(job_id,), daemon=True).start()
+    return {"ok": True, "jobId": job_id}
+
+
+@app.get("/admin/seed-guidelines/progress/{job_id}")
+async def admin_seed_guidelines_progress(job_id: str):
+    """Poll progress of a seed job."""
+    with _SEED_JOBS_LOCK:
+        job = _SEED_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return dict(job)
+
+
 @app.post("/admin/reindex")
 async def admin_reindex(async_job: bool = True, owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
     if async_job:
@@ -3159,11 +3212,19 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
                     analysis = None
             if analysis is None:
                 print(f"[CDSS] Generating analysis for patient context...")
-                analysis = await diagnostic_assistant.llm_provider.generate_response(
-                    prompt,
-                    use_case="guideline_analysis",
-                    tenant_id=tenant_cache_key,
-                )
+                _llm_wall_timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", "45"))
+                try:
+                    analysis = await asyncio.wait_for(
+                        diagnostic_assistant.llm_provider.generate_response(
+                            prompt,
+                            use_case="guideline_analysis",
+                            tenant_id=tenant_cache_key,
+                        ),
+                        timeout=_llm_wall_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    print(f"[CDSS] LLM analysis timed out after {_llm_wall_timeout}s — returning citations only")
+                    analysis = None
                 try:
                     if cache_client:
                         cache_client.incr("metrics:llm:cache_miss")
