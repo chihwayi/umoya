@@ -1,0 +1,34 @@
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /tenant-service/ {
+        proxy_pass ${TENANT_SERVICE_INTERNAL_URL:-http://medicore-tenant-service:3001}/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 60s;
+    }
+
+    location /ehr-service/ {
+        proxy_pass ${EHR_SERVICE_INTERNAL_URL:-http://medicore-ehr-service:3013}/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 60s;
+    }
+
+    location /cdss-service/ {
+        proxy_pass ${CDSS_SERVICE_INTERNAL_URL:-http://medicore-cdss-service:8000}/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+    }
+}
