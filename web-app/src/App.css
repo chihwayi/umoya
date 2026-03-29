@@ -72,3 +72,51 @@ textarea:focus-visible {
   outline: 2px solid var(--mc-info);
   outline-offset: 2px;
 }
+
+/* ── Dark-theme global form control overrides ──────────────────────────────
+   Components written with light-mode Tailwind classes (bg-white,
+   border-slate-300) would render invisible text on the dark background.
+   These rules force all text inputs, selects and textareas into the dark
+   design system. Checkboxes, radio, file and range are excluded. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+select,
+textarea {
+  background-color: var(--mc-surface) !important;
+  color: var(--mc-text) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"])::placeholder,
+textarea::placeholder {
+  color: rgba(159, 179, 211, 0.5);
+}
+
+/* Sections and table wrappers given bg-white render dark text on a white
+   island — remap to the dark surface colour. */
+.bg-white:not(img) {
+  background-color: var(--mc-surface) !important;
+  color: var(--mc-text) !important;
+}
+
+/* Tailwind border-slate-300/200 on light inputs → swap to dark border */
+.border-slate-300,
+.border-slate-200 {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Light text colours used in light-mode components → remap to dark theme */
+.text-slate-700,
+.text-slate-800,
+.text-slate-900,
+.text-gray-700,
+.text-gray-800,
+.text-gray-900 {
+  color: var(--mc-text) !important;
+}
+
+.text-slate-500,
+.text-slate-600,
+.text-gray-500,
+.text-gray-600 {
+  color: var(--mc-muted) !important;
+}
