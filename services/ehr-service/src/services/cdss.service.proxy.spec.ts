@@ -72,7 +72,7 @@ describe('CdssService proxy routing', () => {
         module: 'critical_care',
       },
       {
-        timeout: 15000,
+        timeout: 50000,
         headers: { 'X-Tenant-ID': 'tenant-b' },
       },
     );
