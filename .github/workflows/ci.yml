@@ -160,8 +160,11 @@ jobs:
       run: npx expo-doctor
 
     - name: Mobile E2E Smoke
+      # Requires a booted Android emulator (AVD). Opt-in by setting
+      # MOBILE_E2E_ENABLED = 'true' in repo Variables (Settings → Variables).
+      if: vars.MOBILE_E2E_ENABLED == 'true'
       working-directory: mobile
-      run: npm run test:e2e --if-present
+      run: npm run test:e2e
 
   playwright-e2e:
     name: Playwright E2E (Staging)
