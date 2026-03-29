@@ -22,6 +22,11 @@ RUN apt-get update && apt-get install -y \
 # Upgrade pip
 RUN pip install --upgrade pip setuptools wheel
 
+# Install asyncpg separately so it gets its own cached layer.
+# It compiles from source on ARM64 which is slow — isolating it means
+# changes to other requirements don't force a recompile.
+RUN pip install --default-timeout=600 --no-cache-dir asyncpg>=0.29.0
+
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
