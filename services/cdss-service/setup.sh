@@ -31,7 +31,7 @@ pip install --upgrade pip
 
 # Install requirements
 echo "📥 Installing Python packages..."
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt
 
 echo ""
 echo "✅ Setup complete!"
@@ -44,4 +44,3 @@ echo "  python main.py"
 echo ""
 echo "Or use Docker (recommended):"
 echo "  docker compose up -d cdss-service"
-

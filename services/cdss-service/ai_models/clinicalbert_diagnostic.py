@@ -37,11 +37,13 @@ try:
         extract_zimbabwe_conditions,
         get_zimbabwe_disease_multiplier,
         SHONA_SYMPTOMS,
-        NDEBELE_SYMPTOMS
+        NDEBELE_SYMPTOMS,
+        _nlp as _zim_nlp,
     )
     ZIMBABWE_TERMINOLOGY_AVAILABLE = True
 except ImportError:
     ZIMBABWE_TERMINOLOGY_AVAILABLE = False
+    _zim_nlp = None
     logger.warning("Zimbabwe terminology not available")
 
 
@@ -437,24 +439,65 @@ class ClinicalBERTDiagnostic:
                             diagnosis_scores[diag]['probability'] = min(diagnosis_scores[diag]['probability'] + (prob * 0.3), 0.95)
                             diagnosis_scores[diag]['supporting_symptoms'].append(symptom)
         
-        if ZIMBABWE_TERMINOLOGY_AVAILABLE:
-            zimbabwe_conditions = extract_zimbabwe_conditions(clinical_text)
-            for condition in zimbabwe_conditions:
-                condition_map = {
-                    'hiv': 'HIV/AIDS',
-                    'tuberculosis': 'Tuberculosis',
-                    'malaria': 'Malaria',
-                    'diabetes': 'Diabetes',
-                    'hypertension': 'Hypertension',
-                    'pneumonia': 'Pneumonia'
-                }
-                diag_name = condition_map.get(condition, condition.title())
-                if diag_name not in diagnosis_scores:
-                    diagnosis_scores[diag_name] = {
-                        'diagnosis': diag_name,
-                        'probability': 0.25,
-                        'supporting_symptoms': ['zimbabwe_condition_detected']
+        if ZIMBABWE_TERMINOLOGY_AVAILABLE and _zim_nlp is not None:
+            try:
+                zim = _zim_nlp.analyze(clinical_text)
+
+                # 1. Feed Shona/Ndebele/local symptoms into entity list so the
+                #    fallback diagnosis map picks them up (e.g. "fivha" → "fever" → Malaria)
+                for sym in zim.get("symptoms_found", []):
+                    if sym.get("score", 0) >= 0.50 and not sym.get("negated", False):
+                        sym_name = sym.get("name", "")
+                        if sym_name and sym_name not in entities.get("symptoms", []):
+                            entities.setdefault("symptoms", []).append(sym_name)
+
+                # 2. Add Zimbabwe conditions with real confidence scores (not flat 0.25)
+                for cond in zim.get("final_conditions", []):
+                    if cond.get("negated", False):
+                        continue  # "no cough" / "akasina TB" — skip
+                    diag_name = cond.get("name", "")
+                    score = float(cond.get("score", 0.0))
+                    if not diag_name or score < 0.25:
+                        continue
+                    if cond.get("historical", False):
+                        score *= 0.50  # past condition — reduce weight
+                    matched = (cond.get("matched_terms") or []) + (cond.get("matched_symptoms") or [])
+                    if diag_name not in diagnosis_scores:
+                        diagnosis_scores[diag_name] = {
+                            "diagnosis": diag_name,
+                            "probability": score,
+                            "supporting_symptoms": matched or ["zimbabwe_nlp_detected"],
+                        }
+                    else:
+                        # Blend with existing score — don't let NLP double-count
+                        current = diagnosis_scores[diag_name]["probability"]
+                        diagnosis_scores[diag_name]["probability"] = min(
+                            current + score * 0.30, 0.95
+                        )
+
+                # 3. Propagate language detection and HIV/TB co-infection flag
+                if zim.get("hiv_tb_coinfection_flag"):
+                    entities["hiv_tb_coinfection_flag"] = True
+                langs = zim.get("languages_detected", [])
+                if langs:
+                    entities["languages_detected"] = langs
+
+            except Exception as _e:
+                logger.debug(f"Zimbabwe NLP analysis failed, falling back: {_e}")
+                # Graceful fallback to old flat-score method
+                for condition in extract_zimbabwe_conditions(clinical_text):
+                    condition_map = {
+                        "hiv": "HIV/AIDS", "tuberculosis": "Tuberculosis",
+                        "malaria": "Malaria", "diabetes": "Diabetes",
+                        "hypertension": "Hypertension", "pneumonia": "Pneumonia",
                     }
+                    diag_name = condition_map.get(condition, condition.title())
+                    if diag_name not in diagnosis_scores:
+                        diagnosis_scores[diag_name] = {
+                            "diagnosis": diag_name,
+                            "probability": 0.25,
+                            "supporting_symptoms": ["zimbabwe_condition_detected"],
+                        }
         
         # Sort by probability
         suggestions = sorted(

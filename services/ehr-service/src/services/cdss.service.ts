@@ -306,6 +306,18 @@ export class CdssService {
     };
   }
 
+  private mergeRequestConfig(base: AxiosRequestConfig, overrides?: AxiosRequestConfig): AxiosRequestConfig {
+    const mergedHeaders = {
+      ...(base.headers as Record<string, string> | undefined),
+      ...(overrides?.headers as Record<string, string> | undefined),
+    };
+    return {
+      ...base,
+      ...overrides,
+      headers: Object.keys(mergedHeaders).length > 0 ? mergedHeaders : undefined,
+    };
+  }
+
   private parsePositiveInt(raw: string | undefined, fallback: number): number {
     const parsed = Number.parseInt(raw || '', 10);
     if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -480,6 +492,28 @@ export class CdssService {
     timeoutMs: number,
     tenantId?: string,
   ): Promise<T> {
+    return this.requestWithPolicy<T>('POST', eventType, path, payload, timeoutMs, tenantId);
+  }
+
+  private async getWithPolicy<T>(
+    eventType: string,
+    path: string,
+    timeoutMs: number,
+    tenantId?: string,
+    params?: Record<string, any>,
+  ): Promise<T> {
+    return this.requestWithPolicy<T>('GET', eventType, path, params, timeoutMs, tenantId);
+  }
+
+  private async requestWithPolicy<T>(
+    method: 'GET' | 'POST',
+    eventType: string,
+    path: string,
+    payload: any,
+    timeoutMs: number,
+    tenantId?: string,
+    overrides?: AxiosRequestConfig,
+  ): Promise<T> {
     this.ensureCircuitClosed(eventType);
     const startedAt = Date.now();
     const maxAttempts = this.retryMax + 1;
@@ -488,11 +522,24 @@ export class CdssService {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        const response = await this.cdssClient.post(
-          path,
-          payload,
+        const requestConfig = this.mergeRequestConfig(
           this.buildCdssRequestConfig(timeoutMs, tenantId),
+          overrides,
         );
+        const requestFn = (this.cdssClient as any).request;
+        const response = typeof requestFn === 'function'
+          ? await requestFn.call(this.cdssClient, {
+              method,
+              url: path,
+              ...(method === 'GET' ? { params: payload } : { data: payload }),
+              ...requestConfig,
+            })
+          : method === 'GET'
+            ? await (this.cdssClient as any).get(path, {
+                ...requestConfig,
+                params: payload,
+              })
+            : await (this.cdssClient as any).post(path, payload, requestConfig);
         const durationSeconds = (Date.now() - startedAt) / 1000;
         this.metricsService?.recordCdssHook(eventType, 'success', durationSeconds, tenantId);
         this.recordAbstentionMetric(eventType, response.data, tenantId);
@@ -1283,7 +1330,10 @@ export class CdssService {
           governance: responseData?.governance || {},
         });
         if (responseData && responseData.citations) {
-          results.citations.push(...responseData.citations);
+          results.citations.push(...responseData.citations.map((c: any) => ({
+            ...c,
+            confidence: c.confidence ?? c.score ?? null,
+          })));
         }
       } catch (error: any) {
         this.logger.warn(`CDSS guideline search failed: ${error.message}`);
@@ -1304,6 +1354,7 @@ export class CdssService {
                 governed_source: true,
                 source_version: 'fhir-local',
               },
+            confidence: 1.0,
             })));
           }
         } catch (err: any) {
@@ -1349,14 +1400,19 @@ export class CdssService {
 
     const startedAt = Date.now();
     try {
-      const response = await this.cdssClient.post('/analyze-image', formData, {
-        timeout: 45000,
-        headers,
-      });
+      const response = await this.requestWithPolicy<any>(
+        'POST',
+        'analyze_image',
+        '/analyze-image',
+        formData,
+        45000,
+        tenantId,
+        { headers },
+      );
       const durationSeconds = (Date.now() - startedAt) / 1000;
       this.metricsService?.recordCdssHook('analyze_image', 'success', durationSeconds, tenantId);
       this.onCdssCallSuccess();
-      return response.data;
+      return response;
     } catch (error: any) {
       const durationSeconds = (Date.now() - startedAt) / 1000;
       const errorType = this.classifyCdssError(error);
@@ -4381,11 +4437,59 @@ export class CdssService {
 
   async getModelVersions(tenantId?: string): Promise<Record<string, any>> {
     try {
-      const res = await this.postWithPolicy<any>('ops', '/fl/model-version', { surface: 'all' }, 5000, tenantId);
+      const res = await this.getWithPolicy<any>('ops', '/fl/model-version', 5000, tenantId, { surface: 'all' });
       return (res as any)?.versions ?? {};
     } catch {
       return {};
     }
+  }
+
+  async submitOutcomeFeedback(entries: any[], tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>('outcome_feedback_submit', '/feedback/outcome', { entries }, 30000, tenantId);
+  }
+
+  async collectOutcomeFeedbackBatch(entries: any[], tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>('outcome_feedback_collect', '/feedback/outcome/batch-collect', { entries }, 30000, tenantId);
+  }
+
+  async claimOutcomeFeedbackForLearning(limit: number = 25, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'outcome_feedback_claim',
+      `/feedback/outcome/learning/claim?limit=${encodeURIComponent(String(limit))}`,
+      {},
+      30000,
+      tenantId,
+    );
+  }
+
+  async triggerOutcomeLearningRetraining(surface: string, entries: any[], tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'outcome_feedback_retrain',
+      '/feedback/outcome/learning/retrain',
+      { surface, entries },
+      30000,
+      tenantId,
+    );
+  }
+
+  async getModelVersion(surface: string = 'all', tenantId?: string): Promise<any> {
+    return this.getWithPolicy<any>('model_version', '/fl/model-version', 5000, tenantId, { surface });
+  }
+
+  async trainFederatedLocalModel(payload: Record<string, any>, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>('federated_train_local', '/fl/train-local', payload, 120000, tenantId);
+  }
+
+  async aggregateFederatedRound(payload: Record<string, any>, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>('federated_aggregate', '/fl/aggregate', payload, 60000, tenantId);
+  }
+
+  async evaluateFederatedModel(payload: Record<string, any>, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>('federated_evaluate', '/fl/evaluate', payload, 60000, tenantId);
+  }
+
+  async loadCdssModel(modelName: string, minioPath: string, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>('model_load', '/model/load', { modelName, minioPath }, 30000, tenantId);
   }
 
   async ingestKnowledgeDocument(payload: {

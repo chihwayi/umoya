@@ -27,10 +27,10 @@ const GuidelineCitationCard: React.FC<GuidelineCitationCardProps> = ({
     const pct = Math.round(result.confidence * 100);
     const style = dark
       ? result.confidence > 0.8
-        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+        ? 'bg-emerald-800 text-emerald-200 border-emerald-600'
         : result.confidence > 0.5
-        ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-        : 'bg-red-500/10 text-red-400 border-red-500/20'
+        ? 'bg-yellow-800 text-yellow-200 border-yellow-600'
+        : 'bg-red-800 text-red-200 border-red-600'
       : result.confidence > 0.8
       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
       : result.confidence > 0.5
@@ -45,26 +45,26 @@ const GuidelineCitationCard: React.FC<GuidelineCitationCardProps> = ({
 
   if (dark) {
     return (
-      <div className={`bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-colors ${className}`}>
+      <div className={`bg-slate-800 border border-slate-600 rounded-xl p-4 hover:bg-slate-750 transition-colors ${className}`}>
         <div className="flex items-start gap-3">
           {index !== undefined && (
-            <div className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-300 flex items-center justify-center text-xs font-bold border border-blue-500/20 flex-shrink-0 mt-0.5">
+            <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
               {index + 1}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 mb-2">
-              <h4 className="text-sm font-semibold text-blue-200 flex items-center gap-1.5 leading-tight">
+              <h4 className="text-sm font-semibold text-blue-300 flex items-center gap-1.5 leading-tight">
                 <BookOpen className="w-3.5 h-3.5 flex-shrink-0" />
                 {result.source || 'Clinical Guideline'}
               </h4>
               {confidenceBadge()}
             </div>
             {result.text && (
-              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap mb-3">{result.text}</p>
+              <p className="text-sm text-slate-100 leading-relaxed whitespace-pre-wrap mb-3">{result.text}</p>
             )}
             {result.recommendation && (
-              <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <div className="mb-3 p-3 bg-blue-900 border border-blue-700 rounded-lg">
                 <strong className="flex items-center gap-1.5 text-blue-300 text-xs uppercase tracking-wide mb-1">
                   <Sparkles className="w-3 h-3" />
                   Recommendation

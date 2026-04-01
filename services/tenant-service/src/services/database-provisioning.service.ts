@@ -1152,6 +1152,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint113UiCompletenessStatements(),
       },
       {
+        id: 'sprint126_scheduler_schema_fixes',
+        label: 'Sprint 126 - Scheduler schema fixes for oncology/cardiology background jobs',
+        version: '2026.04.01.1',
+        description: 'Adds missing columns needed by background scheduler services: oncology_adverse_events (severity_grade, snomed_concept_id, status, escalated_at), oncology_regimens (cycle_length_days, current_cycle, last_cycle_date, next_cycle_date), cardiology_encounters (follow_up_required, follow_up_date)',
+        statements: () => this.getSprint126SchedulerSchemaFixStatements(),
+      },
+      {
         id: 'sprint117_radiology_viewer',
         label: 'Sprint 117 - Radiology DICOM Viewer with AI Heatmap',
         version: '2026.03.31.2',
@@ -5907,6 +5914,10 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_term TEXT`);
     statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_module_id VARCHAR(50)`);
     statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_definition_status VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS cycle_length_days INTEGER`);
+    statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS current_cycle INTEGER DEFAULT 0`);
+    statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS last_cycle_date DATE`);
+    statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS next_cycle_date DATE`);
     
     statements.push(`CREATE TABLE IF NOT EXISTS oncology_infusion_sessions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), regimen_id UUID NOT NULL REFERENCES oncology_regimens(id) ON DELETE CASCADE, cycle_number INTEGER, session_date TIMESTAMP WITH TIME ZONE NOT NULL, location VARCHAR(100), administered_by UUID REFERENCES users(id), vitals JSONB DEFAULT '{}'::jsonb, drugs_administered JSONB DEFAULT '[]'::jsonb, premedications JSONB DEFAULT '[]'::jsonb, toxicities JSONB DEFAULT '[]'::jsonb, status VARCHAR(30) DEFAULT 'scheduled' CHECK (status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled')), notes TEXT, fee_amount NUMERIC(12,2), finance_transaction_id UUID, payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_infusion_regimen_id ON oncology_infusion_sessions(regimen_id)`);
@@ -5950,6 +5961,10 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_term TEXT`);
     statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_module_id VARCHAR(50)`);
     statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_definition_status VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS severity_grade INTEGER`);
+    statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'`);
+    statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMP WITH TIME ZONE`);
     
     statements.push(`CREATE TABLE IF NOT EXISTS tumor_board_meetings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), meeting_date TIMESTAMP WITH TIME ZONE NOT NULL, facilitator UUID REFERENCES users(id), location VARCHAR(100), agenda TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_tumor_board_meetings_date ON tumor_board_meetings(meeting_date)`);
@@ -7252,6 +7267,8 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_definition_status VARCHAR(50)`);
     statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS symptom_snomed_codes JSONB DEFAULT '[]'::jsonb`);
     statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS diagnostic_snomed_codes JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS follow_up_required BOOLEAN DEFAULT false`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS follow_up_date DATE`);
 
     statements.push(`CREATE TABLE IF NOT EXISTS hiv_nurse_intakes (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -17702,6 +17719,24 @@ RECOMMENDATIONS:
         UNIQUE(surface, metric_date)
       )`,
       `CREATE INDEX IF NOT EXISTS idx_ai_ops_metrics_surface_date ON ai_ops_metrics(surface, metric_date DESC)`,
+    ];
+  }
+
+  private getSprint126SchedulerSchemaFixStatements(): string[] {
+    return [
+      // oncology_adverse_events: tracking columns needed by background escalation job
+      `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS severity_grade INTEGER`,
+      `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50)`,
+      `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending'`,
+      `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMP WITH TIME ZONE`,
+      // oncology_regimens: cycle-tracking columns needed by background reminder job
+      `ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS cycle_length_days INTEGER`,
+      `ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS current_cycle INTEGER DEFAULT 0`,
+      `ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS last_cycle_date DATE`,
+      `ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS next_cycle_date DATE`,
+      // cardiology_encounters: follow-up tracking columns needed by SLA job
+      `ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS follow_up_required BOOLEAN DEFAULT false`,
+      `ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS follow_up_date DATE`,
     ];
   }
 

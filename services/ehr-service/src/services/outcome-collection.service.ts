@@ -1,16 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import axios from 'axios';
 import { TenantService } from './tenant.service';
 import { AiOpsMetric } from '../entities/ai-ops-metric.entity';
 import { ModelDeployment } from '../entities/model-deployment.entity';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class OutcomeCollectionService {
   private readonly logger = new Logger(OutcomeCollectionService.name);
-  private readonly cdssUrl = process.env.SERVICE_CDSS_URL ?? 'http://cdss-service:8000';
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   /**
    * Nightly at 01:00 UTC — collect outcomes for CDSS decisions made 30+ days ago.
@@ -90,7 +92,7 @@ export class OutcomeCollectionService {
     }
 
     try {
-      await axios.post(`${this.cdssUrl}/feedback/outcome/batch-collect`, { entries });
+      await this.cdssService.collectOutcomeFeedbackBatch(entries, tenantId);
       this.logger.log(`Collected ${entries.length} outcomes in batch ${batchId} for tenant ${tenantId}`);
     } catch (err) {
       this.logger.error(`Outcome collection batch-collect failed for tenant ${tenantId}: ${err}`);
@@ -209,16 +211,15 @@ export class OutcomeCollectionService {
 
         // Trigger CDSS retraining and verify new model version
         try {
-          const claimRes = await axios.post(`${this.cdssUrl}/feedback/outcome/learning/claim`, {
-            surface,
-            entries: [{ tenant_id: tenantId, approved: true }],
-          });
-          const newModelId = (claimRes.data as any)?.model_id ?? 'unknown';
+          const claimRes = await this.cdssService.triggerOutcomeLearningRetraining(surface, [
+            { tenant_id: tenantId, approved: true },
+          ], tenantId);
+          const newModelId = (claimRes as any)?.model_id ?? 'unknown';
           this.logger.log(`[retraining] Surface "${surface}" tenant "${tenantId}" → new model: ${newModelId}`);
 
           // Confirm version is readable back
-          const versionRes = await axios.get(`${this.cdssUrl}/fl/model-version?surface=${surface}`);
-          const confirmedVersion = (versionRes.data as any)?.version ?? 'unknown';
+          const versionRes = await this.cdssService.getModelVersion(surface, tenantId);
+          const confirmedVersion = (versionRes as any)?.version ?? 'unknown';
           this.logger.log(`[retraining] Confirmed model version for ${surface}: ${confirmedVersion}`);
         } catch (err) {
           this.logger.warn(`[retraining] Could not trigger or verify retraining for ${surface}: ${err}`);

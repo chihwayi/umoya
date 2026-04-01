@@ -692,8 +692,8 @@ const EDDashboard: React.FC = () => {
                 )}
               </div>
               
-              <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-500 text-center shrink-0">
-                AI-assisted results should be verified against official hospital protocols.
+              <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-amber-700 font-medium text-center shrink-0">
+                ⚠ AI-assisted results should be verified against official hospital protocols.
               </div>
             </div>
           </div>

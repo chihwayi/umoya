@@ -25,20 +25,20 @@ RUN pip install --upgrade pip setuptools wheel
 # Install asyncpg separately so it gets its own cached layer.
 # It compiles from source on ARM64 which is slow — isolating it means
 # changes to other requirements don't force a recompile.
-RUN pip install --default-timeout=600 --no-cache-dir asyncpg>=0.29.0
+RUN pip install --default-timeout=600 --no-cache-dir "asyncpg>=0.29.0"
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
+COPY requirements.txt constraints.txt ./
+RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt -c constraints.txt
 
 # Download NLTK data (required for unstructured)
-RUN python -m nltk.downloader punkt averaged_perceptron_tagger
+RUN python -m nltk.downloader punkt punkt_tab averaged_perceptron_tagger averaged_perceptron_tagger_eng
 
 # Install scispacy model
 RUN pip install --default-timeout=1000 --no-cache-dir https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz
 
 # Verify installation
-RUN python -c "import fastapi, uvicorn, pydantic, numpy, pandas, sklearn, redis; print('✅ All modules installed successfully')"
+RUN python -c "import asyncpg, fastapi, uvicorn, pydantic, numpy, pandas, sklearn, redis, pytesseract; from pgvector.psycopg2 import register_vector; print('✅ All modules installed successfully')"
 
 # Copy application code
 COPY . .
@@ -51,9 +51,8 @@ USER cdssuser
 EXPOSE 8000
 
 # Health check (using curl or python http.client)
-HEALTHCHECK --interval=30s --timeout=35s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=35s --start-period=90s --retries=3 \
     CMD python -c "import http.client; conn = http.client.HTTPConnection('localhost', 8000); conn.request('GET', '/health'); r = conn.getresponse(); exit(0 if r.status == 200 else 1)" || exit 1
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-
+# Run the application (no --reload: WatchFiles reloader blocks worker startup with heavy AI models)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

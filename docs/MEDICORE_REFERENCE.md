@@ -286,6 +286,8 @@ These rules prevent broken builds caused by AI agents guessing:
 
 - **File paths:** Always verify with `Glob` or `ls` before editing. Never guess import paths.
 - **Database:** Never use `synchronize: true`. Never run raw DDL without `IF NOT EXISTS`. Always add entity + registration + provisioning bundle together.
+- **URLs/config:** Never hard-code service URLs. Always read them from env vars or centralized config.
+- **Tenant schema changes:** Any database change must also update the tenant database provisioning service and be followed by tenant repair so current tenants receive the schema.
 - **CDSS calls:** All EHR→CDSS calls go through `CdssService`. All PHI-touching calls use `callGovernedJson()`. Never pass raw patient PII to CDSS.
 - **TypeScript:** DTOs use `class-validator`. All CDSS-calling methods are `async`. New services go in `providers:` array.
 - **Frontend:** Tailwind v3 only. Verify icon names before using. Never call API in render functions. Display confidence as `(confidence * 100).toFixed(0)%`.

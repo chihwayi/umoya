@@ -101,6 +101,7 @@ describe('CdssOutcomeBatchService governed learning orchestration', () => {
     const service = new CdssOutcomeBatchService(
       tenantService as any,
       undefined as any,
+      undefined as any,
       federatedLearningService as any,
     );
 
@@ -159,6 +160,7 @@ describe('CdssOutcomeBatchService governed learning orchestration', () => {
 
     const service = new CdssOutcomeBatchService(
       tenantService as any,
+      undefined as any,
       undefined as any,
       undefined as any,
     );

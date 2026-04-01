@@ -5495,9 +5495,9 @@ const NurseDashboard: React.FC = () => {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-3 text-center text-xs shrink-0"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.06)', color: '#475569' }}>
-                AI-assisted — verify against official hospital protocols before acting
+              <div className="px-6 py-3 text-center text-xs shrink-0 text-amber-400 font-medium"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+                ⚠ AI-assisted — verify against official hospital protocols before acting
               </div>
             </div>
           </div>

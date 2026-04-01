@@ -62,7 +62,7 @@ export class AppointmentPrecharterService {
     const repo = tenantDb.getRepository(EncounterPrechart);
 
     const apptRows = await tenantDb.query(
-      `SELECT a.id, a.patient_id, a.start_time FROM appointments a WHERE a.id = $1`,
+      `SELECT a.id, a.patient_id, a.appointment_date AS start_time FROM appointments a WHERE a.id = $1`,
       [appointmentId],
     );
     if (!apptRows.length) throw new Error(`Appointment ${appointmentId} not found`);
@@ -86,11 +86,11 @@ export class AppointmentPrecharterService {
   private async precharTenant(tenantDb: DataSource, tenantSlug: string): Promise<void> {
     // Find appointments starting in 25–35 minutes that haven't been pre-charted yet
     const upcoming = await tenantDb.query(`
-      SELECT a.id, a.patient_id, a.start_time
+      SELECT a.id, a.patient_id, a.appointment_date AS start_time
       FROM appointments a
       LEFT JOIN encounter_precharts ep ON ep.appointment_id = a.id
-      WHERE a.start_time BETWEEN NOW() + INTERVAL '25 minutes'
-                              AND NOW() + INTERVAL '35 minutes'
+      WHERE a.appointment_date BETWEEN NOW() + INTERVAL '25 minutes'
+                                   AND NOW() + INTERVAL '35 minutes'
         AND ep.id IS NULL
         AND (a.status IS NULL OR a.status NOT IN ('cancelled', 'no_show'))
     `);

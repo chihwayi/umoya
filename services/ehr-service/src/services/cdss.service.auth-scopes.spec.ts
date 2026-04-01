@@ -46,6 +46,16 @@ describe('CdssService service JWT scopes', () => {
     expect(scopes).toContain('cdss.api.invoke');
   });
 
+  it('includes registration document scope for /registration/documents/analyze', () => {
+    const service = new CdssService(undefined, undefined);
+    const token = (service as any).createServiceJwt('/registration/documents/analyze', 'POST');
+    expect(token).toBeTruthy();
+    const payload = decodePayload(token as string);
+    const scopes: string[] = payload.scopes || [];
+    expect(scopes).toContain('cdss.copilot.registration.write');
+    expect(scopes).toContain('cdss.api.invoke');
+  });
+
   it('falls back to cdss.api.invoke for general routes', () => {
     const service = new CdssService(undefined, undefined);
     const token = (service as any).createServiceJwt('/risk/calculate', 'POST');

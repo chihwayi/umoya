@@ -48,11 +48,28 @@ class RAGEngine:
                 path=self.persistence_path,
                 settings=Settings(anonymized_telemetry=False)
             )
-            self.collection = self.chroma_client.get_or_create_collection(name="medical_guidelines")
-            
+            # Ensure collection uses cosine space for meaningful similarity scores
+            try:
+                existing = self.chroma_client.get_collection(name="medical_guidelines")
+                existing_space = (existing.metadata or {}).get("hnsw:space", "l2")
+                if existing_space != "cosine":
+                    logger.warning("Migrating medical_guidelines from L2 to cosine space (re-seed required).")
+                    self.chroma_client.delete_collection(name="medical_guidelines")
+                    self.collection = self.chroma_client.create_collection(
+                        name="medical_guidelines",
+                        metadata={"hnsw:space": "cosine"}
+                    )
+                else:
+                    self.collection = existing
+            except Exception:
+                self.collection = self.chroma_client.create_collection(
+                    name="medical_guidelines",
+                    metadata={"hnsw:space": "cosine"}
+                )
+
             count = self.collection.count()
             logger.info(f"ChromaDB initialized at {self.persistence_path} (Telemetry Disabled)")
-            logger.info(f"📚 Loaded Medical Guidelines Collection. Total Documents: {count}")
+            logger.info(f"Loaded Medical Guidelines Collection (cosine space). Total Documents: {count}")
 
             # 2. Initialize Embedding Model & Cross-Encoder
             # Bi-Encoder for fast retrieval
@@ -184,6 +201,24 @@ class RAGEngine:
             safe_query = redact_text(str(query or "").strip())[:800]
             if not safe_query:
                 return []
+            # Expand short medical abbreviations before embedding to improve recall
+            _MEDICAL_EXPANSIONS = {
+                "hiv": "HIV human immunodeficiency virus AIDS antiretroviral ART treatment",
+                "aids": "AIDS HIV acquired immunodeficiency syndrome antiretroviral treatment",
+                "sti": "STI sexually transmitted infection gonorrhea syphilis chlamydia",
+                "std": "STD sexually transmitted disease infection gonorrhea syphilis",
+                "tb": "TB tuberculosis pulmonary treatment isoniazid rifampicin",
+                "cpr": "CPR cardiopulmonary resuscitation cardiac arrest",
+                "mi": "MI myocardial infarction heart attack STEMI NSTEMI",
+                "uti": "UTI urinary tract infection bladder kidney",
+                "dvt": "DVT deep vein thrombosis pulmonary embolism anticoagulation",
+                "pe": "PE pulmonary embolism deep vein thrombosis anticoagulation",
+                "dm": "DM diabetes mellitus type 1 type 2 glucose insulin",
+                "htn": "HTN hypertension high blood pressure",
+                "copd": "COPD chronic obstructive pulmonary disease bronchitis emphysema",
+            }
+            q_lower = safe_query.strip().lower()
+            embed_query = _MEDICAL_EXPANSIONS.get(q_lower, safe_query)
             # 0. Check Cache (key includes filters + n_results)
             filt_str = "nofilter" if not filters else json.dumps(filters, sort_keys=True)
             base = f"{safe_query}|{filt_str}|n{n_results}"
@@ -211,8 +246,8 @@ class RAGEngine:
             # This improves recall before the precision step
             initial_k = n_results * 5 if self.cross_encoder else n_results
             
-            # 1. Vector Search
-            query_embedding = self.embedding_model.encode([safe_query]).tolist()
+            # 1. Vector Search (use expanded query for better recall of short abbreviations)
+            query_embedding = self.embedding_model.encode([embed_query]).tolist()
             vector_res = self.collection.query(
                 query_embeddings=query_embedding,
                 n_results=initial_k,
@@ -340,7 +375,7 @@ class RAGEngine:
             logger.error(f"Context retrieval failed: {e}")
             return []
 
-    def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: List[str]):
+    def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: List[str], upsert: bool = False):
         """
         Batch ingest documents into the vector database.
         """
@@ -350,12 +385,20 @@ class RAGEngine:
         try:
             embeddings = self.embedding_model.encode(texts).tolist()
             
-            self.collection.add(
-                documents=texts,
-                embeddings=embeddings,
-                metadatas=metadatas,
-                ids=ids
-            )
+            if upsert:
+                self.collection.upsert(
+                    documents=texts,
+                    embeddings=embeddings,
+                    metadatas=metadatas,
+                    ids=ids
+                )
+            else:
+                self.collection.add(
+                    documents=texts,
+                    embeddings=embeddings,
+                    metadatas=metadatas,
+                    ids=ids
+                )
             
             # Rebuild BM25 index
             self._build_bm25_index()

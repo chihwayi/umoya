@@ -19,16 +19,16 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install --upgrade pip setuptools wheel
 
-RUN pip install --default-timeout=600 --no-cache-dir asyncpg>=0.29.0
+RUN pip install --default-timeout=600 --no-cache-dir "asyncpg>=0.29.0"
 
-COPY requirements.txt .
-RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
+COPY requirements.txt constraints.txt ./
+RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt -c constraints.txt
 
-RUN python -m nltk.downloader punkt averaged_perceptron_tagger
+RUN python -m nltk.downloader punkt punkt_tab averaged_perceptron_tagger averaged_perceptron_tagger_eng
 
 RUN pip install --default-timeout=1000 --no-cache-dir https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz
 
-RUN python -c "import fastapi, uvicorn, pydantic, numpy, pandas, sklearn, redis; print('All modules OK')"
+RUN python -c "import asyncpg, fastapi, uvicorn, pydantic, numpy, pandas, sklearn, redis, pytesseract; from pgvector.psycopg2 import register_vector; print('All modules OK')"
 
 COPY . .
 

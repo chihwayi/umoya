@@ -31,6 +31,7 @@
 "dhis2:bootstrap": "node scripts/bootstrap-dhis2-metadata.mjs",
     "report:soc2-hipaa": "node scripts/soc2-hipaa-evidence-report.js",
     "provision:all-tenants": "npx ts-node --project services/tenant-service/tsconfig.json services/tenant-service/src/scripts/repairTenants.ts",
+    "provision:master-db": "npx ts-node --project services/tenant-service/tsconfig.json services/tenant-service/src/scripts/repairMasterDatabase.ts",
     "provision:sprint110-master": "npx ts-node scripts/provision-sprint110-terminology-master.ts",
     "provision:repair-all": "./scripts/provision-repair-all.sh",
     "sprint111:validate": "./scripts/sprint111-validate.sh",

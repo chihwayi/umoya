@@ -8,7 +8,7 @@ import { ModelPromotionReview } from '../entities/model-promotion-review.entity'
 import { ModelCard } from '../entities/model-card.entity';
 import { ModelShadowEvaluation } from '../entities/model-shadow-evaluation.entity';
 import { OutcomeLearningJob } from '../entities/outcome-learning-job.entity';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 export interface PromotionReviewRequest {
   requestedStage?: 'shadow' | 'canary' | 'production';
@@ -34,7 +34,6 @@ type PromotionGateSummary = Record<string, string | number | boolean | null>;
 @Injectable()
 export class ModelRegistryService {
   private readonly logger = new Logger(ModelRegistryService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
   private static readonly MIN_AUC = 0.55;
   private static readonly MIN_AUC_IMPROVEMENT = 0.01;
   private static readonly MAX_BRIER_SCORE = 0.25;
@@ -42,7 +41,10 @@ export class ModelRegistryService {
   // AUC of the current production model per name — cached to avoid DB hit on every prediction
   private productionAuc = new Map<string, number>();
 
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   // ── Registration ───────────────────────────────────────────────────────────
 
@@ -525,10 +527,7 @@ export class ModelRegistryService {
   // ── CDSS notify ────────────────────────────────────────────────────────────
 
   private async notifyCdssPromote(modelName: string, minioPath: string): Promise<void> {
-    await axios.post(`${this.cdssUrl}/model/load`, {
-      modelName,
-      minioPath,
-    }, { timeout: 30000 });
+    await this.cdssService.loadCdssModel(modelName, minioPath);
   }
 
   private meetsCalibrationGate(

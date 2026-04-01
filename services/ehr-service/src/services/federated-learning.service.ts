@@ -4,20 +4,20 @@ import { TenantService } from './tenant.service';
 import { FlRound } from '../entities/fl-round.entity';
 import { FlParticipationLog } from '../entities/fl-participation-log.entity';
 import { ModelRegistryService } from './model-registry.service';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 const MODEL_TYPES = ['deterioration', 'readmission', 'sepsis', 'no_show'];
 
 @Injectable()
 export class FederatedLearningService {
   private readonly logger = new Logger(FederatedLearningService.name);
-  private cdssUrl = process.env.CDSS_SERVICE_URL || 'http://localhost:8001';
 
   // Minimum outcomes before training is worthwhile
   private readonly MIN_OUTCOMES = 50;
 
   constructor(
     private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
     @Inject(forwardRef(() => ModelRegistryService))
     private readonly modelRegistry: ModelRegistryService,
   ) {}
@@ -124,12 +124,12 @@ export class FederatedLearningService {
     }
 
     // Send to CDSS for sklearn training
-    const { data } = await axios.post(`${this.cdssUrl}/fl/train-local`, {
+    const data = await this.cdssService.trainFederatedLocalModel({
       modelType,
       roundId,
       outcomes,
       privacyEpsilon: 1.0, // differential privacy budget
-    }, { timeout: 120000 }); // training can take a while
+    }, subdomain); // training can take a while
 
     return this.submitLocalMetrics(subdomain, roundId, {
       localModelMetrics: {
@@ -171,7 +171,7 @@ export class FederatedLearningService {
     }
 
     try {
-      const { data } = await axios.post(`${this.cdssUrl}/fl/aggregate`, {
+      const data = await this.cdssService.aggregateFederatedRound({
         roundId,
         modelType: round.modelType,
         contributions: realContributions.map(l => ({
@@ -181,7 +181,7 @@ export class FederatedLearningService {
           gradientNorm: l.gradientNorm,
           privacyEpsilon: l.privacyEpsilon,
         })),
-      }, { timeout: 60000 });
+      }, subdomain);
 
       await roundRepo.update(roundId, {
         aggregatedMetrics: data.aggregatedMetrics || {},
@@ -215,11 +215,11 @@ export class FederatedLearningService {
       const ds = await this.tenantService.getTenantDatabase(subdomain);
       const holdout = await this.fetchTrainingOutcomes(ds, round.modelType, true);
       if (holdout.length >= 20) {
-        const { data: evalData } = await axios.post(`${this.cdssUrl}/fl/evaluate`, {
+        const evalData = await this.cdssService.evaluateFederatedModel({
           modelType: round.modelType,
           minioPath: aggregateData.modelWeightsRef,
           outcomes: holdout,
-        }, { timeout: 60000 });
+        }, subdomain);
         aucRoc = evalData.auc_roc;
         brierScore = evalData.brier_score;
         sampleCount = evalData.sample_count || sampleCount;

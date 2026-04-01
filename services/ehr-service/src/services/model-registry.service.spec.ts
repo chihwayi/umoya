@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { ModelRegistryService } from './model-registry.service';
 import { ModelRegistry } from '../entities/model-registry.entity';
 import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
@@ -7,13 +6,6 @@ import { ModelPromotionReview } from '../entities/model-promotion-review.entity'
 import { ModelCard } from '../entities/model-card.entity';
 import { ModelShadowEvaluation } from '../entities/model-shadow-evaluation.entity';
 import { OutcomeLearningJob } from '../entities/outcome-learning-job.entity';
-
-jest.mock('axios', () => ({
-  __esModule: true,
-  default: {
-    post: jest.fn(),
-  },
-}));
 
 function createMutableRepo(records: Array<any>) {
   return {
@@ -74,6 +66,12 @@ function createTenantDb(repos: Map<any, any>) {
   };
 }
 
+function createCdssServiceMock() {
+  return {
+    loadCdssModel: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 describe('ModelRegistryService governed promotion', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -128,7 +126,8 @@ describe('ModelRegistryService governed promotion', () => {
       ]))),
     };
 
-    const service = new ModelRegistryService(tenantService as any);
+    const cdssService = createCdssServiceMock();
+    const service = new ModelRegistryService(tenantService as any, cdssService as any);
     const result = await service.evaluateAndPromote('tenant-a', 'candidate-1');
 
     expect(result.promoted).toBe(false);
@@ -137,7 +136,7 @@ describe('ModelRegistryService governed promotion', () => {
     expect(candidate.status).toBe('staging');
     expect(reviewRepo.save).toHaveBeenCalled();
     expect(cardRepo.save).toHaveBeenCalled();
-    expect((axios as any).post).not.toHaveBeenCalled();
+    expect(cdssService.loadCdssModel).not.toHaveBeenCalled();
   });
 
   it('promotes only after all governed gates are explicitly satisfied', async () => {
@@ -189,7 +188,8 @@ describe('ModelRegistryService governed promotion', () => {
       ]))),
     };
 
-    const service = new ModelRegistryService(tenantService as any);
+    const cdssService = createCdssServiceMock();
+    const service = new ModelRegistryService(tenantService as any, cdssService as any);
     const result = await service.evaluateAndPromote('tenant-b', 'candidate-1', {
       requestedStage: 'production',
       requestedBy: 'clinical-governance-board',
@@ -205,13 +205,9 @@ describe('ModelRegistryService governed promotion', () => {
     expect(result.model?.deploymentStage).toBe('production');
     expect(current.status).toBe('retired');
     expect(reviewRepo.save).toHaveBeenCalled();
-    expect((axios as any).post).toHaveBeenCalledWith(
-      'http://localhost:8001/model/load',
-      {
-        modelName: 'readmission',
-        minioPath: 'models/readmission/v4.pkl',
-      },
-      { timeout: 30000 },
+    expect(cdssService.loadCdssModel).toHaveBeenCalledWith(
+      'readmission',
+      'models/readmission/v4.pkl',
     );
   });
 
@@ -238,7 +234,8 @@ describe('ModelRegistryService governed promotion', () => {
       ]))),
     };
 
-    const service = new ModelRegistryService(tenantService as any);
+    const cdssService = createCdssServiceMock();
+    const service = new ModelRegistryService(tenantService as any, cdssService as any);
     jest.spyOn(service, 'evaluateAndPromote').mockResolvedValue({
       promoted: false,
       reason: 'Model approved for governed canary stage; production promotion still requires an explicit production approval request',
@@ -301,7 +298,8 @@ describe('ModelRegistryService governed promotion', () => {
       ]))),
     };
 
-    const service = new ModelRegistryService(tenantService as any);
+    const cdssService = createCdssServiceMock();
+    const service = new ModelRegistryService(tenantService as any, cdssService as any);
     const rolledBack = await service.rollback('tenant-d', 'no_show');
 
     expect(rolledBack?.id).toBe('prev-1');
@@ -309,13 +307,9 @@ describe('ModelRegistryService governed promotion', () => {
     expect(previous.deploymentStage).toBe('production');
     expect(current.status).toBe('rolled_back');
     expect(current.deploymentStage).toBe('rolled_back');
-    expect((axios as any).post).toHaveBeenCalledWith(
-      'http://localhost:8001/model/load',
-      {
-        modelName: 'no_show',
-        minioPath: 'models/no_show/v3.pkl',
-      },
-      { timeout: 30000 },
+    expect(cdssService.loadCdssModel).toHaveBeenCalledWith(
+      'no_show',
+      'models/no_show/v3.pkl',
     );
   });
 });

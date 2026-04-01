@@ -83,7 +83,7 @@ export const GuidelineRecommendationCard: React.FC<GuidelineRecommendationCardPr
 
       {/* Red Flags Section */}
       {data.red_flags && data.red_flags.length > 0 && (
-        <div className="mb-3 ml-8 bg-white/60 rounded-lg p-3 border border-red-100">
+        <div className="mb-3 ml-8 bg-white rounded-lg p-3 border border-red-200">
           <p className="text-xs font-bold text-red-800 uppercase tracking-wide mb-2 flex items-center gap-1">
             <AlertCircle className="w-3 h-3" />
             Red Flags Detected
@@ -105,7 +105,7 @@ export const GuidelineRecommendationCard: React.FC<GuidelineRecommendationCardPr
            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
             Clinical Reasoning
           </p>
-          <p className="text-sm text-slate-600 italic bg-white/50 p-2 rounded border border-slate-100">
+          <p className="text-sm text-slate-700 italic bg-white p-2 rounded border border-slate-200">
             {data.reasoning}
           </p>
         </div>

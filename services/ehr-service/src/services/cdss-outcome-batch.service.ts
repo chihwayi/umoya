@@ -8,7 +8,7 @@ import { ModelShadowEvaluation } from '../entities/model-shadow-evaluation.entit
 import { ModelRegistry } from '../entities/model-registry.entity';
 import { FlRound } from '../entities/fl-round.entity';
 import { FederatedLearningService } from './federated-learning.service';
-import axios from 'axios';
+import { CdssService } from './cdss.service';
 
 /**
  * Weekly batch job that:
@@ -27,7 +27,6 @@ import axios from 'axios';
 @Injectable()
 export class CdssOutcomeBatchService {
   private readonly logger = new Logger(CdssOutcomeBatchService.name);
-  private readonly cdssUrl: string;
   private readonly learningClaimTenant = 'system-learning';
   private readonly governedTrainingModels = new Set(['deterioration', 'readmission', 'sepsis', 'no_show']);
   private readonly minLearningJobsForTraining = Math.max(
@@ -38,10 +37,9 @@ export class CdssOutcomeBatchService {
   constructor(
     @Optional() @Inject(TenantService) private readonly tenantService: TenantService,
     @Optional() @Inject(CdssDecisionLogService) private readonly decisionLogService: CdssDecisionLogService,
+    @Optional() @Inject(CdssService) private readonly cdssService?: CdssService,
     @Optional() @Inject(FederatedLearningService) private readonly federatedLearningService?: FederatedLearningService,
-  ) {
-    this.cdssUrl = (process.env.CDSS_SERVICE_URL || '').replace(/\/$/, '');
-  }
+  ) {}
 
   /**
    * Runs every Sunday at 02:00 server time.
@@ -53,8 +51,8 @@ export class CdssOutcomeBatchService {
       this.logger.warn('CdssOutcomeBatchService: dependencies not injected, skipping batch');
       return;
     }
-    if (!this.cdssUrl) {
-      this.logger.warn('CDSS_SERVICE_URL not set — skipping outcome feedback batch');
+    if (!this.cdssService) {
+      this.logger.warn('CdssOutcomeBatchService: CdssService not injected, skipping outcome feedback batch');
       return;
     }
 
@@ -92,14 +90,7 @@ export class CdssOutcomeBatchService {
             createdAt: entry.createdAt,
           }));
 
-          await axios.post(`${this.cdssUrl}/feedback/outcome`, { entries: payload }, {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Service-Token': process.env.CDSS_SERVICE_TOKEN || '',
-              'X-Tenant-ID': tenant.subdomain,
-            },
-            timeout: 30_000,
-          });
+          await this.cdssService.submitOutcomeFeedback(payload, tenant.subdomain);
 
           await this.decisionLogService.markFeedbackSent(
             actionable.map((entry) => entry.id),
@@ -126,24 +117,13 @@ export class CdssOutcomeBatchService {
       this.logger.warn('CdssOutcomeBatchService: tenant service not injected, skipping approved learning claim batch');
       return;
     }
-    if (!this.cdssUrl) {
-      this.logger.warn('CDSS_SERVICE_URL not set — skipping approved learning claim batch');
+    if (!this.cdssService) {
+      this.logger.warn('CdssOutcomeBatchService: CdssService not injected, skipping approved learning claim batch');
       return;
     }
 
     try {
-      const { data } = await axios.post(
-        `${this.cdssUrl}/feedback/outcome/learning/claim?limit=50`,
-        {},
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Service-Token': process.env.CDSS_SERVICE_TOKEN || '',
-            'X-Tenant-ID': this.learningClaimTenant,
-          },
-          timeout: 30_000,
-        },
-      );
+      const data = await this.cdssService.claimOutcomeFeedbackForLearning(50, this.learningClaimTenant);
 
       const entries = Array.isArray(data?.entries) ? data.entries : [];
       if (!entries.length) {

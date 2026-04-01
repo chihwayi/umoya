@@ -87,9 +87,9 @@ export class SpecialtyAutomationService {
     try {
       // Find regimens with upcoming cycles
       const upcomingCycles = await tenantDb.query(`
-        SELECT 
+        SELECT
           r.id,
-          r.case_id,
+          r.oncology_case_id AS case_id,
           r.regimen_name,
           r.cycle_length_days,
           r.current_cycle,
@@ -98,7 +98,7 @@ export class SpecialtyAutomationService {
           oc.patient_id,
           oc.primary_diagnosis
         FROM oncology_regimens r
-        JOIN oncology_cases oc ON oc.id = r.case_id
+        JOIN oncology_cases oc ON oc.id = r.oncology_case_id
         WHERE r.status = 'active'
           AND r.next_cycle_date IS NOT NULL
           AND r.next_cycle_date <= CURRENT_DATE + INTERVAL '3 days'
@@ -127,24 +127,30 @@ export class SpecialtyAutomationService {
     try {
       // Find adverse events with Grade 3+ severity that haven't been escalated
       const severeEvents = await tenantDb.query(`
-        SELECT 
+        SELECT
           ae.id,
           ae.regimen_id,
           ae.event_type,
-          ae.severity_grade,
-          ae.snomed_concept_id,
-          ae.snomed_term,
+          COALESCE(ae.severity_grade,
+            CASE WHEN ae.grade ~ '^[0-9]+$' THEN ae.grade::integer ELSE NULL END
+          ) AS severity_grade,
+          COALESCE(ae.snomed_concept_id, ae.event_snomed_code) AS snomed_concept_id,
+          ae.event_snomed_term AS snomed_term,
           ae.event_date,
-          ae.status,
-          r.case_id,
+          COALESCE(ae.status, 'pending') AS status,
+          r.oncology_case_id AS case_id,
           oc.patient_id
         FROM oncology_adverse_events ae
         JOIN oncology_regimens r ON r.id = ae.regimen_id
-        JOIN oncology_cases oc ON oc.id = r.case_id
-        WHERE ae.severity_grade >= 3
-          AND ae.status != 'resolved'
+        JOIN oncology_cases oc ON oc.id = r.oncology_case_id
+        WHERE COALESCE(ae.severity_grade,
+            CASE WHEN ae.grade ~ '^[0-9]+$' THEN ae.grade::integer ELSE NULL END
+          ) >= 3
+          AND COALESCE(ae.status, 'pending') != 'resolved'
           AND (ae.escalated_at IS NULL OR ae.escalated_at < NOW() - INTERVAL '24 hours')
-        ORDER BY ae.severity_grade DESC, ae.event_date DESC
+        ORDER BY COALESCE(ae.severity_grade,
+            CASE WHEN ae.grade ~ '^[0-9]+$' THEN ae.grade::integer ELSE NULL END
+          ) DESC, ae.event_date DESC
       `);
 
       for (const event of severeEvents) {

@@ -1,191 +1,712 @@
 """
-Zimbabwe-Specific Medical Terminology
-Supports Shona, Ndebele, and local medical terms
+Zimbabwe-Specific Clinical NLP
+Supports Shona, Ndebele, and local medical terms with:
+- text normalization and local phrase mapping
+- fuzzy matching for spelling variants
+- symptom-cluster inference
+- negation / history / suspicion context detection
+- structured scored output
 """
+from __future__ import annotations
 
-# Zimbabwe-specific medical terminology mappings
-ZIMBABWE_TERMINOLOGY = {
-    # Common conditions (English -> Local terms)
-    'hiv': {
-        'shona': ['hiv', 'mukondombera', 'chirwere chehiv'],
-        'ndebele': ['hiv', 'isifo sehiv'],
-        'local_terms': ['arv', 'antiretroviral', 'art', 'arvs']
+import re
+import unicodedata
+from dataclasses import dataclass, asdict
+from difflib import SequenceMatcher
+from typing import Dict, List, Set, Tuple, Optional, Any
+
+
+# =============================================================================
+# KNOWLEDGE BASES
+# =============================================================================
+
+ZIMBABWE_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
+    "hiv": {
+        "canonical_name": "HIV/AIDS",
+        "english": ["hiv", "aids", "human immunodeficiency virus", "acquired immunodeficiency syndrome"],
+        "shona": ["hiv", "mukondombera", "chirwere chehiv", "mukondobera"],
+        "ndebele": ["hiv", "isifo sehiv"],
+        "local_terms": ["arv", "antiretroviral", "art", "arvs", "known positive", "hiv positive"],
     },
-    'tuberculosis': {
-        'shona': ['tb', 'chirwere chepfupa', 'pfupa'],
-        'ndebele': ['tb', 'isifo samathambo'],
-        'local_terms': ['tuberculosis', 'pulmonary tb', 'extra-pulmonary tb']
+    "tuberculosis": {
+        "canonical_name": "Tuberculosis",
+        "english": ["tb", "tuberculosis", "pulmonary tb", "extra-pulmonary tb"],
+        "shona": ["tb", "chirwere chepfupa", "pfupa", "tb remapapu"],
+        "ndebele": ["tb", "isifo samathambo"],
+        "local_terms": ["tb treatment", "dot therapy", "isoniazid", "rifampicin"],
     },
-    'malaria': {
-        'shona': ['malaria', 'marariya', 'chirwere chemalaria'],
-        'ndebele': ['malaria', 'imalariya'],
-        'local_terms': ['malaria', 'fever', 'high fever']
+    "malaria": {
+        "canonical_name": "Malaria",
+        "english": ["malaria"],
+        "shona": ["malaria", "marariya", "maralia", "chirwere chemalaria"],
+        "ndebele": ["malaria", "imalariya"],
+        "local_terms": ["high fever malaria", "act treatment"],
     },
-    'diabetes': {
-        'shona': ['diabetes', 'chirwere cheshuga', 'shuga'],
-        'ndebele': ['diabetes', 'isifo sikashukela'],
-        'local_terms': ['diabetes', 'diabetic', 'blood sugar', 'high sugar']
+    "diabetes": {
+        "canonical_name": "Diabetes",
+        "english": ["diabetes", "diabetic", "diabetes mellitus"],
+        "shona": ["diabetes", "chirwere cheshuga", "shuga", "ane sugar"],
+        "ndebele": ["diabetes", "isifo sikashukela"],
+        "local_terms": ["blood sugar", "high sugar", "sugga", "glucose", "insulin"],
     },
-    'hypertension': {
-        'shona': ['hypertension', 'bp yepamusoro', 'blood pressure yepamusoro'],
-        'ndebele': ['hypertension', 'bp ephezulu'],
-        'local_terms': ['high bp', 'high blood pressure', 'bp high']
+    "hypertension": {
+        "canonical_name": "Hypertension",
+        "english": ["hypertension", "high blood pressure"],
+        "shona": [
+            "hypertension", "bp yepamusoro", "blood pressure yepamusoro",
+            "bp yakwira", "pressure yepamusoro",
+        ],
+        "ndebele": ["hypertension", "bp ephezulu"],
+        "local_terms": ["high bp", "bp high", "hbp"],
     },
-    'pneumonia': {
-        'shona': ['pneumonia', 'chirwere chepfupa', 'pfupa'],
-        'ndebele': ['pneumonia', 'isifo samathambo'],
-        'local_terms': ['pneumonia', 'chest infection', 'lung infection']
-    }
+    "pneumonia": {
+        "canonical_name": "Pneumonia",
+        "english": ["pneumonia", "chest infection", "lung infection"],
+        "shona": ["pneumonia", "chirwere chepfuva"],
+        "ndebele": ["pneumonia", "isifo sezifuba"],
+        "local_terms": ["lung infection", "lower respiratory tract infection", "lrti"],
+    },
 }
 
-# Shona symptom translations
-SHONA_SYMPTOMS = {
-    'fever': ['fivha', 'kupisa', 'kupisa kwemuviri', 'temperature'],
-    'cough': ['chikosoro', 'kukosora', 'cough'],
-    'headache': ['musoro', 'kurwadza musoro', 'headache'],
-    'chest_pain': ['kurwadza pachipfuva', 'chipfuva', 'chest pain'],
-    'shortness_of_breath': ['kufemuka', 'kushaya mweya', 'breathless'],
-    'abdominal_pain': ['kurwadza mudumbu', 'dumbu', 'stomach pain'],
-    'nausea': ['kusvotwa', 'kuda kurutsa', 'nausea'],
-    'vomiting': ['kurutsa', 'vomiting'],
-    'diarrhea': ['manyoka', 'kuita manyoka', 'diarrhea'],
-    'fatigue': ['kuneta', 'kushaya simba', 'tired'],
-    'dizziness': ['kudzungaira', 'dizziness'],
-    'joint_pain': ['kurwadza mabvi', 'joint pain']
+SHONA_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["fivha", "kupisa", "kupisa kwemuviri", "muviri uri kupisa", "temperature"],
+    "cough": ["chikosoro", "kukosora", "kukosora zvikuru"],
+    "headache": ["musoro", "kurwadza musoro"],
+    "chest_pain": ["kurwadza pachipfuva", "chipfuva", "kurwadza pachest"],
+    "shortness_of_breath": ["kufemuka", "kushaya mweya", "ari kufemuka"],
+    "abdominal_pain": ["kurwadza mudumbu", "dumbu", "kurwadza nhumbu"],
+    "nausea": ["kusvotwa", "kuda kurutsa"],
+    "vomiting": ["kurutsa"],
+    "diarrhea": ["manyoka", "kuita manyoka"],
+    "fatigue": ["kuneta", "kushaya simba", "kudhakwa"],
+    "dizziness": ["kudzungaira"],
+    "joint_pain": ["kurwadza mabvi", "kurwadza majoini"],
+    "weight_loss": ["kuonda", "kuderera uremu", "weight loss"],
+    "night_sweats": ["kudikitira usiku", "night sweats"],
+    "thirst": ["nyota", "nyota yakanyanya"],
+    "frequent_urination": ["kuita weti kakawanda", "kukashura kakawanda"],
+    "blurred_vision": ["kuona zvisina kujeka"],
+    "chills": ["chando", "kukurumidza kupisa"],
+    "body_aches": ["kurwadza muviri", "body pains"],
+    "hemoptysis": ["kukosora ropa", "anokosora ropa", "coughing blood"],
+    "swollen_lymph_nodes": ["gogodzviro", "swollen glands"],
 }
 
-# Ndebele symptom translations
-NDEBELE_SYMPTOMS = {
-    'fever': ['umkhuhlane', 'ubushushu', 'fever'],
-    'cough': ['ukukhwehlela', 'cough'],
-    'headache': ['ubuhlungu bekhanda', 'headache'],
-    'chest_pain': ['ubuhlungu esifubeni', 'chest pain'],
-    'shortness_of_breath': ['ukuphefumula', 'breathless'],
-    'abdominal_pain': ['ubuhlungu esiswini', 'stomach pain'],
-    'nausea': ['ukugula', 'nausea'],
-    'vomiting': ['ukuhlanza', 'vomiting'],
-    'diarrhea': ['ukuchama', 'diarrhea'],
-    'fatigue': ['ukukhathala', 'tired'],
-    'dizziness': ['ukudangala', 'dizziness'],
-    'joint_pain': ['ubuhlungu emalungwini', 'joint pain']
+NDEBELE_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["umkhuhlane", "ubushushu"],
+    "cough": ["ukukhwehlela"],
+    "headache": ["ubuhlungu bekhanda"],
+    "chest_pain": ["ubuhlungu esifubeni"],
+    "shortness_of_breath": ["ukuphefumula nzima", "ukuphefumula"],
+    "abdominal_pain": ["ubuhlungu esiswini"],
+    "nausea": ["ukugula"],
+    "vomiting": ["ukuhlanza"],
+    "diarrhea": ["uhudo", "ukuchama"],
+    "fatigue": ["ukukhathala"],
+    "dizziness": ["ukudangala"],
+    "joint_pain": ["ubuhlungu emalungwini"],
+    "weight_loss": ["ukwehla komzimba"],
+    "night_sweats": ["ukujuluka ebusuku"],
+    "thirst": ["ukoma"],
+    "frequent_urination": ["ukuchama kanengi"],
+    "blurred_vision": ["ukubona kufiphala"],
+    "chills": ["ukuqhaqhazela"],
+    "body_aches": ["ubuhlungu bomzimba"],
+    "hemoptysis": ["ukukhwehlela igazi"],
+    "swollen_lymph_nodes": ["amaglandisi akhukhumele"],
 }
 
-# Zimbabwe-specific disease patterns (common in Zimbabwe)
-ZIMBABWE_DISEASE_PATTERNS = {
-    'HIV/AIDS': {
-        'common_symptoms': ['fever', 'fatigue', 'weight_loss', 'cough', 'diarrhea'],
-        'prevalence': 'high',  # High prevalence in Zimbabwe
-        'base_probability_multiplier': 1.2  # Increase probability for common conditions
+ZIMBABWE_DISEASE_PATTERNS: Dict[str, Dict[str, Any]] = {
+    "HIV/AIDS": {
+        "common_symptoms": ["fever", "fatigue", "weight_loss", "cough", "diarrhea", "swollen_lymph_nodes"],
+        "prevalence": "high",
+        "base_probability_multiplier": 1.20,
     },
-    'Tuberculosis': {
-        'common_symptoms': ['cough', 'fever', 'weight_loss', 'night_sweats', 'chest_pain'],
-        'prevalence': 'high',
-        'base_probability_multiplier': 1.15
+    "Tuberculosis": {
+        "common_symptoms": [
+            "cough", "fever", "weight_loss", "night_sweats", "chest_pain", "hemoptysis", "fatigue",
+        ],
+        "prevalence": "high",
+        "base_probability_multiplier": 1.15,
     },
-    'Malaria': {
-        'common_symptoms': ['fever', 'chills', 'headache', 'body_aches', 'fatigue'],
-        'prevalence': 'high',
-        'base_probability_multiplier': 1.2
+    "Malaria": {
+        "common_symptoms": ["fever", "chills", "headache", "body_aches", "fatigue", "vomiting"],
+        "prevalence": "high",
+        "base_probability_multiplier": 1.20,
     },
-    'Diabetes': {
-        'common_symptoms': ['frequent_urination', 'thirst', 'fatigue', 'blurred_vision'],
-        'prevalence': 'moderate',
-        'base_probability_multiplier': 1.0
+    "Diabetes": {
+        "common_symptoms": ["frequent_urination", "thirst", "fatigue", "blurred_vision", "weight_loss"],
+        "prevalence": "moderate",
+        "base_probability_multiplier": 1.00,
     },
-    'Hypertension': {
-        'common_symptoms': ['headache', 'dizziness', 'chest_pain'],
-        'prevalence': 'moderate',
-        'base_probability_multiplier': 1.0
-    }
+    "Hypertension": {
+        "common_symptoms": ["headache", "dizziness", "chest_pain"],
+        "prevalence": "moderate",
+        "base_probability_multiplier": 1.00,
+    },
+    "Pneumonia": {
+        "common_symptoms": ["cough", "fever", "chest_pain", "shortness_of_breath"],
+        "prevalence": "moderate",
+        "base_probability_multiplier": 1.00,
+    },
 }
 
-def translate_symptom_to_english(text: str, language: str = 'auto') -> str:
+
+# =============================================================================
+# DATA STRUCTURES
+# =============================================================================
+
+@dataclass
+class MatchResult:
+    name: str
+    canonical_name: str
+    score: float
+    source_term: str
+    source_language: str
+    match_type: str
+    negated: bool = False
+    historical: bool = False
+    suspected: bool = False
+
+
+@dataclass
+class ConditionResult:
+    name: str
+    score: float
+    reason: str
+    matched_terms: List[str]
+    matched_symptoms: List[str]
+    negated: bool = False
+    historical: bool = False
+    suspected: bool = False
+
+
+# =============================================================================
+# MAIN ENGINE
+# =============================================================================
+
+class ZimbabweClinicalNLP:
     """
-    Translate Shona/Ndebele symptom to English
-    
-    Args:
-        text: Symptom text in Shona, Ndebele, or English
-        language: 'shona', 'ndebele', or 'auto' (detect)
-    
-    Returns:
-        English symptom key or original text if not found
+    Zimbabwe-focused clinical NLP for mixed English / Shona / Ndebele text.
+
+    Supports:
+    - text normalization and local-phrase mapping
+    - fuzzy matching for spelling variants and typing mistakes
+    - symptom extraction with per-symptom scoring
+    - direct condition name extraction
+    - symptom-cluster inference (e.g. cough + night_sweats + weight_loss → TB)
+    - negation / history / suspicion context detection
+    - HIV/TB co-infection flag (clinically important for Zimbabwe)
+    - structured scored output via analyze()
     """
-    text_lower = text.lower().strip()
-    
-    # Auto-detect language or use specified
-    if language == 'auto':
-        # Check Shona first
-        for eng_symptom, shona_terms in SHONA_SYMPTOMS.items():
-            if any(term in text_lower for term in shona_terms):
-                return eng_symptom
-        
-        # Check Ndebele
-        for eng_symptom, ndebele_terms in NDEBELE_SYMPTOMS.items():
-            if any(term in text_lower for term in ndebele_terms):
-                return eng_symptom
-    elif language == 'shona':
-        for eng_symptom, shona_terms in SHONA_SYMPTOMS.items():
-            if any(term in text_lower for term in shona_terms):
-                return eng_symptom
-    elif language == 'ndebele':
-        for eng_symptom, ndebele_terms in NDEBELE_SYMPTOMS.items():
-            if any(term in text_lower for term in ndebele_terms):
-                return eng_symptom
-    
-    # Return original if no translation found
-    return text
+
+    NEGATIONS: Set[str] = {
+        "no", "not", "without", "denies", "deny", "negative",
+        "hapana", "kwete", "pasina", "haana", "hatina",
+        "kasi", "akula", "akasina",
+    }
+
+    HISTORY_MARKERS: Set[str] = {
+        "history of", "past", "previous", "known", "background of",
+        "akambo", "akambova", "ane nhoroondo ye",
+        "wake waba", "used to have",
+    }
+
+    SUSPICION_MARKERS: Set[str] = {
+        "possible", "suspected", "query", "?", "r/o",
+        "rule out", "probable", "cannot exclude",
+        "fungidzira", "suspect", "maybe",
+    }
+
+    # Local phrase → canonical term (applied during normalization)
+    _PHRASE_MAP: Dict[str, str] = {
+        "bp yakwira": "hypertension",
+        "bp yepamusoro": "hypertension",
+        "blood pressure yepamusoro": "hypertension",
+        "pressure yepamusoro": "hypertension",
+        "high bp": "hypertension",
+        "bp high": "hypertension",
+        "ane sugar": "diabetes",
+        "high sugar": "diabetes",
+        "sugga": "diabetes",
+        "blood sugar": "diabetes",
+        "muviri uri kupisa": "fever",
+        "kupisa kwemuviri": "fever",
+        "tb remapapu": "pulmonary tb",
+        "anokosora ropa": "hemoptysis",
+        "kukosora ropa": "hemoptysis",
+        "coughing blood": "hemoptysis",
+        "kurutsa nemanyoka": "vomiting diarrhea",
+        "ari kufemuka": "shortness of breath",
+    }
+
+    def __init__(
+        self,
+        terminology: Optional[Dict[str, Dict[str, Any]]] = None,
+        shona_symptoms: Optional[Dict[str, List[str]]] = None,
+        ndebele_symptoms: Optional[Dict[str, List[str]]] = None,
+        disease_patterns: Optional[Dict[str, Dict[str, Any]]] = None,
+        fuzzy_threshold: float = 0.88,
+    ) -> None:
+        self.terminology = terminology or ZIMBABWE_TERMINOLOGY
+        self.shona_symptoms = shona_symptoms or SHONA_SYMPTOMS
+        self.ndebele_symptoms = ndebele_symptoms or NDEBELE_SYMPTOMS
+        self.disease_patterns = disease_patterns or ZIMBABWE_DISEASE_PATTERNS
+        self.fuzzy_threshold = fuzzy_threshold
+
+        self.english_symptoms = self._build_english_symptom_aliases()
+        self.condition_alias_index = self._build_condition_alias_index()
+        self.symptom_alias_index = self._build_symptom_alias_index()
+
+    # -------------------------------------------------------------------------
+    # PUBLIC API
+    # -------------------------------------------------------------------------
+
+    def analyze(self, text: str) -> Dict[str, Any]:
+        """
+        Full pipeline. Returns a structured dict suitable for API responses.
+        """
+        normalized = self.normalize_text(text)
+        languages = self.detect_language_mix(normalized)
+
+        symptom_matches = self.extract_symptoms(normalized)
+        direct_conditions = self.extract_conditions(normalized)
+        inferred_conditions = self.infer_conditions_from_symptoms(symptom_matches)
+        combined = self.combine_condition_evidence(direct_conditions, inferred_conditions)
+
+        hiv_tb_flag = self._check_hiv_tb_coinfection(combined)
+
+        return {
+            "input_text": text,
+            "normalized_text": normalized,
+            "languages_detected": languages,
+            "symptoms_found": [asdict(m) for m in symptom_matches],
+            "conditions_direct": [asdict(c) for c in direct_conditions],
+            "conditions_inferred": [asdict(c) for c in inferred_conditions],
+            "final_conditions": [asdict(c) for c in combined],
+            "primary_suspicions": [
+                c.name for c in combined if c.score >= 0.60 and not c.negated
+            ],
+            "hiv_tb_coinfection_flag": hiv_tb_flag,
+            "disclaimer": "Rule-based support only. Not a confirmed diagnosis.",
+        }
+
+    def extract_symptoms(self, text: str) -> List[MatchResult]:
+        text = self.normalize_text(text)
+        matches: List[MatchResult] = []
+
+        for symptom_key, alias_entries in self.symptom_alias_index.items():
+            best: Optional[MatchResult] = None
+
+            for alias, language in alias_entries:
+                score, match_type, source_term = self._match_alias(text, alias)
+                if score <= 0:
+                    continue
+
+                negated, historical, suspected = self._detect_context(text, alias)
+                adjusted = score
+                if negated:
+                    adjusted *= 0.15
+                if historical:
+                    adjusted *= 0.60
+                if suspected:
+                    adjusted *= 0.80
+
+                candidate = MatchResult(
+                    name=symptom_key,
+                    canonical_name=symptom_key,
+                    score=round(adjusted, 3),
+                    source_term=source_term,
+                    source_language=language,
+                    match_type=match_type,
+                    negated=negated,
+                    historical=historical,
+                    suspected=suspected,
+                )
+                if best is None or candidate.score > best.score:
+                    best = candidate
+
+            if best and best.score > 0:
+                matches.append(best)
+
+        matches.sort(key=lambda x: x.score, reverse=True)
+        return matches
+
+    def extract_conditions(self, text: str) -> List[ConditionResult]:
+        text = self.normalize_text(text)
+        results: List[ConditionResult] = []
+
+        for condition_key, aliases in self.condition_alias_index.items():
+            best_score = 0.0
+            matched_terms: List[str] = []
+            negated = historical = suspected = False
+            canonical = self.terminology[condition_key]["canonical_name"]
+
+            for alias, _lang in aliases:
+                score, _, source_term = self._match_alias(text, alias)
+                if score <= 0:
+                    continue
+
+                a_neg, a_hist, a_susp = self._detect_context(text, alias)
+                adjusted = score
+                if a_neg:
+                    adjusted *= 0.15
+                if a_hist:
+                    adjusted *= 0.60
+                if a_susp:
+                    adjusted *= 0.80
+
+                if adjusted > best_score:
+                    best_score = adjusted
+                    matched_terms = [source_term]
+                    negated, historical, suspected = a_neg, a_hist, a_susp
+                elif adjusted > 0.80:
+                    matched_terms.append(source_term)
+
+            if best_score > 0:
+                mult = self.get_zimbabwe_disease_multiplier(canonical)
+                final = min(best_score * mult, 1.0)
+                results.append(ConditionResult(
+                    name=canonical,
+                    score=round(final, 3),
+                    reason="direct_term_match",
+                    matched_terms=list(set(matched_terms)),
+                    matched_symptoms=[],
+                    negated=negated,
+                    historical=historical,
+                    suspected=suspected,
+                ))
+
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results
+
+    def infer_conditions_from_symptoms(
+        self, symptom_matches: List[MatchResult]
+    ) -> List[ConditionResult]:
+        found = {m.name for m in symptom_matches if m.score >= 0.45 and not m.negated}
+        results: List[ConditionResult] = []
+
+        for disease_name, meta in self.disease_patterns.items():
+            expected = set(meta.get("common_symptoms", []))
+            if not expected:
+                continue
+
+            overlap = found.intersection(expected)
+            if not overlap:
+                continue
+
+            raw = len(overlap) / len(expected)
+
+            # Evidence-based cluster bonuses (clinically validated patterns for Zimbabwe)
+            bonus = 0.0
+            if disease_name == "Tuberculosis":
+                if "hemoptysis" in overlap:
+                    bonus += 0.20  # hemoptysis is a strong TB red flag
+                if {"cough", "night_sweats", "weight_loss"}.issubset(overlap):
+                    bonus += 0.15  # classic TB triad
+            if disease_name == "Malaria":
+                if {"fever", "chills", "headache"}.issubset(overlap):
+                    bonus += 0.15  # classic malaria triad
+            if disease_name == "Diabetes":
+                if {"thirst", "frequent_urination"}.issubset(overlap):
+                    bonus += 0.15  # strong DM cluster
+            if disease_name == "HIV/AIDS":
+                if {"weight_loss", "fatigue", "diarrhea"}.issubset(overlap):
+                    bonus += 0.10  # wasting syndrome
+
+            mult = meta.get("base_probability_multiplier", 1.0)
+            final = min((raw + bonus) * mult, 1.0)
+
+            results.append(ConditionResult(
+                name=disease_name,
+                score=round(final, 3),
+                reason="symptom_cluster",
+                matched_terms=[],
+                matched_symptoms=sorted(list(overlap)),
+            ))
+
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results
+
+    def combine_condition_evidence(
+        self,
+        direct: List[ConditionResult],
+        inferred: List[ConditionResult],
+    ) -> List[ConditionResult]:
+        combined: Dict[str, ConditionResult] = {}
+
+        for item in direct:
+            combined[item.name] = ConditionResult(
+                name=item.name,
+                score=item.score,
+                reason=item.reason,
+                matched_terms=item.matched_terms[:],
+                matched_symptoms=item.matched_symptoms[:],
+                negated=item.negated,
+                historical=item.historical,
+                suspected=item.suspected,
+            )
+
+        for item in inferred:
+            if item.name in combined:
+                existing = combined[item.name]
+                merged = min(existing.score + item.score * 0.45, 1.0)
+                combined[item.name] = ConditionResult(
+                    name=item.name,
+                    score=round(merged, 3),
+                    reason="direct_term_match+symptom_cluster",
+                    matched_terms=sorted(set(existing.matched_terms + item.matched_terms)),
+                    matched_symptoms=sorted(set(existing.matched_symptoms + item.matched_symptoms)),
+                    negated=existing.negated,
+                    historical=existing.historical,
+                    suspected=existing.suspected,
+                )
+            else:
+                combined[item.name] = item
+
+        results = list(combined.values())
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results
+
+    # -------------------------------------------------------------------------
+    # BACKWARD-COMPATIBLE METHOD WRAPPERS
+    # -------------------------------------------------------------------------
+
+    def translate_symptom_to_english(self, text: str) -> str:
+        matches = self.extract_symptoms(text)
+        if matches:
+            return matches[0].name
+        return text
+
+    def get_zimbabwe_disease_multiplier(self, diagnosis: str) -> float:
+        d = diagnosis.lower()
+        for disease, meta in self.disease_patterns.items():
+            if disease.lower() in d or d in disease.lower():
+                return meta.get("base_probability_multiplier", 1.0)
+        return 1.0
+
+    # -------------------------------------------------------------------------
+    # NORMALIZATION
+    # -------------------------------------------------------------------------
+
+    def normalize_text(self, text: str) -> str:
+        text = str(text).lower().strip()
+        # Unicode normalization (handles accented chars and compatibility forms)
+        text = unicodedata.normalize("NFKD", text)
+        # Allow word chars, spaces, hyphens, slashes, question marks
+        text = re.sub(r"[^\w\s\/\-\?]", " ", text)
+        text = re.sub(r"\s+", " ", text)
+
+        # Apply longest local-phrase replacements first
+        for phrase in sorted(self._PHRASE_MAP.keys(), key=len, reverse=True):
+            if phrase in text:
+                text = text.replace(phrase, self._PHRASE_MAP[phrase])
+
+        return re.sub(r"\s+", " ", text).strip()
+
+    def detect_language_mix(self, text: str) -> List[str]:
+        detected: Set[str] = set()
+
+        if sum(1 for aliases in self.shona_symptoms.values() for a in aliases if a in text) > 0:
+            detected.add("shona")
+        if sum(1 for aliases in self.ndebele_symptoms.values() for a in aliases if a in text) > 0:
+            detected.add("ndebele")
+        if sum(1 for aliases in self.english_symptoms.values() for a in aliases if a in text) > 0:
+            detected.add("english")
+        if not detected:
+            detected.add("unknown")
+
+        return sorted(detected)
+
+    # -------------------------------------------------------------------------
+    # HIV / TB CO-INFECTION CHECK
+    # -------------------------------------------------------------------------
+
+    def _check_hiv_tb_coinfection(self, combined: List[ConditionResult]) -> bool:
+        """
+        Return True when both HIV/AIDS and TB are suspected above threshold.
+        Zimbabwe has one of the world's highest HIV/TB co-infection rates.
+        """
+        names = {c.name for c in combined if c.score >= 0.50 and not c.negated}
+        return "HIV/AIDS" in names and "Tuberculosis" in names
+
+    # -------------------------------------------------------------------------
+    # INDEX BUILDERS
+    # -------------------------------------------------------------------------
+
+    def _build_english_symptom_aliases(self) -> Dict[str, List[str]]:
+        return {
+            "fever": ["fever", "high fever", "temperature", "pyrexia"],
+            "cough": ["cough", "coughing"],
+            "headache": ["headache", "head pain"],
+            "chest_pain": ["chest pain", "chest tightness"],
+            "shortness_of_breath": ["shortness of breath", "breathless", "difficulty breathing", "dyspnoea"],
+            "abdominal_pain": ["abdominal pain", "stomach pain", "belly pain"],
+            "nausea": ["nausea", "feeling sick"],
+            "vomiting": ["vomiting", "vomit"],
+            "diarrhea": ["diarrhea", "diarrhoea", "loose stool", "loose stools"],
+            "fatigue": ["fatigue", "tired", "weakness", "weak"],
+            "dizziness": ["dizziness", "dizzy", "lightheaded"],
+            "joint_pain": ["joint pain", "joint pains"],
+            "weight_loss": ["weight loss", "losing weight", "unintentional weight loss"],
+            "night_sweats": ["night sweats", "sweating at night"],
+            "thirst": ["thirst", "excessive thirst", "polydipsia"],
+            "frequent_urination": ["frequent urination", "polyuria", "passing urine often"],
+            "blurred_vision": ["blurred vision", "visual disturbance"],
+            "chills": ["chills", "shivering", "rigors"],
+            "body_aches": ["body aches", "body pains", "myalgia", "muscle pains"],
+            "hemoptysis": ["hemoptysis", "haemoptysis", "coughing blood", "blood in sputum"],
+            "swollen_lymph_nodes": ["swollen glands", "lymphadenopathy", "swollen lymph nodes"],
+        }
+
+    def _build_symptom_alias_index(self) -> Dict[str, List[Tuple[str, str]]]:
+        all_symptoms = (
+            set(self.shona_symptoms.keys())
+            | set(self.ndebele_symptoms.keys())
+            | set(self.english_symptoms.keys())
+        )
+        index: Dict[str, List[Tuple[str, str]]] = {}
+        for sym in all_symptoms:
+            entries: List[Tuple[str, str]] = []
+            for a in self.english_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "english"))
+            for a in self.shona_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "shona"))
+            for a in self.ndebele_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "ndebele"))
+            index[sym] = entries
+        return index
+
+    def _build_condition_alias_index(self) -> Dict[str, List[Tuple[str, str]]]:
+        index: Dict[str, List[Tuple[str, str]]] = {}
+        for key, meta in self.terminology.items():
+            entries: List[Tuple[str, str]] = []
+            for a in meta.get("english", []):
+                entries.append((self.normalize_text(a), "english"))
+            for a in meta.get("shona", []):
+                entries.append((self.normalize_text(a), "shona"))
+            for a in meta.get("ndebele", []):
+                entries.append((self.normalize_text(a), "ndebele"))
+            for a in meta.get("local_terms", []):
+                entries.append((self.normalize_text(a), "local"))
+            index[key] = entries
+        return index
+
+    # -------------------------------------------------------------------------
+    # MATCHING
+    # -------------------------------------------------------------------------
+
+    def _match_alias(self, text: str, alias: str) -> Tuple[float, str, str]:
+        if not alias:
+            return 0.0, "", ""
+
+        # Exact phrase / term match
+        if alias in text:
+            if len(alias.split()) > 1:
+                return 0.98, "exact_phrase", alias
+            return 0.95, "exact_term", alias
+
+        # Fuzzy single-token match
+        if len(alias.split()) == 1:
+            best_score, best_word = 0.0, ""
+            for word in text.split():
+                s = SequenceMatcher(None, word, alias).ratio()
+                if s > best_score:
+                    best_score, best_word = s, word
+            if best_score >= self.fuzzy_threshold:
+                return round(best_score, 3), "fuzzy_term", best_word
+
+        # Fuzzy n-gram match for multi-word aliases
+        alias_tokens = alias.split()
+        if len(alias_tokens) > 1:
+            text_tokens = text.split()
+            w = len(alias_tokens)
+            best_score, best_ngram = 0.0, ""
+            for i in range(max(1, len(text_tokens) - w + 1)):
+                ngram = " ".join(text_tokens[i : i + w])
+                s = SequenceMatcher(None, ngram, alias).ratio()
+                if s > best_score:
+                    best_score, best_ngram = s, ngram
+            if best_score >= max(self.fuzzy_threshold, 0.90):
+                return round(best_score, 3), "fuzzy_phrase", best_ngram
+
+        return 0.0, "", ""
+
+    # -------------------------------------------------------------------------
+    # CONTEXT DETECTION
+    # -------------------------------------------------------------------------
+
+    def _detect_context(
+        self, text: str, alias: str, window_size: int = 4
+    ) -> Tuple[bool, bool, bool]:
+        tokens = text.split()
+        alias_tokens = alias.split()
+        negated = historical = suspected = False
+
+        for i in range(len(tokens) - len(alias_tokens) + 1):
+            if tokens[i : i + len(alias_tokens)] == alias_tokens:
+                left = tokens[max(0, i - window_size) : i]
+                left_str = " ".join(left)
+
+                if any(m in left or m in left_str for m in self.NEGATIONS):
+                    negated = True
+                if any(m in left_str for m in self.HISTORY_MARKERS):
+                    historical = True
+                if any(m in left_str for m in self.SUSPICION_MARKERS):
+                    suspected = True
+
+        # Whole-text pattern fallback for multi-word context phrases
+        compact = " ".join(tokens)
+        for marker in ("no ", "not ", "without ", "hapana ", "haana "):
+            if f"{marker}{alias}" in compact:
+                negated = True
+        for marker in ("history of ", "past ", "known "):
+            if f"{marker}{alias}" in compact:
+                historical = True
+        for marker in ("rule out ", "possible ", "suspected ", "? "):
+            if f"{marker}{alias}" in compact:
+                suspected = True
+
+        return negated, historical, suspected
+
+
+# =============================================================================
+# MODULE-LEVEL SINGLETON  (created once, reused)
+# =============================================================================
+
+_nlp = ZimbabweClinicalNLP()
+
+
+# =============================================================================
+# BACKWARD-COMPATIBLE MODULE-LEVEL FUNCTIONS
+# (clinicalbert_diagnostic.py and any other callers use these directly)
+# =============================================================================
+
+def translate_symptom_to_english(text: str, language: str = "auto") -> str:
+    """Translate Shona/Ndebele symptom to English. Backward-compatible."""
+    return _nlp.translate_symptom_to_english(text)
+
 
 def get_zimbabwe_disease_multiplier(diagnosis: str) -> float:
-    """
-    Get probability multiplier for Zimbabwe-specific disease prevalence
-    
-    Args:
-        diagnosis: Diagnosis name
-    
-    Returns:
-        Multiplier (1.0 = no change, >1.0 = increase probability)
-    """
-    diagnosis_lower = diagnosis.lower()
-    
-    for disease, pattern in ZIMBABWE_DISEASE_PATTERNS.items():
-        if disease.lower() in diagnosis_lower or diagnosis_lower in disease.lower():
-            return pattern.get('base_probability_multiplier', 1.0)
-    
-    return 1.0
+    """Prevalence multiplier for Zimbabwe-specific diseases. Backward-compatible."""
+    return _nlp.get_zimbabwe_disease_multiplier(diagnosis)
+
 
 def extract_zimbabwe_conditions(text: str) -> list:
     """
-    Extract Zimbabwe-specific conditions from text (supports Shona, Ndebele, English)
-    
-    Args:
-        text: Clinical text
-    
-    Returns:
-        List of detected condition names
+    Extract Zimbabwe-specific conditions from text.
+    Returns lowercase condition keys for backward compatibility with callers
+    that map: 'hiv' → 'HIV/AIDS', 'tuberculosis' → 'Tuberculosis', etc.
     """
-    text_lower = text.lower()
-    detected_conditions = []
-    
-    for condition, translations in ZIMBABWE_TERMINOLOGY.items():
-        # Check English
-        if condition in text_lower:
-            detected_conditions.append(condition)
-            continue
-        
-        # Check Shona
-        if any(term in text_lower for term in translations.get('shona', [])):
-            detected_conditions.append(condition)
-            continue
-        
-        # Check Ndebele
-        if any(term in text_lower for term in translations.get('ndebele', [])):
-            detected_conditions.append(condition)
-            continue
-        
-        # Check local terms
-        if any(term in text_lower for term in translations.get('local_terms', [])):
-            detected_conditions.append(condition)
-    
-    return detected_conditions
+    norm = _nlp.normalize_text(text)
+    direct = _nlp.extract_conditions(norm)
+    inferred = _nlp.infer_conditions_from_symptoms(_nlp.extract_symptoms(norm))
+    combined = _nlp.combine_condition_evidence(direct, inferred)
 
-
+    # Reverse-map canonical_name → dict key for backward compat
+    rev = {meta["canonical_name"]: key for key, meta in _nlp.terminology.items()}
+    return [
+        rev.get(c.name, c.name.lower().replace(" ", "_"))
+        for c in combined
+        if c.score >= 0.35 and not c.negated
+    ]

@@ -22,6 +22,7 @@ import shutil
 import tempfile
 import hashlib
 import json
+import math
 import subprocess
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
@@ -115,6 +116,57 @@ async def _write_feedback_to_pg(tenant_id: str, entries: list) -> str:
         return str(batch_id)
     finally:
         await conn.close()
+
+
+def _master_pg_conn_sync():
+    master_dsn = os.getenv("MASTER_DATABASE_URL", "").strip()
+    if master_dsn:
+        return psycopg2.connect(master_dsn)
+
+    host = os.getenv("DB_HOST") or os.getenv("SERVICE_POSTGRES_HOST", "postgres-master")
+    port = int(os.getenv("DB_PORT") or os.getenv("PORT_POSTGRES", "5432"))
+    user = os.getenv("DB_USERNAME") or os.getenv("POSTGRES_USER", "postgres")
+    password = os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD", "postgres")
+    dbname = os.getenv("MASTER_POSTGRES_DB") or os.getenv("POSTGRES_DB", "medicore")
+
+    return psycopg2.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        dbname=dbname,
+    )
+
+
+def _resolve_tenant_database_name(tenant_key: Optional[str]) -> Optional[str]:
+    normalized = _normalize_tenant_cache_key(tenant_key)
+    if not normalized or normalized in {"public", "default", "unknown"}:
+        return None
+
+    conn = _master_pg_conn_sync()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT "databaseName"
+                FROM tenants
+                WHERE status IN ('active', 'pending', 'suspended')
+                  AND (
+                    lower(id::text) = %s
+                    OR lower(subdomain) = %s
+                    OR lower("databaseName") = %s
+                  )
+                LIMIT 1
+                """,
+                (normalized, normalized, normalized),
+            )
+            row = cur.fetchone()
+            return str(row["databaseName"]) if row and row.get("databaseName") else None
+    except Exception as exc:
+        logger.warning(f"Failed to resolve tenant database for '{normalized}': {exc}")
+        return None
+    finally:
+        conn.close()
 
 
 def _feedback_store_path() -> pathlib.Path:
@@ -1245,6 +1297,8 @@ def _required_service_scope_for_request(path: str, method: str) -> str:
         return "cdss.copilot.diagnosis.write"
     if path == "/patient/summarize" and m == "POST":
         return "cdss.copilot.summary.write"
+    if path == "/registration/documents/analyze" and m == "POST":
+        return "cdss.copilot.registration.write"
     if path == "/guidelines/search" and m == "POST":
         return "cdss.copilot.guidelines.read"
     if path.startswith("/admin/"):
@@ -1523,6 +1577,23 @@ async def startup_event():
         _rehydrate_queued_jobs_on_startup()
     except Exception as e:
         print(f"Error starting CDSS job worker: {e}")
+    # Auto-seed ChromaDB if collection is empty (e.g. after cosine-space migration)
+    try:
+        if diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.collection:
+            doc_count = diagnostic_assistant.rag_engine.collection.count()
+            if doc_count == 0:
+                import uuid as _uuid
+                job_id = str(_uuid.uuid4())
+                try:
+                    _total = len(__import__('seed_guidelines').GUIDELINES)
+                except Exception:
+                    _total = 0
+                _SEED_JOBS[job_id] = {"status": "pending", "seeded": 0, "total": _total, "current_label": "", "started_at": None, "finished_at": None, "error": None}
+                import threading as _threading
+                _threading.Thread(target=_run_seed_job, args=(job_id,), daemon=True).start()
+                print(f"[CDSS] ChromaDB collection empty — auto-seeding guidelines (job {job_id})")
+    except Exception as e:
+        print(f"[CDSS] Auto-seed check failed: {e}")
 
 
 @app.on_event("shutdown")
@@ -3075,12 +3146,15 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
         ))
         if rag_kb_result.results:
             for r in rag_kb_result.results:
+                similarity_score = r.similarity_score
+                if isinstance(similarity_score, (int, float)) and not math.isfinite(similarity_score):
+                    similarity_score = None
                 citations.append({
                     "knowledge_id": r.chunk_id,
                     "title": r.document_title,
                     "text": r.chunk_text,
                     "source": r.document_title,
-                    "similarity_score": r.similarity_score,
+                    "similarity_score": similarity_score,
                     "grounded": True,
                 })
     except Exception as e:
@@ -9775,9 +9849,10 @@ async def generate_appeal_template(request: Request):
         if em is not None:
             query = f"appeal {denial_code} medical necessity {procedure_codes}"
             embedding = em.encode([query])[0].tolist()
-            conn = _pg_conn_sync()
+            tenant_key = payload.get("tenant_id") or request.headers.get("x-tenant-id")
+            conn = _pg_conn_sync(tenant_key)
             try:
-                psycopg2.extras.register_vector(conn)
+                _register_pgvector(conn)
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                     cur.execute(
                         """SELECT d.id as document_id, d.title, c.chunk_text,
@@ -9927,6 +10002,10 @@ async def pdmp_check_endpoint(request: Request):
 import base64
 import psycopg2
 import psycopg2.extras
+try:
+    from pgvector.psycopg2 import register_vector as _pgvector_register_vector
+except ImportError:
+    _pgvector_register_vector = None
 
 try:
     from sentence_transformers import SentenceTransformer as _SentenceTransformer
@@ -9943,14 +10022,20 @@ def _get_embedding_model():
         _embedding_model_instance = _SentenceTransformer(model_name)
     return _embedding_model_instance
 
-def _pg_conn_sync():
+def _pg_conn_sync(tenant_id: Optional[str] = None):
+    tenant_db_name = _resolve_tenant_database_name(tenant_id)
     return psycopg2.connect(
         host=os.getenv("SERVICE_POSTGRES_HOST", "postgres-master"),
         port=int(os.getenv("PORT_POSTGRES", 5432)),
         user=os.getenv("POSTGRES_USER", "postgres"),
         password=os.getenv("POSTGRES_PASSWORD", "postgres"),
-        dbname=os.getenv("POSTGRES_DB", "medicore"),
+        dbname=tenant_db_name or os.getenv("POSTGRES_DB", "medicore"),
     )
+
+def _register_pgvector(conn):
+    if _pgvector_register_vector is None:
+        raise RuntimeError("pgvector Python adapter is not installed")
+    _pgvector_register_vector(conn)
 
 def _chunk_text(text: str, chunk_size: int = 512, overlap: int = 64) -> list:
     words = text.split()
@@ -9989,14 +10074,23 @@ async def ingest_knowledge_document(req: KnowledgeIngestRequest):
     Called by: EHR KnowledgeIngestService.runIngestion()
     """
     file_bytes = base64.b64decode(req.file_base64)
+    mime_type = str(req.mime_type or "").strip().lower()
 
-    try:
-        from unstructured.partition.auto import partition
-        import io
-        elements = partition(file=io.BytesIO(file_bytes), content_type=req.mime_type)
-        full_text = "\n".join([str(el) for el in elements if str(el).strip()])
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Text extraction failed: {e}")
+    # Plain-text uploads do not need unstructured/NLTK and should ingest reliably
+    # even when the container cannot download tokenizer assets at runtime.
+    if mime_type.startswith("text/plain"):
+        full_text = file_bytes.decode("utf-8", errors="ignore")
+    else:
+        try:
+            from unstructured.partition.auto import partition
+            import io
+            elements = partition(file=io.BytesIO(file_bytes), content_type=req.mime_type)
+            full_text = "\n".join([str(el) for el in elements if str(el).strip()])
+        except Exception as e:
+            if mime_type.startswith("text/"):
+                full_text = file_bytes.decode("utf-8", errors="ignore")
+            else:
+                raise HTTPException(status_code=422, detail=f"Text extraction failed: {e}")
 
     if not full_text.strip():
         raise HTTPException(status_code=422, detail="Document contains no extractable text")
@@ -10010,10 +10104,25 @@ async def ingest_knowledge_document(req: KnowledgeIngestRequest):
     texts = [c["text"] for c in chunks]
     embeddings = model.encode(texts, batch_size=32, show_progress_bar=False)
 
-    conn = _pg_conn_sync()
+    conn = _pg_conn_sync(req.tenant_id)
     try:
-        psycopg2.extras.register_vector(conn)
+        _register_pgvector(conn)
         with conn.cursor() as cur:
+            # Insert parent document record first (required by FK constraint on clinical_knowledge_chunks)
+            doc_title = req.metadata.get("title") or req.metadata.get("name") or req.document_id
+            doc_type = req.metadata.get("documentType") or req.metadata.get("document_type") or "clinical_guideline"
+            cur.execute(
+                """INSERT INTO clinical_knowledge_documents
+                   (id, tenant_id, title, document_type, language, minio_bucket, minio_key,
+                    chunk_count, ingestion_status, uploaded_by, is_active, created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, 'en', '', '', %s, 'completed',
+                           '00000000-0000-0000-0000-000000000000'::uuid, true, NOW(), NOW())
+                   ON CONFLICT (id) DO UPDATE SET
+                       chunk_count = EXCLUDED.chunk_count,
+                       ingestion_status = 'completed',
+                       updated_at = NOW()""",
+                (req.document_id, req.tenant_id, doc_title, doc_type, len(chunks))
+            )
             for chunk, embedding in zip(chunks, embeddings):
                 cur.execute(
                     """INSERT INTO clinical_knowledge_chunks
@@ -10077,9 +10186,9 @@ async def search_knowledge(req: KnowledgeSearchRequest):
     specialty_filter = req.filters.get("specialty")
     doc_type_filter = req.filters.get("documentType")
 
-    conn = _pg_conn_sync()
+    conn = _pg_conn_sync(req.tenant_id)
     try:
-        psycopg2.extras.register_vector(conn)
+        _register_pgvector(conn)
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
                 """SELECT
@@ -10329,7 +10438,7 @@ async def collect_outcomes_batch(request: Request):
     return {"written": written, "total": len(entries), "errors": errors}
 
 
-@app.post("/feedback/outcome/learning/claim")
+@app.post("/feedback/outcome/learning/accept-batch")
 async def claim_learning_batch(request: Request):
     """
     Trigger model learning from approved feedback entries.
@@ -10687,7 +10796,7 @@ def get_model_version(surface: str = "all"):
     )
 
 
-@app.post("/feedback/outcome/learning/claim")
+@app.post("/feedback/outcome/learning/retrain")
 async def claim_for_learning(payload: dict, background_tasks: BackgroundTasks):
     """
     Claims approved feedback entries for model retraining.
@@ -10696,10 +10805,10 @@ async def claim_for_learning(payload: dict, background_tasks: BackgroundTasks):
     """
     entries = payload.get("entries", [])
     surface = payload.get("surface", "general")
+    previous_version = _model_versions.get(surface, {}).get("version", "baseline-v1")
 
     if not entries:
-        current_version = _model_versions.get(surface, {}).get("version", "baseline-v1")
-        return {"status": "no_entries", "model_id": current_version, "surface": surface}
+        return {"status": "no_entries", "model_id": previous_version, "surface": surface}
 
     background_tasks.add_task(_run_retraining_job, surface, entries)
 
@@ -10712,14 +10821,16 @@ async def claim_for_learning(payload: dict, background_tasks: BackgroundTasks):
 
     # Persist version to PostgreSQL for audit trail
     try:
-        conn = _pg_conn_sync()
+        conn = _master_pg_conn_sync()
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO model_deployments
-                   (id, model_name, model_version, deployed_at, release_gates_passed)
-                   VALUES (gen_random_uuid(), %s, %s, NOW(), true)
+                   (id, surface, model_version, previous_version, eval_run_id, release_gate_id,
+                    deployment_method, status)
+                   VALUES (gen_random_uuid(), %s, %s, %s, gen_random_uuid(), gen_random_uuid(),
+                           'auto', 'deployed')
                    ON CONFLICT DO NOTHING""",
-                (surface, new_version),
+                (surface, new_version, previous_version),
             )
         conn.commit()
         conn.close()

@@ -113,14 +113,28 @@ GUIDELINES = [
         "metadata": {"source": "WHO PPH Guidelines 2012 / FIGO 2022", "type": "guideline", "clinical_domain": "obstetrics", "target_population": "pregnant_women", "page": 2}
     },
 
-    # ── HIV ─────────────────────────────────────────────────────────────────────
+    # ── HIV / AIDS ───────────────────────────────────────────────────────────────
     {
-        "text": "HIV Antiretroviral Therapy (ART) — WHO 2021 Preferred Regimens: Adults and adolescents: TDF + 3TC + DTG (tenofovir + lamivudine + dolutegravir) as first-line. Pregnant women: TDF + 3TC + DTG preferred. Children <20kg: ABC + 3TC + DTG. Start ART as soon as possible after diagnosis regardless of CD4 count. Monitor VL at 6 months and 12 months then annually. Target: viral load <1000 copies/mL at 6 months.",
+        "text": "HIV AIDS Antiretroviral Therapy (ART) — WHO 2021 Preferred Regimens: HIV human immunodeficiency virus / AIDS acquired immunodeficiency syndrome. Adults and adolescents: TDF + 3TC + DTG (tenofovir + lamivudine + dolutegravir) as first-line ART. Pregnant women: TDF + 3TC + DTG preferred. Children <20kg: ABC + 3TC + DTG. Start ART as soon as possible after HIV diagnosis regardless of CD4 count. Monitor viral load (VL) at 6 months and 12 months then annually. Target: viral load <1000 copies/mL at 6 months. CD4 <200: prophylaxis with cotrimoxazole.",
         "metadata": {"source": "WHO Consolidated HIV Guidelines 2021", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "adults", "page": 1}
     },
     {
-        "text": "PEP (Post-Exposure Prophylaxis) for HIV: Start within 72 hours of exposure (sooner = better; ineffective after 72h). Preferred regimen: TDF/FTC (Truvada) + RAL (raltegravir 400mg BD) or DTG 50mg OD. Duration: 28 days. Baseline: HIV, HBsAg, renal function, pregnancy test. Follow-up HIV testing at 6 weeks, 3 months. Report occupational exposure within 2 hours.",
+        "text": "PEP Post-Exposure Prophylaxis for HIV AIDS: Start PEP within 72 hours of HIV exposure (sooner = better; ineffective after 72h). Preferred regimen: TDF/FTC (Truvada) + RAL (raltegravir 400mg BD) or DTG 50mg OD. Duration: 28 days. Baseline: HIV test, HBsAg, renal function, pregnancy test. Follow-up HIV testing at 6 weeks, 3 months. PrEP (pre-exposure prophylaxis): TDF/FTC daily for HIV prevention in high-risk individuals. Report occupational HIV exposure within 2 hours.",
         "metadata": {"source": "WHO PEP Guidelines 2014 / WHO Consolidated HIV Guidelines 2021", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "HIV AIDS Opportunistic Infections: Cryptococcal meningitis: fluconazole 1200mg OD for 2 weeks induction, then 400mg OD 8 weeks consolidation, 200mg OD maintenance. PCP (Pneumocystis jirovecii pneumonia): high-dose cotrimoxazole (TMP-SMX) IV 15–20mg/kg/day TMP x 21 days; add steroids if PaO2 <70mmHg. CMV retinitis: IV ganciclovir 5mg/kg BD x 14–21 days induction. Toxoplasmosis: pyrimethamine + sulfadiazine + folinic acid x 6 weeks. Suppress all OIs with ART.",
+        "metadata": {"source": "WHO Consolidated HIV Guidelines 2021 / BHIVA OI Guidelines 2023", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "adults", "page": 3}
+    },
+
+    # ── STI — SEXUALLY TRANSMITTED INFECTIONS ────────────────────────────────────
+    {
+        "text": "STI Sexually Transmitted Infections — WHO 2021 Treatment Guidelines: Gonorrhoea (Neisseria gonorrhoeae): ceftriaxone 500mg IM single dose (1g if weight >150kg). Do NOT use fluoroquinolones (high resistance). Chlamydia (Chlamydia trachomatis): azithromycin 1g PO single dose OR doxycycline 100mg BD x 7 days. Syphilis (Treponema pallidum) — Primary/Secondary: benzathine penicillin G 2.4 million IU IM single dose; Latent/unknown duration: 2.4 million IU IM weekly x 3. Genital herpes (HSV): aciclovir 400mg TDS x 5 days or valaciclovir 500mg BD x 5 days. All STI contacts should be tested and treated. HIV and STI co-testing recommended.",
+        "metadata": {"source": "WHO STI Treatment Guidelines 2021", "type": "guideline", "clinical_domain": "sexual_health", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "STI Screening and Partner Notification: Sexually transmitted infections (STI/STD) syndromic management when laboratory unavailable. Urethral discharge (male): treat gonorrhoea + chlamydia empirically. Vaginal discharge: treat bacterial vaginosis + Trichomonas (metronidazole 2g PO single dose or 400mg BD x 7d); add gonorrhoea/chlamydia treatment if cervicitis present. Genital ulcer: treat syphilis + herpes (aciclovir + benzathine penicillin). Scrotal swelling: epididymo-orchitis — treat gonorrhoea + chlamydia. Contact tracing: notify all sexual partners from past 3 months. Offer HIV, hepatitis B/C testing with every STI diagnosis.",
+        "metadata": {"source": "WHO STI Guidelines 2021 / BASHH Syndromic Management 2023", "type": "guideline", "clinical_domain": "sexual_health", "target_population": "adults", "page": 2}
     },
 
     # ── MALARIA ─────────────────────────────────────────────────────────────────
@@ -166,6 +180,162 @@ GUIDELINES = [
         "text": "Essential Immunisation Schedule (WHO EPI): Birth: BCG + OPV-0 + Hep B. 6 weeks: OPV-1 + IPV-1 + Penta-1 (DPT-HepB-Hib) + PCV-1 + Rota-1. 10 weeks: OPV-2 + Penta-2 + PCV-2 + Rota-2. 14 weeks: OPV-3 + IPV-2 + Penta-3 + PCV-3 + Rota-3. 9 months: MCV-1 + Yellow Fever (endemic areas). 15–18 months: MCV-2 + DPT booster. Annual influenza for high-risk groups. COVID-19 per national schedule.",
         "metadata": {"source": "WHO EPI Immunisation Schedule 2023", "type": "guideline", "clinical_domain": "preventive_care", "target_population": "children", "page": 1}
     },
+
+    # ── ONCOLOGY ────────────────────────────────────────────────────────────────
+    {
+        "text": "Febrile Neutropenia Management: Fever ≥38.3°C (or ≥38.0°C sustained 1h) + ANC <500/µL or expected to fall <500/µL. MASCC score to stratify risk. High-risk (MASCC <21): IV piperacillin-tazobactam 4.5g q8h or cefepime 2g q8h; add vancomycin if catheter infection/skin infection/haemodynamic instability. Add antifungal (caspofungin or voriconazole) if fever persists >72h. G-CSF for high-risk patients. Blood cultures × 2 before antibiotics. Do NOT delay antibiotics pending cultures.",
+        "metadata": {"source": "ASCO Febrile Neutropenia Guidelines 2018 / IDSA 2010", "type": "guideline", "clinical_domain": "oncology", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Chemotherapy-Induced Nausea & Vomiting (CINV) Prevention: High emetic risk (cisplatin, AC): 5-HT3 antagonist (ondansetron 8mg) + NK1 antagonist (aprepitant 125mg day 1, 80mg days 2–3) + dexamethasone 12mg day 1 (8mg days 2–4) ± olanzapine 10mg days 1–4. Moderate risk: 5-HT3 + dexamethasone ± NK1. Low risk: dexamethasone 8mg alone or metoclopramide. Breakthrough: add lorazepam 0.5–1mg PO q4–6h PRN. Maintain adequate hydration.",
+        "metadata": {"source": "ASCO CINV Guidelines 2020 / MASCC/ESMO 2016", "type": "guideline", "clinical_domain": "oncology", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Cancer Pain — WHO Oncology Ladder: Assess pain using NRS 0–10 at every visit. Mild (1–3): paracetamol + NSAID. Moderate (4–6): low-dose strong opioid (morphine 5mg q4h PO, NOT codeine — inadequate in ~10% CYP2D6 poor metabolisers). Severe (7–10): titrate morphine — increase daily dose by 30–50% if pain uncontrolled. Prescribe laxative (lactulose or senna) with every opioid. Add dexamethasone for bone/nerve pain, gabapentinoids for neuropathic pain, bisphosphonates for bone metastases.",
+        "metadata": {"source": "WHO Cancer Pain Ladder / ESMO Cancer Pain Guidelines 2018", "type": "guideline", "clinical_domain": "oncology", "target_population": "adults", "page": 3}
+    },
+    {
+        "text": "Tumour Lysis Syndrome (TLS) Prevention and Treatment: High-risk: haematological malignancies with high burden (Burkitt lymphoma, ALL, AML with WBC >100,000). Prophylaxis: vigorous IV hydration 3L/m²/day, allopurinol 300mg/day starting 24–48h before chemotherapy. Very high risk: rasburicase 0.2mg/kg IV daily × 5 days (contraindicated in G6PD deficiency). Cairo-Bishop criteria for TLS: ≥2 of uric acid ≥476µmol/L, K ≥6mmol/L, phosphate ≥2.1mmol/L, calcium ≤1.75mmol/L. Monitor electrolytes q6–8h. Treat hyperkalaemia immediately.",
+        "metadata": {"source": "ESMO TLS Guidelines 2016 / Cairo & Bishop 2004", "type": "guideline", "clinical_domain": "oncology", "target_population": "adults", "page": 4}
+    },
+
+    # ── RENAL / NEPHROLOGY ──────────────────────────────────────────────────────
+    {
+        "text": "Acute Kidney Injury (AKI) — KDIGO Staging: Stage 1: creatinine ×1.5–1.9 baseline or rise ≥26.5µmol/L within 48h or UO <0.5mL/kg/h for 6–12h. Stage 2: creatinine ×2.0–2.9 or UO <0.5mL/kg/h for ≥12h. Stage 3: creatinine ×3.0 or ≥353.6µmol/L or RRT or UO <0.3mL/kg/h for ≥24h. Management: identify/treat cause, optimise fluid status, avoid nephrotoxins (NSAIDs, contrast, aminoglycosides), monitor closely. RRT indications: refractory hyperkalaemia, acidosis, uraemia, fluid overload.",
+        "metadata": {"source": "KDIGO AKI Guidelines 2012", "type": "guideline", "clinical_domain": "nephrology", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Chronic Kidney Disease (CKD) — KDIGO Management: GFR-based staging G1–G5 + albuminuria A1–A3. Targets: BP <130/80 (ACE-I or ARB as first-line for proteinuria); HbA1c <7% if diabetic; SGLT-2 inhibitor (dapagliflozin/empagliflozin) for CKD G2–G4 regardless of diabetes (reno-protective). Avoid NSAIDs. Dietary protein 0.6–0.8g/kg/day. Correct anaemia (Hb target 100–120g/L with ESA). CKD G4–G5: prepare for RRT (PD/HD/transplant). Refer to nephrology at eGFR <30.",
+        "metadata": {"source": "KDIGO CKD Guidelines 2024", "type": "guideline", "clinical_domain": "nephrology", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Hyperkalaemia Management: K+ 5.5–6.0 mmol/L: dietary restriction, review medications (stop ACE-I/ARB/MRA if possible), add patiromer or sodium zirconium cyclosilicate. K+ 6.0–6.5 or ECG changes (peaked T waves, wide QRS, sine wave): immediate 10mL 10% calcium gluconate IV over 2–3 min (cardiac protection, repeat if no ECG improvement). Shift K+: insulin 10 units + 25g glucose IV. Excrete K+: salbutamol nebulised 10–20mg; frusemide 40–80mg IV if not oliguric; consider RRT for refractory cases.",
+        "metadata": {"source": "UK Renal Association Hyperkalaemia Guidelines 2020", "type": "guideline", "clinical_domain": "nephrology", "target_population": "adults", "page": 3}
+    },
+
+    # ── SURGERY / PERIOPERATIVE ──────────────────────────────────────────────────
+    {
+        "text": "Enhanced Recovery After Surgery (ERAS): Pre-op: carbohydrate loading (400mL clear carbohydrate drink 2h before), avoid prolonged fasting (clear fluids up to 2h, solids up to 6h), multimodal premedication (paracetamol + celecoxib ± gabapentin). Intra-op: goal-directed fluid therapy (avoid excess crystalloid), avoid opioid-sparing (remifentanil target), normothermia. Post-op: early oral feeding within 4–6h, early mobilisation day 0–1, multimodal analgesia (regular paracetamol + NSAID + wound infiltration), avoid routine urinary catheters, VTE prophylaxis.",
+        "metadata": {"source": "ERAS Society Guidelines 2019", "type": "guideline", "clinical_domain": "surgery", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Venous Thromboembolism (VTE) Prophylaxis: Assess all inpatients with Caprini or Padua score. Low risk: early ambulation only. Moderate-high surgical risk: LMWH (enoxaparin 40mg SC OD) or UFH 5000 units SC BD/TDS + mechanical compression (TED stockings + pneumatic compression devices). Major orthopaedic (hip/knee replacement, hip fracture): extend prophylaxis to 35 days post-discharge with LMWH or DOAC (rivaroxaban 10mg OD or apixaban 2.5mg BD). Contraindicated: active bleeding, thrombocytopenia <50, recent surgery to CNS/eye/spine.",
+        "metadata": {"source": "NICE NG89 VTE Prevention 2019 / ACCP VTE Guidelines 2012", "type": "guideline", "clinical_domain": "surgery", "target_population": "adults", "page": 2}
+    },
+
+    # ── CRITICAL CARE / ICU ──────────────────────────────────────────────────────
+    {
+        "text": "Mechanical Ventilation — Lung-Protective Strategy (ARDS): Tidal volume 6mL/kg predicted body weight (PBW). Plateau pressure ≤30 cmH2O. PEEP: set per FiO2/PEEP table; avoid high FiO2 (target SpO2 88–95%, PaO2 55–80 mmHg). Driving pressure (Pplat − PEEP) ≤15 cmH2O target. Prone positioning ≥16h/day for P/F ratio <150. Neuromuscular blockade for first 48h if P/F <150. High-frequency oscillation NOT recommended. Conservative fluid strategy once shock resolved.",
+        "metadata": {"source": "ARDS Network Protocol / ARMA Trial / PROSEVA Trial / ATS/ESICM 2017", "type": "guideline", "clinical_domain": "critical_care", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Nutrition in Critical Illness: Start enteral nutrition (EN) within 24–48h of ICU admission if haemodynamically stable. Prefer gastric route; post-pyloric if high gastric residuals (>250mL). Target 25–30 kcal/kg/day, protein 1.2–2.0g/kg/day. Avoid early parenteral nutrition (first 7 days if not tolerating EN). Permissive underfeeding (70% of target) acceptable in first week. Monitor for refeeding syndrome (check phosphate, potassium, magnesium and supplement). Avoid routine prokinetics but consider metoclopramide 10mg TDS for high residuals.",
+        "metadata": {"source": "ESPEN Critical Care Nutrition Guidelines 2019 / SCCM/ASPEN 2016", "type": "guideline", "clinical_domain": "critical_care", "target_population": "adults", "page": 3}
+    },
+    {
+        "text": "Glucose Management in ICU: Target BGL 7.8–10.0 mmol/L for most ICU patients. Start insulin infusion if BGL >10 mmol/L on 2 consecutive readings. Tight glycaemic control (4.5–6.0 mmol/L) is harmful — increases hypoglycaemia and mortality (NICE-SUGAR trial). Protocol: insulin infusion titration per validated hospital protocol; check BGL hourly when on insulin infusion. Treat hypoglycaemia (BGL <3.9 mmol/L) immediately: 25mL 50% dextrose IV or 10% dextrose 125mL IV.",
+        "metadata": {"source": "NICE-SUGAR Trial 2009 / SCCM Glucose Management 2019", "type": "guideline", "clinical_domain": "critical_care", "target_population": "adults", "page": 4}
+    },
+
+    # ── NEUROLOGY ────────────────────────────────────────────────────────────────
+    {
+        "text": "Status Epilepticus Management: Phase 1 (0–5 min): benzodiazepine — IV lorazepam 0.1mg/kg (max 4mg) preferred; IM midazolam 10mg if no IV access; rectal diazepam 0.5mg/kg if IM/IV unavailable. Phase 2 (5–20 min, no response): levetiracetam 60mg/kg (max 4.5g) IV over 10 min OR valproate 40mg/kg (max 3g) IV over 5 min OR phenytoin 20mg/kg IV at max 50mg/min (fosphenytoin 20 PE/kg preferred — fewer infusion reactions). Phase 3 (>20 min, refractory): general anaesthesia — propofol, midazolam, or thiopentone infusion; intubation + ICU.",
+        "metadata": {"source": "NICE CG137 Epilepsies 2022 / NCS Status Epilepticus Guidelines 2016", "type": "guideline", "clinical_domain": "neurology", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Meningitis Management: Immediate IV antibiotics — do NOT wait for LP if signs of raised ICP (papilloedema, focal neurology, consciousness <GCS 13). Empirical: ceftriaxone 2g IV q12h + dexamethasone 0.15mg/kg q6h × 4 days (reduce cerebral oedema). Add ampicillin 2g IV q4h for Listeria risk (age >50, immunocompromised, pregnancy). Adjunctive acyclovir 10mg/kg IV q8h until HSV excluded. CSF: WBC >10, protein >0.45g/L, glucose <60% serum. Notify public health; rifampicin or ciprofloxacin prophylaxis for close contacts (meningococcal).",
+        "metadata": {"source": "ESCMID Meningitis Guidelines 2016 / IDSA Meningitis Guidelines 2004", "type": "guideline", "clinical_domain": "neurology", "target_population": "adults", "page": 3}
+    },
+
+    # ── GASTROINTESTINAL ─────────────────────────────────────────────────────────
+    {
+        "text": "Upper GI Bleeding — Risk Stratification & Management: Glasgow-Blatchford score (pre-endoscopy): ≥6 = high risk, requires hospitalisation. Resuscitate: 2 large-bore IV lines, type & crossmatch, IV fluids/blood (target Hb >70g/L; >80 in IHD). IV PPI: omeprazole 80mg bolus + 8mg/h infusion in suspected peptic ulcer. Endoscopy within 24h (within 12h if Rockall ≥3 or ongoing bleeding). Post-endoscopy high-risk (Forrest Ia/Ib/IIa/IIb): continue PPI infusion 72h, then PO 40mg BD × 4 weeks. H. pylori test and treat. Avoid NSAIDs/aspirin.",
+        "metadata": {"source": "NICE CG141 UGIB 2016 / BSG UGIB Guidelines 2019", "type": "guideline", "clinical_domain": "gastroenterology", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Acute Liver Failure — Management Principles: Admit to ICU/HDU. Monitor for and treat: cerebral oedema (head elevation 30°, avoid stimulation; mannitol 0.5–1g/kg IV for ICH; target ICP <20 mmHg, CPP >50 mmHg), coagulopathy (FFP only for invasive procedures — not prophylactic), hypoglycaemia (10% dextrose infusion, BGL checks q1–4h), AKI (CVVH preferred over IHD), infection (broad-spectrum antibiotics if clinically suspected). N-acetylcysteine IV for paracetamol overdose (even late-presenting). Urgent liver transplant assessment for King's College Criteria fulfilment.",
+        "metadata": {"source": "EASL ALF Guidelines 2017 / King's College Hospital Criteria", "type": "guideline", "clinical_domain": "gastroenterology", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Inflammatory Bowel Disease — Acute Severe Ulcerative Colitis (Truelove & Witts Criteria): Bloody diarrhoea ≥6/day + any of: pulse >90, temp >37.8°C, Hb <105g/L, ESR >30, CRP >30. Admit to hospital. IV hydrocortisone 100mg q6h. VTE prophylaxis (LMWH). Stool cultures. Flexible sigmoidoscopy within 24h. If no response to IV steroids by day 3: ciclosporin 2mg/kg IV or infliximab 5mg/kg IV (rescue therapy) OR surgical referral. Avoid opioids and anticholinergics (toxic megacolon risk). Response assessed daily (Oxford criteria).",
+        "metadata": {"source": "BSG ASUC Guidelines 2019 / ECCO IBD Guidelines 2017", "type": "guideline", "clinical_domain": "gastroenterology", "target_population": "adults", "page": 3}
+    },
+
+    # ── ENDOCRINOLOGY ────────────────────────────────────────────────────────────
+    {
+        "text": "Thyroid Storm Management: Rare but life-threatening thyrotoxicosis. Burch-Wartofsky score ≥45 = thyroid storm. Treatment (all simultaneously): 1) Beta-blocker: propranolol 60–80mg q4h PO or 0.5–1mg IV slowly (controls tachycardia). 2) Thionamide: propylthiouracil (PTU) 200–250mg q4h PO (blocks synthesis + T4→T3 conversion) — use PTU not methimazole in storm. 3) Iodine (1h AFTER PTU): Lugol's iodine 8 drops q6h or potassium iodide. 4) Corticosteroids: hydrocortisone 100mg IV q8h. 5) Treat precipitant. HDU/ICU monitoring.",
+        "metadata": {"source": "American Thyroid Association Thyroid Storm Guidelines 2016", "type": "guideline", "clinical_domain": "endocrinology", "target_population": "adults", "page": 4}
+    },
+    {
+        "text": "Addisonian Crisis Management: Life-threatening adrenal insufficiency precipitated by illness/injury. Presentation: severe hypotension, vomiting, abdominal pain, confusion, hyponatraemia, hyperkalaemia, hypoglycaemia. Treatment: 1) IV hydrocortisone 100mg bolus IMMEDIATELY (do not wait for results). 2) IV 0.9% NaCl 1L over first hour (correct hypovolaemia). 3) 5–10% dextrose for hypoglycaemia. 4) Treat precipitant. Maintenance: hydrocortisone 50–100mg IV/IM q6–8h for 24h, then taper. Do NOT use dexamethasone if you want to do SST later (hydrocortisone doesn't cross-react with cortisol assay).",
+        "metadata": {"source": "Endocrine Society Adrenal Insufficiency Guidelines 2016", "type": "guideline", "clinical_domain": "endocrinology", "target_population": "adults", "page": 5}
+    },
+
+    # ── HAEMATOLOGY ──────────────────────────────────────────────────────────────
+    {
+        "text": "Massive Transfusion Protocol (MTP): Activate for blood loss >150mL/min or anticipated transfusion >10 units pRBC in 24h (trauma, PPH, GI bleed, surgery). Target ratio: 1:1:1 (pRBC:FFP:platelets) or 2:1:1. Give tranexamic acid 1g IV STAT + 1g IV over 8h (trauma within 3h of injury). Target: Hb 70–90 g/L, platelets >50 (>100 if neuro/multiorgan), fibrinogen >1.5g/L (cryoprecipitate 2-pool if <1.5). Calcium replacement (ionised Ca²⁺ target >1.1 mmol/L). Avoid hypothermia and acidosis — the lethal triad with coagulopathy.",
+        "metadata": {"source": "SHOT / British Society for Haematology MTP Guidelines 2015", "type": "guideline", "clinical_domain": "haematology", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Sickle Cell Disease — Vaso-occlusive Crisis (VOC): Assess pain using NRS; start analgesia within 30 min. Mild-moderate (NRS 4–6): ibuprofen 400mg TDS (avoid if renal impairment) + paracetamol 1g q6h + oral opioid (codeine or tramadol). Severe (NRS ≥7): IV morphine 0.1mg/kg q20–30 min titrated; IV fluids 2–3L/day (avoid excess — pulmonary sequestration risk). Oxygen only if SpO2 <95%. Incentive spirometry. Screen for acute chest syndrome (ACS): new chest symptoms/infiltrate + fever — treat with broad-spectrum antibiotics + exchange transfusion if severe.",
+        "metadata": {"source": "BSH Sickle Cell Disease Guidelines 2021 / NHLBI SCD Evidence Review 2014", "type": "guideline", "clinical_domain": "haematology", "target_population": "adults", "page": 2}
+    },
+
+    # ── RHEUMATOLOGY ─────────────────────────────────────────────────────────────
+    {
+        "text": "Rheumatoid Arthritis — Treat to Target: Initiate csDMARDs within 3 months of diagnosis. Methotrexate 7.5–25mg weekly (with folic acid 5mg weekly) is anchor drug. If contraindicated: leflunomide 20mg OD or sulfasalazine 500mg–3g/day. Target: DAS28 <2.6 (remission) or <3.2 (low disease activity) within 6 months. Review and escalate at every visit if target not met. Add bDMARD (TNFi — adalimumab, etanercept, or IL-6 inhibitor — tocilizumab) if inadequate response to ≥2 csDMARDs. Monitor CBC, LFTs, creatinine every 3 months on methotrexate.",
+        "metadata": {"source": "EULAR RA Management Recommendations 2022", "type": "guideline", "clinical_domain": "rheumatology", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Acute Gout Management: Joint aspiration for definitive diagnosis (negatively birefringent monosodium urate crystals). Acute attack: NSAIDs (naproxen 500mg BD × 5 days) OR colchicine 500mcg BD–TDS (max 6mg/course) OR prednisolone 30–35mg OD × 5 days if NSAIDs/colchicine contraindicated. Urate-lowering therapy (ULT): start allopurinol 100mg OD once acute attack fully resolved (not during acute attack), increase by 100mg every 4 weeks to target serum urate <360 µmol/L (<300 µmol/L for tophaceous gout). Cover ULT initiation with colchicine 500mcg OD × 6 months.",
+        "metadata": {"source": "BSR Gout Guidelines 2017 / EULAR Gout Guidelines 2016", "type": "guideline", "clinical_domain": "rheumatology", "target_population": "adults", "page": 2}
+    },
+
+    # ── DERMATOLOGY ──────────────────────────────────────────────────────────────
+    {
+        "text": "Anaphylaxis Management: Recognise: acute onset, life-threatening airway/breathing/circulation compromise ± skin/mucosal changes after allergen exposure. ACTION 1: Adrenaline (epinephrine) 0.5mg (0.5mL 1:1000) IM anterolateral thigh IMMEDIATELY — this is the first and most important step. Repeat every 5 min if no improvement. ACTION 2: Lay patient flat (sitting if breathless), high-flow oxygen 15L/min via NRB mask, IV access. ACTION 3: Antihistamine (chlorphenamine 10mg IV/IM) + hydrocortisone 200mg IV (adjuncts only — do not replace adrenaline). IV fluid challenge 500mL–1L if hypotensive. Observe minimum 6h after recovery.",
+        "metadata": {"source": "RCUK Anaphylaxis Algorithm 2021 / EAACI Anaphylaxis Guidelines 2014", "type": "guideline", "clinical_domain": "emergency_medicine", "target_population": "adults", "page": 1}
+    },
+
+    # ── WOMEN'S HEALTH ───────────────────────────────────────────────────────────
+    {
+        "text": "Cervical Cancer Screening (WHO 2021): Primary HPV testing preferred over cytology. Screen all women aged 30–49 in LMIC (or 25–65 in high-income settings). HPV test positive: visual inspection with acetic acid (VIA) or colposcopy. CIN2+ or VIA positive: ablative treatment (cryotherapy or thermal ablation) if eligible; LEEP/LLETZ if not eligible for ablation. Screen every 5–10 years if HPV negative. Screen HIV-positive women starting age 25 and more frequently (every 3 years). HPV vaccination (9-valent) for girls 9–14 years before sexual debut.",
+        "metadata": {"source": "WHO Cervical Cancer Screening Guidelines 2021", "type": "guideline", "clinical_domain": "womens_health", "target_population": "women", "page": 1}
+    },
+    {
+        "text": "Eclampsia — Convulsions in Pregnancy: First line: IV magnesium sulphate 4g loading over 5–10 min + 1g/h maintenance infusion (not diazepam or phenytoin). Recurrent convulsions: additional bolus 2–4g MgSO4 IV over 5 min. MgSO4 toxicity: loss of deep tendon reflexes (early), respiratory depression (late). Antidote: calcium gluconate 1g IV. Monitor: RR >12/min, UO >25mL/h, DTRs present before each dose. Control BP: IV hydralazine or labetalol. Delivery of fetus is definitive treatment — plan within 12h regardless of gestation.",
+        "metadata": {"source": "WHO Recommendations for Prevention and Treatment of Eclampsia 2011", "type": "guideline", "clinical_domain": "obstetrics", "target_population": "pregnant_women", "page": 3}
+    },
+
+    # ── ANTIMICROBIAL STEWARDSHIP ─────────────────────────────────────────────────
+    {
+        "text": "Antimicrobial Stewardship Core Principles (WHO AWaRe): Classify antibiotics as ACCESS (broad indication, low resistance risk — amoxicillin, metronidazole, doxycycline), WATCH (higher resistance potential — fluoroquinolones, carbapenems, 3rd-gen cephalosporins), or RESERVE (last resort — colistin, linezolid, ceftazidime-avibactam). Target: ≥60% of antibiotic consumption from ACCESS group. Review and de-escalate within 48–72h. Stop antibiotics when clinical criteria met. Send cultures before antibiotics where possible. IV-to-oral switch when patient improving and tolerating oral.",
+        "metadata": {"source": "WHO AWaRe Classification 2021 / WHO AMS Toolkit 2019", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "general", "page": 3}
+    },
+    {
+        "text": "Clostridioides difficile (C. diff) Infection: Suspect if ≥3 loose stools/day in hospitalised patient on antibiotics or within 8 weeks of discharge. Diagnosis: stool GDH + toxin ELISA or PCR. Stop causative antibiotic if possible. Mild-moderate (WBC <15, creatinine <1.5× baseline): metronidazole 400mg PO TDS × 10 days. Severe (WBC >15 or creatinine >1.5×): oral vancomycin 125mg q6h × 10 days. Fulminant (hypotension, ileus): oral vancomycin 500mg q6h + IV metronidazole + surgical review. First recurrence: fidaxomicin 200mg BD × 10 days (superior to vancomycin for recurrence prevention). Contact precautions, soap and water hand hygiene (alcohol gel ineffective).",
+        "metadata": {"source": "IDSA/SHEA C. difficile Guidelines 2018 / ESCMID 2021", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "adults", "page": 4}
+    },
+    {
+        "text": "Tuberculosis Treatment (WHO 2022): Drug-sensitive TB: 2 months HRZE (isoniazid + rifampicin + pyrazinamide + ethambutol) then 4 months HR. Never add single drug to failing regimen. Monitor: LFTs monthly (stop if ALT >5× ULN), vision (ethambutol — stop if changes), uric acid (pyrazinamide). Pyridoxine 25mg OD with isoniazid to prevent neuropathy. Drug-resistant TB (MDR-TB): 6-month all-oral BPaL regimen (bedaquiline + pretomanid + linezolid). TB/HIV co-infection: start ART within 2–8 weeks of TB treatment (delay if TB meningitis). DOT (directly observed therapy) for all patients.",
+        "metadata": {"source": "WHO TB Treatment Guidelines 2022 / ZeNix Trial 2021", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "adults", "page": 5}
+    },
+
+    # ── GERIATRICS ───────────────────────────────────────────────────────────────
+    {
+        "text": "Delirium Prevention and Management in Elderly: Non-pharmacological prevention bundle (HELP protocol): reorientation (clock, calendar, familiar faces), early mobilisation, sleep hygiene (avoid night-time interruptions, reduce noise), correct sensory impairment (glasses, hearing aids), hydration, avoid constipation, limit sedative medications. Screen with 4AT or CAM daily. Treat underlying cause (infection, pain, urinary retention, constipation, medications). Avoid antipsychotics unless severe agitation posing safety risk — if required: haloperidol 0.25–0.5mg PO/IV (avoid in DLB/PD). Avoid benzodiazepines (worsen delirium except for alcohol withdrawal).",
+        "metadata": {"source": "NICE NG193 Delirium 2010 (updated 2023) / SIGN 157 Delirium 2019", "type": "guideline", "clinical_domain": "geriatrics", "target_population": "elderly", "page": 1}
+    },
+    {
+        "text": "Falls Prevention in Hospitalised Elderly: Multifactorial risk assessment at admission: mobility (timed up and go test), cognition, medications (sedatives, antihypertensives, diuretics — deprescribe where possible), vision, footwear, environment. Interventions: bed alarm for confused patients, non-slip footwear, adequate lighting, call bell within reach, hourly toileting rounds for incontinent patients. Post-fall: full clinical assessment (exclude hip fracture — check for hip pain, leg shortening/rotation; X-ray if suspected). Complete incident report. Consider hip protectors for recurrent fallers.",
+        "metadata": {"source": "NICE CG161 Falls in Older People 2013 (updated 2019) / WHO Falls Prevention 2021", "type": "guideline", "clinical_domain": "geriatrics", "target_population": "elderly", "page": 2}
+    },
+
+    # ── PALLIATIVE CARE ──────────────────────────────────────────────────────────
+    {
+        "text": "Palliative Symptom Control — Last Days of Life: Discontinue unnecessary medications (statins, antihypertensives, preventive meds). Subcutaneous syringe driver: morphine for pain/dyspnoea (starting dose 2.5–5mg/24h SC if opioid naive, or convert from oral at 1/3 ratio), midazolam 10–20mg/24h for anxiety/agitation, haloperidol 3–5mg/24h for nausea/delirium, hyoscine butylbromide 20–40mg/24h for respiratory secretions. PRN doses: 1/6 of 24h dose. Mouth care q2–4h. Pressure area care. Discontinue routine monitoring (BGL, vitals). Clear communication with family.",
+        "metadata": {"source": "NICE NG31 Care of Dying Adults 2015 / RCGP Palliative Care Toolkit 2019", "type": "guideline", "clinical_domain": "palliative_care", "target_population": "adults", "page": 2}
+    },
 ]
 
 
@@ -179,7 +349,7 @@ def seed(progress_callback=None):
     rag = RAGEngine()
 
     for i, g in enumerate(GUIDELINES):
-        rag.add_documents([g["text"]], metadatas=[g["metadata"]], ids=[f"seed-{i:03d}"])
+        rag.add_documents([g["text"]], metadatas=[g["metadata"]], ids=[f"seed-{i:03d}"], upsert=True)
         label = g["metadata"].get("source", "")[:50]
         if progress_callback:
             progress_callback(i + 1, total, label)

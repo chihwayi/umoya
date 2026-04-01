@@ -11,6 +11,7 @@ import re
 import logging
 import hashlib
 import json
+import os
 from privacy_guard import redact_text, redact_value
 from ai_governance import apply_safety_gate, compute_request_hash
 
@@ -61,26 +62,31 @@ class DiagnosticAssistant:
         self.knowledge_registry = None
         self.icd10_mapper = None
         self.snomed_mapper = None
+        self.ai_enabled = os.getenv("CDSS_ENABLE_AI", "false").strip().lower() == "true"
         
-        # Always try to initialize AI models (lightweight mode works without transformers)
-        try:
-            self.medbert = MedBERTPredictor()
-            self.clinicalbert = ClinicalBERTDiagnostic()
-            self.fusion_engine = IntelligentFusionEngine()
-            # Initialize LLMProvider and check availability
-            if LLMProvider:
-                self.llm_provider = LLMProvider()
-                # We don't await here because __init__ is sync, but check_availability will be called later
-            
-            self.rag_engine = RAGEngine() if RAGEngine else None
-            self.knowledge_registry = ClinicalKnowledgeRegistry() if ClinicalKnowledgeRegistry else None
-            logger.info("AI models initialized for intelligent diagnostics (lightweight mode + LLM + RAG)")
-        except Exception as e:
-            logger.warning(f"Failed to initialize AI models: {e}. Using rule-based only.")
-            self.medbert = None
-            self.clinicalbert = None
-            self.fusion_engine = None
-            self.llm_provider = None
+        if self.ai_enabled:
+            try:
+                self.medbert = MedBERTPredictor()
+                self.clinicalbert = ClinicalBERTDiagnostic()
+                self.fusion_engine = IntelligentFusionEngine()
+                # Initialize LLMProvider and check availability
+                if LLMProvider:
+                    self.llm_provider = LLMProvider()
+                    # We don't await here because __init__ is sync, but check_availability will be called later
+                
+                self.rag_engine = RAGEngine() if RAGEngine else None
+                self.knowledge_registry = ClinicalKnowledgeRegistry() if ClinicalKnowledgeRegistry else None
+                logger.info("AI models initialized for intelligent diagnostics (lightweight mode + LLM + RAG)")
+            except Exception as e:
+                logger.warning(f"Failed to initialize AI models: {e}. Using rule-based only.")
+                self.medbert = None
+                self.clinicalbert = None
+                self.fusion_engine = None
+                self.llm_provider = None
+                self.rag_engine = None
+                self.knowledge_registry = None
+        else:
+            logger.info("CDSS_ENABLE_AI=false; skipping heavy diagnostic AI initialization and using rule-based mode only.")
         
         if TERMINOLOGY_AVAILABLE:
             try:
