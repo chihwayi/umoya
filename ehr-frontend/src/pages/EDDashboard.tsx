@@ -3,15 +3,13 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   AlertCircle, AlertTriangle, Clock, User, Users,
   ArrowLeft, RefreshCw, TrendingUp, Ambulance, X,
-  Brain, Search, BookOpen, Sparkles, Loader2
+  Brain, Search
 } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import EDTrackingBoard from '../components/EDTrackingBoard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
-import ModalPortal from '../components/ModalPortal';
-import { GuidelineResult } from '../types/guidelines';
-import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import { useConfirmation } from '../hooks/useConfirmation';
 import {
   buildSharedContextTags,
@@ -58,33 +56,6 @@ const EDDashboard: React.FC = () => {
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
-
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      const token = localStorage.getItem('ehr_token');
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -375,54 +346,11 @@ const EDDashboard: React.FC = () => {
           </div>
 
           {showGuidelineSearch && (
-            <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={guidelineQuery}
-                    onChange={(e) => setGuidelineQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                    placeholder="Search e.g. 'STEMI protocol', 'Sepsis bundle', 'Stroke pathway'..."
-                    className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  onClick={handleGuidelineSearch}
-                  disabled={loadingGuidelines || !guidelineQuery.trim()}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
-                >
-                  {loadingGuidelines ? 'Searching...' : 'Search'}
-                </button>
-              </div>
-
-              {guidelineResults.length > 0 && (
-                <div className="grid gap-3">
-                  {guidelineResults.slice(0, 2).map((result, idx) => (
-                    <div key={idx} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                      <div className="flex items-start gap-3">
-                        <BookOpen className="w-5 h-5 text-red-600 mt-1 shrink-0" />
-                        <div>
-                          <h4 className="font-medium text-slate-900">{result.source}</h4>
-                          <p className="text-sm text-slate-600 mt-1 leading-relaxed">{result.text}</p>
-                          {result.url && (
-                            <a
-                              href={result.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-block mt-2 text-xs text-red-600 hover:underline"
-                            >
-                              View Source
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <GuidelineSearchPanel
+              searchFn={(q) => cdssApi.searchGuidelines(q, localStorage.getItem('ehr_token')!, tenantSlug!)}
+              contextLabel="Emergency Medicine"
+              className="mt-2"
+            />
           )}
         </div>
 
@@ -616,90 +544,6 @@ const EDDashboard: React.FC = () => {
         </div>
       )}
       {Dialog}
-      {/* AI Guideline Search Modal */}
-      {showGuidelineSearch && (
-        <ModalPortal>
-          <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl max-h-[85vh] overflow-hidden bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 flex flex-col">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-5 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-xl">
-                  <BookOpen className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">AI Clinical Guidelines</h3>
-                  <p className="text-sm text-blue-100">Evidence-based emergency protocols & guidelines</p>
-                </div>
-              </div>
-              <button onClick={() => setShowGuidelineSearch(false)} className="p-2 rounded-lg hover:bg-white/20 text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-hidden flex flex-col h-full">
-              <div className="flex gap-2 mb-6 shrink-0">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={guidelineQuery}
-                    onChange={(e) => setGuidelineQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                    placeholder="Search for emergency protocols (e.g., 'Stroke protocol', 'Sepsis', 'Trauma')..."
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
-                    autoFocus
-                  />
-                </div>
-                <button
-                  onClick={handleGuidelineSearch}
-                  disabled={loadingGuidelines || !guidelineQuery.trim()}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-semibold rounded-xl hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {loadingGuidelines ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Searching...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5" />
-                      Search
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
-                {loadingGuidelines ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-slate-500">
-                    <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-3" />
-                    <p>Analyzing clinical guidelines...</p>
-                  </div>
-                ) : guidelineResults.length > 0 ? (
-                  <div className="space-y-4">
-                    {guidelineResults.map((result, index) => (
-                      <GuidelineCitationCard key={index} result={result} index={index} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-slate-500">
-                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <BookOpen className="w-8 h-8 text-slate-400" />
-                    </div>
-                    <p className="text-lg font-medium text-slate-700">No guidelines found</p>
-                    <p className="text-sm">Try searching for a specific condition, procedure, or medication.</p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-amber-700 font-medium text-center shrink-0">
-                ⚠ AI-assisted results should be verified against official hospital protocols.
-              </div>
-            </div>
-          </div>
-          </div>
-        </ModalPortal>
-      )}
     </div>
   );
 };

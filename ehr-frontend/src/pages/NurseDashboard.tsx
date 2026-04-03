@@ -39,8 +39,7 @@ import LabResultsViewer from '../components/LabResultsViewer';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import { ProactiveAlertBell } from '../components/ProactiveAlertBell';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
-import { GuidelineResult } from '../types/guidelines';
-import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import { GuidelineRecommendationCard } from '../components/GuidelineRecommendationCard';
 import {
   cacheTenantBranding,
@@ -1007,9 +1006,6 @@ const NurseDashboard: React.FC = () => {
 
   // AI Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
-  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
   const [triageCopilotLoading, setTriageCopilotLoading] = useState(false);
   const [vitalsCopilotLoading, setVitalsCopilotLoading] = useState(false);
   const [notesCopilotLoading, setNotesCopilotLoading] = useState(false);
@@ -1651,79 +1647,6 @@ const NurseDashboard: React.FC = () => {
     }
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    
-    setLoadingGuidelines(true);
-    try {
-      const token = localStorage.getItem('ehr_token');
-      if (!token || !tenantSlug) {
-         return;
-      }
-
-      // Add context for nursing
-      let searchContext = "Nursing protocols, triage guidelines, medication administration, patient safety";
-      
-      // Enhance with patient context if selected
-      if (selectedPatient) {
-        const patientContext = [];
-        if (selectedPatient.age) patientContext.push(`${selectedPatient.age}yo`);
-        if (selectedPatient.gender) patientContext.push(selectedPatient.gender);
-        if (selectedPatient.chronicConditions) patientContext.push(`Hx: ${selectedPatient.chronicConditions}`);
-        if (selectedPatient.allergies) patientContext.push(`Allergies: ${selectedPatient.allergies}`);
-        
-        if (patientContext.length > 0) {
-          searchContext += `. Patient Context: ${patientContext.join(', ')}`;
-        }
-
-        // Enhance with vitals if available in today's appointments
-        const patientApt = appointments.find(a => a.patient.id === selectedPatient.id && a.vitals);
-        if (patientApt && patientApt.vitals) {
-          const v = patientApt.vitals;
-          const vitalsContext = [];
-          
-          // BP
-          if (v.bloodPressure) {
-            const parts = v.bloodPressure.split('/');
-            if (parts.length === 2) {
-              const sys = Number(parts[0]);
-              const dia = Number(parts[1]);
-              if (sys > 140 || dia > 90) vitalsContext.push(`BP ${v.bloodPressure} (High)`);
-              else if (sys < 90 || dia < 60) vitalsContext.push(`BP ${v.bloodPressure} (Low)`);
-            }
-          }
-          
-          // HR
-          if (v.heartRate > 100) vitalsContext.push(`HR ${v.heartRate} (Tachycardia)`);
-          else if (v.heartRate < 60) vitalsContext.push(`HR ${v.heartRate} (Bradycardia)`);
-          
-          // Temp
-          if (v.temperature > 37.5) vitalsContext.push(`Temp ${v.temperature}C (Fever)`);
-          
-          // SpO2
-          if (v.oxygenSaturation < 95) vitalsContext.push(`SpO2 ${v.oxygenSaturation}% (Low)`);
-          
-          if (vitalsContext.length > 0) {
-            searchContext += `. Recent Vitals: ${vitalsContext.join(', ')}`;
-          }
-        }
-      }
-
-      const finalQuery = `${searchContext}: ${guidelineQuery}`;
-
-      const response = await ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (err: any) {
-      const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
-      showError('Error', isTimeout ? 'Guidelines search timed out — LLM is busy. Citations may still be available.' : 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const getSelectedPatientLatestVitals = () => {
     if (!selectedPatient) {
@@ -5419,8 +5342,6 @@ const NurseDashboard: React.FC = () => {
           <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
             <div className="w-full max-w-4xl max-h-[85vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col"
               style={{ background: 'linear-gradient(145deg, #1e3a5f 0%, #0f2744 100%)', border: '1px solid rgba(99,179,237,0.15)' }}>
-
-              {/* Header */}
               <div className="px-6 py-4 flex items-center justify-between shrink-0"
                 style={{ borderBottom: '1px solid rgba(99,179,237,0.12)', background: 'rgba(255,255,255,0.04)' }}>
                 <div className="flex items-center gap-3">
@@ -5444,67 +5365,11 @@ const NurseDashboard: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-
-              {/* Search bar */}
-              <div className="px-6 pt-5 pb-4 shrink-0">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#64748b' }} />
-                    <input
-                      type="text"
-                      value={guidelineQuery}
-                      onChange={(e) => setGuidelineQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                      placeholder="Search protocols (e.g. Sepsis, Fall prevention, IV administration)…"
-                      className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                      style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)', color: '#e2e8f0' }}
-                      autoFocus
-                    />
-                  </div>
-                  <button
-                    onClick={handleGuidelineSearch}
-                    disabled={loadingGuidelines || !guidelineQuery.trim()}
-                    className="px-5 py-2.5 text-sm font-semibold rounded-xl flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ background: 'linear-gradient(135deg,#3b82f6,#4f46e5)', color: '#fff', boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }}
-                  >
-                    {loadingGuidelines ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" />Searching…</>
-                    ) : (
-                      <><Sparkles className="w-4 h-4" />Search</>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Results */}
-              <div className="flex-1 overflow-y-auto min-h-0 px-6 pb-2 custom-scrollbar">
-                {loadingGuidelines ? (
-                  <div className="flex flex-col items-center justify-center h-48" style={{ color: '#64748b' }}>
-                    <Loader2 className="w-9 h-9 animate-spin mb-3" style={{ color: '#3b82f6' }} />
-                    <p className="text-sm">Querying clinical knowledge base…</p>
-                  </div>
-                ) : guidelineResults.length > 0 ? (
-                  <div className="space-y-3">
-                    {guidelineResults.map((result, index) => (
-                      <GuidelineCitationCard key={index} result={result} index={index} dark />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-48 text-center">
-                    <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <BookOpen className="w-6 h-6" style={{ color: '#64748b' }} />
-                    </div>
-                    <p className="text-sm font-medium" style={{ color: '#94a3b8' }}>Type a query and press Search</p>
-                    <p className="text-xs mt-1" style={{ color: '#475569' }}>Try a condition, drug, or procedure name</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="px-6 py-3 text-center text-xs shrink-0 text-amber-400 font-medium"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-                ⚠ AI-assisted — verify against official hospital protocols before acting
+              <div className="p-6 flex-1 overflow-y-auto">
+                <GuidelineSearchPanel
+                  searchFn={(q) => ehrApi.searchGuidelines(`Nursing protocols, triage guidelines, medication administration, patient safety: ${q}`, localStorage.getItem('ehr_token')!, tenantSlug!)}
+                  contextLabel="Nursing"
+                />
               </div>
             </div>
           </div>
