@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PatientController } from './patient.controller';
 import { PatientService } from '../services/patient.service';
+import { ProactiveAiService } from '../services/proactive-ai.service';
 
 describe('PatientController', () => {
   let controller: PatientController;
@@ -20,6 +21,11 @@ describe('PatientController', () => {
     deactivatePatient: jest.fn(),
   };
 
+  const mockProactiveAiService = {
+    triggerAnalysis: jest.fn(),
+    getSnapshot: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PatientController],
@@ -27,6 +33,10 @@ describe('PatientController', () => {
         {
           provide: PatientService,
           useValue: mockPatientService,
+        },
+        {
+          provide: ProactiveAiService,
+          useValue: mockProactiveAiService,
         },
       ],
     }).compile();
@@ -51,10 +61,22 @@ describe('PatientController', () => {
       generatedAt: '2026-03-05T12:00:00.000Z',
     };
     mockPatientService.getPatientContext.mockResolvedValue(expected);
+    mockProactiveAiService.triggerAnalysis.mockResolvedValue(undefined);
+    mockProactiveAiService.getSnapshot.mockResolvedValue(null);
 
-    const result = await controller.getPatientContext('patient-1', { tenantDb: mockTenantDb } as any);
+    const result = await controller.getPatientContext(
+      'patient-1',
+      { tenantDb: mockTenantDb, tenantId: 'tenant-1', user: { userId: 'user-1' } } as any,
+    );
 
     expect(service.getPatientContext).toHaveBeenCalledWith('patient-1', mockTenantDb);
+    expect(mockProactiveAiService.triggerAnalysis).toHaveBeenCalledWith({
+      patientId: 'patient-1',
+      tenantId: 'tenant-1',
+      triggeredByUserId: 'user-1',
+      triggerType: 'chart_open',
+    });
+    expect(mockProactiveAiService.getSnapshot).toHaveBeenCalledWith('patient-1', 'tenant-1');
     expect(result).toEqual(expected);
   });
 });

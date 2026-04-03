@@ -58,7 +58,12 @@ const baseBody = {
 
 describe('HivService clinical visit validation', () => {
   beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-03-01T08:00:00.000Z'));
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('fails when visit date is in the future', async () => {
