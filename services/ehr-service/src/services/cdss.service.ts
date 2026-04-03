@@ -4523,4 +4523,14 @@ export class CdssService {
     }, 15000, tenantId);
     return response.results || [];
   }
+
+  async proactiveAnalysis(payload: Record<string, any>): Promise<any> {
+    try {
+      const response = await this.cdssClient.post('/patient/analyze/proactive', payload);
+      return response.data;
+    } catch (err) {
+      this.logger.warn(`proactiveAnalysis CDSS call failed: ${(err as any).message}`);
+      return null;
+    }
+  }
 }

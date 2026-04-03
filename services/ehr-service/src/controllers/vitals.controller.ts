@@ -1,16 +1,41 @@
 import { Controller, Post, Get, Body, Param, Req, Query } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { VitalsService } from '../services/vitals.service';
+import { ProactiveAiService } from '../services/proactive-ai.service';
 
 @ApiTags('Vitals')
 @Controller('vitals')
 export class VitalsController {
-  constructor(private readonly vitalsService: VitalsService) {}
+  constructor(
+    private readonly vitalsService: VitalsService,
+    private readonly proactiveAiService: ProactiveAiService,
+  ) {}
 
   @Post()
   async record(@Body() body: any, @Req() req: any) {
     const tenantId = req.tenantId;
     const saved = await this.vitalsService.recordVitals(body, tenantId);
+
+    // ── PROACTIVE TRIGGER — pass fresh vitals so analysis doesn't re-fetch ──
+    if (body.patientId) {
+      this.proactiveAiService.triggerAnalysis({
+        patientId: body.patientId,
+        tenantId,
+        triggeredByUserId: req.user?.userId,
+        triggerType: 'vitals',
+        freshVitals: {
+          systolic_bp: body.systolicBp,
+          diastolic_bp: body.diastolicBp,
+          heart_rate: body.heartRate,
+          temperature: body.temperature,
+          oxygen_saturation: body.oxygenSaturation,
+          respiratory_rate: body.respiratoryRate,
+          glasgow_coma_scale: body.glasgowComaScale,
+          blood_glucose: body.bloodGlucose,
+        },
+      }).catch(() => {});
+    }
+
     return { success: true, vitals: saved, cdssInsights: saved.cdssInsights ?? null };
   }
 

@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeor
 
 @Entity('cdss_feedback_batches')
 export class CdssFeedbackBatch {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('uuid', { name: 'batch_id' })
   id: string;
 
   @Column({ name: 'tenant_id', type: 'varchar', length: 100 })

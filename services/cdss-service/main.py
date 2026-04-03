@@ -12037,6 +12037,571 @@ async def audit_anomaly_detection(request: AuditAnomalyRequest):
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 130 — Lab Result Auto-Interpretation: Critical Lab Values Endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+class LabCriticalCheckPayload(BaseModel):
+    patient_id: str
+    results: List[Dict[str, Any]]
+    patient_age: Optional[int] = None
+    known_conditions: Optional[List[str]] = []
+    tenant_id: Optional[str] = None
+
+
+@app.post("/labs/critical-check")
+async def labs_critical_check(payload: LabCriticalCheckPayload):
+    """
+    Fast critical lab value detection. Returns immediately.
+    Pure reference range checking — no LLM or RAG lookup.
+    """
+    CRITICAL_THRESHOLDS = {
+        # key: (low_critical, high_critical, unit, message)
+        'haemoglobin': (5.0,   None,  'g/dL',     'Critical anaemia — transfusion may be required'),
+        'hemoglobin':  (5.0,   None,  'g/dL',     'Critical anaemia — transfusion may be required'),
+        'potassium':   (2.5,   6.5,   'mmol/L',   'Critical potassium — cardiac arrhythmia risk'),
+        'sodium':      (120,   160,   'mmol/L',   'Critical sodium — neurological emergency risk'),
+        'glucose':     (2.0,   30.0,  'mmol/L',   'Critical glucose — DKA/HHS or hypoglycaemia'),
+        'creatinine':  (None,  800,   '\u03bcmol/L', 'Critical renal failure — consider dialysis'),
+        'troponin':    (None,  0.1,   'ng/mL',    'Elevated troponin — possible ACS'),
+        'lactate':     (None,  4.0,   'mmol/L',   'Critical lactate — septic shock / tissue hypoperfusion'),
+        'platelet':    (20,    None,  '\u00d710\u2079/L', 'Critical thrombocytopenia — bleeding risk'),
+        'inr':         (None,  5.0,   '',         'Critical INR — major bleeding risk'),
+        'ph':          (7.2,   7.6,   '',         'Critical blood pH — metabolic/respiratory emergency'),
+    }
+    alerts = []
+    for result in payload.results:
+        test_name = (result.get('testName') or result.get('test_name') or '').lower()
+        value_raw = result.get('value') or result.get('result')
+        try:
+            value = float(str(value_raw).replace(',', '.'))
+        except (TypeError, ValueError):
+            continue
+        for key, (low, high, unit, msg) in CRITICAL_THRESHOLDS.items():
+            if key in test_name:
+                is_critical = (low is not None and value < low) or (high is not None and value > high)
+                if is_critical:
+                    alerts.append({
+                        'severity': 'critical',
+                        'category': 'critical_value',
+                        'title': f'Critical {result.get("testName", key)}: {value} {unit}',
+                        'message': msg,
+                        'trigger_data': result,
+                        'recommended_action': 'Notify attending physician immediately. Repeat confirmatory test if needed.',
+                        'guideline_reference': 'Laboratory Critical Values Protocol',
+                    })
+    return {'patient_id': payload.patient_id, 'alerts': alerts, 'critical_count': len(alerts)}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 129 — Real-Time Vitals Intelligence: Fast Vitals Alert Endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+class VitalsAlertPayload(BaseModel):
+    patient_id: str
+    vitals: Dict[str, Any]
+    patient_age: Optional[int] = None
+    pregnancy_status: Optional[str] = None
+    known_conditions: Optional[List[str]] = []
+    tenant_id: Optional[str] = None
+
+
+@app.post("/vitals/analyze-realtime")
+async def analyze_vitals_realtime(payload: VitalsAlertPayload):
+    """
+    Fast vitals-only analysis. Returns in < 200ms.
+    Pure rule-based + scoring — no RAG lookup.
+    """
+    vitals = payload.vitals
+    alerts = []
+    news2 = _calculate_news2(vitals)
+    qsofa = _calculate_qsofa(vitals)
+
+    sbp = vitals.get('systolic_bp') or vitals.get('sbp')
+    dbp = vitals.get('diastolic_bp') or vitals.get('dbp')
+    spo2 = vitals.get('oxygen_saturation') or vitals.get('spo2')
+    temp = vitals.get('temperature')
+    hr = vitals.get('heart_rate')
+    rr = vitals.get('respiratory_rate')
+    glucose = vitals.get('blood_glucose')
+
+    if news2 is not None and news2 >= 5:
+        alerts.append({'severity': 'critical' if news2 >= 7 else 'high', 'category': 'deterioration',
+                       'title': f'NEWS2={news2}', 'message': f'NEWS2 score {news2} — clinical review needed'})
+    if qsofa is not None and qsofa >= 2:
+        alerts.append({'severity': 'critical', 'category': 'sepsis',
+                       'title': f'qSOFA={qsofa} — Sepsis', 'message': 'Sepsis 6 bundle within 1 hour'})
+    if sbp and sbp >= 180:
+        alerts.append({'severity': 'high', 'category': 'vitals_abnormal',
+                       'title': f'BP {sbp}/{dbp}', 'message': 'Hypertensive crisis — assess for end-organ damage'})
+    if payload.pregnancy_status in ['pregnant', 'antenatal'] and sbp and sbp >= 160 and dbp and dbp >= 110:
+        alerts.append({'severity': 'critical', 'category': 'preeclampsia',
+                       'title': 'Severe Pre-eclampsia', 'message': 'Urgent obstetric review + MgSO4'})
+    if spo2 and spo2 < 92:
+        alerts.append({'severity': 'critical', 'category': 'vitals_abnormal',
+                       'title': f'SpO2 {spo2}%', 'message': 'Critical hypoxia — supplemental O2 immediately'})
+    if temp and temp >= 39.5:
+        alerts.append({'severity': 'high', 'category': 'vitals_abnormal',
+                       'title': f'High Fever {temp}\u00b0C', 'message': 'Consider sepsis screen, malaria RDT in endemic area'})
+    if hr and hr > 130:
+        alerts.append({'severity': 'high', 'category': 'vitals_abnormal',
+                       'title': f'Tachycardia HR={hr}', 'message': 'Assess cause: sepsis, dehydration, pain, arrhythmia'})
+    if glucose and glucose > 20.0:
+        alerts.append({'severity': 'high', 'category': 'vitals_abnormal',
+                       'title': f'Hyperglycaemia {glucose} mmol/L', 'message': 'Consider DKA/HHS workup. IV fluids + insulin protocol.'})
+    if glucose and glucose < 3.0:
+        alerts.append({'severity': 'critical', 'category': 'vitals_abnormal',
+                       'title': f'Hypoglycaemia {glucose} mmol/L', 'message': 'Immediate glucose — 50ml 50% dextrose IV or oral if conscious'})
+
+    return {
+        'patient_id': payload.patient_id,
+        'news2_score': news2,
+        'qsofa_score': qsofa,
+        'alerts': alerts,
+        'alert_count': len(alerts),
+        'has_critical': any(a['severity'] == 'critical' for a in alerts),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 127 — Proactive AI Nervous System: Full Patient Analysis Endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PatientSummaryPayload(BaseModel):
+    patient_id: str
+    age: int
+    gender: str
+    chronic_conditions: Optional[List[str]] = []
+    active_medications: Optional[List[Dict[str, Any]]] = []
+    allergies: Optional[List[str]] = []
+    latest_vitals: Optional[Dict[str, Any]] = {}
+    latest_labs: Optional[List[Dict[str, Any]]] = []
+    recent_diagnoses: Optional[List[Dict[str, Any]]] = []
+    # Last 3 visits only — do NOT send full history
+    recent_visits_summary: Optional[List[Dict[str, Any]]] = []
+    pregnancy_status: Optional[str] = None
+    hiv_status: Optional[str] = None
+    trigger_type: Optional[str] = "chart_open"
+    tenant_id: Optional[str] = None
+
+
+class ProactiveAnalysisResponse(BaseModel):
+    patient_id: str
+    clinical_summary: str
+    risk_scores: Dict[str, float]
+    risk_levels: Dict[str, str]
+    active_alerts: List[Dict[str, Any]]
+    care_gaps: List[Dict[str, Any]]
+    treatment_recommendations: List[Dict[str, Any]]
+    guideline_citations: List[Dict[str, Any]]
+    news2_score: Optional[int]
+    qsofa_score: Optional[int]
+    model_version: str
+    processing_time_ms: int
+
+
+def _calculate_news2(vitals: dict) -> Optional[int]:
+    """Calculate NEWS2 score from vitals dict."""
+    if not vitals:
+        return None
+    score = 0
+    rr = vitals.get('respiratory_rate')
+    spo2 = vitals.get('oxygen_saturation') or vitals.get('spo2')
+    temp = vitals.get('temperature')
+    sbp = vitals.get('systolic_bp') or vitals.get('sbp')
+    hr = vitals.get('heart_rate')
+
+    if rr is not None:
+        if rr <= 8 or rr >= 25: score += 3
+        elif rr >= 21: score += 2
+        elif rr <= 11: score += 1
+
+    if spo2 is not None:
+        if spo2 <= 91: score += 3
+        elif spo2 <= 93: score += 2
+        elif spo2 <= 95: score += 1
+
+    if temp is not None:
+        if temp <= 35.0 or temp >= 39.1: score += 3
+        elif temp >= 38.1: score += 2
+        elif temp <= 36.0: score += 1
+
+    if sbp is not None:
+        if sbp <= 90 or sbp >= 220: score += 3
+        elif sbp <= 100: score += 2
+        elif sbp <= 110: score += 1
+
+    if hr is not None:
+        if hr <= 40 or hr >= 131: score += 3
+        elif hr >= 111: score += 2
+        elif hr <= 50 or hr >= 91: score += 1
+
+    return score
+
+
+def _calculate_qsofa(vitals: dict) -> Optional[int]:
+    """Calculate qSOFA score."""
+    if not vitals:
+        return None
+    score = 0
+    rr = vitals.get('respiratory_rate')
+    sbp = vitals.get('systolic_bp') or vitals.get('sbp')
+    if rr and rr >= 22: score += 1
+    if sbp and sbp <= 100: score += 1
+    gcs = vitals.get('glasgow_coma_scale') or vitals.get('gcs_total')
+    if gcs and gcs < 15: score += 1
+    return score
+
+
+def _estimate_deterioration_risk(vitals: dict, conditions: list, labs: list, news2: Optional[int]) -> float:
+    """Simple heuristic deterioration risk 0.0-1.0."""
+    score = 0.0
+    if news2 is not None:
+        score = min(news2 / 20.0, 0.8)
+    condition_risk = {'heart failure': 0.2, 'copd': 0.15, 'diabetes': 0.1, 'ckd': 0.15, 'hiv': 0.1}
+    for c in (conditions or []):
+        for k, v in condition_risk.items():
+            if k in c.lower():
+                score = min(score + v, 1.0)
+    return min(score, 1.0)
+
+
+def _estimate_readmission_risk(payload: PatientSummaryPayload, visits: list) -> float:
+    """Simple 30-day readmission risk heuristic."""
+    score = 0.1
+    if len(payload.chronic_conditions) >= 3: score += 0.2
+    if len(payload.active_medications) >= 6: score += 0.1
+    if payload.age and payload.age >= 65: score += 0.1
+    if payload.age and payload.age >= 80: score += 0.1
+    return min(score, 1.0)
+
+
+def _build_clinical_summary(payload: PatientSummaryPayload, alerts: list, care_gaps: list, news2: Optional[int], qsofa: Optional[int]) -> str:
+    """Build a one-paragraph clinical summary."""
+    parts = [f"{payload.age}yo {payload.gender.lower()}"]
+    if payload.chronic_conditions:
+        parts.append(f"with {', '.join(payload.chronic_conditions[:3])}")
+    if payload.pregnancy_status in ['pregnant', 'antenatal']:
+        parts.append("(pregnant)")
+    if alerts:
+        critical = [a for a in alerts if a['severity'] == 'critical']
+        if critical:
+            parts.append(f"— \u26a0 {len(critical)} critical alert(s): {critical[0]['title']}")
+    if care_gaps:
+        parts.append(f"— {len(care_gaps)} care gap(s) identified")
+    if news2 is not None and news2 >= 5:
+        parts.append(f"— NEWS2={news2} (elevated risk)")
+    return ' '.join(parts)
+
+
+@app.post("/patient/analyze/proactive", response_model=ProactiveAnalysisResponse)
+async def proactive_patient_analysis(payload: PatientSummaryPayload):
+    """
+    Full proactive patient analysis. Called automatically at trigger points
+    (chart open, vitals save, lab results, admission).
+    Accepts a condensed patient snapshot to keep latency low.
+    """
+    import time
+    start_ms = int(time.time() * 1000)
+
+    vitals = payload.latest_vitals or {}
+    labs = payload.latest_labs or []
+    diagnoses = payload.recent_diagnoses or []
+    visits = payload.recent_visits_summary or []
+
+    alerts = []
+    risk_scores = {}
+    risk_levels = {}
+    care_gaps = []
+    recommendations = []
+    citations = []
+
+    # 1. NEWS2 Score
+    news2 = _calculate_news2(vitals)
+    qsofa = _calculate_qsofa(vitals)
+    if news2 is not None:
+        risk_scores['news2_raw'] = float(news2)
+        if news2 >= 7:
+            risk_levels['news2'] = 'critical'
+            alerts.append({
+                'category': 'deterioration',
+                'severity': 'critical',
+                'title': f'NEWS2 Score: {news2} — Urgent clinical review required',
+                'message': f'NEWS2 score of {news2} indicates high risk of clinical deterioration. Immediate senior review needed.',
+                'recommended_action': 'Escalate to senior clinician immediately. Continuous monitoring.',
+                'guideline_reference': 'Royal College of Physicians NEWS2 Guidelines 2017',
+                'trigger_data': {'news2': news2, 'vitals': vitals}
+            })
+        elif news2 >= 5:
+            risk_levels['news2'] = 'high'
+            alerts.append({
+                'category': 'deterioration',
+                'severity': 'high',
+                'title': f'NEWS2 Score: {news2} — Increased monitoring needed',
+                'message': f'NEWS2 score of {news2} indicates medium-high risk. Increase monitoring frequency.',
+                'recommended_action': 'Monitor vitals every 1 hour. Consider senior review.',
+                'guideline_reference': 'Royal College of Physicians NEWS2 Guidelines 2017',
+                'trigger_data': {'news2': news2, 'vitals': vitals}
+            })
+        elif news2 >= 3:
+            risk_levels['news2'] = 'medium'
+        else:
+            risk_levels['news2'] = 'low'
+
+    # 2. Sepsis / qSOFA
+    if qsofa is not None:
+        risk_scores['qsofa'] = float(qsofa)
+        if qsofa >= 2:
+            risk_levels['sepsis'] = 'high'
+            alerts.append({
+                'category': 'sepsis',
+                'severity': 'critical',
+                'title': f'qSOFA \u2265 2 — Possible Sepsis',
+                'message': f'qSOFA score {qsofa}/3. Sepsis protocol should be initiated. Apply Sepsis 6 bundle within 1 hour.',
+                'recommended_action': 'Blood cultures \u00d7 2, IV access, IV fluids, broad-spectrum antibiotics, urine output monitoring, lactate.',
+                'guideline_reference': 'Surviving Sepsis Campaign Guidelines 2021',
+                'trigger_data': {'qsofa': qsofa, 'vitals': vitals}
+            })
+        else:
+            risk_levels['sepsis'] = 'low'
+
+    # 3. Critical Vitals
+    sbp = vitals.get('systolic_bp') or vitals.get('sbp')
+    dbp = vitals.get('diastolic_bp') or vitals.get('dbp')
+    spo2 = vitals.get('oxygen_saturation') or vitals.get('spo2')
+    if sbp and sbp >= 180:
+        alerts.append({
+            'category': 'vitals_abnormal',
+            'severity': 'high',
+            'title': f'Hypertensive Crisis — BP {sbp}/{dbp}',
+            'message': 'Systolic BP \u2265 180 mmHg. Assess for end-organ damage. Check for headache, chest pain, visual changes.',
+            'recommended_action': 'Immediate BP recheck. Consider IV antihypertensives if symptomatic.',
+            'guideline_reference': 'WHO Hypertension Guidelines 2023',
+            'trigger_data': vitals
+        })
+    if payload.pregnancy_status in ['pregnant', 'antenatal'] and sbp and sbp >= 160 and dbp and dbp >= 110:
+        alerts.append({
+            'category': 'preeclampsia',
+            'severity': 'critical',
+            'title': 'Severe Pre-eclampsia Criteria Met',
+            'message': f'BP {sbp}/{dbp} in pregnancy. Severe pre-eclampsia criteria. Assess for headache, visual disturbance, epigastric pain, oedema.',
+            'recommended_action': 'Urgent obstetric review. MgSO4 prophylaxis. Antihypertensive treatment. Consider delivery.',
+            'guideline_reference': 'WHO ANC Recommendations 2016 — Hypertension in Pregnancy',
+            'trigger_data': vitals
+        })
+    if spo2 and spo2 < 92:
+        alerts.append({
+            'category': 'vitals_abnormal',
+            'severity': 'critical',
+            'title': f'Critical SpO2: {spo2}%',
+            'message': f'Oxygen saturation {spo2}% — below 92% threshold. Supplemental oxygen required.',
+            'recommended_action': 'Apply supplemental O2 immediately. Assess airway. Consider CPAP/BiPAP if no improvement.',
+            'guideline_reference': 'BTS Oxygen Guidelines 2017',
+            'trigger_data': vitals
+        })
+
+    # 4. HIV/TB Care Gaps
+    condition_lower = [c.lower() for c in payload.chronic_conditions]
+    med_names = [m.get('name', '').lower() for m in payload.active_medications]
+    has_hiv = payload.hiv_status in ['positive', 'hiv_positive'] or 'hiv' in condition_lower or 'aids' in condition_lower
+    on_art = any(drug in ' '.join(med_names) for drug in ['tenofovir', 'lamivudine', 'efavirenz', 'dolutegravir', 'lopinavir', 'atazanavir', 'tdf', 'ftc', '3tc'])
+    has_tb = any('tuberculosis' in c or ' tb' in c or c.startswith('tb') for c in condition_lower)
+    on_tb_tx = any(drug in ' '.join(med_names) for drug in ['isoniazid', 'rifampicin', 'rifampin', 'pyrazinamide', 'ethambutol', 'rhze'])
+
+    if has_hiv and not on_art:
+        care_gaps.append({
+            'type': 'treatment_gap',
+            'category': 'hiv',
+            'title': 'HIV — No ART documented',
+            'message': 'Patient has HIV diagnosis but no antiretroviral therapy documented in active medications.',
+            'recommended_action': 'Review ART status. Initiate or document current ART regimen. Check viral load.',
+            'guideline_reference': 'WHO Consolidated HIV Guidelines 2021 — Treat All Policy',
+            'priority': 'critical'
+        })
+    if has_hiv and has_tb and on_tb_tx and not on_art:
+        alerts.append({
+            'category': 'coinfection',
+            'severity': 'critical',
+            'title': 'HIV/TB Co-infection — ART not documented',
+            'message': 'Patient on TB treatment with HIV diagnosis but no ART documented. WHO recommends ART initiation within 2 weeks of TB treatment start.',
+            'recommended_action': 'Initiate ART within 2 weeks of TB treatment. Preferred: dolutegravir-based regimen.',
+            'guideline_reference': 'WHO HIV/TB Guidelines 2021',
+            'trigger_data': {'has_hiv': True, 'has_tb': True}
+        })
+
+    # 5. RAG-backed guideline recommendations
+    if diagnostic_assistant and diagnostic_assistant.rag_engine:
+        query_terms = []
+        if payload.chronic_conditions:
+            query_terms.extend(payload.chronic_conditions[:3])
+        if diagnoses:
+            query_terms.extend([d.get('description', '') for d in diagnoses[:2]])
+        if query_terms:
+            query_str = ' '.join(query_terms)
+            try:
+                rag_results = diagnostic_assistant.rag_engine.query(query_str, n_results=3, tenant_id=payload.tenant_id)
+                citations = [{
+                    'source': r.get('source', ''),
+                    'text': r.get('text', '')[:300],
+                    'confidence': r.get('confidence', 0.0)
+                } for r in rag_results]
+            except Exception:
+                pass
+
+    # 6. Clinical summary
+    clinical_summary = _build_clinical_summary(payload, alerts, care_gaps, news2, qsofa)
+
+    # 7. Deterioration / readmission risk
+    det_risk = _estimate_deterioration_risk(vitals, payload.chronic_conditions, labs, news2)
+    readm_risk = _estimate_readmission_risk(payload, visits)
+    risk_scores['deterioration'] = round(det_risk, 3)
+    risk_scores['readmission'] = round(readm_risk, 3)
+    risk_levels['deterioration'] = 'critical' if det_risk > 0.7 else 'high' if det_risk > 0.5 else 'medium' if det_risk > 0.3 else 'low'
+    risk_levels['readmission'] = 'critical' if readm_risk > 0.7 else 'high' if readm_risk > 0.5 else 'medium' if readm_risk > 0.3 else 'low'
+
+    end_ms = int(time.time() * 1000)
+
+    return ProactiveAnalysisResponse(
+        patient_id=payload.patient_id,
+        clinical_summary=clinical_summary,
+        risk_scores=risk_scores,
+        risk_levels=risk_levels,
+        active_alerts=alerts,
+        care_gaps=care_gaps,
+        treatment_recommendations=recommendations,
+        guideline_citations=citations,
+        news2_score=news2,
+        qsofa_score=qsofa,
+        model_version="medicore-proactive-v1.0",
+        processing_time_ms=(end_ms - start_ms)
+    )
+
+
+# ── Sprint 132: Care Gap Batch Detection ─────────────────────────────────────
+
+class CareGapBatchPayload(BaseModel):
+    patient_id: str
+    age: int
+    gender: str
+    chronic_conditions: List[str] = []
+    active_medications: List[Dict[str, Any]] = []
+    hiv_status: Optional[str] = None
+    pregnancy_status: Optional[str] = None
+    last_visit_date: Optional[str] = None
+    last_lab_date: Optional[str] = None
+    last_viral_load_date: Optional[str] = None
+    last_bp_check_date: Optional[str] = None
+    last_hba1c_date: Optional[str] = None
+    tenant_id: Optional[str] = None
+
+
+@app.post("/care-gaps/batch-detect")
+async def care_gaps_batch_detect(payload: CareGapBatchPayload):
+    """
+    Comprehensive care gap detection for nightly batch.
+    Checks disease program requirements, overdue reviews, monitoring gaps.
+    """
+    from datetime import datetime, timedelta
+    gaps = []
+    today = datetime.utcnow()
+
+    def months_since(date_str) -> Optional[float]:
+        if not date_str:
+            return None
+        try:
+            d = datetime.fromisoformat(str(date_str).replace('Z', ''))
+            return (today - d).days / 30.0
+        except Exception:
+            return None
+
+    conditions = [c.lower() for c in payload.chronic_conditions]
+    med_names = ' '.join([m.get('name', '').lower() for m in payload.active_medications])
+
+    # HIV monitoring gaps
+    has_hiv = payload.hiv_status in ['positive', 'hiv_positive'] or 'hiv' in conditions
+    if has_hiv:
+        vl_months = months_since(payload.last_viral_load_date)
+        if vl_months is None or vl_months > 6:
+            gaps.append({
+                'type': 'care_gap', 'category': 'treatment_gap',
+                'title': 'HIV — Viral Load overdue',
+                'message': f'Last viral load: {"never" if vl_months is None else f"{vl_months:.0f} months ago"}. WHO recommends 6-monthly for stable patients.',
+                'recommended_action': 'Order viral load test.',
+                'guideline_reference': 'WHO HIV Monitoring Guidelines 2021',
+                'priority': 'high'
+            })
+        on_art = any(d in med_names for d in ['tenofovir', 'lamivudine', 'efavirenz', 'dolutegravir', 'lopinavir'])
+        if not on_art:
+            gaps.append({
+                'type': 'care_gap', 'category': 'treatment_gap',
+                'title': 'HIV — No ART documented',
+                'message': 'Active HIV diagnosis without documented ART.',
+                'recommended_action': 'Confirm ART status. Initiate if not on treatment.',
+                'guideline_reference': 'WHO HIV Treat-All Guidelines 2021',
+                'priority': 'critical'
+            })
+
+    # Diabetes monitoring
+    has_dm = any(d in ' '.join(conditions) for d in ['diabetes', 'dm '])
+    if has_dm:
+        hba1c_months = months_since(payload.last_hba1c_date)
+        if hba1c_months is None or hba1c_months > 3:
+            gaps.append({
+                'type': 'care_gap', 'category': 'care_gap',
+                'title': 'Diabetes — HbA1c overdue',
+                'message': f'Last HbA1c: {"never documented" if hba1c_months is None else f"{hba1c_months:.0f} months ago"}.',
+                'recommended_action': 'Order HbA1c. Target <7% (53 mmol/mol).',
+                'guideline_reference': 'WHO Diabetes Management Guidelines 2023',
+                'priority': 'medium'
+            })
+
+    # Hypertension monitoring
+    has_htn = any(d in ' '.join(conditions) for d in ['hypertension', 'htn '])
+    if has_htn:
+        bp_months = months_since(payload.last_bp_check_date)
+        if bp_months is None or bp_months > 1:
+            gaps.append({
+                'type': 'care_gap', 'category': 'care_gap',
+                'title': 'Hypertension — BP check overdue',
+                'message': f'Last BP recorded: {"never" if bp_months is None else f"{bp_months:.0f} months ago"}.',
+                'recommended_action': 'Record blood pressure at every visit.',
+                'guideline_reference': 'WHO Hypertension Guidelines 2023',
+                'priority': 'medium'
+            })
+
+    # Pregnancy ANC monitoring
+    if payload.pregnancy_status in ['pregnant', 'antenatal']:
+        visit_months = months_since(payload.last_visit_date)
+        if visit_months is None or visit_months > 1:
+            gaps.append({
+                'type': 'care_gap', 'category': 'missed_followup',
+                'title': 'ANC visit overdue',
+                'message': 'Pregnant patient with no visit in over 4 weeks.',
+                'recommended_action': 'Contact patient for ANC follow-up.',
+                'guideline_reference': 'WHO ANC Recommendations 2016',
+                'priority': 'high'
+            })
+
+    # General follow-up gap
+    visit_months = months_since(payload.last_visit_date)
+    if payload.chronic_conditions and (visit_months is None or visit_months > 6):
+        gaps.append({
+            'type': 'care_gap', 'category': 'missed_followup',
+            'title': 'Chronic condition — no visit in 6 months',
+            'message': f'Patient with chronic conditions last seen {"never" if visit_months is None else f"{visit_months:.0f} months ago"}.',
+            'recommended_action': 'Contact patient. Schedule follow-up appointment.',
+            'guideline_reference': 'Chronic Disease Management Standards',
+            'priority': 'medium'
+        })
+
+    return {
+        'patient_id': payload.patient_id,
+        'care_gaps': gaps,
+        'gap_count': len(gaps),
+        'has_critical': any(g.get('priority') == 'critical' for g in gaps)
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

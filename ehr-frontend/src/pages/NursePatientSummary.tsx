@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { GuidelineRecommendationCard } from '../components/GuidelineRecommendationCard';
+import { PatientRiskPanel } from '../components/PatientRiskPanel';
 import { ehrApi, chartApi } from '../services/api';
 import { formatDateTimeToDDMMYYYYHHMM, formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
@@ -558,6 +559,13 @@ const NursePatientSummary: React.FC = () => {
                 <p className="text-sm text-slate-600 capitalize">{patient.gender}</p>
               </div>
             </div>
+          </div>
+          {/* Proactive AI Risk Panel */}
+          <div className="mt-3">
+            <PatientRiskPanel
+              patientId={patient.id}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
           </div>
         </div>
       </div>

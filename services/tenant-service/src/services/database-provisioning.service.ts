@@ -1194,6 +1194,20 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint114ClinicalRagStatements(),
       },
       {
+        id: 'sprint127_proactive_ai',
+        label: 'Sprint 127-132 - Proactive AI Nervous System',
+        version: '2026.04.03.1',
+        description: 'patient_ai_snapshots, proactive_alerts, patient_risk_scores tables',
+        statements: () => this.getSprint127ProactiveAiStatements(),
+      },
+      {
+        id: 'sprint127_proactive_ai_column_hardening',
+        label: 'Sprint 127 - Proactive AI Column Hardening',
+        version: '2026.04.03.1',
+        description: 'Adds missing columns to proactive_alerts and patient_risk_scores; renames acknowledged_by → acknowledged_by_id',
+        statements: () => this.getSprint127ProactiveAiColumnHardeningStatements(),
+      },
+      {
         id: 'tenant_entity_alignment',
         label: 'Tenant Entity Alignment',
         version: TENANT_ENTITY_ALIGNMENT_BUNDLE_VERSION,
@@ -16762,6 +16776,15 @@ RECOMMENDATIONS:
       )`,
       `CREATE INDEX IF NOT EXISTS idx_cdss_dl_patient ON cdss_decision_log (patient_id, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_cdss_dl_type ON cdss_decision_log (decision_type, created_at DESC)`,
+      // Fix: column was created as TEXT by an earlier migration; convert to BOOLEAN before creating partial index
+      `DO $$ BEGIN
+         IF (SELECT data_type FROM information_schema.columns
+             WHERE table_name='cdss_decision_log' AND column_name='feedback_sent_to_cdss') = 'text' THEN
+           ALTER TABLE cdss_decision_log
+             ALTER COLUMN feedback_sent_to_cdss TYPE BOOLEAN
+             USING feedback_sent_to_cdss::boolean;
+         END IF;
+       END $$`,
       `CREATE INDEX IF NOT EXISTS idx_cdss_dl_feedback ON cdss_decision_log (feedback_sent_to_cdss) WHERE feedback_sent_to_cdss = FALSE`,
 
       // ── Clinical Pathways ──────────────────────────────────────────────────
@@ -17438,16 +17461,27 @@ RECOMMENDATIONS:
       )`,
       `CREATE INDEX IF NOT EXISTS idx_enc_key_current ON encryption_key_versions (is_current)`,
       `CREATE INDEX IF NOT EXISTS idx_patient_consents_type ON patient_consents (patient_id, consent_type, status)`,
-      `INSERT INTO consent_templates (consent_type, title, description, version, is_active, created_at, updated_at)
+      // Extend consent_type CHECK constraint to include cdss_ai_processing
+      `ALTER TABLE consent_templates DROP CONSTRAINT IF EXISTS consent_templates_consent_type_check`,
+      `ALTER TABLE consent_templates ADD CONSTRAINT consent_templates_consent_type_check
+       CHECK (consent_type IN (
+         'treatment','surgery','procedure','research','hipaa','photography',
+         'release_of_information','financial','telehealth','vaccine',
+         'anesthesia','blood_transfusion','general','cdss_ai_processing'
+       ))`,
+      // Seed the CDSS AI consent template (content column, not description; template_name + template_code required)
+      `INSERT INTO consent_templates (consent_type, template_name, template_code, title, content, version, is_active, created_at, updated_at)
        VALUES (
          'cdss_ai_processing',
+         'AI-Assisted Clinical Decision Support',
+         'cdss_ai_processing_v1',
          'AI-Assisted Clinical Decision Support Consent',
          'Consent for use of AI/CDSS tools to analyze health information for care improvement. All AI recommendations are reviewed by a qualified clinician.',
          '1.0',
          true,
          NOW(),
          NOW()
-       ) ON CONFLICT DO NOTHING`,
+       ) ON CONFLICT (template_code) DO NOTHING`,
     ];
   }
 
@@ -17818,6 +17852,103 @@ RECOMMENDATIONS:
       )`,
       `CREATE INDEX IF NOT EXISTS idx_dicom_series_order_id ON dicom_series(imaging_order_id)`,
       `CREATE INDEX IF NOT EXISTS idx_dicom_series_study_uid ON dicom_series(study_instance_uid)`,
+    ];
+  }
+
+  private getSprint127ProactiveAiStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS patient_ai_snapshots (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        tenant_id VARCHAR(100) NOT NULL,
+        clinical_summary TEXT,
+        analysis_payload JSONB NOT NULL DEFAULT '{}',
+        risk_scores JSONB NOT NULL DEFAULT '{}',
+        active_flags JSONB NOT NULL DEFAULT '[]',
+        guideline_citations TEXT,
+        trigger_type VARCHAR(50) NOT NULL DEFAULT 'manual',
+        news2_score INT,
+        qsofa_score INT,
+        model_version VARCHAR(100),
+        snapshot_generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        triggered_by_user_id UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_patient_ai_snapshot_patient UNIQUE (patient_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_ai_snapshots_patient ON patient_ai_snapshots (patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_ai_snapshots_tenant ON patient_ai_snapshots (tenant_id, snapshot_generated_at DESC)`,
+
+      `CREATE TABLE IF NOT EXISTS proactive_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        tenant_id VARCHAR(100) NOT NULL,
+        category VARCHAR(50) NOT NULL DEFAULT 'clinical_alert',
+        severity VARCHAR(20) NOT NULL DEFAULT 'medium',
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        title VARCHAR(500) NOT NULL,
+        message TEXT NOT NULL,
+        recommended_action TEXT,
+        guideline_reference TEXT,
+        trigger_type VARCHAR(50),
+        dedup_key VARCHAR(64),
+        expires_at TIMESTAMPTZ,
+        target_user_id UUID,
+        acknowledged_by UUID,
+        acknowledged_at TIMESTAMPTZ,
+        dismissed_by UUID,
+        dismissed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_proactive_alerts_patient_status ON proactive_alerts (patient_id, status)`,
+      `CREATE INDEX IF NOT EXISTS idx_proactive_alerts_tenant_status ON proactive_alerts (tenant_id, status, severity)`,
+      `CREATE INDEX IF NOT EXISTS idx_proactive_alerts_target_user ON proactive_alerts (target_user_id, status)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_proactive_alerts_dedup ON proactive_alerts (dedup_key) WHERE status = 'active' AND dedup_key IS NOT NULL`,
+
+      `CREATE TABLE IF NOT EXISTS patient_risk_scores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL,
+        tenant_id VARCHAR(100) NOT NULL,
+        score_type VARCHAR(50) NOT NULL,
+        score_value NUMERIC(6,4) NOT NULL,
+        risk_level VARCHAR(20) NOT NULL DEFAULT 'low',
+        scored_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        trigger_type VARCHAR(50),
+        model_version VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_risk_scores_patient ON patient_risk_scores (patient_id, scored_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_patient_risk_scores_tenant ON patient_risk_scores (tenant_id, score_type)`,
+    ];
+  }
+
+  private getSprint127ProactiveAiColumnHardeningStatements(): string[] {
+    return [
+      // Rename acknowledged_by → acknowledged_by_id (entity uses acknowledged_by_id)
+      `DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'proactive_alerts' AND column_name = 'acknowledged_by'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'proactive_alerts' AND column_name = 'acknowledged_by_id'
+        ) THEN
+          ALTER TABLE proactive_alerts RENAME COLUMN acknowledged_by TO acknowledged_by_id;
+        END IF;
+      END $$`,
+
+      // proactive_alerts: add missing columns
+      `ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS trigger_data JSONB`,
+      `ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS confidence_score NUMERIC(5,4)`,
+      `ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS is_suppressed BOOLEAN NOT NULL DEFAULT FALSE`,
+      `ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS snapshot_id UUID`,
+      // ensure acknowledged_by_id exists if rename above was skipped (fresh DB case)
+      `ALTER TABLE proactive_alerts ADD COLUMN IF NOT EXISTS acknowledged_by_id UUID`,
+
+      // patient_risk_scores: add missing columns
+      `ALTER TABLE patient_risk_scores ADD COLUMN IF NOT EXISTS input_data JSONB`,
+      `ALTER TABLE patient_risk_scores ADD COLUMN IF NOT EXISTS snapshot_id UUID`,
     ];
   }
 }

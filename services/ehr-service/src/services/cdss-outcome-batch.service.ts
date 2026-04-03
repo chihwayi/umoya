@@ -9,6 +9,7 @@ import { ModelRegistry } from '../entities/model-registry.entity';
 import { FlRound } from '../entities/fl-round.entity';
 import { FederatedLearningService } from './federated-learning.service';
 import { CdssService } from './cdss.service';
+import { ProactiveAiService } from './proactive-ai.service';
 
 /**
  * Weekly batch job that:
@@ -39,6 +40,7 @@ export class CdssOutcomeBatchService {
     @Optional() @Inject(CdssDecisionLogService) private readonly decisionLogService: CdssDecisionLogService,
     @Optional() @Inject(CdssService) private readonly cdssService?: CdssService,
     @Optional() @Inject(FederatedLearningService) private readonly federatedLearningService?: FederatedLearningService,
+    @Optional() @Inject(ProactiveAiService) private readonly proactiveAiService?: ProactiveAiService,
   ) {}
 
   /**
@@ -590,6 +592,72 @@ export class CdssOutcomeBatchService {
       return sourceModel.trim();
     }
     return this.normalizeDecisionModelName(entry?.decision_type);
+  }
+
+  // ── Sprint 132 — Nightly Proactive AI Batch ──────────────────────────────
+
+  /** Runs every night at 02:00. Scans active patients for care gaps, overdue reviews. */
+  @Cron('0 2 * * *')
+  async runNightlyProactiveAnalysis(): Promise<void> {
+    if (!this.tenantService || !this.proactiveAiService) {
+      this.logger.warn('CdssOutcomeBatchService: proactiveAiService not injected, skipping nightly batch');
+      return;
+    }
+    this.logger.log('Starting nightly proactive AI analysis batch...');
+    try {
+      const tenants = await this.tenantService.getAllActiveTenants();
+      for (const tenant of tenants) {
+        await this.runProactiveBatchForTenant(tenant);
+      }
+    } catch (err) {
+      this.logger.error(`Nightly proactive batch failed: ${(err as any).message}`);
+    }
+  }
+
+  private async runProactiveBatchForTenant(tenant: { id: string; subdomain: string; databaseName: string }): Promise<void> {
+    try {
+      const db = await this.tenantService.getTenantDatabase(tenant.id);
+      if (!db) return;
+
+      // Active patients with chronic conditions, active prescriptions, or recent appointments
+      const patients: Array<{ id: string }> = await db.query(`
+        SELECT DISTINCT p.id
+        FROM patients p
+        WHERE (p.is_active = true OR p.is_active IS NULL)
+        AND (
+          p.chronic_conditions IS NOT NULL
+          OR EXISTS (
+            SELECT 1 FROM prescriptions pr
+            WHERE pr.patient_id = p.id AND pr.status = 'active'
+          )
+          OR EXISTS (
+            SELECT 1 FROM appointments a
+            WHERE a.patient_id = p.id
+            AND a.appointment_date >= NOW() - INTERVAL '90 days'
+          )
+        )
+        LIMIT 500
+      `);
+
+      this.logger.log(`Nightly batch: ${patients.length} patients for tenant ${tenant.id}`);
+
+      // Process in batches of 10 to avoid overwhelming CDSS
+      for (let i = 0; i < patients.length; i += 10) {
+        const batch = patients.slice(i, i + 10);
+        await Promise.allSettled(
+          batch.map(p =>
+            this.proactiveAiService!.triggerAnalysis({
+              patientId: p.id,
+              tenantId: tenant.id,
+              triggerType: 'batch',
+            })
+          )
+        );
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (err) {
+      this.logger.error(`Nightly batch failed for tenant ${tenant.id}: ${(err as any).message}`);
+    }
   }
 
   private normalizeDecisionModelName(decisionType: unknown): string {

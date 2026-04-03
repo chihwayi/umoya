@@ -4,13 +4,17 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PatientService } from '../services/patient.service';
 import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { ProactiveAiService } from '../services/proactive-ai.service';
 
 @ApiTags('Patient Management')
 @ApiBearerAuth()
 @Controller('patients')
 @UseGuards(JwtAuthGuard)
 export class PatientController {
-  constructor(private patientService: PatientService) {}
+  constructor(
+    private patientService: PatientService,
+    private proactiveAiService: ProactiveAiService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get all patients' })
@@ -79,7 +83,33 @@ export class PatientController {
   @ApiOperation({ summary: 'Get unified reusable patient context across modules' })
   @ApiResponse({ status: 200, description: 'Patient context retrieved successfully' })
   async getPatientContext(@Param('id') id: string, @Request() req: RequestWithTenant) {
-    return this.patientService.getPatientContext(id, req.tenantDb);
+    const context: any = await this.patientService.getPatientContext(id, req.tenantDb);
+
+    const tenantId = req.tenantId;
+    const userId = (req as any).user?.userId;
+
+    // Fire async proactive analysis — does NOT block this response
+    this.proactiveAiService.triggerAnalysis({
+      patientId: id,
+      tenantId,
+      triggeredByUserId: userId,
+      triggerType: 'chart_open',
+    }).catch(() => {});
+
+    // Attach latest cached snapshot if one exists
+    const snapshot = await this.proactiveAiService.getSnapshot(id, tenantId);
+    if (snapshot) {
+      context['aiSnapshot'] = {
+        clinicalSummary: snapshot.clinicalSummary,
+        riskScores: snapshot.riskScores,
+        activeFlags: snapshot.activeFlags,
+        news2Score: snapshot.news2Score,
+        qsofaScore: snapshot.qsofaScore,
+        generatedAt: snapshot.snapshotGeneratedAt,
+      };
+    }
+
+    return context;
   }
 
   @Get('mrn/:mrn')

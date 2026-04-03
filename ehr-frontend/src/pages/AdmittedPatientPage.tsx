@@ -5,6 +5,7 @@ import {
   User, Bed, Calendar, Clock, Pill, TestTube, Brain
 } from 'lucide-react';
 import { DischargeIntelligencePanel } from '../components/DischargeIntelligencePanel';
+import { PatientRiskPanel } from '../components/PatientRiskPanel';
 import { MedicationReconciliationAI } from '../components/MedicationReconciliationAI';
 import { NursingIntelligencePanel } from '../components/NursingIntelligencePanel';
 import { useNotification } from '../components/GlobalNotification';
@@ -255,6 +256,14 @@ const AdmittedPatientPage: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Proactive AI Risk Panel */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <PatientRiskPanel
+          patientId={admission.patient_id}
+          token={token}
+        />
       </div>
 
       {/* Action Buttons */}

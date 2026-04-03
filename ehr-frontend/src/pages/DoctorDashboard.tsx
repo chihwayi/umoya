@@ -36,6 +36,7 @@ import ConsentLibrary from '../components/ConsentLibrary';
 import ImmunizationHistory from '../components/ImmunizationHistory';
 import PathwayManagement from '../components/PathwayManagement';
 import CriticalResultAlertPanel from '../components/CriticalResultAlertPanel';
+import { ProactiveAlertBell } from '../components/ProactiveAlertBell';
 import ProAlerts from '../components/ProAlerts';
 import PatientProViewer from '../components/PatientProViewer';
 import QuestionnaireLibrary from '../components/QuestionnaireLibrary';
@@ -2294,6 +2295,11 @@ const DoctorDashboard: React.FC = () => {
                     >
                       <RefreshCw className="w-5 h-5 text-slate-600" />
                     </button>
+                    {/* Proactive AI Alert Bell */}
+                    <ProactiveAlertBell
+                      userId={currentUser?.id || ''}
+                      token={localStorage.getItem('ehr_token') || ''}
+                    />
                   </>
                 ) : (
                   <>

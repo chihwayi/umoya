@@ -37,6 +37,7 @@ import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
 import LabResultsViewer from '../components/LabResultsViewer';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
+import { ProactiveAlertBell } from '../components/ProactiveAlertBell';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 import { GuidelineResult } from '../types/guidelines';
 import GuidelineCitationCard from '../components/GuidelineCitationCard';
@@ -3334,9 +3335,15 @@ const NurseDashboard: React.FC = () => {
                 <span className="hidden lg:inline text-sm font-medium">Guidelines</span>
               </button>
 
+              {/* Proactive AI Alert Bell */}
+              <ProactiveAlertBell
+                userId={currentUser?.id || ''}
+                token={localStorage.getItem('ehr_token') || ''}
+              />
+
               {/* Notifications */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setShowNotifications(!showNotifications)}
                   className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200 relative"
                 >

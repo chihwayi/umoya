@@ -5,6 +5,7 @@ import { PrescriptionService } from '../services/prescription.service';
 import { PrescriptionPdfService } from '../services/prescription-pdf.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { ProactiveAiService } from '../services/proactive-ai.service';
 
 @ApiTags('Prescription Management')
 @ApiSecurity('tenant-key')
@@ -15,12 +16,26 @@ export class PrescriptionController {
   constructor(
     private prescriptionService: PrescriptionService,
     private prescriptionPdfService: PrescriptionPdfService,
+    private proactiveAiService: ProactiveAiService,
   ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create prescription' })
   async createPrescription(@Body() createDto: any, @Request() req: RequestWithTenant) {
-    return this.prescriptionService.create(createDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id, req.tenantId);
+    const saved = await this.prescriptionService.create(createDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id, req.tenantId);
+
+    // ── PROACTIVE TRIGGER — drug interaction + allergy check ──
+    if (createDto.patientId) {
+      this.proactiveAiService.triggerAnalysis({
+        patientId: createDto.patientId,
+        tenantId: req.tenantId,
+        triggeredByUserId: (req.user as any)?.userId,
+        triggerType: 'prescription',
+        freshPrescriptions: [{ name: createDto.medicationName, dosage: createDto.dosage }],
+      }).catch(() => {});
+    }
+
+    return saved;
   }
 
   @Get('patient/:patientId')

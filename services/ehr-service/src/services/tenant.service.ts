@@ -269,6 +269,9 @@ import { getMasterDbConfig } from '../utils/runtime-env';
 import { RegistrationAiSession } from '../entities/registration-ai-session.entity';
 import { InsuranceOcrResult } from '../entities/insurance-ocr-result.entity';
 import { DicomSeries } from '../entities/dicom-series.entity';
+import { PatientAiSnapshot } from '../entities/patient-ai-snapshot.entity';
+import { ProactiveAlert } from '../entities/proactive-alert.entity';
+import { PatientRiskScore } from '../entities/patient-risk-score.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -713,6 +716,9 @@ export class TenantService {
         RegistrationAiSession,
         InsuranceOcrResult,
         DicomSeries,
+        PatientAiSnapshot,
+        ProactiveAlert,
+        PatientRiskScore,
       ],
       logging: false,
     });

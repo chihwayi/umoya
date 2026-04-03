@@ -4,6 +4,7 @@ import { LabOrderService } from '../services/lab-order.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { LabOrderStatus } from '../entities/lab-order.entity';
+import { ProactiveAiService } from '../services/proactive-ai.service';
 
 @ApiTags('Laboratory Orders')
 @ApiSecurity('tenant-key')
@@ -11,7 +12,10 @@ import { LabOrderStatus } from '../entities/lab-order.entity';
 @UseGuards(JwtAuthGuard)
 @Controller('lab-orders')
 export class LabOrderController {
-  constructor(private labOrderService: LabOrderService) {}
+  constructor(
+    private labOrderService: LabOrderService,
+    private proactiveAiService: ProactiveAiService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create lab order' })
@@ -28,7 +32,20 @@ export class LabOrderController {
   @Put(':id/results')
   @ApiOperation({ summary: 'Add lab results' })
   async addResults(@Param('id') id: string, @Body() resultsDto: any, @Request() req: RequestWithTenant) {
-    return this.labOrderService.addResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
+    const updated = await this.labOrderService.addResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
+
+    // ── PROACTIVE TRIGGER — pass fresh lab results ──
+    if (updated?.patientId) {
+      this.proactiveAiService.triggerAnalysis({
+        patientId: updated.patientId,
+        tenantId: req.tenantId,
+        triggeredByUserId: (req.user as any)?.userId,
+        triggerType: 'labs',
+        freshLabs: resultsDto.results || [],
+      }).catch(() => {});
+    }
+
+    return updated;
   }
 
   @Get('patient/:patientId/results')
@@ -65,7 +82,20 @@ export class LabOrderController {
   @Put(':id/submit-results')
   @ApiOperation({ summary: 'Submit lab results (with optional documents)' })
   async submitResults(@Param('id') id: string, @Body() resultsDto: any, @Request() req: RequestWithTenant) {
-    return this.labOrderService.submitResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
+    const updated = await this.labOrderService.submitResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
+
+    // ── PROACTIVE TRIGGER — pass fresh lab results ──
+    if (updated?.patientId) {
+      this.proactiveAiService.triggerAnalysis({
+        patientId: updated.patientId,
+        tenantId: req.tenantId,
+        triggeredByUserId: (req.user as any)?.userId,
+        triggerType: 'labs',
+        freshLabs: resultsDto.results || [],
+      }).catch(() => {});
+    }
+
+    return updated;
   }
 
   @Put(':id/status')

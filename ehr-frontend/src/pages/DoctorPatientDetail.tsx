@@ -17,6 +17,7 @@ import AllergiesModal from '../components/AllergiesModal';
 import VoiceInput from '../components/VoiceInput';
 import PatientSdohTab from '../components/PatientSdohTab';
 import CareGapPanel from '../components/CareGapPanel';
+import { PatientRiskPanel } from '../components/PatientRiskPanel';
 import TbDashboard from '../components/TbDashboard';
 import PediatricsDashboard from '../components/PediatricsDashboard';
 import MentalHealthDashboard from '../components/MentalHealthDashboard';
@@ -507,6 +508,15 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Proactive AI Risk Panel */}
+      <div className={embedded ? 'px-4 pb-3' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3'}>
+        <PatientRiskPanel
+          patientId={patientId!}
+          token={localStorage.getItem('ehr_token') || ''}
+          snapshot={(patient as any)?.aiSnapshot || null}
+        />
       </div>
 
       {/* Navigation Tabs */}
