@@ -17,6 +17,7 @@ import { EmailService } from './services/email.service';
 import { HealthMonitorService } from './services/health-monitor.service';
 import { PlatformServiceMonitorService } from './services/platform-service-monitor.service';
 import { RuntimeEndpointConfigService } from './services/runtime-endpoint-config.service';
+import { TenantDriftService } from './services/tenant-drift.service';
 import { BackupService } from './services/backup.service';
 import { BackupScheduleService } from './services/backup-schedule.service';
 import { StorageService } from './services/storage.service';
@@ -77,6 +78,7 @@ function resolveJwtSecret(): string {
     BackupScheduleService,
     StorageService,
     DemoAccessRequestService,
+    TenantDriftService,
     JwtStrategy
   ],
   exports: [TenantService, TenantAnalyticsService, TenantDatabaseService, AuthService],

@@ -12,6 +12,7 @@ import { BackupManager } from '../components/BackupManager';
 import { TerminologyImport } from '../components/TerminologyImport';
 import { CdssAdmin } from '../components/CdssAdmin';
 import { DemoAccessRequestsPanel } from '../components/DemoAccessRequestsPanel';
+import { DatabaseDriftPanel } from '../components/DatabaseDriftPanel';
 import { useNotification } from '../contexts/NotificationContext';
 
 interface DashboardProps {
@@ -108,6 +109,17 @@ const NAV_ITEMS = [
       </svg>
     ),
     accent: '#FF7A40',
+  },
+  {
+    id: 'db-drift',
+    label: 'DB Integrity',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
+      </svg>
+    ),
+    accent: '#A66CFF',
   },
 ] as const;
 
@@ -371,6 +383,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             {currentView === 'terminology' && <TerminologyImport />}
             {currentView === 'cdss' && <CdssAdmin />}
             {currentView === 'requests' && <DemoAccessRequestsPanel />}
+            {currentView === 'db-drift' && <DatabaseDriftPanel />}
 
             {currentView === 'tenants' && (
               <div className="space-y-6">

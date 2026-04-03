@@ -19,6 +19,7 @@ import { HealthMonitorService } from '../services/health-monitor.service';
 import { AdminRole } from '../entities/admin-user.entity';
 import { PlatformServiceMonitorService } from '../services/platform-service-monitor.service';
 import { RuntimeEndpointConfigService } from '../services/runtime-endpoint-config.service';
+import { TenantDriftService } from '../services/tenant-drift.service';
 
 @ApiTags('admin-maintenance')
 @ApiBearerAuth()
@@ -31,6 +32,7 @@ export class AdminMaintenanceController {
     private readonly healthMonitor: HealthMonitorService,
     private readonly platformMonitor: PlatformServiceMonitorService,
     private readonly runtimeEndpointConfig: RuntimeEndpointConfigService,
+    private readonly driftService: TenantDriftService,
   ) {}
 
   private assertRole(req: any, allowed: AdminRole[]) {
@@ -181,5 +183,92 @@ export class AdminMaintenanceController {
       },
       req?.user?.id,
     );
+  }
+
+  // ── DB Schema Drift Endpoints ──────────────────────────────────────────
+
+  /** Check drift for all tenants (compares actual DB vs TypeORM entity schema) */
+  @Get('drift')
+  async getDriftAll(@Req() req: any) {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN]);
+    const tenants = await this.tenantService.findAll();
+    const results = await Promise.all(
+      tenants.map(async (tenant) => {
+        const connection = this.buildTenantConnection(tenant.databaseName, tenant.connectionString);
+        try {
+          const drift = await this.driftService.checkDrift(connection);
+          return { tenantId: tenant.id, tenantName: tenant.clinicName, databaseName: tenant.databaseName, drift };
+        } catch (err) {
+          return {
+            tenantId: tenant.id,
+            tenantName: tenant.clinicName,
+            databaseName: tenant.databaseName,
+            drift: null,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    );
+    const clean = results.filter((r) => r.drift?.ok).length;
+    const drifted = results.filter((r) => r.drift && !r.drift.ok).length;
+    const failed = results.filter((r) => !r.drift).length;
+    return { summary: { total: tenants.length, clean, drifted, failed }, tenants: results };
+  }
+
+  /** Check drift for a single tenant */
+  @Get('tenants/:id/drift')
+  async getTenantDrift(@Req() req: any, @Param('id') id: string) {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN]);
+    const tenant = await this.tenantService.findById(id);
+    const connection = this.buildTenantConnection(tenant.databaseName, tenant.connectionString);
+    const drift = await this.driftService.checkDrift(connection);
+    return { tenantId: tenant.id, tenantName: tenant.clinicName, databaseName: tenant.databaseName, drift };
+  }
+
+  /** Auto-repair a single tenant (up to 2 attempts) then re-check drift */
+  @Post('tenants/:id/auto-repair')
+  async autoRepairTenant(@Req() req: any, @Param('id') id: string) {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN]);
+    const tenant = await this.tenantService.findById(id);
+    const connection = this.buildTenantConnection(tenant.databaseName, tenant.connectionString);
+    const outcome = await this.driftService.autoRepairWithCheck(
+      connection,
+      (conn) => this.provisioning.applyClinicSchema(conn).then(() => undefined),
+    );
+    return {
+      tenantId: tenant.id,
+      tenantName: tenant.clinicName,
+      databaseName: tenant.databaseName,
+      ...outcome,
+    };
+  }
+
+  /** Auto-repair all drifted tenants */
+  @Post('drift/repair-all')
+  async autoRepairAll(@Req() req: any) {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN]);
+    const tenants = await this.tenantService.findAll();
+    const results = await Promise.all(
+      tenants.map(async (tenant) => {
+        const connection = this.buildTenantConnection(tenant.databaseName, tenant.connectionString);
+        try {
+          const outcome = await this.driftService.autoRepairWithCheck(
+            connection,
+            (conn) => this.provisioning.applyClinicSchema(conn).then(() => undefined),
+          );
+          return { tenantId: tenant.id, tenantName: tenant.clinicName, ...outcome };
+        } catch (err) {
+          return {
+            tenantId: tenant.id,
+            tenantName: tenant.clinicName,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    );
+    const resolved = results.filter((r: any) => r.resolved === true).length;
+    const persists = results.filter((r: any) => r.resolved === false).length;
+    const skipped = results.filter((r: any) => r.attempts === 0).length;
+    return { summary: { total: tenants.length, resolved, persists, skipped }, tenants: results };
   }
 }

@@ -279,6 +279,33 @@ export const tenantAPI = {
   },
 };
 
+// DB Schema Drift API
+export const driftAPI = {
+  /** Scan all tenant DBs for schema drift vs TypeORM entities */
+  scanAll: async (): Promise<any> => {
+    const response = await api.get('/admin/drift');
+    return response.data;
+  },
+
+  /** Scan a single tenant */
+  scanTenant: async (tenantId: string): Promise<any> => {
+    const response = await api.get(`/admin/tenants/${tenantId}/drift`);
+    return response.data;
+  },
+
+  /** Auto-repair a single tenant (runs provisioning up to 2x then re-checks) */
+  autoRepairTenant: async (tenantId: string): Promise<any> => {
+    const response = await api.post(`/admin/tenants/${tenantId}/auto-repair`);
+    return response.data;
+  },
+
+  /** Auto-repair all drifted tenants */
+  repairAll: async (): Promise<any> => {
+    const response = await api.post('/admin/drift/repair-all');
+    return response.data;
+  },
+};
+
 // Analytics API
 export const analyticsAPI = {
   getSystemOverview: async (): Promise<SystemStats> => {
