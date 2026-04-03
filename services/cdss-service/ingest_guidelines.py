@@ -111,6 +111,70 @@ def _sha256_file(file_path: str) -> str:
             hasher.update(chunk)
     return hasher.hexdigest()
 
+def _classify_domain(lower_file: str, lower_text: str) -> str:
+    """Classify clinical domain from filename and text keywords."""
+    combined = lower_file + " " + lower_text[:500]
+
+    if any(k in combined for k in ["hiv", "aids", "antiretroviral", "art ", "tuberculosis", " tb ", "malaria", "cholera",
+                                    "typhoid", "dengue", "ebola", "sti ", "sexually transmitted", "gonorrhoea",
+                                    "gonorrhea", "syphilis", "chlamydia", "hepatitis b", "hepatitis c",
+                                    "leishmaniasis", "trypanosomiasis", "schistosomiasis", "helminth",
+                                    "meningococcal", "pneumococcal", "antifungal", "antimicrobial"]):
+        return "infectious_disease"
+    if any(k in combined for k in ["hypertension", "cardiac", "cardiovascular", "heart failure", "myocardial",
+                                    "coronary", "arrhythmia", "atrial fibrillation", "stroke", "angina",
+                                    "dyslipidaemia", "dyslipidemia", "lipid-lowering"]):
+        return "cardiology"
+    if any(k in combined for k in ["antenatal", "anc ", "maternal", "pregnancy", "pregnant", "postpartum",
+                                    "eclampsia", "preeclampsia", "labour", "labor ", "caesarean", "cesarean",
+                                    "obstetric", "midwif", "perinatal"]):
+        return "obstetrics"
+    if any(k in combined for k in ["child", "pediatric", "paediatric", "infant", "neonatal", "neonate",
+                                    "newborn", "adolescent", "imci", "growth monitoring", "immunization",
+                                    "vaccination", "epi ", "under-five"]):
+        return "pediatrics"
+    if any(k in combined for k in ["diabetes", "insulin", "glycaemic", "glycemic", "hyperglycaemia",
+                                    "hyperglycemia", "thyroid", "hypothyroid", "hyperthyroid", "endocrine",
+                                    "obesity", "metabolic syndrome"]):
+        return "endocrinology"
+    if any(k in combined for k in ["cancer", "oncology", "tumour", "tumor", "chemotherapy", "radiotherapy",
+                                    "malignancy", "palliative", "cervical cancer", "breast cancer"]):
+        return "oncology"
+    if any(k in combined for k in ["asthma", "copd", "respiratory", "pneumonia", "bronchitis", "pulmonary",
+                                    "oxygen therapy", "ventilation", "spirometry"]):
+        return "respiratory"
+    if any(k in combined for k in ["mental health", "psychiatric", "depression", "anxiety", "schizophrenia",
+                                    "bipolar", "psychosis", "substance use", "alcohol use", "drug use",
+                                    "dementia", "delirium", "mhgap", "mhpss"]):
+        return "mental_health"
+    if any(k in combined for k in ["nutrition", "malnutrition", "stunting", "wasting", "acute malnutrition",
+                                    "breastfeeding", "infant feeding", "cmam", "therapeutic feeding",
+                                    "micronutrient", "vitamin a", "zinc supplementation"]):
+        return "nutrition"
+    if any(k in combined for k in ["surgery", "surgical", "operative", "perioperative", "anaesthesia",
+                                    "anesthesia", "wound management", "trauma surgery"]):
+        return "surgery"
+    if any(k in combined for k in ["kidney", "renal", "dialysis", "nephropathy", "nephrotic", "glomerular",
+                                    "chronic kidney"]):
+        return "nephrology"
+    if any(k in combined for k in ["epilepsy", "seizure", "neurolog", "meningitis", "encephalitis",
+                                    "cerebral malaria", "neuropathy", "spinal cord"]):
+        return "neurology"
+    if any(k in combined for k in ["eye", "ophthalm", "vision", "cataract", "glaucoma", "trachoma",
+                                    "blindness", "low vision"]):
+        return "ophthalmology"
+    if any(k in combined for k in ["skin", "dermatitis", "dermatology", "leprosy", "scabies", "wound",
+                                    "burn", "ulcer", "fungal skin"]):
+        return "dermatology"
+    if any(k in combined for k in ["emergency", "trauma", "resuscitation", "cpr", "acute care",
+                                    "triage", "shock", "critical care", "icu ", "first aid"]):
+        return "emergency"
+    if any(k in combined for k in ["reproductive", "family planning", "contraception", "fertility",
+                                    "sexual health", "gender-based violence", "gbv"]):
+        return "reproductive_health"
+    return "general"
+
+
 def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
     """
     Uses unstructured to partition PDF and chunk by title.
@@ -160,12 +224,8 @@ def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
             elif "elderly" in lower_text or "geriatric" in lower_text:
                 target_pop = "elderly"
                 
-            domain = "general"
-            if "hypertension" in lower_file or "hypertension" in lower_text:
-                domain = "cardiology"
-            elif "hiv" in lower_file:
-                domain = "infectious_disease"
-            
+            domain = _classify_domain(lower_file, lower_text)
+
             processed_chunks.append({
                 "text": text,
                 "metadata": {
@@ -221,12 +281,8 @@ def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
                 elif "elderly" in lower_text or "geriatric" in lower_text:
                     target_pop = "elderly"
                     
-                domain = "general"
-                if "hypertension" in lower_file or "hypertension" in lower_text:
-                    domain = "cardiology"
-                elif "hiv" in lower_file:
-                    domain = "infectious_disease"
-                
+                domain = _classify_domain(lower_file, lower_text)
+
                 processed_chunks.append({
                     "text": chunk,
                     "metadata": {
@@ -242,8 +298,6 @@ def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
         
     except Exception as e:
         logger.error(f"Fallback processing failed for {pdf_path}: {e}")
-        return []
-
         return []
 
 def ingest_guidelines() -> Dict[str, Any]:
@@ -263,14 +317,10 @@ def ingest_guidelines() -> Dict[str, Any]:
             "collectionCount": 0,
         }
 
-    # Wipe existing data (Data Hygiene)
-    try:
-        print("🧹 Wiping existing Vector DB for clean ingestion...")
-        rag.chroma_client.delete_collection("medical_guidelines")
-        rag.collection = rag.chroma_client.get_or_create_collection("medical_guidelines")
-        print("   ✅ Collection wiped and recreated.")
-    except Exception as e:
-        logger.warning(f"Could not wipe DB (might be empty): {e}")
+    # Additive ingestion — never wipe. Upsert ensures idempotency.
+    # Re-ingesting the same file is safe: deterministic IDs mean duplicates are silently overwritten.
+    existing_count = rag.collection.count() if rag.collection else 0
+    print(f"📦 Existing ChromaDB documents: {existing_count}. Running additive/upsert ingestion.")
 
     files = glob.glob(os.path.join(GUIDELINES_DIR, "**", "*.pdf"), recursive=True)
 
@@ -339,7 +389,7 @@ def ingest_guidelines() -> Dict[str, Any]:
             # ID format: Source_Page_Hash
             ids.append(f"{c['metadata']['source']}_p{c['metadata']['page']}_{text_hash}")
             
-        rag.add_documents(texts, metadatas, ids)
+        rag.add_documents(texts, metadatas, ids, upsert=True)
         total_chunks += len(chunks)
         print(f"   ✅ Added {len(chunks)} chunks. Total in DB: {rag.collection.count()}")
         pages = {str((meta or {}).get("page") or "") for meta in metadatas}

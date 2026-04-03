@@ -131,6 +131,9 @@ data/chroma_db/
 services/cdss-service/data/chroma_db/
 
 # Local guideline PDFs and debug helpers (not for source control)
+# PDFs are large, often copyrighted, and sourced externally — never commit them
+services/cdss-service/who-smart-guidelines/**/*.pdf
+services/cdss-service/who-smart-guidelines/*.pdf
 services/cdss-service/who-smart-guidelines/dak/
 services/cdss-service/debug_rag.py
 services/cdss-service/data/ingest_metadata_report.json
