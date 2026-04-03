@@ -10,6 +10,7 @@ import { exportVisitToPDF, VisitPDFData } from '../utils/pdfExport';
 import { HIVCareVisitWithSmartForms, HIVWorkflowIntegration } from './HIV';
 import { GuidelineResult } from '../types/guidelines';
 import { getHivCdssConfig } from './HIV/hivCdssConfig';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
 interface HIVPatientDetailModalProps {
   enrollment: any;
@@ -53,33 +54,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
 
   // AI Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
-  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      const token = localStorage.getItem('ehr_token');
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   useEffect(() => {
     if (enrollment) {
@@ -461,83 +436,25 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                 <BookOpen className="w-5 h-5" />
                 <h3 className="font-bold">HIV Clinical Guidelines (AI-Powered)</h3>
               </div>
-              <button 
+              <button
                 onClick={() => setShowGuidelineSearch(false)}
                 className="p-1 hover:bg-emerald-100 rounded-full text-emerald-600 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
-            <div className="p-4 border-b border-gray-100">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={guidelineQuery}
-                  onChange={(e) => setGuidelineQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                  placeholder="Search HIV guidelines, ARV interactions, opportunistic infections..."
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                  autoFocus
-                />
-                <button
-                  onClick={handleGuidelineSearch}
-                  disabled={loadingGuidelines || !guidelineQuery.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-md hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                >
-                  {loadingGuidelines ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
-                </button>
-              </div>
+
+            <div className="flex-1 overflow-y-auto bg-gray-50/50 p-4">
+              <GuidelineSearchPanel
+                searchFn={(q) => {
+                  const token = localStorage.getItem('ehr_token');
+                  return cdssApi.searchGuidelines(q, token || '', tenantSlug);
+                }}
+                contextLabel="HIV Care"
+                className=""
+              />
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
-                {guidelineResults.length > 0 ? (
-                  <div className="space-y-4">
-                    {guidelineResults.map((result, idx) => (
-                      <div key={idx} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                        <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-semibold text-gray-900 leading-tight">{result.source || 'Clinical Guideline'}</h4>
-                          {result.confidence && (
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
-                              result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                              result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                              'bg-red-50 text-red-700 border-red-100'
-                            }`}>
-                              Confidence: {Math.round(result.confidence * 100)}%
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap mb-3">{result.text}</p>
-                        
-                        {result.recommendation && (
-                          <div className="mb-3 p-3 bg-emerald-50 border border-emerald-100 rounded-md">
-                            <h5 className="text-xs font-bold text-emerald-800 uppercase tracking-wide mb-1">Recommendation</h5>
-                            <p className="text-sm text-emerald-900">{result.recommendation}</p>
-                          </div>
-                        )}
-
-                        {result.url && (
-                          <a href={result.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-sm text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
-                            View Source Document <ArrowRight className="w-3 h-3 ml-1" />
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Search className="w-8 h-8 text-emerald-300" />
-                  </div>
-                  <h4 className="text-lg font-medium text-gray-900 mb-1">No guidelines found</h4>
-                  <p className="text-gray-500 max-w-sm mx-auto">
-                    Try searching for specific topics like "first-line regimen", "viral load failure", or "TB coinfection".
-                  </p>
-                </div>
-              )}
-            </div>
-            
             <div className="p-3 border-t border-gray-100 bg-gray-50 text-xs text-center text-gray-500">
               AI-generated results based on WHO & National HIV Guidelines. Verify with standard protocols.
             </div>

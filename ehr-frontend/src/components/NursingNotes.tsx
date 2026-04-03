@@ -10,6 +10,7 @@ import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { AiOutputWrapper } from './AiOutputWrapper';
 import ClinicalTemplateLibrary from './ClinicalTemplateLibrary';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
 interface Patient {
   id: string;
@@ -64,34 +65,8 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [showNewNote, setShowNewNote] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelineSearch, setLoadingGuidelineSearch] = useState(false);
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
 
-  const handleGuidelineSearch = async () => {
-    const token = localStorage.getItem('ehr_token');
-    const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelineSearch(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await ehrApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch {
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelineSearch(false);
-    }
-  };
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(patient || null);
   const [allNotes, setAllNotes] = useState<NursingNote[]>([]);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
@@ -437,51 +412,18 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
                   <Brain className="w-4 h-4" />
                   AI Clinical Guidelines Support
                 </button>
-                
+
                 {showGuidelineSearch && (
                   <div className="animate-in slide-in-from-top-2">
-                    <div className="flex gap-2 mb-3">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                        <input
-                          type="text"
-                          value={guidelineQuery}
-                          onChange={(e) => setGuidelineQuery(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                          placeholder="Search for clinical guidelines (e.g., 'Wound care protocol')"
-                          className="w-full pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                        />
-                      </div>
-                      <button
-                        onClick={handleGuidelineSearch}
-                        disabled={loadingGuidelineSearch || !guidelineQuery.trim()}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {loadingGuidelineSearch ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Search'}
-                      </button>
-                    </div>
-
-                    {guidelineResults.length > 0 && (
-                      <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar bg-white rounded-lg border border-slate-200 p-3">
-                        {guidelineResults.map((citation: any, idx: number) => (
-                          <div key={idx} className="p-2 border-b border-slate-100 last:border-0">
-                             <div className="flex items-start gap-2">
-                              <BookOpen className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
-                              <div>
-                                <p className="text-slate-800 text-sm">
-                                  {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
-                                </p>
-                                {citation.source && (
-                                  <span className="inline-block mt-1 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-xs rounded">
-                                    {citation.source}
-                                  </span>
-                                )}
-                              </div>
-                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <GuidelineSearchPanel
+                      searchFn={(q) => {
+                        const token = localStorage.getItem('ehr_token');
+                        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+                        return ehrApi.searchGuidelines(q, token || '', tenantSlug || '');
+                      }}
+                      contextLabel="Nursing"
+                      className=""
+                    />
                   </div>
                 )}
               </div>

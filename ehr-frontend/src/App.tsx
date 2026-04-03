@@ -2,6 +2,8 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { NotificationProvider } from './components/GlobalNotification';
 import { AutoLogoutProvider } from './components/AutoLogoutProvider';
+import { BackgroundTaskProvider } from './contexts/BackgroundTaskContext';
+import { BackgroundTaskDock } from './components/BackgroundTaskDock';
 import { tenantApi } from './services/api';
 import { hasModuleAccess, TenantSubscriptionInfo } from './utils/tenantSubscription';
 const TenantDirectory = lazy(() => import('./pages/TenantDirectory'));
@@ -275,7 +277,9 @@ function App() {
 
   return (
     <NotificationProvider>
-      <AutoLogoutProvider>
+      <BackgroundTaskProvider>
+        <AutoLogoutProvider>
+          <BackgroundTaskDock />
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <RouteThemeManager />
           <Suspense fallback={<RouteLoader />}>
@@ -906,7 +910,8 @@ function App() {
             </Routes>
           </Suspense>
         </Router>
-      </AutoLogoutProvider>
+        </AutoLogoutProvider>
+      </BackgroundTaskProvider>
     </NotificationProvider>
   );
 }

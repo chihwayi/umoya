@@ -6,6 +6,7 @@ import { ehrApi, cdssApi } from '../services/api';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import { ClinicalNotesWithSmartForms } from './ClinicalNotes/ClinicalNotesWithSmartForms';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
 interface Appointment {
   id: string;
@@ -45,38 +46,9 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
   const [clinicalGuidelines, setClinicalGuidelines] = useState<any>(null);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [showSmartForms, setShowSmartForms] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelineSearch, setLoadingGuidelineSearch] = useState(false);
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
   const [codedDiagnoses, setCodedDiagnoses] = useState<SnomedConcept[]>([]);
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelineSearch(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      // Use provided context or default to general clinical guidelines
-      const context = searchContext || "Clinical guidelines, medical protocols";
-      const finalQuery = `${context}: ${guidelineQuery}`;
-      
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelineSearch(false);
-    }
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -411,72 +383,11 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
               </div>
               
               {showGuidelineSearch && (
-                <div className="mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in slide-in-from-top-2">
-                  <div className="flex gap-2 mb-3">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                      <input
-                        type="text"
-                        value={guidelineQuery}
-                        onChange={(e) => setGuidelineQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                        placeholder="Search for clinical guidelines (e.g., 'Sepsis protocol')"
-                        className="w-full pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                    <button
-                      onClick={handleGuidelineSearch}
-                      disabled={loadingGuidelineSearch || !guidelineQuery.trim()}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
-                    >
-                      {loadingGuidelineSearch ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Search'}
-                    </button>
-                  </div>
-
-                  {guidelineResults.length > 0 && (
-                    <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                      {guidelineResults.map((result, idx) => (
-                        <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm text-sm">
-                           <div className="flex items-start gap-2">
-                            <BookOpen className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-semibold text-slate-700">{result.source || 'Clinical Guideline'}</span>
-                                {result.confidence && (
-                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                                    result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
-                                    result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                    'bg-red-50 text-red-700 border-red-100'
-                                  }`}>
-                                    {Math.round(result.confidence * 100)}%
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-slate-800 mb-1">
-                                {result.text}
-                              </p>
-                              {result.recommendation && (
-                                <div className="mt-2 p-2 bg-indigo-50 border border-indigo-100 rounded text-xs text-indigo-800">
-                                  <strong>Recommendation:</strong> {result.recommendation}
-                                </div>
-                              )}
-                              {result.url && (
-                                <a 
-                                  href={result.url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-indigo-600 hover:underline mt-1 inline-block"
-                                >
-                                  View Source
-                                </a>
-                              )}
-                            </div>
-                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <GuidelineSearchPanel
+                  searchFn={(q) => cdssApi.searchGuidelines(`${searchContext || "Clinical guidelines, medical protocols"}: ${q}`, token, tenantSlug)}
+                  contextLabel="Clinical Notes"
+                  className="mb-4"
+                />
               )}
               <textarea 
                 value={assessment} 

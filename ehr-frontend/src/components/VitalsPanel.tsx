@@ -8,6 +8,7 @@ import { ehrApi } from '../services/api';
 import { GuidelineRecommendationCard, ClinicalRecommendation } from './GuidelineRecommendationCard';
 import { AiOutputWrapper } from './AiOutputWrapper';
 import { useNotification } from '../components/GlobalNotification';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 import {
   ResponsiveContainer,
   LineChart,
@@ -109,10 +110,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
   const [copilotDecisionSaving, setCopilotDecisionSaving] = useState(false);
   const [trendOverview, setTrendOverview] = useState<VitalTrendsResponse | null>(null);
   const [trendLoading, setTrendLoading] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [abnormalFindings, setAbnormalFindings] = useState<SnomedConcept[]>([]);
   const [pendingFinding, setPendingFinding] = useState<SnomedConcept | null>(null);
   const insightsRef = useRef<HTMLDivElement>(null);
@@ -123,64 +121,6 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
     }
   }, [cdssInsights]);
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      const token = localStorage.getItem('ehr_token');
-      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-      if (!token || !tenantSlug) {
-        showError('Error', 'Session expired. Please login again.');
-        return;
-      }
-      
-      const patientContext: any = {};
-      
-      // Enhance with patient context
-      if (selectedPatient) {
-        if (selectedPatient.dateOfBirth) {
-             const age = Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-             patientContext.age = age;
-        }
-        if (selectedPatient.gender) patientContext.gender = selectedPatient.gender;
-        if (selectedPatient.chronicConditions) patientContext.conditions = selectedPatient.chronicConditions;
-        if (selectedPatient.allergies) patientContext.allergies = selectedPatient.allergies;
-      }
-
-      // Enhance with abnormal vitals context
-      patientContext.vitals = { ...vitals };
-      patientContext.abnormalities = [];
-      
-      // Enhance with vital history
-      if (trendOverview?.trends) {
-          patientContext.vitalHistory = trendOverview.trends;
-      }
-      
-      if (vitals.bloodPressureSystolic > 140) patientContext.abnormalities.push(`Systolic BP ${vitals.bloodPressureSystolic} (High)`);
-      if (vitals.bloodPressureDiastolic > 90) patientContext.abnormalities.push(`Diastolic BP ${vitals.bloodPressureDiastolic} (High)`);
-      if (vitals.heartRate > 100) patientContext.abnormalities.push(`HR ${vitals.heartRate} (Tachycardia)`);
-      if (vitals.heartRate < 60 && vitals.heartRate > 0) patientContext.abnormalities.push(`HR ${vitals.heartRate} (Bradycardia)`);
-      if (vitals.oxygenSaturation < 95 && vitals.oxygenSaturation > 0) patientContext.abnormalities.push(`SpO2 ${vitals.oxygenSaturation}% (Low)`);
-      if (vitals.temperature > 37.5) patientContext.abnormalities.push(`Temp ${vitals.temperature}C (Fever)`);
-
-      const response = await ehrApi.searchGuidelines(guidelineQuery, token, tenantSlug, 5, patientContext);
-      
-      if (response.data) {
-        if (response.data.citations) {
-          setGuidelineResults(response.data.citations);
-        }
-        if (response.data.analysis) {
-          setAnalysisResult(response.data.analysis);
-        } else {
-          setAnalysisResult(null);
-        }
-      }
-    } catch {
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   useEffect(() => {
     setSelectedPatient(patient || null);
@@ -768,123 +708,37 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={guidelineQuery}
-                onChange={(e) => setGuidelineQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                placeholder="e.g. hypertension management"
-                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <button
-                onClick={handleGuidelineSearch}
-                disabled={loadingGuidelines || !guidelineQuery.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {loadingGuidelines ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  'Search'
-                )}
-              </button>
-            </div>
+            <GuidelineSearchPanel
+              searchFn={(q) => {
+                const token = localStorage.getItem('ehr_token');
+                const tenantSlug = localStorage.getItem('ehr_tenant_slug');
 
-            {/* Analysis Result Section - moved above Guideline Results */}
-            {analysisResult && (
-              <div className="mt-4 mb-4 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 shadow-sm">
-                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-indigo-100">
-                  <div className="p-1.5 bg-indigo-100 rounded-lg">
-                    <Brain className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  <p className="text-sm font-bold text-indigo-900">AI Clinical Analysis</p>
-                </div>
-                <div className="text-sm text-indigo-900 whitespace-pre-wrap leading-relaxed font-medium">
-                  {formatAnalysisText(analysisResult)}
-                </div>
-              </div>
-            )}
-
-            {guidelineResults.length > 0 && (
-              <div className="space-y-2 mt-3 max-h-60 overflow-y-auto custom-scrollbar">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Sources & Guidelines</p>
-                {guidelineResults.map((citation: any, idx: number) => {
-                  let data = citation;
-                  
-                  // Robust JSON parsing logic
-                  if (typeof data === 'string') {
-                    try {
-                      // 1. Try direct parse
-                      let parsed = JSON.parse(data);
-                      
-                      // 2. Handle double-encoded JSON (string inside string)
-                      if (typeof parsed === 'string') {
-                        try {
-                          const doubleParsed = JSON.parse(parsed);
-                          if (typeof doubleParsed === 'object' && doubleParsed !== null) {
-                            parsed = doubleParsed;
-                          }
-                        } catch (e) {
-                          // Ignore inner parse error
-                        }
-                      }
-
-                      if (typeof parsed === 'object' && parsed !== null) {
-                        data = parsed;
-                      }
-                    } catch (e) {
-                      // 3. If direct parse fails, try cleaning newlines (common issue with LLM output)
-                      try {
-                        // Replace literal newlines with escaped newlines
-                        const cleaned = data.replace(/\n/g, "\\n").replace(/\r/g, "");
-                        const parsed = JSON.parse(cleaned);
-                        if (typeof parsed === 'object' && parsed !== null) {
-                          data = parsed;
-                        }
-                      } catch (e2) {
-                        // Parsing failed completely, keep as string
-                      }
-                    }
+                // Build patient context
+                const patientContext: any = {};
+                if (selectedPatient) {
+                  if (selectedPatient.dateOfBirth) {
+                    const age = Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+                    patientContext.age = age;
                   }
+                  if (selectedPatient.gender) patientContext.gender = selectedPatient.gender;
+                  if (selectedPatient.chronicConditions) patientContext.conditions = selectedPatient.chronicConditions;
+                  if (selectedPatient.allergies) patientContext.allergies = selectedPatient.allergies;
+                }
+                patientContext.vitals = { ...vitals };
+                patientContext.abnormalities = [];
+                if (trendOverview?.trends) patientContext.vitalHistory = trendOverview.trends;
+                if (vitals.bloodPressureSystolic > 140) patientContext.abnormalities.push(`Systolic BP ${vitals.bloodPressureSystolic} (High)`);
+                if (vitals.bloodPressureDiastolic > 90) patientContext.abnormalities.push(`Diastolic BP ${vitals.bloodPressureDiastolic} (High)`);
+                if (vitals.heartRate > 100) patientContext.abnormalities.push(`HR ${vitals.heartRate} (Tachycardia)`);
+                if (vitals.heartRate < 60 && vitals.heartRate > 0) patientContext.abnormalities.push(`HR ${vitals.heartRate} (Bradycardia)`);
+                if (vitals.oxygenSaturation < 95 && vitals.oxygenSaturation > 0) patientContext.abnormalities.push(`SpO2 ${vitals.oxygenSaturation}% (Low)`);
+                if (vitals.temperature > 37.5) patientContext.abnormalities.push(`Temp ${vitals.temperature}C (Fever)`);
 
-                  return (
-                    <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600">
-                      <div className="flex items-start gap-2">
-                        <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          {typeof data === 'string' ? (
-                            data
-                          ) : (
-                            <>
-                              {data.source && (
-                                <p className="font-semibold text-slate-700 mb-1">
-                                  {data.source}
-                                  {data.confidence > 0 && <span className="text-slate-400 font-normal ml-1">({(data.confidence * 100).toFixed(0)}%)</span>}
-                                </p>
-                              )}
-                              <p className="whitespace-pre-wrap">{data.text || data.content || JSON.stringify(data)}</p>
-                              {data.url && (
-                                <a 
-                                  href={data.url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  className="text-blue-500 hover:underline mt-1 block"
-                                >
-                                  View Source
-                                </a>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                return ehrApi.searchGuidelines(q, token || '', tenantSlug || '', 5, patientContext);
+              }}
+              contextLabel="Vitals"
+              className="mb-4"
+            />
           </div>
 
           {/* Vitals Form */}

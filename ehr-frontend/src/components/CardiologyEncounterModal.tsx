@@ -11,6 +11,7 @@ import {
   getCardiologyCreateEncounterPrefill,
   getCardiologyEncounterDuplicateGuard,
 } from '../services/doctorContextAdapter';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
 type CardiologyEncounterModalProps = {
   isOpen: boolean;
@@ -64,34 +65,8 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [selectedPatientContext, setSelectedPatientContext] = useState<any | null>(null);
   const [loadingSelectedPatientContext, setLoadingSelectedPatientContext] = useState(false);
-
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const handleAddSymptomConcept = () => {
     if (!pendingSymptomConcept) return;
@@ -444,55 +419,10 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
               </div>
 
               {showGuidelineSearch && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex gap-3 mb-4">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                      <input
-                        type="text"
-                        value={guidelineQuery}
-                        onChange={(e) => setGuidelineQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleGuidelineSearch())}
-                        placeholder="Search guidelines (e.g., 'Heart failure treatment', 'Atrial fibrillation management')..."
-                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleGuidelineSearch}
-                      disabled={loadingGuidelines || !guidelineQuery.trim()}
-                      className="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-medium hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2"
-                    >
-                      {loadingGuidelines ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Searching...
-                        </>
-                      ) : (
-                        'Search'
-                      )}
-                    </button>
-                  </div>
-
-                  {guidelineResults.length > 0 && (
-                    <div className="space-y-3 bg-rose-50/50 rounded-xl p-4 border border-rose-100">
-                      <p className="text-xs font-bold text-rose-700 uppercase tracking-wider mb-2">Relevant Guidelines</p>
-                      {guidelineResults.map((citation: any, idx: number) => (
-                        <div key={`cardio-search-${idx}`} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-rose-100 shadow-sm">
-                          <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
-                          <div className="space-y-1">
-                            <p className="text-sm text-slate-700 leading-relaxed">
-                              {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
-                            </p>
-                            {citation.source && (
-                              <p className="text-xs text-slate-400 font-medium">Source: {citation.source}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <GuidelineSearchPanel
+                  searchFn={(q) => cdssApi.searchGuidelines(q, token!, tenantSlug)}
+                  contextLabel="Cardiology"
+                />
               )}
             </section>
 
