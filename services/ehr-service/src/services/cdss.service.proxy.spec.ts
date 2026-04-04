@@ -178,6 +178,7 @@ describe('CdssService proxy routing', () => {
         message: 'I am running out of tablets',
         medications: ['Metformin'],
         history: [{ role: 'user', content: 'I forgot twice last week' }],
+        visit_context: null,
       },
       {
         timeout: 15000,

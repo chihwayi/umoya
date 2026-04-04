@@ -29,6 +29,9 @@ import { EDService } from '../services/ed.service';
 import { TenantService } from '../services/tenant.service';
 import { PatientPortalH3Service } from '../services/patient-portal-h3.service';
 import { EmailService } from '../services/email.service';
+import { PatientHistoryService } from '../services/patient-history.service';
+import { AllergyService } from '../services/allergy.service';
+import { DocumentService } from '../services/document.service';
 
 import { SignerRole, SignatureType } from '../dto/consent.dto';
 
@@ -60,6 +63,9 @@ export class PatientPortalController {
     private readonly tenantService: TenantService,
     private readonly patientPortalH3Service: PatientPortalH3Service,
     private readonly emailService: EmailService,
+    private readonly patientHistoryService: PatientHistoryService,
+    private readonly allergyService: AllergyService,
+    private readonly documentService: DocumentService,
   ) {}
 
   @Post('register')
@@ -454,6 +460,47 @@ export class PatientPortalController {
     }
   }
 
+  @Get('conditions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient conditions', description: 'Get medical history conditions for the logged-in patient' })
+  async getConditions(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientHistoryService.getMedicalHistory(patientId, req.tenantDb);
+  }
+
+  @Get('allergies')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient allergies', description: 'Get allergies for the logged-in patient' })
+  async getAllergies(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.allergyService.findByPatient(patientId, req.tenantId);
+  }
+
+  @Get('documents')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient documents', description: 'Get documents for the logged-in patient' })
+  @ApiQuery({ name: 'documentType', required: false })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'tag', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async getDocuments(@Req() req: RequestWithTenant & { user: any }, @Query() filters: any) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.documentService.getDocuments(patientId, filters || {}, req.tenantDb);
+  }
+
   // Lab Results
   @Get('lab-results')
   @UseGuards(JwtAuthGuard)
@@ -625,6 +672,57 @@ export class PatientPortalController {
     return result.consultations[0];
   }
 
+  @Get('telemedicine/consultations')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List patient telemedicine consultations', description: 'List telemedicine consultations for the authenticated patient' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by consultation status' })
+  @ApiQuery({ name: 'dateFrom', required: false, description: 'Filter consultations from date/time' })
+  @ApiQuery({ name: 'dateTo', required: false, description: 'Filter consultations to date/time' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Page size' })
+  async listPatientConsultations(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('status') status?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+
+    return this.telemedicineService.listConsultations(req.tenantDb, {
+      patientId,
+      status,
+      dateFrom,
+      dateTo,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  @Get('telemedicine/consultation/:consultationId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient telemedicine consultation', description: 'Get a single telemedicine consultation for the authenticated patient' })
+  @ApiParam({ name: 'consultationId', description: 'Consultation ID' })
+  async getPatientConsultation(@Param('consultationId') consultationId: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+
+    const consultation = await this.telemedicineService.getConsultation(req.tenantDb, consultationId);
+    if (consultation.patient_id !== patientId) {
+      throw new Error('You do not have access to this consultation');
+    }
+
+    return consultation;
+  }
+
   @Post('telemedicine/consultation/:consultationId/join')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -646,6 +744,25 @@ export class PatientPortalController {
     return this.telemedicineService.joinConsultation(req.tenantDb, consultationId, { userId: patientId, role: 'patient' });
   }
 
+  @Get('telemedicine/consultation/:consultationId/token')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient meeting token', description: 'Get a signed meeting token for the authenticated patient' })
+  @ApiParam({ name: 'consultationId', description: 'Consultation ID' })
+  async getConsultationToken(@Param('consultationId') consultationId: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+
+    const consultation = await this.telemedicineService.getConsultation(req.tenantDb, consultationId);
+    if (consultation.patient_id !== patientId) {
+      throw new Error('You do not have access to this consultation');
+    }
+
+    return this.telemedicineService.getMeetingToken(req.tenantDb, consultationId, patientId, 'patient');
+  }
+
   @Get('telemedicine/consultation/:consultationId/meeting-url')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -664,6 +781,48 @@ export class PatientPortalController {
     }
 
     return this.telemedicineService.getMeetingUrl(req.tenantDb, consultationId);
+  }
+
+  @Get('telemedicine/consultation/:consultationId/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient consultation room status', description: 'Get the live room status for the authenticated patient consultation' })
+  @ApiParam({ name: 'consultationId', description: 'Consultation ID' })
+  async getConsultationStatus(@Param('consultationId') consultationId: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+
+    const consultation = await this.telemedicineService.getConsultation(req.tenantDb, consultationId);
+    if (consultation.patient_id !== patientId) {
+      throw new Error('You do not have access to this consultation');
+    }
+
+    return this.telemedicineService.getRoomStatus(req.tenantDb, consultationId);
+  }
+
+  @Post('telemedicine/consultation/:consultationId/satisfaction')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Record patient consultation satisfaction', description: 'Record a satisfaction rating for the authenticated patient consultation' })
+  @ApiParam({ name: 'consultationId', description: 'Consultation ID' })
+  async recordConsultationSatisfaction(
+    @Param('consultationId') consultationId: string,
+    @Body() body: { rating: number; comment?: string },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+
+    const consultation = await this.telemedicineService.getConsultation(req.tenantDb, consultationId);
+    if (consultation.patient_id !== patientId) {
+      throw new Error('You do not have access to this consultation');
+    }
+
+    return this.telemedicineService.recordSatisfaction(req.tenantDb, consultationId, body);
   }
 
   // Dashboard Summary

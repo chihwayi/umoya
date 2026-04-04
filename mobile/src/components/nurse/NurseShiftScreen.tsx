@@ -20,6 +20,7 @@ import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, AiPulse, Dot } from '../ui';
 import { NurseWorklistService } from '../../services/nurseWorklist';
 import { CdssService, SbarResult, FallRiskResult } from '../../services/cdss';
+import { MessagesService } from '../../services/messages';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -179,13 +180,23 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
       return;
     }
     setSending(true);
-    await new Promise((r) => setTimeout(r, 900));
-    setSending(false);
-    setSent(true);
-    setTimeout(() => {
-      onSend(severity, doctor.id, finding);
-      handleClose();
-    }, 1600);
+    try {
+      await MessagesService.send({
+        recipient_id: doctor.id,
+        subject:      `ESCALATION [${severity}]: ${patientName}`,
+        body:         finding,
+        priority:     severity === 'CRITICAL' ? 'urgent' : 'normal',
+      });
+      setSending(false);
+      setSent(true);
+      setTimeout(() => {
+        onSend(severity, doctor.id, finding);
+        handleClose();
+      }, 1600);
+    } catch {
+      setSending(false);
+      Alert.alert('Escalation failed', 'Unable to send escalation. Please try again.');
+    }
   };
 
   const SEV_OPTIONS: { key: EscalateSeverity; color: string }[] = [
@@ -614,9 +625,17 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients, onSbar, onFall
 
   const getAiSuggestion = async () => {
     setAiLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setAiESI(assessing!.esi);
-    setAiLoading(false);
+    try {
+      const result = await CdssService.triageESI({
+        age:       assessing!.age,
+        complaint: assessing!.complaint,
+      });
+      setAiESI(result ?? assessing!.esi);
+    } catch {
+      setAiESI(assessing!.esi);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   if (patients.length === 0) {

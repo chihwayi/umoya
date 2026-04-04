@@ -45,5 +45,5 @@ export const AppointmentsService = {
 
   /** Cancel an appointment */
   cancel: (id: string) =>
-    api.put<ApiAppointment>(`/appointments/${id}/status`, { status: 'cancelled' }).then(r => r.data),
+    api.delete<{ success: boolean; message: string }>(`/patient-portal/appointments/${id}`).then(r => r.data as any),
 };

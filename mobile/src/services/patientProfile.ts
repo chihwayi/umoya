@@ -50,10 +50,10 @@ export const PatientProfileService = {
     api.get<ApiPatientProfile>(`/patients/${patientId}`).then(r => r.data),
 
   /** Get medical history / active conditions */
-  getConditions: (patientId: string) =>
-    api.get<ApiCondition[]>(`/patients/${patientId}/history/medical`).then(r => r.data),
+  getConditions: (_patientId?: string) =>
+    api.get<ApiCondition[]>('/patient-portal/conditions').then(r => r.data),
 
   /** Get allergies */
-  getAllergies: (patientId: string) =>
-    api.get<ApiAllergy[]>(`/allergies/patient/${patientId}`).then(r => r.data),
+  getAllergies: (_patientId?: string) =>
+    api.get<ApiAllergy[]>('/patient-portal/allergies').then(r => r.data),
 };

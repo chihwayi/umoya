@@ -17,8 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, SectionHeader, AiBadge, AiPulse } from '../ui';
 import { PostVisitService } from '../../services/postVisit';
-import { PatientAiService } from '../../services/patientAi';
-import { useAuthStore } from '../../stores/useAuthStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +68,60 @@ function mapApiSession(s: any): VisitNote {
     quickSummary: s.quickSummary ?? '',
     diagnoses:    (s.diagnoses ?? []).map((d: any) => ({ name: d.name ?? d, icd: d.icd ?? '' })),
     soap,
+  };
+}
+
+function toTitleCase(value?: string | null): string {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (part) => part.toUpperCase())
+    .trim();
+}
+
+function mapPatientSession(session: any, summaryResponse?: any): VisitNote {
+  const summary = summaryResponse?.summary || {};
+  const checklist = Array.isArray(summaryResponse?.checklist) ? summaryResponse.checklist : [];
+  const keyPoints = Array.isArray(summary?.keyPoints) ? summary.keyPoints : [];
+  const teachBack = Array.isArray(summary?.teachBackQuestions) ? summary.teachBackQuestions : [];
+  const summarySections: SOAPSection[] = checklist.length > 0
+    ? checklist.map((item: any, index: number) => ({
+        key: String(item?.id || `check-${index}`),
+        label: item?.title || `Next step ${index + 1}`,
+        icon: item?.completed ? 'check' : 'calendar',
+        content: item?.description || '',
+      }))
+    : teachBack.map((question: string, index: number) => ({
+        key: `teach-${index}`,
+        label: `Question ${index + 1}`,
+        icon: 'chat',
+        content: question,
+      }));
+
+  const visitDateValue =
+    session?.publishedAt ||
+    session?.completedAt ||
+    session?.startedAt ||
+    summary?.generatedAt ||
+    null;
+
+  return {
+    id: session?.id,
+    doctorName: 'Your care team',
+    specialty: toTitleCase(session?.sourceType || 'Post Visit'),
+    visitDate: visitDateValue
+      ? new Date(visitDateValue).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '—',
+    visitType: toTitleCase(session?.sourceType || 'post_visit_summary') || 'Post-Visit Summary',
+    quickSummary: summary?.plainLanguageSummary || session?.summarySnippet || '',
+    diagnoses: keyPoints.map((point: string) => ({ name: point, icd: '' })),
+    soap: summarySections.length > 0
+      ? summarySections
+      : [{
+          key: 'summary',
+          label: 'Visit Summary',
+          icon: 'book',
+          content: summary?.plainLanguageSummary || session?.summarySnippet || '',
+        }],
   };
 }
 
@@ -212,8 +264,8 @@ const VisitSummaryTab: React.FC<VisitSummaryProps> = ({ note, onAskAbout }) => {
     {/* Visit header */}
     <View style={summaryStyles.visitHeader}>
       <View style={[summaryStyles.dateBox, { backgroundColor: C.blue + '20' }]}>
-        <Text style={summaryStyles.dateMonth}>{note.visitDate.split(' ')[1].toUpperCase().slice(0, 3)}</Text>
-        <Text style={summaryStyles.dateDay}>{note.visitDate.split(' ')[0]}</Text>
+        <Text style={summaryStyles.dateMonth}>{note.visitDate.split(' ')[1]?.toUpperCase().slice(0, 3) ?? '—'}</Text>
+        <Text style={summaryStyles.dateDay}>{note.visitDate.split(' ')[0] ?? '—'}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[summaryStyles.visitType, { color: C.teal }]}>{note.visitType}</Text>
@@ -308,7 +360,6 @@ const AIChatTab: React.FC<AIChatProps> = ({ note, initialQuestion, onClearInitia
   const [messages,   setMessages]   = useState<ChatMessage[]>([]);
   const [input,      setInput]      = useState('');
   const [typing,     setTyping]     = useState(false);
-  const sessionIdRef                = useRef<string | undefined>(undefined);
   const listRef                     = useRef<FlatList>(null);
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
@@ -316,26 +367,23 @@ const AIChatTab: React.FC<AIChatProps> = ({ note, initialQuestion, onClearInitia
 
   // Load chat history when note changes
   useEffect(() => {
-    const patientId = useAuthStore.getState().user?.patientMrn ?? useAuthStore.getState().user?.id ?? '';
-    if (!patientId || !note) return;
-    PatientAiService.chatHistory(patientId)
+    if (!note) return;
+    setMessages([]);
+    PostVisitService.patientMessages(note.id)
       .then(history => {
-        if (history.length > 0) {
-          const mapped: ChatMessage[] = history.map((m, i) => ({
-            id:   `h-${i}`,
-            role: m.role === 'assistant' ? 'ai' : 'user',
-            text: m.content,
-            time: m.timestamp
-              ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        const mapped: ChatMessage[] = (history.messages ?? [])
+          .filter((message: any) => message?.message)
+          .map((message: any) => ({
+            id: String(message.id),
+            role: (message.senderType ?? message.sender_type) === 'system' ? 'ai' : 'user',
+            text: message.message ?? '',
+            time: message.createdAt
+              ? new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : '',
           }));
-          setMessages(mapped);
-          // Restore session ID from last message
-          const lastSession = history[history.length - 1]?.sessionId;
-          if (lastSession) sessionIdRef.current = lastSession;
-        }
+        setMessages(mapped);
       })
-      .catch(() => {});
+      .catch(() => setMessages([]));
   }, [note?.id]);
 
   // Typing indicator animation
@@ -358,8 +406,7 @@ const AIChatTab: React.FC<AIChatProps> = ({ note, initialQuestion, onClearInitia
   }, [typing]);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return;
-    const patientId = useAuthStore.getState().user?.patientMrn ?? useAuthStore.getState().user?.id ?? '';
+    if (!text.trim() || !note) return;
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -371,16 +418,14 @@ const AIChatTab: React.FC<AIChatProps> = ({ note, initialQuestion, onClearInitia
     setTyping(true);
 
     try {
-      const res = await PatientAiService.chat({
-        patientId,
-        message:   text.trim(),
-        sessionId: sessionIdRef.current,
+      const res = await PostVisitService.patientSendMessage(note.id, {
+        message: text.trim(),
+        messageType: 'question',
       });
-      if (res.sessionId) sessionIdRef.current = res.sessionId;
       const aiMsg: ChatMessage = {
         id:   (Date.now() + 1).toString(),
         role: 'ai',
-        text: res.content ?? AI_UNAVAILABLE_MESSAGE,
+        text: res.assistantMessage?.message ?? AI_UNAVAILABLE_MESSAGE,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, aiMsg]);
@@ -395,7 +440,7 @@ const AIChatTab: React.FC<AIChatProps> = ({ note, initialQuestion, onClearInitia
       setTyping(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
     }
-  }, []);
+  }, [note]);
 
   // Handle pre-queued question from Visit Summary "Ask" button
   useEffect(() => {
@@ -575,22 +620,32 @@ type PVTab = 'summary' | 'chat';
 
 export const PatientPostVisitScreen: React.FC = () => {
   const insets  = useSafeAreaInsets();
-  const { user } = useAuthStore();
   const [visits,       setVisits]       = useState<VisitNote[]>([]);
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [activeTab,    setActiveTab]    = useState<PVTab>('summary');
   const [chatQuestion, setChatQuestion] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    const patientId = user?.patientMrn ?? user?.id;
-    PostVisitService.sessions(patientId)
-      .then(list => {
-        const mapped = (list ?? []).map(mapApiSession);
+    PostVisitService.patientSessions()
+      .then(async (result) => {
+        const mapped = await Promise.all(
+          (result.sessions ?? []).map(async (session) => {
+            try {
+              const summary = await PostVisitService.patientSessionSummary(session.id);
+              return mapPatientSession(session, summary);
+            } catch {
+              return mapPatientSession(session);
+            }
+          }),
+        );
         setVisits(mapped);
-        if (mapped.length > 0) setSelectedNote(mapped[0]);
+        setSelectedNote(mapped[0] ?? null);
       })
-      .catch(() => { setVisits([]); });
-  }, [user?.id]);
+      .catch(() => {
+        setVisits([]);
+        setSelectedNote(null);
+      });
+  }, []);
 
   const handleAskAbout = (q: string) => {
     setChatQuestion(q);

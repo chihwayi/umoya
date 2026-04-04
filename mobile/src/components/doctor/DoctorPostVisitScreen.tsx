@@ -59,163 +59,6 @@ interface MedChange {
   reason: string;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_NOTES: PostVisitNote[] = [
-  {
-    id: 'n1',
-    patientId: 'p1',
-    patientName: 'Patient',
-    age: 67,
-    mrn: 'MRN-004821',
-    ward: 'Cardiology',
-    bed: 'A-204',
-    visitDate: '22 March 2026',
-    visitTime: '07:40',
-    consultDuration: '18 min',
-    diagnosis: ['Acute STEMI, post-PCI day 2', 'Bradycardia (drug-induced)'],
-    status: 'pending',
-    aiGeneratedAt: '08:05',
-    audioTranscriptAvailable: true,
-    followUp: 'Cardiology clinic in 6 weeks. Repeat ECG in 48h. Troponin series 12h.',
-    referrals: ['Cardiac Rehab referral placed'],
-    medications: [
-      { drug: 'Metoprolol',        action: 'started',    dose: '25mg BD',    reason: 'Rate control post-STEMI' },
-      { drug: 'Aspirin',           action: 'continued',  dose: '100mg daily', reason: 'Dual antiplatelet' },
-      { drug: 'Ticagrelor',        action: 'continued',  dose: '90mg BD',    reason: 'Dual antiplatelet — post-PCI' },
-      { drug: 'Atorvastatin',      action: 'modified',   dose: '80mg nocte',  reason: 'High-intensity statin post-ACS' },
-    ],
-    soap: [
-      {
-        key: 'S',
-        label: 'Subjective',
-        icon: 'chat',
-        edited: false,
-        content: `Patient reports mild central chest discomfort that has markedly improved since yesterday. Rates current discomfort 2/10 compared to 8/10 on admission. Denies dyspnoea at rest. Anxious about discharge timeline.
-
-Discussed during consultation: patient asked specifically about returning to work as a delivery driver and about driving restrictions post-MI. Also raised concern about sexual activity restrictions. Family present — wife expressed concern about home monitoring.`,
-      },
-      {
-        key: 'O',
-        label: 'Objective',
-        icon: 'pulse',
-        edited: false,
-        content: `Vitals: HR 48 bpm (sinus bradycardia), BP 108/72 mmHg, SpO₂ 97% on room air, Temp 37.1°C.
-
-Examination: Alert and orientated. JVP not elevated. Chest clear bilaterally. Heart sounds I + II, no added sounds. PCI site (right radial) clean, no haematoma. Peripheral pulses present.
-
-ECG (07:30): Sinus bradycardia 48 bpm. Resolving ST changes in V2–V4. No AV block.
-
-Labs (06:00): Troponin-I 12.4 μg/L (peak was 18.2 on admission — trending down). Cr 94, eGFR 74. K⁺ 4.1, Na⁺ 138. HbA1c 7.2%.`,
-      },
-      {
-        key: 'A',
-        label: 'Assessment',
-        icon: 'brain',
-        edited: false,
-        content: `1. Acute STEMI, post-PCI day 2 — evolving as expected. Troponin trend reassuring. Haemodynamically stable.
-
-2. Sinus bradycardia — likely metoprolol effect. Asymptomatic. Will monitor; consider dose reduction if HR remains <50 bpm on 12h ECG.
-
-3. Diabetes (HbA1c 7.2%) — reasonable perioperative control. Endocrine review as outpatient.
-
-4. Cardiac rehabilitation — patient motivated. Referral placed.`,
-      },
-      {
-        key: 'P',
-        label: 'Plan',
-        icon: 'calendar',
-        edited: false,
-        content: `1. Continue dual antiplatelet (aspirin 100mg + ticagrelor 90mg BD) — do not discontinue without cardiology review.
-2. Atorvastatin increased to 80mg nocte (high-intensity post-ACS).
-3. Metoprolol 25mg BD — hold if HR <45 bpm, recheck in 2h.
-4. 12-lead ECG at 10:00, 18:00 to monitor for AV block.
-5. Troponin-I at 18:00 (12h series).
-6. Driving: minimum 4 weeks off, notify licencing authority (DVLA) — patient counselled.
-7. Return to work: reviewed, advised light duties only after cardiology clearance.
-8. Sexual activity: resumption safe after 4–6 weeks if no symptoms — patient counselled privately.
-9. Target discharge day 4 if ECG and troponin stabilise.`,
-      },
-    ],
-  },
-  {
-    id: 'n2',
-    patientId: 'p3',
-    patientName: 'Thomas Ndlovu',
-    age: 52,
-    mrn: 'MRN-001573',
-    ward: 'Cardiology',
-    bed: 'A-211',
-    visitDate: '22 March 2026',
-    visitTime: '07:00',
-    consultDuration: '14 min',
-    diagnosis: ['Decompensated heart failure (EF 28%)', 'Hypokalaemia'],
-    status: 'pending',
-    aiGeneratedAt: '07:28',
-    audioTranscriptAvailable: false,
-    followUp: 'Heart failure clinic in 2 weeks. Daily weights at home. Fluid restriction 1.5L/day.',
-    referrals: ['Heart failure nurse specialist review today'],
-    medications: [
-      { drug: 'Furosemide IV',  action: 'continued', dose: '80mg BD IV',   reason: 'Active decongestion' },
-      { drug: 'Potassium supplement', action: 'started', dose: '40 mmol oral', reason: 'K⁺ 3.1 — replace' },
-      { drug: 'Spironolactone', action: 'started',   dose: '25mg daily',   reason: 'Mineralocorticoid antagonist — HF with reduced EF' },
-      { drug: 'Sacubitril/Valsartan', action: 'stopped', reason: 'Hold until euvolaemic, SBP >100 mmHg' },
-    ],
-    soap: [
-      {
-        key: 'S',
-        label: 'Subjective',
-        icon: 'chat',
-        edited: false,
-        content: `Patient reports significant improvement in breathlessness. Previously orthopnoeic (4-pillow orthopnoea on admission), now sleeping with 2 pillows. Ankle oedema improving. Still fatigue on exertion (2 flights of stairs before resting).
-
-Discussed during consultation: patient expressed concern about salt restriction — reviewed his diet with him. Mentioned he had run out of his spironolactone 2 weeks prior to admission. We discussed medication adherence and the link to decompensation. Patient agreed to pharmacist review of his home regimen.`,
-      },
-      {
-        key: 'O',
-        label: 'Objective',
-        icon: 'pulse',
-        edited: false,
-        content: `Vitals: HR 88 bpm, BP 118/78 mmHg, SpO₂ 95% on 2L O₂, Weight 84.2 kg (↓1.4 kg from yesterday, ↓2.4 kg from admission).
-
-Examination: Less distressed. JVP 4 cm above sternal angle. Fine bibasal crackles (reduced from admission). Bilateral ankle pitting oedema +1 (reduced from +3).
-
-Fluid balance: −1.8 L net over past 24h. Cumulative −3.1 L from admission.
-
-Labs: K⁺ 3.1 mmol/L (↓). BNP 980 pg/mL (down from 1840 on admission). Cr 112, eGFR 58. BGL 6.8.`,
-      },
-      {
-        key: 'A',
-        label: 'Assessment',
-        icon: 'brain',
-        edited: false,
-        content: `1. Decompensated HFrEF (EF 28%) — responding to IV diuresis. BNP trend reassuring. Continue aggressive decongestion.
-
-2. Hypokalaemia (K⁺ 3.1) — likely diuresis-related. Replacing orally. Will recheck at 16:00.
-
-3. Medication non-adherence identified (spironolactone missed) — pharmacist review arranged. Counselled on importance of consistency.
-
-4. Worsening renal function (Cr up from 88 on last admission) — monitor closely; expected with diuresis but watch for acute kidney injury threshold (Cr >150 or 1.5× baseline).`,
-      },
-      {
-        key: 'P',
-        label: 'Plan',
-        icon: 'calendar',
-        edited: false,
-        content: `1. Continue IV furosemide 80mg BD — target net −1.5 L/day until clinically euvolaemic.
-2. Potassium 40 mmol oral now, recheck K⁺ at 16:00.
-3. Start spironolactone 25mg daily (previously stopped — restart now that BP tolerates).
-4. Hold sacubitril/valsartan until BP consistently >100 mmHg and euvolaemic — restart as outpatient.
-5. Daily weights — alert if gaining >1 kg/day.
-6. Fluid restriction 1.5L/day — dietician input.
-7. Heart failure nurse review today.
-8. Target: transition to oral furosemide in 48h if maintaining diuresis orally.
-9. Discharge plan: estimated day 6 if euvolaemic and K⁺ stable.`,
-      },
-    ],
-  },
-];
-
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 const STATUS_COLOR: Record<SignoffStatus, string> = {
@@ -458,11 +301,21 @@ const NoteReview: React.FC<NoteReviewProps> = ({ note, onClose, onSign }) => {
           style: 'default',
           onPress: () => {
             setSigning(true);
-            setTimeout(() => {
-              setSigning(false);
-              onSign(note.id);
-              handleClose();
-            }, 1500);
+            PostVisitService.publish(note.id, {
+              note: hasEdits ? 'Doctor amended AI-drafted note' : undefined,
+              publishMetadata: hasEdits
+                ? { amendedSoap: Object.fromEntries(sections.filter(s => s.edited).map(s => [s.key, s.content])) }
+                : undefined,
+            })
+              .then(() => {
+                setSigning(false);
+                onSign(note.id);
+                handleClose();
+              })
+              .catch(() => {
+                setSigning(false);
+                Alert.alert('Sign failed', 'Unable to publish note. Please try again.');
+              });
           },
         },
       ]

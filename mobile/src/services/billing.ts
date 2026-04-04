@@ -52,6 +52,27 @@ export const BillingService = {
   forPatient: (patientId: string) =>
     api.get<ApiBill[]>(`/billing/bills?patientId=${patientId}`).then(r => r.data),
 
+  forCurrentPatient: () =>
+    api.get<any[]>('/patient-portal/bills').then(r =>
+      (r.data ?? []).map((bill: any) => ({
+        id: bill.id,
+        billNumber: bill.billNumber,
+        patientId: bill.patientId ?? '',
+        description: bill.description ?? bill.billNumber ?? 'Invoice',
+        serviceDate: bill.billDate ?? bill.serviceDate,
+        dueDate: bill.dueDate,
+        totalAmount: Number(bill.totalAmount ?? 0),
+        paidAmount: Number(bill.paidAmount ?? 0),
+        balance: Number(bill.balance ?? bill.totalAmount ?? 0),
+        status: bill.status,
+        items: Array.isArray(bill.items) ? bill.items : [],
+        insurerName: bill.insurerName,
+        medicalAidClaim: bill.medicalAidClaim,
+        currency: bill.currency,
+        payments: bill.payments,
+      } as ApiBill)),
+    ),
+
   all: (query: Record<string, string> = {}) => {
     const qs = new URLSearchParams(query).toString();
     return api.get<ApiBill[]>(`/billing/bills${qs ? '?' + qs : ''}`).then(r => r.data);

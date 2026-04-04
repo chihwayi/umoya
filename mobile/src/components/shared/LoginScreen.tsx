@@ -8,13 +8,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
 import { C, FONT, RADIUS } from '../../design/tokens';
 import { TENANT_DISCOVERY_URL } from '../../config/env';
 import { Icon, Badge } from '../ui';
 import { useAuthStore, UserRole } from '../../stores/useAuthStore';
 import { api } from '../../services/api';
 
-type LoginMode = 'staff' | 'patient_otp' | 'patient_pin';
+type LoginMode = 'staff' | 'patient_password';
 
 const ClinicLogo: React.FC<{ tenant: any; accent: string }> = ({ tenant, accent }) => {
   const [errored, setErrored] = useState(false);
@@ -51,15 +52,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const [role, setRole] = useState<UserRole>('doctor');
   const [mode, setMode] = useState<LoginMode>('staff');
+
+  // Restore last-used role so returning patients don't have to switch tabs
+  useEffect(() => {
+    SecureStore.getItemAsync('medicore_role').then(saved => {
+      if (saved === 'patient' || saved === 'doctor' || saved === 'nurse') {
+        setRole(saved as UserRole);
+        setMode(saved === 'patient' ? 'patient_password' : 'staff');
+      }
+    }).catch(() => {});
+  }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const [otpToken, setOtpToken] = useState('');
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState<'face' | 'fingerprint' | 'none'>('none');
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -92,9 +98,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const handleRoleChange = (r: UserRole) => {
     setRole(r);
-    setMode(r === 'patient' ? 'patient_otp' : 'staff');
-    setEmail(''); setPassword(''); setPhone(''); setOtp(''); setPin('');
-    setOtpSent(false);
+    setMode(r === 'patient' ? 'patient_password' : 'staff');
+    setEmail('');
+    setPassword('');
+    SecureStore.setItemAsync('medicore_role', r).catch(() => {});
   };
 
   // ── Staff login (Doctor / Nurse) ──────────────────────────────────────────
@@ -116,38 +123,60 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
-  // ── Patient — request OTP ─────────────────────────────────────────────────
-  const requestOtp = async () => {
-    if (!phone.trim()) { shake(); return; }
+  // ── Patient portal login ──────────────────────────────────────────────────
+  const loginPatient = async () => {
+    if (!email.trim() || !password.trim()) { shake(); return; }
     setLoading(true);
     try {
-      const res = await api.post<{ otpToken: string }>('/auth/patient/otp-request', {
-        phone: phone.trim(),
+      const res = await api.post<{
+        success: boolean;
+        requiresVerification?: boolean;
+        message?: string;
+        token?: string;
+        patient?: {
+          id: string;
+          patientNumber?: string;
+          firstName?: string;
+          lastName?: string;
+          email?: string;
+          phone?: string;
+          dateOfBirth?: string;
+          isLinked?: boolean;
+        };
+      }>('/patient-portal/login', {
+        email: email.trim().toLowerCase(),
+        password,
       });
-      setOtpToken(res.data.otpToken);
-      setOtpSent(true);
-    } catch (err: any) {
-      shake();
-      Alert.alert('Error', err?.response?.data?.message ?? 'Could not send OTP');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Patient — verify OTP ──────────────────────────────────────────────────
-  const verifyOtp = async () => {
-    if (otp.length < 4) { shake(); return; }
-    setLoading(true);
-    try {
-      const res = await api.post<{ token: string; user: any }>('/auth/patient/otp-verify', {
-        otpToken,
-        otp: otp.trim(),
+      if (!res.data.success || !res.data.token || !res.data.patient) {
+        shake();
+        Alert.alert(
+          res.data.requiresVerification ? 'Verify Email' : 'Login failed',
+          res.data.message ?? 'Unable to sign in to the patient portal',
+        );
+        return;
+      }
+      const patient = res.data.patient;
+      const firstName = patient.firstName?.trim() ?? '';
+      const lastName = patient.lastName?.trim() ?? '';
+      const name = [firstName, lastName].filter(Boolean).join(' ') || patient.email || 'Patient';
+      await login(res.data.token, 'patient', {
+        id: patient.id,
+        name,
+        firstName,
+        lastName,
+        email: patient.email,
+        phone: patient.phone,
+        role: 'patient',
+        tenantSlug: tenant?.slug ?? '',
+        patientMrn: patient.patientNumber,
+        patientNumber: patient.patientNumber,
+        dateOfBirth: patient.dateOfBirth,
+        isLinked: patient.isLinked,
       });
-      await login(res.data.token, 'patient', { ...res.data.user, role: 'patient' });
       onLoggedIn();
     } catch (err: any) {
       shake();
-      Alert.alert('Invalid OTP', err?.response?.data?.message ?? 'Incorrect code');
+      Alert.alert('Login failed', err?.response?.data?.message ?? 'Invalid patient portal credentials');
     } finally {
       setLoading(false);
     }
@@ -308,69 +337,47 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               </View>
             )}
 
-            {role === 'patient' && !otpSent && (
+            {role === 'patient' && (
               <View style={styles.form}>
                 <View style={styles.field}>
-                  <Text style={styles.fieldLabel}>Mobile Number</Text>
-                  <View style={[styles.inputBox, { borderColor: phone ? C.blue + '60' : C.border }]}>
-                    <Icon name="phone" size={16} color={C.textMuted} />
+                  <Text style={styles.fieldLabel}>Email</Text>
+                  <View style={[styles.inputBox, { borderColor: email ? C.blue + '60' : C.border }]}>
+                    <Icon name="inbox" size={16} color={C.textMuted} />
                     <TextInput
                       style={styles.input}
-                      placeholder="+263 77 123 4567"
+                      placeholder="you@example.com"
                       placeholderTextColor={C.textMuted}
-                      value={phone}
-                      onChangeText={setPhone}
-                      keyboardType="phone-pad"
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
                     />
                   </View>
-                </View>
-                <TouchableOpacity
-                  style={[styles.primaryBtn, loading && styles.btnDisabled]}
-                  onPress={requestOtp}
-                  activeOpacity={0.85}
-                  disabled={loading}
-                >
-                  <LinearGradient
-                    colors={[C.blue, C.teal]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                    style={styles.btnGradient}
-                  >
-                    {loading
-                      ? <ActivityIndicator color="#000" />
-                      : <Text style={styles.btnText}>Send OTP</Text>
-                    }
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {role === 'patient' && otpSent && (
-              <View style={styles.form}>
-                <View style={styles.otpInfo}>
-                  <Icon name="check" size={14} color={C.teal} strokeWidth={2.5} />
-                  <Text style={styles.otpInfoText}>Code sent to {phone}</Text>
-                  <TouchableOpacity onPress={() => setOtpSent(false)}>
-                    <Text style={styles.changeLink}>Change</Text>
-                  </TouchableOpacity>
                 </View>
                 <View style={styles.field}>
-                  <Text style={styles.fieldLabel}>One-Time Code</Text>
-                  <View style={[styles.inputBox, { borderColor: otp ? C.blue + '60' : C.border }]}>
+                  <Text style={styles.fieldLabel}>Password</Text>
+                  <View style={[styles.inputBox, { borderColor: password ? C.blue + '60' : C.border }]}>
                     <Icon name="shield" size={16} color={C.textMuted} />
                     <TextInput
-                      style={[styles.input, styles.monoInput]}
-                      placeholder="· · · · · ·"
+                      style={styles.input}
+                      placeholder="••••••••"
                       placeholderTextColor={C.textMuted}
-                      value={otp}
-                      onChangeText={setOtp}
-                      keyboardType="number-pad"
-                      maxLength={6}
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPw}
                     />
+                    <TouchableOpacity onPress={() => setShowPw(p => !p)}>
+                      <Icon name={showPw ? 'eyeOff' : 'eye'} size={16} color={C.textMuted} />
+                    </TouchableOpacity>
                   </View>
                 </View>
+                <Text style={styles.patientHelperText}>
+                  Sign in with the same patient portal email and password used on the web portal.
+                </Text>
                 <TouchableOpacity
                   style={[styles.primaryBtn, loading && styles.btnDisabled]}
-                  onPress={verifyOtp}
+                  onPress={loginPatient}
                   activeOpacity={0.85}
                   disabled={loading}
                 >
@@ -381,7 +388,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   >
                     {loading
                       ? <ActivityIndicator color="#000" />
-                      : <Text style={styles.btnText}>Verify & Sign In</Text>
+                      : <Text style={styles.btnText}>Sign In to Portal</Text>
                     }
                   </LinearGradient>
                 </TouchableOpacity>
@@ -485,6 +492,7 @@ const styles = StyleSheet.create({
   form: { gap: 16 },
   field: { gap: 6 },
   fieldLabel: { fontFamily: FONT.uiSb, fontSize: 11, color: C.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' },
+  patientHelperText: { fontFamily: FONT.ui, fontSize: 12, color: C.textMuted, lineHeight: 18 },
   inputBox: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -25,27 +25,84 @@ export interface MeetingAccess {
   consultationId: string;
 }
 
+interface PortalConsultationListResponse {
+  consultations: any[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+interface MeetingUrlResponse {
+  meetingUrl?: string;
+  roomUrl?: string;
+  meetingRoomId?: string;
+  roomName?: string;
+}
+
+interface MeetingTokenResponse {
+  token: string;
+  meetingUrl?: string;
+  roomUrl?: string;
+  expiresAt?: string;
+  expiresInSeconds?: number;
+}
+
+function mapConsultationStatus(status: string | undefined): ApiConsultation['status'] {
+  if (status === 'in_progress' || status === 'technical_issue') return 'active';
+  if (status === 'scheduled') return 'scheduled';
+  if (status === 'completed') return 'completed';
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'no_show') return 'no_show';
+  return 'scheduled';
+}
+
+function mapConsultation(raw: any): ApiConsultation {
+  return {
+    id: raw.id,
+    patientId: raw.patientId ?? raw.patient_id,
+    doctorId: raw.doctorId ?? raw.doctor_id,
+    doctorName: raw.doctorName ?? raw.doctor_name,
+    doctorSpecialty: raw.doctorSpecialty ?? raw.doctor_specialty,
+    scheduledAt: raw.scheduledAt ?? raw.scheduled_start_time ?? raw.appointmentDate,
+    status: mapConsultationStatus(raw.status),
+    consultationType: raw.consultationType ?? raw.consultation_type,
+    notes: raw.notes,
+    roomUrl: raw.roomUrl ?? raw.meetingUrl ?? raw.meeting_url,
+    roomName: raw.roomName ?? raw.meetingRoomId ?? raw.meeting_room_id,
+    patientJoinedAt: raw.patientJoinedAt ?? raw.patient_join_time,
+    doctorJoinedAt: raw.doctorJoinedAt ?? raw.doctor_join_time,
+    endedAt: raw.endedAt ?? raw.actual_end_time,
+    durationMinutes: raw.durationMinutes ?? raw.duration_minutes,
+    patientConnectionQuality: raw.patientConnectionQuality ?? raw.patient_connection_quality,
+  };
+}
+
 export const TelemedicineService = {
   /** List consultations for the logged-in patient */
-  list: (patientId?: string) => {
-    const qs = patientId ? `?patientId=${patientId}` : '';
-    return api.get<ApiConsultation[]>(`/telemedicine/consultations${qs}`).then(r => r.data);
-  },
+  list: (_patientId?: string) =>
+    api.get<PortalConsultationListResponse>(`/patient-portal/telemedicine/consultations`)
+      .then(r => (r.data.consultations ?? []).map(mapConsultation)),
 
   /** Get single consultation */
   get: (id: string) =>
-    api.get<ApiConsultation>(`/telemedicine/consultations/${id}`).then(r => r.data),
+    api.get<any>(`/patient-portal/telemedicine/consultation/${id}`).then(r => mapConsultation(r.data)),
 
   /** Get the meeting URL for a consultation */
   getMeetingUrl: (id: string) =>
-    api.get<{ roomUrl: string; roomName: string }>(`/telemedicine/consultations/${id}/meeting-url`)
-      .then(r => r.data),
+    api.get<MeetingUrlResponse>(`/patient-portal/telemedicine/consultation/${id}/meeting-url`)
+      .then(r => ({
+        roomUrl: r.data.roomUrl ?? r.data.meetingUrl ?? '',
+        roomName: r.data.roomName ?? r.data.meetingRoomId ?? '',
+      })),
 
   /** Get a signed Daily.co meeting token */
-  getToken: (id: string, role: 'patient' | 'doctor' = 'patient') =>
-    api.get<{ token: string; roomUrl: string; expiresAt?: string }>(
-      `/telemedicine/consultations/${id}/token?role=${role}`,
-    ).then(r => r.data),
+  getToken: (id: string, _role: 'patient' | 'doctor' = 'patient') =>
+    api.get<MeetingTokenResponse>(`/patient-portal/telemedicine/consultation/${id}/token`)
+      .then(r => ({
+        token: r.data.token,
+        roomUrl: r.data.roomUrl ?? r.data.meetingUrl ?? '',
+        expiresAt: r.data.expiresAt,
+      })),
 
   /**
    * One-shot helper: get room URL + token together
@@ -61,25 +118,16 @@ export const TelemedicineService = {
   },
 
   /** Join consultation (registers participant) */
-  join: (id: string, role: 'patient' | 'doctor' = 'patient') =>
-    api.post<ApiConsultation>(`/telemedicine/consultations/${id}/join`, { role }).then(r => r.data),
-
-  /** End consultation */
-  end: (id: string) =>
-    api.post<ApiConsultation>(`/telemedicine/consultations/${id}/end`, {}).then(r => r.data),
-
-  /** Report connection quality */
-  reportQuality: (id: string, quality: 'excellent' | 'good' | 'fair' | 'poor', role: 'patient' | 'doctor' = 'patient') =>
-    api.post<void>(`/telemedicine/consultations/${id}/connection-quality?role=${role}&quality=${quality}`, {})
-      .then(r => r.data).catch(() => {}),
+  join: (id: string, _role: 'patient' | 'doctor' = 'patient') =>
+    api.post<any>(`/patient-portal/telemedicine/consultation/${id}/join`, {}).then(r => mapConsultation(r.data)),
 
   /** Record patient satisfaction after call */
   rateSatisfaction: (id: string, rating: number, comment?: string) =>
-    api.post<void>(`/telemedicine/consultations/${id}/satisfaction`, { rating, comment })
+    api.post<void>(`/patient-portal/telemedicine/consultation/${id}/satisfaction`, { rating, comment })
       .then(r => r.data).catch(() => {}),
 
   /** Get live room status (participant count) */
   roomStatus: (id: string) =>
-    api.get<{ participants: number; isLive: boolean }>(`/telemedicine/consultations/${id}/status`)
-      .then(r => r.data),
+    api.get<{ participants: number; isActive?: boolean; isLive?: boolean }>(`/patient-portal/telemedicine/consultation/${id}/status`)
+      .then(r => ({ participants: r.data.participants, isLive: r.data.isLive ?? r.data.isActive ?? false })),
 };

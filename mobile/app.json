@@ -23,26 +23,37 @@
         "NSHealthShareUsageDescription": "MediCore reads your health data from Apple Health to display your vitals history and medication adherence.",
         "NSHealthUpdateUsageDescription": "MediCore writes medication adherence records and vitals data to Apple Health.",
         "NSMicrophoneUsageDescription": "MediCore uses the microphone for voice dictation of clinical notes.",
-        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
-            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
           },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
-            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1"
+            ]
           },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
-            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+            "NSPrivacyAccessedAPITypeReasons": [
+              "35F9.1"
+            ]
           },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
-            "NSPrivacyAccessedAPITypeReasons": ["85F4.1"]
+            "NSPrivacyAccessedAPITypeReasons": [
+              "85F4.1"
+            ]
           }
         ],
         "NSPrivacyCollectedDataTypes": [],
@@ -86,11 +97,15 @@
       "expo-font",
       [
         "expo-camera",
-        { "cameraPermission": "MediCore uses the camera to scan clinic QR codes." }
+        {
+          "cameraPermission": "MediCore uses the camera to scan clinic QR codes."
+        }
       ],
       [
         "expo-local-authentication",
-        { "faceIDPermission": "MediCore uses Face ID to securely sign you in." }
+        {
+          "faceIDPermission": "MediCore uses Face ID to securely sign you in."
+        }
       ],
       [
         "expo-notifications",
@@ -100,18 +115,25 @@
           "sounds": []
         }
       ],
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "expo-sharing"
     ],
     "extra": {
-      "eas": { "projectId": "REPLACE_WITH_EAS_PROJECT_ID" }
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
     },
     "updates": {
       "url": "https://u.expo.dev/REPLACE_WITH_EAS_PROJECT_ID",
       "enabled": true,
       "fallbackToCacheTimeout": 0,
       "checkAutomatically": "ON_LOAD",
-      "requestHeaders": { "expo-channel-name": "production" }
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
-    "runtimeVersion": { "policy": "appVersion" }
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

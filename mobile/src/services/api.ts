@@ -20,8 +20,10 @@ export function buildApiClient(baseUrl: string): AxiosInstance {
     ]);
     if (jwt) config.headers['Authorization'] = `Bearer ${jwt}`;
     if (tenantRaw) {
-      const tenant = JSON.parse(tenantRaw);
-      config.headers['X-Tenant-ID'] = tenant.slug;
+      try {
+        const tenant = JSON.parse(tenantRaw);
+        if (tenant?.slug) config.headers['X-Tenant-ID'] = tenant.slug;
+      } catch { /* malformed tenant data — skip header */ }
     }
     return config;
   });

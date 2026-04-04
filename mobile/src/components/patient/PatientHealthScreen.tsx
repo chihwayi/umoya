@@ -134,6 +134,129 @@ function mapApiVitals(apiVitals: VitalTrend[]): VitalEntry[] {
   });
 }
 
+function mapPortalVitals(rawVitals: any[]): VitalEntry[] {
+  if (!rawVitals?.length) return [];
+
+  const definitions: Array<{
+    key: string;
+    label: string;
+    unit: string;
+    icon: string;
+    normal: [number, number];
+    warn: [number, number];
+    pick: (row: any) => number | null;
+  }> = [
+    {
+      key: 'sbp',
+      label: 'Systolic BP',
+      unit: 'mmHg',
+      icon: 'pulse',
+      normal: [90, 120],
+      warn: [80, 140],
+      pick: (row) => {
+        const value = String(row?.bloodPressure || '').split('/')[0];
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      },
+    },
+    {
+      key: 'dbp',
+      label: 'Diastolic BP',
+      unit: 'mmHg',
+      icon: 'pulse',
+      normal: [60, 80],
+      warn: [50, 90],
+      pick: (row) => {
+        const value = String(row?.bloodPressure || '').split('/')[1];
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      },
+    },
+    {
+      key: 'hr',
+      label: 'Heart Rate',
+      unit: 'bpm',
+      icon: 'pulse',
+      normal: [60, 100],
+      warn: [50, 120],
+      pick: (row) => Number(row?.heartRate || 0) || null,
+    },
+    {
+      key: 'temp',
+      label: 'Temperature',
+      unit: 'C',
+      icon: 'pulse',
+      normal: [36, 37.5],
+      warn: [35.5, 38.5],
+      pick: (row) => Number(row?.temperature || 0) || null,
+    },
+    {
+      key: 'spo2',
+      label: 'SpO2',
+      unit: '%',
+      icon: 'pulse',
+      normal: [95, 100],
+      warn: [92, 100],
+      pick: (row) => Number(row?.oxygenSaturation || 0) || null,
+    },
+    {
+      key: 'rr',
+      label: 'Respiratory Rate',
+      unit: '/min',
+      icon: 'pulse',
+      normal: [12, 20],
+      warn: [10, 24],
+      pick: (row) => Number(row?.respiratoryRate || 0) || null,
+    },
+    {
+      key: 'weight',
+      label: 'Weight',
+      unit: 'kg',
+      icon: 'pulse',
+      normal: [0, 300],
+      warn: [0, 350],
+      pick: (row) => Number(row?.weight || 0) || null,
+    },
+    {
+      key: 'bgl',
+      label: 'Blood Glucose',
+      unit: 'mg/dL',
+      icon: 'pulse',
+      normal: [70, 140],
+      warn: [60, 200],
+      pick: (row) => Number(row?.bloodGlucose || 0) || null,
+    },
+  ];
+
+  return definitions.flatMap((definition, idx) => {
+    const readings = rawVitals
+      .map((row) => ({
+        value: definition.pick(row),
+        recordedAt: row?.recordedAt,
+      }))
+      .filter((row) => row.value !== null && row.recordedAt)
+      .slice(0, 7)
+      .reverse();
+
+    if (readings.length === 0) {
+      return [];
+    }
+
+    return [{
+      label: definition.label,
+      unit: definition.unit,
+      values: readings.map((reading) => Number(reading.value)),
+      dates: readings.map((reading) =>
+        new Date(reading.recordedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+      ),
+      normal: definition.normal,
+      warn: definition.warn,
+      icon: definition.icon,
+      accent: VITAL_ACCENT_COLORS[idx % VITAL_ACCENT_COLORS.length],
+    }];
+  });
+}
+
 function mapApiLabs(orders: any[]): LabResult[] {
   const results: LabResult[] = [];
   (orders ?? []).forEach((order: any) => {
@@ -709,11 +832,11 @@ export const PatientHealthScreen: React.FC = () => {
       .then(raw => setAllergies(mapApiAllergies(raw ?? [])))
       .catch(() => setAllergies([]));
 
-    VitalsService.trends(id)
-      .then(data => setVitals(mapApiVitals(data ?? [])))
+    VitalsService.forCurrentPatient()
+      .then(data => setVitals(mapPortalVitals(data ?? [])))
       .catch(() => setVitals([]));
 
-    LabOrdersService.results(id)
+    LabOrdersService.forCurrentPatient()
       .then(orders => {
         const mapped = mapApiLabs(orders ?? []);
         setLabs(mapped);
@@ -732,7 +855,7 @@ export const PatientHealthScreen: React.FC = () => {
       })
       .catch(() => { setLabs([]); setLoading(false); });
 
-    DocumentsService.forPatient(id)
+    DocumentsService.forCurrentPatient()
       .then(data => setDocs(mapApiDocuments(data ?? [])))
       .catch(() => setDocs([]));
   }, [user?.id]);

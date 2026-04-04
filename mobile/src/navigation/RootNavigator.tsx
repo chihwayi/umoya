@@ -36,9 +36,13 @@ import { PatientHealthScreen } from '../components/patient/PatientHealthScreen';
 // Patient screens — S118 (Telemedicine)
 import { PatientTelemedicineScreen } from '../components/patient/PatientTelemedicineScreen';
 // Patient screens — S124
-import { PatientAppointmentsScreen } from '../components/patient/PatientAppointmentsScreen';
+import { PatientAppointmentsScreen }     from '../components/patient/PatientAppointmentsScreen';
+import { PatientMessagesScreen }         from '../components/patient/PatientMessagesScreen';
+// Patient screens — S127
+import { PatientNotificationsScreen }    from '../components/patient/PatientNotificationsScreen';
 
 const Stack  = createNativeStackNavigator();
+const PatientStack = createNativeStackNavigator();
 const DoctorTabs  = createBottomTabNavigator();
 const NurseTabs   = createBottomTabNavigator();
 const PatientTabs = createBottomTabNavigator();
@@ -109,11 +113,19 @@ const PatientNavigator = () => (
   </PatientTabs.Navigator>
 );
 
+const PatientStackNavigator = () => (
+  <PatientStack.Navigator screenOptions={{ headerShown: false }}>
+    <PatientStack.Screen name="PatientTabs"      component={PatientNavigator}             />
+    <PatientStack.Screen name="PHMessages"       component={PatientMessagesScreen}        />
+    <PatientStack.Screen name="PHNotifications"  component={PatientNotificationsScreen}   />
+  </PatientStack.Navigator>
+);
+
 // ── Role Router ───────────────────────────────────────────────────────────────
 const RoleRouter = () => {
   const { role } = useAuthStore();
   if (role === 'nurse')   return <NurseNavigator />;
-  if (role === 'patient') return <PatientNavigator />;
+  if (role === 'patient') return <PatientStackNavigator />;
   return <DoctorNavigator />;
 };
 

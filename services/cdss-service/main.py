@@ -9421,12 +9421,21 @@ class PatientAdherenceHistoryItem(BaseModel):
     content: str
 
 
+class PatientAdherenceVisitContext(BaseModel):
+    visit_id: Optional[str] = None
+    visit_date: Optional[str] = None
+    doctor_name: Optional[str] = None
+    diagnoses: List[str] = []
+    soap: Optional[Dict[str, Optional[str]]] = None
+    quick_summary: Optional[str] = None
+
 class PatientAdherenceChatReq(BaseModel):
     patient_id: str
     session_id: Optional[str] = None
     message: str
     medications: List[str] = []
     history: List[PatientAdherenceHistoryItem] = []
+    visit_context: Optional[PatientAdherenceVisitContext] = None
 
 
 def _classify_patient_adherence_message(message: str) -> Dict[str, Any]:
@@ -9560,13 +9569,31 @@ async def patient_adherence_chat(req: PatientAdherenceChatReq, http_req: Request
                   "clinician_follow_up_needed": "boolean"
                 }
                 """
+                visit_context_block = ""
+                if req.visit_context:
+                    vc = req.visit_context
+                    lines = []
+                    if vc.visit_date:
+                        lines.append(f"Visit date: {vc.visit_date}")
+                    if vc.doctor_name:
+                        lines.append(f"Doctor: {vc.doctor_name}")
+                    if vc.diagnoses:
+                        lines.append(f"Diagnoses: {', '.join(vc.diagnoses[:6])}")
+                    if vc.soap:
+                        for section, content in (vc.soap or {}).items():
+                            if content:
+                                lines.append(f"SOAP {section}: {str(content)[:400]}")
+                    if vc.quick_summary:
+                        lines.append(f"Visit summary: {str(vc.quick_summary)[:400]}")
+                    if lines:
+                        visit_context_block = "\n\nVISIT_CONTEXT (from the patient's recent clinical visit — use this to answer questions about what the doctor said or recommended):\n" + "\n".join(lines)
+
                 prompt = f"""
-                You are a medication adherence support assistant.
-                Do not diagnose.
-                Do not prescribe.
-                Do not tell the patient to change dose.
-                Keep the answer short and practical.
-                If side effects, refill barriers, or cost barriers appear, tell the patient to contact the clinician or pharmacist.
+                You are a patient care assistant helping patients understand their recent clinical visit.
+                You can explain what was discussed, what the doctor found, and what the care plan means.
+                Do not diagnose. Do not prescribe. Do not tell the patient to change doses.
+                If the patient reports new or worsening symptoms, tell them to contact their clinic.
+                Keep answers clear, supportive, and practical.{visit_context_block}
 
                 STRUCTURED_CLASSIFICATION:
                 {json.dumps(classification, sort_keys=True)}

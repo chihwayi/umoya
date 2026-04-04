@@ -7,6 +7,14 @@ export interface AdherenceChatDto {
   context?: {
     medications?: { name: string; dose: string }[];
     recentVitals?: Record<string, number>;
+    visitContext?: {
+      visitId?: string;
+      visitDate?: string;
+      doctorName?: string;
+      diagnoses?: string[];
+      soap?: { subjective?: string; objective?: string; assessment?: string; plan?: string };
+      quickSummary?: string;
+    };
   };
 }
 

@@ -113,7 +113,6 @@ export const PatientAppointmentsScreen: React.FC = () => {
     setBookLoading(true);
     try {
       await AppointmentsService.book({
-        patientId:       user?.id,
         appointmentType: bookType,
         notes:           bookNotes.trim() || undefined,
         appointmentDate: bookDate.trim(),

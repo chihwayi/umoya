@@ -412,6 +412,16 @@ export class PatientAiService {
     message: string;
     medications?: string[];
     missedFollowUp?: boolean;
+    context?: {
+      visitContext?: {
+        visitId?: string;
+        visitDate?: string;
+        doctorName?: string;
+        diagnoses?: string[];
+        soap?: { subjective?: string; objective?: string; assessment?: string; plan?: string };
+        quickSummary?: string;
+      };
+    };
   }): Promise<{
     sessionId: string;
     aiSessionId: string;
@@ -470,6 +480,7 @@ export class PatientAiService {
           message: dto.message,
           medications: dto.medications || [],
           history: messages,
+          visitContext: dto.context?.visitContext,
         },
         subdomain,
       );

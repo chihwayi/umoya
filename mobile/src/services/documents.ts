@@ -15,6 +15,6 @@ export interface ApiDocument {
 }
 
 export const DocumentsService = {
-  forPatient: (patientId: string) =>
-    api.get<ApiDocument[]>(`/documents/patient/${patientId}`).then(r => r.data),
+  forCurrentPatient: () =>
+    api.get<ApiDocument[]>('/patient-portal/documents').then(r => r.data),
 };

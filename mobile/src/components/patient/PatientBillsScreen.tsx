@@ -503,7 +503,7 @@ export const PatientBillsScreen: React.FC = () => {
   useEffect(() => {
     const patientId = user?.patientMrn ?? user?.id;
     if (!patientId) return;
-    BillingService.forPatient(patientId)
+    BillingService.forCurrentPatient()
       .then(list => setInvoices((list ?? []).map(mapApiBill)))
       .catch(() => setInvoices([]));
   }, [user?.id]);

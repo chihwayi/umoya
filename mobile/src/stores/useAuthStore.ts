@@ -15,11 +15,16 @@ export interface Tenant {
 export interface AuthUser {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   phone?: string;
   role: UserRole;
   tenantSlug: string;
   patientMrn?: string;
+  patientNumber?: string;
+  dateOfBirth?: string;
+  isLinked?: boolean;
 }
 
 interface AuthState {

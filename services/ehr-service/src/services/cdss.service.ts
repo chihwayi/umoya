@@ -983,6 +983,14 @@ export class CdssService {
       message: string;
       medications?: string[];
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      visitContext?: {
+        visitId?: string;
+        visitDate?: string;
+        doctorName?: string;
+        diagnoses?: string[];
+        soap?: { subjective?: string; objective?: string; assessment?: string; plan?: string };
+        quickSummary?: string;
+      } | null;
     },
     tenantId?: string,
   ): Promise<PatientAdherenceAssistantResponse> {
@@ -995,6 +1003,7 @@ export class CdssService {
         message: payload.message,
         medications: payload.medications || [],
         history: payload.history || [],
+        visit_context: payload.visitContext ?? null,
       },
       15000,
       tenantId,

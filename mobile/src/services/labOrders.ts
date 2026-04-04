@@ -31,6 +31,9 @@ export const LabOrdersService = {
   results: (patientId: string) =>
     api.get<ApiLabOrder[]>(`/lab-orders/patient/${patientId}/results`).then(r => r.data),
 
+  forCurrentPatient: () =>
+    api.get<ApiLabOrder[]>('/patient-portal/lab-results').then(r => r.data),
+
   pending: () =>
     api.get<ApiLabOrder[]>('/lab-orders/pending').then(r => r.data),
 };

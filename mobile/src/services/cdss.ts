@@ -406,6 +406,30 @@ export const CdssService = {
   },
 
   /**
+   * AI ESI triage level suggestion.
+   * POST /governed/json surface='triage_esi' task='suggest_esi'
+   */
+  async triageESI(params: {
+    age: number;
+    complaint: string;
+  }): Promise<1 | 2 | 3 | 4 | 5 | null> {
+    try {
+      const res = await api.post<{ result: { esi: number }; abstained?: boolean }>('/governed/json', {
+        surface:    'triage_esi',
+        task:       'suggest_esi',
+        payload:    { age: params.age, complaint: params.complaint },
+        governance: { abstain_if_uncertain: true, phi_guard: true },
+      });
+      if (res.data?.abstained) return null;
+      const esi = res.data?.result?.esi;
+      if (esi && esi >= 1 && esi <= 5) return esi as 1 | 2 | 3 | 4 | 5;
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
    * AI medication reconciliation check.
    * POST /governed/json surface='medication_reconciliation'
    */

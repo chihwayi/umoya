@@ -36,78 +36,6 @@ interface Conversation {
   messages: Message[];
 }
 
-interface Group {
-  id: string;
-  name: string;
-  members: string;
-  unread: number;
-  lastMessage: string;
-  lastTime: string;
-  accent: string;
-}
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const CONVERSATIONS: Conversation[] = [
-  {
-    id: 'c1', name: 'Nurse Amai Dube', role: 'Senior Nurse · Ward C', avatar: 'AD',
-    online: true, unread: 2, lastMessage: 'Patient asking about discharge timing.',
-    lastTime: '14 min',
-    messages: [
-      { id: 'm1', from: 'them', type: 'text', text: 'Good morning Doctor. A patient is asking about his estimated discharge date.', time: '08:12', read: true },
-      { id: 'm2', from: 'me',   type: 'text', text: 'Aiming for Friday if troponin stays flat. I\'ll speak to him during rounds.', time: '08:15', read: true },
-      { id: 'm3', from: 'them', type: 'text', text: 'Thank you. Also, his SpO₂ has been 97–99% since 06:00. Looking stable.', time: '08:18', read: true },
-      { id: 'm4', from: 'them', type: 'text', text: 'Patient asking about discharge timing. Can you advise?', time: '09:41', read: false },
-      { id: 'm5', from: 'them', type: 'voice', text: '🎙 Voice memo  0:18', time: '09:42', read: false },
-    ],
-  },
-  {
-    id: 'c2', name: 'Dr. B. Moyo', role: 'Cardiology · Specialist', avatar: 'BM',
-    online: false, unread: 1, lastMessage: 'Echo report for Thomas Ndlovu ready.',
-    lastTime: '32 min',
-    messages: [
-      { id: 'm1', from: 'them', type: 'text',       text: 'Tinashe, just completed Thomas Ndlovu\'s echo. Significant LV dysfunction — EF 35%. Recommend urgent Cardiology review.',   time: '09:23', read: false },
-      { id: 'm2', from: 'them', type: 'attachment', text: '📎 Echo_Report_Ndlovu_TN_210326.pdf  ·  348 KB', time: '09:23', read: false },
-    ],
-  },
-  {
-    id: 'c3', name: 'Nurse Takudzwa Phiri', role: 'Nurse · Ward B', avatar: 'TP',
-    online: true, unread: 0, lastMessage: 'Amelia Chen moved to step-down.',
-    lastTime: '1 hr',
-    messages: [
-      { id: 'm1', from: 'me',   type: 'text', text: 'How is Amelia doing post-IV antibiotics?', time: '07:50', read: true },
-      { id: 'm2', from: 'them', type: 'text', text: 'Temp now 37.2°C, WBC trending down. She\'s responding well.', time: '07:55', read: true },
-      { id: 'm3', from: 'them', type: 'text', text: 'Amelia Chen vitals stable. Moved to step-down.', time: '08:42', read: true },
-    ],
-  },
-  {
-    id: 'c4', name: 'Dr. P. Zungu', role: 'Night Registrar · Handover', avatar: 'PZ',
-    online: false, unread: 0, lastMessage: 'Overnight summary attached.',
-    lastTime: '6 hr',
-    messages: [
-      { id: 'm1', from: 'them', type: 'attachment', text: '📎 Overnight_Handover_2026-03-22.pdf  ·  88 KB', time: '02:00', read: true },
-      { id: 'm2', from: 'them', type: 'text',       text: 'Quiet night overall. Samuel Park had one desaturation at 02:15 — resolved with repositioning. Keep an eye on him.',       time: '02:01', read: true },
-    ],
-  },
-  {
-    id: 'c5', name: 'Fatima Al-Rashid', role: 'Patient · Ward A Rm 204', avatar: 'FA',
-    online: false, unread: 0, lastMessage: 'Thank you for explaining, doctor.',
-    lastTime: 'Yesterday',
-    messages: [
-      { id: 'm1', from: 'them', type: 'text', text: 'Doctor, will I need the BP medication long-term?', time: '15:30', read: true },
-      { id: 'm2', from: 'me',   type: 'text', text: 'Fatima, yes for now. We will reassess at your follow-up in 6 weeks. Your BP is responding well.', time: '15:44', read: true },
-      { id: 'm3', from: 'them', type: 'text', text: 'Thank you for explaining, doctor.', time: '15:45', read: true },
-    ],
-  },
-];
-
-const GROUPS: Group[] = [
-  { id: 'g1', name: 'Ward C Care Team',      members: '8 members',  unread: 4, lastMessage: '[Nurse Dube] Samuel Park IV site looks inflamed.',  lastTime: '5 min',  accent: C.teal   },
-  { id: 'g2', name: 'Cardiac Consult Group', members: '5 members',  unread: 1, lastMessage: '[Dr. Moyo] New STEMI protocol uploaded.',            lastTime: '2 hr',   accent: C.red    },
-  { id: 'g3', name: 'Daily Huddle — Morning',members: '12 members', unread: 0, lastMessage: '[Dr. Zungu] Handover complete. Good morning all.',   lastTime: 'Yesterday', accent: C.blue },
-  { id: 'g4', name: 'Lab Alerts Channel',    members: 'Broadcast',  unread: 3, lastMessage: '[MediCore Labs] 4 results ready for review.',        lastTime: '1 hr',   accent: C.amber  },
-];
-
 // ─── Mapper ───────────────────────────────────────────────────────────────────
 
 function mapInboxToConversations(msgs: any[]): Conversation[] {
@@ -317,35 +245,11 @@ const DirectTab: React.FC<{ onOpen: (c: Conversation) => void; conversations: Co
 };
 
 const GroupsTab: React.FC = () => (
-  <FlatList
-    data={GROUPS}
-    keyExtractor={g => g.id}
-    contentContainerStyle={{ padding: 14, paddingBottom: 32, gap: 10 }}
-    renderItem={({ item: g }) => (
-      <TouchableOpacity activeOpacity={0.85}>
-        <Card style={[styles.groupCard, { borderLeftColor: g.accent, borderLeftWidth: 3 }]}>
-          <View style={styles.groupRow}>
-            <View style={[styles.groupIcon, { backgroundColor: g.accent + '22' }]}>
-              <Icon name="chat" size={16} color={g.accent} />
-            </View>
-            <View style={styles.groupMeta}>
-              <View style={styles.groupTopRow}>
-                <Text style={[styles.groupName, g.unread > 0 && styles.groupNameUnread]}>{g.name}</Text>
-                <Text style={styles.groupTime}>{g.lastTime}</Text>
-              </View>
-              <Text style={styles.groupMembers}>{g.members}</Text>
-              <Text style={styles.groupLast} numberOfLines={1}>{g.lastMessage}</Text>
-            </View>
-            {g.unread > 0 && (
-              <View style={[styles.unreadBadge, { backgroundColor: g.accent }]}>
-                <Text style={styles.unreadBadgeText}>{g.unread}</Text>
-              </View>
-            )}
-          </View>
-        </Card>
-      </TouchableOpacity>
-    )}
-  />
+  <View style={styles.emptyState}>
+    <Icon name="chat" size={40} color={C.textMuted} />
+    <Text style={styles.emptyTitle}>Groups & Channels</Text>
+    <Text style={styles.emptySub}>Group messaging is not yet configured for your account. Contact your administrator to enable ward channels and care team groups.</Text>
+  </View>
 );
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
@@ -366,7 +270,7 @@ export const DoctorMessagesScreen: React.FC = () => {
 
   useEffect(() => { loadInbox(); }, [loadInbox]);
 
-  const totalUnread = conversations.reduce((s, c) => s + c.unread, 0) + GROUPS.reduce((s, g) => s + g.unread, 0);
+  const totalUnread = conversations.reduce((s, c) => s + c.unread, 0);
 
   if (activeConvo) {
     return (
@@ -411,7 +315,6 @@ export const DoctorMessagesScreen: React.FC = () => {
                 {t === 'direct' ? 'Direct' : 'Groups & Channels'}
               </Text>
               {t === 'direct' && conversations.some(c => c.unread > 0) && <View style={styles.tabDot} />}
-              {t === 'groups' && GROUPS.some(g => g.unread) && <View style={styles.tabDot} />}
             </TouchableOpacity>
           ))}
         </View>
@@ -471,17 +374,10 @@ const styles = StyleSheet.create({
   avatarText: { fontFamily: FONT.uiBk, color: C.blue },
   onlineDot:  { position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: C.green, borderWidth: 1.5, borderColor: C.bg },
 
-  // Groups
-  groupCard:    {},
-  groupRow:     { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  groupIcon:    { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  groupMeta:    { flex: 1, gap: 2 },
-  groupTopRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  groupName:    { fontFamily: FONT.uiBd, fontSize: 13, color: C.textMuted },
-  groupNameUnread: { color: C.text },
-  groupMembers: { fontFamily: FONT.ui, fontSize: 10, color: C.textMuted },
-  groupLast:    { fontFamily: FONT.ui, fontSize: 12, color: C.textMuted },
-  groupTime:    { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
+  // Empty state
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 12 },
+  emptyTitle: { fontFamily: FONT.uiBd, fontSize: 16, color: C.textSecondary },
+  emptySub:   { fontFamily: FONT.ui, fontSize: 13, color: C.textMuted, textAlign: 'center', lineHeight: 20 },
 
   // Thread
   threadHeader:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.surface },

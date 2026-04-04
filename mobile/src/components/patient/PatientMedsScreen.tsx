@@ -8,12 +8,16 @@ import {
   Animated,
   Modal,
   Pressable,
+  Alert,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge } from '../ui';
 import { PrescriptionsService } from '../../services/prescriptions';
+import { PatientPortalService, ApiImmunization, ApiImmunizationForecast } from '../../services/patientPortal';
 import { useAuthStore } from '../../stores/useAuthStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -109,14 +113,20 @@ interface MedDetailProps {
 }
 
 const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI }) => {
-  const slideAnim = useRef(new Animated.Value(600)).current;
-  const insets    = useSafeAreaInsets();
+  const slideAnim  = useRef(new Animated.Value(600)).current;
+  const insets     = useSafeAreaInsets();
+  const [downloading, setDownloading] = useState(false);
+  const [emailModal,  setEmailModal]  = useState(false);
+  const [emailInput,  setEmailInput]  = useState('');
+  const [sending,     setSending]     = useState(false);
 
   React.useEffect(() => {
     if (med) {
       Animated.spring(slideAnim, { toValue: 0, tension: 60, friction: 12, useNativeDriver: true }).start();
     } else {
       slideAnim.setValue(600);
+      setEmailModal(false);
+      setEmailInput('');
     }
   }, [med]);
 
@@ -124,6 +134,32 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI }) => 
 
   const handleClose = () => {
     Animated.timing(slideAnim, { toValue: 600, duration: 220, useNativeDriver: true }).start(onClose);
+  };
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      await PrescriptionsService.downloadAndShare(med.id, `${med.name} ${med.dose}`);
+    } catch {
+      Alert.alert('Download failed', 'Could not download the prescription. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleEmailSend = async () => {
+    if (!emailInput.trim()) return;
+    setSending(true);
+    try {
+      await PrescriptionsService.shareByEmail(med.id, emailInput.trim());
+      setSending(false);
+      setEmailModal(false);
+      setEmailInput('');
+      Alert.alert('Sent', `Prescription sent to ${emailInput.trim()}`);
+    } catch {
+      setSending(false);
+      Alert.alert('Send failed', 'Could not send the prescription by email. Please try again.');
+    }
   };
 
   return (
@@ -175,8 +211,71 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI }) => 
             <AiBadge text="PostVisit AI" />
             <Text style={[sheetStyles.askBtnText, { color: med.color }]}>Ask AI about {med.name}</Text>
           </TouchableOpacity>
+
+          {/* Prescription actions */}
+          <View style={sheetStyles.rxActions}>
+            <TouchableOpacity
+              style={[sheetStyles.rxBtn, { flex: 1 }]}
+              onPress={handleDownload}
+              activeOpacity={0.85}
+              disabled={downloading}
+            >
+              {downloading
+                ? <ActivityIndicator size="small" color={C.teal} />
+                : <Icon name="download" size={16} color={C.teal} />}
+              <Text style={sheetStyles.rxBtnText}>
+                {downloading ? 'Downloading…' : 'Download / Print'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[sheetStyles.rxBtn, { flex: 1 }]}
+              onPress={() => setEmailModal(true)}
+              activeOpacity={0.85}
+            >
+              <Icon name="mail" size={16} color={C.blue} />
+              <Text style={[sheetStyles.rxBtnText, { color: C.blue }]}>Send by Email</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </Animated.View>
+
+      {/* Email input modal */}
+      <Modal transparent visible={emailModal} animationType="fade" onRequestClose={() => setEmailModal(false)}>
+        <Pressable style={sheetStyles.emailOverlay} onPress={() => setEmailModal(false)} />
+        <View style={sheetStyles.emailBox}>
+          <Text style={sheetStyles.emailTitle}>Send Prescription by Email</Text>
+          <TextInput
+            style={sheetStyles.emailInput}
+            value={emailInput}
+            onChangeText={setEmailInput}
+            placeholder="Enter email address"
+            placeholderTextColor={C.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+            <TouchableOpacity
+              style={[sheetStyles.emailBtn, { flex: 1, backgroundColor: C.border }]}
+              onPress={() => setEmailModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={[sheetStyles.emailBtnText, { color: C.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[sheetStyles.emailBtn, { flex: 1, backgroundColor: C.blue }]}
+              onPress={handleEmailSend}
+              disabled={sending || !emailInput.trim()}
+              activeOpacity={0.8}
+            >
+              {sending
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={[sheetStyles.emailBtnText, { color: '#fff' }]}>Send</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -202,6 +301,15 @@ const sheetStyles = StyleSheet.create({
   refillDays: { fontFamily: FONT.uiBk, fontSize: 18 },
   askBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 13, paddingHorizontal: 16, borderRadius: RADIUS.lg, borderWidth: 1, justifyContent: 'center' },
   askBtnText: { fontFamily: FONT.uiBd, fontSize: 14 },
+  rxActions: { flexDirection: 'row', gap: 10 },
+  rxBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 12, paddingHorizontal: 14, borderRadius: RADIUS.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  rxBtnText: { fontFamily: FONT.uiBd, fontSize: 13, color: C.teal },
+  emailOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  emailBox: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, borderTopWidth: 1, borderColor: C.border },
+  emailTitle: { fontFamily: FONT.uiBd, fontSize: 16, color: C.textPrimary },
+  emailInput: { borderWidth: 1, borderColor: C.border, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 11, fontFamily: FONT.ui, fontSize: 14, color: C.textPrimary, backgroundColor: C.card },
+  emailBtn: { paddingVertical: 12, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', minHeight: 44 },
+  emailBtnText: { fontFamily: FONT.uiBd, fontSize: 14 },
 });
 
 // ─── Medication Card ──────────────────────────────────────────────────────────
@@ -276,15 +384,23 @@ const MedCard: React.FC<MedCardProps> = ({ med, onMark, onDetail }) => {
 export const PatientMedsScreen: React.FC = () => {
   const insets  = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const [meds,   setMeds]   = useState<Medication[]>([]);
-  const [detail, setDetail] = useState<Medication | null>(null);
+  const [meds,         setMeds]         = useState<Medication[]>([]);
+  const [detail,       setDetail]       = useState<Medication | null>(null);
+  const [immunizations,setImmunizations]= useState<ApiImmunization[]>([]);
+  const [forecast,     setForecast]     = useState<ApiImmunizationForecast[]>([]);
 
   useEffect(() => {
     const patientId = user?.patientMrn ?? user?.id;
     if (!patientId) return;
-    PrescriptionsService.forPatient(patientId)
+    PrescriptionsService.forCurrentPatient()
       .then(list => setMeds((list ?? []).map(mapApiPrescription)))
       .catch(() => setMeds([]));
+    PatientPortalService.getImmunizations()
+      .then(list => setImmunizations(list ?? []))
+      .catch(() => {});
+    PatientPortalService.getImmunizationForecast()
+      .then(list => setForecast(list ?? []))
+      .catch(() => {});
   }, [user?.id]);
 
   const takenToday = meds.filter((m) => m.takenToday).length;
@@ -347,6 +463,65 @@ export const PatientMedsScreen: React.FC = () => {
           ))}
         </View>
 
+        {/* Immunizations */}
+        {(immunizations.length > 0 || forecast.length > 0) && (
+          <View style={styles.immunSection}>
+            <SectionHeader>Immunizations</SectionHeader>
+
+            {/* Upcoming / overdue forecast */}
+            {forecast.filter(f => f.status === 'overdue' || f.status === 'due').slice(0, 2).map((f, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.immunForecastRow,
+                  { borderColor: f.status === 'overdue' ? C.red + '50' : C.amber + '50',
+                    backgroundColor: f.status === 'overdue' ? C.red + '0A' : C.amber + '0A' },
+                ]}
+              >
+                <Icon name="calendar" size={14} color={f.status === 'overdue' ? C.red : C.amber} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.immunForecastName}>{f.vaccineName}</Text>
+                  <Text style={styles.immunForecastDate}>
+                    {f.status === 'overdue' ? 'Overdue since ' : 'Due '}
+                    {new Date(f.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+                <Badge color={f.status === 'overdue' ? C.red : C.amber} size="xs">
+                  {f.status === 'overdue' ? 'Overdue' : 'Due'}
+                </Badge>
+              </View>
+            ))}
+
+            {/* History list */}
+            <Card style={styles.immunHistoryCard}>
+              {immunizations.slice(0, 6).map((imm, i) => (
+                <View
+                  key={imm.id}
+                  style={[styles.immunRow, i > 0 && styles.immunRowBorder]}
+                >
+                  <View style={styles.immunDot} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.immunName}>
+                      {imm.vaccineName}
+                      {imm.doseNumber ? ` (Dose ${imm.doseNumber})` : ''}
+                    </Text>
+                    {imm.dateAdministered ? (
+                      <Text style={styles.immunDate}>
+                        {new Date(imm.dateAdministered).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {imm.administeredBy ? ` · ${imm.administeredBy}` : ''}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Icon name="check" size={13} color={C.green} />
+                </View>
+              ))}
+              {immunizations.length === 0 && (
+                <Text style={styles.immunEmpty}>No immunization records on file</Text>
+              )}
+            </Card>
+          </View>
+        )}
+
       </ScrollView>
 
       <MedDetailSheet
@@ -390,4 +565,21 @@ const styles = StyleSheet.create({
   markBtnText: { fontFamily: FONT.uiBd, fontSize: 13 },
   emptyState: { alignItems: 'center', paddingVertical: 32 },
   emptyStateText: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textMuted },
+  immunSection: { gap: 8 },
+  immunForecastRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: RADIUS.md, borderWidth: 1, padding: 12,
+  },
+  immunForecastName: { fontFamily: FONT.uiBd, fontSize: 13, color: C.textPrimary },
+  immunForecastDate: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, marginTop: 1 },
+  immunHistoryCard: { gap: 0, padding: 0, overflow: 'hidden' },
+  immunRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 11, paddingHorizontal: 14,
+  },
+  immunRowBorder: { borderTopWidth: 1, borderTopColor: C.border },
+  immunDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.green },
+  immunName: { fontFamily: FONT.uiBd, fontSize: 13, color: C.textPrimary },
+  immunDate: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, marginTop: 1 },
+  immunEmpty: { fontFamily: FONT.ui, fontSize: 13, color: C.textMuted, textAlign: 'center', paddingVertical: 16, paddingHorizontal: 14 },
 });

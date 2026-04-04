@@ -59,6 +59,9 @@ export const VitalsService = {
       `/vitals/patient/${patientId}?trend=true`,
     ).then(r => r.data),
 
+  forCurrentPatient: (limit = 30) =>
+    api.get<any[]>(`/patient-portal/vitals?limit=${limit}`).then(r => r.data),
+
   record: (dto: RecordVitalsDto) =>
     api.post<{ success: boolean; vitals: ApiVital; cdssInsights: any }>(
       '/vitals', dto,

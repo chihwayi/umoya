@@ -18,6 +18,7 @@ import { PostVisitService } from '../../services/postVisit';
 import { AppointmentsService, ApiAppointment } from '../../services/appointments';
 import { MessagesService } from '../../services/messages';
 import { CdssService, CareGapResult, RiskTierResult } from '../../services/cdss';
+import { PatientPortalService, ApiAdmission, ApiAiHealthInsight } from '../../services/patientPortal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,8 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
   const [unreadCount,  setUnreadCount]  = useState(0);
   const [careGaps,     setCareGaps]     = useState<CareGapResult[]>([]);
   const [riskTier,     setRiskTier]     = useState<RiskTierResult | null>(null);
+  const [admission,    setAdmission]    = useState<ApiAdmission | null>(null);
+  const [aiInsights,   setAiInsights]   = useState<ApiAiHealthInsight | null>(null);
 
   useEffect(() => {
     Animated.loop(
@@ -106,22 +109,22 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
     if (!id) return;
 
     // Load latest post-visit session
-    PostVisitService.sessions(id).then(sessions => {
-      if (sessions?.[0]) {
-        const s = sessions[0];
+    PostVisitService.patientSessions().then(result => {
+      const s = result?.sessions?.[0];
+      if (s) {
         setPostVisit({
-          doctorName: s.doctorName ?? 'Your doctor',
-          specialty:  s.specialty  ?? '',
-          visitDate:  s.appointmentDate
-            ? new Date(s.appointmentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+          doctorName: 'Your care team',
+          specialty:  s.sourceType ?? '',
+          visitDate:  s.publishedAt
+            ? new Date(s.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
             : '—',
-          visitType:  s.visitType ?? 'Consultation',
+          visitType:  s.sourceType ?? 'Consultation',
         });
       }
     }).catch(() => {});
 
     // Load prescriptions for next-med card
-    PrescriptionsService.forPatient(id).then(list => {
+    PrescriptionsService.forCurrentPatient(true).then(list => {
       if (list?.[0]) {
         setNextMed({
           name:          list[0].drugName ?? 'Medication',
@@ -154,10 +157,10 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
     }).catch(() => {});
 
     // Load unread message count for bell badge
-    MessagesService.unreadCount().then(n => setUnreadCount(n ?? 0)).catch(() => {});
+    MessagesService.patientUnreadCount().then(n => setUnreadCount(n ?? 0)).catch(() => {});
 
     // Load recent lab results
-    LabOrdersService.results(id).then(orders => {
+    LabOrdersService.forCurrentPatient().then(orders => {
       const results: HomeLab[] = [];
       (orders ?? []).slice(0, 3).forEach(order => {
         (order.results ?? []).slice(0, 1).forEach(r => {
@@ -184,6 +187,16 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
     CdssService.getPatientRiskTier(id).then(tier => {
       if (tier) setRiskTier(tier);
     }).catch(() => {});
+
+    // Load current admission status (conditional banner)
+    PatientPortalService.getCurrentAdmission().then(adm => {
+      if (adm?.id) setAdmission(adm);
+    }).catch(() => {});
+
+    // Load AI health insights
+    PatientPortalService.getAiInsights().then(ins => {
+      if (ins?.summary) setAiInsights(ins);
+    }).catch(() => {});
   }, [user?.id]);
 
   const goToPostVisit = () => {
@@ -202,7 +215,7 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
             <Text style={styles.greetingSub}>{greeting()}</Text>
             <Text style={styles.greetingName}>{user?.name?.split(' ')[0] ?? 'Welcome'}</Text>
           </View>
-          <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8} onPress={() => navigation?.navigate('PHNotifications')}>
             <Icon name="bell" size={20} color={C.textSecondary} />
             {unreadCount > 0 && (
               <View style={styles.bellBadge}>
@@ -258,6 +271,53 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
             {careGaps.length > 2 && (
               <Text style={styles.careGapMore}>+{careGaps.length - 2} more care gaps</Text>
             )}
+          </Card>
+        )}
+
+        {/* Admission banner — only when patient is currently admitted */}
+        {admission && (
+          <Card accent={C.amber} style={styles.admissionCard}>
+            <View style={styles.admissionRow}>
+              <View style={[styles.admissionIconBox, { backgroundColor: C.amber + '20' }]}>
+                <Icon name="bed" size={18} color={C.amber} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.admissionLabel}>Currently Admitted</Text>
+                <Text style={styles.admissionDetail}>
+                  {[admission.ward, admission.bedNumber ? `Bed ${admission.bedNumber}` : admission.room]
+                    .filter(Boolean).join(' · ') || 'Inpatient'}
+                </Text>
+                {admission.attendingDoctor ? (
+                  <Text style={styles.admissionDoctor}>Attending: {admission.attendingDoctor}</Text>
+                ) : null}
+              </View>
+              {admission.admissionDate ? (
+                <Text style={styles.admissionDate}>
+                  {new Date(admission.admissionDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                </Text>
+              ) : null}
+            </View>
+          </Card>
+        )}
+
+        {/* AI health summary */}
+        {aiInsights && (
+          <Card accent={C.purple} style={styles.insightsCard}>
+            <View style={styles.insightsHeader}>
+              <AiBadge text="Health Summary" />
+              {aiInsights.lastAssessedAt ? (
+                <Text style={styles.insightsDate}>
+                  {new Date(aiInsights.lastAssessedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                </Text>
+              ) : null}
+            </View>
+            <Text style={styles.insightsSummary}>{aiInsights.summary}</Text>
+            {(aiInsights.keyFindings ?? []).slice(0, 2).map((finding, i) => (
+              <View key={i} style={styles.insightsFindingRow}>
+                <Icon name="sparkle" size={11} color={C.purple} />
+                <Text style={styles.insightsFinding}>{finding}</Text>
+              </View>
+            ))}
           </Card>
         )}
 
@@ -460,4 +520,17 @@ const styles = StyleSheet.create({
   careGapDesc: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textPrimary, lineHeight: 18 },
   careGapDue: { fontFamily: FONT.mono, fontSize: 10, color: C.textMuted, marginTop: 2 },
   careGapMore: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, textAlign: 'center' },
+  admissionCard: { gap: 0 },
+  admissionRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  admissionIconBox: { width: 38, height: 38, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
+  admissionLabel: { fontFamily: FONT.uiBd, fontSize: 12, color: C.amber, textTransform: 'uppercase', letterSpacing: 0.4 },
+  admissionDetail: { fontFamily: FONT.uiBd, fontSize: 14, color: C.textPrimary, marginTop: 1 },
+  admissionDoctor: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, marginTop: 2 },
+  admissionDate: { fontFamily: FONT.mono, fontSize: 11, color: C.textMuted },
+  insightsCard: { gap: 10 },
+  insightsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  insightsDate: { fontFamily: FONT.mono, fontSize: 10, color: C.textMuted },
+  insightsSummary: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textPrimary, lineHeight: 20 },
+  insightsFindingRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 2 },
+  insightsFinding: { flex: 1, fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, lineHeight: 18 },
 });

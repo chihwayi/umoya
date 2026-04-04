@@ -292,9 +292,6 @@ export const PatientTelemedicineScreen: React.FC<PatientTelemedicineScreenProps>
   };
 
   const handleEndCall = async () => {
-    if (activeConsultation) {
-      await TelemedicineService.end(activeConsultation.id).catch(() => {});
-    }
     setCallState('ended');
     setMeetingAccess(null);
     setShowRating(true);
