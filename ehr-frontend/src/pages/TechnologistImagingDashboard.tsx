@@ -132,6 +132,7 @@ const TechnologistImagingDashboard: React.FC = () => {
                 searchFn={(q) => cdssApi.searchGuidelines(`Medical imaging, radiology technologist: ${q}`, token, tenantSlug!)}
                 contextLabel="Imaging Protocols"
                 className="h-full bg-slate-900 border-0"
+                onMinimize={() => setShowGuidelineSearch(false)}
               />
             </div>
           </div>

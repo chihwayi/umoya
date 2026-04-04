@@ -4638,6 +4638,7 @@ const DoctorDashboard: React.FC = () => {
                   }}
                   contextLabel="Doctor"
                   className="flex-1"
+                  onMinimize={() => setShowGuidelineSearch(false)}
                 />
               </div>
             </div>

@@ -16,6 +16,8 @@ interface GuidelineSearchPanelProps {
   /** Short label prefix shown in the dock, e.g. "Cardiac notes" */
   contextLabel?: string;
   className?: string;
+  /** Called when the panel minimizes (search starts). Use to close a parent modal overlay. */
+  onMinimize?: () => void;
 }
 
 interface Citation {
@@ -27,7 +29,7 @@ interface Citation {
   confidence?: number;
 }
 
-export function GuidelineSearchPanel({ searchFn, contextLabel, className = '' }: GuidelineSearchPanelProps) {
+export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', onMinimize }: GuidelineSearchPanelProps) {
   const { registerTask, completeTask, failTask } = useBackgroundTasks();
   const { showInfo, showError } = useNotification();
 
@@ -52,6 +54,7 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '' }:
     setRunningTaskId(taskId);
     setResults([]);
     setCollapsed(true); // auto-minimize — user can continue working
+    onMinimize?.(); // close parent modal overlay if provided
 
     try {
       const response = await searchFn(q);
@@ -72,7 +75,7 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '' }:
     } finally {
       setRunningTaskId(null);
     }
-  }, [query, isRunning, contextLabel, registerTask, completeTask, failTask, searchFn, showInfo, showError]);
+  }, [query, isRunning, contextLabel, registerTask, completeTask, failTask, searchFn, showInfo, showError, onMinimize]);
 
   return (
     <div className={`rounded-xl border border-slate-200 bg-slate-50 ${className}`}>
@@ -140,7 +143,7 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '' }:
                 AI is searching — this can take 1–2 minutes. You can close this modal and keep working.
               </p>
               <button
-                onClick={() => setCollapsed(true)}
+                onClick={() => { setCollapsed(true); onMinimize?.(); }}
                 className="ml-3 shrink-0 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 bg-white rounded border border-indigo-200 hover:border-indigo-400 transition"
               >
                 Minimize

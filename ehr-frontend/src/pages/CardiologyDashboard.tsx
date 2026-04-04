@@ -818,6 +818,7 @@ const CardiologyDashboard: React.FC<CardiologyDashboardProps> = ({ embedded = fa
               <GuidelineSearchPanel
                 searchFn={(q) => cdssApi.searchGuidelines(q, token!, tenantSlug!)}
                 contextLabel="Cardiology"
+                onMinimize={() => setShowGuidelineSearch(false)}
               />
             </div>
           </div>

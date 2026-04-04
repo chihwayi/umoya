@@ -1220,6 +1220,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                       return cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
                     }}
                     contextLabel="Doctor"
+                    onMinimize={() => setShowGuidelineSearch(false)}
                   />
                 </div>
 

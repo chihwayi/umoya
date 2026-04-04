@@ -1122,6 +1122,7 @@ const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedde
                   <GuidelineSearchPanel
                     searchFn={(q) => cdssApi.searchGuidelines(q, localStorage.getItem('ehr_token')!, tenantSlug!)}
                     contextLabel="Ophthalmology"
+                    onMinimize={() => setShowGuidelineSearch(false)}
                   />
                 </div>
               </div>

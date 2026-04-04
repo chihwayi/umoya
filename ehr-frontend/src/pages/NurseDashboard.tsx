@@ -5369,6 +5369,7 @@ const NurseDashboard: React.FC = () => {
                 <GuidelineSearchPanel
                   searchFn={(q) => ehrApi.searchGuidelines(`Nursing protocols, triage guidelines, medication administration, patient safety: ${q}`, localStorage.getItem('ehr_token')!, tenantSlug!)}
                   contextLabel="Nursing"
+                  onMinimize={() => setShowGuidelineSearch(false)}
                 />
               </div>
             </div>

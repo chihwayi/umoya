@@ -114,6 +114,7 @@ const MaternityDoctorDashboard: React.FC<MaternityDoctorDashboardProps> = ({ emb
                 <GuidelineSearchPanel
                   searchFn={(q) => ehrApi.searchGuidelines(`Maternity, Obstetrics, WHO ANC/PNC guidelines: ${q}`, localStorage.getItem('ehr_token')!, tenantSlug!)}
                   contextLabel="Maternity"
+                  onMinimize={() => setShowGuidelineSearch(false)}
                 />
               </div>
             </div>
