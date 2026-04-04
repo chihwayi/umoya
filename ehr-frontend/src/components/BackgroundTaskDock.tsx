@@ -76,7 +76,7 @@ function GuidelineResultViewer({ task, onClose }: ResultViewerProps) {
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-4">{c.content || c.text || c.recommendation || ''}</p>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">{c.content || c.text || c.recommendation || ''}</p>
                     {c.recommendation && c.content && (
                       <p className="mt-1.5 text-[11px] font-medium text-indigo-700">→ {c.recommendation}</p>
                     )}
