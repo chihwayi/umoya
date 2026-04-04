@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Save, Calendar, Users, Target, Activity, BookOpen, Search, Sparkles, CheckCircle } from 'lucide-react';
+import { X, Plus, Trash2, Save, Calendar, Users, Target, Activity, BookOpen, Sparkles, CheckCircle } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import ConfirmDialog from './ConfirmDialog';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
 interface CarePlan {
   id?: string;
@@ -119,11 +120,6 @@ const CarePlanBuilder: React.FC<CarePlanBuilderProps> = ({
   const [activeTab, setActiveTab] = useState<'details' | 'goals' | 'interventions' | 'guidelines'>('details');
   const { showSuccess, showError } = useNotification();
 
-  // CDSS Guideline Search State
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
-
   useEffect(() => {
     if (carePlan) {
       setFormData({
@@ -212,28 +208,6 @@ const CarePlanBuilder: React.FC<CarePlanBuilderProps> = ({
     });
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -648,67 +622,12 @@ const CarePlanBuilder: React.FC<CarePlanBuilderProps> = ({
                   </div>
                 </div>
 
-                <div className="flex gap-3">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={guidelineQuery}
-                      onChange={(e) => setGuidelineQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                      placeholder="e.g. 'Type 2 Diabetes management guidelines' or 'Hypertension treatment protocol'"
-                      className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <button
-                    onClick={handleGuidelineSearch}
-                    disabled={loadingGuidelines || !guidelineQuery.trim()}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {loadingGuidelines ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Searching...
-                      </>
-                    ) : (
-                      'Search'
-                    )}
-                  </button>
-                </div>
+                <GuidelineSearchPanel
+                  searchFn={(q) => cdssApi.searchGuidelines(`Care Plan: ${q}`, token, tenantSlug)}
+                  contextLabel="Care Plan"
+                  className="bg-white border-indigo-200"
+                />
               </div>
-
-              {guidelineResults.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold text-slate-800">Search Results</h4>
-                    <span className="text-xs text-slate-500">{guidelineResults.length} citations found</span>
-                  </div>
-                  {guidelineResults.map((citation: any, idx: number) => (
-                    <div key={`cp-cite-${idx}`} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-start gap-3">
-                        <CheckCircle className="w-5 h-5 text-emerald-500 mt-1 flex-shrink-0" />
-                        <div className="space-y-2">
-                          <p className="text-slate-800 leading-relaxed">
-                            {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
-                          </p>
-                          {citation.source && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md font-medium">
-                                Source: {citation.source}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                  <Sparkles className="w-10 h-10 text-indigo-300 mx-auto mb-3" />
-                  <p className="text-slate-500 font-medium">Search for clinical guidelines to see recommendations here</p>
-                </div>
-              )}
             </div>
           )}
         </div>

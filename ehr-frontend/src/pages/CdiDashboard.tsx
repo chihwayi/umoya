@@ -8,13 +8,12 @@ import {
   Loader2,
   ArrowLeft,
   Brain,
-  Search,
-  BookOpen,
   ClipboardList,
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 
 interface CdiDashboardProps {
   embedded?: boolean;
@@ -39,9 +38,6 @@ const CdiDashboard: React.FC<CdiDashboardProps> = ({ embedded = false }) => {
   const [responseDrafts, setResponseDrafts] = useState<Record<string, any>>({});
 
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -178,27 +174,6 @@ const CdiDashboard: React.FC<CdiDashboardProps> = ({ embedded = false }) => {
     }
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      showError('Error', 'Failed to search CDI guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const getPriorityBadge = (priority: string) => {
     const value = String(priority || '').toLowerCase();
@@ -702,54 +677,10 @@ const CdiDashboard: React.FC<CdiDashboardProps> = ({ embedded = false }) => {
         </div>
 
         {showGuidelineSearch && (
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={guidelineQuery}
-                  onChange={(e) => setGuidelineQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                  placeholder="Search e.g. 'acute respiratory failure specificity', 'sepsis documentation', 'POA query best practices'..."
-                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={handleGuidelineSearch}
-                disabled={loadingGuidelines || !guidelineQuery.trim()}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-              >
-                {loadingGuidelines ? 'Searching...' : 'Search'}
-              </button>
-            </div>
-
-            {guidelineResults.length > 0 && (
-              <div className="grid gap-3">
-                {guidelineResults.slice(0, 2).map((result, idx) => (
-                  <div key={idx} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="flex items-start gap-3">
-                      <BookOpen className="w-5 h-5 text-indigo-600 mt-1 shrink-0" />
-                      <div>
-                        <h4 className="font-medium text-slate-900">{result.source}</h4>
-                        <p className="text-sm text-slate-600 mt-1 leading-relaxed">{result.text}</p>
-                        {result.url && (
-                          <a
-                            href={result.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block mt-2 text-xs text-indigo-600 hover:underline"
-                          >
-                            View Source
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <GuidelineSearchPanel
+            searchFn={(q) => cdssApi.searchGuidelines(`CDI: ${q}`, token, tenantSlug!)}
+            contextLabel="CDI"
+          />
         )}
       </div>
 

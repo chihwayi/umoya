@@ -67,6 +67,7 @@ import AmbientBar from '../components/ambient/AmbientBar';
 import { OrderIntelligencePanel } from '../components/OrderIntelligencePanel';
 import { RiskTierBadge } from '../components/RiskTierBadge';
 import SmartInbox from '../components/inbox/SmartInbox';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import DoctorPatientsList from './DoctorPatientsList';
 import DoctorAppointmentManagement from './DoctorAppointmentManagement';
 import DoctorTreatmentHistory from './DoctorTreatmentHistory';
@@ -266,9 +267,6 @@ const DoctorDashboard: React.FC = () => {
   const [patientRiskAssessment, setPatientRiskAssessment] = useState<any>(null);
   const [loadingRiskAssessment, setLoadingRiskAssessment] = useState(false);
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [showProblemsModal, setShowProblemsModal] = useState(false);
   const [showAllergiesModal, setShowAllergiesModal] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -330,75 +328,6 @@ const DoctorDashboard: React.FC = () => {
     );
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    
-    setLoadingGuidelines(true);
-    try {
-      const token = localStorage.getItem('ehr_token');
-      if (!token || !tenantSlug) {
-         showError('Session Expired', 'Please login again.');
-         return;
-      }
-
-      let searchContext = "";
-      
-      // Enhance with patient context if available
-      if (currentAppointment?.patient) {
-        const patientContext = [];
-        if (currentAppointment.patient.dateOfBirth) {
-             const age = Math.floor((new Date().getTime() - new Date(currentAppointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-             patientContext.push(`${age}yo`);
-        }
-        // Gender is not directly in currentAppointment.patient interface in the file, 
-        // but often it's there or we might need to fetch it. 
-        // Let's check the interface. It has id, firstName, lastName, patientNumber, dateOfBirth, phone, email.
-        // It's missing gender. We might rely on what we have.
-        
-        if (patientContext.length > 0) {
-          searchContext += `Patient: ${patientContext.join(', ')}. `;
-        }
-      }
-
-      // Enhance with vitals if available
-      if (patientVitals) {
-        const vitalsContext = [];
-        if (patientVitals.bloodPressure) vitalsContext.push(`BP ${patientVitals.bloodPressure}`);
-        if (patientVitals.heartRate) vitalsContext.push(`HR ${patientVitals.heartRate}`);
-        if (patientVitals.temperature) vitalsContext.push(`Temp ${patientVitals.temperature}`);
-        if (patientVitals.oxygenSaturation) vitalsContext.push(`SpO2 ${patientVitals.oxygenSaturation}%`);
-        
-        if (vitalsContext.length > 0) {
-          searchContext += `Vitals: ${vitalsContext.join(', ')}. `;
-        }
-      }
-
-      // Enhance with current problems/diagnosis if available
-      if (problems && problems.length > 0) {
-        const problemContext = problems
-          .filter(p => p.status === 'active')
-          .map(p => p.snomedTerm || p.description || p.code)
-          .join(', ');
-        if (problemContext) {
-          searchContext += `Conditions: ${problemContext}. `;
-        }
-      }
-
-      const finalQuery = searchContext ? `${searchContext} Query: ${guidelineQuery}` : guidelineQuery;
-
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (error) {
-      console.error('Error searching guidelines:', error);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const openClinicalNotesModal = () => {
     if (!currentAppointment) return;
@@ -4669,128 +4598,47 @@ const DoctorDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Search Bar */}
-              <div className="p-6 bg-slate-50 border-b border-slate-200 shrink-0">
-                <div className="flex gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={guidelineQuery}
-                      onChange={(e) => setGuidelineQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                      placeholder="Ask a clinical question (e.g., 'First-line treatment for community-acquired pneumonia')"
-                      className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg shadow-sm"
-                      autoFocus
-                    />
-                  </div>
-                  <button
-                    onClick={handleGuidelineSearch}
-                    disabled={loadingGuidelines || !guidelineQuery.trim()}
-                    className="px-8 py-4 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center gap-2"
-                  >
-                    {loadingGuidelines ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Search className="w-5 h-5" />
-                    )}
-                    Search
-                  </button>
-                </div>
-              </div>
-
-              {/* Results Area */}
-              <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-                {loadingGuidelines ? (
-                  <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-                    <div className="relative w-20 h-20 mb-8">
-                      <div className="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
-                      <div className="absolute inset-0 border-4 border-purple-600 rounded-full border-t-transparent animate-spin"></div>
-                      <Brain className="absolute inset-0 m-auto w-8 h-8 text-purple-600 animate-pulse" />
-                    </div>
-                    <p className="text-lg font-medium">Analyzing clinical guidelines...</p>
-                    <p className="text-sm opacity-70 mt-2">Retrieving evidence-based recommendations</p>
-                  </div>
-                ) : guidelineResults && guidelineResults.length > 0 ? (
-                  <div className="space-y-6">
-                    {guidelineResults.map((result: any, index: number) => (
-                      <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
-                        <div className="flex items-start gap-4">
-                          <div className="p-3 bg-purple-50 rounded-xl shrink-0">
-                            <BookOpen className="w-6 h-6 text-purple-600" />
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="text-lg font-bold text-slate-900 mb-2 leading-tight">
-                              {result.title || 'Clinical Recommendation'}
-                            </h3>
-                            <div className="prose prose-slate max-w-none text-slate-600 mb-4">
-                              <p>{result.content || result.snippet}</p>
-                            </div>
-                            
-                            {/* Metadata/Sources */}
-                            {(result.source || result.guideline_id) && (
-                              <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-100 text-sm text-slate-500">
-                                <span className="bg-slate-100 px-2 py-1 rounded font-medium text-slate-600">
-                                  Source
-                                </span>
-                                <span>{result.source || 'Medical Guideline Database'}</span>
-                                {result.confidence && (
-                                  <>
-                                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                    <span className={`font-medium ${
-                                      result.confidence > 0.8 ? 'text-emerald-600' : 'text-amber-600'
-                                    }`}>
-                                      {Math.round(result.confidence * 100)}% Match
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : guidelineQuery && !loadingGuidelines && guidelineResults.length === 0 ? (
-                  <div className="text-center py-20">
-                    <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
-                      <Search className="w-10 h-10 text-slate-300" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">No Guidelines Found</h3>
-                    <p className="text-slate-500 max-w-md mx-auto">
-                      We couldn't find any specific clinical guidelines matching "{guidelineQuery}". Try adjusting your search terms or browsing the full library.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center py-20">
-                    <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
-                      <Brain className="w-10 h-10 text-purple-200" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">Ready to Assist</h3>
-                    <p className="text-slate-500 max-w-md mx-auto">
-                      Search for clinical guidelines, drug interactions, or treatment protocols to get AI-powered evidence-based support.
-                    </p>
-                    
-                    <div className="mt-8 flex flex-wrap justify-center gap-3">
-                      {['Hypertension management', 'Sepsis protocols', 'Adult asthma', 'Diabetes type 2'].map(term => (
-                        <button
-                          key={term}
-                          onClick={() => {
-                            setGuidelineQuery(term);
-                          }}
-                          className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm text-slate-600 hover:border-purple-300 hover:text-purple-600 transition-colors"
-                        >
-                          {term}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Footer */}
-              <div className="p-4 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-400">
-                AI-generated results should be verified against official clinical guidelines. Use professional judgment.
+              {/* GuidelineSearchPanel */}
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <GuidelineSearchPanel
+                  searchFn={(q) => {
+                    // Build context with patient data
+                    let searchContext = "";
+                    if (currentAppointment?.patient) {
+                      const patientContext = [];
+                      if (currentAppointment.patient.dateOfBirth) {
+                        const age = Math.floor((new Date().getTime() - new Date(currentAppointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+                        patientContext.push(`${age}yo`);
+                      }
+                      if (patientContext.length > 0) {
+                        searchContext += `Patient: ${patientContext.join(', ')}. `;
+                      }
+                    }
+                    if (patientVitals) {
+                      const vitalsContext = [];
+                      if (patientVitals.bloodPressure) vitalsContext.push(`BP ${patientVitals.bloodPressure}`);
+                      if (patientVitals.heartRate) vitalsContext.push(`HR ${patientVitals.heartRate}`);
+                      if (patientVitals.temperature) vitalsContext.push(`Temp ${patientVitals.temperature}`);
+                      if (patientVitals.oxygenSaturation) vitalsContext.push(`SpO2 ${patientVitals.oxygenSaturation}%`);
+                      if (vitalsContext.length > 0) {
+                        searchContext += `Vitals: ${vitalsContext.join(', ')}. `;
+                      }
+                    }
+                    if (problems && problems.length > 0) {
+                      const problemContext = problems
+                        .filter(p => p.status === 'active')
+                        .map(p => p.snomedTerm || p.description || p.code)
+                        .join(', ');
+                      if (problemContext) {
+                        searchContext += `Conditions: ${problemContext}. `;
+                      }
+                    }
+                    const finalQuery = searchContext ? `${searchContext} Query: ${q}` : q;
+                    return cdssApi.searchGuidelines(finalQuery, localStorage.getItem('ehr_token')!, tenantSlug!);
+                  }}
+                  contextLabel="Doctor"
+                  className="flex-1"
+                />
               </div>
             </div>
           </div>

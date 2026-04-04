@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   X, Save, ClipboardList, AlertTriangle, Activity, Heart,
-  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain, Plus, CheckCircle, Search, History, ChevronDown, ChevronUp
+  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain, Plus, CheckCircle, History, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from '../components/GlobalNotification';
@@ -10,6 +10,7 @@ import AllergiesModal from './AllergiesModal';
 import ModalPortal from './ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import Icd10Suggestions from './Icd10Suggestions';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
 interface Patient {
   id: string;
@@ -78,10 +79,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<any>(null);
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [guidelineAnalysis, setGuidelineAnalysis] = useState<string | null>(null);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [triageCopilotLoading, setTriageCopilotLoading] = useState(false);
   const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
   const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
@@ -89,16 +86,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   const [triageHistory, setTriageHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<any | null>(null);
-
-  const formatAnalysisText = (text: string) => {
-    if (!text) return null;
-    return text.split(/(\*\*.*?\*\*)/g).map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
-      }
-      return <span key={i}>{part}</span>;
-    });
-  };
 
   // Load triage history when patient changes
   useEffect(() => {
@@ -150,54 +137,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
     loadVitals();
   }, [patient?.id]);
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      const token = localStorage.getItem('ehr_token');
-      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-      if (!token || !tenantSlug) {
-        showError('Error', 'Session expired. Please login again.');
-        return;
-      }
-      
-      let searchContext = "Triage protocols, clinical guidelines";
-      
-      // Enhance with patient context
-      if (patient) {
-        const patientContext = [];
-        if (patient.dateOfBirth) {
-            const age = Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-            patientContext.push(`${age}yo`);
-        }
-        if (patient.gender) patientContext.push(patient.gender);
-        if (patientContext.length > 0) {
-          searchContext += `. Patient: ${patientContext.join(', ')}`;
-        }
-      }
-
-      // Enhance with current triage data
-      if (chiefComplaint) searchContext += `. CC: ${chiefComplaint}`;
-      if (chiefComplaintConcept) searchContext += ` (SNOMED: ${chiefComplaintConcept.term})`;
-      if (observations) searchContext += `. Obs: ${observations}`;
-
-      const finalQuery = `${searchContext}: ${guidelineQuery}`;
-      
-      const response = await Api.ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data) {
-        setGuidelineResults(response.data.citations || []);
-        setGuidelineAnalysis(response.data.analysis || null);
-      } else {
-        setGuidelineResults([]);
-        setGuidelineAnalysis(null);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   useEffect(() => {
     setCdssInsights(null);
@@ -565,60 +504,36 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
       )}
 
       {/* Guideline Search Section */}
-      <div className="p-6 bg-white rounded-2xl border border-indigo-200/80 shadow-sm space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
-            <Search className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Guideline Search</h3>
-            <p className="text-sm text-slate-500">
-              Search clinical guidelines and protocols using AI-powered search.
-            </p>
-          </div>
-        </div>
+      <div className="rounded-2xl">
+        <GuidelineSearchPanel
+          searchFn={async (query) => {
+            const token = localStorage.getItem('ehr_token');
+            const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+            if (!token || !tenantSlug) {
+              throw new Error('Session expired');
+            }
 
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={guidelineQuery}
-            onChange={(e) => setGuidelineQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-            placeholder="e.g. hypertension treatment guidelines"
-            className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
-          <button
-            onClick={handleGuidelineSearch}
-            disabled={loadingGuidelines || !guidelineQuery.trim()}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loadingGuidelines ? 'Searching...' : 'Search'}
-          </button>
-        </div>
+            let searchContext = "Triage protocols, clinical guidelines";
+            if (patient) {
+              const patientContext = [];
+              if (patient.dateOfBirth) {
+                const age = Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+                patientContext.push(`${age}yo`);
+              }
+              if (patient.gender) patientContext.push(patient.gender);
+              if (patientContext.length > 0) {
+                searchContext += `. Patient: ${patientContext.join(', ')}`;
+              }
+            }
+            if (chiefComplaint) searchContext += `. CC: ${chiefComplaint}`;
+            if (chiefComplaintConcept) searchContext += ` (SNOMED: ${chiefComplaintConcept.term})`;
+            if (observations) searchContext += `. Obs: ${observations}`;
 
-        {guidelineAnalysis && (
-          <div className="mt-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
-            <h4 className="text-sm font-semibold text-indigo-900 mb-2 flex items-center gap-2">
-              <Brain className="w-4 h-4" />
-              AI Clinical Analysis
-            </h4>
-            <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-              {formatAnalysisText(guidelineAnalysis)}
-            </div>
-          </div>
-        )}
-
-        {guidelineResults.length > 0 && (
-          <div className="space-y-3 mt-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Evidence Sources</p>
-            {guidelineResults.map((citation: any, idx: number) => (
-              <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm text-slate-600">
-                {/* Handle both string and object citations if necessary */}
-                {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
-              </div>
-            ))}
-          </div>
-        )}
+            const finalQuery = `${searchContext}: ${query}`;
+            return Api.ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
+          }}
+          contextLabel="Patient Assessment"
+        />
       </div>
 
       {/* Triage Form */}
@@ -1085,57 +1000,37 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
         {/* Right rail */}
         <div className="space-y-6">
           {/* Guideline Search Card */}
-          <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
-                <Brain className="w-5 h-5 text-white" />
-              </div>
-              <h4 className="text-sm font-bold text-slate-900">Clinical Guidelines</h4>
-            </div>
-            
-            <div className="flex gap-2 mb-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={guidelineQuery}
-                  onChange={(e) => setGuidelineQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                  placeholder="Search protocols..."
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <button
-                onClick={handleGuidelineSearch}
-                disabled={loadingGuidelines || !guidelineQuery.trim()}
-                className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loadingGuidelines ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Go'}
-              </button>
-            </div>
+          <GuidelineSearchPanel
+            searchFn={async (query) => {
+              const token = localStorage.getItem('ehr_token');
+              const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+              if (!token || !tenantSlug) {
+                throw new Error('Session expired');
+              }
 
-            {guidelineResults.length > 0 && (
-              <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                {guidelineResults.map((citation: any, idx: number) => (
-                  <div key={idx} className="bg-white p-2 rounded border border-slate-200 text-xs">
-                    <div className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-slate-800 leading-tight">
-                          {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
-                        </p>
-                        {citation.source && (
-                          <span className="text-[10px] text-slate-400 mt-1 block">
-                            Src: {citation.source}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              let searchContext = "Triage protocols, clinical guidelines";
+              if (patient) {
+                const patientContext = [];
+                if (patient.dateOfBirth) {
+                  const age = Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+                  patientContext.push(`${age}yo`);
+                }
+                if (patient.gender) patientContext.push(patient.gender);
+                if (patientContext.length > 0) {
+                  searchContext += `. Patient: ${patientContext.join(', ')}`;
+                }
+              }
+              if (chiefComplaint) searchContext += `. CC: ${chiefComplaint}`;
+              if (chiefComplaintConcept) searchContext += ` (SNOMED: ${chiefComplaintConcept.term})`;
+              if (observations) searchContext += `. Obs: ${observations}`;
+
+              const finalQuery = `${searchContext}: ${query}`;
+              return Api.ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
+            }}
+            contextLabel="Patient Assessment"
+            className="bg-gradient-to-br from-white to-slate-50 border-slate-200/60 shadow-sm"
+          />
+
 
           <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
             <div className="flex items-center gap-3 mb-4">

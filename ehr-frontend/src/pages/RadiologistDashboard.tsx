@@ -1,8 +1,8 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import { Camera, Brain, BookOpen, Search, RefreshCw, Settings, LayoutDashboard } from 'lucide-react';
+import { Camera, Brain, Settings, LayoutDashboard } from 'lucide-react';
 import RadiologistWorklist from '../components/RadiologistWorklist';
-import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
 import MedicalVisionPanel from '../components/MedicalVision/MedicalVisionPanel';
 import { ehrApi, cdssApi } from '../services/api';
@@ -23,9 +23,6 @@ const RadiologistDashboard: React.FC = () => {
   // CDSS State
   const [showGuidelineSearch, setShowGuidelineSearch] = React.useState(false);
   const [showVisionPanel, setShowVisionPanel] = React.useState(false);
-  const [guidelineQuery, setGuidelineQuery] = React.useState('');
-  const [guidelineResults, setGuidelineResults] = React.useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = React.useState(false);
 
   React.useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -78,32 +75,6 @@ const RadiologistDashboard: React.FC = () => {
     setLoadError(false);
   }, []);
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      // Use specific context for Radiology
-      const searchContext = "Radiology, medical imaging protocols, ACR appropriateness criteria";
-      const finalQuery = `${searchContext}: ${guidelineQuery}`;
-
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   if (!tenantSlug) return null;
 
@@ -156,43 +127,11 @@ const RadiologistDashboard: React.FC = () => {
 
       {/* Guideline Search Panel */}
       {showGuidelineSearch && (
-        <div className="bg-white border border-violet-200 rounded-2xl shadow-sm animate-in slide-in-from-top-2 duration-200">
-          <div className="px-4 py-4">
-            <div className="flex gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                <input
-                  type="text"
-                  value={guidelineQuery}
-                  onChange={(e) => setGuidelineQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                  placeholder="Search ACR Appropriateness Criteria or imaging protocols..."
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                />
-              </div>
-              <button
-                onClick={handleGuidelineSearch}
-                disabled={loadingGuidelines}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {loadingGuidelines ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <BookOpen className="w-4 h-4" />
-                )}
-                Search Guidelines
-              </button>
-            </div>
-
-            {guidelineResults.length > 0 && (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {guidelineResults.slice(0, 2).map((result: any, index: number) => (
-                  <GuidelineCitationCard key={index} result={result} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <GuidelineSearchPanel
+          searchFn={(q: string) => cdssApi.searchGuidelines(`Radiology, imaging interpretation: ${q}`, token, tenantSlug!)}
+          contextLabel="Radiology & Imaging"
+          className="animate-in slide-in-from-top-2 duration-200"
+        />
       )}
 
       {/* Main Content */}

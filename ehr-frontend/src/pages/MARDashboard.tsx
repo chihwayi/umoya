@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Scan, Loader2, ArrowLeft, Brain, Search, BookOpen, ShieldAlert, ClipboardList } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Scan, Loader2, ArrowLeft, Brain, BookOpen, ShieldAlert, ClipboardList } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
 import MedicationScannerModal from '../components/MedicationScannerModal';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 import PromptDialog from '../components/PromptDialog';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 
 interface MARDashboardProps {
   embedded?: boolean;
@@ -44,9 +45,6 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
   const [worklistFocus, setWorklistFocus] = useState<'all' | 'overdue' | 'high-risk' | 'alerts' | 'exceptions' | 'documentation'>('all');
   const [includeCompleted, setIncludeCompleted] = useState(false);
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   // Dialog state replacing window.prompt calls
   const [alertAckPrompt, setAlertAckPrompt] = useState<{ alert: any; value: string } | null>(null);
@@ -313,25 +311,6 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
     });
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim() || !tenantSlug || !token) return;
-    try {
-      setLoadingGuidelines(true);
-      const response = await cdssApi.searchGuidelines(
-        guidelineQuery,
-        token,
-        tenantSlug,
-        6,
-        { module: 'mar', role: user?.role || 'doctor' },
-      );
-      setGuidelineResults(response.data?.citations || []);
-    } catch (error: any) {
-      showError('Error', error?.response?.data?.message || 'Failed to search medication safety guidance');
-      setGuidelineResults([]);
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -625,41 +604,10 @@ const MARDashboard: React.FC<MARDashboardProps> = ({ embedded = false }) => {
 
         {isDoctor && showGuidelineSearch && (
           <div className="mb-6 rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 via-blue-50 to-cyan-100/70 p-4">
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <input
-                type="text"
-                value={guidelineQuery}
-                onChange={(e) => setGuidelineQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleGuidelineSearch();
-                }}
-                placeholder="Search guidance: insulin administration safety checks"
-                className="flex-1 min-w-[240px] rounded-lg border border-cyan-300 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-              />
-              <button
-                onClick={handleGuidelineSearch}
-                disabled={loadingGuidelines}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-700 text-white hover:bg-blue-800 text-sm font-semibold disabled:opacity-60"
-              >
-                {loadingGuidelines ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                Search
-              </button>
-            </div>
-            <div className="space-y-2">
-              {guidelineResults.length === 0 ? (
-                <p className="text-sm text-blue-800/80">No guidance loaded yet.</p>
-              ) : (
-                guidelineResults.map((citation: any, idx: number) => (
-                  <article key={`mar-guideline-${idx}`} className="rounded-lg border border-cyan-200 bg-white p-3">
-                    <p className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-blue-700" />
-                      {citation.title || citation.source || `Guideline ${idx + 1}`}
-                    </p>
-                    <p className="text-sm text-slate-600 mt-1">{citation.snippet || citation.content || 'No excerpt provided.'}</p>
-                  </article>
-                ))
-              )}
-            </div>
+            <GuidelineSearchPanel
+              searchFn={(q) => cdssApi.searchGuidelines(q, localStorage.getItem('ehr_token')!, tenantSlug!, 6, { module: 'mar', role: user?.role || 'doctor' })}
+              contextLabel="MAR"
+            />
           </div>
         )}
 

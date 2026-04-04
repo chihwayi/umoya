@@ -14,7 +14,6 @@ import {
   Settings,
   Brain,
   BookOpen,
-  Search,
   RefreshCw,
   ChevronRight,
   Sparkles,
@@ -23,9 +22,9 @@ import {
 } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
-import { GuidelineResult } from '../types/guidelines';
 import GuidelineCitationCard from '../components/GuidelineCitationCard';
 import { useConfirmation } from '../hooks/useConfirmation';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 
 const TelemedicineConsultationPage: React.FC = () => {
   const { tenantSlug, consultationId } = useParams<{ tenantSlug: string; consultationId: string }>();
@@ -44,9 +43,6 @@ const TelemedicineConsultationPage: React.FC = () => {
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
   const currentUser = React.useMemo(() => {
@@ -138,32 +134,6 @@ const TelemedicineConsultationPage: React.FC = () => {
     await handleEndConsultation(true);
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      // Add context for Telemedicine
-      const searchContext = "Telemedicine, remote consultation, digital health protocols";
-      const finalQuery = `${searchContext}: ${guidelineQuery}`;
-      
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -392,51 +362,20 @@ const TelemedicineConsultationPage: React.FC = () => {
                 <Brain className="w-5 h-5 text-purple-400" />
                 AI Assistant
               </h3>
-              <button 
+              <button
                 onClick={() => setShowGuidelineSearch(false)}
                 className="p-1 hover:bg-white/10 rounded-lg text-white/60 hover:text-white"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
-            
-            <div className="p-4 border-b border-white/10 bg-slate-800/50">
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-white/40" />
-                <input
-                  type="text"
-                  value={guidelineQuery}
-                  onChange={(e) => setGuidelineQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                  placeholder="Search clinical guidelines..."
-                  className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-white/10 rounded-lg text-sm text-white placeholder-white/40 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={handleGuidelineSearch}
-                disabled={loadingGuidelines || !guidelineQuery.trim()}
-                className="w-full mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                {loadingGuidelines ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <BookOpen className="w-4 h-4" />
-                )}
-                Search Guidelines
-              </button>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {guidelineResults.length > 0 ? (
-                guidelineResults.map((result, index) => (
-                  <GuidelineCitationCard key={index} result={result} dark />
-                ))
-              ) : (
-                <div className="text-center py-8 text-white/40">
-                  <Brain className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p className="text-sm">Search for protocols, drug interactions, or clinical guidelines to assist during the consultation.</p>
-                </div>
-              )}
+            <div className="p-4 border-b border-white/10 bg-slate-800/50 flex-1 overflow-y-auto">
+              <GuidelineSearchPanel
+                searchFn={(q) => cdssApi.searchGuidelines(`Telemedicine: ${q}`, token, tenantSlug!)}
+                contextLabel="Telemedicine"
+                className="bg-slate-900 border-white/10"
+              />
             </div>
           </div>
         </div>

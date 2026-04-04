@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, BellRing, Brain, Loader2, Search, BookOpen, CheckCircle, Sparkles } from 'lucide-react';
+import { AlertTriangle, BellRing, Brain, Loader2, BookOpen, CheckCircle, Sparkles, Search } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
 type OncologyIntelligencePanelProps = {
   tenantSlug: string;
@@ -39,9 +40,6 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
   
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const effectiveCaseId = String(appliedFilters.caseId || caseId || '').trim();
   const hasCase = Boolean(effectiveCaseId && tenantSlug && token);
@@ -105,28 +103,6 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
     loadIntelligence(appliedFilters);
   }, [appliedFilters, caseId, tenantSlug, token]);
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const recommendations = intelligence?.recommendations?.recommendations ?? [];
   const responseAlerts = intelligence?.responseStatus?.alerts ?? [];
@@ -349,55 +325,11 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
       
       {showGuidelineSearch && (
         <div className="p-4 border-b border-slate-800/70 bg-slate-900/50">
-          <div className="flex gap-3 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={guidelineQuery}
-                onChange={(e) => setGuidelineQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                placeholder="Search oncology guidelines (e.g. 'metastatic breast cancer protocols', 'immunotherapy side effects')..."
-                className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-200 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 placeholder-slate-500"
-              />
-            </div>
-            <button
-              onClick={handleGuidelineSearch}
-              disabled={loadingGuidelines || !guidelineQuery.trim()}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loadingGuidelines ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Searching...
-                </>
-              ) : (
-                'Search'
-              )}
-            </button>
-          </div>
-
-          {guidelineResults.length > 0 && (
-            <div className="space-y-3 bg-slate-950/50 rounded-lg p-4 border border-slate-800">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Relevant Guidelines & Evidence</p>
-              </div>
-              {guidelineResults.map((citation: any, idx: number) => (
-                <div key={`onco-search-${idx}`} className="flex items-start gap-3 p-3 bg-slate-900 rounded border border-slate-800/60 shadow-sm">
-                  <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
-                  <div className="space-y-1">
-                    <p className="text-sm text-slate-300 leading-relaxed">
-                      {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
-                    </p>
-                    {citation.source && (
-                      <p className="text-xs text-slate-500 font-medium">Source: {citation.source}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <GuidelineSearchPanel
+            searchFn={(q) => cdssApi.searchGuidelines(`Oncology: ${q}`, token, tenantSlug)}
+            contextLabel="Oncology"
+            className="bg-slate-950 border-slate-700"
+          />
         </div>
       )}
 

@@ -10,15 +10,16 @@ import {
   FileText,
   ListFilter,
   Loader2,
-  Sparkles,
   ShieldAlert,
   Tag,
-  Search,
   BookOpen,
   CheckCircle,
+  Search,
+  Sparkles,
 } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 import {
   formatDateTimeToDDMMYYYYHHMM,
   formatDateToDDMMYYYY,
@@ -242,9 +243,6 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const renderSeverityBadge = (severity?: string | null) => {
     if (!severity) return null;
@@ -464,28 +462,6 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
     );
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const getFilterCount = (key: FilterValue) => {
     switch (key) {
@@ -620,55 +596,10 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
 
       {showGuidelineSearch && (
         <div className="mb-6 bg-violet-50/50 rounded-xl p-4 border border-violet-100">
-          <div className="flex gap-3 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={guidelineQuery}
-                onChange={(e) => setGuidelineQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                placeholder="Search imaging guidelines (e.g. 'MRI brain contrast indications', 'CT pulmonary angiogram protocol')..."
-                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
-              />
-            </div>
-            <button
-              onClick={handleGuidelineSearch}
-              disabled={loadingGuidelines || !guidelineQuery.trim()}
-              className="px-6 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loadingGuidelines ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Searching...
-                </>
-              ) : (
-                'Search'
-              )}
-            </button>
-          </div>
-
-          {guidelineResults.length > 0 && (
-            <div className="space-y-3 bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <BookOpen className="w-4 h-4 text-violet-600" />
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Relevant Clinical Guidelines</p>
-              </div>
-              {guidelineResults.map((citation: any, idx: number) => (
-                <div key={`img-search-${idx}`} className="flex items-start gap-3 p-3 bg-slate-50 rounded border border-slate-100">
-                  <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
-                  <div className="space-y-1">
-                    <p className="text-sm text-slate-700 leading-relaxed">
-                      {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
-                    </p>
-                    {citation.source && (
-                      <p className="text-xs text-slate-400 font-medium">Source: {citation.source}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <GuidelineSearchPanel
+            searchFn={(q) => cdssApi.searchGuidelines(q, token!, tenantSlug!)}
+            contextLabel="Imaging"
+          />
         </div>
       )}
 

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Activity, Camera, CalendarDays, BookOpen, Search, X, Loader2, Settings, LayoutDashboard, Brain } from 'lucide-react';
-import { GuidelineResult } from '../types/guidelines';
+import { Activity, Camera, CalendarDays, BookOpen, X, Settings, LayoutDashboard, Brain } from 'lucide-react';
 import { cdssApi } from '../services/api';
-import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import TechnologistImagingWorklist from '../components/TechnologistImagingWorklist';
 import AdminNavigationShell from '../components/AdminNavigationShell';
 
@@ -13,9 +12,6 @@ const TechnologistImagingDashboard: React.FC = () => {
 
   // AI Protocol Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
-  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
 
   React.useEffect(() => {
     const stored = localStorage.getItem('ehr_user');
@@ -29,29 +25,6 @@ const TechnologistImagingDashboard: React.FC = () => {
   }, []);
 
   const token = React.useMemo(() => localStorage.getItem('ehr_token') || '', []);
-
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) return;
-
-      const searchContext = "Radiology, Imaging Protocols, ACR Guidelines, contrast media";
-      const finalQuery = `${searchContext}: ${guidelineQuery}`;
-
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (error) {
-      console.error('Error searching guidelines:', error);
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   if (!tenantSlug) {
     return null;
@@ -153,65 +126,13 @@ const TechnologistImagingDashboard: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
-            <div className="p-6 overflow-hidden flex flex-col h-full bg-slate-950">
-              <div className="flex gap-2 mb-6 shrink-0">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                  <input
-                    type="text"
-                    value={guidelineQuery}
-                    onChange={(e) => setGuidelineQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                    placeholder="Search protocols (e.g., 'CT Abdomen contrast', 'MRI Brain stroke protocol')..."
-                    className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-slate-600"
-                    autoFocus
-                  />
-                </div>
-                <button
-                  onClick={handleGuidelineSearch}
-                  disabled={loadingGuidelines || !guidelineQuery.trim()}
-                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {loadingGuidelines ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Searching...
-                    </>
-                  ) : (
-                    'Search'
-                  )}
-                </button>
-              </div>
 
-              <div className="flex-1 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
-                {loadingGuidelines ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-slate-500">
-                    <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
-                    <p>Retrieving protocols...</p>
-                  </div>
-                ) : guidelineResults.length > 0 ? (
-                  <div className="space-y-4">
-                    {guidelineResults.map((result, index) => (
-                      <GuidelineCitationCard key={index} result={result} index={index} dark />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-slate-600">
-                    <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-800">
-                      <BookOpen className="w-8 h-8 text-slate-700" />
-                    </div>
-                    <h4 className="text-lg font-medium text-slate-300 mb-1">No protocols found</h4>
-                    <p className="max-w-sm mx-auto">
-                      Search for specific imaging protocols, contrast guidelines, or ACR recommendations.
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="p-3 border-t border-slate-800 bg-slate-900 text-xs text-center text-slate-500">
-                AI-assisted results. Always verify with radiologist or official ACR guidelines.
-              </div>
+            <div className="p-6 overflow-hidden flex flex-col h-full bg-slate-950">
+              <GuidelineSearchPanel
+                searchFn={(q) => cdssApi.searchGuidelines(`Medical imaging, radiology technologist: ${q}`, token, tenantSlug!)}
+                contextLabel="Imaging Protocols"
+                className="h-full bg-slate-900 border-0"
+              />
             </div>
           </div>
         </div>

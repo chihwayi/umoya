@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
+import {
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
   Pill, Baby,
-  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad
+  Brain, BookOpen, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
-import { GuidelineResult } from '../types/guidelines';
-import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import ModalPortal from '../components/ModalPortal';
 import ProblemListModal from '../components/ProblemListModal';
 import AllergiesModal from '../components/AllergiesModal';
@@ -91,9 +90,6 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
 
   // AI/RAG State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
-  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
   const [loadingAiSnapshot, setLoadingAiSnapshot] = useState(false);
   const [aiRiskResult, setAiRiskResult] = useState<any | null>(null);
   const [aiDiagnosisResult, setAiDiagnosisResult] = useState<any | null>(null);
@@ -205,69 +201,6 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
     }
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    
-    setLoadingGuidelines(true);
-    try {
-      const token = localStorage.getItem('ehr_token');
-      if (!token || !tenantSlug) {
-         showError('Session Expired', 'Please login again.');
-         return;
-      }
-
-      let searchContext = "";
-      
-      // Enhance with patient context
-      if (patient) {
-        const patientContext = [];
-        if (patient.dateOfBirth) {
-             const age = calculateAge(patient.dateOfBirth);
-             patientContext.push(`${age}yo`);
-        }
-        if (patient.gender) patientContext.push(patient.gender);
-        
-        if (patientContext.length > 0) {
-          searchContext += `Patient: ${patientContext.join(', ')}. `;
-        }
-
-        // Add chronic conditions and allergies to context
-        if (patient.chronicConditions) {
-          searchContext += `Conditions: ${patient.chronicConditions}. `;
-        }
-        if (patient.allergies) {
-           searchContext += `Allergies: ${patient.allergies}. `;
-        }
-      }
-
-      // Enhance with vitals if available
-      if (latestVitals) {
-        const vitalsContext = [];
-        if (latestVitals.bloodPressure) vitalsContext.push(`BP ${latestVitals.bloodPressure}`);
-        if (latestVitals.heartRate) vitalsContext.push(`HR ${latestVitals.heartRate}`);
-        if (latestVitals.temperature) vitalsContext.push(`Temp ${latestVitals.temperature}`);
-        if (latestVitals.oxygenSaturation) vitalsContext.push(`SpO2 ${latestVitals.oxygenSaturation}%`);
-        
-        if (vitalsContext.length > 0) {
-          searchContext += `Vitals: ${vitalsContext.join(', ')}. `;
-        }
-      }
-
-      const finalQuery = searchContext ? `${searchContext} Query: ${guidelineQuery}` : guidelineQuery;
-
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (error) {
-      console.error('Error searching guidelines:', error);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -346,7 +279,6 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
         new Set<string>([
           ...problemTerms.map((item: string) => String(item).trim()),
           ...appointmentContext.map((item: string) => String(item).trim()),
-          ...splitTerms(guidelineQuery),
         ].filter(Boolean)),
       ).slice(0, 8);
 
@@ -1247,32 +1179,48 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               </div>
 
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-                <div className="flex gap-2 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
-                    <input
-                      type="text"
-                      value={guidelineQuery}
-                      onChange={(e) => setGuidelineQuery(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                      placeholder="Search for clinical guidelines, drug interactions, or treatment protocols..."
-                      className="w-full pl-10 pr-4 py-3 bg-white border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none shadow-sm text-slate-700 placeholder:text-slate-400"
-                    />
-                  </div>
-                  <button
-                    onClick={handleGuidelineSearch}
-                    disabled={loadingGuidelines}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {loadingGuidelines ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <>
-                        <Sparkles className="w-5 h-5" />
-                        <span>Search</span>
-                      </>
-                    )}
-                  </button>
+                <div className="mb-6">
+                  <GuidelineSearchPanel
+                    searchFn={async (query) => {
+                      const token = localStorage.getItem('ehr_token');
+                      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+                      if (!token || !tenantSlug) {
+                        throw new Error('Session expired');
+                      }
+
+                      let searchContext = "";
+                      if (patient) {
+                        const patientContext = [];
+                        if (patient.dateOfBirth) {
+                          const age = calculateAge(patient.dateOfBirth);
+                          patientContext.push(`${age}yo`);
+                        }
+                        if (patient.gender) patientContext.push(patient.gender);
+                        if (patientContext.length > 0) {
+                          searchContext += `Patient: ${patientContext.join(', ')}. `;
+                        }
+                        if (patient.chronicConditions) {
+                          searchContext += `Conditions: ${patient.chronicConditions}. `;
+                        }
+                        if (patient.allergies) {
+                          searchContext += `Allergies: ${patient.allergies}. `;
+                        }
+                      }
+                      if (latestVitals) {
+                        const vitalsContext = [];
+                        if (latestVitals.bloodPressure) vitalsContext.push(`BP ${latestVitals.bloodPressure}`);
+                        if (latestVitals.heartRate) vitalsContext.push(`HR ${latestVitals.heartRate}`);
+                        if (latestVitals.temperature) vitalsContext.push(`Temp ${latestVitals.temperature}`);
+                        if (latestVitals.oxygenSaturation) vitalsContext.push(`SpO2 ${latestVitals.oxygenSaturation}%`);
+                        if (vitalsContext.length > 0) {
+                          searchContext += `Vitals: ${vitalsContext.join(', ')}. `;
+                        }
+                      }
+                      const finalQuery = searchContext ? `${searchContext} Query: ${query}` : query;
+                      return cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+                    }}
+                    contextLabel="Doctor"
+                  />
                 </div>
 
                 <div className="mb-6 bg-white border border-indigo-100 rounded-2xl p-5 shadow-sm">
@@ -1353,26 +1301,6 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                       )}
                     </div>
                   </div>
-                </div>
-
-                <div className="space-y-4">
-                  {guidelineResults.length > 0 ? (
-                    guidelineResults.map((result, index) => (
-                      <GuidelineCitationCard key={index} result={result} />
-                    ))
-                  ) : (
-                    !loadingGuidelines && (
-                      <div className="text-center py-12 bg-white/50 rounded-2xl border border-dashed border-slate-300">
-                        <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Brain className="w-8 h-8 text-blue-500" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-slate-900 mb-2">AI Clinical Assistant</h3>
-                        <p className="text-slate-500 max-w-md mx-auto">
-                          Search for guidelines, protocols, and medical research to assist with your diagnosis and treatment planning.
-                        </p>
-                      </div>
-                    )
-                  )}
                 </div>
               </div>
             </div>

@@ -17,7 +17,6 @@ import {
   Brain,
   BookOpen,
   Sparkles,
-  Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ehrApi, cdssApi } from '../services/api';
@@ -26,8 +25,7 @@ import { useConfirmation } from '../hooks/useConfirmation';
 import ModalPortal from '../components/ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
-import { GuidelineResult } from '../types/guidelines';
-import GuidelineCitationCard from '../components/GuidelineCitationCard';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import {
   buildSharedContextTags,
   getOphthalmologyCreateEncounterPrefill,
@@ -116,9 +114,6 @@ const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedde
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const [encounterDetail, setEncounterDetail] = useState<OphthalmologyEncounterDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -211,28 +206,6 @@ const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedde
     [currentUser?.id, showError, tenantSlug, token],
   );
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const ensureAuth = useCallback(() => {
     if (!token || !tenantSlug) {
@@ -1145,67 +1118,11 @@ const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedde
                   </button>
                 </div>
 
-                <div className="p-4 border-b border-slate-100 bg-white">
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <input
-                        type="text"
-                        value={guidelineQuery}
-                        onChange={(e) => setGuidelineQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                        placeholder="Search guidelines (e.g., 'Glaucoma treatment', 'Diabetic retinopathy screening')..."
-                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                        autoFocus
-                      />
-                    </div>
-                    <button
-                      onClick={handleGuidelineSearch}
-                      disabled={loadingGuidelines || !guidelineQuery.trim()}
-                      className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-sm"
-                    >
-                      {loadingGuidelines ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Searching...
-                        </>
-                      ) : (
-                        <>
-                          <Search className="w-4 h-4" />
-                          Search
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50">
-                  {loadingGuidelines ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-                      <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-3" />
-                      <p className="animate-pulse">Analyzing clinical protocols...</p>
-                    </div>
-                  ) : guidelineResults.length > 0 ? (
-                    <div className="space-y-4">
-                      {guidelineResults.map((result, idx) => (
-                        <GuidelineCitationCard key={idx} result={result} index={idx} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                        <Brain className="w-8 h-8 text-slate-300" />
-                      </div>
-                      <p className="text-lg font-medium text-slate-600">No guidelines found</p>
-                      <p className="text-sm">Try searching for specific ocular conditions or treatments</p>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
-                  <p className="text-xs text-slate-500">
-                    AI-generated results. Always verify with official AAO/local protocols.
-                  </p>
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  <GuidelineSearchPanel
+                    searchFn={(q) => cdssApi.searchGuidelines(q, localStorage.getItem('ehr_token')!, tenantSlug!)}
+                    contextLabel="Ophthalmology"
+                  />
                 </div>
               </div>
             </div>

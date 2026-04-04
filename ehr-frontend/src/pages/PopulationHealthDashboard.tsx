@@ -10,7 +10,6 @@ import {
   RefreshCw,
   Phone,
   Brain,
-  Search,
   BookOpen,
   ShieldCheck,
   ClipboardCheck,
@@ -22,6 +21,7 @@ import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, populationHealthApi } from '../services/api';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 import ModalPortal from '../components/ModalPortal';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 
 interface PopulationHealthDashboardProps {
   embedded?: boolean;
@@ -62,9 +62,6 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
   const [reviewModal, setReviewModal] = useState<{ item: any; intervalDays: string; note: string } | null>(null);
 
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const conditionTypes = [
     'all',
@@ -274,25 +271,6 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
     }
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim() || !token || !tenantSlug) return;
-    try {
-      setLoadingGuidelines(true);
-      const response = await cdssApi.searchGuidelines(
-        guidelineQuery,
-        token,
-        tenantSlug,
-        6,
-        { module: 'population_health', role: currentUser?.role || 'doctor' },
-      );
-      setGuidelineResults(response.data?.citations || []);
-    } catch (e: any) {
-      showError('Error', e?.response?.data?.message || 'Failed to search population-health guidance');
-      setGuidelineResults([]);
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const getPriorityPill = (priority: string) => {
     const value = String(priority || '').toLowerCase();
@@ -760,47 +738,10 @@ const PopulationHealthDashboard: React.FC<PopulationHealthDashboardProps> = ({ e
 
         {showGuidelineSearch && (
           <div className="mb-8 rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 via-teal-50 to-cyan-100/70 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-cyan-900 flex items-center gap-2">
-                <Brain className="w-5 h-5" />
-                Population Health AI Guidance
-              </h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <input
-                type="text"
-                value={guidelineQuery}
-                onChange={(e) => setGuidelineQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleGuidelineSearch();
-                }}
-                placeholder="Search guidance: uncontrolled diabetes outreach"
-                className="flex-1 min-w-[240px] rounded-lg border border-cyan-300 px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-              />
-              <button
-                onClick={handleGuidelineSearch}
-                disabled={loadingGuidelines}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 text-sm font-semibold disabled:opacity-60"
-              >
-                {loadingGuidelines ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                Search
-              </button>
-            </div>
-            <div className="space-y-2">
-              {guidelineResults.length === 0 ? (
-                <p className="text-sm text-cyan-800/80">No guidance loaded yet.</p>
-              ) : (
-                guidelineResults.map((citation: any, idx: number) => (
-                  <article key={`citation-${idx}`} className="rounded-lg border border-cyan-200 bg-white p-3">
-                    <p className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-cyan-700" />
-                      {citation.title || citation.source || `Guideline ${idx + 1}`}
-                    </p>
-                    <p className="text-sm text-slate-600 mt-1">{citation.snippet || citation.content || 'No excerpt provided.'}</p>
-                  </article>
-                ))
-              )}
-            </div>
+            <GuidelineSearchPanel
+              searchFn={(q) => cdssApi.searchGuidelines(q, token, tenantSlug || '', 6, { module: 'population_health', role: currentUser?.role || 'doctor' })}
+              contextLabel="Population Health"
+            />
           </div>
         )}
 

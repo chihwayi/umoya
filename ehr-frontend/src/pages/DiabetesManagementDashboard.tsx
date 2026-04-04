@@ -15,12 +15,11 @@ import {
   Users,
   Brain,
   BookOpen,
-  Search,
 } from 'lucide-react';
 import { diabetesApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
-import { GuidelineResult } from '../types/guidelines';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 
 const formatDate = (value?: string | Date | null, includeTime = false) => {
   if (!value) return '—';
@@ -112,9 +111,6 @@ const DiabetesManagementDashboard: React.FC = () => {
 
   // AI/RAG State
   const [showGuidelineSearch, setShowGuidelineSearch] = React.useState(false);
-  const [guidelineQuery, setGuidelineQuery] = React.useState('');
-  const [loadingGuidelines, setLoadingGuidelines] = React.useState(false);
-  const [guidelineResults, setGuidelineResults] = React.useState<GuidelineResult[]>([]);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
@@ -209,28 +205,6 @@ const DiabetesManagementDashboard: React.FC = () => {
     }
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
-      }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
-      showError('Error', 'Failed to search guidelines');
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('ehr_token');
@@ -339,52 +313,11 @@ const DiabetesManagementDashboard: React.FC = () => {
             </div>
 
             {showGuidelineSearch && (
-              <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex gap-2 mb-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={guidelineQuery}
-                      onChange={(e) => setGuidelineQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                      placeholder="Search e.g. 'Metformin titration', 'Insulin sensitivity', 'Hypoglycemia protocol'..."
-                      className="w-full pl-9 pr-4 py-2 bg-white/90 border border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-slate-900 placeholder:text-slate-500"
-                    />
-                  </div>
-                  <button
-                    onClick={handleGuidelineSearch}
-                    disabled={loadingGuidelines}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition disabled:opacity-50"
-                  >
-                    {loadingGuidelines ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
-                  </button>
-                </div>
-
-                {guidelineResults.length > 0 && (
-                  <div className="grid gap-3 max-h-96 overflow-y-auto custom-scrollbar">
-                    {guidelineResults.slice(0, 2).map((citation, idx) => (
-                      <div key={idx} className="bg-white/90 p-3 rounded-lg border border-white/20">
-                        <div className="flex items-start gap-2 mb-1">
-                          <BookOpen className="w-4 h-4 text-indigo-600 mt-0.5" />
-                          <p className="text-sm font-medium text-slate-900">{citation.source || 'Clinical Guideline'}</p>
-                        </div>
-                        <p className="text-sm text-slate-700 pl-6">{citation.text}</p>
-                        {citation.url && (
-                          <a
-                            href={citation.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-indigo-600 hover:underline pl-6 mt-1 block"
-                          >
-                            View Source
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <GuidelineSearchPanel
+                searchFn={(q) => cdssApi.searchGuidelines(`Diabetes: ${q}`, token, tenantSlug!)}
+                contextLabel="Diabetes"
+                className="bg-white/90 border-white/20"
+              />
             )}
           </div>
 

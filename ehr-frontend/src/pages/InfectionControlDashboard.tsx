@@ -3,13 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Shield, AlertTriangle, Activity, Users,
   Loader2, Calendar, BarChart3, ArrowLeft, ClipboardCheck,
-  Brain, Search, BookOpen, X
+  Brain, BookOpen, X
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { cdssApi, ehrAxios } from '../services/api';
 import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 import PromptDialog from '../components/PromptDialog';
 import ModalPortal from '../components/ModalPortal';
+import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 
 interface InfectionControlDashboardProps {
   embedded?: boolean;
@@ -44,9 +45,6 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
   const [reviewingInfectionId, setReviewingInfectionId] = useState<string | null>(null);
   const [isolationActionId, setIsolationActionId] = useState<string | null>(null);
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [guidelineQuery, setGuidelineQuery] = useState('');
-  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
-  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   // Dialog state for stewardship review (replaces 6 browser dialogs)
   const [stewardshipModal, setStewardshipModal] = useState<{
@@ -356,23 +354,6 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
     }
   };
 
-  const handleGuidelineSearch = async () => {
-    if (!guidelineQuery.trim()) return;
-    setLoadingGuidelines(true);
-    try {
-      if (!token || !tenantSlug) {
-        showError('Session Expired', 'Please login again.');
-        return;
-      }
-      const response = await cdssApi.searchGuidelines(guidelineQuery.trim(), token, tenantSlug);
-      setGuidelineResults(response.data?.citations || []);
-    } catch {
-      showError('Error', 'Failed to search infection-control guidance');
-      setGuidelineResults([]);
-    } finally {
-      setLoadingGuidelines(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -973,56 +954,18 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
           </div>
 
           {showGuidelineSearch && (
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={guidelineQuery}
-                    onChange={(e) => setGuidelineQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleGuidelineSearch();
-                    }}
-                    placeholder="Search e.g. 'contact precautions for MRSA', 'CLABSI prevention bundle', 'antibiotic timeout checklist'"
-                    className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-4 focus:border-transparent focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <button
-                  onClick={handleGuidelineSearch}
-                  disabled={loadingGuidelines || !guidelineQuery.trim()}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                >
-                  {loadingGuidelines ? 'Searching...' : 'Search'}
-                </button>
-              </div>
-
-              {guidelineResults.length > 0 && (
-                <div className="grid gap-3">
-                  {guidelineResults.slice(0, 3).map((result, idx) => (
-                    <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-start gap-3">
-                        <BookOpen className="mt-1 h-5 w-5 shrink-0 text-emerald-700" />
-                        <div>
-                          <h4 className="font-medium text-slate-900">{result.source || `Guideline ${idx + 1}`}</h4>
-                          <p className="mt-1 text-sm leading-relaxed text-slate-600">{result.text}</p>
-                          {result.url && (
-                            <a
-                              href={result.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-2 inline-block text-xs text-emerald-700 hover:underline"
-                            >
-                              View Source
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <GuidelineSearchPanel
+              searchFn={async (query) => {
+                const token = localStorage.getItem('ehr_token');
+                const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+                if (!token || !tenantSlug) {
+                  throw new Error('Session expired');
+                }
+                return cdssApi.searchGuidelines(`Infection Control: ${query}`, token, tenantSlug);
+              }}
+              contextLabel="Infection Control"
+              className="mt-4"
+            />
           )}
         </div>
 
