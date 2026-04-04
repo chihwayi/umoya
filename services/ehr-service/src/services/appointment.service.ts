@@ -344,6 +344,8 @@ export class AppointmentService {
           firstName: apt.doctor?.firstName,
           lastName: apt.doctor?.lastName
         },
+        doctorName: apt.doctor ? `${apt.doctor.firstName ?? ''} ${apt.doctor.lastName ?? ''}`.trim() || null : null,
+        doctorSpecialty: apt.doctor?.specialization ?? null,
         appointmentDate: apt.appointmentDate,
         appointmentType: apt.appointmentType,
         status: apt.status,
