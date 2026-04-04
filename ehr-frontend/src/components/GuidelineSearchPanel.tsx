@@ -153,7 +153,7 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', o
 
           {/* Results */}
           {results.length > 0 && (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
               {results.map((c, idx) => (
                 <div key={idx} className="bg-white rounded-lg border border-slate-200 p-3 shadow-sm text-sm">
                   <div className="flex items-start gap-2">
@@ -173,7 +173,7 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', o
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">{c.content || c.text || ''}</p>
+                      <p className="text-xs text-slate-600 leading-relaxed">{c.content || c.text || ''}</p>
                       {c.recommendation && (
                         <p className="mt-1 text-xs font-medium text-indigo-700">→ {c.recommendation}</p>
                       )}
