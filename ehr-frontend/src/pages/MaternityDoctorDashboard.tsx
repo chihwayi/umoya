@@ -31,6 +31,7 @@ const MaternityDoctorDashboard: React.FC<MaternityDoctorDashboardProps> = ({ emb
   };
 
   const handleLogout = () => {
+    window.dispatchEvent(new Event('ehr-logout'));
     localStorage.removeItem('ehr_token');
     localStorage.removeItem('ehr_user');
     navigate(`/ehr/${tenantSlug}`);

@@ -1498,6 +1498,7 @@ const LabDashboard: React.FC = () => {
   };
 
   const handleLogout = () => {
+    window.dispatchEvent(new Event('ehr-logout'));
     localStorage.removeItem('ehr_token');
     localStorage.removeItem('ehr_user');
     localStorage.removeItem('ehr_tenant_slug');

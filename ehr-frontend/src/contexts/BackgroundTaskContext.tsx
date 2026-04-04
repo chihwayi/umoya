@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 export type BgTaskStatus = 'running' | 'done' | 'error';
 export type BgTaskIcon = 'guidelines' | 'analysis' | 'ai' | 'search';
@@ -20,6 +20,7 @@ interface BackgroundTaskContextType {
   completeTask: (id: string, result: any) => void;
   failTask: (id: string, error: string) => void;
   dismissTask: (id: string) => void;
+  clearAllTasks: () => void;
   getTask: (id: string) => BackgroundTask | undefined;
 }
 
@@ -65,10 +66,21 @@ export const BackgroundTaskProvider: React.FC<{ children: React.ReactNode }> = (
     sync(tasksRef.current.filter(t => t.id !== id));
   }, []);
 
+  const clearAllTasks = useCallback(() => {
+    sync([]);
+  }, []);
+
   const getTask = useCallback((id: string) => tasksRef.current.find(t => t.id === id), []);
 
+  // Clear all tasks when any logout happens (manual or auto)
+  useEffect(() => {
+    const onLogout = () => sync([]);
+    window.addEventListener('ehr-logout', onLogout);
+    return () => window.removeEventListener('ehr-logout', onLogout);
+  }, []);
+
   return (
-    <BackgroundTaskContext.Provider value={{ tasks, registerTask, completeTask, failTask, dismissTask, getTask }}>
+    <BackgroundTaskContext.Provider value={{ tasks, registerTask, completeTask, failTask, dismissTask, clearAllTasks, getTask }}>
       {children}
     </BackgroundTaskContext.Provider>
   );

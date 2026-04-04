@@ -301,6 +301,7 @@ const CardiologyDashboard: React.FC<CardiologyDashboardProps> = ({ embedded = fa
   };
 
   const handleLogout = () => {
+    window.dispatchEvent(new Event('ehr-logout'));
     localStorage.removeItem('ehr_token');
     localStorage.removeItem('ehr_user');
     localStorage.removeItem('ehr_tenant');

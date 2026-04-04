@@ -2054,6 +2054,7 @@ const NurseDashboard: React.FC = () => {
 
   const handleLogout = () => {
     try {
+      window.dispatchEvent(new Event('ehr-logout'));
       // Clear all stored data
       localStorage.removeItem('ehr_token');
       localStorage.removeItem('ehr_user');

@@ -124,6 +124,7 @@ const EHRDashboard: React.FC = () => {
   }, [navigate, showSuccess, tenantSlug]);
 
   const handleLogout = () => {
+    window.dispatchEvent(new Event('ehr-logout'));
     localStorage.removeItem('ehr_token');
     localStorage.removeItem('ehr_user');
     localStorage.removeItem('ehr_tenant');

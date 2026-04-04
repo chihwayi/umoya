@@ -91,7 +91,10 @@ export const initializeAutoLogout = (options: AutoLogoutOptions) => {
 // Handle automatic logout when token expires
 export const handleAutoLogout = () => {
   console.log('🔐 Auto-logout: Token expired, clearing session');
-  
+
+  // Notify BackgroundTaskContext (and any other listeners) to clear session state
+  window.dispatchEvent(new Event('ehr-logout'));
+
   // Clear all stored authentication data
   localStorage.removeItem('ehr_token');
   localStorage.removeItem('ehr_temp_token');

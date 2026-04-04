@@ -291,6 +291,7 @@ const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedde
   };
 
   const handleLogout = () => {
+    window.dispatchEvent(new Event('ehr-logout'));
     localStorage.removeItem('ehr_token');
     localStorage.removeItem('ehr_user');
     localStorage.removeItem('ehr_tenant');

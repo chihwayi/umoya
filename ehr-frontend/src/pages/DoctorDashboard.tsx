@@ -2144,6 +2144,7 @@ const DoctorDashboard: React.FC = () => {
         <div className="p-6 border-t border-slate-700/50">
           <button
             onClick={() => {
+              window.dispatchEvent(new Event('ehr-logout'));
               localStorage.removeItem('ehr_token');
               localStorage.removeItem('ehr_user');
               localStorage.removeItem('ehr_tenant');
