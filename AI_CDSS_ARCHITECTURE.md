@@ -9,15 +9,16 @@
 1. [Overview](#overview)
 2. [Why Not Just Elasticsearch?](#why-not-just-elasticsearch)
 3. [The Full AI Stack](#the-full-ai-stack)
-4. [Document Ingestion Pipeline](#document-ingestion-pipeline)
-5. [How a Search Query Flows](#how-a-search-query-flows)
-6. [The Knowledge Databases](#the-knowledge-databases)
-7. [Hybrid Search: Vector + BM25 + Reranking](#hybrid-search-vector--bm25--reranking)
-8. [Intelligent Diagnosis Engine](#intelligent-diagnosis-engine)
-9. [LLM Integration & Governance](#llm-integration--governance)
-10. [Redis Caching & Job Queue](#redis-caching--job-queue)
-11. [Safety, PHI & Audit](#safety-phi--audit)
-12. [Running & Managing Ingestion](#running--managing-ingestion)
+4. [Complete Model Inventory](#complete-model-inventory)
+5. [Document Ingestion Pipeline](#document-ingestion-pipeline)
+6. [How a Search Query Flows](#how-a-search-query-flows)
+7. [The Knowledge Databases](#the-knowledge-databases)
+8. [Hybrid Search: Vector + BM25 + Reranking](#hybrid-search-vector--bm25--reranking)
+9. [Intelligent Diagnosis Engine](#intelligent-diagnosis-engine)
+10. [LLM Integration & Governance](#llm-integration--governance)
+11. [Redis Caching & Job Queue](#redis-caching--job-queue)
+12. [Safety, PHI & Audit](#safety-phi--audit)
+13. [Running & Managing Ingestion](#running--managing-ingestion)
 
 ---
 
@@ -101,9 +102,188 @@ A fair question. Here is what you gain by going beyond Elasticsearch:
 | `all-MiniLM-L6-v2` | SentenceTransformer (384 dims) | Query + document embedding |
 | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder | Reranking retrieved candidates |
 | `en_core_sci_sm` | scispaCy NLP | Medical entity extraction, tokenisation |
-| MedBERT (fine-tuned) | Classification | Diagnosis from structured vitals/labs |
-| ClinicalBERT (BioBERT fine-tuned) | Classification | Diagnosis from clinical notes text |
-| Ollama LLM (mistral / neural-chat) | Generative LLM | Clinical reasoning, SOAP notes, summaries |
+| `medbert/medbert-base` | HuggingFace Transformer | Diagnosis from structured vitals/labs |
+| `emilyalsentzer/Bio_ClinicalBERT` | HuggingFace Transformer | Diagnosis from clinical notes |
+| `openai/clip-vit-base-patch32` | Vision Transformer | Medical image analysis (X-ray, DICOM) |
+| Faster-Whisper (`base`/`small`/`medium`) | Speech-to-text | Audio transcription → SOAP notes |
+| Ollama LLM (mistral, llama2, neural-chat…) | Generative LLM | Clinical reasoning, SOAP notes, summaries |
+
+---
+
+## Complete Model Inventory
+
+Every AI model in the system, where it lives, what it does, and whether it ships inside the Docker image or downloads at runtime.
+
+---
+
+### 1. Embedding Model — `all-MiniLM-L6-v2`
+
+| | |
+|---|---|
+| **HuggingFace ID** | `sentence-transformers/all-MiniLM-L6-v2` |
+| **Library** | `sentence-transformers` |
+| **Dimensions** | 384 floats per vector |
+| **File** | `ai_models/rag_engine.py` |
+| **Loaded as** | `SentenceTransformer('all-MiniLM-L6-v2')` |
+| **Docker** | **Baked into image** — downloaded at build time, cached in `/opt/hf_cache` |
+| **Purpose** | Encodes every guideline chunk and every incoming query into a 384-dimensional vector. Cosine similarity between query vector and chunk vectors drives the semantic search leg of the hybrid search. |
+| **Speed** | ~2 000 sentences/second on CPU; sub-millisecond per single query |
+| **Fallback** | None — this model is required for RAG to function |
+
+---
+
+### 2. Re-Ranker — `cross-encoder/ms-marco-MiniLM-L-6-v2`
+
+| | |
+|---|---|
+| **HuggingFace ID** | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| **Library** | `sentence-transformers` (CrossEncoder class) |
+| **File** | `ai_models/rag_engine.py` |
+| **Loaded as** | `CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')` |
+| **Docker** | **Baked into image** — cached in `/opt/hf_cache` |
+| **Purpose** | After RRF fusion produces a candidate list, this model scores every `[query, document]` pair jointly — seeing both at the same time gives far higher precision than the bi-encoder. Results are then re-sorted by this score. |
+| **Fallback** | If loading fails, re-ranking is skipped and the RRF-ranked order is used directly |
+
+---
+
+### 3. MedBERT — `medbert/medbert-base`
+
+| | |
+|---|---|
+| **HuggingFace ID** | `medbert/medbert-base` |
+| **Library** | `transformers`, `torch` |
+| **File** | `ai_models/medbert_predictor.py` |
+| **Loaded as** | `AutoModel.from_pretrained()` + `AutoTokenizer.from_pretrained()` |
+| **Docker** | **Downloaded at runtime** — only if `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
+| **Purpose** | Analyses structured patient data (vitals, lab values, demographics) and outputs a probability distribution over possible diagnoses. Contributes 35% weight in the diagnosis fusion engine. |
+| **Fallback** | **Lightweight mode** — if the model is unavailable, falls back to feature encoding + rule-based pattern matching without any transformer. The service keeps running. |
+
+---
+
+### 4. ClinicalBERT — `emilyalsentzer/Bio_ClinicalBERT`
+
+| | |
+|---|---|
+| **HuggingFace ID** | `emilyalsentzer/Bio_ClinicalBERT` |
+| **Library** | `transformers`, `torch` |
+| **File** | `ai_models/clinicalbert_diagnostic.py` |
+| **Loaded as** | `AutoTokenizer.from_pretrained()` + `AutoModelForSequenceClassification.from_pretrained()` |
+| **Docker** | **Downloaded at runtime** — only if `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
+| **Purpose** | Reads free-text clinical notes (chief complaint, history of presenting illness) and produces a diagnosis probability distribution. BioBERT trained on MIMIC-III clinical notes — understands clinical language far better than a general BERT. Contributes 30% weight in fusion. |
+| **Fallback** | **Lightweight mode** — spaCy NLP + keyword extraction without transformer |
+| **NLP pipeline** | `en_core_sci_sm` (scispaCy) for token lemmatisation and noun chunks; falls back to `en_core_web_sm` |
+
+---
+
+### 5. scispaCy — `en_core_sci_sm`
+
+| | |
+|---|---|
+| **Package** | `en_core_sci_sm` (scispaCy v0.5.4) |
+| **Library** | `spacy`, `scispacy` |
+| **Files** | `ai_models/rag_engine.py`, `ai_models/clinicalbert_diagnostic.py` |
+| **Docker** | **Baked into image** — installed from `https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz` |
+| **Purpose** | Medical/scientific NLP: tokenisation, lemmatisation, noun-chunk extraction, named entity recognition for diseases, chemicals, and procedures. Used in both the RAG query expansion path and the ClinicalBERT NLP pipeline. |
+| **Fallback** | `en_core_web_sm` (standard English) if sci model unavailable |
+
+---
+
+### 6. CLIP Vision Model — `openai/clip-vit-base-patch32`
+
+| | |
+|---|---|
+| **HuggingFace ID** | `openai/clip-vit-base-patch32` |
+| **Alternative** | `microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224` (drop-in swap for clinical imaging) |
+| **Library** | `transformers`, `torch`, `pillow`, `pydicom` |
+| **File** | `ai_models/medical_vision.py` |
+| **Loaded as** | `CLIPModel.from_pretrained()` + `CLIPProcessor.from_pretrained()` |
+| **Docker** | **Downloaded at runtime** — loaded on first image analysis request |
+| **Device** | GPU if `torch.cuda.is_available()`, otherwise CPU |
+| **Purpose** | Analyses medical images — chest X-rays, DICOM files, JPGs. Matches the image against clinical label descriptions to detect: normal chest X-ray, pneumonia, tuberculosis, pleural effusion, pneumothorax, fracture. DICOM files are pre-processed with `pydicom` before being passed to CLIP. |
+| **Mock mode** | Set `MOCK_VISION_AI=true` to skip model loading (useful in dev/CI) |
+| **Triggered by** | `POST /analyze-image` (async job via Redis queue) |
+
+---
+
+### 7. Faster-Whisper (Speech-to-Text)
+
+| | |
+|---|---|
+| **Library** | `faster-whisper>=1.0.0` |
+| **Model sizes** | `base`, `small`, `medium`, `large` (set via `WHISPER_MODEL_SIZE`) |
+| **File** | `ai_models/voice_scribe.py` |
+| **Loaded as** | `WhisperModel(size, device, compute_type='int8')` |
+| **Docker** | **Downloaded at runtime** — on first transcription request |
+| **Device** | Set via `WHISPER_DEVICE` env var (default: `cpu`) |
+| **Quantisation** | int8 — significantly reduces memory footprint on CPU |
+| **Languages** | English (`en`), Shona (`sn`), Ndebele (`nd`), auto-detection |
+| **Purpose** | Transcribes clinician audio (voice consultations, dictated notes) to text. The transcript is then passed to the LLM to generate a structured SOAP note. |
+| **Fallback** | If `faster_whisper` import fails, transcription endpoints are disabled gracefully |
+| **Triggered by** | `POST /transcribe` (async job) and `POST /transcription/stream` (streaming) |
+
+---
+
+### 8. LLM — Ollama (mistral / llama2 / neural-chat / any Ollama model)
+
+| | |
+|---|---|
+| **Runtime** | Ollama — local inference server, not HuggingFace directly |
+| **Model** | Configured via `LLM_MODEL_NAME` env var — any model pulled into Ollama works |
+| **Common choices** | `mistral`, `llama2`, `neural-chat`, `llama3`, `phi3` |
+| **API endpoint** | `LLM_API_URL` (e.g. `http://ollama:11434`) |
+| **File** | `ai_models/llm_provider.py` |
+| **Docker** | **Served externally** — CDSS calls Ollama over HTTP; Ollama is a separate service/container |
+| **Temperature** | 0.2 — low, for factual clinical output |
+| **Max tokens** | 1 024 per response |
+| **JSON mode** | Supported (`format: "json"` in payload) — used for structured SOAP notes and diagnosis JSON |
+| **Purpose** | Generates natural-language clinical reasoning, differential diagnosis lists, SOAP notes from transcripts, patient visit summaries. Always receives retrieved guideline citations as context first (grounded generation). |
+| **Governance** | Every call gated by tenant use-case policy: enabled/disabled per use case, model allowlist, audit log on every call |
+| **OpenAI (optional)** | Supported as an alternative vendor for non-PHI use cases; not used by default |
+
+---
+
+### 9. Zimbabwe Terminology & Localisation
+
+| | |
+|---|---|
+| **File** | `ai_models/zimbabwe_terminology.py` |
+| **Type** | Custom rule-based NLP (no HuggingFace download) |
+| **Purpose** | Bridges local language → clinical English for the diagnosis engine |
+| **Knowledge bases** | |
+| `ZIMBABWE_TERMINOLOGY` | Maps common conditions: HIV/ARVs, TB/DOTS, Malaria, Diabetes, Hypertension, Pneumonia |
+| `SHONA_SYMPTOMS` | 21 symptoms with Shona translations (e.g. `musoro kurwadza` → headache) |
+| `NDEBELE_SYMPTOMS` | 21 symptoms with Ndebele translations |
+| `ZIMBABWE_DISEASE_PATTERNS` | Prevalence multipliers and local symptom patterns — boosts locally common conditions (HIV, Malaria, TB) in the diagnosis scorer |
+| **Used in** | `ai_models/clinicalbert_diagnostic.py` — applied during scoring to adjust confidence for Zimbabwe's disease burden |
+
+---
+
+### 10. NLTK (tokenisation support)
+
+| | |
+|---|---|
+| **Library** | `nltk` |
+| **Data downloaded** | `punkt`, `punkt_tab`, `averaged_perceptron_tagger`, `averaged_perceptron_tagger_eng` |
+| **Docker** | **Baked into image** — downloaded to `/usr/share/nltk_data` at build time (world-readable) |
+| **Purpose** | Sentence tokenisation and POS tagging used by the `unstructured` PDF extraction library during ingestion |
+
+---
+
+### Model Download Summary
+
+| Model | How it arrives | Env var to control |
+|---|---|---|
+| `all-MiniLM-L6-v2` | **Baked into Docker image** | — |
+| `cross-encoder/ms-marco-MiniLM-L-6-v2` | **Baked into Docker image** | — |
+| `en_core_sci_sm` (scispaCy) | **Baked into Docker image** | — |
+| NLTK punkt/tagger data | **Baked into Docker image** | — |
+| `medbert/medbert-base` | Downloaded at runtime | `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
+| `emilyalsentzer/Bio_ClinicalBERT` | Downloaded at runtime | `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
+| `openai/clip-vit-base-patch32` | Downloaded on first image request | `MOCK_VISION_AI=true` to skip |
+| Faster-Whisper | Downloaded on first transcription request | `WHISPER_MODEL_SIZE=base` |
+| LLM (mistral, llama2, etc.) | Served by Ollama (external) | `LLM_MODEL_NAME`, `LLM_API_URL` |
+
+**The four baked-in models** (`all-MiniLM-L6-v2`, cross-encoder, scispaCy, NLTK) are the ones that run on every single guideline query. They must be available from cold start, so they live in the image. The heavier transformer models (MedBERT, ClinicalBERT) are optional — if they can't load, the service degrades gracefully to rule-based mode rather than failing.
 
 ---
 
@@ -323,28 +503,35 @@ Patient Data
   ├─ Structured (vitals, labs, age, sex)
   └─ Unstructured (clinical notes, chief complaint)
          │
-         ├─ MedBERT Predictor
-         │   Fine-tuned on structured EHR data
-         │   Output: probability distribution over diagnoses
+         ├─ MedBERT Predictor  [medbert/medbert-base]
+         │   AutoModel.from_pretrained — structured EHR data
+         │   Vitals, labs, demographics → diagnosis probabilities
          │   Weight in fusion: 35%
+         │   Fallback: feature encoding + pattern matching
          │
-         ├─ ClinicalBERT Diagnostic
-         │   BioBERT fine-tuned on MIMIC clinical notes
-         │   Input: free-text clinical notes
-         │   Output: probability distribution over diagnoses
+         ├─ ClinicalBERT Diagnostic  [emilyalsentzer/Bio_ClinicalBERT]
+         │   AutoModelForSequenceClassification — free text
+         │   BioBERT trained on MIMIC-III clinical notes
+         │   Chief complaint, HPI → diagnosis probabilities
          │   Weight in fusion: 30%
+         │   Fallback: spaCy NLP + keyword extraction
          │
          ├─ Rule-based Engine
          │   Symptom matching + clinical decision rules
          │   Fast, explainable, reliable baseline
          │   Weight in fusion: 35%
          │
+         ├─ Zimbabwe Terminology Layer
+         │   Adjusts scores for local disease prevalence
+         │   Shona/Ndebele symptom → canonical English mapping
+         │   Prevalence multipliers for HIV, Malaria, TB, etc.
+         │
          └─ Fusion Engine
              Weighted average of probabilities
              Agreement scoring (boost if all three agree)
              ICD-10 + SNOMED CT code attachment
              RAG-retrieved evidence for top diagnoses
-             Optional LLM reasoning generation
+             Optional LLM reasoning (Ollama) for differential
 ```
 
 The fusion weights are tunable. Rule-based gets equal weight to ML models because it is highly explainable and fails gracefully when ML models are uncertain.
