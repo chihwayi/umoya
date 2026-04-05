@@ -87,6 +87,21 @@ export const authAPI = {
   isAuthenticated: () => {
     const token = localStorage.getItem('auth_token');
     if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.exp && payload.exp < Date.now() / 1000) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user');
+          delete api.defaults.headers.common['Authorization'];
+          return false;
+        }
+      } catch {
+        // malformed token — treat as unauthenticated
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        delete api.defaults.headers.common['Authorization'];
+        return false;
+      }
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       return true;
     }
