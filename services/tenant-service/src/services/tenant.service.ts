@@ -962,9 +962,10 @@ export class TenantService implements OnModuleInit {
     try {
       this.logger.log(`Starting database provisioning for tenant: ${tenant.id}`);
       
-      // Create database and run migrations
+      // Create database and run migrations (pass subdomain so demo users get slug-based emails)
       const connectionString = await this.databaseProvisioningService.createDatabase(
-        tenant.databaseName
+        tenant.databaseName,
+        tenant.subdomain,
       );
 
       // Update tenant with connection string and activate

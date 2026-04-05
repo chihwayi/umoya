@@ -36,6 +36,7 @@ interface ApplySchemaOptions {
   appliedBy?: string;
   strict?: boolean;
   maxPasses?: number;
+  tenantSlug?: string;
 }
 
 interface ApplySchemaResult {
@@ -1126,14 +1127,14 @@ export class DatabaseProvisioningService {
       {
         id: 'sprint111_entity_completeness',
         label: 'Sprint 111 Entity Completeness Backfill',
-        version: '2026.03.26.2',
+        version: '2026.04.04.1',
         description: 'Adds all 32 TypeORM entity tables that were missing from provisioning: advance_care_planning, appointment_resources, appointment_resource_bookings, appointment_templates, care_gap_detections, cdss_decision_log, clinical_pathways, crisis_events, ed_visits, falls_assessments, inbox_items, malaria_contact_tracing, malaria_surveillance_reports, malaria_tests, mental_health_screenings, neonatal_records, neurology_examinations, nurse_tasks, patient_sdoh, pediatric_profiles, pressure_injury_assessments, psychiatric_encounters, psychotropic_medications, safe_plans, school_health_records, tb_patients, tb_diagnoses, tb_dot_records, tb_drug_susceptibilities, tb_outcomes, tb_treatment_episodes, tb_contact_investigations',
         statements: () => this.getSprint111EntityCompletenessStatements(),
       },
       {
         id: 'sprint112_p0_safety',
         label: 'Sprint 112 - P0 Safety Foundations',
-        version: '2026.03.27.1',
+        version: '2026.04.04.1',
         description: 'consent_type index + encryption_key_versions tracking + audit enhancements',
         statements: () => this.getSprint112P0SafetyStatements(),
       },
@@ -4123,19 +4124,19 @@ export class DatabaseProvisioningService {
     ];
   }
 
-  async createDatabase(databaseName: string): Promise<string> {
+  async createDatabase(databaseName: string, tenantSlug?: string): Promise<string> {
     try {
       this.assertSafeDatabaseName(databaseName);
       this.logger.log(`Creating database: ${databaseName}`);
-      
+
       // Create database
       await this.dataSource.query(`CREATE DATABASE "${databaseName}"`);
-      
+
       // Generate connection string
       const connectionString = this.generateConnectionString(databaseName);
-      
+
       // Run schema migration
-      await this.applyClinicSchema(connectionString);
+      await this.applyClinicSchema(connectionString, { tenantSlug });
       
       this.logger.log(`Database ${databaseName} created successfully`);
       return connectionString;
@@ -4343,6 +4344,15 @@ export class DatabaseProvisioningService {
           );
         }
 
+        // Seed demo users even in non-strict mode (partial schema is still usable)
+        if (options?.tenantSlug) {
+          try {
+            await this.seedDefaultUsers(tenantDataSource, options.tenantSlug);
+          } catch (e) {
+            this.logger.warn(`seedDefaultUsers failed: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+
         return {
           pendingBundles: unresolved,
         };
@@ -4351,6 +4361,15 @@ export class DatabaseProvisioningService {
       this.logger.log(
         `Schema migration completed${pendingBundles.length > 0 ? ` with ${pendingBundles.length} unresolved bundle(s)` : ''}`,
       );
+
+      // Seed demo users when a tenant slug is provided (frictionless demo setup)
+      if (options?.tenantSlug) {
+        try {
+          await this.seedDefaultUsers(tenantDataSource, options.tenantSlug);
+        } catch (e) {
+          this.logger.warn(`seedDefaultUsers failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
 
       return {
         pendingBundles: [],
@@ -10200,21 +10219,31 @@ export class DatabaseProvisioningService {
     }
   }
 
-  private async seedDefaultUsers(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding default clinical users (doctor, nurse, radiologist)...');
+  private async seedDefaultUsers(tenantDataSource: DataSource, tenantSlug: string): Promise<void> {
+    // Sanitize slug to alphanumeric + hyphen only before interpolating into SQL
+    const s = tenantSlug.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!s) return;
 
-    const defaultPasswordHash = '$2b$10$53yYB1QraHibRFYL1g1Bzu9zRcQ90b5QciaSd9GBmo5laFu8lqVbC'; // Password1#
+    this.logger.log(`Seeding default demo users for tenant: ${s}`);
 
+    // Medicore1# — meets policy (uppercase, lowercase, digit, special char, 9 chars)
+    const demoPasswordHash = '$2b$10$WN4.1EiRgPP.oBR2hKOurulJvnlC6muYcBOtesTwgekWhqmacgUDy';
     await tenantDataSource.query(`
       INSERT INTO users (email, password_hash, first_name, last_name, role, license_number, specialization, phone, must_change_password)
       VALUES
-        ('doctor@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Doctor', 'Bulawayo', 'doctor', 'MD-0001', 'Internal Medicine', '+263 77 555 1000', false),
-        ('nurse@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Nurse', 'Dube', 'nurse', 'RN-0008', 'Maternal & Child Health', '+263 77 555 2000', false),
-        ('radiologist@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Rudo', 'Munyoro', 'radiologist', 'RAD-001234', 'Diagnostic Radiology', '+263 77 555 1212', false),
-        ('accounts@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Finance', 'Officer', 'accounts', NULL, 'Revenue Management', '+263 77 555 4500', false),
-        ('gina@gmail.com', '${defaultPasswordHash}', 'Gina', 'Doctor', 'doctor', 'MD-GINA', 'General Practice', '+1 555 0000', false)
+        ('doctor@${s}.com',       '${demoPasswordHash}', 'Demo',    'Doctor',       'doctor',       'MD-DEMO',   'Internal Medicine',     '+1 555 0001', false),
+        ('nurse@${s}.com',        '${demoPasswordHash}', 'Demo',    'Nurse',        'nurse',        'RN-DEMO',   'General Nursing',        '+1 555 0002', false),
+        ('nurse.accounts@${s}.com','${demoPasswordHash}', 'Demo',   'NurseAccounts','nurse_accounts','RN-ACC',   'Finance & Nursing',      '+1 555 0003', false),
+        ('pharmacist@${s}.com',   '${demoPasswordHash}', 'Demo',    'Pharmacist',   'pharmacist',   'PH-DEMO',   'Clinical Pharmacy',      '+1 555 0004', false),
+        ('lab@${s}.com',          '${demoPasswordHash}', 'Demo',    'LabTech',      'lab_tech',     'LT-DEMO',   'Clinical Laboratory',    '+1 555 0005', false),
+        ('radiologist@${s}.com',  '${demoPasswordHash}', 'Demo',    'Radiologist',  'radiologist',  'RAD-DEMO',  'Diagnostic Radiology',   '+1 555 0006', false),
+        ('accounts@${s}.com',     '${demoPasswordHash}', 'Demo',    'Accounts',     'accounts',     NULL,        'Revenue Management',     '+1 555 0007', false),
+        ('receptionist@${s}.com', '${demoPasswordHash}', 'Demo',    'Receptionist', 'receptionist', NULL,        'Front Desk',             '+1 555 0008', false),
+        ('admin@${s}.com',        '${demoPasswordHash}', 'Demo',    'Admin',        'admin',        NULL,        'System Administration',  '+1 555 0009', false)
       ON CONFLICT (email) DO NOTHING;
     `);
+
+    this.logger.log(`Demo users seeded. Password for all: Medicore1# | Logins: doctor@${s}.com, nurse@${s}.com, ...`);
   }
 
   private async seedLabCatalog(tenantDataSource: DataSource): Promise<void> {
@@ -16776,16 +16805,22 @@ RECOMMENDATIONS:
       )`,
       `CREATE INDEX IF NOT EXISTS idx_cdss_dl_patient ON cdss_decision_log (patient_id, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_cdss_dl_type ON cdss_decision_log (decision_type, created_at DESC)`,
-      // Fix: column was created as TEXT by an earlier migration; convert to BOOLEAN before creating partial index
-      `DO $$ BEGIN
-         IF (SELECT data_type FROM information_schema.columns
-             WHERE table_name='cdss_decision_log' AND column_name='feedback_sent_to_cdss') = 'text' THEN
+      // Fix: column may have been created as TEXT by TypeORM auto-sync; convert to BOOLEAN safely
+      `DO $$
+       DECLARE col_type TEXT;
+       BEGIN
+         SELECT data_type INTO col_type
+         FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND table_name = 'cdss_decision_log'
+           AND column_name = 'feedback_sent_to_cdss';
+         IF col_type = 'text' THEN
            ALTER TABLE cdss_decision_log
              ALTER COLUMN feedback_sent_to_cdss TYPE BOOLEAN
-             USING feedback_sent_to_cdss::boolean;
+             USING CASE WHEN lower(feedback_sent_to_cdss) IN ('true','t','yes','1') THEN TRUE ELSE FALSE END;
          END IF;
        END $$`,
-      `CREATE INDEX IF NOT EXISTS idx_cdss_dl_feedback ON cdss_decision_log (feedback_sent_to_cdss) WHERE feedback_sent_to_cdss = FALSE`,
+      `CREATE INDEX IF NOT EXISTS idx_cdss_dl_feedback ON cdss_decision_log (feedback_sent_to_cdss)`,
 
       // ── Clinical Pathways ──────────────────────────────────────────────────
       `CREATE TABLE IF NOT EXISTS clinical_pathways (

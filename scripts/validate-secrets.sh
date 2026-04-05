@@ -11,9 +11,20 @@ fail()    { echo -e "${RED}✗ FAIL${NC}: $1"; ERRORS=$((ERRORS+1)); }
 warn()    { echo -e "${YELLOW}⚠ WARN${NC}: $1"; WARNINGS=$((WARNINGS+1)); }
 ok()      { echo -e "${GREEN}✓${NC}: $1"; }
 
-# Load .env if present and not already in environment
+# Load .env if present — parse manually to handle unquoted values with spaces
+# (docker-compose .env format differs from bash source syntax)
 if [ -f .env ]; then
-  set -a; source .env; set +a
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// }" ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      val="${BASH_REMATCH[2]}"
+      val="${val#\"}" ; val="${val%\"}"
+      val="${val#\'}" ; val="${val%\'}"
+      [[ -z "${!key+x}" ]] && export "$key"="$val"
+    fi
+  done < .env
 fi
 
 echo "=== MediCore Production Secrets Validation ==="

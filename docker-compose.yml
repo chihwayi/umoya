@@ -154,12 +154,14 @@ services:
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - HF_HOME=/opt/hf_cache
+      - TRANSFORMERS_CACHE=/opt/hf_cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./services/cdss-service:/app
       - ./data/chroma_db:/app/data/chroma_db
-      - cdss_hf_cache:/root/.cache/huggingface
+      - cdss_hf_cache:/opt/hf_cache
     depends_on:
       - redis
       - postgres-master
@@ -222,12 +224,14 @@ services:
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - HF_HOME=/opt/hf_cache
+      - TRANSFORMERS_CACHE=/opt/hf_cache
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./services/cdss-service:/app
       - ./data/chroma_db:/app/data/chroma_db
-      - cdss_hf_cache:/root/.cache/huggingface
+      - cdss_hf_cache:/opt/hf_cache
     depends_on:
       - redis
       - postgres-master

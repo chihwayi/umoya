@@ -32,10 +32,20 @@ COPY requirements.txt constraints.txt ./
 RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt -c constraints.txt
 
 # Download NLTK data (required for unstructured)
-RUN python -m nltk.downloader punkt punkt_tab averaged_perceptron_tagger averaged_perceptron_tagger_eng
+RUN python -c "import nltk; [nltk.download(p, download_dir='/usr/share/nltk_data', quiet=True) for p in ('punkt','punkt_tab','averaged_perceptron_tagger','averaged_perceptron_tagger_eng')]"
 
 # Install scispacy model
 RUN pip install --default-timeout=1000 --no-cache-dir https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz
+
+# Pre-download HF models required by RAGEngine so they're baked into the image
+# (avoids throttled/blocked HuggingFace downloads at runtime)
+# HF_HOME is set inline so this layer doesn't bust the pip install cache on future builds
+RUN mkdir -p /opt/hf_cache && \
+    HF_HOME=/opt/hf_cache TRANSFORMERS_CACHE=/opt/hf_cache \
+      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" && \
+    HF_HOME=/opt/hf_cache TRANSFORMERS_CACHE=/opt/hf_cache \
+      python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')" && \
+    chmod -R a+rX /opt/hf_cache
 
 # Verify installation
 RUN python -c "import asyncpg, fastapi, uvicorn, pydantic, numpy, pandas, sklearn, redis, pytesseract; from pgvector.psycopg2 import register_vector; print('✅ All modules installed successfully')"
