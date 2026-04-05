@@ -1,629 +1,971 @@
 # MediCore AI & CDSS Architecture
 
-> How the Clinical Decision Support System works — from document ingestion to bedside recommendations.
+> The complete picture of how every AI model works, how they talk to each other, how the system learns from clinicians over time, and why this beats a plain search engine.
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#overview)
+1. [The Big Picture](#the-big-picture)
 2. [Why Not Just Elasticsearch?](#why-not-just-elasticsearch)
-3. [The Full AI Stack](#the-full-ai-stack)
-4. [Complete Model Inventory](#complete-model-inventory)
-5. [Document Ingestion Pipeline](#document-ingestion-pipeline)
-6. [How a Search Query Flows](#how-a-search-query-flows)
-7. [The Knowledge Databases](#the-knowledge-databases)
-8. [Hybrid Search: Vector + BM25 + Reranking](#hybrid-search-vector--bm25--reranking)
-9. [Intelligent Diagnosis Engine](#intelligent-diagnosis-engine)
-10. [LLM Integration & Governance](#llm-integration--governance)
-11. [Redis Caching & Job Queue](#redis-caching--job-queue)
-12. [Safety, PHI & Audit](#safety-phi--audit)
-13. [Running & Managing Ingestion](#running--managing-ingestion)
+3. [Every AI Model in the System](#every-ai-model-in-the-system)
+4. [The Unified AI Flow](#the-unified-ai-flow)
+5. [Document Ingestion — How Knowledge Gets In](#document-ingestion--how-knowledge-gets-in)
+6. [Real-Time Clinical Query — How Knowledge Gets Out](#real-time-clinical-query--how-knowledge-gets-out)
+7. [Hybrid Search: Vector + BM25 + Reranking](#hybrid-search-vector--bm25--reranking)
+8. [Diagnosis Engine — Three Models, One Answer](#diagnosis-engine--three-models-one-answer)
+9. [Voice, Vision, and Structured Clinical AI](#voice-vision-and-structured-clinical-ai)
+10. [The LLM Layer — Local, Governed, Grounded](#the-llm-layer--local-governed-grounded)
+11. [The Self-Learning Loop](#the-self-learning-loop)
+12. [Federated Learning — Learning Across Clinics Without Sharing Patient Data](#federated-learning--learning-across-clinics-without-sharing-patient-data)
+13. [Model Drift Monitoring & Anomaly Detection](#model-drift-monitoring--anomaly-detection)
+14. [Safety, PHI & Governance](#safety-phi--governance)
+15. [The Knowledge Databases](#the-knowledge-databases)
+16. [Redis: Caching & Job Queue](#redis-caching--job-queue)
+17. [Running & Managing Ingestion](#running--managing-ingestion)
 
 ---
 
-## Overview
+## The Big Picture
 
-The CDSS (Clinical Decision Support System) is a standalone Python microservice (`services/cdss-service`, port 8000) that:
+MediCore's AI is not a collection of separate tools bolted together. It is a single clinical intelligence pipeline where every component feeds the next:
 
-- Ingests medical guidelines and clinical documents as searchable knowledge
-- Retrieves the most relevant guidelines for a given clinical query
-- Runs multiple AI models to suggest diagnoses, drug interactions, dosing, and risk scores
-- Optionally passes retrieved knowledge to a local LLM for natural-language clinical reasoning
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         KNOWLEDGE IN                                     │
+│  WHO Guidelines + Local Protocols → MinIO → Ingestion → ChromaDB/pgvector│
+└──────────────────────────────────┬───────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        REAL-TIME CLINICAL AI                             │
+│                                                                          │
+│  Clinician Query ──► RAG (Vector + BM25 + Reranker) ──► Citations       │
+│  Patient Vitals  ──► MedBERT ──┐                                        │
+│  Clinical Notes  ──► ClinicalBERT ──► Fusion Engine ──► Diagnosis       │
+│  Rule engine     ──────────────┘                                        │
+│  Audio           ──► Faster-Whisper ──► LLM ──► SOAP Note              │
+│  X-ray / DICOM   ──► CLIP Vision ──► Findings                          │
+│  All of above    ──► Ollama LLM ──► Clinical Reasoning Text            │
+└──────────────────────────────────┬───────────────────────────────────────┘
+                                   │  Clinician acts on AI recommendation
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         LEARNING LOOP                                    │
+│                                                                          │
+│  Clinician accepts / modifies / overrides recommendation                │
+│       ↓                                                                  │
+│  Feedback captured → human review gate → approved for learning          │
+│       ↓                                                                  │
+│  Local retraining (per clinic, privacy-preserving)                      │
+│       ↓                                                                  │
+│  Federated averaging across all clinics (FedAvg)                       │
+│       ↓                                                                  │
+│  Governance gates: AUC, Brier score, fairness, calibration             │
+│       ↓                                                                  │
+│  Shadow → Canary → Production promotion (clinical approval required)    │
+│       ↓                                                                  │
+│  Drift & bias monitoring runs continuously                              │
+└──────────────────────────────────────────────────────────────────────────┘
+```
 
-It does **not** replace a clinician — it gives them the right information at the right moment, grounded in evidence.
+Every decision the AI makes can be audited, reviewed, corrected, and fed back into improving the next generation of the model — without any raw patient data ever leaving a clinic.
 
 ---
 
 ## Why Not Just Elasticsearch?
 
-A fair question. Here is what you gain by going beyond Elasticsearch:
-
-| Capability | Elasticsearch (text search) | MediCore CDSS |
+| Capability | Elasticsearch | MediCore CDSS |
 |---|---|---|
-| **Keyword match** | Yes — exact/fuzzy text | Yes — BM25 index |
-| **Semantic understanding** | No | Yes — 384-dim sentence embeddings |
-| **Synonym / abbreviation handling** | Requires manual synonym files | Automatic (HIV → "human immunodeficiency virus…") |
-| **"Meaning" not just words** | No | Yes — finds relevant content even when phrasing differs |
-| **Reranking / precision boost** | No | Yes — cross-encoder scores every candidate pair |
-| **Clinical domain tagging** | Manual only | Automatic heuristic + metadata extraction |
-| **Idempotent re-ingestion** | Requires custom IDs | Built-in stable IDs (source + page + md5 hash) |
-| **Multi-signal fusion** | No | RRF fuses vector rank + BM25 rank |
-| **Per-tenant isolation** | Possible but complex | Native (tenant_id on every row) |
-| **Integrated AI chain** | External glue code | Diagnosis models, LLM, RAG all in one service |
-| **Outcome feedback loop** | Not applicable | Clinician overrides → learning pipeline |
+| Keyword match | Yes — fuzzy text | Yes — BM25 index |
+| Semantic understanding | No | Yes — 384-dim sentence embeddings |
+| Synonym / abbreviation handling | Manual synonym files | Automatic (HIV → "human immunodeficiency virus…") |
+| Finds meaning, not just words | No | Yes — cosine similarity over meaning vectors |
+| Precision re-ranking | No | Cross-encoder scores every `[query, doc]` pair |
+| Clinical domain tagging | Manual | Automatic heuristic metadata extraction |
+| Safe re-ingestion | Requires custom logic | Stable IDs (source + page + md5 hash) |
+| Multi-signal fusion | No | RRF fuses vector rank + BM25 rank |
+| Per-clinic isolation | Complex | Native `tenant_id` on every row |
+| Diagnosis from patient data | Not applicable | MedBERT + ClinicalBERT + rule fusion |
+| Voice transcription | Not applicable | Faster-Whisper → SOAP note |
+| Medical image analysis | Not applicable | CLIP vision model |
+| Clinical reasoning text | Not applicable | Local Ollama LLM (grounded in retrieved citations) |
+| Self-learning from clinicians | Not applicable | Feedback loop → federated retraining → governed promotion |
+| Fairness & drift monitoring | Not applicable | Demographic parity audits, anomaly detection |
 
-**Short version:** Elasticsearch finds documents that contain your words. The CDSS finds documents that contain your *meaning*, even if the words are different — then it re-ranks for precision and grounds an LLM answer in the retrieved evidence.
+**The short version:** Elasticsearch finds documents containing your words. The CDSS finds documents containing your *meaning*, generates a grounded explanation, learns from clinician corrections, and gets better over time — without your patient data ever leaving your infrastructure.
 
 ---
 
-## The Full AI Stack
+## Every AI Model in the System
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Clinical Query / EHR Data                │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │   FastAPI CDSS  │  port 8000
-                    │   (main.py)     │
-                    └────────┬────────┘
-                             │
-          ┌──────────────────┼──────────────────────┐
-          │                  │                      │
-   ┌──────▼──────┐  ┌────────▼────────┐  ┌─────────▼──────────┐
-   │  Rule-based │  │  RAG Engine     │  │  Diagnosis Models  │
-   │  Guidelines │  │  (rag_engine.py)│  │                    │
-   │  Registry   │  │                 │  │  ┌─ MedBERT        │
-   │  (JSON)     │  │  ┌─ ChromaDB    │  │  ├─ ClinicalBERT   │
-   └─────────────┘  │  ├─ BM25 Index  │  │  └─ Fusion Engine  │
-                    │  └─ Re-ranker   │  └────────────────────┘
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  pgvector (PG)  │  clinical_knowledge_chunks
-                    │  tenant-aware   │  384-dim embeddings
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  LLM Provider   │  Ollama (local)
-                    │  (llm_provider) │  temperature 0.2
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  Redis Cache    │  query + LLM result cache
-                    └─────────────────┘
-```
+### Retrieval & Embedding
 
-**Models in play:**
-
-| Model | Type | Purpose |
+| Model | HuggingFace ID | What it does |
 |---|---|---|
-| `all-MiniLM-L6-v2` | SentenceTransformer (384 dims) | Query + document embedding |
-| `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder | Reranking retrieved candidates |
-| `en_core_sci_sm` | scispaCy NLP | Medical entity extraction, tokenisation |
-| `medbert/medbert-base` | HuggingFace Transformer | Diagnosis from structured vitals/labs |
-| `emilyalsentzer/Bio_ClinicalBERT` | HuggingFace Transformer | Diagnosis from clinical notes |
-| `openai/clip-vit-base-patch32` | Vision Transformer | Medical image analysis (X-ray, DICOM) |
-| Faster-Whisper (`base`/`small`/`medium`) | Speech-to-text | Audio transcription → SOAP notes |
-| Ollama LLM (mistral, llama2, neural-chat…) | Generative LLM | Clinical reasoning, SOAP notes, summaries |
+| **Bi-encoder** | `sentence-transformers/all-MiniLM-L6-v2` | Encodes every guideline chunk and every query into a 384-dim vector. The semantic heart of RAG. |
+| **Cross-encoder reranker** | `cross-encoder/ms-marco-MiniLM-L-6-v2` | After RRF fusion, scores every `[query, doc]` pair jointly for precision ranking. |
+| **BM25Okapi** | `rank-bm25` library (in-memory) | Lexical keyword search — catches exact drug names, dosages, codes that vectors miss. |
 
----
+### Clinical NLP
 
-## Complete Model Inventory
-
-Every AI model in the system, where it lives, what it does, and whether it ships inside the Docker image or downloads at runtime.
-
----
-
-### 1. Embedding Model — `all-MiniLM-L6-v2`
-
-| | |
-|---|---|
-| **HuggingFace ID** | `sentence-transformers/all-MiniLM-L6-v2` |
-| **Library** | `sentence-transformers` |
-| **Dimensions** | 384 floats per vector |
-| **File** | `ai_models/rag_engine.py` |
-| **Loaded as** | `SentenceTransformer('all-MiniLM-L6-v2')` |
-| **Docker** | **Baked into image** — downloaded at build time, cached in `/opt/hf_cache` |
-| **Purpose** | Encodes every guideline chunk and every incoming query into a 384-dimensional vector. Cosine similarity between query vector and chunk vectors drives the semantic search leg of the hybrid search. |
-| **Speed** | ~2 000 sentences/second on CPU; sub-millisecond per single query |
-| **Fallback** | None — this model is required for RAG to function |
-
----
-
-### 2. Re-Ranker — `cross-encoder/ms-marco-MiniLM-L-6-v2`
-
-| | |
-|---|---|
-| **HuggingFace ID** | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
-| **Library** | `sentence-transformers` (CrossEncoder class) |
-| **File** | `ai_models/rag_engine.py` |
-| **Loaded as** | `CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')` |
-| **Docker** | **Baked into image** — cached in `/opt/hf_cache` |
-| **Purpose** | After RRF fusion produces a candidate list, this model scores every `[query, document]` pair jointly — seeing both at the same time gives far higher precision than the bi-encoder. Results are then re-sorted by this score. |
-| **Fallback** | If loading fails, re-ranking is skipped and the RRF-ranked order is used directly |
-
----
-
-### 3. MedBERT — `medbert/medbert-base`
-
-| | |
-|---|---|
-| **HuggingFace ID** | `medbert/medbert-base` |
-| **Library** | `transformers`, `torch` |
-| **File** | `ai_models/medbert_predictor.py` |
-| **Loaded as** | `AutoModel.from_pretrained()` + `AutoTokenizer.from_pretrained()` |
-| **Docker** | **Downloaded at runtime** — only if `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
-| **Purpose** | Analyses structured patient data (vitals, lab values, demographics) and outputs a probability distribution over possible diagnoses. Contributes 35% weight in the diagnosis fusion engine. |
-| **Fallback** | **Lightweight mode** — if the model is unavailable, falls back to feature encoding + rule-based pattern matching without any transformer. The service keeps running. |
-
----
-
-### 4. ClinicalBERT — `emilyalsentzer/Bio_ClinicalBERT`
-
-| | |
-|---|---|
-| **HuggingFace ID** | `emilyalsentzer/Bio_ClinicalBERT` |
-| **Library** | `transformers`, `torch` |
-| **File** | `ai_models/clinicalbert_diagnostic.py` |
-| **Loaded as** | `AutoTokenizer.from_pretrained()` + `AutoModelForSequenceClassification.from_pretrained()` |
-| **Docker** | **Downloaded at runtime** — only if `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
-| **Purpose** | Reads free-text clinical notes (chief complaint, history of presenting illness) and produces a diagnosis probability distribution. BioBERT trained on MIMIC-III clinical notes — understands clinical language far better than a general BERT. Contributes 30% weight in fusion. |
-| **Fallback** | **Lightweight mode** — spaCy NLP + keyword extraction without transformer |
-| **NLP pipeline** | `en_core_sci_sm` (scispaCy) for token lemmatisation and noun chunks; falls back to `en_core_web_sm` |
-
----
-
-### 5. scispaCy — `en_core_sci_sm`
-
-| | |
-|---|---|
-| **Package** | `en_core_sci_sm` (scispaCy v0.5.4) |
-| **Library** | `spacy`, `scispacy` |
-| **Files** | `ai_models/rag_engine.py`, `ai_models/clinicalbert_diagnostic.py` |
-| **Docker** | **Baked into image** — installed from `https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz` |
-| **Purpose** | Medical/scientific NLP: tokenisation, lemmatisation, noun-chunk extraction, named entity recognition for diseases, chemicals, and procedures. Used in both the RAG query expansion path and the ClinicalBERT NLP pipeline. |
-| **Fallback** | `en_core_web_sm` (standard English) if sci model unavailable |
-
----
-
-### 6. CLIP Vision Model — `openai/clip-vit-base-patch32`
-
-| | |
-|---|---|
-| **HuggingFace ID** | `openai/clip-vit-base-patch32` |
-| **Alternative** | `microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224` (drop-in swap for clinical imaging) |
-| **Library** | `transformers`, `torch`, `pillow`, `pydicom` |
-| **File** | `ai_models/medical_vision.py` |
-| **Loaded as** | `CLIPModel.from_pretrained()` + `CLIPProcessor.from_pretrained()` |
-| **Docker** | **Downloaded at runtime** — loaded on first image analysis request |
-| **Device** | GPU if `torch.cuda.is_available()`, otherwise CPU |
-| **Purpose** | Analyses medical images — chest X-rays, DICOM files, JPGs. Matches the image against clinical label descriptions to detect: normal chest X-ray, pneumonia, tuberculosis, pleural effusion, pneumothorax, fracture. DICOM files are pre-processed with `pydicom` before being passed to CLIP. |
-| **Mock mode** | Set `MOCK_VISION_AI=true` to skip model loading (useful in dev/CI) |
-| **Triggered by** | `POST /analyze-image` (async job via Redis queue) |
-
----
-
-### 7. Faster-Whisper (Speech-to-Text)
-
-| | |
-|---|---|
-| **Library** | `faster-whisper>=1.0.0` |
-| **Model sizes** | `base`, `small`, `medium`, `large` (set via `WHISPER_MODEL_SIZE`) |
-| **File** | `ai_models/voice_scribe.py` |
-| **Loaded as** | `WhisperModel(size, device, compute_type='int8')` |
-| **Docker** | **Downloaded at runtime** — on first transcription request |
-| **Device** | Set via `WHISPER_DEVICE` env var (default: `cpu`) |
-| **Quantisation** | int8 — significantly reduces memory footprint on CPU |
-| **Languages** | English (`en`), Shona (`sn`), Ndebele (`nd`), auto-detection |
-| **Purpose** | Transcribes clinician audio (voice consultations, dictated notes) to text. The transcript is then passed to the LLM to generate a structured SOAP note. |
-| **Fallback** | If `faster_whisper` import fails, transcription endpoints are disabled gracefully |
-| **Triggered by** | `POST /transcribe` (async job) and `POST /transcription/stream` (streaming) |
-
----
-
-### 8. LLM — Ollama (mistral / llama2 / neural-chat / any Ollama model)
-
-| | |
-|---|---|
-| **Runtime** | Ollama — local inference server, not HuggingFace directly |
-| **Model** | Configured via `LLM_MODEL_NAME` env var — any model pulled into Ollama works |
-| **Common choices** | `mistral`, `llama2`, `neural-chat`, `llama3`, `phi3` |
-| **API endpoint** | `LLM_API_URL` (e.g. `http://ollama:11434`) |
-| **File** | `ai_models/llm_provider.py` |
-| **Docker** | **Served externally** — CDSS calls Ollama over HTTP; Ollama is a separate service/container |
-| **Temperature** | 0.2 — low, for factual clinical output |
-| **Max tokens** | 1 024 per response |
-| **JSON mode** | Supported (`format: "json"` in payload) — used for structured SOAP notes and diagnosis JSON |
-| **Purpose** | Generates natural-language clinical reasoning, differential diagnosis lists, SOAP notes from transcripts, patient visit summaries. Always receives retrieved guideline citations as context first (grounded generation). |
-| **Governance** | Every call gated by tenant use-case policy: enabled/disabled per use case, model allowlist, audit log on every call |
-| **OpenAI (optional)** | Supported as an alternative vendor for non-PHI use cases; not used by default |
-
----
-
-### 9. Zimbabwe Terminology & Localisation
-
-| | |
-|---|---|
-| **File** | `ai_models/zimbabwe_terminology.py` |
-| **Type** | Custom rule-based NLP (no HuggingFace download) |
-| **Purpose** | Bridges local language → clinical English for the diagnosis engine |
-| **Knowledge bases** | |
-| `ZIMBABWE_TERMINOLOGY` | Maps common conditions: HIV/ARVs, TB/DOTS, Malaria, Diabetes, Hypertension, Pneumonia |
-| `SHONA_SYMPTOMS` | 21 symptoms with Shona translations (e.g. `musoro kurwadza` → headache) |
-| `NDEBELE_SYMPTOMS` | 21 symptoms with Ndebele translations |
-| `ZIMBABWE_DISEASE_PATTERNS` | Prevalence multipliers and local symptom patterns — boosts locally common conditions (HIV, Malaria, TB) in the diagnosis scorer |
-| **Used in** | `ai_models/clinicalbert_diagnostic.py` — applied during scoring to adjust confidence for Zimbabwe's disease burden |
-
----
-
-### 10. NLTK (tokenisation support)
-
-| | |
-|---|---|
-| **Library** | `nltk` |
-| **Data downloaded** | `punkt`, `punkt_tab`, `averaged_perceptron_tagger`, `averaged_perceptron_tagger_eng` |
-| **Docker** | **Baked into image** — downloaded to `/usr/share/nltk_data` at build time (world-readable) |
-| **Purpose** | Sentence tokenisation and POS tagging used by the `unstructured` PDF extraction library during ingestion |
-
----
-
-### Model Download Summary
-
-| Model | How it arrives | Env var to control |
+| Model | HuggingFace ID / Package | What it does |
 |---|---|---|
-| `all-MiniLM-L6-v2` | **Baked into Docker image** | — |
-| `cross-encoder/ms-marco-MiniLM-L-6-v2` | **Baked into Docker image** | — |
-| `en_core_sci_sm` (scispaCy) | **Baked into Docker image** | — |
-| NLTK punkt/tagger data | **Baked into Docker image** | — |
-| `medbert/medbert-base` | Downloaded at runtime | `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
-| `emilyalsentzer/Bio_ClinicalBERT` | Downloaded at runtime | `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
-| `openai/clip-vit-base-patch32` | Downloaded on first image request | `MOCK_VISION_AI=true` to skip |
-| Faster-Whisper | Downloaded on first transcription request | `WHISPER_MODEL_SIZE=base` |
-| LLM (mistral, llama2, etc.) | Served by Ollama (external) | `LLM_MODEL_NAME`, `LLM_API_URL` |
+| **scispaCy** | `en_core_sci_sm` v0.5.4 | Medical tokenisation, lemmatisation, named entity recognition (diseases, chemicals, procedures). Primary NLP for both RAG and ClinicalBERT. |
+| **spaCy fallback** | `en_core_web_sm` | Standard English NLP — used when scispaCy unavailable. |
+| **NLTK** | punkt, punkt_tab, averaged_perceptron_tagger | Sentence tokenisation for the `unstructured` PDF extraction library used during ingestion. |
 
-**The four baked-in models** (`all-MiniLM-L6-v2`, cross-encoder, scispaCy, NLTK) are the ones that run on every single guideline query. They must be available from cold start, so they live in the image. The heavier transformer models (MedBERT, ClinicalBERT) are optional — if they can't load, the service degrades gracefully to rule-based mode rather than failing.
+### Diagnosis Models
 
----
+| Model | HuggingFace ID | What it does | Fusion weight |
+|---|---|---|---|
+| **MedBERT** | `medbert/medbert-base` | Analyses structured EHR data — vitals, labs, demographics — to produce a probability distribution over diagnoses. | 35% |
+| **ClinicalBERT** | `emilyalsentzer/Bio_ClinicalBERT` | Analyses free-text clinical notes (chief complaint, HPI). BioBERT trained on MIMIC-III. | 30% |
+| **Rule-based engine** | — (in-code decision trees) | Symptom matching + clinical decision rules. Fast, explainable, fails gracefully. | 35% |
+| **Fusion engine** | — (weighted average + agreement scoring) | Combines all three, boosts score when models agree, attaches ICD-10 + SNOMED codes. | — |
+| **Zimbabwe terminology** | `ai_models/zimbabwe_terminology.py` | Maps Shona/Ndebele symptoms → English; applies local prevalence multipliers (HIV, TB, Malaria). | Modifier |
 
-## Document Ingestion Pipeline
+### Federated / Self-Learning Models
 
-This is how a PDF guideline goes from storage into searchable, semantically-indexed knowledge.
+| Model | Library | What it does |
+|---|---|---|
+| **GradientBoostingClassifier** | scikit-learn | Trained locally per clinic on: deterioration, readmission, no-show, sepsis outcomes. n_estimators=100, max_depth=4. |
+| **Differential privacy layer** | Custom (Gaussian noise) | Adds noise to gradient/feature importances before sharing. Privacy budget tracked per round (epsilon=1.0 default). |
+| **FedAvg aggregator** | Custom (weighted average) | Combines locally trained models from all participating clinics into a global model by weighting by sample count. |
 
-```
-MinIO (object storage)
-   └── who-smart-guidelines/ bucket
-           │
-           │  POST /admin/ingest  (JWT-authenticated)
-           ▼
-   ┌─────────────────────────────────────────────────────┐
-   │              Redis Job Queue                        │
-   │  cdss:jobs:queue  ← job_id pushed (lpush)           │
-   └──────────────────────┬──────────────────────────────┘
-                          │  cdss-worker brpop (blocking)
-                          ▼
-   ┌─────────────────────────────────────────────────────┐
-   │           ingest_guidelines.py                      │
-   │                                                     │
-   │  For each PDF file:                                 │
-   │                                                     │
-   │  1. EXTRACT                                         │
-   │     Primary:  unstructured library                  │
-   │               (layout-aware, by_title chunking)     │
-   │     Fallback: pypdf (plain text extraction)         │
-   │                                                     │
-   │  2. CHUNK                                           │
-   │     Max chunk:        1 500 chars                   │
-   │     New chunk thresh: 2 000 chars                   │
-   │     Min chunk:           50 chars (skip noise)      │
-   │                                                     │
-   │  3. TAG METADATA (heuristic)                        │
-   │     clinical_domain:  infectious_disease, cardiology│
-   │                       obstetrics, pediatrics …      │
-   │     target_population: pregnant_women, children,    │
-   │                        elderly, adults              │
-   │     source: filename  │  page: page number          │
-   │                                                     │
-   │  4. STABLE ID                                       │
-   │     "{source}_p{page}_{md5(text)}"                  │
-   │     → same chunk re-ingested = same ID = upsert     │
-   │       (safe to run ingest as many times as needed)  │
-   │                                                     │
-   │  5. EMBED                                           │
-   │     SentenceTransformer('all-MiniLM-L6-v2')         │
-   │     Batch encode → 384-float vector per chunk       │
-   │                                                     │
-   │  6. UPSERT                                          │
-   │     ChromaDB collection.upsert() — idempotent       │
-   │     pgvector   clinical_knowledge_chunks             │
-   │                                                     │
-   │  7. REBUILD BM25 INDEX (in-memory, incremental)     │
-   │                                                     │
-   │  ✅ Added N chunks. Total in DB: XXXXX              │
-   └─────────────────────────────────────────────────────┘
-                          │
-                          ▼
-              Job status → "completed"
-              Metadata quality report →
-              data/ingest_metadata_report.json
-```
+### Voice & Vision
 
-**Why the stable ID matters:** If you re-ingest after adding new documents, existing chunks are updated in place (upsert), not duplicated. The corpus stays clean regardless of how many times you run it.
+| Model | Library / ID | What it does |
+|---|---|---|
+| **Faster-Whisper** | `faster-whisper`, `base`/`small`/`medium`/`large` | Transcribes clinician audio to text. Supports English, Shona (`sn`), Ndebele (`nd`). int8 quantised for CPU efficiency. |
+| **CLIP** | `openai/clip-vit-base-patch32` | Analyses medical images (chest X-ray, DICOM, JPG). Detects: pneumonia, TB, pleural effusion, pneumothorax, fracture. |
+| **BiomedCLIP** (optional swap) | `microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224` | Drop-in clinical imaging alternative to base CLIP — trained on biomedical image-text pairs. |
 
-**Why the worker is separate from the API:** Ingesting 282 PDFs takes ~20–40 minutes. If it ran inline in the HTTP request it would time out. The job is pushed to Redis, the API returns immediately with a `job_id`, and the worker processes it in the background. You poll `GET /admin/ingest/status/{job_id}` to check progress.
+### Language Models
+
+| Model | Runtime | What it does |
+|---|---|---|
+| **Ollama LLM** (mistral / llama2 / llama3 / neural-chat / phi3 / any) | Ollama (local server) | Generates clinical reasoning text, differential diagnosis explanations, SOAP notes, patient summaries. Always grounded in retrieved citations. temperature=0.2. |
+| **OpenAI** (optional) | Cloud API | Only for non-PHI use cases when enabled by tenant policy. Not used by default. |
+
+### Where Each Model Lives at Runtime
+
+| Model | In Docker image? | Downloads when? |
+|---|---|---|
+| `all-MiniLM-L6-v2` | **Yes** — baked in at build, cached at `/opt/hf_cache` | Never |
+| `cross-encoder/ms-marco-MiniLM-L-6-v2` | **Yes** — baked in | Never |
+| `en_core_sci_sm` (scispaCy) | **Yes** — installed at build | Never |
+| NLTK punkt + tagger | **Yes** — downloaded to `/usr/share/nltk_data` at build | Never |
+| `medbert/medbert-base` | No | At startup if `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
+| `emilyalsentzer/Bio_ClinicalBERT` | No | At startup if `CDSS_ALLOW_MODEL_DOWNLOAD=true` |
+| `openai/clip-vit-base-patch32` | No | On first image analysis request |
+| Faster-Whisper | No | On first transcription request |
+| Ollama LLM | No | Served by separate Ollama container |
+| Federated GBM models | No | Trained locally; weights stored in MinIO |
+
+The four baked-in models are baked because they run on **every single query**. Everything else either lazy-loads or degrades gracefully when unavailable.
 
 ---
 
-## How a Search Query Flows
+## The Unified AI Flow
 
-This is the full path from a clinician typing a query to a response appearing on screen.
+Here is how all the components work together for a single patient encounter — from the moment a clinician opens a chart to the moment the model learns from their decision:
 
 ```
-EHR Frontend
-  POST /guidelines/search
-  { query: "ANC management first trimester",
-    patient_context: { age: 24, pregnant: true },
-    limit: 5 }
+STEP 1 — CLINICIAN OPENS PATIENT
+─────────────────────────────────────────────────────────────────────────
+Patient data (vitals, labs, notes, demographics) loaded from EHR DB
+                    │
+                    ▼
+STEP 2 — PARALLEL AI ANALYSIS
+─────────────────────────────────────────────────────────────────────────
+
+  Structured data ──► MedBERT (medbert/medbert-base)
+                      AutoModel.from_pretrained
+                      Output: P(diagnosis_A)=0.72, P(diagnosis_B)=0.41…
+
+  Clinical notes  ──► ClinicalBERT (emilyalsentzer/Bio_ClinicalBERT)
+                      AutoModelForSequenceClassification
+                      scispaCy tokenisation first
+                      Output: P(diagnosis_A)=0.68, P(diagnosis_B)=0.55…
+
+  Symptom list    ──► Rule-based engine
+                      Decision rules + Zimbabwe terminology adjustments
+                      Output: P(diagnosis_A)=0.80, P(diagnosis_B)=0.30…
+
+                    │
+                    ▼
+STEP 3 — FUSION ENGINE
+─────────────────────────────────────────────────────────────────────────
+  Weighted combination:
+    diagnosis_A = (0.72 × 0.35) + (0.68 × 0.30) + (0.80 × 0.35) = 0.736
+    Agreement bonus applied when all three models point the same way
+    ICD-10 + SNOMED CT codes attached to top diagnoses
+
+                    │
+                    ▼
+STEP 4 — KNOWLEDGE RETRIEVAL (RAG)
+─────────────────────────────────────────────────────────────────────────
+  For each top diagnosis, retrieve relevant guidelines:
+
+  Query: "HIV management adult ART initiation"
+    │
+    ├─ Abbreviation expansion: "HIV human immunodeficiency virus antiretroviral"
+    │
+    ├─ all-MiniLM-L6-v2 encodes query → 384-dim vector
+    │    ↓ cosine search in ChromaDB + pgvector
+    │    Top-K semantically relevant chunks
+    │
+    ├─ BM25Okapi keyword scores across all docs
+    │    Top-K by lexical match
+    │
+    ├─ RRF fusion: score = 1/(60+v_rank) + 1/(60+bm25_rank)
+    │
+    ├─ Deduplication (same source + page → keep one)
+    │
+    └─ Cross-encoder reranks top candidates as [query, doc] pairs
+         Final citations: title, text excerpt, source, similarity_score
+
+                    │
+                    ▼
+STEP 5 — LLM REASONING (optional, governed)
+─────────────────────────────────────────────────────────────────────────
+  Governance check: is this use case enabled for this tenant?
+  PHI redacted from prompt
+  Prompt = patient_context + top citations + fusion scores
+  POST Ollama /api/generate (temperature=0.2, max_tokens=1024)
+  Output: differential diagnosis explanation + management plan
+  Redis cache (TTL 600s) — identical prompts skip the LLM
+
+                    │
+                    ▼
+STEP 6 — RESPONSE TO CLINICIAN
+─────────────────────────────────────────────────────────────────────────
+  {
+    diagnoses: [ { name, probability, icd10, snomed, confidence } ],
+    citations: [ { title, text, source, similarity_score, grounded: true } ],
+    analysis: "Based on retrieved guidelines, first-line ART…"
+  }
+
+  grounded: true = text came from an ingested document, not generated
+
+                    │
+                    ▼
+STEP 7 — CLINICIAN ACTS
+─────────────────────────────────────────────────────────────────────────
+  Clinician: accepts / modifies / overrides / ignores
+                    │
+                    ▼
+STEP 8 — FEEDBACK CAPTURED
+─────────────────────────────────────────────────────────────────────────
+  POST /feedback/outcome
+  { clinician_action: "modified", override_reason: "…",
+    outcome_30d: { readmission: false, … } }
+
+  Stored in cdss_feedback_entries:
+    learning_status: "pending_review"
+    source_model, confidence_score, demographic fields
+
+                    │
+                    ▼
+STEP 9 — LEARNING LOOP (async, background)
+─────────────────────────────────────────────────────────────────────────
+  See full details in "The Self-Learning Loop" section below
+```
+
+---
+
+## Document Ingestion — How Knowledge Gets In
+
+Guidelines (WHO Smart Guidelines, local protocols) live in MinIO object storage. Ingestion converts them into searchable, semantically-indexed chunks.
+
+```
+MinIO bucket: who-smart-guidelines/
+  └── 282 PDF files
+         │
+         │  POST /admin/ingest  (JWT required)
+         ▼
+  Redis queue: cdss:jobs:queue
+  job pushed → API returns job_id immediately → worker picks it up
+         │
+         ▼  (cdss-worker container, blocking brpop)
+  ┌─────────────────────────────────────────────────────────────┐
+  │  For each PDF:                                              │
+  │                                                             │
+  │  1. EXTRACT TEXT                                            │
+  │     Primary:  unstructured library (layout-aware,           │
+  │               by_title chunking — respects headers)         │
+  │     Fallback: pypdf (plain text extraction)                 │
+  │     NLTK punkt used by unstructured for sentence boundaries │
+  │                                                             │
+  │  2. CHUNK                                                   │
+  │     Max chunk:         1 500 chars                          │
+  │     New chunk trigger: 2 000 chars                          │
+  │     Min chunk:            50 chars (noise filter)           │
+  │                                                             │
+  │  3. HEURISTIC METADATA TAGGING                              │
+  │     clinical_domain — 15 categories:                        │
+  │       infectious_disease, cardiology, obstetrics,           │
+  │       pediatrics, endocrinology, oncology, respiratory,     │
+  │       mental_health, nutrition, surgery, nephrology,        │
+  │       neurology, ophthalmology, dermatology, emergency      │
+  │     target_population:                                      │
+  │       pregnant_women, children, elderly, adults             │
+  │     source: filename  │  page: page number                  │
+  │                                                             │
+  │  4. STABLE CHUNK ID                                         │
+  │     "{source}_p{page}_{md5(text)}"                          │
+  │     Same chunk re-ingested = same ID = upsert (no dup)      │
+  │                                                             │
+  │  5. EMBED                                                   │
+  │     all-MiniLM-L6-v2 batch encodes all chunks               │
+  │     → 384-float vector per chunk                            │
+  │                                                             │
+  │  6. UPSERT INTO BOTH STORES                                 │
+  │     ChromaDB:  collection.upsert() — fast in-memory RAG     │
+  │     pgvector:  clinical_knowledge_chunks — tenant-aware,    │
+  │                persistent across restarts                   │
+  │                                                             │
+  │  7. REBUILD BM25 INDEX (incremental, in-memory)             │
+  │                                                             │
+  │  ✅ Added N chunks. Total in DB: XXXXX                      │
+  └─────────────────────────────────────────────────────────────┘
          │
          ▼
-  CDSS FastAPI (main.py)
-         │
-         ├─ 1. PHI REDACTION
-         │     privacy_guard.redact_text(query)
-         │     Names, MRNs, dates stripped before any processing
-         │
-         ├─ 2. KNOWLEDGE RETRIEVAL  (three layers, tried in order)
-         │
-         │   Layer A — pgvector (persistent, tenant-aware)
-         │     ┌─ Encode query → 384-dim vector
-         │     ├─ SELECT chunks WHERE tenant_id=X
-         │     │   ORDER BY embedding <=> query_vector  (cosine)
-         │     ├─ BM25 rerank on retrieved rows
-         │     └─ RRF fusion → ranked list
-         │
-         │   Layer B — Governed Knowledge Registry (fallback)
-         │     Versioned, human-reviewed JSON guideline files
-         │     knowledge_registry/ directory
-         │
-         │   Layer C — ChromaDB RAG (fast in-memory fallback)
-         │     ┌─ Vector search in ChromaDB
-         │     ├─ BM25 search (in-memory BM25Okapi index)
-         │     ├─ RRF fusion
-         │     ├─ Deduplication (same source + page → keep one)
-         │     └─ Cross-encoder reranking
-         │
-         ├─ 3. POPULATION FILTER
-         │     Filter citations by patient age / gender / pregnancy status
-         │
-         ├─ 4. LLM ANALYSIS (optional, if enabled)
-         │     ┌─ Governance check: policy + vendor + allowed models
-         │     ├─ Build prompt: patient context + top citations
-         │     ├─ POST Ollama /api/generate (temperature 0.2)
-         │     ├─ Redis cache (TTL 600s, key: md5(prompt))
-         │     └─ Timeout: LLM_GUIDELINES_TIMEOUT_SECONDS (default 20s)
-         │
-         └─ 5. RESPONSE
-               {
-                 citations: [ { title, text, source, similarity_score, grounded } ],
-                 analysis: "LLM clinical reasoning…"   // optional
-               }
+  Job status → "completed"
+  Quality report → data/ingest_metadata_report.json
+  (field coverage, domain distribution, population distribution)
 ```
 
-**The "grounded" flag** on each citation means the text came directly from an ingested document — it is not hallucinated. The LLM is always given the retrieved text first and asked to reason from it, not to generate from scratch.
+**Re-ingestion is always safe.** The stable MD5-based chunk ID means running ingest again after adding new documents upserts existing ones in place. No duplicates accumulate.
+
+**Why the worker is separate from the API.** Ingesting 282 PDFs takes 20–40 minutes. The job is queued, the API returns instantly, and the worker processes in the background. Failed jobs retry up to 3 times, then land in a dead-letter queue for manual inspection.
 
 ---
 
-## The Knowledge Databases
-
-Two storage layers work together:
-
-### ChromaDB — Fast In-Memory RAG
-
-- Persistent file-based vector store (`./data/chroma_db`)
-- Collection: `medical_guidelines`
-- Distance: cosine similarity
-- Rebuilt in full on `POST /admin/reindex`
-- BM25 index lives alongside it in memory — rebuilt after every ingest
-
-### pgvector — Persistent Tenant-Aware Store
-
-Stored in PostgreSQL alongside the EHR data:
+## Real-Time Clinical Query — How Knowledge Gets Out
 
 ```
-clinical_knowledge_documents
-  id, tenant_id, title, document_type, specialty,
-  minio_bucket, minio_key, chunk_count, ingestion_status
-
-clinical_knowledge_chunks
-  id (UUID), document_id → documents.id,
-  tenant_id, chunk_index,
-  chunk_text,
-  embedding  vector(384),   ← pgvector column
-  metadata   JSONB          ← domain, population, keywords
+POST /guidelines/search
+{ query, patient_context: { age, pregnant, gender }, limit }
+         │
+         ├─ 1. PHI REDACTION
+         │     privacy_guard.redact_text()
+         │     Names, MRNs, dates stripped — never reaches model
+         │
+         ├─ 2. ABBREVIATION EXPANSION (pre-query)
+         │     HIV → "HIV human immunodeficiency virus antiretroviral"
+         │     ANC → "ANC antenatal care prenatal"
+         │     TB  → "TB tuberculosis pulmonary respiratory"
+         │     + 10 more medical abbreviations
+         │
+         ├─ 3. KNOWLEDGE RETRIEVAL (three layers)
+         │
+         │   Layer A — pgvector (tenant-aware, persistent)
+         │     all-MiniLM-L6-v2 encodes query → vector
+         │     SELECT ... WHERE tenant_id=X ORDER BY embedding <=> vector
+         │     BM25 rerank on retrieved rows → RRF fusion
+         │
+         │   Layer B — Knowledge Registry (fallback)
+         │     Versioned, human-reviewed JSON guidelines
+         │     knowledge_registry/ directory
+         │     Used when pgvector has no results
+         │
+         │   Layer C — ChromaDB (fast in-memory, final fallback)
+         │     Full hybrid search (see Hybrid Search section)
+         │
+         ├─ 4. POPULATION FILTER
+         │     Filter citations by patient age / gender / pregnancy
+         │
+         ├─ 5. LLM ANALYSIS (if enabled, governed)
+         │     Ollama POST /api/generate
+         │     Model sees: patient context + top citations
+         │     Output: clinical reasoning grounded in evidence
+         │     Redis cache: md5(prompt), TTL 600s
+         │     Timeout: 20s (configurable)
+         │
+         └─ 6. RESPONSE
+               citations: [{ title, text, source, similarity_score, grounded }]
+               analysis: "…LLM text grounded in citations…"
 ```
-
-Every clinic (tenant) gets its own rows. A query from `kids-clinic` can never see chunks belonging to `city-hospital`. The vector similarity operator is `<=>` (cosine distance, lower = more similar).
 
 ---
 
 ## Hybrid Search: Vector + BM25 + Reranking
 
-The three signals and how they combine:
-
 ```
-Query: "hypertension management in pregnancy"
+Query → Abbreviation expansion
          │
-         ├─ VECTOR SEARCH
-         │   Encode query → 384-dim vector
-         │   Find top-k nearest chunks by cosine similarity
-         │   Good at: meaning, synonyms, related concepts
-         │   Misses: exact drug names, specific code numbers
+         ├─ VECTOR SEARCH  (all-MiniLM-L6-v2)
+         │   What it catches: synonyms, related concepts, paraphrasing
+         │   What it misses: exact drug names, specific dose numbers
+         │   Returns: ranked list (v_rank 0 = best)
          │
          ├─ BM25 SEARCH  (BM25Okapi, rank-bm25 library)
-         │   Tokenise query → keyword scores across all docs
-         │   Good at: exact terms, dosage numbers, drug names
-         │   Misses: semantically related but different words
+         │   What it catches: exact terms, dosages, codes, drug names
+         │   What it misses: semantically equivalent but different words
+         │   Returns: scored list (b_rank 0 = best)
          │
-         └─ RRF FUSION  (Reciprocal Rank Fusion, k=60)
-             Each document gets a combined score:
-             score = 1/(60 + vector_rank) + 1/(60 + bm25_rank)
-             The k=60 constant prevents one weak signal from
-             dominating — a doc ranked 1st by vector but not
-             found by BM25 still scores well.
+         └─ RRF FUSION  (k=60)
+             score = 1/(60 + v_rank) + 1/(60 + b_rank)
+
+             k=60 means rank-1 contributes ~0.016
+             A document ranked 1st in one signal but absent from the
+             other still scores meaningfully — neither signal dominates.
                   │
                   ▼
              DEDUPLICATION
-             Same source + same page → keep highest scorer
+             Same source file + same page number → keep highest scorer
                   │
                   ▼
-             CROSS-ENCODER RERANKING  (optional, precision boost)
-             Model: cross-encoder/ms-marco-MiniLM-L-6-v2
+             CROSS-ENCODER RERANKING  (cross-encoder/ms-marco-MiniLM-L-6-v2)
+             Retrieves n_results × 5 candidates from RRF
              Forms pairs: [ [query, doc1], [query, doc2], … ]
-             Scores each pair as a whole (not independently)
-             Re-sorts by rerank score → final top-N returned
+             Model reads query AND document together → logit score
+             Re-sorts by logit → slices to final top-N
+             Fallback: if model unavailable, use RRF order
 ```
 
-**Why RRF k=60?** If a document is ranked 1st by one signal but missing from the other, `1/(60+1) ≈ 0.016` — a meaningful contribution but not overwhelming. This makes the fusion robust when one retriever comes up empty.
-
-**Abbreviation expansion** happens before any search:
-- `HIV` → `"HIV human immunodeficiency virus antiretroviral"`
-- `ANC` → `"ANC antenatal care prenatal"`
-- `TB` → `"TB tuberculosis pulmonary respiratory"`
-This dramatically improves recall for clinical abbreviations that may not appear in guideline text verbatim.
+The cross-encoder is the precision layer. The bi-encoder + BM25 + RRF is the recall layer. Together they give you wide net + precise filter.
 
 ---
 
-## Intelligent Diagnosis Engine
-
-Beyond search, the CDSS can suggest diagnoses from patient data:
+## Diagnosis Engine — Three Models, One Answer
 
 ```
-Patient Data
-  ├─ Structured (vitals, labs, age, sex)
-  └─ Unstructured (clinical notes, chief complaint)
+Patient data
+  ├─ Vitals, labs, demographics (structured)
+  └─ Free-text notes, chief complaint (unstructured)
          │
-         ├─ MedBERT Predictor  [medbert/medbert-base]
-         │   AutoModel.from_pretrained — structured EHR data
-         │   Vitals, labs, demographics → diagnosis probabilities
-         │   Weight in fusion: 35%
-         │   Fallback: feature encoding + pattern matching
-         │
-         ├─ ClinicalBERT Diagnostic  [emilyalsentzer/Bio_ClinicalBERT]
-         │   AutoModelForSequenceClassification — free text
-         │   BioBERT trained on MIMIC-III clinical notes
-         │   Chief complaint, HPI → diagnosis probabilities
-         │   Weight in fusion: 30%
-         │   Fallback: spaCy NLP + keyword extraction
-         │
-         ├─ Rule-based Engine
-         │   Symptom matching + clinical decision rules
-         │   Fast, explainable, reliable baseline
-         │   Weight in fusion: 35%
-         │
-         ├─ Zimbabwe Terminology Layer
-         │   Adjusts scores for local disease prevalence
-         │   Shona/Ndebele symptom → canonical English mapping
-         │   Prevalence multipliers for HIV, Malaria, TB, etc.
-         │
-         └─ Fusion Engine
-             Weighted average of probabilities
-             Agreement scoring (boost if all three agree)
-             ICD-10 + SNOMED CT code attachment
-             RAG-retrieved evidence for top diagnoses
-             Optional LLM reasoning (Ollama) for differential
+         ├─────────────────────────────────────────────┐
+         │                                             │
+         ▼                                             ▼
+  MedBERT                                    ClinicalBERT
+  medbert/medbert-base                       emilyalsentzer/Bio_ClinicalBERT
+  AutoModel.from_pretrained                  AutoModelForSequenceClassification
+  ─────────────────────                      ──────────────────────────────────
+  Input: structured feature vector           Input: raw clinical text
+  Vitals: RR, SpO2, BP, HR, temp             Tokenised by scispaCy en_core_sci_sm
+  Labs: WBC, lactate, glucose …              Falls back to en_core_web_sm
+  Demographics: age, gender                  BioBERT base trained on MIMIC-III
+                                             Text classification pipeline
+  Output: P(HIV)=0.82, P(TB)=0.41…          Output: P(HIV)=0.78, P(TB)=0.55…
+
+  Fallback: feature encoding + pattern       Fallback: spaCy NLP + keywords
+  matching if model unavailable              if model unavailable
+         │                                             │
+         └──────────────────┬──────────────────────────┘
+                            │
+                            ▼
+                   RULE-BASED ENGINE
+                   Symptom matching + clinical decision rules
+                   Output: P(HIV)=0.90, P(TB)=0.35…
+
+                            │
+                            ▼
+                   ZIMBABWE TERMINOLOGY LAYER
+                   Shona/Ndebele symptom → English canonical
+                   SHONA_SYMPTOMS: 21 symptoms with translations
+                   NDEBELE_SYMPTOMS: 21 symptoms with translations
+                   ZIMBABWE_DISEASE_PATTERNS: prevalence multipliers
+                   → Boosts locally common conditions (HIV, Malaria, TB)
+                   → Applied as score modifier before fusion
+
+                            │
+                            ▼
+                   FUSION ENGINE
+                   ─────────────────────────────────────────
+                   Weights:  MedBERT 35% + ClinicalBERT 30% + Rules 35%
+                   Formula:  score = Σ(model_probability × weight)
+                   Agreement bonus: applied when all three models agree
+                   Confidence: boosted when model outputs align closely
+
+                   Final output per diagnosis:
+                     name, probability, confidence,
+                     icd10_code  (ICD-10 mapper — lookup table),
+                     snomed_code (SNOMED CT mapper — lookup table)
+
+                            │
+                            ▼
+                   RAG retrieves evidence for top diagnoses
+                   LLM generates differential reasoning from citations
 ```
 
-The fusion weights are tunable. Rule-based gets equal weight to ML models because it is highly explainable and fails gracefully when ML models are uncertain.
+**On the ICD-10 and SNOMED mappers:** These are structured lookup tables, not ML models. The diagnosis name from the fusion engine is mapped to standard codes for interoperability. They are deterministic and do not require model downloads.
+
+**On the `CDSS_ALLOW_MODEL_DOWNLOAD` flag:** If this is `false` (the default in resource-constrained environments), MedBERT and ClinicalBERT do not download. The service runs in lightweight mode — rule-based engine at full weight, Zimbabwe terminology still applied. You get meaningful clinical suggestions without the memory overhead of full transformers.
 
 ---
 
-## LLM Integration & Governance
+## Voice, Vision, and Structured Clinical AI
 
-The LLM (local Ollama instance) is never called without governance checks:
+### Voice — Faster-Whisper → SOAP Note
+
+```
+Clinician records audio during consultation
+         │
+         ▼  POST /transcribe  (async job)
+  Faster-Whisper
+  WhisperModel(size=WHISPER_MODEL_SIZE, device=WHISPER_DEVICE, compute_type='int8')
+  Sizes: base / small / medium / large
+  Languages: English (en), Shona (sn), Ndebele (nd), auto-detect
+  int8 quantisation — runs on CPU without GPU
+         │
+         ▼
+  Raw transcript text
+         │
+         ▼  LLM (Ollama)
+  LLMProvider.generate_json(transcript, schema="SOAP note")
+  Structured output: Subjective, Objective, Assessment, Plan
+         │
+         ▼
+  SOAP note saved to patient record
+```
+
+### Medical Image Analysis — CLIP
+
+```
+X-ray / DICOM upload
+         │
+         ├─ DICOM? → pydicom pre-processing → pixel array → PNG
+         ├─ JPG/PNG? → direct
+         │
+         ▼  POST /analyze-image  (async job)
+  CLIP Model
+  openai/clip-vit-base-patch32  (default)
+  Alternative: microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224
+  CLIPModel.from_pretrained + CLIPProcessor.from_pretrained
+  Device: GPU if available, CPU otherwise
+         │
+         ▼
+  Labels scored:
+    normal chest x-ray, pneumonia, tuberculosis,
+    pleural effusion, pneumothorax, fracture
+         │
+         ▼
+  Findings returned with confidence scores
+  Flagged findings surface as clinical alerts
+```
+
+### Structured Clinical Decision AI
+
+These endpoints run within the CDSS and use rule-based logic + evidence lookup — no separate ML models, but they integrate with RAG for guideline backing:
+
+| Endpoint | What it does |
+|---|---|
+| `POST /drugs/interactions/advanced` | Drug-drug interaction analysis with severity scoring |
+| `POST /risk/calculate` | Patient risk score with contributing factors |
+| `POST /risk/deterioration/ml` | ML-enhanced early warning score (uses federated GBM model when available) |
+| `POST /dosing/recommend` | Weight/renal-adjusted dosing recommendation |
+| `POST /labs/interpret` | Lab value interpretation with reference ranges |
+| `POST /medications/duplicates` | Duplicate therapy detection |
+| `POST /medications/high-risk` | High-risk medication alerts |
+| `POST /medications/food-interactions` | Food-drug interaction warnings |
+| `POST /hiv/testing/algorithm` | Zimbabwe HIV testing algorithm |
+| `POST /patient/summarize` | LLM-generated patient visit summary |
+
+---
+
+## The LLM Layer — Local, Governed, Grounded
+
+The LLM is the last step in the pipeline. It never sees raw patient data — only the redacted clinical context and the retrieved citations.
 
 ```
 llm_provider.generate_response(prompt, use_case, tenant_id)
          │
-         ├─ 1. Resolve use-case policy from settings_provider
-         │       Is this use case enabled for this tenant?
-         │       Which vendor/model is allowed?
-         │       If disabled → raise RuntimeError (not called)
+         ├─ 1. GOVERNANCE CHECK
+         │     Load use-case policy for this tenant from settings_provider
+         │     Is the use case enabled?
+         │     Is the requested model on the allowlist?
+         │     Which vendor is configured (ollama / openai)?
+         │     If denied → log "llm_use_case_denied" → raise RuntimeError
          │
-         ├─ 2. PHI redaction on prompt + system_prompt
-         │       Any names, MRNs, dates stripped before leaving service
+         ├─ 2. PHI REDACTION
+         │     privacy_guard.redact_text(prompt)
+         │     privacy_guard.redact_text(system_prompt)
+         │     Names, MRNs, dates, identifiers stripped
          │
-         ├─ 3. POST Ollama /api/generate
-         │       model:         LLM_MODEL_NAME
-         │       temperature:   0.2  (factual, low creativity)
-         │       num_predict:   1024 tokens
-         │       format:        "json" if structured output needed
+         ├─ 3. CACHE CHECK
+         │     Redis key: md5(prompt)  TTL: 600s
+         │     Hit → return cached response immediately
          │
-         ├─ 4. Audit log
-         │       llm_use_case_allowed / llm_use_case_denied
-         │       Stored via settings_provider.log_action()
+         ├─ 4. LLM CALL
+         │     POST {LLM_API_URL}/api/generate
+         │     { model: LLM_MODEL_NAME,
+         │       prompt: redacted_prompt,
+         │       temperature: 0.2,
+         │       num_predict: 1024,
+         │       format: "json" if structured output }
+         │     Timeout: LLM_TIMEOUT_SECONDS (default 30s)
+         │     Retries: LLM_MAX_RETRIES (default 1)
          │
-         └─ 5. Redis cache
-                key: md5(prompt)
-                TTL: 600s
-                Identical prompts don't re-call the LLM
+         ├─ 5. OUTBOUND PHI GUARD
+         │     Response checked for potential PHI before returning
+         │
+         ├─ 6. AUDIT LOG
+         │     log_action("llm_use_case_allowed", use_case, model, tenant)
+         │
+         └─ 7. CACHE WRITE + RETURN
 ```
 
-**Why local LLM (Ollama)?** Patient data never leaves the clinic's infrastructure. There is no OpenAI API call with PHI in the request body. Cloud LLMs (OpenAI) are optional and only used for non-PHI use cases (e.g., post-visit summaries after redaction).
+**Why Ollama (local)?** Patient data never leaves the clinic's server. There is no API call to OpenAI with a patient's vitals in the body. OpenAI is available as an optional secondary vendor, controlled by tenant governance policy, and only used after PHI redaction.
+
+**Why temperature 0.2?** Clinical output must be factual and reproducible. High temperature introduces creative variation that is harmful in a medical context. 0.2 keeps the model near its highest-confidence response.
 
 ---
 
-## Redis Caching & Job Queue
+## The Self-Learning Loop
 
-Redis serves two roles:
+Every time a clinician accepts, modifies, or overrides an AI recommendation, that signal is captured and eventually improves the model — but only after passing through a human review gate.
+
+```
+STAGE 1 — CLINICIAN FEEDBACK CAPTURE
+─────────────────────────────────────────────────────────────────────────
+POST /feedback/outcome
+{
+  clinician_action: "overridden",  // accepted | modified | overridden | ignored
+  override_reason: "Patient already on ARTs",
+  outcome_30d: { readmission: false, adverse_event: false },
+  outcome_90d: { …90-day observations… }
+}
+
+Stored in cdss_feedback_entries:
+  learning_status:    "pending_review"
+  processing_status:  "received"
+  source_model:       "diagnosis" | "risk" | "vitals_risk" | "denial"
+  confidence_score:   0.736  (what the model said)
+  clinician_action:   "overridden"
+  demographic fields: age_bucket, gender, sdoh_flag  (for fairness audits)
+
+         │
+         ▼
+STAGE 2 — HUMAN REVIEW GATE
+─────────────────────────────────────────────────────────────────────────
+POST /feedback/outcome/review/{entry_id}
+{
+  action: "approve_for_learning",  // or "reject_for_learning"
+  review_notes: "Override was clinically justified, good learning signal"
+}
+
+learning_status transitions:
+  pending_review → reviewed → approved_for_learning
+                            → rejected_for_learning  (with notes)
+
+Only "approved_for_learning" entries proceed.
+Rejected entries are kept for audit but excluded from retraining.
+
+         │
+         ▼
+STAGE 3 — BATCH COLLECTION & RETRAINING TRIGGER
+─────────────────────────────────────────────────────────────────────────
+POST /feedback/outcome/batch-collect
+  Collects approved entries
+  Computes aggregates: accepted_count, modified_count, overridden_count,
+                       ignored_count, avg_outcome_score
+
+POST /feedback/outcome/learning/retrain
+  Triggered when approved batch reaches threshold (MIN_OUTCOMES ≈ 50)
+  Writes approved entries to JSONL:
+    /tmp/medicore_retrain_{surface}.jsonl
+    Each line: { predicted, actual, features, timestamp, tenant_id }
+
+  Background job picks up JSONL, retrains model surface
+  (diagnosis / risk / denial / vitals_risk)
+  Model version bumped in model_deployments table
+
+         │
+         ▼
+STAGE 4 — FEDERATED LEARNING (across all clinics)
+─────────────────────────────────────────────────────────────────────────
+  See full federated learning section below
+
+         │
+         ▼
+STAGE 5 — SHADOW EVALUATION
+─────────────────────────────────────────────────────────────────────────
+POST /self-learning/shadow-eval
+  Challenger model runs alongside production model
+  Both score the same inputs
+  Divergence logged to /tmp/shadow_{surface}.jsonl:
+    { confidence_delta, abstention_divergence, production_score,
+      challenger_score, timestamp }
+  Human review triggered if: confidence_delta > 0.20
+
+         │
+         ▼
+STAGE 6 — PROMOTION GATES
+─────────────────────────────────────────────────────────────────────────
+  Challenger must pass ALL of:
+    AUC ≥ 0.55
+    Improvement ≥ 0.01 over current production model
+    Brier score ≤ 0.25
+    Calibration: decile expected vs actual rates aligned
+    Fairness: demographic parity gap ≤ 10%
+    Clinical approval: human sign-off required
+
+  Staging: shadow → canary (optional, % of real traffic) → production
+  Auto-promotion BLOCKED — every stage requires explicit approval
+
+         │
+         ▼
+STAGE 7 — PRODUCTION DEPLOYMENT
+─────────────────────────────────────────────────────────────────────────
+POST /model/load
+  Loads promoted model into _LOADED_MODELS in-memory cache
+  Serving switches to new model version
+  All predictions now use updated model
+  Old version retained for rollback
+```
+
+---
+
+## Federated Learning — Learning Across Clinics Without Sharing Patient Data
+
+The federated learning system lets all clinics collectively improve shared predictive models without any clinic's patient data ever being visible to another.
+
+```
+WEEKLY CRON (Sunday 02:00 UTC)
+─────────────────────────────────────────────────────────────────────────
+FederatedLearningService.initiateRound()
+  Model types: deterioration, readmission, no_show, sepsis
+  Creates FlRound: roundNumber, globalModelVersion, status="pending"
+  Kicks off local training for each active tenant
+
+         │
+         ▼  (simultaneously, in each clinic's own database)
+LOCAL TRAINING — PER CLINIC
+─────────────────────────────────────────────────────────────────────────
+POST /fl/train-local  { modelType, roundId, tenantId }
+
+For each model type, the clinic queries ONLY its own patient data:
+
+  deterioration: vitals (RR, SpO2, BP, HR, temp) + ICU transfer label
+  readmission:   demographics + 30-day readmission label
+  no_show:       age, gender, day_of_week, hour_of_day + attendance label
+  sepsis:        RR, HR, temp, BP, WBC, lactate, age + sepsis label
+
+  Minimum viable training: ≥10 samples, ≥5 positive outcomes
+  If not enough data: clinic skips this round gracefully
+
+  GradientBoostingClassifier (scikit-learn)
+    n_estimators=100, max_depth=4, learning_rate=0.05, subsample=0.8
+
+  DIFFERENTIAL PRIVACY APPLIED:
+    Gaussian noise added to feature importances before sharing
+    noise_scale = gradient_norm / privacy_epsilon  (epsilon=1.0 default)
+    → What is shared: noisy feature importances + aggregate metrics
+    → What is NOT shared: any patient-level data whatsoever
+
+  Local model weights uploaded to MinIO:
+    models/{modelType}/round-{roundId}/weights.pkl
+
+  Clinic submits FlParticipationLog:
+    localModelMetrics: { auc, brierScore, featureImportances }
+    sampleCount, gradientNorm, privacyEpsilon
+
+         │
+         ▼  (once all clinics submit, or 24h timeout)
+FEDERATED AGGREGATION (FedAvg)
+─────────────────────────────────────────────────────────────────────────
+POST /fl/aggregate  { roundId }
+
+  Weighted average by sample count:
+    aggregated_metric[k] = Σ(clinic_metric[k] × clinic_samples) / total_samples
+
+  Aggregates: AUC, Brier score, feature importances
+  Produces: global model weights reference in MinIO
+
+         │
+         ▼
+GLOBAL MODEL EVALUATION
+─────────────────────────────────────────────────────────────────────────
+POST /fl/evaluate  { roundId }
+
+  Holdout evaluation on last 10% of outcomes (min 20 samples)
+  Promotion gates:
+    AUC ≥ 0.55
+    Improvement ≥ 0.01 over current global model
+    Brier score ≤ 0.25
+    Calibration: 10-decile expected vs actual alignment
+    Fairness: no demographic parity flag raised
+
+  Model registered in ModelRegistry:
+    modelName, version, minioPath, aucRoc, brierScore,
+    sampleCount (total across all clinics), tenantCount,
+    featureNames, framework, status, deploymentStage
+
+  ModelPromotionReview created:
+    requestedStage: "shadow"
+    reviewStatus:   "pending_review"
+    Requires human clinical approval to proceed
+
+         │
+         ▼  (after clinical approval)
+SHADOW → CANARY → PRODUCTION  (same gates as self-learning above)
+```
+
+**What "federated" means in practice:** No clinic ever sends a patient row to another clinic or to a central server. Only the model's aggregate statistics (weighted scores, noisy feature importances) travel over the network. The actual patient records never leave the clinic's PostgreSQL database.
+
+---
+
+## Model Drift Monitoring & Anomaly Detection
+
+The system continuously monitors its own models for signs of degradation.
+
+### Bias Audit
+
+```
+POST /self-learning/bias-audit
+  Protected attributes: age_bucket, gender, sdoh_flag
+  For each attribute:
+    Compute outcome_score mean per group
+    parity_gap = max(group_means) - min(group_means)
+    PASS if gap ≤ 10%
+    FAIL if gap > 10% → recommendation: pause auto-learning approval
+
+  Confidence based on sample size: 0.60 + min(samples/1000, 0.30)
+  Reports: worst_performing_group, best_performing_group, per-attribute results
+```
+
+### Anomaly Detection
+
+```
+POST /self-learning/audit-anomaly
+  Compares consecutive metric snapshots (requires ≥2 historical records)
+
+  ACCURACY DROP > 5%
+    Critical if > 15%: halt auto-deployment, trigger manual review, consider rollback
+    High if 5–15%: flag for review
+
+  ABSTENTION SURGE > 20%
+    Model refusing > 20% of requests (safety gates firing too often)
+    Action: check input data quality, review safety gate thresholds
+
+  LATENCY SPIKE > 3× baseline
+    Severity: medium
+    Action: check service load, review model complexity
+
+  FAIRNESS DEGRADATION (SDOH parity gap > 10%)
+    Severity: high
+    Action: review training data for SDOH bias, pause auto-learning approval
+```
+
+### Calibration Monitoring
+
+Every promoted model's calibration is checked continuously:
+- 10-decile analysis: for each decile of predicted probability, what was the actual event rate?
+- Overconfident model: predicts 0.9 but only 0.6 actually occur → flagged
+- Underconfident model: predicts 0.2 but 0.5 actually occur → flagged
+
+---
+
+## Safety, PHI & Governance
+
+| Layer | Mechanism | What it prevents |
+|---|---|---|
+| **Input** | `privacy_guard.redact_text()` on every query | PHI reaching the embedding model or LLM |
+| **Output** | Outbound PHI guard on LLM responses | PHI leaking back through the API |
+| **LLM gating** | Per-tenant, per-use-case governance policy | Unauthorised model calls; wrong model for use case |
+| **Model allowlist** | Only listed model names accepted per use case | Swapping in an unapproved model |
+| **Audit log** | Every AI decision: use case, model, tenant, outcome | Full traceability for every clinical AI call |
+| **Feedback gate** | Human review before any feedback enters training | Bad signals corrupting the model |
+| **Promotion gate** | AUC, Brier, calibration, fairness, clinical approval | Degraded model reaching production |
+| **Shadow mode** | Challenger runs alongside production before promotion | Untested model affecting real care |
+| **Differential privacy** | Gaussian noise on FL gradients | Individual patient data inferred from model weights |
+| **Stable chunk IDs** | MD5-based upsert on ingest | Ghost duplicate knowledge chunks |
+| **Dead-letter queue** | Failed jobs captured, inspectable, re-queueable | Silently dropped ingestion jobs |
+
+---
+
+## The Knowledge Databases
+
+### ChromaDB — Fast In-Memory RAG
+
+- PersistentClient, file-backed (`./data/chroma_db`)
+- Collection: `medical_guidelines`, cosine distance
+- Rebuilt in full on `POST /admin/reindex`
+- BM25 index lives alongside it in memory, rebuilt after every ingest
+
+### pgvector — Persistent Tenant-Aware Store
+
+```sql
+-- One row per ingested document
+clinical_knowledge_documents (
+  id UUID, tenant_id, title, document_type, specialty,
+  minio_bucket, minio_key, chunk_count, ingestion_status,
+  is_active, uploaded_by, created_at, updated_at
+)
+
+-- One row per text chunk with its embedding
+clinical_knowledge_chunks (
+  id UUID, document_id → documents.id,
+  tenant_id,           -- clinic-level isolation
+  chunk_index,         -- position in document
+  chunk_text,
+  chunk_tokens,
+  embedding vector(384),   -- pgvector column, cosine via <=>
+  metadata JSONB           -- domain, population, keywords
+)
+```
+
+### Feedback & Learning Tables
+
+```sql
+cdss_feedback_entries     -- clinician feedback, learning status machine
+cdss_feedback_batches     -- aggregated batch stats
+
+-- Federated learning (EHR service)
+FlRound                   -- round metadata, status, aggregated metrics
+FlParticipationLog        -- per-clinic contribution, privacy budget
+ModelRegistry             -- candidate models with evaluation metrics
+ModelPromotionReview      -- approval records per promotion stage
+ModelPerformanceMetric    -- time-series AUC, Brier, calibration
+ModelFairnessReport       -- parity gap results per model version
+```
+
+---
+
+## Redis: Caching & Job Queue
 
 ### Query Cache
 
 ```
-cache key = "rag:query:{tenant_id}:{md5(query + filters + n_results)}"
-TTL = 3600 seconds (1 hour)
+Key:  "rag:query:{tenant_id}:{md5(query + filters + n_results)}"
+TTL:  3600 seconds
 
-Identical clinical queries within the hour → instant response
+Same clinical query within the hour → instant response
 No re-embedding, no re-searching, no LLM call
 ```
 
-### Async Job Queue
+### LLM Cache
 
 ```
-Queue: cdss:jobs:queue   (Redis list, lpush/brpop)
+Key:  md5(prompt)
+TTL:  600 seconds
+
+Identical prompts skip the Ollama call entirely
+```
+
+### Job Queue
+
+```
+Queue: cdss:jobs:queue   (Redis list, lpush / brpop)
 DLQ:   cdss:jobs:dead_letter
 
-Lifecycle:
-  POST /admin/ingest
-    → lpush job_id onto queue
-    → return { job_id, status: "queued" }
+POST /admin/ingest → lpush job_id → API returns immediately
+cdss-worker brpop(queue, timeout=5s) → _run_job(job_id)
+Status: queued → running → completed / failed
+Retry: up to 3 times, then dead_letter
+Manual recover: POST /admin/jobs/dead-letter/requeue/{job_id}
 
-  cdss-worker (separate container)
-    → brpop(queue, timeout=5s)  ← blocks, no polling
-    → _run_job(job_id)
-    → update status: queued → running → completed/failed
-
-  On failure:
-    → retry up to 3 times (re-enqueued)
-    → after 3 failures → dead_letter queue
-    → manual requeue: POST /admin/jobs/dead-letter/requeue/{job_id}
+Job types:
+  ingest       — run full guideline corpus ingest
+  reindex      — delete + rebuild ChromaDB + BM25
+  cache_flush  — clear Redis caches (rag:*, llm:*, cdss:*)
+  reencrypt    — re-encrypt payloads in database
+  transcribe   — audio transcription + SOAP note generation
+  analyze_image — medical image analysis via CLIP
 ```
-
-Job types: `ingest`, `reindex`, `cache_flush`, `reencrypt`, `transcribe`, `analyze_image`
-
----
-
-## Safety, PHI & Audit
-
-| Mechanism | What it does |
-|---|---|
-| `privacy_guard.redact_text()` | Strips PHI from every query before RAG/LLM processing |
-| Outbound PHI guard | Checks LLM response for potential PHI before returning |
-| AI governance policies | Per-tenant, per-use-case enable/disable + model allowlist |
-| Audit log (`/admin/audit`) | Every AI decision logged with use case, model, tenant, outcome |
-| Outcome feedback (`/feedback/outcome`) | Clinician overrides captured for model learning pipeline |
-| Stable chunk IDs | Re-ingestion is safe and idempotent — no ghost duplicates |
-| Dead-letter queue | Failed jobs never silently disappear |
 
 ---
 
@@ -632,26 +974,26 @@ Job types: `ingest`, `reindex`, `cache_flush`, `reencrypt`, `transcribe`, `analy
 ### Trigger a full re-ingest
 
 ```bash
-# Generate a short-lived JWT (JWT_SECRET from .env)
+# Generate a 1-hour JWT (uses JWT_SECRET from .env)
 TOKEN=$(node -e "
   const c = require('crypto');
   const h = { alg:'HS256', typ:'JWT' };
-  const p = { sub:'admin@medicore.co.zw', email:'admin@medicore.co.zw', exp: Math.floor(Date.now()/1000)+3600 };
+  const p = { sub:'admin@medicore.co.zw', email:'admin@medicore.co.zw',
+              exp: Math.floor(Date.now()/1000)+3600 };
   const b64 = s => Buffer.from(JSON.stringify(s)).toString('base64url');
   const data = b64(h)+'.'+b64(p);
-  const sig = c.createHmac('sha256','dev_secret_key_change_in_production').update(data).digest('base64url');
+  const sig = c.createHmac('sha256','dev_secret_key_change_in_production')
+               .update(data).digest('base64url');
   console.log(data+'.'+sig);
 ")
 
-# Start ingest job
 curl -s -X POST http://localhost:8000/admin/ingest \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-### Monitor progress
+### Watch ingestion progress
 
 ```bash
-# Watch the worker logs
 docker logs medicore-cdss-worker -f --tail=20 | grep "Total in DB"
 ```
 
@@ -662,18 +1004,19 @@ curl -s http://localhost:8000/admin/ingest/jobs \
   -H "Authorization: Bearer $TOKEN" | jq '.[] | {id, status, result}'
 ```
 
-### Test a search query
+### Test a guideline search
 
 ```bash
 curl -s -X POST http://localhost:8000/guidelines/search \
   -H "Content-Type: application/json" \
-  -d '{"query":"hypertension management pregnancy","limit":3}' | jq '.citations[].title'
+  -d '{"query":"hypertension management pregnancy","limit":3}' \
+  | jq '.citations[].title'
 ```
 
 ### Interactive API docs
 
-`http://localhost:8000/docs` — full Swagger UI for all CDSS endpoints.
+`http://localhost:8000/docs` — full Swagger UI for all 60+ CDSS endpoints.
 
 ---
 
-*This document describes the system as implemented. For sprint history and roadmap context, see `docs/SPRINT-ROADMAP-AI-FIRST.md`.*
+*For sprint history and roadmap context, see `docs/SPRINT-ROADMAP-AI-FIRST.md` and `docs/AI_FIRST_MASTER_GUIDE.md`.*
