@@ -3,9 +3,37 @@ import { OncologyService } from './oncology.service';
 const makeService = () => {
   const financeService = {};
   const terminologyService = {};
+  const aiSurfaceContractService = {
+    buildSurfaceMetadata: jest.fn((input: any) => ({
+      aiSurface: input.aiSurface,
+      useCase: input.useCase,
+      provenance: {
+        modelId: input.modelId,
+        modelVersion: input.modelVersion,
+        provider: input.provider,
+        source: input.source,
+      },
+      audit: {
+        modelRegistry: 'ai_model_audit_registry',
+        promptAuditLog: 'prompt_audit_log',
+        requestId: null,
+        recorded: input.recorded === true,
+      },
+      monitoring: {
+        metricsSurface: input.aiSurface,
+        offlineEvalSupported: false,
+        releaseGateSupported: false,
+      },
+      controls: {
+        disablePaths: ['test disable'],
+        rollbackPaths: ['test rollback'],
+      },
+    })),
+  };
 
   return {
-    service: new OncologyService(financeService as any, terminologyService as any, {} as any),
+    service: new OncologyService(financeService as any, terminologyService as any, {} as any, aiSurfaceContractService as any),
+    aiSurfaceContractService,
   };
 };
 
@@ -114,6 +142,94 @@ describe('OncologyService protocol automation', () => {
 
     expect(result.idempotent).toBe(true);
     expect(result.result.operation).toBe('prechemo_order_set_documented');
+  });
+
+  it('builds a compact mobile oncology protocol snapshot from the highest-priority active case', async () => {
+    const { service, aiSurfaceContractService } = makeService();
+
+    jest.spyOn(service, 'listCases').mockResolvedValue({
+      cases: [
+        {
+          id: 'case-1',
+          patient_id: 'patient-1',
+          patient_name: 'Jane Doe',
+          primary_diagnosis: 'Breast cancer',
+          status: 'active',
+          overall_stage: 'II',
+          oncologist_name: 'Dr Onco',
+        },
+      ],
+      total: 1,
+    } as any);
+    jest.spyOn(service, 'getProtocolAutomationBundle').mockResolvedValue({
+      protocolBundle: {
+        bundle_key: 'oncology-protocol:case-1',
+        actionable_count: 2,
+        pending_count: 1,
+        items: [
+          {
+            id: 'route-tumor-board-review',
+            title: 'Route case for tumor-board review',
+            priority: 'critical',
+            rationale: 'Progressive disease requires multidisciplinary review.',
+            execution_status: 'completed',
+          },
+          {
+            id: 'queue-prechemo-labs',
+            title: 'Queue pre-chemo CBC/CMP order set',
+            priority: 'high',
+            rationale: 'Next infusion needs a completed lab gate.',
+          },
+        ],
+      },
+    } as any);
+    jest.spyOn(service, 'generateTreatmentRecommendations').mockResolvedValue({
+      recommendations: [
+        {
+          title: 'Evaluate alternative regimen',
+          rationale: 'Latest RECIST response suggests escalation review.',
+          severity: 'warning',
+        },
+      ],
+    } as any);
+    jest.spyOn(service, 'generateSurveillanceReminders').mockResolvedValue({
+      upcoming: [],
+      overdue: [{ dueDate: '2026-03-01T00:00:00.000Z' }],
+    } as any);
+
+    const result = await service.getMobileProtocolSnapshot({} as any);
+
+    expect(result.activeCase).toEqual(
+      expect.objectContaining({
+        id: 'case-1',
+        patientName: 'Jane Doe',
+        diagnosis: 'Breast cancer',
+      }),
+    );
+    expect(result.protocol).toEqual(
+      expect.objectContaining({
+        actionableCount: 2,
+        pendingCount: 1,
+        nextAction: expect.objectContaining({ id: 'queue-prechemo-labs' }),
+      }),
+    );
+    expect(result.surveillance.overdueCount).toBe(1);
+    expect(aiSurfaceContractService.buildSurfaceMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiSurface: 'oncology_mobile_intelligence',
+        useCase: 'oncology_protocol_mobile',
+      }),
+    );
+    expect(result.aiMetadata).toEqual(
+      expect.objectContaining({
+        aiSurface: 'oncology_mobile_intelligence',
+        useCase: 'oncology_protocol_mobile',
+        governed: true,
+        provenance: expect.objectContaining({
+          source: 'oncology_protocol_bundle',
+        }),
+      }),
+    );
   });
 
   it('executes pre-chemo lab queue protocol action and persists workflow state', async () => {

@@ -1,6 +1,14 @@
 import { RadiologyAiService } from './radiology-ai.service';
 
 describe('RadiologyAiService', () => {
+  const aiSurfaceContractService = {
+    buildSurfaceMetadata: jest.fn((payload) => ({
+      aiSurface: 'radiology_ai',
+      useCase: payload.useCase,
+      provenance: { modelId: payload.modelId, modelVersion: payload.modelVersion, provider: payload.provider, source: payload.source },
+    })),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -37,7 +45,12 @@ describe('RadiologyAiService', () => {
       }),
     };
 
-    const service = new RadiologyAiService(tenantService as any, alertDelivery as any, cdssService as any);
+    const service = new RadiologyAiService(
+      tenantService as any,
+      alertDelivery as any,
+      cdssService as any,
+      aiSurfaceContractService as any,
+    );
     const study = await service.registerStudy('kids-clinic', {
       patientId: 'patient-1',
       studyUid: '1.2.3',
@@ -57,6 +70,10 @@ describe('RadiologyAiService', () => {
       'kids-clinic',
       tenantDb,
     );
+    expect((study as any).aiMetadata).toEqual(expect.objectContaining({
+      aiSurface: 'radiology_ai',
+      useCase: 'radiology_analysis',
+    }));
     expect(alertDelivery.broadcastCriticalAlert).toHaveBeenCalled();
   });
 });

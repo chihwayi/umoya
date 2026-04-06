@@ -24,6 +24,14 @@ import {
   AiPulse,
 } from '../ui';
 import { CdssService, InteractionResult, DosingResult, RiskScoreResult, GuidelineResult, DiagnosisResult, LabInterpretResult } from '../../services/cdss';
+import {
+  ApiBloodBankOperationalBrief,
+  ApiPacuPatient,
+  SpecialtyIntelligenceService,
+  ApiDoctorImagingResult,
+  ApiOncologyProtocolSnapshot,
+  ApiSepsisOperationalBrief,
+} from '../../services/specialtyIntelligence';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -278,8 +286,66 @@ const CDSSScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CdssResult | null>(null);
   const [recentQueries, setRecentQueries] = useState<string[]>([]);
+  const [sepsisBrief, setSepsisBrief] = useState<ApiSepsisOperationalBrief | null>(null);
+  const [oncologySnapshot, setOncologySnapshot] = useState<ApiOncologyProtocolSnapshot | null>(null);
+  const [bloodBankBrief, setBloodBankBrief] = useState<ApiBloodBankOperationalBrief | null>(null);
+  const [pacuPatients, setPacuPatients] = useState<ApiPacuPatient[]>([]);
+  const [criticalImaging, setCriticalImaging] = useState<ApiDoctorImagingResult[]>([]);
+  const [specialtyLoading, setSpecialtyLoading] = useState(true);
 
   const activeDef = CDSS_TOOLS.find((t) => t.key === activeTool);
+  const pacuReadyCount = pacuPatients.filter((item) => Boolean(item.dischargeCriteriaMet)).length;
+  const pacuMonitoringCount = pacuPatients.length - pacuReadyCount;
+  const nextPacuPatient = pacuPatients[0] || null;
+  const longestWaitMinutes = pacuPatients.reduce((max, item) => {
+    const arrival = item.arrivalTime ? new Date(item.arrivalTime).getTime() : NaN;
+    if (!Number.isFinite(arrival)) return max;
+    const minutes = Math.max(0, Math.round((Date.now() - arrival) / (1000 * 60)));
+    return Math.max(max, minutes);
+  }, 0);
+  const hasSepsisCard = Boolean(
+    sepsisBrief?.summary ||
+    (sepsisBrief?.recommendations?.length || 0) > 0 ||
+    (sepsisBrief?.highPriorityQueue?.length || 0) > 0,
+  );
+  const hasOncologyCard = Boolean(
+    oncologySnapshot?.activeCase ||
+    oncologySnapshot?.protocol ||
+    oncologySnapshot?.treatmentRecommendation,
+  );
+  const hasBloodBankCard = Boolean(
+    bloodBankBrief?.safetySummary ||
+    bloodBankBrief?.inventorySummary ||
+    (bloodBankBrief?.highPriorityQueue?.length || 0) > 0 ||
+    (bloodBankBrief?.recommendations?.length || 0) > 0,
+  );
+  const hasPacuCard = pacuPatients.length > 0;
+  const hasImagingCard = criticalImaging.length > 0;
+  const hasAnySpecialtyCard = hasSepsisCard || hasOncologyCard || hasBloodBankCard || hasPacuCard || hasImagingCard;
+
+  const loadSpecialtyActions = useCallback(async () => {
+    setSpecialtyLoading(true);
+    try {
+      const [brief, oncology, bloodBank, pacu, imaging] = await Promise.allSettled([
+        SpecialtyIntelligenceService.getSepsisOperationalBrief(),
+        SpecialtyIntelligenceService.getOncologyProtocolSnapshot(),
+        SpecialtyIntelligenceService.getBloodBankOperationalBrief(),
+        SpecialtyIntelligenceService.getActivePacuPatients(),
+        SpecialtyIntelligenceService.getCriticalImagingResults(),
+      ]);
+      setSepsisBrief(brief.status === 'fulfilled' ? brief.value : null);
+      setOncologySnapshot(oncology.status === 'fulfilled' ? oncology.value : null);
+      setBloodBankBrief(bloodBank.status === 'fulfilled' ? bloodBank.value : null);
+      setPacuPatients(pacu.status === 'fulfilled' ? pacu.value.slice(0, 6) : []);
+      setCriticalImaging(imaging.status === 'fulfilled' ? imaging.value.slice(0, 3) : []);
+    } finally {
+      setSpecialtyLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSpecialtyActions();
+  }, [loadSpecialtyActions]);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim() || !activeTool) return;
@@ -338,8 +404,289 @@ const CDSSScreen: React.FC = () => {
     setResult(null);
   };
 
+  const acknowledgeImaging = useCallback(async (reportId: string) => {
+    setCriticalImaging((prev) =>
+      prev.filter((item) => item.report?.id !== reportId),
+    );
+    try {
+      await SpecialtyIntelligenceService.acknowledgeImagingReport(reportId, 'Acknowledged from doctor mobile specialty actions');
+    } catch {
+      loadSpecialtyActions().catch(() => {});
+    }
+  }, [loadSpecialtyActions]);
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={cdssStyles.content}>
+
+      <View style={cdssStyles.specialtySection}>
+        <SectionHeader action="Refresh" onAction={loadSpecialtyActions}>Specialty Actions</SectionHeader>
+        {specialtyLoading ? (
+          <View style={cdssStyles.specialtyLoading}>
+            <ActivityIndicator color={C.teal} size="small" />
+            <Text style={cdssStyles.specialtyLoadingText}>Refreshing specialty priorities…</Text>
+          </View>
+        ) : (
+          <>
+            {hasSepsisCard && sepsisBrief && (
+              <Card accent={C.red} style={cdssStyles.specialtyCard}>
+                <View style={cdssStyles.specialtyCardHeader}>
+                  <AiBadge text="Sepsis Watch" />
+                  <Badge color={C.red} size="xs">
+                    {sepsisBrief.summary?.criticalRisk || 0} critical
+                  </Badge>
+                </View>
+                <Text style={cdssStyles.specialtyTitle}>
+                  {sepsisBrief.recommendations?.[0] || 'Monitor high-risk sepsis bundles and escalate time-critical gaps.'}
+                </Text>
+                <View style={cdssStyles.specialtyMetricsRow}>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>{sepsisBrief.summary?.totalAlerts24h || 0}</Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Alerts</Text>
+                  </View>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>{sepsisBrief.summary?.overdueThreeHour || 0}</Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>3h overdue</Text>
+                  </View>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>{sepsisBrief.summary?.repeatLactateOverdue || 0}</Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Repeat lactate</Text>
+                  </View>
+                </View>
+                {sepsisBrief.highPriorityQueue?.[0] && (
+                  <View style={cdssStyles.specialtyQueueItem}>
+                    <Text style={cdssStyles.specialtyQueueTitle}>
+                      Next patient: {sepsisBrief.highPriorityQueue[0].patientName || 'Unknown patient'}
+                    </Text>
+                    <Text style={cdssStyles.specialtyQueueBody}>
+                      {sepsisBrief.highPriorityQueue[0].recommendedActions?.[0] ||
+                        'Review the next high-risk bundle and clear outstanding sepsis actions.'}
+                    </Text>
+                  </View>
+                )}
+              </Card>
+            )}
+
+            {hasOncologyCard && oncologySnapshot?.activeCase && (
+              <Card accent={C.purple} style={cdssStyles.specialtyCard}>
+                <View style={cdssStyles.specialtyCardHeader}>
+                  <AiBadge text="Oncology Snapshot" />
+                  <Badge color={C.purple} size="xs">
+                    {oncologySnapshot.protocol?.pendingCount || 0} pending
+                  </Badge>
+                </View>
+                <Text style={cdssStyles.specialtyTitle}>
+                  {(oncologySnapshot.activeCase.patientName || 'Unknown patient') +
+                    (oncologySnapshot.activeCase.diagnosis ? ` · ${oncologySnapshot.activeCase.diagnosis}` : '')}
+                </Text>
+                <Text style={cdssStyles.specialtyQueueBody}>
+                  {oncologySnapshot.summary ||
+                    oncologySnapshot.protocol?.nextAction?.rationale ||
+                    'Review the active oncology case and clear the next protocol action.'}
+                </Text>
+                <View style={cdssStyles.specialtyMetricsRow}>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>{oncologySnapshot.protocol?.actionableCount || 0}</Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Actions</Text>
+                  </View>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>{oncologySnapshot.surveillance?.overdueCount || 0}</Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Overdue</Text>
+                  </View>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>
+                      {oncologySnapshot.activeCase.overallStage || 'N/A'}
+                    </Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Stage</Text>
+                  </View>
+                </View>
+                {oncologySnapshot.protocol?.nextAction && (
+                  <View style={cdssStyles.specialtyQueueItem}>
+                    <Text style={cdssStyles.specialtyQueueTitle}>
+                      Next protocol action: {oncologySnapshot.protocol.nextAction.title || 'Review case'}
+                    </Text>
+                    <Text style={cdssStyles.specialtyQueueBody}>
+                      {oncologySnapshot.protocol.nextAction.rationale ||
+                        'Open the oncology workspace and complete the next protocol step.'}
+                    </Text>
+                  </View>
+                )}
+                {oncologySnapshot.treatmentRecommendation && (
+                  <View style={cdssStyles.specialtyQueueItem}>
+                    <Text style={cdssStyles.specialtyQueueTitle}>
+                      Treatment cue: {oncologySnapshot.treatmentRecommendation.title || 'Recommendation'}
+                    </Text>
+                    <Text style={cdssStyles.specialtyQueueBody}>
+                      {oncologySnapshot.treatmentRecommendation.rationale ||
+                        'Review the current oncology treatment recommendation.'}
+                    </Text>
+                  </View>
+                )}
+              </Card>
+            )}
+
+            {hasBloodBankCard && bloodBankBrief && (
+              <Card accent={C.red} style={cdssStyles.specialtyCard}>
+                <View style={cdssStyles.specialtyCardHeader}>
+                  <AiBadge text="Blood Bank Safety" />
+                  <Badge color={C.red} size="xs">
+                    {bloodBankBrief.safetySummary?.criticalRiskItems || 0} critical
+                  </Badge>
+                </View>
+                <Text style={cdssStyles.specialtyTitle}>
+                  {bloodBankBrief.recommendations?.[0] ||
+                    'Review transfusion safety risks and inventory pressure before the next blood product administration.'}
+                </Text>
+                <View style={cdssStyles.specialtyMetricsRow}>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>
+                      {bloodBankBrief.safetySummary?.overdueItems || 0}
+                    </Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Overdue</Text>
+                  </View>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>
+                      {bloodBankBrief.safetySummary?.compatibilityAlerts || 0}
+                    </Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Compat</Text>
+                  </View>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>
+                      {bloodBankBrief.inventorySummary?.nearExpiryUnits || 0}
+                    </Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Near expiry</Text>
+                  </View>
+                </View>
+                {bloodBankBrief.highPriorityQueue?.[0] && (
+                  <View style={cdssStyles.specialtyQueueItem}>
+                    <Text style={cdssStyles.specialtyQueueTitle}>
+                      Next transfusion: {bloodBankBrief.highPriorityQueue[0].patientName || 'Unknown patient'}
+                    </Text>
+                    <Text style={cdssStyles.specialtyQueueBody}>
+                      {bloodBankBrief.highPriorityQueue[0].recommendedActions?.[0] ||
+                        bloodBankBrief.highPriorityQueue[0].cdssFlags?.[0] ||
+                        'Review transfusion compatibility and safety documentation before proceeding.'}
+                    </Text>
+                  </View>
+                )}
+                {bloodBankBrief.inventorySummary?.criticalShortages?.[0] && (
+                  <View style={cdssStyles.specialtyQueueItem}>
+                    <Text style={cdssStyles.specialtyQueueTitle}>
+                      Stock pressure: {bloodBankBrief.inventorySummary.criticalShortages[0].bloodType || bloodBankBrief.inventorySummary.criticalShortages[0].componentType || 'Inventory'}
+                    </Text>
+                    <Text style={cdssStyles.specialtyQueueBody}>
+                      {bloodBankBrief.inventorySummary.criticalShortages[0].recommendation ||
+                        'Review low-stock blood product inventory and conserve urgent-use units.'}
+                    </Text>
+                  </View>
+                )}
+              </Card>
+            )}
+
+            {hasPacuCard && (
+              <Card accent={C.teal} style={cdssStyles.specialtyCard}>
+                <View style={cdssStyles.specialtyCardHeader}>
+                  <AiBadge text="PACU Recovery" />
+                  <Badge color={C.teal} size="xs">
+                    {pacuReadyCount} ready
+                  </Badge>
+                </View>
+                <Text style={cdssStyles.specialtyTitle}>
+                  {pacuReadyCount > 0
+                    ? `${pacuReadyCount} patient${pacuReadyCount === 1 ? '' : 's'} meet discharge criteria.`
+                    : 'Monitor recovery readiness and clear PACU bottlenecks.'}
+                </Text>
+                <View style={cdssStyles.specialtyMetricsRow}>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>{pacuPatients.length}</Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>In PACU</Text>
+                  </View>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>{pacuMonitoringCount}</Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Monitoring</Text>
+                  </View>
+                  <View style={cdssStyles.specialtyMetric}>
+                    <Text style={cdssStyles.specialtyMetricValue}>{longestWaitMinutes}</Text>
+                    <Text style={cdssStyles.specialtyMetricLabel}>Longest min</Text>
+                  </View>
+                </View>
+                {nextPacuPatient && (
+                  <View style={cdssStyles.specialtyQueueItem}>
+                    <Text style={cdssStyles.specialtyQueueTitle}>
+                      Next recovery review: {[nextPacuPatient.patient?.firstName, nextPacuPatient.patient?.lastName].filter(Boolean).join(' ') || 'Unknown patient'}
+                    </Text>
+                    <Text style={cdssStyles.specialtyQueueBody}>
+                      {nextPacuPatient.dischargeCriteriaMet
+                        ? 'Discharge criteria are met. Review final readiness and approve transition from PACU.'
+                        : `Current Aldrete ${
+                            nextPacuPatient.aldreteScoreDischarge ?? nextPacuPatient.aldreteScoreAdmission ?? 'N/A'
+                          }/10 · Pain ${
+                            nextPacuPatient.painScoreDischarge ?? nextPacuPatient.painScoreAdmission ?? 'N/A'
+                          }/10`}
+                    </Text>
+                  </View>
+                )}
+                {nextPacuPatient?.complications && (
+                  <View style={cdssStyles.specialtyQueueItem}>
+                    <Text style={cdssStyles.specialtyQueueTitle}>Recovery concern</Text>
+                    <Text style={cdssStyles.specialtyQueueBody}>{nextPacuPatient.complications}</Text>
+                  </View>
+                )}
+              </Card>
+            )}
+
+            {hasImagingCard && (
+              <Card accent={C.blue} style={cdssStyles.specialtyCard}>
+                <View style={cdssStyles.specialtyCardHeader}>
+                  <AiBadge text="Critical Imaging" />
+                  <Badge color={C.blue} size="xs">
+                    {criticalImaging.length} pending
+                  </Badge>
+                </View>
+                {criticalImaging.map((item) => (
+                  <View key={item.order.id} style={cdssStyles.imagingRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={cdssStyles.specialtyQueueTitle}>
+                        {item.patient.full_name || 'Unknown patient'}
+                      </Text>
+                      <Text style={cdssStyles.specialtyQueueBody}>
+                        {[item.order.study_name, item.order.modality_name, item.order.body_part]
+                          .filter(Boolean)
+                          .join(' · ') || 'Critical imaging result awaiting acknowledgement'}
+                      </Text>
+                    </View>
+                    {item.report?.id ? (
+                      <TouchableOpacity
+                        style={cdssStyles.specialtyActionBtn}
+                        onPress={() => acknowledgeImaging(item.report!.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={cdssStyles.specialtyActionBtnText}>Acknowledge</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ))}
+              </Card>
+            )}
+
+            {!hasAnySpecialtyCard && (
+              <Card accent={C.teal} style={cdssStyles.specialtyCard}>
+                <View style={cdssStyles.specialtyCardHeader}>
+                  <AiBadge text="Specialty Coverage" />
+                  <Badge color={C.teal} size="xs">
+                    Clear
+                  </Badge>
+                </View>
+                <Text style={cdssStyles.specialtyTitle}>
+                  No urgent specialty actions are showing right now.
+                </Text>
+                <Text style={cdssStyles.specialtyQueueBody}>
+                  Refresh to recheck sepsis, oncology, blood bank, PACU, and critical imaging. Open the full module if you expect active work that is not surfaced here yet.
+                </Text>
+              </Card>
+            )}
+          </>
+        )}
+      </View>
 
       {/* Tool grid */}
       <View style={cdssStyles.toolGrid}>
@@ -467,6 +814,56 @@ const CDSSScreen: React.FC = () => {
 
 const cdssStyles = StyleSheet.create({
   content: { padding: 16, gap: 16, paddingBottom: 40 },
+  specialtySection: { gap: 10 },
+  specialtyLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 2,
+  },
+  specialtyLoadingText: { fontFamily: FONT.ui, fontSize: 12, color: C.textMuted },
+  specialtyCard: { gap: 10 },
+  specialtyCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  specialtyTitle: { fontFamily: FONT.uiBd, fontSize: 13, color: C.textPrimary, lineHeight: 19 },
+  specialtyMetricsRow: { flexDirection: 'row', gap: 10 },
+  specialtyMetric: {
+    flex: 1,
+    backgroundColor: C.surface,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  specialtyMetricValue: { fontFamily: FONT.uiBk, fontSize: 18, color: C.textPrimary, letterSpacing: -0.3 },
+  specialtyMetricLabel: { fontFamily: FONT.ui, fontSize: 10, color: C.textMuted, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
+  specialtyQueueItem: {
+    backgroundColor: C.surface,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 12,
+    gap: 4,
+  },
+  specialtyQueueTitle: { fontFamily: FONT.uiBd, fontSize: 12, color: C.textPrimary },
+  specialtyQueueBody: { fontFamily: FONT.ui, fontSize: 11, color: C.textSecondary, lineHeight: 17 },
+  imagingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  specialtyActionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    borderColor: C.blue + '40',
+    backgroundColor: C.blue + '16',
+  },
+  specialtyActionBtnText: { fontFamily: FONT.uiBd, fontSize: 11, color: C.blue, textTransform: 'uppercase', letterSpacing: 0.35 },
   toolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   toolCard: {
     width: '47%',

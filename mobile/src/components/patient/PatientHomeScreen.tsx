@@ -18,7 +18,12 @@ import { PostVisitService } from '../../services/postVisit';
 import { AppointmentsService, ApiAppointment } from '../../services/appointments';
 import { MessagesService } from '../../services/messages';
 import { CdssService, CareGapResult, RiskTierResult } from '../../services/cdss';
-import { PatientPortalService, ApiAdmission, ApiAiHealthInsight } from '../../services/patientPortal';
+import {
+  PatientPortalService,
+  ApiAdmission,
+  ApiAiHealthInsight,
+  ApiPatientCompanionPayload,
+} from '../../services/patientPortal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +99,7 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
   const [riskTier,     setRiskTier]     = useState<RiskTierResult | null>(null);
   const [admission,    setAdmission]    = useState<ApiAdmission | null>(null);
   const [aiInsights,   setAiInsights]   = useState<ApiAiHealthInsight | null>(null);
+  const [companion,    setCompanion]    = useState<ApiPatientCompanionPayload | null>(null);
 
   useEffect(() => {
     Animated.loop(
@@ -197,10 +203,18 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
     PatientPortalService.getAiInsights().then(ins => {
       if (ins?.summary) setAiInsights(ins);
     }).catch(() => {});
+
+    PatientPortalService.getAiCompanion().then(result => {
+      if (result?.summary) setCompanion(result);
+    }).catch(() => {});
   }, [user?.id]);
 
   const goToPostVisit = () => {
     navigation?.navigate('PHPostVisit');
+  };
+
+  const goToCompanion = () => {
+    navigation?.navigate('PHCompanion');
   };
 
   return (
@@ -318,7 +332,47 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
                 <Text style={styles.insightsFinding}>{finding}</Text>
               </View>
             ))}
+            <TouchableOpacity style={styles.insightsLink} activeOpacity={0.85} onPress={goToCompanion}>
+              <Text style={styles.insightsLinkText}>Open care companion</Text>
+              <Icon name="chevron" size={14} color={C.purple} />
+            </TouchableOpacity>
           </Card>
+        )}
+
+        {companion && (
+          <TouchableOpacity activeOpacity={0.85} onPress={goToCompanion}>
+            <Card accent={C.teal} style={styles.companionCard}>
+              <View style={styles.companionHeader}>
+                <AiBadge text="Care Companion" />
+                {companion.summary.lastActivityAt ? (
+                  <Text style={styles.companionDate}>
+                    {new Date(companion.summary.lastActivityAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={styles.companionTitle}>
+                {companion.nextActions[0]?.title || 'Your next care steps are organized here'}
+              </Text>
+              <Text style={styles.companionBody}>
+                {companion.nextActions[0]?.detail ||
+                  'Find follow-ups, telemedicine, reminders, and post-visit updates in one calm timeline.'}
+              </Text>
+              <View style={styles.companionStatsRow}>
+                <View style={styles.companionStat}>
+                  <Text style={styles.companionStatValue}>{companion.summary.activeFollowups}</Text>
+                  <Text style={styles.companionStatLabel}>Follow-ups</Text>
+                </View>
+                <View style={styles.companionStat}>
+                  <Text style={styles.companionStatValue}>{companion.summary.urgentItems}</Text>
+                  <Text style={styles.companionStatLabel}>Urgent</Text>
+                </View>
+                <View style={styles.companionStat}>
+                  <Text style={styles.companionStatValue}>{companion.summary.upcomingTelemedicine}</Text>
+                  <Text style={styles.companionStatLabel}>Visits</Text>
+                </View>
+              </View>
+            </Card>
+          </TouchableOpacity>
         )}
 
         {/* PostVisit AI hero banner */}
@@ -425,10 +479,10 @@ export const PatientHomeScreen: React.FC<PatientHomeScreenProps> = ({ navigation
               onPress={() => navigation?.navigate('PHBills')}
             />
             <QuickAction
-              label="Symptom Checker"
+              label="Care Companion"
               icon="brain"
               accent={C.purple}
-              onPress={goToPostVisit}
+              onPress={goToCompanion}
             />
           </View>
         </View>
@@ -533,4 +587,15 @@ const styles = StyleSheet.create({
   insightsSummary: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textPrimary, lineHeight: 20 },
   insightsFindingRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 2 },
   insightsFinding: { flex: 1, fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, lineHeight: 18 },
+  insightsLink: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: C.purple + '35', backgroundColor: C.purple + '14' },
+  insightsLinkText: { fontFamily: FONT.uiBd, fontSize: 11, color: C.purple, textTransform: 'uppercase', letterSpacing: 0.4 },
+  companionCard: { gap: 10 },
+  companionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  companionDate: { fontFamily: FONT.mono, fontSize: 10, color: C.textMuted },
+  companionTitle: { fontFamily: FONT.uiBd, fontSize: 14, color: C.textPrimary, lineHeight: 20 },
+  companionBody: { fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, lineHeight: 18 },
+  companionStatsRow: { flexDirection: 'row', gap: 10 },
+  companionStat: { flex: 1, backgroundColor: C.surface2, borderRadius: RADIUS.md, paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: C.border },
+  companionStatValue: { fontFamily: FONT.uiBk, fontSize: 20, color: C.teal, letterSpacing: -0.4 },
+  companionStatLabel: { fontFamily: FONT.ui, fontSize: 10, color: C.textMuted, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
 });

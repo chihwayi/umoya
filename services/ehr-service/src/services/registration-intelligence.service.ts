@@ -6,6 +6,7 @@ import { DataSource } from 'typeorm';
 import { MedicalNlpService } from './medical-nlp.service';
 import { MedicalAidApiService } from './medical-aid-api.service';
 import { CdssService, RegistrationDocumentAnalysisResponse } from './cdss.service';
+import { AiSurfaceContractService } from './ai-surface-contract.service';
 
 export interface RegistrationIntakePayload {
   patientId?: string;
@@ -59,7 +60,29 @@ export class RegistrationIntelligenceService {
     @Optional() private readonly medicalNlpService?: MedicalNlpService,
     @Optional() private readonly medicalAidApiService?: MedicalAidApiService,
     @Optional() private readonly cdssService?: CdssService,
+    @Optional() private readonly aiSurfaceContractService?: AiSurfaceContractService,
   ) {}
+
+  private buildRegistrationAiMetadata(aiAnalysis?: RegistrationDocumentAnalysisResponse | null) {
+    if (!aiAnalysis) {
+      return null;
+    }
+
+    return this.aiSurfaceContractService?.buildSurfaceMetadata({
+      aiSurface: 'registration_intelligence',
+      useCase: 'registration_document_intelligence',
+      source: 'registration_intelligence_service',
+      modelId: aiAnalysis.model || 'registration_document_intelligence_proxy',
+      modelVersion: aiAnalysis.model || 'registration_document_intelligence_proxy',
+      provider: String(
+        aiAnalysis.governance?.vendor_id ||
+        aiAnalysis.governance?.vendorId ||
+        aiAnalysis.governance?.provider ||
+        'local',
+      ),
+      recorded: true,
+    }) || null;
+  }
 
   private mapDuplicateReviewRow(row: any) {
     return {
@@ -380,6 +403,7 @@ export class RegistrationIntelligenceService {
         extractionSummary: aiAnalysis?.summary || null,
         flags: aiAnalysis?.flags || [],
         governance: aiAnalysis?.governance || null,
+        aiMetadata: this.buildRegistrationAiMetadata(aiAnalysis),
       };
     }
 
@@ -454,6 +478,7 @@ export class RegistrationIntelligenceService {
       extractionSummary: aiAnalysis?.summary || null,
       flags: aiAnalysis?.flags || [],
       governance: aiAnalysis?.governance || null,
+      aiMetadata: this.buildRegistrationAiMetadata(aiAnalysis),
       createdAt: inserted.created_at,
     };
   }

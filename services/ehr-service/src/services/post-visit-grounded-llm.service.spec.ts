@@ -1,12 +1,23 @@
 import { PostVisitGroundedLlmService } from './post-visit-grounded-llm.service';
 
 describe('PostVisitGroundedLlmService', () => {
+  const aiSurfaceContractService = {
+    buildSurfaceMetadata: jest.fn((payload) => ({
+      aiSurface: 'post_visit_grounded_llm',
+      useCase: payload.useCase,
+      provenance: { modelId: payload.modelId, modelVersion: payload.modelVersion, provider: payload.provider, source: payload.source },
+      audit: { recorded: true },
+      monitoring: { metricsSurface: 'post_visit_grounded_llm', offlineEvalSupported: true, releaseGateSupported: true },
+      controls: { disablePaths: ['POSTVISIT_GROUNDED_LLM_ENABLED'], rollbackPaths: ['model-monitoring release readiness'] },
+    })),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('returns null when governed CDSS is not configured', async () => {
-    const service = new PostVisitGroundedLlmService();
+    const service = new PostVisitGroundedLlmService(undefined, aiSurfaceContractService as any);
     const result = await service.answerPatientQuestion({
       sessionId: 'session-1',
       question: 'What should I do next?',
@@ -32,7 +43,7 @@ describe('PostVisitGroundedLlmService', () => {
       }),
     };
 
-    const service = new PostVisitGroundedLlmService(cdssService as any);
+    const service = new PostVisitGroundedLlmService(cdssService as any, aiSurfaceContractService as any);
     const result = await service.answerPatientQuestion({
       sessionId: 'session-1',
       question: 'When is my follow-up?',
@@ -46,6 +57,10 @@ describe('PostVisitGroundedLlmService', () => {
         abstained: false,
         citationsUsed: ['cit-1'],
         model: 'governed-postvisit-answer',
+        aiMetadata: expect.objectContaining({
+          aiSurface: 'post_visit_grounded_llm',
+          useCase: 'post_visit_patient_answer',
+        }),
       }),
     );
     expect(cdssService.requestGovernedJson).toHaveBeenCalledWith(
@@ -70,7 +85,7 @@ describe('PostVisitGroundedLlmService', () => {
       }),
     };
 
-    const service = new PostVisitGroundedLlmService(cdssService as any);
+    const service = new PostVisitGroundedLlmService(cdssService as any, aiSurfaceContractService as any);
     const result = await service.answerPatientQuestion({
       sessionId: 'session-1',
       question: 'Can I skip medication?',
@@ -97,7 +112,7 @@ describe('PostVisitGroundedLlmService', () => {
       }),
     };
 
-    const service = new PostVisitGroundedLlmService(cdssService as any);
+    const service = new PostVisitGroundedLlmService(cdssService as any, aiSurfaceContractService as any);
     const result = await service.classifyEscalationSignal({
       sessionId: 'session-1',
       message: 'I have severe headache right now',
@@ -112,6 +127,10 @@ describe('PostVisitGroundedLlmService', () => {
         temporality: 'current',
         confidence: 0.84,
         model: 'governed-postvisit-escalation',
+        aiMetadata: expect.objectContaining({
+          aiSurface: 'post_visit_grounded_llm',
+          useCase: 'post_visit_escalation_classification',
+        }),
       }),
     );
   });

@@ -337,10 +337,143 @@ export class NurseWorklistService {
     };
   }
 
+  private humanizeWorkflowLabel(value?: string | null) {
+    const normalized = this.normalizeWorkflowContextStatus(value);
+    if (!normalized) {
+      return null;
+    }
+
+    return normalized
+      .split('_')
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+  }
+
+  private buildCrossModuleTrustSummary(item: Record<string, any>) {
+    const metadata =
+      item?.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? item.metadata
+        : {};
+    const workflowContext = this.parseJsonObject(metadata.workflow_context) || {};
+    const recommendationBundle =
+      metadata.recommendation_bundle && typeof metadata.recommendation_bundle === 'object'
+        ? metadata.recommendation_bundle
+        : null;
+    const citations = Array.isArray(metadata.guideline_citations)
+      ? metadata.guideline_citations.filter(Boolean)
+      : [];
+    const moduleLabel = this.humanizeWorkflowLabel(item?.module) || 'Clinical';
+    const workflowStatus = String(item?.workflow_status || '').toLowerCase();
+    const workflowSource =
+      this.normalizeText(workflowContext?.source) || this.normalizeText(metadata?.source) || null;
+
+    let reviewState = 'Pending nurse review';
+    if (workflowStatus === 'acknowledged') {
+      reviewState = 'Acknowledged clinician workflow';
+    } else if (workflowStatus === 'completed') {
+      reviewState = 'Completed clinician workflow';
+    }
+
+    let sourceLabel =
+      this.normalizeText(recommendationBundle?.bundle_label) ||
+      (workflowSource === 'nurse_cross_module_queue'
+        ? 'Nurse cross-module execution state'
+        : null) ||
+      (Object.keys(workflowContext).length > 0 ? 'Shared workflow routing context' : null) ||
+      `${moduleLabel} escalation workflow`;
+
+    let backingType = 'Shared workflow routing';
+    if (citations.length > 0) {
+      backingType = 'Guideline-backed recommendations';
+    } else if (recommendationBundle) {
+      backingType = 'Governed action bundle';
+    } else if (this.normalizeModuleKey(item?.module) === 'nursing') {
+      backingType = 'Operational safety workflow';
+    } else if (this.isAccountsModule(this.normalizeModuleKey(item?.module))) {
+      backingType = 'Financial workflow routing';
+    }
+
+    const recommendationCountRaw = Number(
+      recommendationBundle?.actionable_count ??
+        (Array.isArray(recommendationBundle?.items) ? recommendationBundle.items.length : NaN),
+    );
+    const recommendationCount = Number.isFinite(recommendationCountRaw)
+      ? recommendationCountRaw
+      : null;
+    const evidenceCount = citations.length > 0 ? citations.length : null;
+
+    return {
+      sourceLabel,
+      backingType,
+      reviewState,
+      classifierStage:
+        this.humanizeWorkflowLabel(item?.doctor_sync_status) ||
+        this.humanizeWorkflowLabel(item?.module_status),
+      workflowSource: this.humanizeWorkflowLabel(workflowSource),
+      recommendationCount,
+      evidenceCount,
+      lastActorRole: this.humanizeWorkflowLabel(workflowContext?.last_actor_role),
+    };
+  }
+
+  private buildClinicalEscalationTrustSummary(row: any) {
+    const metadata = this.parseJsonObject(row?.metadata) || {};
+    const evidence =
+      row?.evidence && typeof row.evidence === 'object' && !Array.isArray(row.evidence) ? row.evidence : {};
+    const severity = String(row?.severity || '').toLowerCase();
+    const status = String(row?.status || '').toLowerCase();
+
+    let reviewState = 'Pending nurse review';
+    if (status === 'acknowledged') {
+      reviewState = 'Acknowledged clinician workflow';
+    } else if (status === 'completed') {
+      reviewState = 'Completed clinician workflow';
+    }
+
+    let sourceLabel = row?.source_module
+      ? `${this.humanizeWorkflowLabel(row.source_module) || 'Clinical'} escalation workflow`
+      : 'Clinical escalation workflow';
+    let backingType = 'Clinical escalation routing';
+
+    if (row?.early_warning_score_id) {
+      sourceLabel = 'Early warning deterioration signal';
+      backingType = 'Rule-backed safety escalation';
+    } else if (row?.remote_monitoring_alert_id) {
+      sourceLabel = 'Remote monitoring escalation signal';
+      backingType = 'Remote monitoring linked alert';
+    } else if (metadata?.source === 'patient_ai' || metadata?.patientAiSessionId || metadata?.patient_ai_session_id) {
+      sourceLabel = 'Patient AI escalation signal';
+      backingType = 'Patient AI linked escalation';
+    }
+
+    const evidenceCount = Object.keys(evidence).length > 0 ? Object.keys(evidence).length : null;
+    const riskBand =
+      this.humanizeWorkflowLabel(row?.early_warning_risk_level) ||
+      this.humanizeWorkflowLabel(metadata?.risk_level) ||
+      (severity ? severity.charAt(0).toUpperCase() + severity.slice(1) : null);
+
+    return {
+      sourceLabel,
+      backingType,
+      reviewState,
+      classifierStage:
+        this.humanizeWorkflowLabel(row?.escalation_type) ||
+        this.humanizeWorkflowLabel(metadata?.classifier_stage),
+      workflowSource: this.humanizeWorkflowLabel(metadata?.source),
+      recommendationCount: this.normalizeText(row?.recommended_action) ? 1 : null,
+      evidenceCount,
+      riskBand,
+    };
+  }
+
   private mergeCrossModuleWorkflowState(item: Record<string, any>, workflowRowsByKey: Map<string, any>) {
     const workflowRow = workflowRowsByKey.get(item.id);
     if (!workflowRow) {
-      return item;
+      return {
+        ...item,
+        trustSummary: this.buildCrossModuleTrustSummary(item),
+      };
     }
 
     const workflowContext = workflowRow.context || null;
@@ -370,6 +503,23 @@ export class NurseWorklistService {
         guideline_citations: recommendationBundle?.citations || item.metadata?.guideline_citations || [],
         workflow_context: workflowRow.context || null,
       },
+      trustSummary: this.buildCrossModuleTrustSummary({
+        ...item,
+        workflow_status: workflowRow.status || item.workflow_status || 'pending',
+        destination_role: workflowRow.destination_role || item.destination_role || null,
+        destination_service: workflowRow.destination_service || item.destination_service || null,
+        destination_specialty: workflowRow.destination_specialty || item.destination_specialty || null,
+        destination_user_id: workflowRow.destination_user_id || item.destination_user_id || null,
+        destination_user_name: workflowRow.destination_user_name || item.destination_user_name || null,
+        destination_facility_id: workflowRow.destination_facility_id || item.destination_facility_id || null,
+        destination_facility_name: workflowRow.destination_facility_name || item.destination_facility_name || null,
+        metadata: {
+          ...(item.metadata || {}),
+          recommendation_bundle: recommendationBundle,
+          guideline_citations: recommendationBundle?.citations || item.metadata?.guideline_citations || [],
+          workflow_context: workflowRow.context || null,
+        },
+      }),
     };
   }
 
@@ -5852,6 +6002,11 @@ export class NurseWorklistService {
       .map((item: any) => ({
         ...item,
         coordination_focus: this.classifyDoctorSyncFocus(item),
+        trustSummary: {
+          ...(item?.trustSummary || {}),
+          coordinationFocus:
+            this.humanizeWorkflowLabel(this.classifyDoctorSyncFocus(item)) || 'Coordination',
+        },
       }))
       .filter((item: any) => {
         if (!includeAcknowledged && String(item.workflow_status || '').toLowerCase() === 'acknowledged') {
@@ -9415,6 +9570,7 @@ export class NurseWorklistService {
         : null,
       evidence: row.evidence || {},
       metadata: row.metadata || {},
+      trustSummary: this.buildClinicalEscalationTrustSummary(row),
     }));
 
     return {

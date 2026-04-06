@@ -5,6 +5,7 @@ import { ClaimRiskScore } from '../entities/claim-risk-score.entity';
 import { ClaimAppeal } from '../entities/claim-appeal.entity';
 import { FinancialHardshipReferral } from '../entities/financial-hardship-referral.entity';
 import { PdmpCheck } from '../entities/pdmp-check.entity';
+import { AiSurfaceContractService } from './ai-surface-contract.service';
 
 export interface ClaimPayload {
   claimId: string;
@@ -30,13 +31,21 @@ export class ClaimsAiService {
   private readonly WARN_THRESHOLD = 0.70;
   private readonly BLOCK_THRESHOLD = 0.90;
 
-  constructor(private readonly cdssService: CdssService) {}
+  constructor(
+    private readonly cdssService: CdssService,
+    private readonly aiSurfaceContractService: AiSurfaceContractService,
+  ) {}
 
   async scoreClaimBeforeSubmission(
     claim: ClaimPayload,
     tenantId: string,
     tenantDb: DataSource,
-  ): Promise<{ allowed: boolean; action: 'allow' | 'warn' | 'block'; riskScore: ClaimRiskScore }> {
+  ): Promise<{
+    allowed: boolean;
+    action: 'allow' | 'warn' | 'block';
+    riskScore: ClaimRiskScore;
+    aiMetadata: Record<string, any>;
+  }> {
     const cdssPayload = {
       procedure_codes: claim.procedureCodes,
       diagnosis_codes: claim.diagnosisCodes,
@@ -52,7 +61,7 @@ export class ClaimsAiService {
       days_since_last_claim: claim.daysSinceLastClaim ?? 999,
     };
 
-    const result = await this.cdssService.predictClaimDenial(cdssPayload, tenantId);
+    const result = await this.cdssService.predictClaimDenial(cdssPayload, tenantId, tenantDb);
 
     const riskScoreRepo = tenantDb.getRepository(ClaimRiskScore);
     const score = riskScoreRepo.create({
@@ -68,6 +77,16 @@ export class ClaimsAiService {
     });
     await riskScoreRepo.save(score);
 
+    const aiMetadata = this.aiSurfaceContractService.buildSurfaceMetadata({
+      aiSurface: 'claims_ai',
+      useCase: 'claims_denial_prediction',
+      source: 'claims_ai_service',
+      modelId: result.model_version,
+      modelVersion: result.model_version,
+      provider: 'local',
+      recorded: true,
+    });
+
     if (result.threshold_action !== 'allow' && claim.totalAmount > 10000) {
       await this.createHardshipReferral(claim.patientId, claim.claimId, tenantId, 'high_risk_claim', tenantDb);
     }
@@ -76,6 +95,7 @@ export class ClaimsAiService {
       allowed: result.threshold_action !== 'block',
       action: result.threshold_action,
       riskScore: score,
+      aiMetadata,
     };
   }
 
@@ -102,7 +122,7 @@ export class ClaimsAiService {
       claim_id: claimId,
       denial_reason_code: denialReasonCode,
       ...claimDetails,
-    }, tenantId);
+    }, tenantId, tenantDb);
 
     const appealRepo = tenantDb.getRepository(ClaimAppeal);
     const appeal = appealRepo.create({
@@ -114,7 +134,17 @@ export class ClaimsAiService {
       ragSources: result.rag_sources ?? [],
       status: 'draft',
     });
-    return appealRepo.save(appeal);
+    const savedAppeal = await appealRepo.save(appeal);
+    (savedAppeal as any).aiMetadata = this.aiSurfaceContractService.buildSurfaceMetadata({
+      aiSurface: 'claims_ai',
+      useCase: 'claims_appeal_generation',
+      source: 'claims_ai_service',
+      modelId: result.model_version,
+      modelVersion: result.model_version,
+      provider: 'local',
+      recorded: true,
+    });
+    return savedAppeal as ClaimAppeal;
   }
 
   async recordClaimOutcome(
@@ -144,7 +174,7 @@ export class ClaimsAiService {
       daily_dose_mg: dailyDoseMg,
       other_active_controlled_prescriptions: [],
       prior_substance_abuse_flags: [],
-    }, tenantId);
+    }, tenantId, tenantDb);
 
     const pdmpRepo = tenantDb.getRepository(PdmpCheck);
     const check = pdmpRepo.create({
@@ -159,6 +189,15 @@ export class ClaimsAiService {
       dispensingBlocked: result.dispensing_blocked,
     });
     const saved = await pdmpRepo.save(check);
+    (saved as any).aiMetadata = this.aiSurfaceContractService.buildSurfaceMetadata({
+      aiSurface: 'claims_ai',
+      useCase: 'pharmacy_pdmp_check',
+      source: 'claims_ai_service',
+      modelId: 'pharmacy_pdmp_check_proxy',
+      modelVersion: 'pharmacy_pdmp_check_proxy',
+      provider: 'local',
+      recorded: true,
+    });
 
     if (result.dispensing_blocked) {
       throw new BadRequestException({
@@ -166,6 +205,7 @@ export class ClaimsAiService {
         message: result.cdss_recommendation,
         pdmpCheckId: saved.id,
         alerts: result.prescriber_alerts,
+        aiMetadata: (saved as any).aiMetadata,
       });
     }
 

@@ -44,6 +44,52 @@ export interface ApiImmunizationForecast {
   status: 'due' | 'overdue' | 'upcoming';
 }
 
+export interface ApiPatientCompanionSummary {
+  activeFollowups: number;
+  urgentItems: number;
+  unreadNotifications: number;
+  activeEscalations: number;
+  upcomingTelemedicine: number;
+  recentPostVisits: number;
+  lastActivityAt?: string | null;
+}
+
+export interface ApiPatientCompanionAction {
+  id: string;
+  kind: 'followup' | 'telemedicine' | 'post_visit' | 'reminder' | 'symptom_check' | 'adherence_chat' | 'escalation';
+  title: string;
+  detail?: string;
+  urgency?: 'routine' | 'urgent' | 'emergency' | string;
+  dueAt?: string | null;
+  actionLabel?: string | null;
+  actionTarget?: string | null;
+  entityId?: string | null;
+}
+
+export interface ApiPatientCompanionTimelineItem {
+  id: string;
+  kind: 'followup' | 'telemedicine' | 'post_visit' | 'reminder' | 'symptom_check' | 'adherence_chat' | 'escalation';
+  title: string;
+  detail?: string;
+  urgency?: 'routine' | 'urgent' | 'emergency' | string;
+  status?: string | null;
+  occurredAt?: string | null;
+  dueAt?: string | null;
+  sentAt?: string | null;
+  scheduledAt?: string | null;
+  publishedAt?: string | null;
+  sourceLabel?: string | null;
+  actionLabel?: string | null;
+  actionTarget?: string | null;
+  entityId?: string | null;
+}
+
+export interface ApiPatientCompanionPayload {
+  summary: ApiPatientCompanionSummary;
+  nextActions: ApiPatientCompanionAction[];
+  timeline: ApiPatientCompanionTimelineItem[];
+}
+
 export const PatientPortalService = {
   getNotifications: () =>
     api.get<ApiNotification[]>('/patient-portal/notifications').then(r => r.data ?? []),
@@ -56,6 +102,9 @@ export const PatientPortalService = {
 
   getAiInsights: () =>
     api.get<ApiAiHealthInsight>('/patient-portal/ai-insights').then(r => r.data),
+
+  getAiCompanion: () =>
+    api.get<ApiPatientCompanionPayload>('/patient-portal/patient-ai/companion').then(r => r.data),
 
   getCurrentAdmission: () =>
     api.get<ApiAdmission | null>('/patient-portal/current-admission').then(r => r.data),

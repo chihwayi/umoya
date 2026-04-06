@@ -642,6 +642,59 @@ export class PostVisitService {
     }
   }
 
+  private normalizeEscalationMetadata(this: any, metadata: any): Record<string, any> {
+    if (!metadata) return {};
+    if (typeof metadata === 'string') {
+      try {
+        return JSON.parse(metadata);
+      } catch {
+        return {};
+      }
+    }
+    return typeof metadata === 'object' ? metadata : {};
+  }
+
+  private buildEscalationTrustSummary(this: any, row: any, metadata: Record<string, any>) {
+    const classificationSource = String(row.classification_source ?? row.classificationSource ?? '').trim().toLowerCase();
+    const triggerType = String(row.trigger_type ?? row.triggerType ?? '').trim().toLowerCase();
+    const linkedPatientAiSessionId = metadata.patient_ai_session_id || null;
+    const linkedPatientAiEscalationId = metadata.patient_ai_escalation_id || null;
+    const linkedFollowupOrchestrationId = metadata.patient_followup_orchestration_id || null;
+
+    let backingType = 'Companion workflow';
+    let sourceLabel = 'Post-visit companion';
+
+    if (linkedPatientAiSessionId || linkedPatientAiEscalationId) {
+      backingType = 'Patient AI linked';
+      sourceLabel = 'Post-visit companion + patient AI';
+    } else if (classificationSource.startsWith('keyword') || triggerType === 'symptom_keyword') {
+      backingType = 'Rule-backed safety logic';
+      sourceLabel = 'Keyword escalation policy';
+    } else if (classificationSource) {
+      backingType = 'Governed classifier';
+      sourceLabel = classificationSource.replace(/_/g, ' ');
+    }
+
+    const reviewState =
+      row.status === 'resolved'
+        ? 'Resolved by clinician'
+        : row.status === 'dismissed'
+          ? 'Dismissed by clinician'
+          : row.status === 'acknowledged'
+            ? 'Acknowledged and awaiting closure'
+            : 'Open clinician review';
+
+    return {
+      sourceLabel,
+      backingType,
+      reviewState,
+      classifierStage: row.classification_stage ?? row.classificationStage ?? 'v1',
+      linkedPatientAiSessionId,
+      linkedPatientAiEscalationId,
+      linkedFollowupOrchestrationId,
+    };
+  }
+
 
 
   // S108: Delegated to PostVisitSessionService.
@@ -2319,6 +2372,7 @@ export class PostVisitService {
       fallbackTemplate: fallback,
       model: llmResult?.model || null,
       audit: llmResult?.audit || null,
+      aiMetadata: llmResult?.aiMetadata || null,
       warnings: llmResult ? [] : ['LLM unavailable; fallback template only'],
     };
 
@@ -2390,6 +2444,7 @@ export class PostVisitService {
       noteText: llmResult?.noteText || '',
       model: llmResult?.model || null,
       audit: llmResult?.audit || null,
+      aiMetadata: llmResult?.aiMetadata || null,
       transcriptIncluded: payload.includeTranscript !== false,
       warnings: llmResult ? [] : ['LLM unavailable; no clinical note draft generated'],
     };
@@ -5571,6 +5626,7 @@ export class PostVisitService {
             model: llmPolish.model,
             citations_used: llmPolish.citationsUsed,
             polished_at: new Date().toISOString(),
+            aiMetadata: llmPolish.aiMetadata || null,
           },
         };
         await this.persistGroundedLlmAudit(tenantDb, {
@@ -9411,6 +9467,7 @@ Object.assign(PostVisitService.prototype as any, {
   },
 
   mapEscalationEvent(this: any, row: any) {
+    const metadata = this.normalizeEscalationMetadata(row.metadata);
     return {
       id: row.id,
       sessionId: row.session_id ?? row.sessionId ?? null,
@@ -9439,7 +9496,8 @@ Object.assign(PostVisitService.prototype as any, {
       resolvedBy: row.resolved_by ?? row.resolvedBy ?? null,
       resolutionNote: row.resolution_note ?? row.resolutionNote ?? null,
       workflowKey: row.workflow_key ?? row.workflowKey ?? null,
-      metadata: row.metadata || {},
+      metadata,
+      trustSummary: this.buildEscalationTrustSummary(row, metadata),
       createdAt: row.created_at ?? row.createdAt ?? null,
       updatedAt: row.updated_at ?? row.updatedAt ?? null,
     };

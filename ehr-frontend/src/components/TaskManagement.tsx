@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckCircle, Clock, AlertTriangle, Heart, Pill, Stethoscope,
-  FileText, Activity, Users, Calendar, Plus, Filter, Search,
-  ChevronDown, ChevronRight, Star, Flag, Bell, Eye, TestTube, Sparkles, Zap, RefreshCw
+  FileText, Activity, Users, Calendar, Search,
+  ChevronDown, ChevronRight, Flag, Eye, TestTube, Sparkles, RefreshCw
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { ehrApi, cdssApi } from '../services/api';
@@ -30,6 +30,16 @@ interface Task {
   relatedOrderId?: string;
   source?: 'manual' | 'copilot' | 'clinical_escalation';
   relatedEscalationTaskId?: string;
+  trustSummary?: {
+    sourceLabel?: string;
+    backingType?: string;
+    reviewState?: string;
+    classifierStage?: string;
+    workflowSource?: string;
+    recommendationCount?: number | null;
+    evidenceCount?: number | null;
+    riskBand?: string | null;
+  };
 }
 
 interface TaskManagementProps {
@@ -100,6 +110,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
               isRecurring: false,
               source: 'clinical_escalation' as const,
               relatedEscalationTaskId: item.id,
+              trustSummary: item.trustSummary || undefined,
             }))
           : [];
         setServerEscalationTasks(escalationTasks);
@@ -443,7 +454,10 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         const token = localStorage.getItem('ehr_token');
         const tenantSlug = localStorage.getItem('ehr_tenant_slug');
         if (token && tenantSlug) {
-          cdssApi.markNurseTaskViewed(taskId, token, tenantSlug).catch(() => {/* non-critical */});
+          const markViewedRequest = cdssApi?.markNurseTaskViewed?.(taskId, token, tenantSlug);
+          if (markViewedRequest && typeof (markViewedRequest as Promise<unknown>).catch === 'function') {
+            (markViewedRequest as Promise<unknown>).catch(() => {/* non-critical */});
+          }
         }
       }
       return newSet;
@@ -831,6 +845,22 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                                 <p className="text-slate-600">{task.notes}</p>
                               </div>
                             )}
+                            {task.source === 'clinical_escalation' &&
+                              (task.trustSummary?.sourceLabel ||
+                                task.trustSummary?.backingType ||
+                                task.trustSummary?.reviewState ||
+                                task.trustSummary?.classifierStage) && (
+                                <div className="md:col-span-2">
+                                  <span className="font-semibold text-slate-700">Trust & Review:</span>
+                                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
+                                    {task.trustSummary?.sourceLabel && <span>Source: {task.trustSummary.sourceLabel}</span>}
+                                    {task.trustSummary?.backingType && <span>{task.trustSummary.backingType}</span>}
+                                    {task.trustSummary?.reviewState && <span>{task.trustSummary.reviewState}</span>}
+                                    {task.trustSummary?.classifierStage && <span>Stage: {task.trustSummary.classifierStage}</span>}
+                                    {task.trustSummary?.riskBand && <span>Risk: {task.trustSummary.riskBand}</span>}
+                                  </div>
+                                </div>
+                              )}
                           </div>
                         </div>
                       )}
@@ -840,6 +870,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                   <div className="flex items-center gap-2 ml-4">
                     <button
                       onClick={() => toggleTaskExpansion(task.id)}
+                      aria-label={`Toggle task details for ${task.title}`}
                       className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all duration-200"
                     >
                       {expandedTasks.has(task.id) ? 

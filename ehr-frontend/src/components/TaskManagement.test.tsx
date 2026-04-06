@@ -11,6 +11,9 @@ jest.mock('../services/api', () => ({
     completeClinicalEscalation: jest.fn(),
     completeNurseTask: jest.fn(),
   },
+  cdssApi: {
+    markNurseTaskViewed: jest.fn().mockResolvedValue({ data: { ok: true } }),
+  },
 }));
 
 describe('TaskManagement', () => {
@@ -118,6 +121,13 @@ describe('TaskManagement', () => {
             summary: 'Clinical escalation requires urgent follow-up.',
             dueAt: new Date().toISOString(),
             recommendedAction: 'Reassess saturation and notify doctor.',
+            trustSummary: {
+              sourceLabel: 'Remote monitoring escalation signal',
+              backingType: 'Remote monitoring linked alert',
+              reviewState: 'Pending nurse review',
+              classifierStage: 'Deterioration Review',
+              riskBand: 'Critical',
+            },
           },
         ],
       },
@@ -134,6 +144,14 @@ describe('TaskManagement', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Start' })).not.toBeNull();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /toggle task details for escalate low oxygen saturation/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Remote monitoring linked alert/i)).not.toBeNull();
     });
 
     await act(async () => {

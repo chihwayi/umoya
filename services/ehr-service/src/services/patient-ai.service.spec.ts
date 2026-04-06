@@ -1,6 +1,21 @@
 import { PatientAiService } from './patient-ai.service';
 
 describe('PatientAiService adherence chat governance', () => {
+  const aiSurfaceContractService = {
+    buildSurfaceMetadata: jest.fn((payload) => ({
+      aiSurface: 'patient_ai',
+      useCase: payload.useCase,
+      provenance: { modelId: payload.modelId, modelVersion: payload.modelVersion, provider: payload.provider, source: payload.source },
+      audit: { recorded: true },
+      monitoring: { metricsSurface: 'patient_ai', offlineEvalSupported: true, releaseGateSupported: true },
+      controls: { disablePaths: ['tenant AI use-case policy'], rollbackPaths: ['model-monitoring release readiness'] },
+    })),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('routes adherence chat through governed CDSS service instead of direct vendor calls', async () => {
     const chatRows: any[] = [];
     const aiSessionRows: any[] = [];
@@ -88,7 +103,12 @@ describe('PatientAiService adherence chat governance', () => {
       logPromptAudit: jest.fn(async () => undefined),
     };
 
-    const service = new PatientAiService(tenantService as any, cdssService as any, hipaaAuditService as any);
+    const service = new PatientAiService(
+      tenantService as any,
+      cdssService as any,
+      hipaaAuditService as any,
+      aiSurfaceContractService as any,
+    );
 
     const result = await service.adherenceChat('kids-clinic', {
       patientId: 'patient-1',
@@ -110,6 +130,10 @@ describe('PatientAiService adherence chat governance', () => {
     expect(result.model).toBe('patient_adherence_rules_v1');
     expect(result.adherenceConcern).toBe(true);
     expect(result.governance).toEqual({ governed_path: true });
+    expect(result.aiMetadata).toEqual(expect.objectContaining({
+      aiSurface: 'patient_ai',
+      useCase: 'patient_adherence_chat',
+    }));
     expect(chatRows).toHaveLength(2);
     expect(chatRows[0].messageRole).toBe('user');
     expect(chatRows[1].messageRole).toBe('assistant');
@@ -199,7 +223,12 @@ describe('PatientAiService adherence chat governance', () => {
       logPromptAudit: jest.fn(async () => undefined),
     };
 
-    const service = new PatientAiService(tenantService as any, cdssService as any, hipaaAuditService as any);
+    const service = new PatientAiService(
+      tenantService as any,
+      cdssService as any,
+      hipaaAuditService as any,
+      aiSurfaceContractService as any,
+    );
 
     const result = await service.checkSymptoms('kids-clinic', {
       patientId: 'patient-1',
@@ -220,6 +249,10 @@ describe('PatientAiService adherence chat governance', () => {
     );
     expect(result.triageLevel).toBe('urgent');
     expect(result.aiSessionId).toBe('ai-session-1');
+    expect(result.aiMetadata).toEqual(expect.objectContaining({
+      aiSurface: 'patient_ai',
+      useCase: 'patient_symptom_check',
+    }));
     expect(result.escalation).toEqual(
       expect.objectContaining({
         id: 'escalation-1',
@@ -267,7 +300,12 @@ describe('PatientAiService adherence chat governance', () => {
         }),
       })),
     };
-    const service = new PatientAiService(tenantService as any, {} as any, {} as any);
+    const service = new PatientAiService(
+      tenantService as any,
+      {} as any,
+      {} as any,
+      aiSurfaceContractService as any,
+    );
 
     const listed = await service.getPatientFollowupOrchestrations('kids-clinic', 'patient-1');
     const updated = await service.updateFollowupOrchestration('kids-clinic', 'followup-1', {

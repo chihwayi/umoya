@@ -4,6 +4,7 @@ import { CdssService } from './cdss.service';
 import { DicomStudy } from '../entities/dicom-study.entity';
 import { RadiologyAiFinding } from '../entities/radiology-ai-finding.entity';
 import { AlertDeliveryService } from './alert-delivery.service';
+import { AiSurfaceContractService } from './ai-surface-contract.service';
 
 @Injectable()
 export class RadiologyAiService {
@@ -13,7 +14,37 @@ export class RadiologyAiService {
     private readonly tenantService: TenantService,
     private readonly alertDelivery: AlertDeliveryService,
     private readonly cdssService: CdssService,
+    private readonly aiSurfaceContractService: AiSurfaceContractService,
   ) {}
+
+  private buildStudyAiMetadata(modelVersion?: string | null) {
+    return this.aiSurfaceContractService.buildSurfaceMetadata({
+      aiSurface: 'radiology_ai',
+      useCase: 'radiology_analysis',
+      source: 'radiology_ai_service',
+      modelId: modelVersion || 'radiology_analysis_proxy',
+      modelVersion: modelVersion || 'radiology_analysis_proxy',
+      provider: 'local',
+      recorded: true,
+    });
+  }
+
+  private decorateStudy(study: DicomStudy | null) {
+    if (!study) {
+      return study;
+    }
+    return {
+      ...study,
+      aiMetadata: this.buildStudyAiMetadata(),
+    };
+  }
+
+  private decorateFinding(finding: RadiologyAiFinding) {
+    return {
+      ...finding,
+      aiMetadata: this.buildStudyAiMetadata(finding?.modelVersion || null),
+    };
+  }
 
   // ── Study Upload & Registration ────────────────────────────────────────────
 
@@ -35,40 +66,45 @@ export class RadiologyAiService {
     this.analyzeStudy(subdomain, ds, study).catch(e =>
       this.logger.warn(`Radiology AI analysis failed for study ${study.id}: ${e?.message}`));
 
-    return study;
+    return this.decorateStudy(study) as DicomStudy;
   }
 
   async getStudy(subdomain: string, studyId: string): Promise<DicomStudy | null> {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return ds.getRepository(DicomStudy).findOneBy({ id: studyId });
+    const study = await ds.getRepository(DicomStudy).findOneBy({ id: studyId });
+    return this.decorateStudy(study) as DicomStudy | null;
   }
 
   async getStudiesForPatient(subdomain: string, patientId: string): Promise<DicomStudy[]> {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return ds.getRepository(DicomStudy).find({
+    const studies = await ds.getRepository(DicomStudy).find({
       where: { patientId },
       order: { uploadedAt: 'DESC' },
     });
+    return studies.map((study) => this.decorateStudy(study) as DicomStudy);
   }
 
   async getFindingsForStudy(subdomain: string, studyId: string): Promise<RadiologyAiFinding[]> {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return ds.getRepository(RadiologyAiFinding).find({ where: { studyId } });
+    const findings = await ds.getRepository(RadiologyAiFinding).find({ where: { studyId } });
+    return findings.map((finding) => this.decorateFinding(finding) as RadiologyAiFinding);
   }
 
   async getFindingsForPatient(subdomain: string, patientId: string): Promise<RadiologyAiFinding[]> {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return ds.getRepository(RadiologyAiFinding).find({
+    const findings = await ds.getRepository(RadiologyAiFinding).find({
       where: { patientId },
       order: { analyzedAt: 'DESC' },
     });
+    return findings.map((finding) => this.decorateFinding(finding) as RadiologyAiFinding);
   }
 
   async radiologistReview(subdomain: string, findingId: string, notes: string, reviewedBy: string): Promise<RadiologyAiFinding | null> {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(RadiologyAiFinding);
     await repo.update(findingId, { radiologistReviewed: true, radiologistNotes: notes });
-    return repo.findOneBy({ id: findingId });
+    const finding = await repo.findOneBy({ id: findingId });
+    return finding ? (this.decorateFinding(finding) as RadiologyAiFinding) : null;
   }
 
   // ── AI Analysis ────────────────────────────────────────────────────────────

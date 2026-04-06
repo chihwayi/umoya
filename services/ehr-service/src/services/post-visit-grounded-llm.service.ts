@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { CircuitBreaker } from '../utils/circuit-breaker';
 import { LruCache } from '../utils/lru-cache';
 import { CdssService } from './cdss.service';
+import { AiSurfaceContractService } from './ai-surface-contract.service';
 
 export interface GroundingCitation {
   id: string;
@@ -45,6 +46,7 @@ export interface PostVisitDoctorPolishOutput {
   citationsUsed: string[];
   model: string;
   audit?: LlmAuditMetadata;
+  aiMetadata?: Record<string, any>;
 }
 
 export interface PostVisitPatientAnswerInput {
@@ -68,6 +70,7 @@ export interface PostVisitPatientAnswerOutput {
   abstainReason?: string;
   urgentSignal: boolean;
   audit?: LlmAuditMetadata;
+  aiMetadata?: Record<string, any>;
 }
 
 export interface PostVisitEscalationClassifierInput {
@@ -86,6 +89,7 @@ export interface PostVisitEscalationClassifierOutput {
   rationale?: string;
   model: string;
   audit?: LlmAuditMetadata;
+  aiMetadata?: Record<string, any>;
 }
 
 export interface LlmAuditMetadata {
@@ -104,10 +108,25 @@ export class PostVisitGroundedLlmService {
   private readonly circuitBreaker = new CircuitBreaker(5, 30000);
   private readonly responseCache = new LruCache<{ json: any; audit: LlmAuditMetadata; model: string }>(200, 3600000);
 
-  constructor(@Optional() private readonly cdssService?: CdssService) {}
+  constructor(
+    @Optional() private readonly cdssService?: CdssService,
+    @Optional() private readonly aiSurfaceContractService?: AiSurfaceContractService,
+  ) {}
 
   private canUseLlm() {
     return this.enabled && Boolean(this.cdssService);
+  }
+
+  private buildAiMetadata(useCase: string, model: string) {
+    return this.aiSurfaceContractService?.buildSurfaceMetadata({
+      aiSurface: 'post_visit_grounded_llm',
+      useCase,
+      source: 'post_visit_grounded_llm_service',
+      modelId: model || 'governed_json_proxy',
+      modelVersion: model || 'governed_json_proxy',
+      provider: 'local',
+      recorded: true,
+    });
   }
 
   async draftReferralLetter(input: {
@@ -121,7 +140,7 @@ export class PostVisitGroundedLlmService {
     soapNote?: Record<string, any> | null;
     visitSummary?: Record<string, any> | null;
     recommendationItems?: any[];
-  }): Promise<{ letterText: string; model: string; audit?: LlmAuditMetadata } | null> {
+  }): Promise<{ letterText: string; model: string; audit?: LlmAuditMetadata; aiMetadata?: Record<string, any> } | null> {
     if (!this.canUseLlm()) return null;
     if (!input?.sessionId) return null;
 
@@ -174,7 +193,12 @@ export class PostVisitGroundedLlmService {
       if (json?.abstain === true) return null;
       const letterText = this.normalizeText(json?.letter_text, 3600);
       if (!letterText) return null;
-      return { letterText, model: llmResponse.model, audit: llmResponse.audit };
+      return {
+        letterText,
+        model: llmResponse.model,
+        audit: llmResponse.audit,
+        aiMetadata: this.buildAiMetadata('post_visit_referral_letter', llmResponse.model),
+      };
     } catch {
       return null;
     }
@@ -188,7 +212,7 @@ export class PostVisitGroundedLlmService {
     soapNote?: Record<string, any> | null;
     visitSummary?: Record<string, any> | null;
     recommendationItems?: any[];
-  }): Promise<{ noteText: string; model: string; audit?: LlmAuditMetadata } | null> {
+  }): Promise<{ noteText: string; model: string; audit?: LlmAuditMetadata; aiMetadata?: Record<string, any> } | null> {
     if (!this.canUseLlm()) return null;
     if (!input?.sessionId) return null;
 
@@ -238,7 +262,12 @@ export class PostVisitGroundedLlmService {
       if (json?.abstain === true) return null;
       const noteText = this.normalizeText(json?.note_text, 5200);
       if (!noteText) return null;
-      return { noteText, model: llmResponse.model, audit: llmResponse.audit };
+      return {
+        noteText,
+        model: llmResponse.model,
+        audit: llmResponse.audit,
+        aiMetadata: this.buildAiMetadata('post_visit_clinical_note', llmResponse.model),
+      };
     } catch {
       return null;
     }
@@ -340,6 +369,7 @@ export class PostVisitGroundedLlmService {
           ...llmResponse.audit,
           safetyGateTriggered: false,
         },
+        aiMetadata: this.buildAiMetadata('post_visit_doctor_polish', llmResponse.model),
       };
     } catch (error: any) {
       this.logger.warn(`Doctor polish LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);
@@ -435,6 +465,7 @@ export class PostVisitGroundedLlmService {
             ...llmResponse.audit,
             safetyGateTriggered: true,
           },
+          aiMetadata: this.buildAiMetadata('post_visit_patient_answer', llmResponse.model),
         };
       }
 
@@ -453,6 +484,7 @@ export class PostVisitGroundedLlmService {
           ...llmResponse.audit,
           safetyGateTriggered: false,
         },
+        aiMetadata: this.buildAiMetadata('post_visit_patient_answer', llmResponse.model),
       };
     } catch (error: any) {
       this.logger.warn(`Patient answer LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);
@@ -547,6 +579,7 @@ export class PostVisitGroundedLlmService {
           templateVersion: 'postvisit-escalation-v2',
           safetyGateTriggered: false,
         },
+        aiMetadata: this.buildAiMetadata('post_visit_escalation_classification', llmResponse.model),
       };
     } catch (error: any) {
       this.logger.warn(`Escalation classifier LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);

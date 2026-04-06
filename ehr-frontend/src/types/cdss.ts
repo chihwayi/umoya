@@ -5,6 +5,17 @@ export interface CdssCitation {
   relevanceScore?: number;
   isPrimary?: boolean;
   url?: string;
+  metadata?: {
+    governed_source?: boolean;
+    tenant_source?: boolean;
+    source_scope?: 'tenant' | 'shared' | 'fallback' | string;
+    source_version?: string | null;
+    reviewed_at?: string | null;
+    effective_date?: string | null;
+    freshness_status?: 'fresh' | 'aging' | 'stale' | 'fallback' | string;
+    release_id?: string | null;
+    release_version?: string | null;
+  };
 }
 
 export type CdssAbstentionReason =

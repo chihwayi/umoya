@@ -27,6 +27,31 @@ interface Citation {
   text?: string;
   recommendation?: string;
   confidence?: number;
+  metadata?: {
+    source_scope?: 'tenant' | 'shared' | 'fallback' | string;
+    source_version?: string | null;
+    reviewed_at?: string | null;
+    effective_date?: string | null;
+    freshness_status?: 'fresh' | 'aging' | 'stale' | 'fallback' | string;
+    release_version?: string | null;
+  };
+}
+
+function freshnessMeta(status?: string | null) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'fresh') return { label: 'Fresh', className: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
+  if (normalized === 'aging') return { label: 'Aging', className: 'bg-amber-50 text-amber-700 border-amber-100' };
+  if (normalized === 'stale') return { label: 'Stale', className: 'bg-rose-50 text-rose-700 border-rose-100' };
+  if (normalized === 'fallback') return { label: 'Fallback', className: 'bg-slate-100 text-slate-700 border-slate-200' };
+  return null;
+}
+
+function scopeMeta(scope?: string | null) {
+  const normalized = String(scope || '').toLowerCase();
+  if (normalized === 'tenant') return { label: 'Local', className: 'bg-teal-50 text-teal-700 border-teal-100' };
+  if (normalized === 'shared') return { label: 'Shared', className: 'bg-indigo-50 text-indigo-700 border-indigo-100' };
+  if (normalized === 'fallback') return { label: 'Fallback', className: 'bg-slate-100 text-slate-700 border-slate-200' };
+  return null;
 }
 
 export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', onMinimize }: GuidelineSearchPanelProps) {
@@ -154,33 +179,62 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', o
           {/* Results */}
           {results.length > 0 && (
             <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
-              {results.map((c, idx) => (
-                <div key={idx} className="bg-white rounded-lg border border-slate-200 p-3 shadow-sm text-sm">
-                  <div className="flex items-start gap-2">
-                    <svg className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                    </svg>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1 gap-2">
-                        <span className="font-semibold text-slate-700 text-xs truncate">{c.source || c.title || 'Clinical Guideline'}</span>
-                        {c.confidence != null && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border ${
-                            c.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
-                            c.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                            'bg-red-50 text-red-700 border-red-100'
-                          }`}>
-                            {Math.round(c.confidence * 100)}%
-                          </span>
+              {results.map((c, idx) => {
+                const sourceBadge = scopeMeta(c.metadata?.source_scope);
+                const freshnessBadge = freshnessMeta(c.metadata?.freshness_status);
+
+                return (
+                  <div key={idx} className="bg-white rounded-lg border border-slate-200 p-3 shadow-sm text-sm">
+                    <div className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                      </svg>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1 gap-2">
+                          <span className="font-semibold text-slate-700 text-xs truncate">{c.source || c.title || 'Clinical Guideline'}</span>
+                          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                            {sourceBadge && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${sourceBadge.className}`}>
+                                {sourceBadge.label}
+                              </span>
+                            )}
+                            {freshnessBadge && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${freshnessBadge.className}`}>
+                                {freshnessBadge.label}
+                              </span>
+                            )}
+                            {c.confidence != null && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+                                c.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
+                                c.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                                'bg-red-50 text-red-700 border-red-100'
+                              }`}>
+                                {Math.round(c.confidence * 100)}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-600 leading-relaxed">{c.content || c.text || ''}</p>
+                        {c.recommendation && (
+                          <p className="mt-1 text-xs font-medium text-indigo-700">→ {c.recommendation}</p>
+                        )}
+                        {(c.metadata?.source_version || c.metadata?.release_version || c.metadata?.reviewed_at || c.metadata?.effective_date) && (
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                            {c.metadata?.source_version && <span>Version {c.metadata.source_version}</span>}
+                            {c.metadata?.release_version && <span>Release {c.metadata.release_version}</span>}
+                            {c.metadata?.effective_date && (
+                              <span>Effective {new Date(c.metadata.effective_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                            )}
+                            {c.metadata?.reviewed_at && (
+                              <span>Reviewed {new Date(c.metadata.reviewed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                            )}
+                          </div>
                         )}
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed">{c.content || c.text || ''}</p>
-                      {c.recommendation && (
-                        <p className="mt-1 text-xs font-medium text-indigo-700">→ {c.recommendation}</p>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

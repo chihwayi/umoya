@@ -132,6 +132,35 @@ describe('PostVisitEscalationService', () => {
       expect(result.summary.highPriorityOpenCount).toBe(1);
     });
 
+    it('normalizes trust summary from escalation metadata and classifier source', async () => {
+      const query = makeQuery(
+        [
+          makeEscalationRow({
+            classification_source: 'keyword_v1',
+            trigger_type: 'symptom_keyword',
+            metadata: {
+              patient_ai_session_id: 'ai-session-1',
+              patient_followup_orchestration_id: 'followup-1',
+            },
+          }),
+        ],
+        [makeSummaryRow()],
+      );
+      const tenantDb = makeTenantDb(query);
+
+      const result = await service.listEscalations(tenantDb);
+
+      expect(result.escalations[0].trustSummary).toEqual(
+        expect.objectContaining({
+          sourceLabel: 'Post-visit companion + patient AI',
+          backingType: 'Patient AI linked',
+          reviewState: 'Open clinician review',
+          linkedPatientAiSessionId: 'ai-session-1',
+          linkedFollowupOrchestrationId: 'followup-1',
+        }),
+      );
+    });
+
     it('passes status filter to the query params', async () => {
       const query = makeQuery([], [{ total: 0, open_count: 0, high_priority_open_count: 0 }]);
       const tenantDb = makeTenantDb(query);

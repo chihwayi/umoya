@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PatientController } from './patient.controller';
 import { PatientService } from '../services/patient.service';
 import { ProactiveAiService } from '../services/proactive-ai.service';
+import { PatientIntelligenceService } from '../services/patient-intelligence.service';
 
 describe('PatientController', () => {
   let controller: PatientController;
@@ -26,6 +27,10 @@ describe('PatientController', () => {
     getSnapshot: jest.fn(),
   };
 
+  const mockPatientIntelligenceService = {
+    getPatientIntelligence: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PatientController],
@@ -37,6 +42,10 @@ describe('PatientController', () => {
         {
           provide: ProactiveAiService,
           useValue: mockProactiveAiService,
+        },
+        {
+          provide: PatientIntelligenceService,
+          useValue: mockPatientIntelligenceService,
         },
       ],
     }).compile();
@@ -78,5 +87,26 @@ describe('PatientController', () => {
     });
     expect(mockProactiveAiService.getSnapshot).toHaveBeenCalledWith('patient-1', 'tenant-1');
     expect(result).toEqual(expected);
+  });
+
+  it('returns unified patient intelligence via getPatientIntelligence', async () => {
+    const intelligence = {
+      summary: { tone: 'attention', headline: 'Several AI signals need follow-through.' },
+      nextActions: [{ id: 'gap:1', title: 'Close care gap' }],
+    };
+    mockPatientIntelligenceService.getPatientIntelligence.mockResolvedValue(intelligence);
+
+    const result = await controller.getPatientIntelligence(
+      'patient-1',
+      { tenantDb: mockTenantDb, tenantId: 'tenant-1', user: { userId: 'user-1' } } as any,
+    );
+
+    expect(mockPatientIntelligenceService.getPatientIntelligence).toHaveBeenCalledWith(
+      'patient-1',
+      'tenant-1',
+      mockTenantDb,
+      'user-1',
+    );
+    expect(result).toEqual(intelligence);
   });
 });

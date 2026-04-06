@@ -1342,6 +1342,15 @@ export class CdssService {
           results.citations.push(...responseData.citations.map((c: any) => ({
             ...c,
             confidence: c.confidence ?? c.score ?? null,
+            metadata: {
+              ...(c.metadata || {}),
+              source_version: c.source_version ?? c.metadata?.source_version ?? null,
+              reviewed_at: c.reviewed_at ?? c.metadata?.reviewed_at ?? null,
+              effective_date: c.effective_date ?? c.metadata?.effective_date ?? null,
+              source_scope:
+                c.metadata?.source_scope ??
+                (c.metadata?.tenant_source ? 'tenant' : c.metadata?.governed_source ? 'shared' : undefined),
+            },
           })));
         }
       } catch (error: any) {
@@ -1362,6 +1371,8 @@ export class CdssService {
               metadata: {
                 governed_source: true,
                 source_version: 'fhir-local',
+                source_scope: 'shared',
+                freshness_status: 'fresh',
               },
             confidence: 1.0,
             })));
@@ -1813,11 +1824,21 @@ export class CdssService {
       ],
     };
 
-    const citations: Array<{ title: string; text: string; source: string; url: null; score: number }> = [];
+    const citations: Array<{ title: string; text: string; source: string; url: null; score: number; metadata: Record<string, any> }> = [];
     for (const [topic, points] of Object.entries(KEYWORD_MAP)) {
       if (q.includes(topic) || topic.split('_').some(w => q.includes(w))) {
         for (const point of points.slice(0, 3)) {
-          citations.push({ title: `${topic.replace(/_/g, ' ')} — key guideline point`, text: point, source: 'Local Clinical Guidelines (Fallback)', url: null, score: 0.75 });
+          citations.push({
+            title: `${topic.replace(/_/g, ' ')} — key guideline point`,
+            text: point,
+            source: 'Local Clinical Guidelines (Fallback)',
+            url: null,
+            score: 0.75,
+            metadata: {
+              source_scope: 'fallback',
+              freshness_status: 'fallback',
+            },
+          });
         }
       }
     }
@@ -1826,7 +1847,17 @@ export class CdssService {
       for (const [topic, points] of Object.entries(KEYWORD_MAP)) {
         const words = q.split(/\s+/).filter(w => w.length > 3);
         if (words.some(w => topic.includes(w) || w.includes(topic.split('_')[0]))) {
-          citations.push({ title: `${topic.replace(/_/g, ' ')} — related guideline`, text: points[0], source: 'Local Clinical Guidelines (Fallback)', url: null, score: 0.4 });
+          citations.push({
+            title: `${topic.replace(/_/g, ' ')} — related guideline`,
+            text: points[0],
+            source: 'Local Clinical Guidelines (Fallback)',
+            url: null,
+            score: 0.4,
+            metadata: {
+              source_scope: 'fallback',
+              freshness_status: 'fallback',
+            },
+          });
           break;
         }
       }
@@ -4203,7 +4234,7 @@ export class CdssService {
     return responseData;
   }
 
-  async predictClaimDenial(payload: Record<string, any>, tenantId?: string): Promise<{
+  async predictClaimDenial(payload: Record<string, any>, tenantId?: string, tenantDb?: DataSource): Promise<{
     risk_score: number;
     confidence: number;
     threshold_action: 'allow' | 'warn' | 'block';
@@ -4211,16 +4242,62 @@ export class CdssService {
     model_version: string;
     feature_snapshot: Record<string, any>;
   }> {
-    return this.postWithPolicy<any>('denial_prediction', '/cdss/claims/denial-prediction', { payload }, 15000, tenantId);
+    const responseData = await this.postWithPolicy<any>('denial_prediction', '/cdss/claims/denial-prediction', { payload }, 15000, tenantId);
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'claims_denial_prediction',
+      source: 'cdss_service',
+      model: String(responseData?.model_version || responseData?.model || 'claims_denial_prediction_proxy'),
+      patientId: payload?.patient_id || payload?.patientId || null,
+      encounterId: payload?.encounter_id || payload?.encounterId || payload?.claim_id || payload?.claimId || null,
+      requestBody: {
+        procedureCodeCount: Array.isArray(payload?.procedure_codes) ? payload.procedure_codes.length : 0,
+        diagnosisCodeCount: Array.isArray(payload?.diagnosis_codes) ? payload.diagnosis_codes.length : 0,
+        totalAmount: payload?.total_amount ?? null,
+        planType: payload?.plan_type || null,
+      },
+      responseSummary: {
+        riskScore: responseData?.risk_score ?? null,
+        action: responseData?.threshold_action || null,
+        abstained: responseData?.abstained === true,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
   }
 
-  async generateAppealTemplateCdss(payload: Record<string, any>, tenantId?: string): Promise<{
+  async generateAppealTemplateCdss(payload: Record<string, any>, tenantId?: string, tenantDb?: DataSource): Promise<{
     draft_letter: string;
     denial_reason_code: string;
     rag_sources: Array<{ documentId: string; title: string; excerpt: string; relevanceScore: number }>;
     model_version: string;
   }> {
-    return this.postWithPolicy<any>('appeal_template', '/cdss/claims/appeal-template', { payload }, 20000, tenantId);
+    const responseData = await this.postWithPolicy<any>('appeal_template', '/cdss/claims/appeal-template', { payload }, 20000, tenantId);
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'claims_appeal_generation',
+      source: 'cdss_service',
+      model: String(responseData?.model_version || responseData?.model || 'claims_appeal_generation_proxy'),
+      patientId: payload?.patient_id || payload?.patientId || null,
+      encounterId: payload?.claim_id || payload?.claimId || null,
+      requestBody: {
+        denialReasonCode: payload?.denial_reason_code || null,
+        detailKeyCount: Object.keys(payload || {}).length,
+      },
+      responseSummary: {
+        ragSourceCount: Array.isArray(responseData?.rag_sources) ? responseData.rag_sources.length : 0,
+        denialReasonCode: responseData?.denial_reason_code || null,
+        letterLength: String(responseData?.draft_letter || '').length,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
   }
 
   async checkPdmpDrug(payload: {
@@ -4229,7 +4306,7 @@ export class CdssService {
     daily_dose_mg: number;
     other_active_controlled_prescriptions: any[];
     prior_substance_abuse_flags: any[];
-  }, tenantId?: string): Promise<{
+  }, tenantId?: string, tenantDb?: DataSource): Promise<{
     risk_level: string;
     risk_score: number;
     morphine_milligram_equivalent: number | null;
@@ -4238,7 +4315,32 @@ export class CdssService {
     other_active_prescriptions: any[];
     cdss_recommendation: string;
   }> {
-    return this.postWithPolicy<any>('pdmp_check', '/cdss/pharmacy/pdmp-check', { payload }, 10000, tenantId);
+    const responseData = await this.postWithPolicy<any>('pdmp_check', '/cdss/pharmacy/pdmp-check', { payload }, 10000, tenantId);
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'pharmacy_pdmp_check',
+      source: 'cdss_service',
+      model: String(responseData?.model_version || responseData?.model || 'pharmacy_pdmp_check_proxy'),
+      requestBody: {
+        drugName: payload.drug_name,
+        deaSchedule: payload.dea_schedule,
+        dailyDoseMg: payload.daily_dose_mg,
+        activeControlledCount: Array.isArray(payload.other_active_controlled_prescriptions)
+          ? payload.other_active_controlled_prescriptions.length
+          : 0,
+      },
+      responseSummary: {
+        riskLevel: responseData?.risk_level || null,
+        riskScore: responseData?.risk_score ?? null,
+        dispensingBlocked: responseData?.dispensing_blocked === true,
+        alertCount: Array.isArray(responseData?.prescriber_alerts) ? responseData.prescriber_alerts.length : 0,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
   }
 
   async stratifyPatientRisk(payload: Record<string, unknown>, tenantId?: string): Promise<{
@@ -4533,10 +4635,41 @@ export class CdssService {
     return response.results || [];
   }
 
-  async proactiveAnalysis(payload: Record<string, any>): Promise<any> {
+  async proactiveAnalysis(payload: Record<string, any>, tenantId?: string, tenantDb?: DataSource): Promise<any> {
     try {
-      const response = await this.cdssClient.post('/patient/analyze/proactive', payload);
-      return response.data;
+      const responseData = await this.postWithPolicy<any>(
+        'patient_proactive_analysis',
+        '/patient/analyze/proactive',
+        payload,
+        15000,
+        tenantId,
+      );
+
+      await this.recordGovernedPromptAudit({
+        tenantDb,
+        tenantId,
+        useCase: 'patient_proactive_analysis',
+        source: 'cdss_service',
+        model: String(responseData?.model_version || responseData?.model || 'patient_proactive_analysis_proxy'),
+        patientId: payload?.patient_id || payload?.patientId || null,
+        requestBody: {
+          age: payload?.age ?? null,
+          gender: payload?.gender || null,
+          chronicConditionCount: Array.isArray(payload?.chronic_conditions) ? payload.chronic_conditions.length : 0,
+          medicationCount: Array.isArray(payload?.active_medications) ? payload.active_medications.length : 0,
+          recentDiagnosisCount: Array.isArray(payload?.recent_diagnoses) ? payload.recent_diagnoses.length : 0,
+          triggerType: payload?.trigger_type || null,
+        },
+        responseSummary: {
+          alertCount: Array.isArray(responseData?.active_alerts) ? responseData.active_alerts.length : 0,
+          careGapCount: Array.isArray(responseData?.care_gaps) ? responseData.care_gaps.length : 0,
+          modelVersion: responseData?.model_version || null,
+          abstained: responseData?.abstained === true,
+        },
+        governance: responseData?.governance || {},
+      });
+
+      return responseData;
     } catch (err) {
       this.logger.warn(`proactiveAnalysis CDSS call failed: ${(err as any).message}`);
       return null;

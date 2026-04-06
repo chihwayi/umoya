@@ -534,4 +534,11 @@ export class OncologyController {
   async getDashboardSummary(@Request() req: RequestWithTenant) {
     return this.oncologyService.getDashboardSummary(req.tenantDb);
   }
+
+  @Get('mobile/protocol-snapshot')
+  @ApiOperation({ summary: 'Get a compact oncology protocol snapshot for mobile clinician workflows' })
+  @ApiResponse({ status: 200, description: 'Mobile oncology protocol snapshot' })
+  async getMobileProtocolSnapshot(@Request() req: RequestWithTenant) {
+    return this.oncologyService.getMobileProtocolSnapshot(req.tenantDb);
+  }
 }

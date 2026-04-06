@@ -9,6 +9,7 @@ import { PatientFollowupOrchestration } from '../entities/patient-followup-orche
 import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
 import { HipaaAuditService } from './hipaa-audit.service';
+import { AiSurfaceContractService } from './ai-surface-contract.service';
 
 @Injectable()
 export class PatientAiService {
@@ -18,7 +19,24 @@ export class PatientAiService {
     private readonly tenantService: TenantService,
     private readonly cdssService: CdssService,
     private readonly hipaaAuditService: HipaaAuditService,
+    private readonly aiSurfaceContractService: AiSurfaceContractService,
   ) {}
+
+  private buildAiMetadata(args: {
+    useCase: 'patient_symptom_check' | 'patient_adherence_chat';
+    model?: string | null;
+    governance?: Record<string, any> | null;
+  }) {
+    return this.aiSurfaceContractService.buildSurfaceMetadata({
+      aiSurface: 'patient_ai',
+      useCase: args.useCase,
+      source: 'patient_ai_service',
+      modelId: args.model || 'patient_ai_proxy',
+      modelVersion: args.model || 'patient_ai_proxy',
+      provider: String(args.governance?.vendor_id || args.governance?.vendorId || args.governance?.provider || 'local'),
+      recorded: true,
+    });
+  }
 
   private mapTriageToUrgency(triageLevel?: string | null): 'routine' | 'urgent' | 'emergency' {
     const normalized = String(triageLevel || '').trim().toLowerCase();
@@ -382,6 +400,11 @@ export class PatientAiService {
     return {
       ...savedSession,
       aiSessionId: patientAiSession.id,
+      aiMetadata: this.buildAiMetadata({
+        useCase: 'patient_symptom_check',
+        model: result.model,
+        governance: result.governance,
+      }),
       safetyPolicy,
       escalation,
       followupOrchestration,
@@ -425,6 +448,7 @@ export class PatientAiService {
   }): Promise<{
     sessionId: string;
     aiSessionId: string;
+    aiMetadata: Record<string, any>;
     reply: string;
     intent?: string;
     adherenceConcern: boolean;
@@ -598,6 +622,11 @@ export class PatientAiService {
     return {
       sessionId,
       aiSessionId: patientAiSession.id,
+      aiMetadata: this.buildAiMetadata({
+        useCase: 'patient_adherence_chat',
+        model,
+        governance,
+      }),
       reply,
       intent,
       adherenceConcern,

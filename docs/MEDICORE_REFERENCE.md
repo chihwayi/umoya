@@ -205,6 +205,31 @@ Bundle version format: `YYYY.MM.DD.N` where N increments for multiple bundles on
 
 After adding: run `./scripts/provision-repair-all.sh` to apply to all existing tenants.
 
+### 3.2.1 Non-Negotiable DB Change Rule
+
+For every database change, this exact gate must be satisfied before committing code or moving to the next sprint task:
+
+1. **Provision through the provisioning service**
+   - The schema change must be added to the provisioning service/bundle first.
+   - Never rely on manual DB edits or TypeORM sync.
+
+2. **Run tenant repair**
+   - Apply the change to current tenants immediately after provisioning.
+   - If master DB changes are needed, run master provisioning too.
+
+3. **Check the real database directly**
+   - Verify the new table/column/index/constraint exists in the actual database.
+   - Verify it is present not only in code, but in the current tenant databases too.
+   - Do not assume provisioning succeeded without direct verification.
+
+4. **Run quality gates before commit**
+   - Lint must pass for the touched area.
+   - Build/typecheck must pass for the touched area.
+   - Tests must pass for the touched area.
+   - No syntax errors or obvious bugs may remain in the changed code.
+
+Only after all 4 are satisfied may the change be committed and the next sprint task begin.
+
 ### 3.3 Frontend API Call Pattern
 
 All API calls go through `services/api.ts` — never `fetch`/`axios` directly in components.

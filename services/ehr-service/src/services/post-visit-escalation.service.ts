@@ -62,9 +62,63 @@ export class PostVisitEscalationService {
     return !['false', '0', 'off', 'no'].includes(v.toLowerCase());
   }
 
+  private normalizeMetadata(metadata: any): Record<string, any> {
+    if (!metadata) return {};
+    if (typeof metadata === 'string') {
+      try {
+        return JSON.parse(metadata);
+      } catch {
+        return {};
+      }
+    }
+    return typeof metadata === 'object' ? metadata : {};
+  }
+
+  private buildEscalationTrustSummary(row: any, metadata: Record<string, any>) {
+    const classificationSource = String(row.classification_source || row.classificationSource || '').trim().toLowerCase();
+    const triggerType = String(row.trigger_type || row.triggerType || '').trim().toLowerCase();
+    const linkedPatientAiSessionId = metadata.patient_ai_session_id || null;
+    const linkedPatientAiEscalationId = metadata.patient_ai_escalation_id || null;
+    const linkedFollowupOrchestrationId = metadata.patient_followup_orchestration_id || null;
+
+    let backingType = 'Companion workflow';
+    let sourceLabel = 'Post-visit companion';
+
+    if (linkedPatientAiSessionId || linkedPatientAiEscalationId) {
+      backingType = 'Patient AI linked';
+      sourceLabel = 'Post-visit companion + patient AI';
+    } else if (classificationSource.startsWith('keyword') || triggerType === 'symptom_keyword') {
+      backingType = 'Rule-backed safety logic';
+      sourceLabel = 'Keyword escalation policy';
+    } else if (classificationSource) {
+      backingType = 'Governed classifier';
+      sourceLabel = classificationSource.replace(/_/g, ' ');
+    }
+
+    const reviewState =
+      row.status === 'resolved'
+        ? 'Resolved by clinician'
+        : row.status === 'dismissed'
+          ? 'Dismissed by clinician'
+          : row.status === 'acknowledged'
+            ? 'Acknowledged and awaiting closure'
+            : 'Open clinician review';
+
+    return {
+      sourceLabel,
+      backingType,
+      reviewState,
+      classifierStage: row.classification_stage || row.classificationStage || 'v1',
+      linkedPatientAiSessionId,
+      linkedPatientAiEscalationId,
+      linkedFollowupOrchestrationId,
+    };
+  }
+
   // ── Row mappers ──────────────────────────────────────────────────────────────
 
   private mapEscalationEvent(row: any) {
+    const metadata = this.normalizeMetadata(row.metadata);
     return {
       id: row.id,
       sessionId: row.session_id,
@@ -91,7 +145,8 @@ export class PostVisitEscalationService {
       resolvedBy: row.resolved_by || null,
       resolutionNote: row.resolution_note || null,
       workflowKey: row.workflow_key || null,
-      metadata: row.metadata || {},
+      metadata,
+      trustSummary: this.buildEscalationTrustSummary(row, metadata),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

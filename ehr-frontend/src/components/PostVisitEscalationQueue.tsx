@@ -20,6 +20,15 @@ interface PostVisitEscalationItem {
     lastName?: string | null;
     patientNumber?: string | null;
   };
+  trustSummary?: {
+    sourceLabel?: string | null;
+    backingType?: string | null;
+    reviewState?: string | null;
+    classifierStage?: string | null;
+    linkedPatientAiSessionId?: string | null;
+    linkedPatientAiEscalationId?: string | null;
+    linkedFollowupOrchestrationId?: string | null;
+  };
 }
 
 interface PostVisitEscalationQueueProps {
@@ -239,6 +248,21 @@ export default function PostVisitEscalationQueue({
               <p className="mt-1 text-xs text-slate-500">
                 Classification note: {item.classificationReason}
               </p>
+            )}
+            {(item.trustSummary?.sourceLabel ||
+              item.trustSummary?.backingType ||
+              item.trustSummary?.reviewState ||
+              item.trustSummary?.classifierStage ||
+              item.trustSummary?.linkedPatientAiSessionId ||
+              item.trustSummary?.linkedFollowupOrchestrationId) && (
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                {item.trustSummary?.sourceLabel && <span>Source {item.trustSummary.sourceLabel}</span>}
+                {item.trustSummary?.backingType && <span>{item.trustSummary.backingType}</span>}
+                {item.trustSummary?.reviewState && <span>{item.trustSummary.reviewState}</span>}
+                {item.trustSummary?.classifierStage && <span>Stage {item.trustSummary.classifierStage}</span>}
+                {item.trustSummary?.linkedPatientAiSessionId && <span>Patient AI linked</span>}
+                {item.trustSummary?.linkedFollowupOrchestrationId && <span>Follow-up linked</span>}
+              </div>
             )}
             <p className="mt-1 text-xs text-slate-500">
               Patient: {item.patient?.firstName || 'Unknown'} {item.patient?.lastName || ''} {item.patient?.patientNumber ? `(${item.patient.patientNumber})` : ''}

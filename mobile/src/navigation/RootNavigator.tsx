@@ -40,6 +40,7 @@ import { PatientAppointmentsScreen }     from '../components/patient/PatientAppo
 import { PatientMessagesScreen }         from '../components/patient/PatientMessagesScreen';
 // Patient screens — S127
 import { PatientNotificationsScreen }    from '../components/patient/PatientNotificationsScreen';
+import { PatientAiCompanionScreen }      from '../components/patient/PatientAiCompanionScreen';
 
 const Stack  = createNativeStackNavigator();
 const PatientStack = createNativeStackNavigator();
@@ -118,6 +119,7 @@ const PatientStackNavigator = () => (
     <PatientStack.Screen name="PatientTabs"      component={PatientNavigator}             />
     <PatientStack.Screen name="PHMessages"       component={PatientMessagesScreen}        />
     <PatientStack.Screen name="PHNotifications"  component={PatientNotificationsScreen}   />
+    <PatientStack.Screen name="PHCompanion"      component={PatientAiCompanionScreen}     />
   </PatientStack.Navigator>
 );
 

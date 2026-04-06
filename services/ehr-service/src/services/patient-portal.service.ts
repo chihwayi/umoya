@@ -36,6 +36,27 @@ export class PatientPortalService {
     }
   }
 
+  private toIsoOrNull(value: any): string | null {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString();
+  }
+
+  private urgencyRank(value?: string | null): number {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'emergency' || normalized === 'critical') return 0;
+    if (normalized === 'urgent' || normalized === 'high') return 1;
+    if (normalized === 'medium') return 2;
+    return 3;
+  }
+
+  private pickTimelineTimestamp(item: { occurredAt?: string | null; dueAt?: string | null; createdAt?: string | null; scheduledAt?: string | null; publishedAt?: string | null; sentAt?: string | null }): number {
+    const raw = item.occurredAt || item.dueAt || item.createdAt || item.scheduledAt || item.publishedAt || item.sentAt;
+    const time = raw ? new Date(raw).getTime() : 0;
+    return Number.isFinite(time) ? time : 0;
+  }
+
   // Appointments
   async getPatientAppointments(patientId: string, tenantId: string, filters?: { startDate?: string; endDate?: string; status?: string }): Promise<any[]> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
@@ -1261,6 +1282,280 @@ export class PatientPortalService {
         requiresClinicianFollowUp: row.requiresClinicianFollowUp === true,
       },
     }));
+  }
+
+  async getPatientAiCompanion(patientId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const [followups, sessions, escalations, consultations, postVisitSessions, notifications] = await Promise.all([
+      connection.query(
+        `SELECT
+            f.id,
+            f.patient_ai_session_id as "patientAiSessionId",
+            f.trigger_type as "triggerType",
+            f.risk_level as "riskLevel",
+            f.status,
+            f.reminder_state as "reminderState",
+            f.next_action as "nextAction",
+            f.unresolved_question as "unresolvedQuestion",
+            f.route_back_target as "routeBackTarget",
+            f.due_at as "dueAt",
+            f.completed_at as "completedAt",
+            f.created_at as "createdAt",
+            s.session_type as "sessionType",
+            s.guidance_summary as "guidanceSummary",
+            s.latest_reply as "latestReply",
+            s.requires_clinician_follow_up as "requiresClinicianFollowUp"
+          FROM patient_followup_orchestrations f
+          LEFT JOIN patient_ai_sessions s ON s.id = f.patient_ai_session_id
+          WHERE f.patient_id = $1
+          ORDER BY
+            CASE WHEN f.status IN ('open', 'in_progress') THEN 0 ELSE 1 END,
+            CASE WHEN f.risk_level = 'emergency' THEN 0 WHEN f.risk_level = 'urgent' THEN 1 ELSE 2 END,
+            COALESCE(f.due_at, f.created_at) ASC
+          LIMIT 10`,
+        [patientId],
+      ),
+      connection.query(
+        `SELECT
+            id,
+            session_type as "sessionType",
+            status,
+            urgency,
+            guidance_summary as "guidanceSummary",
+            latest_message as "latestMessage",
+            latest_reply as "latestReply",
+            requires_clinician_follow_up as "requiresClinicianFollowUp",
+            created_at as "createdAt"
+          FROM patient_ai_sessions
+          WHERE patient_id = $1
+          ORDER BY created_at DESC
+          LIMIT 10`,
+        [patientId],
+      ),
+      connection.query(
+        `SELECT
+            id,
+            source_type as "sourceType",
+            severity,
+            status,
+            route_target as "routeTarget",
+            trigger_summary as "triggerSummary",
+            recommended_action as "recommendedAction",
+            created_at as "createdAt",
+            resolved_at as "resolvedAt"
+          FROM patient_ai_escalations
+          WHERE patient_id = $1
+          ORDER BY created_at DESC
+          LIMIT 10`,
+        [patientId],
+      ),
+      connection.query(
+        `SELECT
+            id,
+            status,
+            scheduled_start_time as "scheduledAt",
+            scheduled_end_time as "scheduledEndAt",
+            doctor_id as "doctorId",
+            room_status as "roomStatus",
+            patient_joined_at as "patientJoinedAt",
+            meeting_url as "meetingUrl",
+            reminder_sent_at as "reminderSentAt",
+            COALESCE(u.first_name || ' ' || u.last_name, 'Care team') as "doctorName"
+          FROM telemedicine_consultations tc
+          LEFT JOIN users u ON u.id = tc.doctor_id
+          WHERE tc.patient_id = $1
+          ORDER BY scheduled_start_time DESC
+          LIMIT 5`,
+        [patientId],
+      ),
+      connection.query(
+        `SELECT
+            s.id,
+            s.status,
+            s.source_type as "sourceType",
+            s.published_at as "publishedAt",
+            s.updated_at as "updatedAt",
+            COALESCE(u.first_name || ' ' || u.last_name, 'Your care team') as "doctorName"
+          FROM post_visit_sessions s
+          LEFT JOIN users u ON u.id = s.doctor_id
+          WHERE s.patient_id = $1
+            AND s.status IN ('published', 'closed')
+          ORDER BY COALESCE(s.published_at, s.updated_at) DESC
+          LIMIT 5`,
+        [patientId],
+      ),
+      connection.query(
+        `SELECT
+            id,
+            notification_type as "notificationType",
+            title,
+            message,
+            read,
+            sent_at as "sentAt",
+            expires_at as "expiresAt"
+          FROM patient_notifications
+          WHERE patient_id = $1
+            AND (expires_at IS NULL OR expires_at > NOW())
+          ORDER BY sent_at DESC
+          LIMIT 10`,
+        [patientId],
+      ),
+    ]);
+
+    const followupRows = (followups || []).map((row: any) => ({
+      id: row.id,
+      kind: 'followup',
+      urgency: row.riskLevel || 'routine',
+      status: row.status,
+      occurredAt: this.toIsoOrNull(row.createdAt),
+      dueAt: this.toIsoOrNull(row.dueAt),
+      title: row.nextAction || 'AI follow-up',
+      detail: row.unresolvedQuestion || row.guidanceSummary || row.latestReply || 'Your care plan has an active follow-up.',
+      sourceLabel: row.sessionType === 'adherence_chat' ? 'Medication support' : row.triggerType || 'AI follow-up',
+      actionLabel: row.status === 'completed' ? 'Completed' : 'Open follow-up',
+      actionTarget: row.status === 'completed' ? null : 'PHCompanion',
+      entityId: row.id,
+      createdAt: this.toIsoOrNull(row.createdAt),
+    }));
+
+    const sessionRows = (sessions || []).map((row: any) => ({
+      id: row.id,
+      kind: row.sessionType === 'adherence_chat' ? 'adherence_chat' : 'symptom_check',
+      urgency: row.urgency || 'routine',
+      status: row.status || 'completed',
+      occurredAt: this.toIsoOrNull(row.createdAt),
+      title: row.sessionType === 'adherence_chat' ? 'Medication check-in completed' : 'Symptom check completed',
+      detail: row.guidanceSummary || row.latestReply || row.latestMessage || 'Your AI check-in has been recorded.',
+      sourceLabel: row.sessionType === 'adherence_chat' ? 'Medication support' : 'Symptom checker',
+      actionLabel: row.requiresClinicianFollowUp ? 'Review follow-up' : 'View history',
+      actionTarget: 'PHCompanion',
+      entityId: row.id,
+      createdAt: this.toIsoOrNull(row.createdAt),
+    }));
+
+    const escalationRows = (escalations || []).map((row: any) => ({
+      id: row.id,
+      kind: 'escalation',
+      urgency: row.severity || 'urgent',
+      status: row.status,
+      occurredAt: this.toIsoOrNull(row.createdAt),
+      title: row.status === 'resolved' ? 'Care team follow-up resolved' : 'Care team follow-up escalated',
+      detail: row.recommendedAction || row.triggerSummary || 'Your care team has been alerted.',
+      sourceLabel: row.sourceType || 'Escalation',
+      actionLabel: 'Check status',
+      actionTarget: 'PHCompanion',
+      entityId: row.id,
+      createdAt: this.toIsoOrNull(row.createdAt),
+      resolvedAt: this.toIsoOrNull(row.resolvedAt),
+    }));
+
+    const consultationRows = (consultations || []).map((row: any) => ({
+      id: row.id,
+      kind: 'telemedicine',
+      urgency: 'routine',
+      status: row.status,
+      occurredAt: this.toIsoOrNull(row.scheduledAt),
+      scheduledAt: this.toIsoOrNull(row.scheduledAt),
+      title: row.status === 'completed' ? 'Telemedicine visit completed' : 'Telemedicine visit scheduled',
+      detail: [row.doctorName, row.roomStatus].filter(Boolean).join(' · ') || 'Telemedicine consultation',
+      sourceLabel: 'Telemedicine',
+      actionLabel: row.status === 'scheduled' || row.status === 'in_progress' ? 'Open visit' : 'View details',
+      actionTarget: 'PHTelemedicine',
+      entityId: row.id,
+      createdAt: this.toIsoOrNull(row.scheduledAt),
+    }));
+
+    const postVisitRows = (postVisitSessions || []).map((row: any) => ({
+      id: row.id,
+      kind: 'post_visit',
+      urgency: 'routine',
+      status: row.status,
+      occurredAt: this.toIsoOrNull(row.publishedAt || row.updatedAt),
+      publishedAt: this.toIsoOrNull(row.publishedAt),
+      title: 'Post-visit plan ready',
+      detail: [row.doctorName, row.sourceType].filter(Boolean).join(' · ') || 'Your visit plan is ready to review.',
+      sourceLabel: 'Post-visit companion',
+      actionLabel: 'Review plan',
+      actionTarget: 'PHPostVisit',
+      entityId: row.id,
+      createdAt: this.toIsoOrNull(row.publishedAt || row.updatedAt),
+    }));
+
+    const notificationRows = (notifications || []).map((row: any) => ({
+      id: row.id,
+      kind: 'reminder',
+      urgency: row.notificationType === 'alert' ? 'urgent' : 'routine',
+      status: row.read ? 'read' : 'unread',
+      occurredAt: this.toIsoOrNull(row.sentAt),
+      sentAt: this.toIsoOrNull(row.sentAt),
+      title: row.title || 'Care reminder',
+      detail: row.message || 'You have a new update from your care team.',
+      sourceLabel: row.notificationType || 'Notification',
+      actionLabel: row.read ? 'Viewed' : 'Open notice',
+      actionTarget: 'PHNotifications',
+      entityId: row.id,
+      createdAt: this.toIsoOrNull(row.sentAt),
+    }));
+
+    const timeline = [
+      ...followupRows,
+      ...sessionRows,
+      ...escalationRows,
+      ...consultationRows,
+      ...postVisitRows,
+      ...notificationRows,
+    ]
+      .sort((a, b) => this.pickTimelineTimestamp(b) - this.pickTimelineTimestamp(a))
+      .slice(0, 20);
+
+    const nextActions = [
+      ...followupRows.filter((item: any) => item.status === 'open' || item.status === 'in_progress'),
+      ...consultationRows.filter((item: any) => ['scheduled', 'in_progress'].includes(String(item.status || '').toLowerCase())),
+      ...postVisitRows.slice(0, 1),
+      ...notificationRows.filter((item: any) => item.status === 'unread'),
+    ]
+      .sort((a, b) => {
+        const urgencyDelta = this.urgencyRank(a.urgency) - this.urgencyRank(b.urgency);
+        if (urgencyDelta !== 0) return urgencyDelta;
+        const aTime = this.pickTimelineTimestamp(a);
+        const bTime = this.pickTimelineTimestamp(b);
+        return aTime - bTime;
+      })
+      .slice(0, 4)
+      .map((item: any) => ({
+        id: item.id,
+        kind: item.kind,
+        title: item.title,
+        detail: item.detail,
+        urgency: item.urgency,
+        dueAt: item.dueAt || item.scheduledAt || item.publishedAt || item.sentAt || item.occurredAt || null,
+        actionLabel: item.actionLabel,
+        actionTarget: item.actionTarget,
+        entityId: item.entityId,
+      }));
+
+    const unreadNotifications = notificationRows.filter((item: any) => item.status === 'unread').length;
+    const openFollowups = followupRows.filter((item: any) => item.status === 'open' || item.status === 'in_progress');
+    const activeEscalations = escalationRows.filter((item: any) => item.status !== 'resolved' && item.status !== 'closed');
+    const upcomingConsultations = consultationRows.filter((item: any) => ['scheduled', 'in_progress'].includes(String(item.status || '').toLowerCase()));
+
+    return {
+      summary: {
+        activeFollowups: openFollowups.length,
+        urgentItems: timeline.filter((item: any) => this.urgencyRank(item.urgency) <= 1).length,
+        unreadNotifications,
+        activeEscalations: activeEscalations.length,
+        upcomingTelemedicine: upcomingConsultations.length,
+        recentPostVisits: postVisitRows.length,
+        lastActivityAt: timeline[0]?.occurredAt || timeline[0]?.dueAt || null,
+      },
+      nextActions,
+      timeline,
+    };
   }
 
   async updatePatientAiFollowup(

@@ -6,6 +6,13 @@ import { TreatmentPathwayInstance } from '../entities/treatment-pathway-instance
 import { EncounterCopilotService } from './encounter-copilot.service';
 
 describe('MOAS-06 encounter orchestration lifecycle', () => {
+  const aiSurfaceContractService = {
+    buildSurfaceMetadata: jest.fn((payload) => ({
+      aiSurface: 'encounter_copilot',
+      useCase: payload.useCase,
+      provenance: { modelId: payload.modelId, modelVersion: payload.modelVersion, provider: payload.provider, source: payload.source },
+    })),
+  };
   const smartDefaultsService = {
     getDefaults: jest.fn().mockResolvedValue({
       show_pregnancy_status: { value: false, confidence: 0.98, source: 'builtin' },
@@ -311,7 +318,7 @@ describe('MOAS-06 encounter orchestration lifecycle', () => {
       }),
     } as any;
 
-    const service = new EncounterCopilotService(smartDefaultsService as any);
+    const service = new EncounterCopilotService(smartDefaultsService as any, aiSurfaceContractService as any);
 
     const session = await service.generateSession(
       'kids-clinic',

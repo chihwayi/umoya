@@ -370,6 +370,8 @@ import { OutcomeCollectionService } from './services/outcome-collection.service'
 import { RegistrationAiService } from './services/registration-ai.service';
 import { RegistrationAiController } from './controllers/registration-ai.controller';
 import { ProactiveAiService } from './services/proactive-ai.service';
+import { AiSurfaceContractService } from './services/ai-surface-contract.service';
+import { PatientIntelligenceService } from './services/patient-intelligence.service';
 import { DicomController } from './controllers/dicom.controller';
 import { ProactiveAiController } from './controllers/proactive-ai.controller';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
@@ -553,6 +555,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
   providers: [
     AuthService,
     PatientService,
+    AiSurfaceContractService,
+    PatientIntelligenceService,
     PatientHistoryService,
     AppointmentService,
     MedicalRecordService,

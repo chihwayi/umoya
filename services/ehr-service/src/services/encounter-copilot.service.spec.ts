@@ -11,6 +11,13 @@ describe('EncounterCopilotService', () => {
       show_pregnancy_status: { value: true, confidence: 0.95, source: 'builtin' },
     }),
   });
+  const aiSurfaceContractService = {
+    buildSurfaceMetadata: jest.fn((payload) => ({
+      aiSurface: 'encounter_copilot',
+      useCase: payload.useCase,
+      provenance: { modelId: payload.modelId, modelVersion: payload.modelVersion, provider: payload.provider, source: payload.source },
+    })),
+  };
 
   const buildRepo = () => ({
     create: jest.fn((value) => value),
@@ -176,7 +183,7 @@ describe('EncounterCopilotService', () => {
       }),
     } as any;
 
-    const service = new EncounterCopilotService(smartDefaultsService as any);
+    const service = new EncounterCopilotService(smartDefaultsService as any, aiSurfaceContractService as any);
     const result = await service.generateSession(
       'kids-clinic',
       tenantDb,
@@ -219,6 +226,10 @@ describe('EncounterCopilotService', () => {
       ]),
     );
     expect(result.resultFollowupTasks).toEqual([]);
+    expect(result.aiMetadata).toEqual(expect.objectContaining({
+      aiSurface: 'encounter_copilot',
+      useCase: 'encounter_copilot',
+    }));
   });
 
   it('persists order appropriateness reviews with duplicate-medication caution and copilot alignment', async () => {
@@ -266,7 +277,7 @@ describe('EncounterCopilotService', () => {
       }),
     } as any;
 
-    const service = new EncounterCopilotService(smartDefaultsService as any);
+    const service = new EncounterCopilotService(smartDefaultsService as any, aiSurfaceContractService as any);
     const result = await service.reviewProposedOrders(
       tenantDb,
       'session-1',
@@ -382,7 +393,7 @@ describe('EncounterCopilotService', () => {
       }),
     } as any;
 
-    const service = new EncounterCopilotService(smartDefaultsService as any);
+    const service = new EncounterCopilotService(smartDefaultsService as any, aiSurfaceContractService as any);
     const result = await service.generateResultFollowupTasks(tenantDb, 'session-1', 'user-1');
 
     expect(resultFollowupRepo.save).toHaveBeenCalledWith(
@@ -591,7 +602,7 @@ describe('EncounterCopilotService', () => {
       }),
     } as any;
 
-    const service = new EncounterCopilotService(smartDefaultsService as any);
+    const service = new EncounterCopilotService(smartDefaultsService as any, aiSurfaceContractService as any);
     const result = await service.generateSession(
       'kids-clinic',
       tenantDb,

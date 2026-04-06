@@ -5,6 +5,7 @@ import { PatientService } from '../services/patient.service';
 import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { ProactiveAiService } from '../services/proactive-ai.service';
+import { PatientIntelligenceService } from '../services/patient-intelligence.service';
 
 @ApiTags('Patient Management')
 @ApiBearerAuth()
@@ -14,6 +15,7 @@ export class PatientController {
   constructor(
     private patientService: PatientService,
     private proactiveAiService: ProactiveAiService,
+    private patientIntelligenceService: PatientIntelligenceService,
   ) {}
 
   @Get()
@@ -110,6 +112,21 @@ export class PatientController {
     }
 
     return context;
+  }
+
+  @Get(':id/intelligence')
+  @ApiOperation({ summary: 'Get unified patient intelligence workspace payload' })
+  @ApiResponse({ status: 200, description: 'Patient intelligence retrieved successfully' })
+  async getPatientIntelligence(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    const tenantId = req.tenantId;
+    const actorUserId = (req as any).user?.userId ?? (req as any).user?.id ?? null;
+
+    return this.patientIntelligenceService.getPatientIntelligence(
+      id,
+      tenantId,
+      req.tenantDb,
+      actorUserId,
+    );
   }
 
   @Get('mrn/:mrn')

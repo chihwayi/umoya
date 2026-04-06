@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  AlertTriangle, Heart, Shield, Droplets, Activity, Eye,
-  Bell, X, CheckCircle, Clock, User, MapPin, Pill, ChevronDown, ChevronRight
+  AlertTriangle, Heart, Shield, Droplets, Activity,
+  Bell, X, CheckCircle, Clock, User, Pill
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 
@@ -24,6 +24,16 @@ interface SafetyAlert {
   relatedData?: any;
   whyShown?: string;
   whyNow?: string;
+  trustSummary?: {
+    sourceLabel?: string;
+    backingType?: string;
+    reviewState?: string;
+    classifierStage?: string;
+    workflowSource?: string;
+    recommendationCount?: number | null;
+    evidenceCount?: number | null;
+    riskBand?: string | null;
+  };
 }
 
 interface PatientSafetyAlertsProps {
@@ -86,10 +96,16 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                 earlyWarning: item.earlyWarning,
                 remoteMonitoring: item.remoteMonitoring,
               },
-              whyShown: item.sourceModule ? `Raised from ${item.sourceModule.replace(/_/g, ' ')} workflow.` : 'Raised from clinical escalation workflow.',
-              whyNow: item.earlyWarning?.riskLevel
-                ? `Risk level ${item.earlyWarning.riskLevel} requires nurse follow-up.`
-                : 'Escalation remains open for nurse action.',
+              whyShown:
+                item.trustSummary?.sourceLabel ||
+                (item.sourceModule ? `Raised from ${item.sourceModule.replace(/_/g, ' ')} workflow.` : 'Raised from clinical escalation workflow.'),
+              whyNow:
+                item.trustSummary?.riskBand
+                  ? `Risk band ${String(item.trustSummary.riskBand).toLowerCase()} requires clinician follow-up.`
+                  : item.earlyWarning?.riskLevel
+                    ? `Risk level ${item.earlyWarning.riskLevel} requires nurse follow-up.`
+                    : 'Escalation remains open for nurse action.',
+              trustSummary: item.trustSummary || undefined,
             }))
           : [];
         setServerEscalationAlerts(escalationAlerts);
@@ -523,7 +539,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
           filteredAlerts.map((alert) => (
             <div
               key={alert.id}
-              onClick={() => handleAcknowledge(alert.id)}
+              onClick={() => toggleAlertExpansion(alert.id)}
               className={`bg-white rounded-xl border-2 transition-all duration-200 hover:shadow-lg cursor-pointer ${
                 alert.severity === 'critical' ? 'border-red-200 bg-red-50/30' :
                 alert.severity === 'high' ? 'border-orange-200 bg-orange-50/30' :
@@ -606,6 +622,19 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                                 <p><span className="font-semibold">Why now:</span> {alert.whyNow}</p>
                               )}
                             </>
+                          )}
+                          {(alert.trustSummary?.backingType ||
+                            alert.trustSummary?.reviewState ||
+                            alert.trustSummary?.classifierStage ||
+                            alert.trustSummary?.evidenceCount != null) && (
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-[11px] text-slate-500">
+                              {alert.trustSummary?.backingType && <span>{alert.trustSummary.backingType}</span>}
+                              {alert.trustSummary?.reviewState && <span>{alert.trustSummary.reviewState}</span>}
+                              {alert.trustSummary?.classifierStage && <span>Stage: {alert.trustSummary.classifierStage}</span>}
+                              {alert.trustSummary?.evidenceCount != null && (
+                                <span>{alert.trustSummary.evidenceCount} evidence signal{alert.trustSummary.evidenceCount === 1 ? '' : 's'}</span>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}

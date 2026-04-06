@@ -11,6 +11,7 @@ import { OrderAppropriatenessReview } from '../entities/order-appropriateness-re
 import { ResultFollowupTask } from '../entities/result-followup-task.entity';
 import { TreatmentPathwayInstance } from '../entities/treatment-pathway-instance.entity';
 import { SmartDefaultsService } from './smart-defaults.service';
+import { AiSurfaceContractService } from './ai-surface-contract.service';
 
 interface EncounterCopilotRequest {
   patientId: string;
@@ -26,7 +27,22 @@ interface EncounterCopilotRequest {
 export class EncounterCopilotService {
   private readonly logger = new Logger(EncounterCopilotService.name);
 
-  constructor(private readonly smartDefaultsService: SmartDefaultsService) {}
+  constructor(
+    private readonly smartDefaultsService: SmartDefaultsService,
+    private readonly aiSurfaceContractService: AiSurfaceContractService,
+  ) {}
+
+  private buildAiMetadata() {
+    return this.aiSurfaceContractService.buildSurfaceMetadata({
+      aiSurface: 'encounter_copilot',
+      useCase: 'encounter_copilot',
+      source: 'encounter_copilot_service',
+      modelId: 'encounter_copilot_proxy',
+      modelVersion: 'encounter_copilot_proxy',
+      provider: 'local',
+      recorded: true,
+    });
+  }
 
   async generateSession(
     tenantId: string,
@@ -188,6 +204,7 @@ export class EncounterCopilotService {
       ...session,
       treatmentPathways: pathwayInstances,
       resultFollowupTasks,
+      aiMetadata: this.buildAiMetadata(),
     };
   }
 
@@ -202,7 +219,10 @@ export class EncounterCopilotService {
       take: Math.max(1, Math.min(limit, 50)),
     });
 
-    return sessions;
+    return sessions.map((session) => ({
+      ...session,
+      aiMetadata: this.buildAiMetadata(),
+    }));
   }
 
   async reviewProposedOrders(

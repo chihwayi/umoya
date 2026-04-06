@@ -833,6 +833,16 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPatientIntelligence: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/intelligence`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
       // Appointment Management
     getAppointments: async (token: string, tenantSlug: string, params?: any) => {
       const response = await ehrAxios.get('/appointments', {

@@ -57,7 +57,7 @@ export class ProactiveAiService {
       if (!patientPayload) return null;
 
       // 2. Call CDSS
-      const analysis = await this.cdssService.proactiveAnalysis(patientPayload);
+      const analysis = await this.cdssService.proactiveAnalysis(patientPayload, ctx.tenantId, db);
       if (!analysis) return null;
 
       // 3. Store snapshot (upsert — one row per patient)

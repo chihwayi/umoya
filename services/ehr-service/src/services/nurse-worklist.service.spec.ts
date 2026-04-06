@@ -137,6 +137,11 @@ describe('NurseWorklistService', () => {
     const triageOnly = await service.getDoctorSynchronizationFeed({} as any, { focus: 'triage' });
     expect(triageOnly.items).toHaveLength(1);
     expect(triageOnly.items[0].id).toBe('ed:visit-1');
+    expect(triageOnly.items[0].trustSummary).toEqual(
+      expect.objectContaining({
+        coordinationFocus: 'Triage',
+      }),
+    );
 
     const withAcknowledged = await service.getDoctorSynchronizationFeed({} as any, {
       focus: 'orders',
@@ -277,6 +282,13 @@ describe('NurseWorklistService', () => {
         patientName: 'Jane Doe',
         earlyWarning: expect.objectContaining({ totalScore: 8, riskLevel: 'high' }),
         remoteMonitoring: expect.objectContaining({ alertId: 'rma-1' }),
+        trustSummary: expect.objectContaining({
+          sourceLabel: 'Early warning deterioration signal',
+          backingType: 'Rule-backed safety escalation',
+          reviewState: 'Pending nurse review',
+          classifierStage: 'Deterioration Review',
+          riskBand: 'High',
+        }),
       }),
     );
   });
@@ -813,6 +825,16 @@ describe('NurseWorklistService', () => {
         expect.objectContaining({ rule_id: 'regimen.tb_interaction' }),
       ]),
     );
+    expect(hivRegimenItem.trustSummary).toEqual(
+      expect.objectContaining({
+        sourceLabel: 'WHO HIV regimen follow-through bundle',
+        backingType: 'Guideline-backed recommendations',
+        reviewState: 'Acknowledged clinician workflow',
+        classifierStage: 'Doctor Approved',
+        recommendationCount: 5,
+        evidenceCount: 4,
+      }),
+    );
 
     const hivPathwayItem = result.items.find(
       (item: any) => item.id === 'hiv-pathway:enroll-hiv-1:high_vl_needs_eac:2026-03-03',
@@ -903,6 +925,15 @@ describe('NurseWorklistService', () => {
           title: 'Cardiology protocol checkpoint pending',
         }),
       ]),
+    );
+    const workflowOnlyCardiologyItem = result.items.find((item: any) => item.id === 'cardiology-sync:case-1');
+    expect(workflowOnlyCardiologyItem?.trustSummary).toEqual(
+      expect.objectContaining({
+        sourceLabel: 'Shared workflow routing context',
+        backingType: 'Shared workflow routing',
+        reviewState: 'Pending nurse review',
+        classifierStage: 'Doctor Review Recommended',
+      }),
     );
   });
 

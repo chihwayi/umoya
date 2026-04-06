@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
   Pill, Baby,
-  Brain, BookOpen, Sparkles, X, Loader2, ArrowRight, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad
+  Brain, BookOpen, Sparkles, X, Loader2, Edit, UserCheck, Zap, Wind, Droplets, Eye, HeartHandshake, Salad
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -17,6 +17,7 @@ import VoiceInput from '../components/VoiceInput';
 import PatientSdohTab from '../components/PatientSdohTab';
 import CareGapPanel from '../components/CareGapPanel';
 import { PatientRiskPanel } from '../components/PatientRiskPanel';
+import PatientIntelligenceWorkspace from '../components/PatientIntelligenceWorkspace';
 import TbDashboard from '../components/TbDashboard';
 import PediatricsDashboard from '../components/PediatricsDashboard';
 import MentalHealthDashboard from '../components/MentalHealthDashboard';
@@ -95,6 +96,8 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const [aiDiagnosisResult, setAiDiagnosisResult] = useState<any | null>(null);
   const [aiSnapshotAt, setAiSnapshotAt] = useState<string | null>(null);
   const [ewsScores, setEwsScores] = useState<any[] | null>(null);
+  const [patientIntelligence, setPatientIntelligence] = useState<any | null>(null);
+  const [loadingPatientIntelligence, setLoadingPatientIntelligence] = useState(false);
 
   // Medical History State
   const [problems, setProblems] = useState<any[]>([]);
@@ -104,21 +107,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const [showAllergiesModal, setShowAllergiesModal] = useState(false);
   const [latestVitals, setLatestVitals] = useState<any>(null);
 
-  useEffect(() => {
-    if (patientId) {
-      fetchPatientDetails();
-      fetchPatientAppointments();
-      fetchLatestVitals();
-    }
-  }, [patientId]);
-
-  useEffect(() => {
-    if (activeTab === 'medical-history' && patientId) {
-      fetchMedicalHistory();
-    }
-  }, [activeTab, patientId]);
-
-  const fetchLatestVitals = async () => {
+  const fetchLatestVitals = useCallback(async () => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token || !tenantSlug || !patientId) return;
@@ -132,9 +121,9 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
     } catch (error) {
       console.error('Error fetching vitals:', error);
     }
-  };
+  }, [patientId, tenantSlug]);
 
-  const fetchMedicalHistory = async () => {
+  const fetchMedicalHistory = useCallback(async () => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token || !patientId) return;
@@ -153,9 +142,9 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
     } finally {
       setLoadingHistory(false);
     }
-  };
+  }, [patientId, showError, tenantSlug]);
 
-  const fetchPatientDetails = async () => {
+  const fetchPatientDetails = useCallback(async () => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
@@ -166,9 +155,24 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
       console.error('Error fetching patient details:', error);
       showError('Error', 'Failed to fetch patient details');
     }
-  };
+  }, [patientId, showError, tenantSlug]);
 
-  const fetchPatientAppointments = async () => {
+  const fetchPatientIntelligence = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug || !patientId) return;
+
+      setLoadingPatientIntelligence(true);
+      const response = await ehrApi.getPatientIntelligence(patientId, token, tenantSlug);
+      setPatientIntelligence(response.data || null);
+    } catch (error) {
+      console.error('Error fetching patient intelligence:', error);
+    } finally {
+      setLoadingPatientIntelligence(false);
+    }
+  }, [patientId, tenantSlug]);
+
+  const fetchPatientAppointments = useCallback(async () => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
@@ -199,7 +203,22 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, patientId, showError, tenantSlug]);
+
+  useEffect(() => {
+    if (patientId) {
+      fetchPatientDetails();
+      fetchPatientAppointments();
+      fetchLatestVitals();
+      fetchPatientIntelligence();
+    }
+  }, [fetchLatestVitals, fetchPatientAppointments, fetchPatientDetails, fetchPatientIntelligence, patientId]);
+
+  useEffect(() => {
+    if (activeTab === 'medical-history' && patientId) {
+      fetchMedicalHistory();
+    }
+  }, [activeTab, fetchMedicalHistory, patientId]);
 
 
   const getStatusColor = (status: string) => {
@@ -447,7 +466,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
         <PatientRiskPanel
           patientId={patientId!}
           token={localStorage.getItem('ehr_token') || ''}
-          snapshot={(patient as any)?.aiSnapshot || null}
+          snapshot={patientIntelligence?.proactiveSnapshot || (patient as any)?.aiSnapshot || null}
         />
       </div>
 
@@ -638,9 +657,16 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
       {/* Content */}
       <div className={embedded ? 'px-4 py-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Patient Information */}
-            <div className="lg:col-span-2 space-y-8">
+          <div className="space-y-8">
+            <PatientIntelligenceWorkspace
+              data={patientIntelligence}
+              loading={loadingPatientIntelligence}
+              onRefresh={fetchPatientIntelligence}
+            />
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Patient Information */}
+              <div className="lg:col-span-2 space-y-8">
               <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <h4 className="text-sm font-bold text-slate-900">Voice Input (L5)</h4>
@@ -710,8 +736,8 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
               </div>
             </div>
 
-            {/* Emergency Contact & Medical Aid */}
-            <div className="space-y-8">
+              {/* Emergency Contact & Medical Aid */}
+              <div className="space-y-8">
               <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-8">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-gradient-to-r from-orange-500 to-red-600 rounded-xl">
@@ -823,6 +849,7 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                   />
                 </div>
               )}
+            </div>
             </div>
           </div>
         )}
@@ -1261,6 +1288,16 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                       {typeof aiRiskResult?.overall_score === 'number' && (
                         <p className="text-xs text-slate-600 mb-2">Score: {aiRiskResult.overall_score.toFixed(1)}</p>
                       )}
+                      {(aiRiskResult?.model_id || aiRiskResult?.model_version || aiRiskResult?.confidence !== undefined) && (
+                        <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                          {(aiRiskResult?.model_id || aiRiskResult?.model_version) && (
+                            <span>Model {String(aiRiskResult?.model_id || aiRiskResult?.model_version)}</span>
+                          )}
+                          {typeof aiRiskResult?.confidence === 'number' && (
+                            <span>{Math.round(aiRiskResult.confidence * 100)}% confidence</span>
+                          )}
+                        </div>
+                      )}
                       {Array.isArray(aiRiskResult?.recommendations) && aiRiskResult.recommendations.length > 0 ? (
                         <ul className="space-y-1 text-xs text-slate-700">
                           {aiRiskResult.recommendations.slice(0, 3).map((item: any, idx: number) => (
@@ -1288,12 +1325,24 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                           Reason: {aiDiagnosisResult?.abstain_reason || 'unspecified'}
                         </p>
                       )}
+                      {(aiDiagnosisResult?.model_id || aiDiagnosisResult?.model_version || aiDiagnosisResult?.confidence !== undefined) && (
+                        <div className="mb-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                          {(aiDiagnosisResult?.model_id || aiDiagnosisResult?.model_version) && (
+                            <span>Model {String(aiDiagnosisResult?.model_id || aiDiagnosisResult?.model_version)}</span>
+                          )}
+                          {typeof aiDiagnosisResult?.confidence === 'number' && (
+                            <span>{Math.round(aiDiagnosisResult.confidence * 100)}% confidence</span>
+                          )}
+                        </div>
+                      )}
                       {Array.isArray(aiDiagnosisResult?.suggested_diagnoses) && aiDiagnosisResult.suggested_diagnoses.length > 0 ? (
                         <ul className="space-y-1 text-xs text-slate-700">
                           {aiDiagnosisResult.suggested_diagnoses.slice(0, 3).map((item: any, idx: number) => (
                             <li key={`diag-${idx}`}>
                               - {item?.diagnosis || item?.name || 'Possible diagnosis'}
                               {typeof item?.probability === 'number' ? ` (${Math.round(item.probability * 100)}%)` : ''}
+                              {item?.urgency ? ` · ${String(item.urgency).replace(/_/g, ' ')}` : ''}
+                              {item?.nextStep ? ` · Next: ${item.nextStep}` : ''}
                             </li>
                           ))}
                         </ul>

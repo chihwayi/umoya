@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, ChevronDown, ChevronUp, BookOpen, ThumbsUp, ThumbsDown, AlertTriangle } from 'lucide-react';
+import { Brain, ChevronDown, ChevronUp, BookOpen, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { CdssBaseResponse, confidenceBand, CONFIDENCE_BAND_META } from '../types/cdss';
 import { ehrAxios } from '../services/api';
 import { AbstentionBanner } from './AbstentionBanner';
@@ -47,6 +47,25 @@ export const AiOutputWrapper: React.FC<AiOutputWrapperProps> = ({
   const band = certainty_level ?? confidenceBand(confidence);
   const bandMeta = CONFIDENCE_BAND_META[band];
   const confidencePct = confidence !== undefined ? `${Math.round(confidence * 100)}%` : null;
+
+  const getFreshnessMeta = (status?: string | null) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'fresh') return { label: 'Fresh', className: 'bg-emerald-900/25 text-emerald-200 border-emerald-700/40' };
+    if (normalized === 'aging') return { label: 'Aging', className: 'bg-amber-900/25 text-amber-200 border-amber-700/40' };
+    if (normalized === 'stale') return { label: 'Stale', className: 'bg-rose-900/25 text-rose-200 border-rose-700/40' };
+    if (normalized === 'fallback') return { label: 'Fallback', className: 'bg-slate-800 text-slate-200 border-slate-700' };
+    return null;
+  };
+
+  const getScopeMeta = (citation: any) => {
+    const explicitScope = String(citation?.metadata?.source_scope || '').toLowerCase();
+    if (explicitScope === 'tenant') return { label: 'Local', className: 'bg-teal-900/25 text-teal-200 border-teal-700/40' };
+    if (explicitScope === 'shared') return { label: 'Shared', className: 'bg-indigo-900/25 text-indigo-200 border-indigo-700/40' };
+    if (explicitScope === 'fallback') return { label: 'Fallback', className: 'bg-slate-800 text-slate-200 border-slate-700' };
+    if (citation?.metadata?.tenant_source) return { label: 'Local', className: 'bg-teal-900/25 text-teal-200 border-teal-700/40' };
+    if (citation?.metadata?.governed_source) return { label: 'Shared', className: 'bg-indigo-900/25 text-indigo-200 border-indigo-700/40' };
+    return null;
+  };
 
   const handleFeedback = async (type: 'helpful' | 'not_helpful') => {
     setFeedbackSent(type);
@@ -132,25 +151,52 @@ export const AiOutputWrapper: React.FC<AiOutputWrapperProps> = ({
         <div className="border-b border-purple-800/30 px-3 py-2 space-y-2 bg-purple-950/30">
           {[...citations]
             .sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0))
-            .map((c, i) => (
-              <div key={i} className="text-xs">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {(c.isPrimary || i === 0) && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-800/60 text-purple-200 font-medium shrink-0">
-                      Primary
-                    </span>
+            .map((c, i) => {
+              const freshnessMeta = getFreshnessMeta(c.metadata?.freshness_status);
+              const scopeMeta = getScopeMeta(c);
+
+              return (
+                <div key={i} className="text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {(c.isPrimary || i === 0) && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-800/60 text-purple-200 font-medium shrink-0">
+                        Primary
+                      </span>
+                    )}
+                    {scopeMeta && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${scopeMeta.className}`}>
+                        {scopeMeta.label}
+                      </span>
+                    )}
+                    {freshnessMeta && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${freshnessMeta.className}`}>
+                        {freshnessMeta.label}
+                      </span>
+                    )}
+                    <span className="font-medium text-gray-200">{c.title}</span>
+                    <span className="text-gray-500">· {c.source}</span>
+                    {c.relevanceScore !== undefined && (
+                      <span className="text-gray-500 ml-auto">{Math.round(c.relevanceScore * 100)}% relevant</span>
+                    )}
+                  </div>
+                  {c.excerpt && (
+                    <p className="text-gray-400 mt-0.5 line-clamp-2">{c.excerpt}</p>
                   )}
-                  <span className="font-medium text-gray-200">{c.title}</span>
-                  <span className="text-gray-500">· {c.source}</span>
-                  {c.relevanceScore !== undefined && (
-                    <span className="text-gray-500 ml-auto">{Math.round(c.relevanceScore * 100)}% relevant</span>
+                  {(c.metadata?.source_version || c.metadata?.release_version || c.metadata?.effective_date || c.metadata?.reviewed_at) && (
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
+                      {c.metadata?.source_version && <span>Version {c.metadata.source_version}</span>}
+                      {c.metadata?.release_version && <span>Release {c.metadata.release_version}</span>}
+                      {c.metadata?.effective_date && (
+                        <span>Effective {new Date(c.metadata.effective_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      )}
+                      {c.metadata?.reviewed_at && (
+                        <span>Reviewed {new Date(c.metadata.reviewed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      )}
+                    </div>
                   )}
                 </div>
-                {c.excerpt && (
-                  <p className="text-gray-400 mt-0.5 line-clamp-2">{c.excerpt}</p>
-                )}
-              </div>
-            ))}
+              );
+            })}
         </div>
       )}
 

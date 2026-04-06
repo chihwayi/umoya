@@ -44,6 +44,17 @@ export interface NurseCrossModuleFeedItem {
   completed_by_name?: string | null;
   note?: string | null;
   metadata?: Record<string, any> | null;
+  trustSummary?: {
+    sourceLabel?: string | null;
+    backingType?: string | null;
+    reviewState?: string | null;
+    classifierStage?: string | null;
+    workflowSource?: string | null;
+    coordinationFocus?: string | null;
+    recommendationCount?: number | null;
+    evidenceCount?: number | null;
+    lastActorRole?: string | null;
+  } | null;
   next_route?: {
     section?: string;
     tab?: string;
@@ -420,6 +431,43 @@ export default function NurseCrossModuleEscalations({
                         <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2">
                           <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Recommended Next Step</p>
                           <p className="text-sm text-indigo-900 mt-1">{item.recommended_action}</p>
+                        </div>
+                      )}
+
+                      {item.trustSummary && (
+                        <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                            Trust & Review
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                            {item.trustSummary.sourceLabel && (
+                              <span>Source: {item.trustSummary.sourceLabel}</span>
+                            )}
+                            {item.trustSummary.backingType && (
+                              <span>{item.trustSummary.backingType}</span>
+                            )}
+                            {item.trustSummary.reviewState && (
+                              <span>{item.trustSummary.reviewState}</span>
+                            )}
+                            {item.trustSummary.classifierStage && (
+                              <span>Stage: {item.trustSummary.classifierStage}</span>
+                            )}
+                            {item.trustSummary.workflowSource && (
+                              <span>Context: {item.trustSummary.workflowSource}</span>
+                            )}
+                            {item.trustSummary.coordinationFocus && (
+                              <span>Focus: {item.trustSummary.coordinationFocus}</span>
+                            )}
+                            {item.trustSummary.recommendationCount != null && (
+                              <span>{item.trustSummary.recommendationCount} action{item.trustSummary.recommendationCount === 1 ? '' : 's'}</span>
+                            )}
+                            {item.trustSummary.evidenceCount != null && (
+                              <span>{item.trustSummary.evidenceCount} citation{item.trustSummary.evidenceCount === 1 ? '' : 's'}</span>
+                            )}
+                            {item.trustSummary.lastActorRole && (
+                              <span>Last actor: {item.trustSummary.lastActorRole}</span>
+                            )}
+                          </div>
                         </div>
                       )}
 

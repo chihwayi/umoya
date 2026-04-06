@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { TerminologyService } from './terminology.service';
 import { CdssService } from './cdss.service';
+import { AiSurfaceContractService } from './ai-surface-contract.service';
 import {
   CreateOncologyImagingFindingDto,
   CreateOncologyPathologyDto,
@@ -45,6 +46,7 @@ export class OncologyService {
     private readonly financeService: FinanceService,
     private readonly terminologyService: TerminologyService,
     private readonly cdssService: CdssService,
+    @Optional() private readonly aiSurfaceContractService?: AiSurfaceContractService,
   ) {}
 
   private extractConceptId(candidate: any): string | null {
@@ -3474,6 +3476,134 @@ export class OncologyService {
         primaryDiagnosis: caseRow.primary_diagnosis,
       },
       protocolBundle: bundle,
+    };
+  }
+
+  async getMobileProtocolSnapshot(tenantDb: DataSource) {
+    const generatedAt = new Date().toISOString();
+    const aiMetadata = this.aiSurfaceContractService?.buildSurfaceMetadata({
+      aiSurface: 'oncology_mobile_intelligence',
+      useCase: 'oncology_protocol_mobile',
+      source: 'oncology_protocol_bundle',
+      modelId: 'oncology_protocol_bundle_proxy',
+      modelVersion: 'oncology_protocol_bundle_proxy',
+      provider: 'local',
+      recorded: true,
+    }) || {
+      aiSurface: 'oncology_mobile_intelligence',
+      useCase: 'oncology_protocol_mobile',
+      provenance: {
+        modelId: 'oncology_protocol_bundle_proxy',
+        modelVersion: 'oncology_protocol_bundle_proxy',
+        provider: 'local',
+        source: 'oncology_protocol_bundle',
+      },
+      audit: {
+        modelRegistry: 'ai_model_audit_registry',
+        promptAuditLog: 'prompt_audit_log',
+        requestId: null,
+        recorded: false,
+      },
+      monitoring: {
+        metricsSurface: 'oncology_mobile_intelligence',
+        offlineEvalSupported: false,
+        releaseGateSupported: false,
+      },
+      controls: {
+        disablePaths: ['mobile specialty card disable'],
+        rollbackPaths: ['feature rollback'],
+      },
+    };
+
+    const activeCases = await this.listCases(tenantDb, { status: 'active' });
+    const selectedCase = activeCases.cases?.[0] || null;
+
+    if (!selectedCase) {
+      return {
+        generatedAt,
+        summary: 'No active oncology cases require mobile action right now.',
+        activeCase: null,
+        protocol: null,
+        treatmentRecommendation: null,
+        surveillance: {
+          overdueCount: 0,
+          nextOverdueDate: null,
+        },
+        aiMetadata: {
+          ...aiMetadata,
+          governed: true,
+          generatedAt,
+        },
+      };
+    }
+
+    const [protocolResponse, treatmentResponse, surveillanceResponse] = await Promise.all([
+      this.getProtocolAutomationBundle(tenantDb, selectedCase.id),
+      this.generateTreatmentRecommendations(tenantDb, selectedCase.id),
+      this.generateSurveillanceReminders(tenantDb, selectedCase.id),
+    ]);
+
+    const protocolBundle = protocolResponse?.protocolBundle || null;
+    const pendingItems = Array.isArray(protocolBundle?.items)
+      ? protocolBundle.items.filter((item: any) => item?.execution_status !== 'completed')
+      : [];
+    const nextAction = pendingItems[0] || null;
+    const topRecommendation = Array.isArray(treatmentResponse?.recommendations)
+      ? treatmentResponse.recommendations[0] || null
+      : null;
+    const overdueItems = Array.isArray(surveillanceResponse?.overdue) ? surveillanceResponse.overdue : [];
+
+    return {
+      generatedAt,
+      summary: nextAction?.rationale
+        || topRecommendation?.rationale
+        || 'Review the active oncology case and clear pending protocol tasks.',
+      activeCase: {
+        id: selectedCase.id,
+        patientId: selectedCase.patient_id || null,
+        patientName: selectedCase.patient_name || null,
+        diagnosis: selectedCase.primary_diagnosis || null,
+        status: selectedCase.status || null,
+        overallStage: selectedCase.overall_stage || null,
+        oncologistName: selectedCase.oncologist_name || null,
+      },
+      protocol: protocolBundle
+        ? {
+            bundleKey: protocolBundle.bundle_key || null,
+            actionableCount: Number(protocolBundle.actionable_count || 0),
+            pendingCount: Number(protocolBundle.pending_count || 0),
+            nextAction: nextAction
+              ? {
+                  id: nextAction.id,
+                  title: nextAction.title,
+                  priority: nextAction.priority || 'medium',
+                  rationale: nextAction.rationale || null,
+                }
+              : null,
+            pendingItems: pendingItems.slice(0, 3).map((item: any) => ({
+              id: item.id,
+              title: item.title,
+              priority: item.priority || 'medium',
+              rationale: item.rationale || null,
+            })),
+          }
+        : null,
+      treatmentRecommendation: topRecommendation
+        ? {
+            title: topRecommendation.title,
+            rationale: topRecommendation.rationale,
+            severity: topRecommendation.severity || 'info',
+          }
+        : null,
+      surveillance: {
+        overdueCount: overdueItems.length,
+        nextOverdueDate: overdueItems[0]?.dueDate || null,
+      },
+      aiMetadata: {
+        ...aiMetadata,
+        governed: true,
+        generatedAt,
+      },
     };
   }
 

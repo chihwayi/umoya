@@ -83,6 +83,14 @@ describe('PatientSafetyAlerts', () => {
             summary: 'Clinical escalation requires nurse action.',
             dueAt: new Date().toISOString(),
             recommendedAction: 'Review patient now.',
+            trustSummary: {
+              sourceLabel: 'Early warning deterioration signal',
+              backingType: 'Rule-backed safety escalation',
+              reviewState: 'Pending nurse review',
+              classifierStage: 'Deterioration Review',
+              riskBand: 'High',
+              evidenceCount: 1,
+            },
           },
         ],
       },
@@ -101,6 +109,14 @@ describe('PatientSafetyAlerts', () => {
     await waitFor(() => {
       expect(onAlertCountsChange).toHaveBeenCalled();
       expect(screen.queryByText('Escalate NEWS2 deterioration')).not.toBeNull();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Escalate NEWS2 deterioration'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Rule-backed safety escalation/i)).not.toBeNull();
     });
 
     const latest = onAlertCountsChange.mock.calls[onAlertCountsChange.mock.calls.length - 1][0];

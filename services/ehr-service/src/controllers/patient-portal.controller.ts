@@ -850,6 +850,18 @@ export class PatientPortalController {
     return this.patientPortalService.getPatientAiFollowups(patientId, req.tenantId);
   }
 
+  @Get('patient-ai/companion')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient AI companion timeline', description: 'Get a continuous patient-safe AI timeline with next actions, reminders, telemedicine context, and post-visit continuity' })
+  async getPatientAiCompanion(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientAiCompanion(patientId, req.tenantId);
+  }
+
   @Put('patient-ai/followups/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

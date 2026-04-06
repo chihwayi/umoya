@@ -433,26 +433,44 @@ const formatSecondMark = (value: number) => {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 };
 
-const formatSlaCountdown = (dueAt: string | null | undefined, nowEpochMs: number) => {
-  if (!dueAt) return null;
-  const dueEpochMs = new Date(dueAt).getTime();
-  if (!Number.isFinite(dueEpochMs)) return null;
-  const diffMs = dueEpochMs - nowEpochMs;
-  const absSeconds = Math.floor(Math.abs(diffMs) / 1000);
-  const hours = Math.floor(absSeconds / 3600);
-  const minutes = Math.floor((absSeconds % 3600) / 60);
-  const seconds = absSeconds % 60;
-  const clock = `${hours > 0 ? `${hours}h ` : ''}${minutes}m ${String(seconds).padStart(2, '0')}s`;
-  if (diffMs >= 0) {
-    return {
-      label: `Due in ${clock}`,
-      overdue: false,
-    };
+const formatLatency = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return null;
+  const normalized = Number(value);
+  if (normalized < 1000) return `${Math.round(normalized)}ms`;
+  return `${(normalized / 1000).toFixed(1)}s`;
+};
+
+const PostVisitAiMeta: React.FC<{ content?: Record<string, any> | null }> = ({ content }) => {
+  const grounded = content?.grounded_llm || null;
+  const aiMetadata = content?.aiMetadata || grounded?.aiMetadata || null;
+  const modelVersion = content?.model || grounded?.model || aiMetadata?.provenance?.modelVersion || null;
+  const provider = aiMetadata?.provenance?.provider || null;
+  const source = aiMetadata?.provenance?.source || null;
+  const latency = formatLatency(content?.audit?.latencyMs ?? content?.audit?.latency_ms ?? null);
+  const citationsUsed = Array.isArray(grounded?.citations_used) ? grounded.citations_used.length : 0;
+  const fallbackReason =
+    grounded?.enabled === false ? grounded?.reason || 'fallback_deterministic' : null;
+
+  if (!modelVersion && !provider && !source && !latency && !citationsUsed && !fallbackReason) {
+    return null;
   }
-  return {
-    label: `Overdue by ${clock}`,
-    overdue: true,
-  };
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+        <ShieldCheck className="h-3.5 w-3.5 text-cyan-600" />
+        <span>AI trust details</span>
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+        {modelVersion && <span>Model {modelVersion}</span>}
+        {provider && <span>Provider {provider}</span>}
+        {source && <span>Source {String(source).replace(/_/g, ' ')}</span>}
+        {latency && <span>Latency {latency}</span>}
+        {citationsUsed > 0 && <span>{citationsUsed} grounded citation{citationsUsed === 1 ? '' : 's'}</span>}
+        {fallbackReason && <span>Fallback {String(fallbackReason).replace(/_/g, ' ')}</span>}
+      </div>
+    </div>
+  );
 };
 
 const PostVisitDoctorWorkspace: React.FC = () => {
@@ -3001,6 +3019,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                             </p>
                           </div>
                         )}
+                      <PostVisitAiMeta content={visitSummaryArtifact?.content} />
                       <button
                         type="button"
                         onClick={() => handleReviewArtifact('visit_summary')}
@@ -3052,6 +3071,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Clinical note draft</p>
                       <p className="mt-1 text-xs text-slate-600">Status: {clinicalNoteDraftArtifact?.status || 'missing'}</p>
+                      <PostVisitAiMeta content={clinicalNoteDraftArtifact?.content} />
                       <button
                         type="button"
                         onClick={async () => {
@@ -3089,6 +3109,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Referral letter draft</p>
                       <p className="mt-1 text-xs text-slate-600">Status: {referralLetterDraftArtifact?.status || 'missing'}</p>
+                      <PostVisitAiMeta content={referralLetterDraftArtifact?.content} />
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         <input
                           value={draftRecipientLabel}
