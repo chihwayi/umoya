@@ -1,481 +1,418 @@
 # MediCore AI & CDSS Architecture
 
-> Faithful implementation-oriented architecture reference for the AI stack that currently exists in this repository as of April 5, 2026.
+> Code-faithful architecture guide for the AI and CDSS stack implemented in this repository as of April 7, 2026.
 
 ---
 
-## Table of Contents
+## 1. What This Document Is
 
-1. [Purpose and Scope](#purpose-and-scope)
-2. [Architectural Layers](#architectural-layers)
-3. [AI Subsystem Inventory](#ai-subsystem-inventory)
-4. [Runtime Model and Algorithm Inventory](#runtime-model-and-algorithm-inventory)
-5. [Governance and Control Plane](#governance-and-control-plane)
-6. [Canonical End-to-End AI Flows](#canonical-end-to-end-ai-flows)
-7. [Storage and Data Plane](#storage-and-data-plane)
-8. [API Surface Overview](#api-surface-overview)
-9. [Web and Mobile Consumption](#web-and-mobile-consumption)
-10. [Config-Dependent Behavior and Graceful Degradation](#config-dependent-behavior-and-graceful-degradation)
-11. [What This Document Does and Does Not Claim](#what-this-document-does-and-does-not-claim)
-12. [Update Checklist](#update-checklist)
+This document explains, in simple detail, what MediCore has actually built for AI and CDSS.
 
----
+It is meant to answer these questions clearly:
 
-## Purpose and Scope
+- What services make up the AI stack?
+- What technologies are used?
+- How does a request move from the UI to AI/CDSS and back?
+- How do knowledge retrieval, LLMs, rules, monitoring, and governance fit together?
+- What is still missing if the platform is to become even stronger?
 
-This document is intentionally not a product pitch.
+This document is intentionally implementation-oriented.
 
-It is a code-faithful description of the AI stack implemented in this repo. It covers:
-
-- the **CDSS core** running in `services/cdss-service`
-- the **EHR orchestration layer** running in `services/ehr-service`
-- the **learning, governance, monitoring, and promotion** surfaces around those models
-- the main **web and mobile consumers** of those AI capabilities
-
-The system is not a single AI pipeline. It is a layered AI platform with multiple independent but connected flows:
-
-- clinician-facing diagnosis and guideline reasoning
-- patient-facing AI interactions
-- specialty decision support
-- knowledge ingestion and retrieval
-- transcription and imaging
-- post-visit grounded drafting
-- proactive longitudinal monitoring
-- self-learning, federated learning, and release governance
-
-Where behavior is conditional on configuration, this document says so explicitly.
+It is not just a theory diagram.
 
 ---
 
-## Architectural Layers
+## 2. The Big Picture
 
+MediCore does **not** have one single AI pipeline.
+
+It has a layered AI platform made of:
+
+1. **Client surfaces**
+   - web EHR
+   - mobile app
+   - patient portal flows
+
+2. **EHR orchestration layer**
+   - NestJS services/controllers in `services/ehr-service`
+   - gathers clinical/workflow context
+   - calls CDSS
+   - persists AI artifacts
+   - turns raw AI output into product workflows
+
+3. **CDSS core platform**
+   - FastAPI app in `services/cdss-service`
+   - diagnosis support
+   - guideline retrieval
+   - governed LLM generation
+   - patient AI endpoints
+   - imaging and transcription endpoints
+   - admin/jobs/metrics/audit/model operations
+
+4. **Data and control plane**
+   - tenant PostgreSQL databases
+   - master PostgreSQL database
+   - Redis
+   - MinIO
+   - ChromaDB
+   - pgvector
+   - Ollama and optional external AI vendors
+
+The cleanest way to think about MediCore is:
+
+- **EHR is the workflow brain**
+- **CDSS is the AI runtime and policy engine**
+- **Postgres / Redis / MinIO / vector stores are the memory and control plane**
+
+---
+
+## 3. Overall Architecture
+
+```text
+Web EHR / Mobile / Patient Portal
+        |
+        v
+EHR NestJS orchestration layer
+        |
+        |-- Builds context
+        |-- Adds tenant/auth/governance headers
+        |-- Persists AI artifacts
+        |-- Creates alerts, follow-ups, tasks, queue items
+        |
+        v
+CDSS FastAPI core
+        |
+        |-- Rules
+        |-- RAG retrieval
+        |-- Optional LLM generation
+        |-- Specialty endpoints
+        |-- Patient AI endpoints
+        |-- Imaging / voice endpoints
+        |-- Feedback / retraining / model ops
+        |
+        v
+Storage and control plane
+        |
+        |-- Tenant PostgreSQL
+        |-- Master PostgreSQL
+        |-- Redis
+        |-- MinIO
+        |-- ChromaDB
+        |-- pgvector
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                           CHANNELS / CLIENTS                            │
-│                                                                          │
-│  Web EHR (broad specialty coverage)                                     │
-│  Mobile app (doctor / nurse / patient focused slices)                   │
-│  Patient portal APIs                                                     │
-└──────────────────────────────────┬───────────────────────────────────────┘
-                                   │
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                      EHR AI ORCHESTRATION LAYER                          │
-│                                                                          │
-│  NestJS services and controllers that:                                   │
-│  - gather patient / workflow context                                     │
-│  - call CDSS with auth / retry / policy                                  │
-│  - persist AI artifacts                                                   │
-│  - raise alerts / create follow-ups / expose workflow APIs               │
-│                                                                          │
-│  Examples:                                                               │
-│  CdssService, PatientAiService, ProactiveAiService,                      │
-│  EncounterCopilotService, RadiologyAiService,                            │
-│  PostVisitGroundedLlmService, ClaimsAiService,                           │
-│  RegistrationIntelligenceService, ModelRegistryService                   │
-└──────────────────────────────────┬───────────────────────────────────────┘
-                                   │
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                           CDSS CORE PLATFORM                             │
-│                                                                          │
-│  FastAPI app that provides:                                              │
-│  - knowledge retrieval and RAG                                            │
-│  - diagnosis, risk, dosing, lab, medication support                      │
-│  - governed LLM JSON/text generation                                     │
-│  - voice and image analysis                                               │
-│  - specialty clinical endpoints                                           │
-│  - feedback capture, self-learning, federated hooks                      │
-│  - admin, metrics, audit, model and use-case governance                  │
-└──────────────────────────────────┬───────────────────────────────────────┘
-                                   │
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                            DATA / CONTROL PLANE                          │
-│                                                                          │
-│  Tenant PostgreSQL DBs        Master DB                                  │
-│  Redis                        MinIO                                      │
-│  ChromaDB                     pgvector                                   │
-│  Knowledge registry           Model registry / use-case policy tables    │
-│  Ollama (primary local LLM)   Optional external services where enabled   │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-The critical distinction is:
-
-- **CDSS core** is the central AI runtime and policy engine
-- **EHR orchestration** turns those model calls into product workflows
-- **clients** consume curated workflow outputs, not raw model primitives
 
 ---
 
-## AI Subsystem Inventory
+## 4. Main Services And Their Jobs
 
-### 1. CDSS Core Platform
+### 4.1 CDSS Core
 
-The FastAPI application in `services/cdss-service/main.py` currently exposes **153** declared routes. Its responsibilities go well beyond classic diagnosis support.
+The CDSS service in `services/cdss-service/main.py` is the main AI runtime.
 
-Main CDSS capability families:
+It currently handles:
 
-- **Health and admin**
-  - `/health`
-  - `/admin/settings`
-  - `/admin/models`
-  - `/admin/ai-vendors`
-  - `/admin/ai-usecases`
-  - `/admin/jobs`
-  - `/admin/metrics`
-  - `/admin/audit`
+- diagnosis support
+- guideline search
+- patient summarization
+- risk scoring
+- labs / medication / dosing support
+- patient AI endpoints
+- governed JSON/text generation
+- registration document intelligence
+- clinical code extraction
+- imaging analysis
+- transcription
+- specialty AI/CDSS endpoints
+- admin settings/jobs/metrics/audit
+- feedback, self-learning, federated learning, model versioning
 
-- **Knowledge and retrieval**
-  - `/admin/ingest`
-  - `/admin/reindex`
-  - `/knowledge/registry/status`
-  - `/knowledge/registry/releases`
-  - `/knowledge/ingest`
-  - `/knowledge/search`
-  - `/guidelines/search`
-  - `/guidelines/check`
+This means CDSS is not just “the diagnosis service”.
+It is the AI platform backend for a large part of MediCore.
 
-- **Core CDSS reasoning**
-  - `/diagnosis/suggest`
-  - `/diagnosis/suggest/intelligent`
-  - `/patient/summarize`
-  - `/risk/calculate`
-  - `/risk/deterioration`
-  - `/risk/deterioration/ml`
-  - `/risk/readmission`
-  - `/care-gaps/detect`
-  - `/care-gaps/batch-detect`
-  - `/labs/interpret`
-  - `/labs/critical-check`
-  - `/dosing/recommend`
-  - `/drugs/interactions/advanced`
-  - `/medications/duplicates`
-  - `/medications/high-risk`
-  - `/medications/food-interactions`
+### 4.2 EHR Orchestration
 
-- **LLM and structured generation**
-  - `/governed/json`
-  - `/education/generate`
-  - `/registration/documents/analyze`
-  - `/nlp/extract-codes`
+The EHR service in `services/ehr-service` is where raw AI output becomes usable product behavior.
 
-- **Voice and imaging**
-  - `/transcribe`
-  - `/transcribe/basic`
-  - `/transcription/stream`
-  - `/analyze-image`
-  - `/radiology/analyze`
-  - `/cdss/imaging/attention-map`
+Important orchestration services include:
 
-- **Patient and guided assistant surfaces**
-  - `/symptom-check`
-  - `/patient/adherence-chat`
-  - `/patient/analyze/proactive`
+- `CdssService`
+  - central CDSS client
+  - shared auth, retry, timeout, policy behavior
 
-- **Order, nursing, medication, discharge intelligence**
-  - `/order/suggest-sets`
-  - `/order/imaging-appropriateness`
-  - `/order/prior-auth-predict`
-  - `/nursing/care-plan`
-  - `/nursing/sbar`
-  - `/nursing/fall-risk`
-  - `/nursing/wound-staging`
-  - `/medication/reconciliation`
-  - `/medication/pdmp-check`
-  - `/discharge/intelligence`
-  - `/discharge/follow-up-timing`
-
-- **Self-learning and model operations**
-  - `/feedback/outcome`
-  - `/feedback/outcome/summary`
-  - `/feedback/outcome/review/{entry_id}`
-  - `/feedback/outcome/learning/claim`
-  - `/feedback/outcome/batch-collect`
-  - `/feedback/outcome/learning/accept-batch`
-  - `/feedback/outcome/learning/retrain`
-  - `/self-learning/shadow-eval`
-  - `/self-learning/bias-audit`
-  - `/self-learning/audit-anomaly`
-  - `/fl/train-local`
-  - `/fl/evaluate`
-  - `/fl/aggregate`
-  - `/fl/model-version`
-  - `/model/load`
-  - `/model/status`
-  - `/model/performance`
-
-- **Specialty CDSS families**
-  - TB, HIV, mental health, malaria, geriatrics, neurology, pulmonology
-  - nephrology, dermatology, palliative care, nutrition, ICU
-  - PGx, formulary optimization, scheduling, IoT analysis
-  - antimicrobial support, SDOH, trials, supply chain
-  - claims denial prediction and appeal drafting
-
-This means the CDSS is not just a search + diagnosis service. It is the central AI runtime for a large portion of the product.
-
-### 2. EHR AI Orchestration Layer
-
-The NestJS EHR service wraps CDSS into concrete workflows and also contains AI-specific orchestration that is not simply a thin proxy.
-
-Key implemented orchestration subsystems:
-
-| Subsystem | Primary implementation role |
-|---|---|
-| `CdssService` | Central CDSS client with auth headers, retries, circuit behavior, and shared request policy |
-| `KnowledgeIngestService` | Stores tenant clinical documents in MinIO and triggers tenant-scoped CDSS ingestion |
-| `TranscriptionService` | Chooses local whisper path first, can fall back to OpenAI Whisper where configured |
-| `RadiologyAiService` | Registers studies, triggers asynchronous CDSS analysis, persists findings, broadcasts critical alerts |
-| `PatientAiService` | Orchestrates symptom checking, adherence chat, escalation, follow-up workflows, and audit |
-| `ProactiveAiService` | Produces patient AI snapshots, active alerts, and risk history for longitudinal monitoring |
-| `EncounterCopilotService` | Builds encounter sessions from longitudinal chart context, smart defaults, care gaps, pathways, and follow-up tasks |
-| `PostVisitGroundedLlmService` | Runs governed post-visit drafting: patient answers, doctor polish, escalation classification, referral letters, clinical notes |
-| `RegistrationIntelligenceService` | Handles duplicate detection, intake assessment, eligibility verification, document extraction |
-| `RegistrationAiService` | Additional registration-oriented AI helpers used by intake flows |
-| `ClaimsAiService` | Denial risk scoring, appeal drafting, override handling, PDMP risk checks |
-| `PredictiveRiskService` | Deterioration and readmission predictions/history surfaces |
-| `RiskStratificationService` | Batch and patient-level risk tiering |
-| `FederatedLearningService` | Creates and tracks FL rounds, submissions, and promotion inputs |
-| `ModelRegistryService` | Promotion, rollback, model cards, history, shadow-evaluation governance |
-| `ModelMonitoringService` | Metrics, fairness, offline eval runs, release gates, readiness, AI ops reporting |
-| `AiExplainabilityService` | Audit history, override capture, recommendation display tracking |
-| `WhoSmartGuidelinesService` | WHO Smart Guideline workflow surfaces distinct from raw CDSS RAG |
-
-### 3. Workflow-Centric AI Subsystems
-
-Several AI capabilities are product workflows in their own right and should be understood as such:
-
-- **Patient AI**
-  - symptom triage
-  - adherence support
-  - escalation routing
+- `PatientAiService`
+  - symptom checks
+  - adherence chat
+  - escalation creation
   - follow-up orchestration
 
-- **Proactive AI**
-  - longitudinal patient snapshot generation
-  - active alert surfacing
-  - risk history tracking
+- `ProactiveAiService`
+  - longitudinal patient analysis
+  - patient AI snapshots
+  - risk trend and alert surfacing
 
-- **Encounter Copilot**
-  - contextual summary generation
+- `EncounterCopilotService`
+  - encounter summary
   - suggested orders
-  - likely care gaps
   - pathway recommendations
-  - order appropriateness review
-  - result follow-up task generation
+  - care-gap-aware workflow support
 
-- **Post-Visit AI**
-  - grounded patient Q&A
-  - clinician-facing draft polishing
-  - escalation classification
-  - referral letter drafting
-  - clinical note drafting
-
-- **Radiology AI**
+- `RadiologyAiService`
   - study registration
-  - asynchronous inference
-  - result persistence
+  - async AI analysis
+  - finding persistence
   - critical alert broadcast
-  - radiologist review loop
 
-These are not fully represented by a single RAG diagram. They have their own persistence, routing, and governance behavior.
+- `PostVisitGroundedLlmService`
+  - doctor polish
+  - patient answers
+  - escalation classification
+  - referral letters
+  - clinical notes
 
----
+- `RegistrationIntelligenceService`
+  - intake document understanding
+  - duplicate review
+  - registration normalization
 
-## Runtime Model and Algorithm Inventory
+- `ClaimsAiService`
+  - denial prediction
+  - appeals drafting
+  - finance/claims AI orchestration
 
-This section distinguishes between:
+- `KnowledgeIngestService`
+  - tenant document upload
+  - MinIO storage
+  - tenant-scoped CDSS ingestion
 
-- true ML / transformer models
-- classical ML
-- retrieval algorithms
-- governed rule systems
-- orchestration logic around those models
+- `ModelMonitoringService`
+  - metrics
+  - fairness
+  - release gates
+  - offline evals
+  - readiness
 
-### Retrieval and Search
+- `ModelRegistryService`
+  - promotion
+  - rollback
+  - shadow evaluation governance
 
-| Component | Runtime role |
-|---|---|
-| `sentence-transformers/all-MiniLM-L6-v2` | Query and chunk embeddings for semantic retrieval |
-| `cross-encoder/ms-marco-MiniLM-L-6-v2` | Precision reranking of retrieved candidates |
-| `rank-bm25` / BM25Okapi | Lexical keyword search |
-| Reciprocal Rank Fusion | Fuses vector and lexical ranks |
-| ChromaDB | Fast vector store and fallback retrieval layer |
-| pgvector | Persistent tenant-aware vector retrieval layer |
-| Knowledge registry | Release-reviewed fallback content layer when vector search is unavailable or empty |
-
-### Clinical NLP and Preprocessing
-
-| Component | Runtime role |
-|---|---|
-| scispaCy `en_core_sci_sm` | Primary clinical tokenization / NLP preprocessing |
-| spaCy `en_core_web_sm` | Fallback NLP |
-| NLTK assets | Sentence segmentation support for ingestion libraries |
-| custom abbreviation expansion | Query enrichment before retrieval |
-| custom metadata tagging heuristics | Domain, population, source metadata assignment |
-
-### Diagnosis and Core Clinical Reasoning
-
-| Component | Runtime role |
-|---|---|
-| `medbert/medbert-base` | Structured-data diagnosis signal when model download/use is enabled |
-| `emilyalsentzer/Bio_ClinicalBERT` | Note-text diagnosis signal when enabled |
-| rule engine | Deterministic clinical rules and symptom matching |
-| fusion engine | Combines model and rule signals |
-| Zimbabwe terminology layer | Local symptom translation and prevalence adjustment |
-
-### Voice and Imaging
-
-| Component | Runtime role |
-|---|---|
-| Faster-Whisper | Primary local transcription model in CDSS |
-| local whisper-compatible endpoints | Alternative local transcription path used by EHR orchestration |
-| OpenAI Whisper API | Optional transcription fallback when configured |
-| `openai/clip-vit-base-patch32` | Default image classification path |
-| `microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224` | Biomedical imaging alternative where enabled |
-
-### Language Models
-
-| Component | Runtime role |
-|---|---|
-| Ollama local models | Primary governed text and JSON generation path |
-| optional OpenAI vendor | Secondary governed vendor path when tenant policy allows it |
-| `governed/json` contract | Structured generation substrate used by several higher-level features |
-
-### Classical ML and Learning
-
-| Component | Runtime role |
-|---|---|
-| GradientBoostingClassifier | Local predictive model training for selected surfaces |
-| differential privacy layer | Noise applied before sharing FL metrics/artifacts |
-| FedAvg-style aggregation logic | Cross-tenant model aggregation |
-| shadow evaluation | Challenger-vs-production comparison before promotion |
-| fairness / calibration / drift checks | Release and monitoring gates |
-
-### Important Accuracy Note
-
-Not every AI surface is transformer-backed.
-
-Many surfaces in MediCore are combinations of:
-
-- governed rules
-- retrieval
-- structured heuristics
-- classical ML
-- optional LLM generation
-
-That is intentional. The platform is designed so critical workflows can still function when heavyweight models are disabled or unavailable.
+So the EHR service is not just proxying CDSS.
+It is shaping the AI into workflows clinicians and patients actually use.
 
 ---
 
-## Governance and Control Plane
+## 5. Main Technologies Used
 
-The AI control plane lives primarily in the CDSS settings provider and the surrounding EHR model operations services.
+### 5.1 Backend Frameworks
 
-### Master-DB Control Objects
+- **FastAPI** for CDSS core
+- **NestJS** for EHR orchestration
+- **TypeORM** and raw SQL in EHR
+- **psycopg2** and direct SQL in CDSS/master settings layer
 
-The CDSS settings layer creates and manages:
+### 5.2 Databases And Storage
 
-- `system_settings`
-- `cdss_admin_audit_logs`
-- `cdss_encryption_keys`
-- `cdss_admin_jobs`
-- `cdss_model_registry`
-- `cdss_tenant_policies`
-- `cdss_ai_vendor_registry`
-- `cdss_ai_usecase_policies`
+- **Tenant PostgreSQL**
+  - patient/workflow data
+  - many AI artifacts
+  - tenant-scoped knowledge metadata
+  - metrics and release data
 
-### Seeded Model Registry
+- **Master PostgreSQL**
+  - CDSS settings
+  - vendor registry
+  - use-case policy registry
+  - admin jobs
+  - audit/control objects
 
-The CDSS model registry is seeded with core runtime entries such as:
+- **MinIO**
+  - uploaded documents
+  - model artifacts
+  - binary workflow assets
 
-- `rule_engine`
-- `rag`
-- `llm_primary`
-- `llm_canary`
-- `medbert_local`
-- `clinicalbert_local`
-- `fusion_engine`
+- **Redis**
+  - cache
+  - rate limiting
+  - metrics counters
+  - queue/retry support
 
-This registry is not a complete list of every workflow surface. It is the CDSS runtime registry for central model/control-plane objects.
+### 5.3 Retrieval Stack
 
-### Seeded LLM Use-Case Policies
+- **ChromaDB**
+  - persistent local vector store
+  - fast retrieval
+  - fallback retrieval path
 
-The current seeded use-case policy set includes:
+- **pgvector**
+  - tenant-aware vector retrieval in PostgreSQL
+  - persistent relationally integrated vector search
 
-- `intelligent_diagnosis`
-- `patient_summarization`
-- `patient_adherence_chat`
-- `voice_soap_generation`
-- `guideline_analysis`
-- `patient_education_generation`
-- `clinical_code_extraction`
-- `registration_document_intelligence`
-- `post_visit_patient_answer`
-- `post_visit_doctor_polish`
-- `post_visit_escalation_classification`
-- `post_visit_referral_letter`
-- `post_visit_clinical_note`
+- **BM25 / rank-bm25**
+  - lexical retrieval
 
-Each policy can govern:
+- **Cross encoder reranking**
+  - improves precision after initial retrieval
 
-- whether the use case is enabled
-- which vendor is allowed
-- which model names are allowed
-- whether tenant context is required
-- whether prompt redaction is required
+- **Reciprocal Rank Fusion**
+  - combines lexical and semantic candidates
 
-### Safety Gate Behavior
+### 5.4 AI / ML Libraries And Models
 
-The AI safety layer is more than simple PHI redaction.
+- `sentence-transformers/all-MiniLM-L6-v2`
+  - embeddings for semantic retrieval
 
-Implemented gate behaviors include:
+- `cross-encoder/ms-marco-MiniLM-L-6-v2`
+  - reranking
 
-- input payload PHI scanning
-- confidence score calculation
-- citation count thresholds
-- contradiction detection between top diagnoses / recommendation text and retrieved citations
-- low-confidence abstention
-- replacement of blocked recommendations with clinician-escalation guidance
+- `en_core_sci_sm` / spaCy
+  - clinical NLP preprocessing when available
 
-So a “safe” response may be:
+- NLTK
+  - sentence/tokenizer assets used by ingestion stack
 
-- a normal answer
-- an abstention with reasons
-- or a downgraded recommendation instructing clinician review
+- MedBERT / ClinicalBERT
+  - optional diagnosis signal layers when enabled
 
-### Audit and Explainability
+- custom fusion engine
+  - combines rules and model signals
 
-The platform records AI behavior at multiple layers:
+- Faster-Whisper
+  - local transcription path
 
-- CDSS admin audit logs
-- AI recommendation audit history
-- override capture
-- model monitoring snapshots
-- offline eval runs
-- release-gate results
-- patient AI prompt/result audit summaries
-- post-visit LLM prompt hash / token / safety metadata
+- CLIP / BiomedCLIP
+  - imaging analysis path
 
-This means governance is not only pre-call allowlisting. It also includes post-call observability and human override recording.
+- Ollama local models
+  - primary local governed LLM path
+
+- optional OpenAI vendor path
+  - only when enabled by configuration and policy
+
+### 5.5 Security And Governance Tech
+
+- JWT-based admin and service auth
+- tenant-aware policy checks
+- prompt audit logging
+- model registry and use-case registry
+- release-gate and readiness tracking
+- safety gate / abstention / contradiction checks
 
 ---
 
-## Canonical End-to-End AI Flows
+## 6. Retrieval And Knowledge Architecture
 
-There is no single universal AI flow in MediCore. The following are the main implemented flows.
+This is one of the most important parts of the system.
 
-### 1. Clinician Diagnosis and Guideline Reasoning
+MediCore does **not** rely on “LLM alone”.
+The platform uses a retrieval stack to ground clinical answers in actual guideline content.
 
-```
-Clinician action in EHR
-  -> EHR assembles patient context
-  -> CdssService calls diagnosis / risk / guideline endpoints
-  -> CDSS runs rule / transformer / retrieval logic
-  -> optional governed LLM reasoning is applied
-  -> safety gate may pass or abstain
-  -> EHR returns structured recommendations, citations, and workflow-friendly output
+### 6.1 What Happens During Guideline Retrieval
+
+At a high level:
+
+1. A query is submitted from EHR or another AI workflow.
+2. CDSS normalizes and expands the query.
+3. Retrieval runs through:
+   - semantic vector search
+   - lexical BM25 search
+   - fusion/reranking
+4. Results are filtered by metadata and tenant context where relevant.
+5. Retrieved citations are passed into:
+   - direct grounded answers
+   - governed LLM reasoning
+   - fallback recommendation logic
+
+### 6.2 Why There Are Two Vector Layers
+
+MediCore currently uses both:
+
+- **ChromaDB**
+- **pgvector**
+
+This is intentional.
+
+#### ChromaDB is used for:
+
+- fast local vector retrieval
+- fallback retrieval when pgvector path is unavailable
+- simpler local/dev operation
+- a resilient semantic store that does not depend on tenant SQL joins
+
+#### pgvector is used for:
+
+- tenant-aware persistent vector search
+- integration with tenant relational data and metadata
+- SQL-level governance and joins
+- stronger production alignment for tenant knowledge
+
+So the architecture is:
+
+- **pgvector first where tenant-aware persistent relational retrieval matters**
+- **ChromaDB as a live fallback / secondary semantic store**
+- **BM25 as lexical support**
+- **cross-encoder reranking for precision**
+
+This gives MediCore more robustness than a single-store approach.
+
+### 6.3 Knowledge Ingestion Paths
+
+There are two important knowledge-ingestion paths:
+
+#### A. Admin full-corpus ingest
+
+This runs through CDSS admin endpoints such as:
+
+- `/admin/ingest`
+- `/admin/ingest/status/{job_id}`
+- `/admin/ingest/history`
+
+This path processes the WHO/local guideline corpus in the CDSS file area.
+
+Current behavior:
+
+- scans PDFs
+- extracts chunks
+- embeds chunks
+- upserts into vector store
+- rebuilds BM25 in-memory index
+
+Important implementation note:
+
+This path is **correct but slow**, because BM25 is rebuilt after files are added and the corpus grows over time.
+
+#### B. Tenant-scoped knowledge ingest
+
+This runs through:
+
+- EHR `KnowledgeIngestService`
+- CDSS `/knowledge/ingest`
+
+This path is used for tenant clinical knowledge documents and is a separate flow from the admin full-corpus sync.
+
+It does:
+
+1. upload in EHR
+2. MinIO persistence
+3. tenant DB metadata row
+4. CDSS chunking/embedding
+5. ingestion result + chunk count update
+
+---
+
+## 7. Main AI/CDSS Flows
+
+This is the simplest way to understand how the system works in practice.
+
+### 7.1 Diagnosis And Guideline Flow
+
+```text
+Clinician action in web/mobile
+    -> EHR collects symptoms, vitals, history, context
+    -> CdssService calls diagnosis or guideline endpoint
+    -> CDSS runs rule engine + retrieval + optional model layers
+    -> optional governed LLM step may add explanation
+    -> safety gate may pass, abstain, or downgrade output
+    -> EHR returns structured recommendation + citations + workflow actions
 ```
 
 Typical endpoints:
@@ -483,352 +420,482 @@ Typical endpoints:
 - `/diagnosis/suggest`
 - `/diagnosis/suggest/intelligent`
 - `/guidelines/search`
-- `/risk/calculate`
 - `/patient/summarize`
+- `/risk/calculate`
 
-### 2. Tenant Knowledge Ingestion
+### 7.2 Patient AI Flow
 
-```
-User uploads clinical knowledge document in EHR
-  -> EHR stores file in MinIO
-  -> EHR stores metadata in tenant DB
-  -> EHR calls CDSS knowledge ingest with tenant + file payload
-  -> CDSS extracts, chunks, embeds, and writes to vector/search stores
-  -> EHR updates document ingestion status and chunk count
-```
-
-This is distinct from the CDSS admin full-corpus ingest flow.
-
-### 3. Transcription and SOAP Generation
-
-```
-Audio enters EHR transcription flow
-  -> local whisper-compatible endpoint attempted first when configured
-  -> request may include tenant/auth headers for CDSS-backed local path
-  -> if local path fails and cloud credentials exist, OpenAI Whisper fallback may run
-  -> transcript is normalized
-  -> SOAP note may be generated through governed LLM path
+```text
+Patient submits symptom or adherence input
+    -> PatientAiService calls governed CDSS path
+    -> response is normalized into patient-safe guidance
+    -> session is persisted
+    -> escalation may be created
+    -> follow-up orchestration may be created
+    -> staff queue and patient history can reference the same trail later
 ```
 
-The important point is that transcription is multi-path, not single-vendor.
+This is not just a chatbot.
+It is a workflow with persistence, escalation, and follow-up state.
 
-### 4. Radiology AI
+### 7.3 Proactive Longitudinal AI Flow
 
-```
-Imaging study registered in EHR
-  -> study persisted with aiAnalysisRequested=true
-  -> asynchronous CDSS radiology analysis triggered
-  -> findings persisted in tenant DB
-  -> critical results can broadcast alert-delivery events
-  -> radiologist review can close the loop
-```
-
-This is more than “CLIP returns labels.” It is an asynchronous operational workflow.
-
-### 5. Patient AI: Symptom and Adherence
-
-```
-Patient submits symptoms or sends adherence message
-  -> EHR patient AI service calls governed CDSS surface
-  -> result is normalized into patient-safe safety policy
-  -> patient AI session is persisted
-  -> escalation may be created
-  -> follow-up orchestration record may be created
-  -> history remains queryable later
+```text
+Manual or scheduled patient review
+    -> ProactiveAiService analyzes longitudinal chart state
+    -> snapshot is created or refreshed
+    -> active alerts and next actions are exposed
+    -> risk trends feed clinician-facing intelligence views
 ```
 
-This workflow includes:
+This feeds the unified patient-intelligence surfaces in the product.
 
-- AI session history
-- escalation tracking
-- follow-up orchestration
-- governed prompt/result audit capture
+### 7.4 Encounter Copilot Flow
 
-### 6. Proactive Longitudinal AI
-
-```
-Manual or scheduled trigger
-  -> ProactiveAiService analyzes patient longitudinal state
-  -> patient snapshot written/read
-  -> active alerts exposed to clinician views
-  -> risk history tracked over time
+```text
+Clinician opens encounter workflow
+    -> EncounterCopilotService gathers chart, meds, allergies, vitals, gaps, ambient context
+    -> smart defaults and specialty contributors are built
+    -> suggested orders / pathway recommendations / follow-up tasks are generated
+    -> encounter copilot session is persisted
+    -> downstream review and follow-up artifacts can be created
 ```
 
-This is a longitudinal monitoring workflow, not just a point-in-time model call.
+This is one of the richest orchestration flows in the system.
 
-### 7. Encounter Copilot
+### 7.5 Radiology AI Flow
 
-```
-Clinician starts encounter copilot session
-  -> EHR gathers patient, meds, allergies, vitals, open care gaps, ambient context
-  -> specialty contributors and smart defaults are built
-  -> pathway recommendations and suggested orders are generated
-  -> session persisted with governance metadata and confidence score
-  -> downstream order appropriateness and result follow-up tasks can be generated
-```
-
-This subsystem is one of the most workflow-rich AI layers in the product.
-
-### 8. Post-Visit Grounded LLM
-
-```
-Post-visit workflow needs patient answer / doctor polish / referral / note
-  -> EHR prepares grounded context, citations, and constraints
-  -> governed JSON completion is requested through CdssService
-  -> response may abstain if context is insufficient
-  -> audit metadata and safety indicators are stored with result
+```text
+Study registered in EHR
+    -> RadiologyAiService stores study and requests AI analysis
+    -> CDSS analyzes study
+    -> findings are persisted back in tenant DB
+    -> critical findings can trigger alerts
+    -> radiologist review can close the loop
 ```
 
-Supported post-visit AI tasks include:
+This is asynchronous workflow AI, not a one-shot inference API only.
 
-- grounded patient answers
-- doctor-language polishing
+### 7.6 Post-Visit Grounded LLM Flow
+
+```text
+Post-visit workflow needs answer / note / polish / escalation classification
+    -> EHR builds grounded context and constraints
+    -> governed CDSS LLM path is called
+    -> safety gate may abstain or allow response
+    -> audit and provenance metadata are attached
+    -> result is stored and exposed to doctor/patient/escalation workflows
+```
+
+Main use cases:
+
+- patient answer drafting
+- doctor polish
 - escalation classification
-- referral letter drafting
-- clinical note drafting
+- referral letters
+- clinical notes
 
-### 9. Self-Learning, Federated Learning, and Release
+### 7.7 Registration Intelligence Flow
 
-```
-Clinician or workflow outcome captured
-  -> feedback stored with learning status
-  -> human review gate decides eligibility
-  -> batches are collected for retraining
-  -> local / federated training and evaluation run
-  -> shadow evaluation compares challenger and production
-  -> model registry and release gates decide promotion / rollback
-  -> monitoring continues after deployment
+```text
+Registration intake or document review starts
+    -> EHR registration intelligence flow checks duplicates and extracts structure
+    -> CDSS document-analysis path may be called
+    -> result is normalized back into registration workflow
+    -> staff review or downstream eligibility/intake logic uses the output
 ```
 
-This lifecycle spans both CDSS and EHR services. It is not contained in a single process.
+### 7.8 Claims AI Flow
+
+```text
+Claims / finance workflow needs denial or appeal intelligence
+    -> ClaimsAiService builds the case context
+    -> governed AI/CDSS support is applied
+    -> risk or appeal output is persisted
+    -> override / review / promotion monitoring can inspect that surface later
+```
+
+### 7.9 Learning And Model Operations Flow
+
+```text
+Clinical or workflow outcome captured
+    -> feedback stored
+    -> human review can claim/accept batches
+    -> retraining or federated evaluation may run
+    -> shadow evaluation compares challenger vs production
+    -> model registry and release gates decide promotion or rollback
+    -> AI ops monitoring tracks runtime health after deployment
+```
+
+This lifecycle spans both CDSS and EHR.
 
 ---
 
-## Storage and Data Plane
+## 8. Governance, Safety, And Monitoring
 
-### Tenant PostgreSQL Databases
+MediCore’s AI stack is not just “models + prompts”.
 
-Hold patient and workflow data plus many AI artifacts such as:
+It has a real governance/control layer.
 
-- knowledge document metadata
-- radiology studies and findings
-- encounter copilot sessions
-- patient AI sessions, escalations, and follow-up orchestrations
-- post-visit artifacts
-- model metrics and release records
+### 8.1 Control Objects
 
-### Master Database
+CDSS settings and governance tables include:
 
-Holds shared CDSS governance/control-plane state such as:
-
+- system settings
+- admin audit logs
+- admin jobs
+- model registry
 - AI vendor registry
-- AI use-case policies
-- CDSS model registry
-- CDSS admin jobs and audits
+- AI use-case policy registry
+- tenant policy registry
 
-### MinIO
+### 8.2 AI Surface Contract Layer
 
-Used for:
+The EHR service now has a shared AI surface contract system in:
 
-- uploaded knowledge documents
-- model artifacts
-- other workflow-linked binary assets
+- `services/ehr-service/src/services/ai-surface-contract.service.ts`
 
-### Redis
+Current catalogued surfaces include:
 
-Used for:
+- `cdss_diagnosis`
+- `proactive_ai`
+- `risk_tier`
+- `patient_ai`
+- `encounter_copilot`
+- `radiology_ai`
+- `post_visit_grounded_llm`
+- `registration_intelligence`
+- `claims_ai`
+- `oncology_mobile_intelligence`
 
-- query caching
-- LLM response caching
-- CDSS job queues
-- dead-letter retry patterns
+Each surface defines:
 
-### ChromaDB and pgvector
+- display name
+- description
+- use cases
+- monitoring surface
+- audit source of truth
+- disable paths
+- rollback paths
 
-These are complementary retrieval stores:
+This is important because it gives the system one consistent language for:
 
-- **ChromaDB**: fast vector retrieval and fallback
-- **pgvector**: persistent, tenant-aware retrieval
+- provenance
+- operations
+- governance
+- release decisions
 
-### Knowledge Registry
+### 8.3 Safety Behavior
 
-A versioned fallback layer for governed knowledge release content, distinct from raw ingested chunks.
+The AI safety path includes more than redaction.
 
----
+Implemented behaviors include:
 
-## API Surface Overview
+- PHI-aware request handling/redaction support
+- citation requirements
+- confidence thresholds
+- contradiction checks
+- abstention on weak grounding or low confidence
+- downgrade-to-clinician-review behavior
 
-### CDSS Platform Families
+So a “safe” answer may be:
 
-The CDSS FastAPI app currently covers these high-level families:
+- a normal grounded answer
+- a reduced-confidence answer
+- or an abstention telling the user to escalate to clinician review
 
-- health
-- admin and policy
-- ingest and jobs
-- retrieval and knowledge
-- diagnosis and risk
-- labs, dosing, medications
-- transcription and imaging
-- patient-facing AI
-- specialty decision support
-- registration / coding / education
-- claims and pharmacy intelligence
-- proactive monitoring
-- self-learning / FL / model loading / model-version lookup
+### 8.4 AI Ops And Release Readiness
 
-### EHR AI Families
+The AI Ops control tower in EHR now exposes per-surface:
 
-The EHR Nest app currently exposes or orchestrates AI through:
+- latest metrics
+- abstention rate
+- latency
+- accuracy
+- fairness gap
+- model version
+- release readiness
+- governance source of truth
+- disable and rollback paths
 
-- `cdss`
-- `knowledge`
-- `transcription`
-- `radiology-ai`
-- `patient-ai`
-- `proactive`
-- `encounter-copilot`
-- `registration-intelligence`
-- `claims`
-- `risk`
-- `fl`
-- `model-registry`
-- `model-monitoring`
-- `ai/explainability`
-- patient-portal AI and post-visit flows
-
-### Important Architectural Point
-
-The EHR API is not merely forwarding calls.
-
-It adds:
-
-- tenant DB lookups
-- persistence
-- alerting
-- follow-up orchestration
-- workflow-specific shaping of model outputs
-- release and audit surfaces
+This is one of the strongest parts of the current stack, because it turns AI into something the platform can actually operate, not just demo.
 
 ---
 
-## Web and Mobile Consumption
+## 9. What Web, Mobile, And Patient Flows Consume
 
-### Web EHR
+### 9.1 Web EHR
 
 The web app is the broadest AI consumer.
 
-It exposes a large number of specialty and operational modules, including:
+It uses AI across:
 
-- oncology
-- ophthalmology
-- emergency
-- OR / PACU
-- blood bank
-- infection control
-- sepsis
-- HIV
-- maternity
-- diabetes
-- cardiology
+- diagnosis and guideline support
+- patient intelligence
+- encounter copilot
+- post-visit drafting
 - radiology
-- telemedicine
-- population health
-- revenue cycle and claims
+- registration intelligence
+- claims and finance AI
+- specialty modules like oncology, sepsis, blood bank, OR/PACU, HIV, maternity, diabetes, cardiology, and others
 
-So the web experience acts as the main operational surface for the widest part of the AI stack.
+### 9.2 Mobile
 
-### Mobile App
+The mobile app is narrower, but now it meaningfully consumes:
 
-The mobile app is narrower and role-focused:
+- patient companion AI
+- telemedicine-related AI flows
+- patient post-visit and follow-up AI
+- selected doctor specialty micro-flows
+- mobile specialty intelligence such as oncology snapshot, sepsis, blood bank, PACU, and critical imaging slices
 
-- doctor flows
-- nurse flows
-- patient flows
+### 9.3 Patient Portal
 
-It consumes a meaningful subset of the AI stack, especially:
+The patient side consumes:
 
-- patient portal AI
-- telemedicine
-- messages
-- post-visit patient workflows
-- selected clinician decision-support slices
-
-It should be thought of as a focused companion client, not a full mirror of all web specialty modules.
-
----
-
-## Config-Dependent Behavior and Graceful Degradation
-
-Several important behaviors depend on configuration and environment.
-
-### Model Loading
-
-- MedBERT and ClinicalBERT may be disabled or not downloaded in lightweight deployments
-- image and voice models may lazy-load on first use
-- Ollama is external to the CDSS container and may be unavailable independently
-
-### Vendor and Path Selection
-
-- governed LLM use depends on use-case policy and vendor allowlists
-- transcription may use local whisper or OpenAI fallback
-- search may hit pgvector first, then knowledge registry, then ChromaDB fallback
-
-### Safety Outcomes
-
-AI surfaces may:
-
-- answer normally
-- answer with lower-confidence guidance
-- abstain
-- request clinician review
-
-### Workflow Degradation
-
-Many workflows still function in reduced mode when heavyweight AI is unavailable by falling back to:
-
-- rules
-- template logic
-- cached data
-- previously persisted artifacts
-
-That graceful degradation is part of the architecture, not an accident.
+- patient AI sessions
+- adherence/symptom workflows
+- telemedicine flows
+- post-visit and follow-up workflows
+- health-summary style AI context where exposed through patient-safe endpoints
 
 ---
 
-## What This Document Does and Does Not Claim
+## 10. Where The Current Document Was Still Weak
 
-### This document does claim
+The previous version of this document was better than before, but it still had a few weaknesses:
 
-- to describe the major AI subsystems currently implemented in this repo
-- to distinguish CDSS core from EHR orchestration
-- to document the main runtime models, governance objects, and AI flows
-- to describe config-dependent behavior where it materially changes runtime behavior
+- it read more like a subsystem inventory than a simple explanation
+- it did not explain the **why** of the dual retrieval architecture clearly enough
+- it did not clearly separate:
+  - raw model runtime
+  - EHR orchestration
+  - workflow persistence
+  - governance/control-tower behavior
+- it did not end with a concrete “what still strengthens this architecture” view
 
-### This document does not claim
-
-- that every individual endpoint is documented here in full detail
-- that every model is always loaded in every deployment
-- that all web AI capabilities have identical mobile parity
-- that every future AI subsystem will automatically fit one canonical pipeline
-
-If a new AI subsystem is added and it changes orchestration, storage, governance, or release behavior, this document should be updated.
+This version is meant to fix that.
 
 ---
 
-## Update Checklist
+## 11. What Is Still Missing Or Would Strengthen The Stack Further
 
-When adding or materially changing an AI capability, update this document if any of the following change:
+MediCore already has a strong AI/CDSS platform.
 
-- a new AI-facing controller or service is added in EHR
-- a new governed LLM use case is seeded
-- a new CDSS endpoint family is added
-- a new model vendor or model registry entry is introduced
-- a new storage table for AI artifacts is introduced
-- a new learning / monitoring / release gate is added
-- a new user-facing AI workflow appears in web, mobile, or patient portal
+What would strengthen it further:
 
-For implementation history and sprint context, see:
+### 11.1 Better Ingestion Throughput
 
-- `docs/SPRINT-ROADMAP-AI-FIRST.md`
-- `docs/AI_FIRST_MASTER_GUIDE.md`
-- `docs/History.md`
+The full admin corpus ingestion path is correct but still slow.
+
+The current implementation rebuilds BM25 in-memory during ingest, and that becomes more expensive as the corpus grows.
+
+Strong improvement:
+
+- move BM25 rebuild to the end of large ingest jobs
+- or batch rebuild after N files instead of every file
+
+### 11.2 More Explicit Dataset / Eval Coverage By Surface
+
+The platform already has release gates and offline eval support, but it would be stronger if every major surface had a clearly maintained eval dataset and visible quality target.
+
+Especially for:
+
+- patient AI
+- post-visit grounded LLM
+- registration intelligence
+- claims AI
+- oncology mobile intelligence
+
+### 11.3 More Complete AI Ops Instrumentation For Newer Surfaces
+
+The catalog now includes `oncology_mobile_intelligence`, but some newer or narrower surfaces are still more catalogued than fully instrumented.
+
+Strong improvement:
+
+- ensure every catalogued AI surface emits stable `ai_ops_metrics`
+
+### 11.4 Better Ingestion Progress Visibility
+
+The admin ingest job currently reports final completion cleanly, but its in-flight progress is still weak.
+
+Strong improvement:
+
+- persist per-file progress
+- current file
+- processed file count
+- running chunk total
+- estimated completion status
+
+### 11.5 Stronger Unified Longitudinal Intelligence
+
+MediCore has many strong AI subsystems, but the strongest future direction is still to make the whole platform feel like one coherent clinical intelligence system rather than many smart features.
+
+Strong improvement:
+
+- continue unifying patient intelligence, explainability, AI ops, and specialty surfaces under one operational language
+
+---
+
+## 12. pgvector + ChromaDB vs Elasticsearch
+
+You asked specifically for this comparison.
+
+### 12.1 What Elasticsearch Would Give
+
+If MediCore used only Elasticsearch for guideline search, the main strengths would be:
+
+- very strong lexical search
+- mature filtering and faceting
+- excellent full-text search behavior
+- operational familiarity in many enterprises
+- scalable document indexing and search
+
+If tuned well, Elasticsearch can be excellent for:
+
+- keyword search
+- metadata filters
+- phrase queries
+- operational dashboards around search content
+
+### 12.2 What Elasticsearch Alone Would Not Give As Cleanly
+
+If you used “just Elasticsearch for guidelines”, you would not automatically get the same architecture benefits MediCore currently has.
+
+Why:
+
+1. **Semantic retrieval is not the same as text search**
+   - Elasticsearch can support vector search, but then you are effectively rebuilding part of a vector stack inside Elasticsearch anyway.
+
+2. **Tenant-local relational integration is weaker than pgvector in tenant PostgreSQL**
+   - MediCore’s tenant-aware RAG needs to live close to tenant relational workflows.
+   - pgvector inside PostgreSQL fits that very naturally.
+
+3. **Local-first fallback is stronger with ChromaDB**
+   - Chroma gives a lightweight persistent semantic store that works well for local/dev/fallback usage.
+
+4. **MediCore already combines semantic + lexical + reranking**
+   - It is not choosing vectors instead of lexical search.
+   - It already uses:
+     - vector retrieval
+     - BM25 lexical retrieval
+     - reciprocal rank fusion
+     - cross-encoder reranking
+
+So the real comparison is not:
+
+- “MediCore vectors” vs “search”
+
+It is:
+
+- **MediCore hybrid retrieval stack**
+  vs
+- **Elasticsearch-only guideline search**
+
+### 12.3 Current Advantages Of MediCore’s Approach
+
+MediCore’s current stack gives these advantages:
+
+#### A. Better semantic grounding
+
+The vector path helps the system find clinically similar content even when wording is different.
+
+That matters a lot for:
+
+- symptom phrasing
+- diagnosis support
+- guideline grounding
+- patient-safe question answering
+
+#### B. Better tenant-aware knowledge architecture
+
+pgvector inside PostgreSQL fits very well with:
+
+- tenant separation
+- SQL joins
+- relational governance
+- tenant-scoped knowledge documents
+
+#### C. Better resilience
+
+Because the platform has:
+
+- pgvector
+- ChromaDB
+- BM25
+- knowledge registry fallback
+
+it can survive partial failures more gracefully than a single-store architecture.
+
+#### D. Better AI-first design
+
+Elasticsearch-only guideline search would be strongest as a search product.
+
+MediCore’s current approach is stronger as an **AI-grounding product**, because the retrieval layer is already designed to feed:
+
+- governed LLM generation
+- diagnosis support
+- patient AI
+- post-visit drafting
+- specialty guidance
+
+### 12.4 Where Elasticsearch Could Still Help
+
+This does **not** mean Elasticsearch is useless here.
+
+Elasticsearch could still add value for:
+
+- advanced lexical search and faceted admin search
+- large-scale content management
+- richer admin-side content browsing
+- operational search analytics
+
+So the fair conclusion is:
+
+- **Elastic search could strengthen the search/admin side**
+- but **it should not replace the current pgvector + ChromaDB hybrid grounding architecture outright**
+
+### 12.5 Bottom-Line Comparison
+
+If MediCore used only Elasticsearch for guidelines:
+
+- search UX might be strong
+- admin filtering might be strong
+- but AI grounding would be less naturally aligned unless vector search and reranking were re-added anyway
+
+With the current MediCore design:
+
+- pgvector gives strong tenant-aware persistent semantic retrieval
+- ChromaDB gives strong local/fallback semantic retrieval
+- BM25 gives lexical support
+- reranking improves precision
+- the whole stack is better aligned to AI/CDSS workflows than “just searchable documents”
+
+That is a real architectural advantage.
+
+---
+
+## 13. Final Assessment
+
+MediCore’s AI/CDSS architecture is already more serious than a typical “LLM added to an EHR” design.
+
+Its standout strengths today are:
+
+- layered architecture instead of one brittle AI pipeline
+- real retrieval grounding instead of LLM-only answers
+- workflow-native AI orchestration in EHR
+- governance, release, and monitoring surfaces
+- strong patient + clinician + specialty coverage
+- resilience through hybrid retrieval and graceful degradation
+
+Its main next-level improvements are:
+
+- faster large-corpus ingestion
+- stronger progress visibility during ingest
+- fuller AI ops metrics coverage for every surface
+- even tighter eval discipline across all AI surfaces
+
+In short:
+
+MediCore already has a real AI/CDSS platform.
+What remains is mostly optimization, instrumentation, and continued unification, not rebuilding the architecture from scratch.

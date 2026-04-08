@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tenantApi, cdssApi } from '../services/api';
-import { Search, ChevronLeft, ChevronRight, Building2, ArrowRight, QrCode, Database } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Building2, ArrowRight, QrCode, Database, Upload, X, FileText } from 'lucide-react';
 import { TenantQRModal } from '../components/TenantQRModal';
 
 interface Tenant {
@@ -15,39 +15,136 @@ interface Tenant {
 
 const ITEMS_PER_PAGE = 9;
 
-interface SeedProgress { seeded: number; total: number; current_label: string; started_at: number | null; finished_at: number | null; error: string | null; }
+interface IngestLiveProgress {
+  totalFiles: number;
+  processedFiles: number;
+  skippedFiles: number;
+  totalChunks: number;
+  currentFile: string | null;
+  elapsedSeconds: number;
+  status: string;
+}
 
-const SeedGuidelinesPanel: React.FC<{ status: 'idle' | 'running' | 'done' | 'error'; progress: SeedProgress; onSeed: () => void }> = ({ status, progress, onSeed }) => {
-  const [now, setNow] = React.useState(Date.now() / 1000);
-  React.useEffect(() => {
-    if (status !== 'running') return;
-    const t = setInterval(() => setNow(Date.now() / 1000), 500);
-    return () => clearInterval(t);
-  }, [status]);
-
-  const elapsed = progress.started_at ? (status === 'done' && progress.finished_at ? progress.finished_at - progress.started_at : now - progress.started_at) : 0;
-  const pct = progress.total > 0 ? Math.round((progress.seeded / progress.total) * 100) : 0;
-  const rate = elapsed > 0 && progress.seeded > 0 ? progress.seeded / elapsed : null;
-  const eta = rate && status === 'running' ? (progress.total - progress.seeded) / rate : null;
+const CDSSIngestPanel: React.FC<{
+  status: 'idle' | 'running' | 'done' | 'error';
+  progress: IngestLiveProgress | null;
+  error: string;
+  onSync: () => void;
+  onUpload: (file: File) => void;
+}> = ({ status, progress, error, onSync, onUpload }) => {
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fmt = (s: number) => s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 
+  const processed = progress?.processedFiles ?? 0;
+  const total = progress?.totalFiles ?? 0;
+  const skipped = progress?.skippedFiles ?? 0;
+  const chunks = progress?.totalChunks ?? 0;
+  const elapsed = progress?.elapsedSeconds ?? 0;
+  const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+  const rate = elapsed > 0 && processed > 0 ? processed / elapsed : null;
+  const eta = rate && status === 'running' && total > processed ? (total - processed) / rate : null;
+  const currentFileName = progress?.currentFile
+    ? progress.currentFile.split('/').pop() ?? progress.currentFile
+    : null;
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files[0];
+    if (f && f.type === 'application/pdf') setUploadFile(f);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) setUploadFile(f);
+  };
+
+  const handleConfirmUpload = () => {
+    if (uploadFile) {
+      onUpload(uploadFile);
+      setUploadFile(null);
+      setShowUpload(false);
+    }
+  };
+
   return (
     <div className="flex flex-col items-end gap-2">
-      <button
-        onClick={onSeed}
-        disabled={status === 'running'}
-        className="inline-flex items-center gap-2 rounded-full border border-[#00C896]/30 bg-[#00C896]/10 px-5 py-3 text-sm font-medium text-[#7DE8CA] transition hover:border-[#00C896]/60 hover:bg-[#00C896]/20 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {status === 'running' ? <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#00C896]" /> : <Database className="h-4 w-4" />}
-        {status === 'running' ? 'Seeding...' : status === 'done' ? 'Re-seed Guidelines' : 'Seed CDSS Guidelines'}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => { setShowUpload(v => !v); setUploadFile(null); }}
+          disabled={status === 'running'}
+          title="Upload a single updated guideline PDF"
+          className="inline-flex items-center gap-2 rounded-full border border-[#2B7FFF]/30 bg-[#2B7FFF]/10 px-4 py-3 text-sm font-medium text-[#7DB9FF] transition hover:border-[#2B7FFF]/60 hover:bg-[#2B7FFF]/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Upload className="h-4 w-4" />
+          Upload Guideline
+        </button>
+        <button
+          onClick={onSync}
+          disabled={status === 'running'}
+          className="inline-flex items-center gap-2 rounded-full border border-[#00C896]/30 bg-[#00C896]/10 px-5 py-3 text-sm font-medium text-[#7DE8CA] transition hover:border-[#00C896]/60 hover:bg-[#00C896]/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {status === 'running' ? <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#00C896]" /> : <Database className="h-4 w-4" />}
+          {status === 'running' ? 'Ingesting...' : status === 'done' ? 'Re-sync Guidelines' : 'Sync CDSS Guidelines'}
+        </button>
+      </div>
 
-      {(status === 'running' || status === 'done') && (
-        <div className="w-72 rounded-2xl border border-white/10 bg-[#0A1525]/90 p-4 shadow-lg backdrop-blur-xl">
+      {/* Single-file upload dropzone */}
+      {showUpload && status !== 'running' && (
+        <div className="w-80 rounded-2xl border border-[#2B7FFF]/20 bg-[#0A1525]/90 p-4 shadow-lg backdrop-blur-xl">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold text-[#7DB9FF]">Upload updated guideline PDF</span>
+            <button onClick={() => { setShowUpload(false); setUploadFile(null); }} className="text-[#4A6080] hover:text-white">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => !uploadFile && fileInputRef.current?.click()}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 transition ${dragOver ? 'border-[#2B7FFF]/60 bg-[#2B7FFF]/10' : 'border-white/15 hover:border-[#2B7FFF]/40'}`}
+          >
+            {uploadFile ? (
+              <div className="flex items-center gap-2 text-xs text-[#7DB9FF]">
+                <FileText className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate max-w-[200px]" title={uploadFile.name}>{uploadFile.name}</span>
+                <button onClick={e => { e.stopPropagation(); setUploadFile(null); }} className="ml-1 text-[#4A6080] hover:text-white">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <Upload className="h-6 w-6 text-[#4A6080]" />
+                <p className="text-center text-[11px] text-[#4A6080]">Drop PDF here or click to select<br /><span className="text-[#2B7FFF]/70">PDF only · max 50 MB</span></p>
+              </>
+            )}
+          </div>
+          <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={handleFileChange} />
+          {uploadFile && (
+            <button
+              onClick={handleConfirmUpload}
+              className="mt-3 w-full rounded-xl bg-[#2B7FFF] py-2 text-xs font-semibold text-white transition hover:bg-[#1a6aee]"
+            >
+              Ingest this guideline
+            </button>
+          )}
+          <p className="mt-2 text-[10px] text-[#3A5070]">Existing files are skipped automatically via SHA-256 manifest — only new or changed PDFs are re-indexed.</p>
+        </div>
+      )}
+
+      {/* Progress panel — shown while running or after completion */}
+      {(status === 'running' || status === 'done') && progress && (
+        <div className="w-80 rounded-2xl border border-white/10 bg-[#0A1525]/90 p-4 shadow-lg backdrop-blur-xl">
           <div className="mb-2 flex items-center justify-between text-xs">
-            <span className="font-semibold text-[#7DE8CA]">{status === 'done' ? 'Complete' : 'Seeding guidelines...'}</span>
-            <span className="tabular-nums text-[#7A92B8]">{progress.seeded} / {progress.total}</span>
+            <span className="font-semibold text-[#7DE8CA]">
+              {status === 'done' ? 'Ingest complete' : 'Ingesting guidelines...'}
+            </span>
+            <span className="tabular-nums text-[#7A92B8]">{processed} / {total} files</span>
           </div>
           <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
             <div
@@ -55,21 +152,37 @@ const SeedGuidelinesPanel: React.FC<{ status: 'idle' | 'running' | 'done' | 'err
               style={{ width: `${pct}%`, boxShadow: status === 'running' ? '0 0 8px rgba(0,200,150,0.6)' : 'none' }}
             />
           </div>
-          <div className="flex justify-between text-[11px] text-[#587296]">
+          <div className="mb-2 flex justify-between text-[11px] text-[#587296]">
             <span>{pct}%{status === 'running' && eta !== null ? ` · ~${fmt(eta)} left` : ''}</span>
             <span>Elapsed: {fmt(elapsed)}</span>
           </div>
-          {status === 'running' && progress.current_label && (
-            <p className="mt-2 truncate text-[11px] text-[#4A6080]" title={progress.current_label}>{progress.current_label}</p>
+          <div className="grid grid-cols-3 gap-1 rounded-xl bg-white/5 px-3 py-2 text-center text-[11px]">
+            <div>
+              <div className="font-semibold text-white">{processed}</div>
+              <div className="text-[#4A6080]">ingested</div>
+            </div>
+            <div>
+              <div className="font-semibold text-[#7A92B8]">{skipped}</div>
+              <div className="text-[#4A6080]">skipped</div>
+            </div>
+            <div>
+              <div className="font-semibold text-[#7DB9FF]">{chunks.toLocaleString()}</div>
+              <div className="text-[#4A6080]">chunks</div>
+            </div>
+          </div>
+          {status === 'running' && currentFileName && (
+            <p className="mt-2 truncate text-[11px] text-[#4A6080]" title={currentFileName}>
+              ↳ {currentFileName}
+            </p>
           )}
           {status === 'done' && (
-            <p className="mt-2 text-[11px] text-[#7DE8CA]">BM25 index rebuilt · {progress.total} chunks in ChromaDB</p>
+            <p className="mt-2 text-[11px] text-[#7DE8CA]">BM25 index rebuilt · {chunks.toLocaleString()} chunks in ChromaDB</p>
           )}
         </div>
       )}
 
-      {status === 'error' && (
-        <span className="max-w-xs text-right text-xs text-[#FF7D92]">{progress.error}</span>
+      {status === 'error' && error && (
+        <span className="max-w-xs text-right text-xs text-[#FF7D92]">{error}</span>
       )}
     </div>
   );
@@ -84,35 +197,61 @@ const TenantDirectory: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [qrTenant, setQrTenant] = useState<Tenant | null>(null);
-  const [seedStatus, setSeedStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
-  const [seedProgress, setSeedProgress] = useState<{ seeded: number; total: number; current_label: string; started_at: number | null; finished_at: number | null; error: string | null }>({ seeded: 0, total: 32, current_label: '', started_at: null, finished_at: null, error: null });
-  const seedPollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const [ingestStatus, setIngestStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [ingestProgress, setIngestProgress] = useState<IngestLiveProgress | null>(null);
+  const [ingestError, setIngestError] = useState('');
+  const ingestPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopPoll = () => { if (seedPollRef.current) { clearInterval(seedPollRef.current); seedPollRef.current = null; } };
+  const stopPoll = () => { if (ingestPollRef.current) { clearInterval(ingestPollRef.current); ingestPollRef.current = null; } };
 
-  const handleSeedGuidelines = async () => {
-    setSeedStatus('running');
-    setSeedProgress({ seeded: 0, total: 32, current_label: '', started_at: Date.now() / 1000, finished_at: null, error: null });
+  const startIngestPoll = (jobId: string) => {
+    stopPoll();
+    ingestPollRef.current = setInterval(async () => {
+      try {
+        const res = await cdssApi.getIngestStatus(jobId);
+        const d = res.data;
+        if (d.liveProgress) setIngestProgress(d.liveProgress);
+        if (d.status === 'completed' || (d.liveProgress?.status === 'completed')) {
+          stopPoll();
+          setIngestStatus('done');
+        } else if (d.status === 'error' || d.status === 'failed') {
+          stopPoll();
+          setIngestError(d.error ?? 'Ingest failed');
+          setIngestStatus('error');
+        }
+      } catch { /* poll silently */ }
+    }, 800);
+  };
+
+  const handleSync = async () => {
+    setIngestStatus('running');
+    setIngestProgress(null);
+    setIngestError('');
     stopPoll();
     try {
-      const res = await cdssApi.seedGuidelines();
-      const jobId = res.data.jobId;
-      seedPollRef.current = setInterval(async () => {
-        try {
-          const prog = await cdssApi.getSeedProgress(jobId);
-          const d = prog.data;
-          setSeedProgress({ seeded: d.seeded, total: d.total, current_label: d.current_label, started_at: d.started_at, finished_at: d.finished_at, error: d.error });
-          if (d.status === 'done') { stopPoll(); setSeedStatus('done'); }
-          if (d.status === 'error') { stopPoll(); setSeedStatus('error'); }
-        } catch { /* poll silently */ }
-      }, 500);
+      const res = await cdssApi.triggerIngest();
+      startIngestPoll(res.data.jobId);
     } catch (err: any) {
-      setSeedProgress(p => ({ ...p, error: err?.response?.data?.detail || err?.message || 'Unknown error' }));
-      setSeedStatus('error');
+      setIngestError(err?.response?.data?.detail || err?.message || 'Unknown error');
+      setIngestStatus('error');
     }
   };
 
-  React.useEffect(() => () => stopPoll(), []);
+  const handleUploadGuideline = async (file: File) => {
+    setIngestStatus('running');
+    setIngestProgress(null);
+    setIngestError('');
+    stopPoll();
+    try {
+      const res = await cdssApi.triggerIngest(file);
+      startIngestPoll(res.data.jobId);
+    } catch (err: any) {
+      setIngestError(err?.response?.data?.detail || err?.message || 'Upload failed');
+      setIngestStatus('error');
+    }
+  };
+
+  useEffect(() => () => stopPoll(), []);
 
   useEffect(() => {
     const fetchTenants = async () => {
@@ -200,10 +339,12 @@ const TenantDirectory: React.FC = () => {
                 >
                   Request test access
                 </button>
-                <SeedGuidelinesPanel
-                  status={seedStatus}
-                  progress={seedProgress}
-                  onSeed={handleSeedGuidelines}
+                <CDSSIngestPanel
+                  status={ingestStatus}
+                  progress={ingestProgress}
+                  error={ingestError}
+                  onSync={handleSync}
+                  onUpload={handleUploadGuideline}
                 />
                 <div className="relative w-full md:max-w-md">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">

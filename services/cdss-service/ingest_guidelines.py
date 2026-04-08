@@ -4,8 +4,9 @@ import glob
 import logging
 import hashlib
 import json
+import time
 import nltk
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # Ensure NLTK data is available for unstructured
 try:
@@ -38,7 +39,50 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 GUIDELINES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "who-smart-guidelines")
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
+# Manifest tracks SHA256 of every successfully ingested file so re-runs skip
+# already-ingested content and crashed runs resume from where they left off.
+_MANIFEST_PATH = os.path.join(DATA_DIR, "ingest_manifest.json")
+# Progress file is written per-file so the status endpoint can surface live state.
+_PROGRESS_PATH = os.path.join(DATA_DIR, "ingest_progress.json")
+
+
+# ---------------------------------------------------------------------------
+# Manifest helpers
+# ---------------------------------------------------------------------------
+
+def _load_manifest() -> Dict[str, str]:
+    """Returns {filename: sha256} for every file successfully ingested."""
+    try:
+        with open(_MANIFEST_PATH, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_manifest(manifest: Dict[str, str]) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(_MANIFEST_PATH, "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, indent=2, sort_keys=True)
+
+
+# ---------------------------------------------------------------------------
+# Progress helpers
+# ---------------------------------------------------------------------------
+
+def _write_progress(progress: Dict[str, Any]) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    try:
+        with open(_PROGRESS_PATH, "w", encoding="utf-8") as fh:
+            json.dump(progress, fh, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not write progress file: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Metadata quality report
+# ---------------------------------------------------------------------------
 
 def _metadata_quality_report(metadatas: List[Dict[str, Any]]) -> Dict[str, Any]:
     total = len(metadatas or [])
@@ -93,13 +137,17 @@ def _metadata_quality_report(metadatas: List[Dict[str, Any]]) -> Dict[str, Any]:
 def _write_metadata_quality_report(report: Dict[str, Any]) -> str:
     report_path = os.getenv("CDSS_INGEST_METADATA_REPORT_PATH", "").strip()
     if not report_path:
-        report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ingest_metadata_report.json")
+        report_path = os.path.join(DATA_DIR, "ingest_metadata_report.json")
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
     with open(report_path, "w", encoding="utf-8") as fh:
         json.dump(report, fh, indent=2, sort_keys=True)
     print(f"📊 Metadata quality report written: {report_path}")
     return report_path
 
+
+# ---------------------------------------------------------------------------
+# File hashing
+# ---------------------------------------------------------------------------
 
 def _sha256_file(file_path: str) -> str:
     hasher = hashlib.sha256()
@@ -110,6 +158,11 @@ def _sha256_file(file_path: str) -> str:
                 break
             hasher.update(chunk)
     return hasher.hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Domain classifier
+# ---------------------------------------------------------------------------
 
 def _classify_domain(lower_file: str, lower_text: str) -> str:
     """Classify clinical domain from filename and text keywords."""
@@ -175,6 +228,10 @@ def _classify_domain(lower_file: str, lower_text: str) -> str:
     return "general"
 
 
+# ---------------------------------------------------------------------------
+# PDF processing
+# ---------------------------------------------------------------------------
+
 def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
     """
     Uses unstructured to partition PDF and chunk by title.
@@ -184,46 +241,41 @@ def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
         import importlib
         mod = importlib.import_module("unstructured.partition.pdf")
         partition_pdf = getattr(mod, "partition_pdf")
-        
+
         logger.info(f"Partitioning PDF (Layout-Aware): {pdf_path}")
-        
-        # partition_pdf with "by_title" chunking strategy
-        # "hi_res" strategy uses layout analysis to detect tables/images (requires tesseract/poppler)
-        # Using "fast" for quicker ingestion during dev/fix
+
         elements = partition_pdf(
             filename=pdf_path,
-            strategy="fast", 
+            strategy="fast",
             infer_table_structure=False,
             chunking_strategy="by_title",
-            max_characters=1500,        # Slightly larger chunks for medical context
+            max_characters=1500,
             new_after_n_chars=2000,
             combine_text_under_n_chars=500,
             extract_images_in_pdf=False
         )
-        
+
         processed_chunks = []
         for element in elements:
             text = str(element).strip()
             if len(text) < 50:
                 continue
-                
-            # Basic metadata extraction
+
             meta = element.metadata.to_dict() if hasattr(element.metadata, "to_dict") else {}
             page_number = meta.get("page_number", 1)
             filename = os.path.basename(pdf_path)
-            
-            # Heuristic Metadata Tagging (Sprint 1 Quick Win)
+
             lower_text = text.lower()
             lower_file = filename.lower()
-            
-            target_pop = "adults" # Default
+
+            target_pop = "adults"
             if any(k in lower_file or k in lower_text for k in ["anc", "antenatal", "pregnancy", "pregnant", "maternal"]):
                 target_pop = "pregnant_women"
             elif any(k in lower_file or k in lower_text for k in ["child", "pediatric", "infant", "adolescent"]):
                 target_pop = "children"
             elif "elderly" in lower_text or "geriatric" in lower_text:
                 target_pop = "elderly"
-                
+
             domain = _classify_domain(lower_file, lower_text)
 
             processed_chunks.append({
@@ -236,15 +288,16 @@ def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
                     "clinical_domain": domain
                 }
             })
-            
+
         return processed_chunks
-        
+
     except ImportError as e:
         logger.warning(f"⚠️ 'unstructured' library missing: {e}. Falling back to pypdf.")
         return process_pdf_fallback(pdf_path)
     except Exception as e:
         logger.warning(f"Error processing PDF {pdf_path} with unstructured: {e}. Falling back to pypdf.")
         return process_pdf_fallback(pdf_path)
+
 
 def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
     """
@@ -253,26 +306,24 @@ def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
     """
     try:
         from pypdf import PdfReader
-        
+
         logger.info(f"Processing PDF with fallback (pypdf): {pdf_path}")
         reader = PdfReader(pdf_path)
-        
+
         processed_chunks = []
         filename = os.path.basename(pdf_path)
-        
+
         for page_num, page in enumerate(reader.pages):
             text = page.extract_text()
             if not text:
                 continue
-                
-            # Simple chunking by paragraphs
+
             raw_chunks = [c.strip() for c in text.split('\n\n') if len(c.strip()) > 50]
-            
+
             for chunk in raw_chunks:
-                 # Apply same heuristic tagging
                 lower_text = chunk.lower()
                 lower_file = filename.lower()
-                
+
                 target_pop = "adults"
                 if any(k in lower_file or k in lower_text for k in ["anc", "antenatal", "pregnancy", "pregnant", "maternal"]):
                     target_pop = "pregnant_women"
@@ -280,7 +331,7 @@ def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
                     target_pop = "children"
                 elif "elderly" in lower_text or "geriatric" in lower_text:
                     target_pop = "elderly"
-                    
+
                 domain = _classify_domain(lower_file, lower_text)
 
                 processed_chunks.append({
@@ -293,19 +344,24 @@ def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
                         "clinical_domain": domain
                     }
                 })
-            
+
         return processed_chunks
-        
+
     except Exception as e:
         logger.error(f"Fallback processing failed for {pdf_path}: {e}")
         return []
 
-def ingest_guidelines() -> Dict[str, Any]:
-    print(f"🚀 Starting Advanced Knowledge Ingestion (Unstructured) from {GUIDELINES_DIR}...")
-    
-    rag = RAGEngine()
-    
-    # Check if RAG engine is ready
+
+# ---------------------------------------------------------------------------
+# Main ingestion entry point
+# ---------------------------------------------------------------------------
+
+def ingest_guidelines(rag: Optional[RAGEngine] = None, job_id: Optional[str] = None) -> Dict[str, Any]:
+    start_time = time.time()
+    print(f"🚀 Starting Knowledge Ingestion from {GUIDELINES_DIR}...")
+
+    rag = rag or RAGEngine()
+
     if not rag.collection:
         print("❌ RAG Engine not initialized correctly.")
         return {
@@ -317,14 +373,11 @@ def ingest_guidelines() -> Dict[str, Any]:
             "collectionCount": 0,
         }
 
-    # Additive ingestion — never wipe. Upsert ensures idempotency.
-    # Re-ingesting the same file is safe: deterministic IDs mean duplicates are silently overwritten.
     existing_count = rag.collection.count() if rag.collection else 0
     print(f"📦 Existing ChromaDB documents: {existing_count}. Running additive/upsert ingestion.")
 
     files = glob.glob(os.path.join(GUIDELINES_DIR, "**", "*.pdf"), recursive=True)
 
-    # Full corpus is the default behavior. Targeted ingest is explicit opt-in.
     target_files_env = os.getenv("CDSS_INGEST_TARGET_FILES", "").strip()
     if target_files_env:
         target_files = [name.strip() for name in target_files_env.split(",") if name.strip()]
@@ -336,7 +389,7 @@ def ingest_guidelines() -> Dict[str, Any]:
             print("⚠️ CDSS_INGEST_TARGET_FILES is set but no matching files were found; ingesting full corpus.")
     else:
         print(f"📚 Full corpus ingestion mode. Processing {len(files)} files.")
-    
+
     if not files:
         print("❌ No PDF guideline files found.")
         return {
@@ -348,29 +401,96 @@ def ingest_guidelines() -> Dict[str, Any]:
             "collectionCount": 0,
         }
 
+    # Load SHA256 manifest — files whose hash matches are skipped (already ingested)
+    manifest = _load_manifest()
+    total_files = len(files)
+
     total_chunks = 0
+    new_chunks = 0
+    skipped_files = 0
     all_metadatas: List[Dict[str, Any]] = []
     processed_files: List[Dict[str, Any]] = []
-    
-    for file_path in files:
-        print(f"📄 Processing {os.path.basename(file_path)}...")
-        
-        # Use fallback for speed
+
+    max_bytes_raw = os.getenv("CDSS_INGEST_MAX_FILE_BYTES", "0").strip()
+    max_file_bytes = int(max_bytes_raw) if max_bytes_raw.isdigit() else 0
+
+    # Write initial progress
+    _write_progress({
+        "job_id": job_id,
+        "status": "running",
+        "total_files": total_files,
+        "processed_files": 0,
+        "skipped_files": 0,
+        "total_chunks": 0,
+        "current_file": None,
+        "started_at": start_time,
+        "elapsed_seconds": 0,
+    })
+
+    for file_index, file_path in enumerate(files):
+        filename = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+
+        # Update live progress before processing
+        _write_progress({
+            "job_id": job_id,
+            "status": "running",
+            "total_files": total_files,
+            "processed_files": file_index,
+            "skipped_files": skipped_files,
+            "total_chunks": total_chunks,
+            "current_file": filename,
+            "started_at": start_time,
+            "elapsed_seconds": round(time.time() - start_time, 1),
+        })
+
+        print(f"📄 [{file_index + 1}/{total_files}] {filename} ({file_size // 1024}KB)...")
+
+        if max_file_bytes > 0 and file_size > max_file_bytes:
+            print(f"   ⏭️ Skipping — file exceeds size limit ({file_size} > {max_file_bytes} bytes).")
+            processed_files.append({
+                "fileName": filename,
+                "filePath": file_path,
+                "sizeBytes": file_size,
+                "sha256": None,
+                "chunkCount": 0,
+                "pageCount": 0,
+                "status": "skipped_too_large",
+            })
+            skipped_files += 1
+            continue
+
+        # SHA256 skip: if hash matches the stored manifest this file is already ingested
+        file_sha256 = _sha256_file(file_path) if os.path.exists(file_path) else None
+        if file_sha256 and manifest.get(filename) == file_sha256:
+            print(f"   ✅ Already ingested (SHA256 match) — skipping.")
+            processed_files.append({
+                "fileName": filename,
+                "filePath": file_path,
+                "sizeBytes": file_size,
+                "sha256": file_sha256,
+                "chunkCount": 0,
+                "pageCount": 0,
+                "status": "skipped_already_ingested",
+            })
+            skipped_files += 1
+            continue
+
         chunks = process_pdf_fallback(file_path)
-        
+
         if not chunks:
             print("   ⚠️ No chunks extracted.")
             processed_files.append({
-                "fileName": os.path.basename(file_path),
+                "fileName": filename,
                 "filePath": file_path,
-                "sizeBytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
-                "sha256": _sha256_file(file_path) if os.path.exists(file_path) else None,
+                "sizeBytes": file_size,
+                "sha256": file_sha256,
                 "chunkCount": 0,
                 "pageCount": 0,
                 "status": "skipped_no_chunks",
             })
             continue
-            
+
         max_chunks_raw = os.getenv("CDSS_INGEST_MAX_CHUNKS_PER_FILE", "0").strip()
         max_chunks = int(max_chunks_raw) if max_chunks_raw.isdigit() else 0
         if max_chunks > 0 and len(chunks) > max_chunks:
@@ -381,50 +501,86 @@ def ingest_guidelines() -> Dict[str, Any]:
         metadatas = [c["metadata"] for c in chunks]
         all_metadatas.extend(metadatas)
         ids = []
-        
-        # Generate stable IDs
+
         for c in chunks:
-            # Create a deterministic hash of the text
             text_hash = hashlib.md5(c["text"].encode('utf-8')).hexdigest()
-            # ID format: Source_Page_Hash
             ids.append(f"{c['metadata']['source']}_p{c['metadata']['page']}_{text_hash}")
-            
-        rag.add_documents(texts, metadatas, ids, upsert=True)
+
+        # rebuild_bm25=False — BM25 is rebuilt once at the end of the full job
+        rag.add_documents(texts, metadatas, ids, upsert=True, rebuild_bm25=False)
         total_chunks += len(chunks)
-        print(f"   ✅ Added {len(chunks)} chunks. Total in DB: {rag.collection.count()}")
+        new_chunks += len(chunks)
         pages = {str((meta or {}).get("page") or "") for meta in metadatas}
         pages.discard("")
+        print(f"   ✅ Added {len(chunks)} chunks. DB total: {rag.collection.count()}")
+
+        # Record this file in the manifest now that it's successfully upserted
+        if file_sha256:
+            manifest[filename] = file_sha256
+
         processed_files.append({
-            "fileName": os.path.basename(file_path),
+            "fileName": filename,
             "filePath": file_path,
-            "sizeBytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
-            "sha256": _sha256_file(file_path) if os.path.exists(file_path) else None,
+            "sizeBytes": file_size,
+            "sha256": file_sha256,
             "chunkCount": len(chunks),
             "pageCount": len(pages),
             "status": "completed",
         })
-        
-    print(f"🎉 Ingestion Complete! Total Chunks: {total_chunks}")
+
+    # Build BM25 once after all files are processed — avoids O(n²) per-file rebuilds
+    if new_chunks > 0:
+        print("🔧 Building BM25 index (single pass over full corpus)...")
+        rag._build_bm25_index()
+        print(f"   ✅ BM25 index built.")
+
+    # Persist updated manifest
+    _save_manifest(manifest)
+
+    elapsed = round(time.time() - start_time, 1)
+    print(f"🎉 Ingestion Complete! New chunks: {new_chunks}, Skipped files: {skipped_files}, Elapsed: {elapsed}s")
+
     report = _metadata_quality_report(all_metadatas)
-    print(
-        "📈 Metadata coverage:",
-        json.dumps(
-            {
-                "field_coverage": report.get("field_coverage", {}),
-                "unknown_target_population_rate": report.get("unknown_target_population_rate"),
-                "unknown_clinical_domain_rate": report.get("unknown_clinical_domain_rate"),
-            },
-            sort_keys=True,
-        ),
-    )
+    if all_metadatas:
+        print(
+            "📈 Metadata coverage:",
+            json.dumps(
+                {
+                    "field_coverage": report.get("field_coverage", {}),
+                    "unknown_target_population_rate": report.get("unknown_target_population_rate"),
+                    "unknown_clinical_domain_rate": report.get("unknown_clinical_domain_rate"),
+                },
+                sort_keys=True,
+            ),
+        )
     report_path = _write_metadata_quality_report(report)
+
+    collection_count = rag.collection.count() if rag.collection else total_chunks
+
+    _write_progress({
+        "job_id": job_id,
+        "status": "completed",
+        "total_files": total_files,
+        "processed_files": len(processed_files),
+        "skipped_files": skipped_files,
+        "total_chunks": total_chunks,
+        "new_chunks": new_chunks,
+        "collection_count": collection_count,
+        "current_file": None,
+        "started_at": start_time,
+        "elapsed_seconds": elapsed,
+    })
+
     return {
         "ok": True,
         "message": "Ingestion completed",
         "processedFiles": processed_files,
         "totalFiles": len(processed_files),
         "totalChunks": total_chunks,
-        "collectionCount": rag.collection.count() if rag.collection else total_chunks,
+        "newChunks": new_chunks,
+        "skippedFiles": skipped_files,
+        "collectionCount": collection_count,
+        "elapsedSeconds": elapsed,
         "metadataReportPath": report_path,
         "metadataQuality": {
             "unknownTargetPopulationRate": report.get("unknown_target_population_rate"),
@@ -432,6 +588,7 @@ def ingest_guidelines() -> Dict[str, Any]:
             "fieldCoverage": report.get("field_coverage", {}),
         },
     }
+
 
 if __name__ == "__main__":
     ingest_guidelines()

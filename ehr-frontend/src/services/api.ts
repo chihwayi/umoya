@@ -9838,6 +9838,37 @@ export const cdssApi = {
     return { data: response.data as { status: string; seeded: number; total: number; current_label: string; started_at: number | null; finished_at: number | null; error: string | null } };
   },
 
+  triggerIngest: async (file?: File) => {
+    if (file) {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await ehrAxios.post('/cdss-service/admin/ingest', form, { timeout: 30000 });
+      return { data: response.data as { started: boolean; jobId: string } };
+    }
+    const response = await ehrAxios.post('/cdss-service/admin/ingest', {}, { timeout: 10000 });
+    return { data: response.data as { started: boolean; jobId: string } };
+  },
+
+  getIngestStatus: async (jobId: string) => {
+    const response = await ehrAxios.get(`/cdss-service/admin/ingest/status/${jobId}`, { timeout: 5000 });
+    return {
+      data: response.data as {
+        status: string;
+        type: string;
+        liveProgress?: {
+          totalFiles: number;
+          processedFiles: number;
+          skippedFiles: number;
+          totalChunks: number;
+          currentFile: string | null;
+          elapsedSeconds: number;
+          status: string;
+        };
+        error?: string;
+      },
+    };
+  },
+
   searchGuidelines: async (query: string, token: string, tenantSlug: string, limit: number = 5, patientContext?: any) => {
     const response = await ehrAxios.post('/cdss/guidelines/search', { query, limit, patient_context: patientContext }, {
       headers: {

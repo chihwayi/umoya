@@ -60,6 +60,8 @@ import json as _json
 
 logger = logging.getLogger(__name__)
 
+_CHROMA_PERSISTENCE_PATH = os.getenv("CHROMA_PERSISTENCE_PATH", "./data/chroma_db").strip() or "./data/chroma_db"
+
 try:
     from ai_models.llm_provider import LLMProvider
 except Exception:  # pragma: no cover - optional dependency path
@@ -67,6 +69,32 @@ except Exception:  # pragma: no cover - optional dependency path
 
 _DEV_LIKE_ENVIRONMENTS = {"dev", "development", "local", "test"}
 _feedback_store_lock = Lock()
+
+
+def _get_metrics_redis_client() -> Optional[redis_pkg.Redis]:
+    try:
+        redis_url = os.getenv("REDIS_URL", "").strip()
+        if redis_url:
+            return redis_pkg.from_url(redis_url, decode_responses=True)
+        host = os.getenv("REDIS_HOST", "localhost")
+        port = int(os.getenv("REDIS_PORT", 6379))
+        return redis_pkg.Redis(host=host, port=port, db=0, decode_responses=True)
+    except Exception:
+        return None
+
+
+def _get_chroma_guideline_doc_count() -> Optional[int]:
+    try:
+        import chromadb
+        from chromadb.config import Settings
+
+        client = chromadb.PersistentClient(
+            path=_CHROMA_PERSISTENCE_PATH,
+            settings=Settings(anonymized_telemetry=False),
+        )
+        return int(client.get_collection("medical_guidelines").count())
+    except Exception:
+        return None
 
 
 # ── Feedback store (Sprint 112: migrated from SQLite /tmp to PostgreSQL) ──────
@@ -1482,6 +1510,16 @@ dosing_calculator = DosingCalculator()
 diagnostic_assistant = DiagnosticAssistant()  # Now includes AI models if available
 trend_analysis_engine = TrendAnalysisEngine()
 
+
+def _get_diagnostic_rag_engine():
+    if not diagnostic_assistant:
+        return None
+    try:
+        diagnostic_assistant.ensure_rag_engine_initialized()
+    except Exception:
+        return None
+    return diagnostic_assistant.rag_engine
+
 # Settings Provider (Master DB)
 settings_provider = None
 try:
@@ -1900,9 +1938,9 @@ def _requeue_jobs_if_missing(jobs: list[dict]) -> None:
 
 
 def _run_reindex_job() -> Dict[str, Any]:
-    if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
+    ce = _get_diagnostic_rag_engine()
+    if not ce:
         raise RuntimeError("RAG engine unavailable")
-    ce = diagnostic_assistant.rag_engine
     if ce.chroma_client:
         ce.chroma_client.delete_collection("medical_guidelines")
         ce.collection = ce.chroma_client.get_or_create_collection("medical_guidelines")
@@ -1912,9 +1950,9 @@ def _run_reindex_job() -> Dict[str, Any]:
 
 
 def _run_cache_flush_job() -> Dict[str, Any]:
-    if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
+    ce = _get_diagnostic_rag_engine()
+    if not ce:
         return {"flushed": 0}
-    ce = diagnostic_assistant.rag_engine
     if not ce.redis_client:
         return {"flushed": 0}
     namespace = "cdss"
@@ -2026,7 +2064,7 @@ def _run_job(job_id: str) -> None:
 
         if job_type == "ingest":
             from ingest_guidelines import ingest_guidelines
-            ingest_result = ingest_guidelines()
+            ingest_result = ingest_guidelines(rag=_get_diagnostic_rag_engine(), job_id=job_id)
             if isinstance(ingest_result, dict):
                 result = {"ingested": bool(ingest_result.get("ok", True)), **ingest_result}
             else:
@@ -2617,7 +2655,34 @@ async def admin_ingest_status(job_id: str, owner: str = Depends(require_owner_sc
         job = _ADMIN_JOBS.get(job_id)
     if not job or job.get("type") != "ingest":
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+
+    # Merge live per-file progress from disk so the response reflects real-time
+    # state even if the job is running in a worker process.
+    response = dict(job)
+    try:
+        import json as _json
+        _progress_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "data", "ingest_progress.json"
+        )
+        with open(_progress_path, "r", encoding="utf-8") as _fh:
+            progress = _json.load(_fh)
+        # Only attach if the progress file belongs to this job
+        if progress.get("job_id") == job_id or job.get("status") == "running":
+            response["liveProgress"] = {
+                "totalFiles": progress.get("total_files"),
+                "processedFiles": progress.get("processed_files"),
+                "skippedFiles": progress.get("skipped_files"),
+                "totalChunks": progress.get("total_chunks"),
+                "currentFile": progress.get("current_file"),
+                "elapsedSeconds": progress.get("elapsed_seconds"),
+                "status": progress.get("status"),
+            }
+    except (FileNotFoundError, KeyError, ValueError):
+        pass  # progress file not yet written or belongs to a different job
+    except Exception as _e:
+        logger.warning(f"Could not read ingest progress file: {_e}")
+
+    return response
 
 @app.post("/admin/ingest/retry/{job_id}")
 async def admin_ingest_retry(job_id: str, owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
@@ -2802,6 +2867,8 @@ async def admin_metrics(owner: str = Depends(require_owner_scope("cdss.admin.met
             docs = ce.collection.count()
         except Exception:
             docs = None
+    if docs is None:
+        docs = _get_chroma_guideline_doc_count()
     if ce and ce.redis_client:
         try:
             cache_keys = len(list(ce.redis_client.scan_iter(match="*")))
@@ -2827,6 +2894,33 @@ async def admin_metrics(owner: str = Depends(require_owner_scope("cdss.admin.met
                 llm_cache_miss = 0
         except Exception:
             cache_keys = 0
+    elif ce is None or ce.redis_client is None:
+        metrics_redis = _get_metrics_redis_client()
+        if metrics_redis:
+            try:
+                cache_keys = len(list(metrics_redis.scan_iter(match="*")))
+                try:
+                    val = metrics_redis.get("metrics:rag:cache_hit")
+                    rag_cache_hit = int(val or 0)
+                except Exception:
+                    rag_cache_hit = 0
+                try:
+                    val = metrics_redis.get("metrics:rag:cache_miss")
+                    rag_cache_miss = int(val or 0)
+                except Exception:
+                    rag_cache_miss = 0
+                try:
+                    val = metrics_redis.get("metrics:llm:cache_hit")
+                    llm_cache_hit = int(val or 0)
+                except Exception:
+                    llm_cache_hit = 0
+                try:
+                    val = metrics_redis.get("metrics:llm:cache_miss")
+                    llm_cache_miss = int(val or 0)
+                except Exception:
+                    llm_cache_miss = 0
+            except Exception:
+                cache_keys = 0
     if settings_provider:
         try:
             settings_provider.log_action(actor=owner, action="metrics_view", payload={"documents": docs, "cache_keys": cache_keys})
@@ -3174,14 +3268,15 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
         print(f"[CDSS] Governed knowledge search failed: {e}")
 
     # 2. Retrieve additional relevant guidelines (RAG)
-    if diagnostic_assistant.rag_engine:
+    rag_engine = _get_diagnostic_rag_engine()
+    if rag_engine:
         try:
             print("[CDSS] Searching guidelines")
 
             if filters:
                 print(f"[CDSS] Applying RAG population filters: {filters}")
 
-            rag_citations = diagnostic_assistant.rag_engine.query(
+            rag_citations = rag_engine.query(
                 safe_query,
                 n_results=request.limit,
                 filters=filters if filters else None,
@@ -3531,7 +3626,8 @@ async def calculate_risk_score(request: RiskScoreRequest, req: Request):
             print(f"[CDSS] Governed risk guidance lookup failed: {e}")
 
     tenant_cache_key = _tenant_cache_key_from_request(req)
-    if diagnostic_assistant.rag_engine and not guideline_citations:
+    rag_engine = _get_diagnostic_rag_engine()
+    if rag_engine and not guideline_citations:
         # Collect terms to search for based on high risks and diagnoses
         search_terms = []
         # Add high risk diagnoses/conditions
@@ -3563,7 +3659,7 @@ async def calculate_risk_score(request: RiskScoreRequest, req: Request):
             query = f"Clinical guidelines for {', '.join(query_terms)}"
             try:
                 print("[CDSS] Querying RAG for risk guidelines")
-                retrieved_docs = diagnostic_assistant.rag_engine.query(
+                retrieved_docs = rag_engine.query(
                     redact_text(query),
                     n_results=3,
                     tenant_id=tenant_cache_key
@@ -12457,7 +12553,8 @@ async def proactive_patient_analysis(payload: PatientSummaryPayload):
         })
 
     # 5. RAG-backed guideline recommendations
-    if diagnostic_assistant and diagnostic_assistant.rag_engine:
+    rag_engine = _get_diagnostic_rag_engine()
+    if rag_engine:
         query_terms = []
         if payload.chronic_conditions:
             query_terms.extend(payload.chronic_conditions[:3])
@@ -12466,7 +12563,7 @@ async def proactive_patient_analysis(payload: PatientSummaryPayload):
         if query_terms:
             query_str = ' '.join(query_terms)
             try:
-                rag_results = diagnostic_assistant.rag_engine.query(query_str, n_results=3, tenant_id=payload.tenant_id)
+                rag_results = rag_engine.query(query_str, n_results=3, tenant_id=payload.tenant_id)
                 citations = [{
                     'source': r.get('source', ''),
                     'text': r.get('text', '')[:300],

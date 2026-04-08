@@ -375,16 +375,20 @@ class RAGEngine:
             logger.error(f"Context retrieval failed: {e}")
             return []
 
-    def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: List[str], upsert: bool = False):
+    def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: List[str], upsert: bool = False, rebuild_bm25: bool = True):
         """
         Batch ingest documents into the vector database.
+
+        Pass rebuild_bm25=False during bulk ingest loops and call
+        _build_bm25_index() once after all files are processed to avoid
+        O(n²) rebuilds.
         """
         if not self.collection or not self.embedding_model:
             return False
-            
+
         try:
             embeddings = self.embedding_model.encode(texts).tolist()
-            
+
             if upsert:
                 self.collection.upsert(
                     documents=texts,
@@ -399,10 +403,10 @@ class RAGEngine:
                     metadatas=metadatas,
                     ids=ids
                 )
-            
-            # Rebuild BM25 index
-            self._build_bm25_index()
-            
+
+            if rebuild_bm25:
+                self._build_bm25_index()
+
             return True
         except Exception as e:
             logger.error(f"Failed to add documents: {e}")

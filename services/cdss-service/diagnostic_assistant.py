@@ -7,37 +7,21 @@ Includes SNOMED CT and ICD-10 code mapping
 """
 from typing import Dict, List, Optional, Any, Tuple
 from collections import Counter
+import importlib
 import re
 import logging
 import hashlib
 import json
 import os
+import threading
 from privacy_guard import redact_text, redact_value
 from ai_governance import apply_safety_gate, compute_request_hash
 
 logger = logging.getLogger(__name__)
 
-# Try to import AI models (optional)
-try:
-    from ai_models.medbert_predictor import MedBERTPredictor
-    from ai_models.clinicalbert_diagnostic import ClinicalBERTDiagnostic
-    from ai_models.fusion_engine import IntelligentFusionEngine
-    from ai_models.llm_provider import LLMProvider
-    from ai_models.rag_engine import RAGEngine
-    from clinical_knowledge_registry import ClinicalKnowledgeRegistry
-    AI_AVAILABLE = True
-except ImportError:
-    AI_AVAILABLE = False
-    logger.info("AI models not available. Using rule-based only.")
-    # Fallback if imports fail, though LLMProvider only needs httpx
-    try:
-        from ai_models.llm_provider import LLMProvider
-    except ImportError:
-        LLMProvider = None
-    try:
-        from clinical_knowledge_registry import ClinicalKnowledgeRegistry
-    except ImportError:
-        ClinicalKnowledgeRegistry = None
+# Import heavyweight AI modules lazily so the CDSS API can start before
+# model stacks are actually needed by a clinical request.
+AI_AVAILABLE = True
 
 # Import terminology mappers
 try:
@@ -63,30 +47,17 @@ class DiagnosticAssistant:
         self.icd10_mapper = None
         self.snomed_mapper = None
         self.ai_enabled = os.getenv("CDSS_ENABLE_AI", "false").strip().lower() == "true"
-        
-        if self.ai_enabled:
-            try:
-                self.medbert = MedBERTPredictor()
-                self.clinicalbert = ClinicalBERTDiagnostic()
-                self.fusion_engine = IntelligentFusionEngine()
-                # Initialize LLMProvider and check availability
-                if LLMProvider:
-                    self.llm_provider = LLMProvider()
-                    # We don't await here because __init__ is sync, but check_availability will be called later
-                
-                self.rag_engine = RAGEngine() if RAGEngine else None
-                self.knowledge_registry = ClinicalKnowledgeRegistry() if ClinicalKnowledgeRegistry else None
-                logger.info("AI models initialized for intelligent diagnostics (lightweight mode + LLM + RAG)")
-            except Exception as e:
-                logger.warning(f"Failed to initialize AI models: {e}. Using rule-based only.")
-                self.medbert = None
-                self.clinicalbert = None
-                self.fusion_engine = None
-                self.llm_provider = None
-                self.rag_engine = None
-                self.knowledge_registry = None
-        else:
+        self._rag_init_lock = threading.Lock()
+        self._ai_init_lock = threading.Lock()
+        self._rag_initialized = False
+        self._ai_initialized = False
+
+        if not self.ai_enabled:
             logger.info("CDSS_ENABLE_AI=false; skipping heavy diagnostic AI initialization and using rule-based mode only.")
+        elif not AI_AVAILABLE:
+            logger.info("AI dependencies unavailable. Diagnostic assistant will stay in rule-based mode.")
+        else:
+            logger.info("CDSS AI runtime will initialize lazily on first clinical use.")
         
         if TERMINOLOGY_AVAILABLE:
             try:
@@ -97,6 +68,61 @@ class DiagnosticAssistant:
                 logger.warning(f"Failed to initialize terminology mappers: {e}")
                 self.icd10_mapper = None
                 self.snomed_mapper = None
+
+    def ensure_rag_engine_initialized(self) -> None:
+        if not self.ai_enabled or not AI_AVAILABLE or self.rag_engine is not None:
+            return
+
+        with self._rag_init_lock:
+            if self.rag_engine is not None:
+                return
+            try:
+                llm_provider_cls = importlib.import_module("ai_models.llm_provider").LLMProvider
+                rag_engine_cls = importlib.import_module("ai_models.rag_engine").RAGEngine
+                knowledge_registry_cls = importlib.import_module("clinical_knowledge_registry").ClinicalKnowledgeRegistry
+                if self.llm_provider is None:
+                    self.llm_provider = llm_provider_cls()
+                if self.rag_engine is None:
+                    self.rag_engine = rag_engine_cls()
+                if self.knowledge_registry is None:
+                    self.knowledge_registry = knowledge_registry_cls()
+                self._rag_initialized = True
+                logger.info("Deferred CDSS RAG/LLM runtime initialized.")
+            except ImportError as e:
+                logger.info(f"Deferred RAG runtime dependencies unavailable: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize deferred RAG runtime: {e}")
+
+    def ensure_ai_initialized(self) -> None:
+        if not self.ai_enabled or not AI_AVAILABLE or self._ai_initialized:
+            return
+
+        self.ensure_rag_engine_initialized()
+        with self._ai_init_lock:
+            if self._ai_initialized:
+                return
+            try:
+                medbert_cls = importlib.import_module("ai_models.medbert_predictor").MedBERTPredictor
+                clinicalbert_cls = importlib.import_module("ai_models.clinicalbert_diagnostic").ClinicalBERTDiagnostic
+                fusion_engine_cls = importlib.import_module("ai_models.fusion_engine").IntelligentFusionEngine
+                llm_provider_cls = importlib.import_module("ai_models.llm_provider").LLMProvider
+                knowledge_registry_cls = importlib.import_module("clinical_knowledge_registry").ClinicalKnowledgeRegistry
+                if self.medbert is None:
+                    self.medbert = medbert_cls()
+                if self.clinicalbert is None:
+                    self.clinicalbert = clinicalbert_cls()
+                if self.fusion_engine is None:
+                    self.fusion_engine = fusion_engine_cls()
+                if self.llm_provider is None:
+                    self.llm_provider = llm_provider_cls()
+                if self.knowledge_registry is None:
+                    self.knowledge_registry = knowledge_registry_cls()
+                self._ai_initialized = True
+                logger.info("Deferred CDSS diagnostic AI models initialized.")
+            except ImportError as e:
+                logger.info(f"Deferred diagnostic AI dependencies unavailable: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize deferred diagnostic AI models: {e}")
 
     def _runtime_model_versions(self) -> Dict[str, Dict[str, Any]]:
         return {
@@ -726,6 +752,8 @@ class DiagnosticAssistant:
         Returns:
             Fused recommendations from rule-based + AI models
         """
+        self.ensure_ai_initialized()
+
         # Rule-based suggestions (existing method)
         rule_based_results = self.suggest_diagnosis(
             symptoms=symptoms,
@@ -1034,6 +1062,8 @@ class DiagnosticAssistant:
         """
         Generate a concise "One-Liner" summary of the patient's history using LLM.
         """
+        self.ensure_ai_initialized()
+
         if not self.llm_provider:
              return {"summary": "AI summarization unavailable (Provider missing)", "source": "fallback"}
 
