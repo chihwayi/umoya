@@ -17,6 +17,10 @@ import {
   TENANT_EPI_REGISTRY_BUNDLE_VERSION,
   TENANT_EPI_REGISTRY_STATEMENTS,
 } from '../generated/tenant-epi-registry.statements';
+import {
+  TENANT_OUTBREAK_SURVEILLANCE_BUNDLE_VERSION,
+  TENANT_OUTBREAK_SURVEILLANCE_STATEMENTS,
+} from '../generated/tenant-outbreak-surveillance.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1218,6 +1222,13 @@ export class DatabaseProvisioningService {
         version: TENANT_EPI_REGISTRY_BUNDLE_VERSION,
         description: 'S129 — EPI schedule engine, vaccination records, vaccine lots, cold chain logging, AEFI reports, and DHIS2 Tracker sync log',
         statements: () => TENANT_EPI_REGISTRY_STATEMENTS,
+      },
+      {
+        id: 'outbreak-surveillance',
+        label: 'Outbreak Surveillance + Notifiable Disease Alerts',
+        version: TENANT_OUTBREAK_SURVEILLANCE_BUNDLE_VERSION,
+        description: 'S130 — Configurable notifiable disease alerts, MOH threshold alerts, SORMAS case notification, and contact tracing',
+        statements: () => TENANT_OUTBREAK_SURVEILLANCE_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

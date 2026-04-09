@@ -62,6 +62,7 @@ const PatientPortalDashboard = lazy(() => import('./pages/PatientPortalDashboard
 const CampaignsDashboard = lazy(() => import('./pages/CampaignsDashboard'));
 const MultiCurrencyMedicalAidDashboard = lazy(() => import('./pages/MultiCurrencyMedicalAidDashboard'));
 const ImmunizationDashboard = lazy(() => import('./pages/ImmunizationDashboard'));
+const OutbreakDashboard = lazy(() => import('./pages/OutbreakDashboard'));
 
 const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'medicore-tenant-subscription:';
 
@@ -914,6 +915,15 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="epi">
                   <ImmunizationDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* S130: Outbreak Surveillance */}
+            <Route
+              path="/ehr/:tenantSlug/outbreak"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="epi">
+                  <OutbreakDashboard />
                 </RoleProtectedRoute>
               }
             />

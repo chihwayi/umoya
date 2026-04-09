@@ -53,6 +53,7 @@ import { OrderController } from './controllers/order.controller';
 import { ProblemController } from './controllers/problem.controller';
 import { AllergyController } from './controllers/allergy.controller';
 import { EpiController } from './controllers/epi.controller';
+import { OutbreakController } from './controllers/outbreak.controller';
 import { LabTestController } from './controllers/lab-test.controller';
 import { LabTestCatalogController } from './controllers/lab-test-catalog.controller';
 import { LabOrderSetController } from './controllers/lab-order-set.controller';
@@ -208,6 +209,7 @@ import { OrderService } from './services/order.service';
 import { ProblemService } from './services/problem.service';
 import { AllergyService } from './services/allergy.service';
 import { EpiService } from './services/epi.service';
+import { OutbreakService } from './services/outbreak.service';
 import { LabTestService } from './services/lab-test.service';
 import { LabTestCatalogService } from './services/lab-test-catalog.service';
 import { LabOrderSetService } from './services/lab-order-set.service';
@@ -449,6 +451,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ProblemController,
     AllergyController,
     EpiController,
+    OutbreakController,
     LabTestController,
     LabTestCatalogController,
     LabOrderSetController,
@@ -586,6 +589,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ProblemService,
     AllergyService,
     EpiService,
+    OutbreakService,
     LabTestService,
     LabTestCatalogService,
     LabOrderSetService,

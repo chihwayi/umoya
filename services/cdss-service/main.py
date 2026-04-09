@@ -30,6 +30,7 @@ from fastapi import UploadFile, File, Form
 from drug_interactions import DrugInteractionAnalyzer
 from clinical_guidelines import ClinicalGuidelinesEngine
 from dhis2_tracker import router as dhis2_tracker_router
+from sormas_client import router as sormas_router
 from clinical_knowledge_registry import ClinicalKnowledgeRegistry
 from risk_scoring import RiskScoringEngine
 from dosing_calculator import DosingCalculator
@@ -529,6 +530,7 @@ app.add_middleware(
 )
 
 app.include_router(dhis2_tracker_router)
+app.include_router(sormas_router)
 
 def _get_bool_env_strict(name: str, default: str) -> bool:
     raw = os.getenv(name, default)
