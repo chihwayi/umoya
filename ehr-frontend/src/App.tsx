@@ -61,6 +61,7 @@ const PatientPortalLogin = lazy(() => import('./pages/PatientPortalLogin'));
 const PatientPortalDashboard = lazy(() => import('./pages/PatientPortalDashboard'));
 const CampaignsDashboard = lazy(() => import('./pages/CampaignsDashboard'));
 const MultiCurrencyMedicalAidDashboard = lazy(() => import('./pages/MultiCurrencyMedicalAidDashboard'));
+const ImmunizationDashboard = lazy(() => import('./pages/ImmunizationDashboard'));
 
 const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'medicore-tenant-subscription:';
 
@@ -904,6 +905,15 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin']}>
                   <AiOpsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* S129: EPI / Immunization Registry */}
+            <Route
+              path="/ehr/:tenantSlug/immunization"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="epi">
+                  <ImmunizationDashboard />
                 </RoleProtectedRoute>
               }
             />
