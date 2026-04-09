@@ -48,7 +48,7 @@ class VoiceScribe:
         Normalise a freeform language label to a Whisper-compatible ISO 639-1 code.
 
         Priority tiers:
-          1. SADC — en, af, sw, pt, fr, sn, nd, zu, xh, mg
+          1. SADC — en, af, sw, pt, fr, sn, nd, zu, xh, mg, ny, ln
           2. Broader Africa — am, ha, yo, so, rw, lg, om, ti, tn, st, ss, ts, ve, nr
           3. Global — es, hi, zh, ar, ru, de, it, ja, ko, nl
         """
@@ -65,6 +65,8 @@ class VoiceScribe:
             "zu": "zu", "zul": "zu", "zulu": "zu", "isizulu": "zu",
             "xh": "xh", "xho": "xh", "xhosa": "xh", "isixhosa": "xh",
             "mg": "mg", "mlg": "mg", "malagasy": "mg",
+            "ny": "ny", "nya": "ny", "chichewa": "ny", "nyanja": "ny", "chinyanja": "ny",
+            "ln": "ln", "lin": "ln", "lingala": "ln",
             # ── Broader Africa (tier-2) ───────────────────────────────────
             "am": "am", "amh": "am", "amharic": "am",
             "ha": "ha", "hau": "ha", "hausa": "ha",

@@ -5,7 +5,8 @@ Secondary market: Broader Africa
 Tertiary: Global
 
 Supports multilingual clinical text including Shona, Ndebele, Zulu, Xhosa,
-Swahili, Afrikaans, Portuguese, French, and English, with:
+Swahili, Afrikaans, Portuguese, French, Setswana, Chichewa/Nyanja, Lingala,
+Siswati, Xitsonga, Tshivenda, and English, with:
 - text normalization and local phrase mapping
 - fuzzy matching for spelling variants
 - symptom-cluster inference
@@ -36,6 +37,12 @@ SADC_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "swahili": ["hiv", "ukimwi", "virusi vya ukimwi"],
         "afrikaans": ["hiv", "miv", "menslike immunogebrekvirus"],
         "portuguese": ["hiv", "sida", "vírus da imunodeficiência humana"],
+        "setswana": ["hiv", "bolwetse jwa hiv"],
+        "chichewa": ["hiv", "matenda a hiv", "edzi"],
+        "lingala": ["hiv", "maladi ya hiv", "sida"],
+        "siswati": ["hiv", "isifo se-hiv"],
+        "xitsonga": ["hiv", "vuvabyi bya hiv"],
+        "tshivenda": ["hiv", "vhulwadze ha hiv"],
         "local_terms": ["arv", "antiretroviral", "art", "arvs", "known positive", "hiv positive"],
     },
     "tuberculosis": {
@@ -48,6 +55,12 @@ SADC_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "swahili": ["tb", "kifua kikuu", "ugonjwa wa mapafu"],
         "afrikaans": ["tb", "tuberkulose"],
         "portuguese": ["tb", "tuberculose"],
+        "setswana": ["tb", "bolwetse jwa masogo"],
+        "chichewa": ["tb", "matenda a ntchestolo", "nfuba"],
+        "lingala": ["tb", "maladi ya masɛki"],
+        "siswati": ["tb", "isifo sebele"],
+        "xitsonga": ["tb", "vuvabyi bya sifuba"],
+        "tshivenda": ["tb", "vhulwadze ha sifuba"],
         "local_terms": ["tb treatment", "dot therapy", "isoniazid", "rifampicin"],
     },
     "malaria": {
@@ -59,6 +72,12 @@ SADC_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "swahili": ["malaria", "homa ya malaria", "homa kali"],
         "afrikaans": ["malaria"],
         "portuguese": ["malária", "paludismo"],
+        "setswana": ["malaria", "maleria"],
+        "chichewa": ["malaria", "malungo a malaria"],
+        "lingala": ["malaria", "fiévre ya malaria"],
+        "siswati": ["malaria", "imaleriya"],
+        "xitsonga": ["malaria", "vuvabyi bya malaria"],
+        "tshivenda": ["malaria", "vhulwadze ha malaria"],
         "local_terms": ["high fever malaria", "act treatment"],
     },
     "diabetes": {
@@ -70,6 +89,12 @@ SADC_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "swahili": ["kisukari", "ugonjwa wa sukari", "diabetes"],
         "afrikaans": ["diabetes", "suikersiekte"],
         "portuguese": ["diabetes", "diabete", "açúcar no sangue"],
+        "setswana": ["diabetes", "bolwetse jwa tshigaro"],
+        "chichewa": ["diabetes", "matenda a shuga", "shuga"],
+        "lingala": ["diabetes", "maladi ya sukali"],
+        "siswati": ["diabetes", "isifo seswekile"],
+        "xitsonga": ["diabetes", "vuvabyi bya shukela"],
+        "tshivenda": ["diabetes", "vhulwadze ha shukela"],
         "local_terms": ["blood sugar", "high sugar", "sugga", "glucose", "insulin"],
     },
     "hypertension": {
@@ -84,6 +109,12 @@ SADC_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "swahili": ["shinikizo la damu", "pressure ya damu", "hypertension"],
         "afrikaans": ["hipertensie", "hoë bloeddruk"],
         "portuguese": ["hipertensão", "pressão alta", "pressão arterial elevada"],
+        "setswana": ["kgatelelo e e kwa godimo ya madi", "hypertension"],
+        "chichewa": ["kumazetsa kwa magazi", "hypertension"],
+        "lingala": ["pression ya makila etomboki", "hypertension"],
+        "siswati": ["ingcindezi yegazi lecephele", "hypertension"],
+        "xitsonga": ["mpfumelo wa ngati wu tlhandlami", "hypertension"],
+        "tshivenda": ["pfushi ya madi yo wedzwa", "hypertension"],
         "local_terms": ["high bp", "bp high", "hbp"],
     },
     "pneumonia": {
@@ -95,6 +126,12 @@ SADC_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "swahili": ["nimonia", "ugonjwa wa mapafu", "kifua"],
         "afrikaans": ["longontsteking", "pneumonie"],
         "portuguese": ["pneumonia", "infecção pulmonar"],
+        "setswana": ["pneumonia", "bolwetse jwa maphaphu"],
+        "chichewa": ["pneumonia", "matenda a mapumo"],
+        "lingala": ["pneumonie", "maladi ya mapɛpɛ"],
+        "siswati": ["pneumonia", "isifo semaphaphu"],
+        "xitsonga": ["pneumonia", "vuvabyi bya mahelo"],
+        "tshivenda": ["pneumonia", "vhulwadze ha mavunde"],
         "local_terms": ["lung infection", "lower respiratory tract infection", "lrti"],
     },
 }
@@ -222,6 +259,150 @@ AFRIKAANS_SYMPTOMS: Dict[str, List[str]] = {
     "swollen_lymph_nodes": ["geswolle kliere"],
 }
 
+SETSWANA_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["feberu", "go baba ga mmele", "bogare jwa mmele jo bo kwa godimo"],
+    "cough": ["go gôfa", "gôfa"],
+    "headache": ["boêmô jwa tlhogo", "tlhogo e e opang"],
+    "chest_pain": ["boêmô jwa sefuba", "sefuba se se opang"],
+    "shortness_of_breath": ["go phefola ka thata", "tlhokego ya moya"],
+    "abdominal_pain": ["boêmô jwa mpa", "mpa e e opang"],
+    "nausea": ["go gakala", "go ikutlwa o gakala"],
+    "vomiting": ["go rutha", "go bua ka molomo"],
+    "diarrhea": ["meetse a mpa", "go ya gare ga meetse"],
+    "fatigue": ["go lapisa", "go nona", "go lesega"],
+    "dizziness": ["go sisiwa ke tlhogo", "tlhogo e sisimetsa"],
+    "joint_pain": ["maoto a a opang", "ditho di di opang"],
+    "weight_loss": ["go hupafala ga boima", "boima jwa mmele bo bo fokolang"],
+    "night_sweats": ["go tshologa ditsêlê bosigo"],
+    "thirst": ["lenyora", "lenyora le le tona"],
+    "frequent_urination": ["go tsamaya gopotsa"],
+    "blurred_vision": ["go bona ga go itekanela"],
+    "chills": ["go roroma", "mogote o o otseng"],
+    "body_aches": ["mmele o o opang", "botshe jwa mmele"],
+    "hemoptysis": ["go gôfa madi", "madi mo go gôfeng"],
+    "swollen_lymph_nodes": ["mangwana a a rurugang"],
+}
+
+CHICHEWA_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["malungo", "thupi lofunda", "kutentha kwa thupi"],
+    "cough": ["chifuwa", "kukohola"],
+    "headache": ["kutsimuka mutu", "mutu kuwawa"],
+    "chest_pain": ["mkosi kuwawa", "mkosi kupweteka"],
+    "shortness_of_breath": ["kupuma mosavuta", "kupanda mpweya"],
+    "abdominal_pain": ["mimba kuwawa", "mimba kupweteka"],
+    "nausea": ["kufuna kusanza", "kuyipa kwa mimba"],
+    "vomiting": ["kusanza", "kuphwanya"],
+    "diarrhea": ["kutsekula", "matumbo"],
+    "fatigue": ["kutopa", "kufooka", "kusowa mphamvu"],
+    "dizziness": ["kuizungulira", "mutu kuzungulira"],
+    "joint_pain": ["mfundo kuwawa", "mapewa kupweteka"],
+    "weight_loss": ["kuchepuka", "kufooka thupi"],
+    "night_sweats": ["kutuluka thukuta usiku"],
+    "thirst": ["ludzu", "ludzu la madzi"],
+    "frequent_urination": ["kukodza kawirikawiri"],
+    "blurred_vision": ["kuona mosavomerezeka", "maso kuona bwino yayi"],
+    "chills": ["kunjenjemera", "kutetemera"],
+    "body_aches": ["thupi kuwawa", "kupweteka kwa thupi"],
+    "hemoptysis": ["kukohola magazi", "magazi pakohola"],
+    "swollen_lymph_nodes": ["nodi zawotcha", "makoswe owotcha"],
+}
+
+LINGALA_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["fiévre", "nzoto ya moto", "nzoto ekiimá"],
+    "cough": ["kɔfɔ", "kolɔlɔ"],
+    "headache": ["motó ebunga", "motó ewela"],
+    "chest_pain": ["libumu ya ntolo ebeta", "ntolo mawa"],
+    "shortness_of_breath": ["kouma mosika", "mpema ekabwi"],
+    "abdominal_pain": ["libumu ebeta", "libumu ewela"],
+    "nausea": ["koyoka bɔɔngɔ", "koyoka pɔɔle"],
+    "vomiting": ["kobɛta", "kolɔtɔ"],
+    "diarrhea": ["libumu ya mai", "kotɔ mingi"],
+    "fatigue": ["kolɛmba", "komɛlɛmɛlɛ", "nguya ezalaka te"],
+    "dizziness": ["motó eyokani", "kozungana"],
+    "joint_pain": ["nzoto ya mabɔkɔ mawa", "elongi mawa"],
+    "weight_loss": ["kokolama", "nzoto ekóki"],
+    "night_sweats": ["kolɔtɔ na butu"],
+    "thirst": ["mposa ya mai", "mposa mingi"],
+    "frequent_urination": ["kobɛtɛla mai mingi"],
+    "blurred_vision": ["miso etaleli te", "komona malamu te"],
+    "chills": ["kolenga", "nzoto ya mpɔzɔ"],
+    "body_aches": ["nzoto ewela", "nzoto mawa nyonso"],
+    "hemoptysis": ["kɔfɔ na makila", "kolɔlɔ na makila"],
+    "swollen_lymph_nodes": ["nodi ya makolo etumba"],
+}
+
+SISWATI_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["umkhuhlane", "kushisa kwemtimba", "umtimba ushisa"],
+    "cough": ["ukukhwehlela", "kukhwehlela"],
+    "headache": ["inhloko ibuhlungu", "buhlungu bekhanda"],
+    "chest_pain": ["libele libuhlungu", "buhlungu esifubeni"],
+    "shortness_of_breath": ["kushaywa umoya", "buhlungu ekuphefumuleni"],
+    "abdominal_pain": ["esiswini buhlungu", "isisu sibuhlungu"],
+    "nausea": ["ukuzwa kubila", "sifuba sekuphuma"],
+    "vomiting": ["kuhlanza", "kuphalaza"],
+    "diarrhea": ["uhudo", "huda"],
+    "fatigue": ["kukhatsala", "kuntula emandla"],
+    "dizziness": ["kuzungeza", "inhloko iyazungeza"],
+    "joint_pain": ["emilente ibuhlungu", "buhlungu emilenteni"],
+    "weight_loss": ["kukhothama komtimba", "lishono lelehla"],
+    "night_sweats": ["kukhipha ematuvi ebusuku"],
+    "thirst": ["luchago", "luchago lolukhulu"],
+    "frequent_urination": ["kuya esindle kanengi"],
+    "blurred_vision": ["kubona kufiphela"],
+    "chills": ["kugqogqezela", "umtimba uyagqogqezela"],
+    "body_aches": ["umtimba ubuhlungu", "emilente ibuhlungu yonke"],
+    "hemoptysis": ["kukhwehlela igazi"],
+    "swollen_lymph_nodes": ["tiglandula letikhukhumele"],
+}
+
+XITSONGA_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["xirho", "miri wu hisa", "vutomi bya hisa"],
+    "cough": ["kukohola", "kukoha"],
+    "headache": ["nhloko yi lova", "nhloko yi pfurha"],
+    "chest_pain": ["sifuba si lova", "sifuba si pfurha"],
+    "shortness_of_breath": ["ku hema hi ndlela leyi pfumalekaka", "ku pfumala moya"],
+    "abdominal_pain": ["ntsongo wu lova", "ntsongo wu pfurha"],
+    "nausea": ["ku twisisa hi ndlela yo biha", "ku lava ku hlantsa"],
+    "vomiting": ["ku hlantsa", "ku nyurha"],
+    "diarrhea": ["ku ya etindlwini kambe na kambe", "matimba ya ntsongo"],
+    "fatigue": ["ku karhala", "ku pfumala maatla"],
+    "dizziness": ["ku tshoveka wa nhloko", "nhloko yi tshoveka"],
+    "joint_pain": ["milenge yi lova", "timilenge ti pfurha"],
+    "weight_loss": ["ku helelwa ka ntolovelo", "ntolovelo wu ehla"],
+    "night_sweats": ["ku rharhama ebusuku"],
+    "thirst": ["nzara ya mati", "nzara yo tika"],
+    "frequent_urination": ["ku ya etindlwini kakalo"],
+    "blurred_vision": ["ku vona hi ndlela leyo sava"],
+    "chills": ["ku titimela", "miri wu titimela"],
+    "body_aches": ["miri wu lova hinkwawo", "milenge yi pfurha hinkwayo"],
+    "hemoptysis": ["ku kohola na ngati", "ngati eka kukohola"],
+    "swollen_lymph_nodes": ["tiglandi ti khulumiwa"],
+}
+
+TSHIVENDA_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["fivha", "muvhili u tshima", "muvhili u fhisa"],
+    "cough": ["u khokhola", "kukhokhola"],
+    "headache": ["ndevhelo i rwa", "muawo wa ndevhelo"],
+    "chest_pain": ["sifuba i rwa", "muawo wa sifuba"],
+    "shortness_of_breath": ["u hema nga thavhelo", "u shandukwa ha moya"],
+    "abdominal_pain": ["thumbu i rwa", "muawo wa thumbu"],
+    "nausea": ["u swika na u ita masimu", "u khou ita masimu"],
+    "vomiting": ["u ita masimu", "u vhomisa"],
+    "diarrhea": ["u thulusa", "thumbu ya mvula"],
+    "fatigue": ["u neta", "u shandukwa ha maatla"],
+    "dizziness": ["ndevhelo i tshimbila", "u tshimbila-tshimbila"],
+    "joint_pain": ["migodo i rwa", "muawo wa migodo"],
+    "weight_loss": ["u lenga", "u fhungudza murole"],
+    "night_sweats": ["u tukula vhusiku"],
+    "thirst": ["nzara ya mvula", "nzara khulwane"],
+    "frequent_urination": ["u ya thoidzi zwinzhi"],
+    "blurred_vision": ["u vhona zwi sa tsha leluwa"],
+    "chills": ["u titimela", "muvhili u titimela"],
+    "body_aches": ["muvhili u rwa hothe", "muawo wa muvhili"],
+    "hemoptysis": ["u khokhola na madi", "madi kha u khokhola"],
+    "swollen_lymph_nodes": ["maglande a khomedzwa"],
+}
+
 SADC_DISEASE_PATTERNS: Dict[str, Dict[str, Any]] = {
     "HIV/AIDS": {
         "common_symptoms": ["fever", "fatigue", "weight_loss", "cough", "diarrhea", "swollen_lymph_nodes"],
@@ -299,7 +480,9 @@ class SadcClinicalNLP:
     SADC-first multilingual clinical NLP for mixed-language clinical text.
 
     Primary market: SADC (English, Afrikaans, Swahili, Portuguese, French,
-                           Zulu, Xhosa, Shona, Ndebele, Malagasy)
+                           Zulu, Xhosa, Shona, Ndebele, Malagasy,
+                           Setswana, Chichewa/Nyanja, Lingala,
+                           Siswati, Xitsonga, Tshivenda)
     Secondary: Broader Africa (Amharic, Hausa, Yoruba, Somali, …)
     Tertiary: Global
 
@@ -362,6 +545,12 @@ class SadcClinicalNLP:
         zulu_symptoms: Optional[Dict[str, List[str]]] = None,
         swahili_symptoms: Optional[Dict[str, List[str]]] = None,
         afrikaans_symptoms: Optional[Dict[str, List[str]]] = None,
+        setswana_symptoms: Optional[Dict[str, List[str]]] = None,
+        chichewa_symptoms: Optional[Dict[str, List[str]]] = None,
+        lingala_symptoms: Optional[Dict[str, List[str]]] = None,
+        siswati_symptoms: Optional[Dict[str, List[str]]] = None,
+        xitsonga_symptoms: Optional[Dict[str, List[str]]] = None,
+        tshivenda_symptoms: Optional[Dict[str, List[str]]] = None,
         disease_patterns: Optional[Dict[str, Dict[str, Any]]] = None,
         fuzzy_threshold: float = 0.88,
     ) -> None:
@@ -371,6 +560,12 @@ class SadcClinicalNLP:
         self.zulu_symptoms = zulu_symptoms or ZULU_SYMPTOMS
         self.swahili_symptoms = swahili_symptoms or SWAHILI_SYMPTOMS
         self.afrikaans_symptoms = afrikaans_symptoms or AFRIKAANS_SYMPTOMS
+        self.setswana_symptoms = setswana_symptoms or SETSWANA_SYMPTOMS
+        self.chichewa_symptoms = chichewa_symptoms or CHICHEWA_SYMPTOMS
+        self.lingala_symptoms = lingala_symptoms or LINGALA_SYMPTOMS
+        self.siswati_symptoms = siswati_symptoms or SISWATI_SYMPTOMS
+        self.xitsonga_symptoms = xitsonga_symptoms or XITSONGA_SYMPTOMS
+        self.tshivenda_symptoms = tshivenda_symptoms or TSHIVENDA_SYMPTOMS
         self.disease_patterns = disease_patterns or SADC_DISEASE_PATTERNS
         self.fuzzy_threshold = fuzzy_threshold
 
@@ -633,6 +828,12 @@ class SadcClinicalNLP:
             ("zulu", self.zulu_symptoms),
             ("swahili", self.swahili_symptoms),
             ("afrikaans", self.afrikaans_symptoms),
+            ("setswana", self.setswana_symptoms),
+            ("chichewa", self.chichewa_symptoms),
+            ("lingala", self.lingala_symptoms),
+            ("siswati", self.siswati_symptoms),
+            ("xitsonga", self.xitsonga_symptoms),
+            ("tshivenda", self.tshivenda_symptoms),
         ]
         for lang, symptom_map in _checks:
             if sum(1 for aliases in symptom_map.values() for a in aliases if a in text) > 0:
@@ -690,6 +891,12 @@ class SadcClinicalNLP:
             | set(self.zulu_symptoms.keys())
             | set(self.swahili_symptoms.keys())
             | set(self.afrikaans_symptoms.keys())
+            | set(self.setswana_symptoms.keys())
+            | set(self.chichewa_symptoms.keys())
+            | set(self.lingala_symptoms.keys())
+            | set(self.siswati_symptoms.keys())
+            | set(self.xitsonga_symptoms.keys())
+            | set(self.tshivenda_symptoms.keys())
             | set(self.english_symptoms.keys())
         )
         index: Dict[str, List[Tuple[str, str]]] = {}
@@ -707,12 +914,28 @@ class SadcClinicalNLP:
                 entries.append((self.normalize_text(a), "swahili"))
             for a in self.afrikaans_symptoms.get(sym, []):
                 entries.append((self.normalize_text(a), "afrikaans"))
+            for a in self.setswana_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "setswana"))
+            for a in self.chichewa_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "chichewa"))
+            for a in self.lingala_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "lingala"))
+            for a in self.siswati_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "siswati"))
+            for a in self.xitsonga_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "xitsonga"))
+            for a in self.tshivenda_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "tshivenda"))
             index[sym] = entries
         return index
 
     def _build_condition_alias_index(self) -> Dict[str, List[Tuple[str, str]]]:
         index: Dict[str, List[Tuple[str, str]]] = {}
-        _lang_fields = ["english", "shona", "ndebele", "zulu", "xhosa", "swahili", "afrikaans", "portuguese", "french"]
+        _lang_fields = [
+            "english", "shona", "ndebele", "zulu", "xhosa", "swahili",
+            "afrikaans", "portuguese", "french",
+            "setswana", "chichewa", "lingala", "siswati", "xitsonga", "tshivenda",
+        ]
         for key, meta in self.terminology.items():
             entries: List[Tuple[str, str]] = []
             for lang in _lang_fields:

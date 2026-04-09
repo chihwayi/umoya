@@ -268,9 +268,10 @@ const modules = [
 const liveActivityItems = [
   { type: 'cdss', text: 'CDSS: Sepsis risk score elevated — initiating SIRS criteria review', color: '#FF7A40' },
   { type: 'ai', text: 'PostVisit AI: Generating SNOMED-coded discharge summary...', color: '#00C896' },
-  { type: 'alert', text: 'Critical alert: Hb 5.2 g/dL — notified Dr. Moyo and nurse station', color: '#2B7FFF' },
-  { type: 'dhis2', text: 'DHIS2 sync: 14 ANC records pushed to national aggregate', color: '#00C896' },
-  { type: 'fhir', text: 'FHIR R4: Patient bundle exported for referral transfer', color: '#2B7FFF' },
+  { type: 'alert', text: 'Critical alert: Hb 5.2 g/dL — notified attending physician and nurse station', color: '#2B7FFF' },
+  { type: 'lang', text: 'Voice AI: Transcribed Setswana clinical notes → structured SOAP encounter', color: '#00C896' },
+  { type: 'dhis2', text: 'DHIS2 sync: 14 ANC records pushed to national aggregate (Zambia MOH)', color: '#00C896' },
+  { type: 'fhir', text: 'FHIR R4: Patient bundle exported for cross-border referral transfer', color: '#2B7FFF' },
   { type: 'icd', text: 'ICD-10: Auto-suggested Z34.0 for ANC first trimester visit', color: '#FF7A40' },
 ];
 
@@ -471,7 +472,7 @@ export default function LandingPage() {
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00C896] opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00C896]" />
                   </span>
-                  Next-generation clinical AI platform
+                  SADC-first · Built for Africa · Used globally
                 </div>
 
                 <h1
@@ -485,7 +486,7 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="mt-6 max-w-2xl text-[1.05rem] leading-[1.85] text-[#8FAACA]">
-                  MediCore combines real-time CDSS, PostVisit AI, structured SNOMED CT data, FHIR R4 interoperability, DHIS2 program reporting, and deep clinical coverage across 40+ specialties — all in one platform built for clinicians, not administrators.
+                  MediCore is an AI-first clinical platform built for SADC, Africa, and beyond. Real-time CDSS, PostVisit AI, multilingual voice support (40+ languages), FHIR R4 interoperability, DHIS2 program reporting, and 40+ specialty workflows — designed for clinicians across Johannesburg, Nairobi, Lusaka, Gaborone, Maputo, and wherever care happens.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -507,7 +508,7 @@ export default function LandingPage() {
 
                 {/* Compliance badges */}
                 <div className="mt-8 flex flex-wrap gap-2">
-                  {['FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7'].map((tag) => (
+                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7', '40+ languages'].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8FA8CC]"
@@ -522,7 +523,7 @@ export default function LandingPage() {
                   {[
                     { icon: Brain, color: '#00C896', title: 'AI-First CDSS', sub: 'Real-time, protocol-linked, bedside' },
                     { icon: ShieldCheck, color: '#2B7FFF', title: 'HIPAA & FHIR', sub: 'Audit logs, structured, exportable' },
-                    { icon: Globe, color: '#FF7A40', title: 'DHIS2 + ICD-10', sub: 'Public health and program ready' },
+                    { icon: Globe, color: '#FF7A40', title: 'SADC + Africa', sub: '16 SADC countries, 40+ languages' },
                   ].map((item) => {
                     const Icon = item.icon;
                     return (
@@ -985,10 +986,10 @@ export default function LandingPage() {
               >
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                   {[
-                    { field: 'fullName' as const, label: 'Full name', placeholder: 'Dr. Tariro Moyo', required: true, type: 'text' },
-                    { field: 'clinicName' as const, label: 'Clinic or hospital', placeholder: 'Borrowdale Specialist Centre', required: true, type: 'text' },
-                    { field: 'workEmail' as const, label: 'Work email', placeholder: 'doctor@clinic.co.zw', required: true, type: 'email' },
-                    { field: 'phone' as const, label: 'Phone', placeholder: '+263 77 123 4567', required: true, type: 'text' },
+                    { field: 'fullName' as const, label: 'Full name', placeholder: 'Dr. Amara Nkosi', required: true, type: 'text' },
+                    { field: 'clinicName' as const, label: 'Clinic or hospital', placeholder: 'Nairobi Regional Health Centre', required: true, type: 'text' },
+                    { field: 'workEmail' as const, label: 'Work email', placeholder: 'doctor@clinic.medicore.health', required: true, type: 'email' },
+                    { field: 'phone' as const, label: 'Phone', placeholder: '+27 / +254 / +260 ...', required: true, type: 'text' },
                     { field: 'roleTitle' as const, label: 'Role', placeholder: 'Consultant physician', required: false, type: 'text' },
                     { field: 'specialization' as const, label: 'Specialty', placeholder: 'Internal medicine, maternity, radiology', required: false, type: 'text' },
                   ].map((f) => (
@@ -1121,10 +1122,10 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[#5A7A9A]">
-                  AI-assisted clinical execution, real-time CDSS, PostVisit AI, FHIR R4 interoperability, SNOMED CT structured data, DHIS2 program reporting, and 40+ specialty workflows — built for clinics that demand real intelligence at the point of care.
+                  SADC-first clinical AI platform — multilingual voice scribe (40+ languages), real-time CDSS, PostVisit AI, FHIR R4 interoperability, DHIS2 national reporting, and 40+ specialty workflows. Serving clinics across Southern, Eastern, and Western Africa.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-1.5">
-                  {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC'].map((s) => (
+                  {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC', 'SADC'].map((s) => (
                     <span
                       key={s}
                       className="rounded-md border border-white/[0.06] bg-white/[0.03] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-[#3A5A7A]"
@@ -1190,10 +1191,10 @@ export default function LandingPage() {
           <div className="border-t border-white/[0.05] px-5 py-4 lg:px-8">
             <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[11px] text-[#3A5A7A]">
-                © {currentYear} MediCore EHR. Built for clinicians, data scientists, NGOs, and the clinics that care about both.
+                © {currentYear} MediCore EHR. SADC-first · Built for Africa · Used globally — serving clinicians, NGOs, and MOH programs across 16 SADC nations.
               </p>
               <p className="text-[11px] text-[#2A4060]">
-                FHIR R4 · SNOMED CT · ICD-10 · DHIS2 · LOINC · RxNorm · HIPAA-aware · HL7
+                FHIR R4 · SNOMED CT · ICD-10 · DHIS2 · LOINC · RxNorm · HIPAA-aware · HL7 · 40+ languages
               </p>
             </div>
           </div>

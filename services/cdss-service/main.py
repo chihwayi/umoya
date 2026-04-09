@@ -2985,7 +2985,7 @@ async def transcribe_audio(
     # SADC-first language set; auto = Whisper auto-detection
     _ALLOWED_LANGUAGES = {
         # SADC tier-1
-        "en", "af", "sw", "pt", "fr", "sn", "nd", "zu", "xh", "mg",
+        "en", "af", "sw", "pt", "fr", "sn", "nd", "zu", "xh", "mg", "ny", "ln",
         # Broader Africa tier-2
         "am", "ha", "yo", "so", "rw", "lg", "om", "ti", "tn", "st", "ss", "ts", "ve", "nr",
         # Global tier-3
@@ -8690,7 +8690,7 @@ async def education_generate(req: EducationGenReq, http_req: Request = None, ai_
         # SADC tier-1
         "en": "English", "af": "Afrikaans", "sw": "Swahili", "pt": "Portuguese",
         "fr": "French", "sn": "Shona", "nd": "Ndebele", "zu": "Zulu",
-        "xh": "Xhosa", "mg": "Malagasy",
+        "xh": "Xhosa", "mg": "Malagasy", "ny": "Chichewa/Nyanja", "ln": "Lingala",
         # Broader Africa tier-2
         "am": "Amharic", "ha": "Hausa", "yo": "Yoruba", "so": "Somali",
         "rw": "Kinyarwanda", "lg": "Luganda", "om": "Oromo", "ti": "Tigrinya",

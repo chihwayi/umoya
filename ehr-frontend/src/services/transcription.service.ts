@@ -11,7 +11,7 @@ import { ehrAxios } from './api';
  */
 export type WhisperLanguageCode =
   // SADC tier-1
-  | 'en' | 'af' | 'sw' | 'pt' | 'fr' | 'sn' | 'nd' | 'zu' | 'xh' | 'mg'
+  | 'en' | 'af' | 'sw' | 'pt' | 'fr' | 'sn' | 'nd' | 'zu' | 'xh' | 'mg' | 'ny' | 'ln'
   // Broader Africa tier-2
   | 'am' | 'ha' | 'yo' | 'so' | 'rw' | 'lg' | 'om' | 'ti' | 'tn' | 'st' | 'ss' | 'ts' | 've' | 'nr'
   // Global tier-3
