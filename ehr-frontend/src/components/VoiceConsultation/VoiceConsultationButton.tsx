@@ -5,7 +5,7 @@
 import React, { useState, useRef } from 'react';
 import { Mic, Square, Pause, Play, Loader2 } from 'lucide-react';
 import ConsentModal from './ConsentModal';
-import transcriptionService from '../../services/transcription.service';
+import transcriptionService, { WhisperLanguageCode } from '../../services/transcription.service';
 import medicalEntityExtractor, { ExtractedEntities } from '../../services/medical-entity-extractor.service';
 
 interface VoiceConsultationButtonProps {
@@ -13,7 +13,7 @@ interface VoiceConsultationButtonProps {
   patientId?: string;
   token: string;
   tenantSlug: string;
-  language?: 'en' | 'sn' | 'nd' | 'auto';
+  language?: WhisperLanguageCode;
   onTranscriptionComplete?: (text: string, entities: ExtractedEntities, soapNote?: any) => void;
   onError?: (error: string) => void;
 }

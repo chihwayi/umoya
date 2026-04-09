@@ -101,7 +101,7 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
           gender: 'female',
           date_of_birth: '1992-03-02',
         }}
-        tenantSlug="bulawayo-general"
+        tenantSlug="demo-clinic"
         onClose={jest.fn()}
         onSuccess={jest.fn()}
       />,
@@ -154,7 +154,7 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
           gender: 'female',
           date_of_birth: '1992-03-02',
         }}
-        tenantSlug="bulawayo-general"
+        tenantSlug="demo-clinic"
         onClose={jest.fn()}
         onSuccess={jest.fn()}
       />,
@@ -198,7 +198,7 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
           gender: 'female',
           date_of_birth: '1992-03-02',
         }}
-        tenantSlug="bulawayo-general"
+        tenantSlug="demo-clinic"
         onClose={jest.fn()}
         onSuccess={jest.fn()}
       />,
@@ -256,7 +256,7 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
           gender: 'female',
           date_of_birth: '1992-03-02',
         }}
-        tenantSlug="bulawayo-general"
+        tenantSlug="demo-clinic"
         onClose={jest.fn()}
         onSuccess={jest.fn()}
       />,

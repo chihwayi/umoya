@@ -222,7 +222,7 @@ export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ childre
     localStorage.removeItem('patient_data');
     localStorage.removeItem('patient_tenant');
     // Redirect to default tenant login on logout
-    window.location.href = '/bulawayo-general/login';
+    window.location.href = '/demo-clinic/login';
   };
 
   return (

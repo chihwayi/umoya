@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 class VoiceScribe:
     """
     Voice-to-Text engine using Faster-Whisper and Auto-SOAP generation.
-    Supports English, Shona, and Ndebele transcription and translation.
+    Supports multilingual transcription with priority on SADC languages:
+    English, Afrikaans, Swahili, Portuguese, French, Zulu, Xhosa, Shona,
+    Ndebele, Malagasy — plus broader African and global language coverage.
     """
     
     def __init__(self):
@@ -42,15 +44,54 @@ class VoiceScribe:
             logger.error(f"Failed to load Whisper model: {e}")
 
     def _normalize_language_code(self, value: Optional[str], fallback: str = "en") -> str:
+        """
+        Normalise a freeform language label to a Whisper-compatible ISO 639-1 code.
+
+        Priority tiers:
+          1. SADC — en, af, sw, pt, fr, sn, nd, zu, xh, mg
+          2. Broader Africa — am, ha, yo, so, rw, lg, om, ti, tn, st, ss, ts, ve, nr
+          3. Global — es, hi, zh, ar, ru, de, it, ja, ko, nl
+        """
         token = str(value or "").strip().lower()
-        mapping = {
-            "en": "en",
-            "eng": "en",
-            "english": "en",
-            "sn": "sn",
-            "shona": "sn",
-            "nd": "nd",
-            "ndebele": "nd",
+        mapping: dict = {
+            # ── SADC (tier-1) ─────────────────────────────────────────────
+            "en": "en", "eng": "en", "english": "en",
+            "af": "af", "afr": "af", "afrikaans": "af",
+            "sw": "sw", "swa": "sw", "swahili": "sw", "kiswahili": "sw",
+            "pt": "pt", "por": "pt", "portuguese": "pt", "português": "pt",
+            "fr": "fr", "fra": "fr", "french": "fr", "français": "fr",
+            "sn": "sn", "sna": "sn", "shona": "sn",
+            "nd": "nd", "nde": "nd", "ndebele": "nd", "isindebele": "nd",
+            "zu": "zu", "zul": "zu", "zulu": "zu", "isizulu": "zu",
+            "xh": "xh", "xho": "xh", "xhosa": "xh", "isixhosa": "xh",
+            "mg": "mg", "mlg": "mg", "malagasy": "mg",
+            # ── Broader Africa (tier-2) ───────────────────────────────────
+            "am": "am", "amh": "am", "amharic": "am",
+            "ha": "ha", "hau": "ha", "hausa": "ha",
+            "yo": "yo", "yor": "yo", "yoruba": "yo",
+            "so": "so", "som": "so", "somali": "so",
+            "rw": "rw", "kin": "rw", "kinyarwanda": "rw", "rwanda": "rw",
+            "lg": "lg", "lug": "lg", "luganda": "lg",
+            "om": "om", "orm": "om", "oromo": "om",
+            "ti": "ti", "tir": "ti", "tigrinya": "ti",
+            "tn": "tn", "tsn": "tn", "tswana": "tn", "setswana": "tn",
+            "st": "st", "sot": "st", "sesotho": "st", "sotho": "st",
+            "ss": "ss", "ssw": "ss", "swati": "ss", "siswati": "ss",
+            "ts": "ts", "tso": "ts", "tsonga": "ts", "xitsonga": "ts",
+            "ve": "ve", "ven": "ve", "venda": "ve", "tshivenda": "ve",
+            "nr": "nr", "nbl": "nr", "south ndebele": "nr", "isindebele south": "nr",
+            # ── Global (tier-3) ───────────────────────────────────────────
+            "ar": "ar", "ara": "ar", "arabic": "ar",
+            "es": "es", "spa": "es", "spanish": "es", "español": "es",
+            "hi": "hi", "hin": "hi", "hindi": "hi",
+            "zh": "zh", "zho": "zh", "chinese": "zh", "mandarin": "zh",
+            "ru": "ru", "rus": "ru", "russian": "ru",
+            "de": "de", "deu": "de", "german": "de", "deutsch": "de",
+            "it": "it", "ita": "it", "italian": "it",
+            "ja": "ja", "jpn": "ja", "japanese": "ja",
+            "ko": "ko", "kor": "ko", "korean": "ko",
+            "nl": "nl", "nld": "nl", "dutch": "nl",
+            # ── Special ───────────────────────────────────────────────────
             "auto": "en",
         }
         normalized = mapping.get(token)
@@ -120,7 +161,7 @@ class VoiceScribe:
     ) -> Dict[str, Any]:
         """
         Convert transcript to SOAP note using LLM.
-        Handles English, Shona, and Ndebele by asking LLM to translate/summarize in English.
+        Handles any Whisper-detected language by asking LLM to translate/summarize in English.
         """
         if not transcript:
             return {"error": "No transcript provided"}
@@ -133,7 +174,7 @@ class VoiceScribe:
             "objective": "Physical findings and vitals (in English)",
             "assessment": "Diagnosis or differential diagnosis (in English)",
             "plan": "Treatment plan and follow-up (in English)",
-            "original_language_detected": "Language detected in transcript (e.g., English, Shona, Ndebele)"
+            "original_language_detected": "Language detected in transcript (e.g., English, Swahili, Afrikaans, Zulu)"
         }
         """
 
@@ -142,15 +183,17 @@ class VoiceScribe:
         prompt = f"""
         You are an expert medical scribe.
         The following text is a transcription of a medical consultation. 
-        It may be in English, Shona, or Ndebele (or a mix).
-        
+        It may be in any language — prioritise SADC languages (English, Afrikaans, Swahili,
+        Portuguese, French, Zulu, Xhosa, Shona, Ndebele, Malagasy), broader African languages,
+        or any global language detected by Whisper.
+
         TRANSCRIPT:
         "{safe_transcript}"
-        
+
         Task:
         1. Analyze the transcript.
         2. Extract the Subjective, Objective, Assessment, and Plan (SOAP) components.
-        3. Translate any non-English content (Shona/Ndebele) into professional medical English.
+        3. Translate any non-English content into professional medical English.
         4. Format the output as a structured JSON object.
         """
         

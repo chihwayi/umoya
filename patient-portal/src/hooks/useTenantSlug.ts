@@ -5,6 +5,6 @@ export const useTenantSlug = () => {
 
   // Return tenant slug from URL, fallback to localStorage, then default
   // No redirects - just return the value
-  return tenantSlug || localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  return tenantSlug || localStorage.getItem('patient_tenant') || 'demo-clinic';
 };
 

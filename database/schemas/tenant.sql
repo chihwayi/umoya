@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     "contactPhone" VARCHAR(50),
     address TEXT,
     city VARCHAR(100),
-    country VARCHAR(100) DEFAULT 'Zimbabwe',
+    country VARCHAR(100),
     "logoUrl" VARCHAR(500),
     "featureFlags" JSONB DEFAULT '{}',
     "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -254,7 +254,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs("createdAt");
 -- Insert default super admin user (password: medicore123)
 INSERT INTO admin_users (email, "passwordHash", "firstName", "lastName", role, "mustChangePassword")
 VALUES (
-    'admin@medicore.co.zw',
+    'admin@medicore.health',
     '$2b$12$ylEv9v4PCtLxQ6DWSKzPFOvfRAaJiAdnX8JOGOYb6Cd7KCl/RPixG',
     'System',
     'Administrator',

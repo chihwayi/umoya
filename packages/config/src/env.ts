@@ -3,7 +3,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   // System
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  SYSTEM_DOMAIN: z.string().default('medicore.co.zw'),
+  SYSTEM_DOMAIN: z.string().default('medicore.health'),
 
   // URL inheritance (single-base, optional)
   SERVICE_BASE_URL: z.string().optional(),
@@ -81,7 +81,10 @@ const envSchema = z.object({
   POSTVISIT_CLINICALTRIALS_STUDY_BASE_URL: z.string().optional(),
   LOCAL_OCR_URL: z.string().optional(),
 
-  // Notifications (SMS)
+  // Notifications (SMS) — primary: Africa's Talking (pan-Africa/SADC), secondary: Twilio (global)
+  SMS_GATEWAY_AFRICAS_TALKING: z.string().optional(),
+  SMS_GATEWAY_TWILIO: z.string().optional(),
+  // Legacy Zimbabwe-only gateways (backward-compat, kept for existing deployments)
   SMS_GATEWAY_ECONET: z.string().optional(),
   SMS_GATEWAY_TELECEL: z.string().optional(),
   SMS_GATEWAY_NETONE: z.string().optional(),
@@ -315,6 +318,9 @@ export const config = {
 
   notifications: {
     sms: {
+      africasTalking: env.SMS_GATEWAY_AFRICAS_TALKING,
+      twilio: env.SMS_GATEWAY_TWILIO,
+      // Legacy Zimbabwe-only gateways (backward-compat)
       econet: env.SMS_GATEWAY_ECONET,
       telecel: env.SMS_GATEWAY_TELECEL,
       netone: env.SMS_GATEWAY_NETONE,

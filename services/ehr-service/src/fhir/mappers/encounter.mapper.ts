@@ -58,15 +58,15 @@ export class EncounterMapper {
       }] : undefined,
       extension: [
         ...(appointment.virtualMeetingUrl ? [{
-          url: 'http://medicore.co.zw/fhir/StructureDefinition/virtual-meeting-url',
+          url: 'http://medicore.health/fhir/StructureDefinition/virtual-meeting-url',
           valueString: appointment.virtualMeetingUrl,
         }] : []),
         ...(appointment.priorityLevel ? [{
-          url: 'http://medicore.co.zw/fhir/StructureDefinition/priority-level',
+          url: 'http://medicore.health/fhir/StructureDefinition/priority-level',
           valueString: appointment.priorityLevel,
         }] : []),
         ...(appointment.waitTimeMinutes ? [{
-          url: 'http://medicore.co.zw/fhir/StructureDefinition/wait-time-minutes',
+          url: 'http://medicore.health/fhir/StructureDefinition/wait-time-minutes',
           valueInteger: appointment.waitTimeMinutes,
         }] : []),
       ],
@@ -137,15 +137,15 @@ export class EncounterMapper {
       }] : undefined,
       extension: [
         ...(admission.admissionNumber ? [{
-          url: 'http://medicore.co.zw/fhir/StructureDefinition/admission-number',
+          url: 'http://medicore.health/fhir/StructureDefinition/admission-number',
           valueString: admission.admissionNumber,
         }] : []),
         ...(admission.admissionSource ? [{
-          url: 'http://medicore.co.zw/fhir/StructureDefinition/admission-source',
+          url: 'http://medicore.health/fhir/StructureDefinition/admission-source',
           valueString: admission.admissionSource,
         }] : []),
         ...(admission.referringFacility ? [{
-          url: 'http://medicore.co.zw/fhir/StructureDefinition/referring-facility',
+          url: 'http://medicore.health/fhir/StructureDefinition/referring-facility',
           valueString: admission.referringFacility,
         }] : []),
       ],

@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  */
 
 const API_BASE = process.env.EHR_API_URL;
-const TENANT_SLUG = process.env.EHR_QA_TENANT || 'bulawayo-general';
+const TENANT_SLUG = process.env.EHR_QA_TENANT || 'demo-clinic';
 const AUTH_TOKEN = process.env.EHR_QA_TOKEN || 'test-token';
 
 test.describe('Scenario S3: Oncology Case Lifecycle', () => {

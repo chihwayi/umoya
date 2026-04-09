@@ -271,7 +271,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </div>
               <div>
                 <p className="text-xs font-bold text-white leading-none">Super Admin</p>
-                <p className="text-[10px] text-[#5A78A0] mt-0.5">admin@medicore.co.zw</p>
+                <p className="text-[10px] text-[#5A78A0] mt-0.5">admin@medicore.health</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5 rounded-xl border border-[#00C896]/20 bg-[#00C896]/[0.07] px-2.5 py-1.5">

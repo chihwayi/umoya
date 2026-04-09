@@ -219,17 +219,30 @@ class MedicalEntityExtractor {
       'sweating', 'loss of appetite', 'weight loss', 'insomnia', 'anxiety',
     ];
 
+    // SADC-first multilingual symptom terms
     const shonaSymptoms = [
       'kurwadza', 'kupisa', 'kukosora', 'kurutsa', 'kubuda', 'kufema',
       'kutemwa nemusoro', 'kutemwa nemuviri', 'kushaya simba',
     ];
-
     const ndebeleSymptoms = [
       'ubuhlungu', 'ukushisa', 'ukukhwehlela', 'ukugabha', 'ukubhuda',
       'ukuphefumula', 'ukubhida', 'ukudla',
     ];
+    const zuluSymptoms = [
+      'ubuhlungu', 'ukushisa komzimba', 'ukukhwehlela', 'ukuhlanza', 'ukukhathala',
+    ];
+    const swahiliSymptoms = [
+      'homa', 'kikohozi', 'maumivu', 'kuhara', 'kutapika', 'uchovu', 'kizunguzungu',
+    ];
+    const afrikaansSymptoms = [
+      'koors', 'hoes', 'hoofpyn', 'pyn', 'duiseligheid', 'moegheid', 'braking',
+    ];
 
-    const allSymptoms = [...symptomKeywords, ...shonaSymptoms, ...ndebeleSymptoms];
+    const allSymptoms = [
+      ...symptomKeywords,
+      ...shonaSymptoms, ...ndebeleSymptoms, ...zuluSymptoms,
+      ...swahiliSymptoms, ...afrikaansSymptoms,
+    ];
 
     for (const symptom of allSymptoms) {
       if (lowerText.includes(symptom)) {

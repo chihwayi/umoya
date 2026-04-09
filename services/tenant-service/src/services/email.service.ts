@@ -40,7 +40,7 @@ export class EmailService {
   }
 
   async sendWelcomeEmail(tenantEmail: string, tenantName: string, subdomain: string, tempPassword: string) {
-    const tenantUrl = `${this.tenantAppProtocol}://${subdomain}.${process.env.SYSTEM_DOMAIN || 'medicore.co.zw'}`;
+    const tenantUrl = `${this.tenantAppProtocol}://${subdomain}.${process.env.SYSTEM_DOMAIN || 'medicore.health'}`;
     const template: EmailTemplate = {
       to: tenantEmail,
       subject: 'Welcome to MediCore - Your EHR System is Ready!',

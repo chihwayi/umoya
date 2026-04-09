@@ -41,7 +41,7 @@ import { GuidelineResult } from '../types/guidelines';
 
 const formatCurrency = (amount: number | string): string => {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return new Intl.NumberFormat('en-ZW', {
+  return new Intl.NumberFormat('en-ZA', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,

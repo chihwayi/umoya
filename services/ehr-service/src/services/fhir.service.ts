@@ -118,7 +118,7 @@ export class FhirService {
     return {
       resourceType: 'CapabilityStatement',
       id: 'medicore-fhir-server',
-      url: 'http://medicore.co.zw/fhir/CapabilityStatement/medicore-fhir-server',
+      url: 'http://medicore.health/fhir/CapabilityStatement/medicore-fhir-server',
       version: '1.0.0',
       name: 'MediCore FHIR Server',
       title: 'MediCore FHIR R4 Server',
@@ -134,7 +134,7 @@ export class FhirService {
       },
       implementation: {
         description: 'MediCore FHIR Server',
-        url: 'http://medicore.co.zw/fhir'
+        url: 'http://medicore.health/fhir'
       },
       fhirVersion: '4.0.1',
       format: ['json', 'xml'],
@@ -2214,7 +2214,7 @@ export class FhirService {
       identifier: [
         {
           use: 'usual',
-          system: 'http://medicore.co.zw/patient-number',
+          system: 'http://medicore.health/fhir/patient-number',
           value: patient.patientNumber
         },
         ...(patient.nationalId ? [{
@@ -3658,7 +3658,7 @@ export class FhirService {
       ],
       identifier: user.licenseNumber ? [
         {
-          system: 'http://medicore.co.zw/license',
+          system: 'http://medicore.health/fhir/license',
           value: user.licenseNumber,
         },
       ] : undefined,

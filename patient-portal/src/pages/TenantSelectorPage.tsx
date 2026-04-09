@@ -36,7 +36,7 @@ const TenantSelectorPage: React.FC = () => {
         setError('Unable to load the live clinic directory. Showing fallback access.');
         // Fallback: Use known tenants if API fails
         setTenants([
-          { id: '1', subdomain: 'bulawayo-general', name: 'Bulawayo General Clinic' },
+          { id: '1', subdomain: 'demo-clinic', name: 'Demo Clinic' },
         ]);
       }
     } catch (err: any) {
@@ -44,7 +44,7 @@ const TenantSelectorPage: React.FC = () => {
       setError('Unable to load the live clinic directory. Showing fallback access.');
       // Fallback: Use known tenants
       setTenants([
-        { id: '1', subdomain: 'bulawayo-general', name: 'Bulawayo General Clinic' },
+        { id: '1', subdomain: 'demo-clinic', name: 'Demo Clinic' },
       ]);
     } finally {
       setLoading(false);
@@ -187,7 +187,7 @@ const TenantSelectorPage: React.FC = () => {
 
           <div className="mt-8 border-t border-white/10 pt-6 text-center text-xs text-[#6F87AB]">
             Can&apos;t find your clinic?{' '}
-            <a href="mailto:support@medicore.co.zw" className="text-[#7DE8CA] transition hover:text-white">
+            <a href="mailto:support@medicore.health" className="text-[#7DE8CA] transition hover:text-white">
               Contact Support
             </a>
           </div>

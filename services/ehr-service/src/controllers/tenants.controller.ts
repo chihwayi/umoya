@@ -66,7 +66,7 @@ export class TenantsController {
       // Return fallback tenant
       return {
         tenants: [
-          { id: '1', subdomain: 'bulawayo-general', name: 'Bulawayo General Clinic' },
+          { id: '1', subdomain: 'demo-clinic', name: 'Demo Clinic' },
         ],
       };
     }

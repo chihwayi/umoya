@@ -2977,13 +2977,24 @@ async def transcribe_audio(
     async_job: bool = Form(False),
 ):
     """
-    Transcribe audio file (English, Shona, Ndebele) and optionally generate SOAP note.
+    Transcribe audio file (multilingual — SADC-first) and optionally generate SOAP note.
     Stores audio in MinIO.
     """
     if not _ensure_voice_scribe_loaded():
         raise HTTPException(status_code=503, detail="Voice service unavailable")
-    if language and language not in {"en", "sn", "nd", "auto"}:
-        raise HTTPException(status_code=400, detail="Invalid language. Allowed: en, sn, nd, auto")
+    # SADC-first language set; auto = Whisper auto-detection
+    _ALLOWED_LANGUAGES = {
+        # SADC tier-1
+        "en", "af", "sw", "pt", "fr", "sn", "nd", "zu", "xh", "mg",
+        # Broader Africa tier-2
+        "am", "ha", "yo", "so", "rw", "lg", "om", "ti", "tn", "st", "ss", "ts", "ve", "nr",
+        # Global tier-3
+        "ar", "es", "hi", "zh", "ru", "de", "it", "ja", "ko", "nl",
+        # Special
+        "auto",
+    }
+    if language and language not in _ALLOWED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language code: {language}")
     
     tenant_key = _require_tenant_cache_key_from_request(req)
     upload_meta = _validate_upload_constraints(
@@ -8675,7 +8686,21 @@ async def education_generate(req: EducationGenReq, http_req: Request = None, ai_
     if effective_ai_policy.get("ai_enabled") is False:
         raise HTTPException(status_code=403, detail="AI/LLM use disabled for tenant by policy")
 
-    lang_names = {"en": "English", "sn": "Shona", "nd": "Ndebele", "pt": "Portuguese"}
+    lang_names = {
+        # SADC tier-1
+        "en": "English", "af": "Afrikaans", "sw": "Swahili", "pt": "Portuguese",
+        "fr": "French", "sn": "Shona", "nd": "Ndebele", "zu": "Zulu",
+        "xh": "Xhosa", "mg": "Malagasy",
+        # Broader Africa tier-2
+        "am": "Amharic", "ha": "Hausa", "yo": "Yoruba", "so": "Somali",
+        "rw": "Kinyarwanda", "lg": "Luganda", "om": "Oromo", "ti": "Tigrinya",
+        "tn": "Setswana", "st": "Sesotho", "ss": "Siswati", "ts": "Xitsonga",
+        "ve": "Tshivenda", "nr": "South Ndebele",
+        # Global tier-3
+        "ar": "Arabic", "es": "Spanish", "hi": "Hindi", "zh": "Chinese",
+        "ru": "Russian", "de": "German", "it": "Italian", "ja": "Japanese",
+        "ko": "Korean", "nl": "Dutch",
+    }
     lang_name = lang_names.get(req.language, "English")
 
     system_prompt = (

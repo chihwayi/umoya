@@ -9,7 +9,7 @@ Replace `{slug}` with the clinic's subdomain (e.g. `kids-clinic`, `city-hospital
 
 | URL | Email | Password |
 |-----|-------|----------|
-| http://localhost:3011 | admin@medicore.co.zw | medicore123 |
+| http://localhost:3011 | admin@medicore.health | medicore123 |
 
 > Manages tenants, billing, and platform-wide settings.
 

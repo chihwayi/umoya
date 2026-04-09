@@ -5,8 +5,22 @@
 
 import { ehrAxios } from './api';
 
+/**
+ * Supported Whisper language codes — SADC-first, then broader Africa, then global.
+ * 'auto' enables Whisper's built-in language detection.
+ */
+export type WhisperLanguageCode =
+  // SADC tier-1
+  | 'en' | 'af' | 'sw' | 'pt' | 'fr' | 'sn' | 'nd' | 'zu' | 'xh' | 'mg'
+  // Broader Africa tier-2
+  | 'am' | 'ha' | 'yo' | 'so' | 'rw' | 'lg' | 'om' | 'ti' | 'tn' | 'st' | 'ss' | 'ts' | 've' | 'nr'
+  // Global tier-3
+  | 'ar' | 'es' | 'hi' | 'zh' | 'ru' | 'de' | 'it' | 'ja' | 'ko' | 'nl'
+  // Special
+  | 'auto';
+
 export interface TranscriptionOptions {
-  language?: 'en' | 'sn' | 'nd' | 'auto';
+  language?: WhisperLanguageCode;
   temperature?: number;
   prompt?: string;
 }

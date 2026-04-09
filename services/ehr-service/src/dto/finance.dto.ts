@@ -94,7 +94,7 @@ export class CreateFinanceTransactionDto {
   @IsPositive()
   amount: number;
 
-  @ApiProperty({ enum: ['USD', 'ZWL'], default: 'USD', required: false })
+  @ApiProperty({ enum: ['USD', 'ZAR', 'BWP', 'MZN', 'ZMW', 'TZS', 'KES', 'NAD', 'SZL', 'LSL', 'MUR', 'SCR'], default: 'USD', required: false })
   @IsOptional()
   @IsString()
   currency?: string;

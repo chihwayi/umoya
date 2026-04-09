@@ -99,7 +99,7 @@ PUBLIC_ADMIN_APP_PATH=/admin
 FRONTEND_URL=http://localhost:3000
 PORTAL_BASE_URL=http://localhost:3015
 WEB_APP_URL=http://localhost:3011
-REACT_APP_BASE_DOMAIN=medicore.co.zw
+REACT_APP_BASE_DOMAIN=medicore.health
 REACT_APP_PROTOCOL=http
 
 CDSS_ENABLE_AI=true
@@ -132,13 +132,14 @@ ELASTICSEARCH_URL=http://localhost:9200
 SNOWSTORM_URL=http://localhost:8080
 WHISPER_SERVICE_URL=http://localhost:8001
 
-# Zimbabwe-specific settings
+# Regional settings — primary market SADC, secondary broader Africa, tertiary global
+# Set DEFAULT_TIMEZONE to the timezone of your deployment region
 DEFAULT_CURRENCY=USD
-DEFAULT_TIMEZONE=Africa/Harare
-DEFAULT_COUNTRY=Zimbabwe
+DEFAULT_TIMEZONE=Africa/Johannesburg
+DEFAULT_COUNTRY=
 
-# SMS Provider (econet, telecel, netone)
-SMS_PROVIDER=econet
+# SMS Provider — recommended: africas_talking (pan-Africa), twilio (global)
+SMS_PROVIDER=africas_talking
 SMS_API_KEY=your-sms-api-key
 
 # Email Configuration
@@ -148,7 +149,10 @@ SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
 SMTP_PASS=your-app-password
 
-# Medical Aid Integration
+# Medical Aid / Insurance Integration
+# Configure for your deployment region's insurance/medical-aid providers
+MEDICAL_AID_API_URL=https://your-medical-aid-provider.com/api
+# Legacy Zimbabwe-specific (kept for backward compatibility)
 CIMAS_API_URL=https://api.cimas.co.zw
 PREMIER_API_URL=https://api.premier.co.zw
 ECONET_HEALTH_API_URL=https://api.econet-health.co.zw

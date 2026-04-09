@@ -1,4 +1,4 @@
--- Seed Data: Operating Rooms for Bulawayo General Hospital
+-- Seed Data: Operating Rooms for Demo Clinic
 
 -- Insert 5 Operating Rooms
 INSERT INTO operating_rooms (room_number, room_name, location, room_type, has_laminar_flow, has_c_arm, has_microscope, equipment_list, capacity) VALUES

@@ -77,7 +77,7 @@ export class AllergyIntoleranceMapper {
               ]
             : []),
           {
-            system: 'http://medicore.co.zw/allergen',
+            system: 'http://medicore.health/fhir/allergen',
             code: allergy.allergen.toLowerCase().replace(/\s+/g, '-'),
             display: allergy.allergen,
           },

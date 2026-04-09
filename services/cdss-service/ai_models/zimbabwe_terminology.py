@@ -1,6 +1,11 @@
 """
-Zimbabwe-Specific Clinical NLP
-Supports Shona, Ndebele, and local medical terms with:
+SADC-First Multilingual Clinical NLP
+Primary market: SADC (Southern African Development Community)
+Secondary market: Broader Africa
+Tertiary: Global
+
+Supports multilingual clinical text including Shona, Ndebele, Zulu, Xhosa,
+Swahili, Afrikaans, Portuguese, French, and English, with:
 - text normalization and local phrase mapping
 - fuzzy matching for spelling variants
 - symptom-cluster inference
@@ -20,12 +25,17 @@ from typing import Dict, List, Set, Tuple, Optional, Any
 # KNOWLEDGE BASES
 # =============================================================================
 
-ZIMBABWE_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
+SADC_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
     "hiv": {
         "canonical_name": "HIV/AIDS",
         "english": ["hiv", "aids", "human immunodeficiency virus", "acquired immunodeficiency syndrome"],
         "shona": ["hiv", "mukondombera", "chirwere chehiv", "mukondobera"],
         "ndebele": ["hiv", "isifo sehiv"],
+        "zulu": ["hiv", "isifo se-hiv", "igciwane le-hiv"],
+        "xhosa": ["hiv", "isifo se-hiv"],
+        "swahili": ["hiv", "ukimwi", "virusi vya ukimwi"],
+        "afrikaans": ["hiv", "miv", "menslike immunogebrekvirus"],
+        "portuguese": ["hiv", "sida", "vírus da imunodeficiência humana"],
         "local_terms": ["arv", "antiretroviral", "art", "arvs", "known positive", "hiv positive"],
     },
     "tuberculosis": {
@@ -33,6 +43,11 @@ ZIMBABWE_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "english": ["tb", "tuberculosis", "pulmonary tb", "extra-pulmonary tb"],
         "shona": ["tb", "chirwere chepfupa", "pfupa", "tb remapapu"],
         "ndebele": ["tb", "isifo samathambo"],
+        "zulu": ["tb", "isifo sezifuba", "uqobo"],
+        "xhosa": ["tb", "isifo sephepho"],
+        "swahili": ["tb", "kifua kikuu", "ugonjwa wa mapafu"],
+        "afrikaans": ["tb", "tuberkulose"],
+        "portuguese": ["tb", "tuberculose"],
         "local_terms": ["tb treatment", "dot therapy", "isoniazid", "rifampicin"],
     },
     "malaria": {
@@ -40,6 +55,10 @@ ZIMBABWE_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "english": ["malaria"],
         "shona": ["malaria", "marariya", "maralia", "chirwere chemalaria"],
         "ndebele": ["malaria", "imalariya"],
+        "zulu": ["malaria", "imaleriya"],
+        "swahili": ["malaria", "homa ya malaria", "homa kali"],
+        "afrikaans": ["malaria"],
+        "portuguese": ["malária", "paludismo"],
         "local_terms": ["high fever malaria", "act treatment"],
     },
     "diabetes": {
@@ -47,6 +66,10 @@ ZIMBABWE_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "english": ["diabetes", "diabetic", "diabetes mellitus"],
         "shona": ["diabetes", "chirwere cheshuga", "shuga", "ane sugar"],
         "ndebele": ["diabetes", "isifo sikashukela"],
+        "zulu": ["diabetes", "isifo sikashukela", "isifo samathambo obushukela"],
+        "swahili": ["kisukari", "ugonjwa wa sukari", "diabetes"],
+        "afrikaans": ["diabetes", "suikersiekte"],
+        "portuguese": ["diabetes", "diabete", "açúcar no sangue"],
         "local_terms": ["blood sugar", "high sugar", "sugga", "glucose", "insulin"],
     },
     "hypertension": {
@@ -57,6 +80,10 @@ ZIMBABWE_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
             "bp yakwira", "pressure yepamusoro",
         ],
         "ndebele": ["hypertension", "bp ephezulu"],
+        "zulu": ["hypertension", "ingcindezi yegazi ephezulu"],
+        "swahili": ["shinikizo la damu", "pressure ya damu", "hypertension"],
+        "afrikaans": ["hipertensie", "hoë bloeddruk"],
+        "portuguese": ["hipertensão", "pressão alta", "pressão arterial elevada"],
         "local_terms": ["high bp", "bp high", "hbp"],
     },
     "pneumonia": {
@@ -64,9 +91,16 @@ ZIMBABWE_TERMINOLOGY: Dict[str, Dict[str, Any]] = {
         "english": ["pneumonia", "chest infection", "lung infection"],
         "shona": ["pneumonia", "chirwere chepfuva"],
         "ndebele": ["pneumonia", "isifo sezifuba"],
+        "zulu": ["pneumonia", "isifo sezifuba", "ukugula kwezifuba"],
+        "swahili": ["nimonia", "ugonjwa wa mapafu", "kifua"],
+        "afrikaans": ["longontsteking", "pneumonie"],
+        "portuguese": ["pneumonia", "infecção pulmonar"],
         "local_terms": ["lung infection", "lower respiratory tract infection", "lrti"],
     },
 }
+
+# Backward-compatible alias
+ZIMBABWE_TERMINOLOGY = SADC_TERMINOLOGY
 
 SHONA_SYMPTOMS: Dict[str, List[str]] = {
     "fever": ["fivha", "kupisa", "kupisa kwemuviri", "muviri uri kupisa", "temperature"],
@@ -116,7 +150,79 @@ NDEBELE_SYMPTOMS: Dict[str, List[str]] = {
     "swollen_lymph_nodes": ["amaglandisi akhukhumele"],
 }
 
-ZIMBABWE_DISEASE_PATTERNS: Dict[str, Dict[str, Any]] = {
+SWAHILI_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["homa", "joto la mwili", "joto kali"],
+    "cough": ["kikohozi", "kukohoa"],
+    "headache": ["maumivu ya kichwa", "kichwa kuuma"],
+    "chest_pain": ["maumivu ya kifua", "kifua kuuma"],
+    "shortness_of_breath": ["kupumua kwa shida", "upungufu wa pumzi"],
+    "abdominal_pain": ["maumivu ya tumbo", "tumbo kuuma"],
+    "nausea": ["kichefuchefu", "kujisikia kichefuchefu"],
+    "vomiting": ["kutapika"],
+    "diarrhea": ["kuhara", "tumbo la kuhara"],
+    "fatigue": ["uchovu", "udhaifu", "nguvu chache"],
+    "dizziness": ["kizunguzungu", "kuchanganyikiwa"],
+    "joint_pain": ["maumivu ya viungo"],
+    "weight_loss": ["kupoteza uzito", "uzito kupungua"],
+    "night_sweats": ["jasho la usiku"],
+    "thirst": ["kiu", "kiu kali"],
+    "frequent_urination": ["kukojoa mara kwa mara"],
+    "blurred_vision": ["kuona kwa ukungu", "macho kuona vibaya"],
+    "chills": ["baridi ya ghafla", "kutetemeka"],
+    "body_aches": ["maumivu ya mwili", "mwili kuuma"],
+    "hemoptysis": ["kutoa damu ukikohoa", "kohozi la damu"],
+    "swollen_lymph_nodes": ["tezi kuvimba", "nodi za limfu kuvimba"],
+}
+
+ZULU_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["umkhuhlane", "ukushisa komzimba", "umzimba ushisa"],
+    "cough": ["ukukhwehlela", "ukhwehlelo"],
+    "headache": ["ikhanda elibuhlungu", "ubuhlungu bekhanda"],
+    "chest_pain": ["ubuhlungu esifubeni", "isifuba esibuhlungu"],
+    "shortness_of_breath": ["ukuphefumula nzima", "ukuntuleka komoya"],
+    "abdominal_pain": ["ubuhlungu esiswini", "isisu esibuhlungu"],
+    "nausea": ["isicefe", "ukuzwa isicefe"],
+    "vomiting": ["ukuhlanza", "ukuphalaza"],
+    "diarrhea": ["uhudo", "ukuhuda"],
+    "fatigue": ["ukukhathala", "ukudiniwa", "ubudedengu"],
+    "dizziness": ["ukuzungeza", "ukudangala"],
+    "joint_pain": ["ubuhlungu emalungwini", "amalunga abuhlungu"],
+    "weight_loss": ["ukwehlela komzimba", "ukuncipha komzimba"],
+    "night_sweats": ["ukujuluka ebusuku"],
+    "thirst": ["ukoma", "ukwoma kakhulu"],
+    "frequent_urination": ["ukuchama kaningi"],
+    "blurred_vision": ["ukubona kufiphele"],
+    "chills": ["ukuqhaqhazela", "umzimba uyaqhaqhazela"],
+    "body_aches": ["ubuhlungu bomzimba", "umzimba ubuhlungu"],
+    "hemoptysis": ["igazi ekhwehlelweni", "ukukhwehlela igazi"],
+    "swollen_lymph_nodes": ["amaglandisi avuvukile"],
+}
+
+AFRIKAANS_SYMPTOMS: Dict[str, List[str]] = {
+    "fever": ["koors", "verhoogde liggaamstemperatuur"],
+    "cough": ["hoes", "hoestery"],
+    "headache": ["hoofpyn"],
+    "chest_pain": ["borspyn", "pyn in die bors"],
+    "shortness_of_breath": ["asemhaling moeilik", "kortasem"],
+    "abdominal_pain": ["maagpyn", "buikpyn"],
+    "nausea": ["naarheid", "naar voel"],
+    "vomiting": ["braking", "opgooi"],
+    "diarrhea": ["diarree", "maagloop"],
+    "fatigue": ["moegheid", "uitputting"],
+    "dizziness": ["duiseligheid", "duiselig"],
+    "joint_pain": ["gewrigspyn"],
+    "weight_loss": ["gewigsverlies"],
+    "night_sweats": ["nagsweetery"],
+    "thirst": ["dors", "baie dors"],
+    "frequent_urination": ["gereelde urinering"],
+    "blurred_vision": ["waasige sig"],
+    "chills": ["koue rillings"],
+    "body_aches": ["liggaamspyne", "lyf pyn"],
+    "hemoptysis": ["bloed hoes", "bloed in slym"],
+    "swollen_lymph_nodes": ["geswolle kliere"],
+}
+
+SADC_DISEASE_PATTERNS: Dict[str, Dict[str, Any]] = {
     "HIV/AIDS": {
         "common_symptoms": ["fever", "fatigue", "weight_loss", "cough", "diarrhea", "swollen_lymph_nodes"],
         "prevalence": "high",
@@ -150,6 +256,9 @@ ZIMBABWE_DISEASE_PATTERNS: Dict[str, Dict[str, Any]] = {
         "base_probability_multiplier": 1.00,
     },
 }
+
+# Backward-compatible alias
+ZIMBABWE_DISEASE_PATTERNS = SADC_DISEASE_PATTERNS
 
 
 # =============================================================================
@@ -185,9 +294,14 @@ class ConditionResult:
 # MAIN ENGINE
 # =============================================================================
 
-class ZimbabweClinicalNLP:
+class SadcClinicalNLP:
     """
-    Zimbabwe-focused clinical NLP for mixed English / Shona / Ndebele text.
+    SADC-first multilingual clinical NLP for mixed-language clinical text.
+
+    Primary market: SADC (English, Afrikaans, Swahili, Portuguese, French,
+                           Zulu, Xhosa, Shona, Ndebele, Malagasy)
+    Secondary: Broader Africa (Amharic, Hausa, Yoruba, Somali, …)
+    Tertiary: Global
 
     Supports:
     - text normalization and local-phrase mapping
@@ -196,7 +310,7 @@ class ZimbabweClinicalNLP:
     - direct condition name extraction
     - symptom-cluster inference (e.g. cough + night_sweats + weight_loss → TB)
     - negation / history / suspicion context detection
-    - HIV/TB co-infection flag (clinically important for Zimbabwe)
+    - HIV/TB co-infection flag (clinically important across SADC)
     - structured scored output via analyze()
     """
 
@@ -245,13 +359,19 @@ class ZimbabweClinicalNLP:
         terminology: Optional[Dict[str, Dict[str, Any]]] = None,
         shona_symptoms: Optional[Dict[str, List[str]]] = None,
         ndebele_symptoms: Optional[Dict[str, List[str]]] = None,
+        zulu_symptoms: Optional[Dict[str, List[str]]] = None,
+        swahili_symptoms: Optional[Dict[str, List[str]]] = None,
+        afrikaans_symptoms: Optional[Dict[str, List[str]]] = None,
         disease_patterns: Optional[Dict[str, Dict[str, Any]]] = None,
         fuzzy_threshold: float = 0.88,
     ) -> None:
-        self.terminology = terminology or ZIMBABWE_TERMINOLOGY
+        self.terminology = terminology or SADC_TERMINOLOGY
         self.shona_symptoms = shona_symptoms or SHONA_SYMPTOMS
         self.ndebele_symptoms = ndebele_symptoms or NDEBELE_SYMPTOMS
-        self.disease_patterns = disease_patterns or ZIMBABWE_DISEASE_PATTERNS
+        self.zulu_symptoms = zulu_symptoms or ZULU_SYMPTOMS
+        self.swahili_symptoms = swahili_symptoms or SWAHILI_SYMPTOMS
+        self.afrikaans_symptoms = afrikaans_symptoms or AFRIKAANS_SYMPTOMS
+        self.disease_patterns = disease_patterns or SADC_DISEASE_PATTERNS
         self.fuzzy_threshold = fuzzy_threshold
 
         self.english_symptoms = self._build_english_symptom_aliases()
@@ -506,13 +626,17 @@ class ZimbabweClinicalNLP:
 
     def detect_language_mix(self, text: str) -> List[str]:
         detected: Set[str] = set()
-
-        if sum(1 for aliases in self.shona_symptoms.values() for a in aliases if a in text) > 0:
-            detected.add("shona")
-        if sum(1 for aliases in self.ndebele_symptoms.values() for a in aliases if a in text) > 0:
-            detected.add("ndebele")
-        if sum(1 for aliases in self.english_symptoms.values() for a in aliases if a in text) > 0:
-            detected.add("english")
+        _checks = [
+            ("english", self.english_symptoms),
+            ("shona", self.shona_symptoms),
+            ("ndebele", self.ndebele_symptoms),
+            ("zulu", self.zulu_symptoms),
+            ("swahili", self.swahili_symptoms),
+            ("afrikaans", self.afrikaans_symptoms),
+        ]
+        for lang, symptom_map in _checks:
+            if sum(1 for aliases in symptom_map.values() for a in aliases if a in text) > 0:
+                detected.add(lang)
         if not detected:
             detected.add("unknown")
 
@@ -525,7 +649,7 @@ class ZimbabweClinicalNLP:
     def _check_hiv_tb_coinfection(self, combined: List[ConditionResult]) -> bool:
         """
         Return True when both HIV/AIDS and TB are suspected above threshold.
-        Zimbabwe has one of the world's highest HIV/TB co-infection rates.
+        SADC has among the world's highest HIV/TB co-infection rates.
         """
         names = {c.name for c in combined if c.score >= 0.50 and not c.negated}
         return "HIV/AIDS" in names and "Tuberculosis" in names
@@ -563,6 +687,9 @@ class ZimbabweClinicalNLP:
         all_symptoms = (
             set(self.shona_symptoms.keys())
             | set(self.ndebele_symptoms.keys())
+            | set(self.zulu_symptoms.keys())
+            | set(self.swahili_symptoms.keys())
+            | set(self.afrikaans_symptoms.keys())
             | set(self.english_symptoms.keys())
         )
         index: Dict[str, List[Tuple[str, str]]] = {}
@@ -574,19 +701,23 @@ class ZimbabweClinicalNLP:
                 entries.append((self.normalize_text(a), "shona"))
             for a in self.ndebele_symptoms.get(sym, []):
                 entries.append((self.normalize_text(a), "ndebele"))
+            for a in self.zulu_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "zulu"))
+            for a in self.swahili_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "swahili"))
+            for a in self.afrikaans_symptoms.get(sym, []):
+                entries.append((self.normalize_text(a), "afrikaans"))
             index[sym] = entries
         return index
 
     def _build_condition_alias_index(self) -> Dict[str, List[Tuple[str, str]]]:
         index: Dict[str, List[Tuple[str, str]]] = {}
+        _lang_fields = ["english", "shona", "ndebele", "zulu", "xhosa", "swahili", "afrikaans", "portuguese", "french"]
         for key, meta in self.terminology.items():
             entries: List[Tuple[str, str]] = []
-            for a in meta.get("english", []):
-                entries.append((self.normalize_text(a), "english"))
-            for a in meta.get("shona", []):
-                entries.append((self.normalize_text(a), "shona"))
-            for a in meta.get("ndebele", []):
-                entries.append((self.normalize_text(a), "ndebele"))
+            for lang in _lang_fields:
+                for a in meta.get(lang, []):
+                    entries.append((self.normalize_text(a), lang))
             for a in meta.get("local_terms", []):
                 entries.append((self.normalize_text(a), "local"))
             index[key] = entries
@@ -674,29 +805,36 @@ class ZimbabweClinicalNLP:
 # MODULE-LEVEL SINGLETON  (created once, reused)
 # =============================================================================
 
-_nlp = ZimbabweClinicalNLP()
+_nlp = SadcClinicalNLP()
+
+# Backward-compatible alias so any `from zimbabwe_terminology import _nlp as _zim_nlp` keeps working
+ZimbabweClinicalNLP = SadcClinicalNLP
 
 
 # =============================================================================
-# BACKWARD-COMPATIBLE MODULE-LEVEL FUNCTIONS
-# (clinicalbert_diagnostic.py and any other callers use these directly)
+# MODULE-LEVEL FUNCTIONS
 # =============================================================================
 
 def translate_symptom_to_english(text: str, language: str = "auto") -> str:
-    """Translate Shona/Ndebele symptom to English. Backward-compatible."""
+    """Translate a multilingual symptom expression to English. SADC-first."""
     return _nlp.translate_symptom_to_english(text)
 
 
-def get_zimbabwe_disease_multiplier(diagnosis: str) -> float:
-    """Prevalence multiplier for Zimbabwe-specific diseases. Backward-compatible."""
+def get_regional_disease_multiplier(diagnosis: str) -> float:
+    """Prevalence multiplier for SADC-priority diseases."""
     return _nlp.get_zimbabwe_disease_multiplier(diagnosis)
 
 
-def extract_zimbabwe_conditions(text: str) -> list:
+# Backward-compatible alias
+def get_zimbabwe_disease_multiplier(diagnosis: str) -> float:
+    """Backward-compatible alias for get_regional_disease_multiplier."""
+    return get_regional_disease_multiplier(diagnosis)
+
+
+def extract_sadc_conditions(text: str) -> list:
     """
-    Extract Zimbabwe-specific conditions from text.
-    Returns lowercase condition keys for backward compatibility with callers
-    that map: 'hiv' → 'HIV/AIDS', 'tuberculosis' → 'Tuberculosis', etc.
+    Extract SADC-priority conditions from multilingual clinical text.
+    Returns lowercase condition keys compatible with the SADC_TERMINOLOGY dict.
     """
     norm = _nlp.normalize_text(text)
     direct = _nlp.extract_conditions(norm)
@@ -710,3 +848,9 @@ def extract_zimbabwe_conditions(text: str) -> list:
         for c in combined
         if c.score >= 0.35 and not c.negated
     ]
+
+
+# Backward-compatible alias
+def extract_zimbabwe_conditions(text: str) -> list:
+    """Backward-compatible alias for extract_sadc_conditions."""
+    return extract_sadc_conditions(text)

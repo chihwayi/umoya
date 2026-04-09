@@ -112,7 +112,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="email"
                   required
                   className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
-                  placeholder="admin@medicore.co.zw"
+                  placeholder="admin@medicore.health"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />

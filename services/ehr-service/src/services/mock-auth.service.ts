@@ -14,7 +14,7 @@ export class MockAuthService {
         firstName: 'Admin',
         lastName: 'User',
         role: 'admin',
-        tenantId: 'bulawayo-general'
+        tenantId: 'demo-clinic'
       };
     }
     return null;

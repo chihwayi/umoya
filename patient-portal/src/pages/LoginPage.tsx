@@ -17,7 +17,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   
   // Use fallback tenant if not in URL
-  const effectiveTenantSlug = tenantSlug || 'bulawayo-general';
+  const effectiveTenantSlug = tenantSlug || 'demo-clinic';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -52,7 +52,7 @@ function App() {
           <Routes>
             {/* Tenant selector - root page */}
             <Route path="/select-tenant" element={<TenantSelectorPage />} />
-            <Route path="/" element={<Navigate to="/bulawayo-general/dashboard" replace />} />
+            <Route path="/" element={<Navigate to="/demo-clinic/dashboard" replace />} />
             
             {/* Tenant-specific routes */}
             <Route path="/:tenantSlug/register" element={<RegisterPage />} />
@@ -342,19 +342,19 @@ function App() {
             />
             
             {/* Legacy routes - redirect to default tenant */}
-            <Route path="/register" element={<Navigate to="/bulawayo-general/register" replace />} />
-            <Route path="/login" element={<Navigate to="/bulawayo-general/login" replace />} />
-            <Route path="/verify-email" element={<Navigate to="/bulawayo-general/verify-email" replace />} />
-            <Route path="/reset-password" element={<Navigate to="/bulawayo-general/reset-password" replace />} />
-            <Route path="/link-account" element={<Navigate to="/bulawayo-general/link-account" replace />} />
-            <Route path="/dashboard" element={<Navigate to="/bulawayo-general/dashboard" replace />} />
-            <Route path="/appointments" element={<Navigate to="/bulawayo-general/appointments" replace />} />
-            <Route path="/records" element={<Navigate to="/bulawayo-general/records" replace />} />
-            <Route path="/lab-results" element={<Navigate to="/bulawayo-general/lab-results" replace />} />
-            <Route path="/prescriptions" element={<Navigate to="/bulawayo-general/prescriptions" replace />} />
-            <Route path="/bills" element={<Navigate to="/bulawayo-general/bills" replace />} />
-            <Route path="/vitals" element={<Navigate to="/bulawayo-general/vitals" replace />} />
-            <Route path="/messages" element={<Navigate to="/bulawayo-general/messages" replace />} />
+            <Route path="/register" element={<Navigate to="/demo-clinic/register" replace />} />
+            <Route path="/login" element={<Navigate to="/demo-clinic/login" replace />} />
+            <Route path="/verify-email" element={<Navigate to="/demo-clinic/verify-email" replace />} />
+            <Route path="/reset-password" element={<Navigate to="/demo-clinic/reset-password" replace />} />
+            <Route path="/link-account" element={<Navigate to="/demo-clinic/link-account" replace />} />
+            <Route path="/dashboard" element={<Navigate to="/demo-clinic/dashboard" replace />} />
+            <Route path="/appointments" element={<Navigate to="/demo-clinic/appointments" replace />} />
+            <Route path="/records" element={<Navigate to="/demo-clinic/records" replace />} />
+            <Route path="/lab-results" element={<Navigate to="/demo-clinic/lab-results" replace />} />
+            <Route path="/prescriptions" element={<Navigate to="/demo-clinic/prescriptions" replace />} />
+            <Route path="/bills" element={<Navigate to="/demo-clinic/bills" replace />} />
+            <Route path="/vitals" element={<Navigate to="/demo-clinic/vitals" replace />} />
+            <Route path="/messages" element={<Navigate to="/demo-clinic/messages" replace />} />
           </Routes>
         </div>
       </Router>

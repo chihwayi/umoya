@@ -36,7 +36,7 @@ const RegisterPage: React.FC = () => {
   const [lastAssessmentKey, setLastAssessmentKey] = useState('');
   
   // Use fallback tenant if not in URL
-  const effectiveTenantSlug = tenantSlug || 'bulawayo-general';
+  const effectiveTenantSlug = tenantSlug || 'demo-clinic';
 
   const hasValidDob = DOB_REGEX.test(formData.dateOfBirth);
   const hasAssessableIdentity =

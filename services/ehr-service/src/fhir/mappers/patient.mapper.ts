@@ -15,7 +15,7 @@ export class PatientMapper {
 
     if (patient.nationalId) {
       identifiers.push({
-        system: 'http://national-id.zimbabwe',
+        system: 'http://medicore.health/fhir/national-id',
         value: patient.nationalId,
       });
     }
@@ -84,19 +84,19 @@ export class PatientMapper {
     const extensions: fhir.Extension[] = [];
     if (patient.bloodType) {
       extensions.push({
-        url: 'http://medicore.co.zw/fhir/StructureDefinition/blood-type',
+        url: 'http://medicore.health/fhir/StructureDefinition/blood-type',
         valueString: patient.bloodType,
       });
     }
     if (patient.allergies) {
       extensions.push({
-        url: 'http://medicore.co.zw/fhir/StructureDefinition/allergies',
+        url: 'http://medicore.health/fhir/StructureDefinition/allergies',
         valueString: patient.allergies,
       });
     }
     if (patient.medicalHistory) {
       extensions.push({
-        url: 'http://medicore.co.zw/fhir/StructureDefinition/medical-history',
+        url: 'http://medicore.health/fhir/StructureDefinition/medical-history',
         valueString: patient.medicalHistory,
       });
     }
