@@ -52,6 +52,7 @@ import { NursingNotesController } from './controllers/nursing-notes.controller';
 import { OrderController } from './controllers/order.controller';
 import { ProblemController } from './controllers/problem.controller';
 import { AllergyController } from './controllers/allergy.controller';
+import { EpiController } from './controllers/epi.controller';
 import { LabTestController } from './controllers/lab-test.controller';
 import { LabTestCatalogController } from './controllers/lab-test-catalog.controller';
 import { LabOrderSetController } from './controllers/lab-order-set.controller';
@@ -206,6 +207,7 @@ import { NursingNotesService } from './services/nursing-notes.service';
 import { OrderService } from './services/order.service';
 import { ProblemService } from './services/problem.service';
 import { AllergyService } from './services/allergy.service';
+import { EpiService } from './services/epi.service';
 import { LabTestService } from './services/lab-test.service';
 import { LabTestCatalogService } from './services/lab-test-catalog.service';
 import { LabOrderSetService } from './services/lab-order-set.service';
@@ -446,6 +448,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OrderController,
     ProblemController,
     AllergyController,
+    EpiController,
     LabTestController,
     LabTestCatalogController,
     LabOrderSetController,
@@ -582,6 +585,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OrderService,
     ProblemService,
     AllergyService,
+    EpiService,
     LabTestService,
     LabTestCatalogService,
     LabOrderSetService,

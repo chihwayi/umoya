@@ -13,6 +13,10 @@ import {
   TENANT_ENTITY_SHADOW_CLEANUP_BUNDLE_VERSION,
   TENANT_ENTITY_SHADOW_CLEANUP_STATEMENTS,
 } from '../generated/tenant-entity-shadow-cleanup.statements';
+import {
+  TENANT_EPI_REGISTRY_BUNDLE_VERSION,
+  TENANT_EPI_REGISTRY_STATEMENTS,
+} from '../generated/tenant-epi-registry.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1207,6 +1211,13 @@ export class DatabaseProvisioningService {
         version: '2026.04.03.1',
         description: 'Adds missing columns to proactive_alerts and patient_risk_scores; renames acknowledged_by → acknowledged_by_id',
         statements: () => this.getSprint127ProactiveAiColumnHardeningStatements(),
+      },
+      {
+        id: 'epi-registry',
+        label: 'EPI / Immunization Registry',
+        version: TENANT_EPI_REGISTRY_BUNDLE_VERSION,
+        description: 'S129 — EPI schedule engine, vaccination records, vaccine lots, cold chain logging, AEFI reports, and DHIS2 Tracker sync log',
+        statements: () => TENANT_EPI_REGISTRY_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',
