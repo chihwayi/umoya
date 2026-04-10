@@ -34,6 +34,7 @@ import { NephrologyController } from './controllers/nephrology.controller';
 import { DermatologyController } from './controllers/dermatology.controller';
 import { PalliativeController } from './controllers/palliative.controller';
 import { NutritionController } from './controllers/nutrition.controller';
+import { NhifController } from './controllers/nhif.controller';
 import { IcuController } from './controllers/icu.controller';
 import { SdohController } from './controllers/sdoh.controller';
 import { NtdController } from './controllers/ntd.controller';
@@ -194,6 +195,7 @@ import { NephrologyService } from './services/nephrology.service';
 import { DermatologyService } from './services/dermatology.service';
 import { PalliativeService } from './services/palliative.service';
 import { NutritionService } from './services/nutrition.service';
+import { NhifService } from './services/nhif.service';
 import { IcuService } from './services/icu.service';
 import { SdohService } from './services/sdoh.service';
 import { NtdService } from './services/ntd.service';
@@ -436,6 +438,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DermatologyController,
     PalliativeController,
     NutritionController,
+    NhifController,
     IcuController,
     SdohController,
     NtdController,
@@ -649,6 +652,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DermatologyService,
     PalliativeService,
     NutritionService,
+    NhifService,
     IcuService,
     SdohService,
     NtdService,

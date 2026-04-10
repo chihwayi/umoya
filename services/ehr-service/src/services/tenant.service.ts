@@ -280,6 +280,10 @@ import { ChwDailyTally } from '../entities/chw-daily-tally.entity';
 import { NutritionAssessment } from '../entities/nutrition-assessment.entity';
 import { RutfDispensing } from '../entities/rutf-dispensing.entity';
 import { TherapeuticFeedingRecord } from '../entities/therapeutic-feeding.entity';
+import { NhifScheme } from '../entities/nhif-scheme.entity';
+import { SchemeMember } from '../entities/scheme-member.entity';
+import { NhifClaim } from '../entities/nhif-claim.entity';
+import { CapitationPayment } from '../entities/capitation-payment.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -735,6 +739,10 @@ export class TenantService {
         NutritionAssessment,
         RutfDispensing,
         TherapeuticFeedingRecord,
+        NhifScheme,
+        SchemeMember,
+        NhifClaim,
+        CapitationPayment,
       ],
       logging: false,
     });

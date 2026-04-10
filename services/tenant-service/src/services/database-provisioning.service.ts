@@ -33,6 +33,10 @@ import {
   TENANT_NUTRITION_CMAM_BUNDLE_VERSION,
   TENANT_NUTRITION_CMAM_STATEMENTS,
 } from '../generated/tenant-nutrition-cmam.statements';
+import {
+  TENANT_NHIF_CBHI_BUNDLE_VERSION,
+  TENANT_NHIF_CBHI_STATEMENTS,
+} from '../generated/tenant-nhif-cbhi.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1262,6 +1266,13 @@ export class DatabaseProvisioningService {
         version: TENANT_NUTRITION_CMAM_BUNDLE_VERSION,
         description: 'S133 — CMAM nutrition assessments, RUTF dispensing, therapeutic feeding, and CMAM reporting registers',
         statements: TENANT_NUTRITION_CMAM_STATEMENTS,
+      },
+      {
+        id: 'nhif-cbhi',
+        label: 'NHIF/CBHI Capitation Billing',
+        version: TENANT_NHIF_CBHI_BUNDLE_VERSION,
+        description: 'NHIF schemes, scheme members, claims, capitation payments',
+        statements: TENANT_NHIF_CBHI_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',
