@@ -163,6 +163,7 @@ import { SupplyChainAiController } from './controllers/supply-chain-ai.controlle
 import { ModelRegistryController } from './controllers/model-registry.controller';
 import { StaffNotificationsController } from './controllers/staff-notifications.controller';
 import { RegistrationIntelligenceController } from './controllers/registration-intelligence.controller';
+import { AtMessagingController } from './controllers/at-messaging.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -381,6 +382,7 @@ import { ModelRegistryService } from './services/model-registry.service';
 import { TelemedicinePostVisitBridgeService } from './services/telemedicine-postvisit-bridge.service';
 import { StaffNotificationsService } from './services/staff-notifications.service';
 import { RegistrationIntelligenceService } from './services/registration-intelligence.service';
+import { AtMessagingService } from './services/at-messaging.service';
 import { KnowledgeIngestService } from './services/knowledge-ingest.service';
 import { ClaimsAiService } from './services/claims-ai.service';
 import { RiskStratificationService } from './services/risk-stratification.service';
@@ -578,6 +580,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RegistrationAiController,
     DicomController,
     ProactiveAiController,
+    AtMessagingController,
   ],
   providers: [
     AuthService,
@@ -803,6 +806,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OutcomeCollectionService,
     RegistrationAiService,
     ProactiveAiService,
+    AtMessagingService,
     CriticalAlertGateway,
     VoiceTranscriptionGateway,
     RolesGuard,

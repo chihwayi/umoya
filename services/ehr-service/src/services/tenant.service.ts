@@ -289,6 +289,9 @@ import { TierNetExport } from '../entities/tier-net-export.entity';
 import { EtrNetNotification } from '../entities/etr-net-notification.entity';
 import { DatimIndicatorMapping } from '../entities/datim-indicator-mapping.entity';
 import { DatimSubmission } from '../entities/datim-submission.entity';
+import { AtMessageLog } from '../entities/at-message-log.entity';
+import { UssdSession } from '../entities/ussd-session.entity';
+import { NotificationTemplate } from '../entities/notification-template.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -753,6 +756,9 @@ export class TenantService {
         EtrNetNotification,
         DatimIndicatorMapping,
         DatimSubmission,
+        AtMessageLog,
+        UssdSession,
+        NotificationTemplate,
       ],
       logging: false,
     });

@@ -45,6 +45,10 @@ import {
   TENANT_DHIS2_TRACKER_DATIM_BUNDLE_VERSION,
   TENANT_DHIS2_TRACKER_DATIM_STATEMENTS,
 } from '../generated/tenant-dhis2-tracker-datim.statements';
+import {
+  TENANT_AT_MESSAGING_BUNDLE_VERSION,
+  TENANT_AT_MESSAGING_STATEMENTS,
+} from '../generated/tenant-at-messaging.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1296,6 +1300,13 @@ export class DatabaseProvisioningService {
         description:
           'S136 — DHIS2 Tracker individual TEI enrollment, program stage events, DATIM MER indicator mappings and submissions',
         statements: TENANT_DHIS2_TRACKER_DATIM_STATEMENTS,
+      },
+      {
+        id: 'at-messaging',
+        label: "Africa's Talking Messaging",
+        version: TENANT_AT_MESSAGING_BUNDLE_VERSION,
+        description: "S137 — Africa's Talking SMS/USSD, WhatsApp health notifications, message logs, USSD session state",
+        statements: TENANT_AT_MESSAGING_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',
