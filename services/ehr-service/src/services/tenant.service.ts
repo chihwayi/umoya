@@ -277,6 +277,9 @@ import { HouseholdMember } from '../entities/household-member.entity';
 import { ChwVisit } from '../entities/chw-visit.entity';
 import { ChwTask } from '../entities/chw-task.entity';
 import { ChwDailyTally } from '../entities/chw-daily-tally.entity';
+import { NutritionAssessment } from '../entities/nutrition-assessment.entity';
+import { RutfDispensing } from '../entities/rutf-dispensing.entity';
+import { TherapeuticFeedingRecord } from '../entities/therapeutic-feeding.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -729,6 +732,9 @@ export class TenantService {
         ChwVisit,
         ChwTask,
         ChwDailyTally,
+        NutritionAssessment,
+        RutfDispensing,
+        TherapeuticFeedingRecord,
       ],
       logging: false,
     });

@@ -195,6 +195,14 @@ export class CdssController {
     );
   }
 
+  @Post('nutrition/cmam-protocol')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Return CMAM protocol recommendation from rule-based CDSS' })
+  @ApiResponse({ status: 200, description: 'CMAM protocol recommendation returned' })
+  async getNutritionCmamProtocol(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.getNutritionCmamProtocol(body, req.tenantId, req.tenantDb);
+  }
+
   @Post('triage/analyze')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Analyze triage context and return copilot recommendations' })

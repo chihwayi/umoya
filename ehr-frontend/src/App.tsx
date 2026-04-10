@@ -61,6 +61,7 @@ const MultiCurrencyMedicalAidDashboard = lazy(() => import('./pages/MultiCurrenc
 const ImmunizationDashboard = lazy(() => import('./pages/ImmunizationDashboard'));
 const OutbreakDashboard = lazy(() => import('./pages/OutbreakDashboard'));
 const CHWDashboard = lazy(() => import('./pages/CHWDashboard'));
+const NutritionDashboard = lazy(() => import('./pages/NutritionDashboard'));
 
 const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'medicore-tenant-subscription:';
 
@@ -930,6 +931,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'chw']} moduleKey="chw">
                   <CHWDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nutrition"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="nutrition">
+                  <NutritionDashboard />
                 </RoleProtectedRoute>
               }
             />

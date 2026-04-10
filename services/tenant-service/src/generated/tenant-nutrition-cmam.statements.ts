@@ -1,0 +1,56 @@
+export const TENANT_NUTRITION_CMAM_BUNDLE_VERSION = '2026.04.09.5';
+
+export const TENANT_NUTRITION_CMAM_STATEMENTS = (): string[] => [
+  `CREATE TABLE IF NOT EXISTS nutrition_assessments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL,
+    assessment_date DATE NOT NULL,
+    assessed_by UUID,
+    muac_mm INTEGER,
+    weight_kg NUMERIC(5,2),
+    height_cm NUMERIC(5,2),
+    whz_score NUMERIC(5,2),
+    bilateral_pitting_oedema BOOLEAN DEFAULT false,
+    oedema_grade VARCHAR(5),
+    classification VARCHAR(10) NOT NULL,
+    program_type VARCHAR(10),
+    admission_type VARCHAR(20),
+    discharge_reason VARCHAR(30),
+    discharge_date DATE,
+    outcome VARCHAR(20),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS rutf_dispensing (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL,
+    nutrition_assessment_id UUID REFERENCES nutrition_assessments(id),
+    dispensed_date DATE NOT NULL,
+    dispensed_by UUID,
+    product_name VARCHAR(50) NOT NULL,
+    sachets_dispensed INTEGER,
+    weight_kg NUMERIC(5,2),
+    dose_sachets_per_day INTEGER,
+    lot_number VARCHAR(50),
+    expiry_date DATE,
+    next_visit_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS therapeutic_feeding_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL,
+    admission_id UUID,
+    feeding_date DATE NOT NULL,
+    feeding_phase VARCHAR(10) NOT NULL,
+    formula VARCHAR(10) NOT NULL,
+    volume_ml_per_feed INTEGER,
+    feeds_per_day INTEGER,
+    weight_kg NUMERIC(5,2),
+    noted_by UUID,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_nutrition_assessments_patient ON nutrition_assessments(patient_id, assessment_date DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_rutf_patient ON rutf_dispensing(patient_id, dispensed_date DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_feeding_patient ON therapeutic_feeding_records(patient_id, feeding_date DESC)`,
+];

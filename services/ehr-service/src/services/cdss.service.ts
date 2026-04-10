@@ -3050,6 +3050,43 @@ export class CdssService {
     return responseData;
   }
 
+  async getNutritionCmamProtocol(
+    payload: Record<string, any>,
+    tenantId?: string,
+    tenantDb?: DataSource,
+  ): Promise<NutritionDecisionResponse> {
+    const responseData = await this.postWithPolicy<any>(
+      'nutrition_cmam_protocol',
+      '/cdss/nutrition/cmam-protocol',
+      payload,
+      15000,
+      tenantId,
+    );
+
+    await this.recordGovernedPromptAudit({
+      tenantDb,
+      tenantId,
+      useCase: 'nutrition_cmam_protocol',
+      source: 'cdss_service',
+      model: 'nutrition_cmam_protocol_rules',
+      patientId: payload?.patientId || null,
+      requestBody: {
+        classification: payload?.classification || null,
+        oedema_grade: payload?.oedema_grade || null,
+        weight_kg: payload?.weight_kg ?? null,
+        age_months: payload?.age_months ?? null,
+      },
+      responseSummary: {
+        program: responseData?.program || null,
+        rutf_product: responseData?.rutf_product || null,
+        rutf_sachets_per_day: responseData?.rutf_sachets_per_day ?? null,
+      },
+      governance: responseData?.governance || {},
+    });
+
+    return responseData;
+  }
+
   async generatePatientEducation(
     payload: Record<string, any>,
     tenantId?: string,

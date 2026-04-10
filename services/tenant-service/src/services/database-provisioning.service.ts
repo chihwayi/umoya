@@ -29,6 +29,10 @@ import {
   TENANT_CHW_MODULE_BUNDLE_VERSION,
   TENANT_CHW_MODULE_STATEMENTS,
 } from '../generated/tenant-chw-module.statements';
+import {
+  TENANT_NUTRITION_CMAM_BUNDLE_VERSION,
+  TENANT_NUTRITION_CMAM_STATEMENTS,
+} from '../generated/tenant-nutrition-cmam.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1251,6 +1255,13 @@ export class DatabaseProvisioningService {
         version: TENANT_CHW_MODULE_BUNDLE_VERSION,
         description: 'S132 — Households, CHW visits, CHW tasks, daily tallies, offline sync, and supervision dashboards',
         statements: TENANT_CHW_MODULE_STATEMENTS,
+      },
+      {
+        id: 'nutrition-cmam',
+        label: 'SAM / CMAM Nutrition Programs',
+        version: TENANT_NUTRITION_CMAM_BUNDLE_VERSION,
+        description: 'S133 — CMAM nutrition assessments, RUTF dispensing, therapeutic feeding, and CMAM reporting registers',
+        statements: TENANT_NUTRITION_CMAM_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

@@ -607,9 +607,9 @@ NTD assessment forms (Schistosomiasis, Leprosy, HAT, Filariasis). MDA campaign t
 |---|---|---|---|
 | HIV/ART (ARV, VL, CD4, PMTCT) | ★★★★☆ | Critical | TIER.net, DATIM MER completeness |
 | TB (regimen, DOT, contact tracing) | ★★★★☆ | Critical | ETR.net export, contact tracing depth |
-| Malaria (case management) | ★★☆☆☆ | Critical | Severity scoring, G6PD, IPTp, RDT capture |
+| Malaria (case management) | ★★★★☆ | Critical | Severity scoring, RDT capture, G6PD, IPTp |
 | Maternal / Obstetrics / PMTCT | ★★★★☆ | Critical | CRVS birth notification, MDSR |
-| Immunization / EPI | ★☆☆☆☆ | Critical | Full module needed — S129 |
+| Immunization / EPI | ★★★★☆ | Critical | DHIS2/GAVI mandate — S129 complete |
 | Nutrition / SAM / CMAM | ★☆☆☆☆ | Critical | Full CMAM module needed — S133 |
 | CHW / Community Health | ★★☆☆☆ | Critical | Full CHW UI needed — S132 |
 | Outbreak / Surveillance | ★☆☆☆☆ | Critical | SORMAS, notifiable disease alerts — S130 |
