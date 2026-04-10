@@ -25,6 +25,10 @@ import {
   TENANT_MOBILE_MONEY_BUNDLE_VERSION,
   TENANT_MOBILE_MONEY_STATEMENTS,
 } from '../generated/tenant-mobile-money.statements';
+import {
+  TENANT_CHW_MODULE_BUNDLE_VERSION,
+  TENANT_CHW_MODULE_STATEMENTS,
+} from '../generated/tenant-chw-module.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1240,6 +1244,13 @@ export class DatabaseProvisioningService {
         version: TENANT_MOBILE_MONEY_BUNDLE_VERSION,
         description: 'S131 — Mobile money payment gateway integration (M-Pesa, MTN, EcoCash, Airtel, Flutterwave)',
         statements: () => TENANT_MOBILE_MONEY_STATEMENTS,
+      },
+      {
+        id: 'chw-module',
+        label: 'Community Health Worker Module',
+        version: TENANT_CHW_MODULE_BUNDLE_VERSION,
+        description: 'S132 — Households, CHW visits, CHW tasks, daily tallies, offline sync, and supervision dashboards',
+        statements: TENANT_CHW_MODULE_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

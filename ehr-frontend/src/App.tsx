@@ -18,8 +18,6 @@ const PatientDetail = lazy(() => import('./pages/PatientDetail'));
 const AppointmentManagement = lazy(() => import('./pages/AppointmentManagement'));
 const DoctorDashboard = lazy(() => import('./pages/DoctorDashboard'));
 const DoctorSyncExecutionHub = lazy(() => import('./pages/DoctorSyncExecutionHub'));
-const HIVDoctorDashboard = lazy(() => import('./pages/HIVDoctorDashboard'));
-const MaternityDoctorDashboard = lazy(() => import('./pages/MaternityDoctorDashboard'));
 const RadiologistDashboard = lazy(() => import('./pages/RadiologistDashboard'));
 const NurseDashboard = lazy(() => import('./pages/NurseDashboard'));
 const TechnologistImagingDashboard = lazy(() => import('./pages/TechnologistImagingDashboard'));
@@ -30,7 +28,6 @@ const PostVisitDoctorWorkspace = lazy(() => import('./pages/PostVisitDoctorWorks
 const OncologyDashboard = lazy(() => import('./pages/OncologyDashboard'));
 const OphthalmologyDashboard = lazy(() => import('./pages/OphthalmologyDashboard'));
 const AccountsDashboard = lazy(() => import('./pages/AccountsDashboard'));
-const CardiologyDashboard = lazy(() => import('./pages/CardiologyDashboard'));
 const DiabetesManagementDashboard = lazy(() => import('./pages/DiabetesManagementDashboard'));
 const PharmacyDashboard = lazy(() => import('./pages/PharmacyDashboard'));
 const BillingDashboard = lazy(() => import('./pages/BillingDashboard'));
@@ -63,6 +60,7 @@ const CampaignsDashboard = lazy(() => import('./pages/CampaignsDashboard'));
 const MultiCurrencyMedicalAidDashboard = lazy(() => import('./pages/MultiCurrencyMedicalAidDashboard'));
 const ImmunizationDashboard = lazy(() => import('./pages/ImmunizationDashboard'));
 const OutbreakDashboard = lazy(() => import('./pages/OutbreakDashboard'));
+const CHWDashboard = lazy(() => import('./pages/CHWDashboard'));
 
 const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'medicore-tenant-subscription:';
 
@@ -924,6 +922,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="epi">
                   <OutbreakDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/chw"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'chw']} moduleKey="chw">
+                  <CHWDashboard />
                 </RoleProtectedRoute>
               }
             />

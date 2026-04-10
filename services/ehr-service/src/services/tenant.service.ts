@@ -272,6 +272,11 @@ import { DicomSeries } from '../entities/dicom-series.entity';
 import { PatientAiSnapshot } from '../entities/patient-ai-snapshot.entity';
 import { ProactiveAlert } from '../entities/proactive-alert.entity';
 import { PatientRiskScore } from '../entities/patient-risk-score.entity';
+import { Household } from '../entities/household.entity';
+import { HouseholdMember } from '../entities/household-member.entity';
+import { ChwVisit } from '../entities/chw-visit.entity';
+import { ChwTask } from '../entities/chw-task.entity';
+import { ChwDailyTally } from '../entities/chw-daily-tally.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -719,6 +724,11 @@ export class TenantService {
         PatientAiSnapshot,
         ProactiveAlert,
         PatientRiskScore,
+        Household,
+        HouseholdMember,
+        ChwVisit,
+        ChwTask,
+        ChwDailyTally,
       ],
       logging: false,
     });
