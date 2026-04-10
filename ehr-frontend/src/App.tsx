@@ -64,6 +64,7 @@ const CHWDashboard = lazy(() => import('./pages/CHWDashboard'));
 const NutritionDashboard = lazy(() => import('./pages/NutritionDashboard'));
 const NhifDashboard = lazy(() => import('./pages/NhifDashboard'));
 const SaInteropDashboard = lazy(() => import('./pages/SaInteropDashboard'));
+const Dhis2DatimDashboard = lazy(() => import('./pages/Dhis2DatimDashboard'));
 
 const TenantScopedNhifDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -77,6 +78,13 @@ const TenantScopedSaInteropDashboard: React.FC = () => {
   const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
   if (!tenantSlug) return null;
   return <SaInteropDashboard tenantSlug={tenantSlug} token={token} />;
+};
+
+const TenantScopedDhis2DatimDashboard: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <Dhis2DatimDashboard tenantSlug={tenantSlug} token={token} />;
 };
 
 const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'medicore-tenant-subscription:';
@@ -971,6 +979,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <TenantScopedSaInteropDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/dhis2-datim"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedDhis2DatimDashboard />
                 </RoleProtectedRoute>
               }
             />

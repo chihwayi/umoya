@@ -38,6 +38,7 @@ import { NhifController } from './controllers/nhif.controller';
 import { NhlsHl7Controller } from './controllers/nhls-hl7.controller';
 import { TierNetController } from './controllers/tier-net.controller';
 import { EtrNetController } from './controllers/etr-net.controller';
+import { DatimMerController } from './controllers/datim-mer.controller';
 import { IcuController } from './controllers/icu.controller';
 import { SdohController } from './controllers/sdoh.controller';
 import { NtdController } from './controllers/ntd.controller';
@@ -202,6 +203,7 @@ import { NhifService } from './services/nhif.service';
 import { NhlsHl7Service } from './services/nhls-hl7.service';
 import { TierNetService } from './services/tier-net.service';
 import { EtrNetService } from './services/etr-net.service';
+import { DatimMerService } from './services/datim-mer.service';
 import { IcuService } from './services/icu.service';
 import { SdohService } from './services/sdoh.service';
 import { NtdService } from './services/ntd.service';
@@ -448,6 +450,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NhlsHl7Controller,
     TierNetController,
     EtrNetController,
+    DatimMerController,
     IcuController,
     SdohController,
     NtdController,
@@ -665,6 +668,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NhlsHl7Service,
     TierNetService,
     EtrNetService,
+    DatimMerService,
     IcuService,
     SdohService,
     NtdService,

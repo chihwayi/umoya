@@ -328,3 +328,236 @@ async def batch_sync(body: BatchSyncRequest, x_tenant_id: str = Header(...)):
         "successes": successes,
         "failures": failures,
     }
+
+
+def _required_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise HTTPException(status_code=503, detail=f"{name} not configured")
+    return value
+
+
+async def _post_json(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    base_url = _required_env("DHIS2_BASE_URL").rstrip("/")
+    auth = (_required_env("DHIS2_USERNAME"), _required_env("DHIS2_PASSWORD"))
+    async with httpx.AsyncClient(timeout=30.0, auth=auth) as client:
+        response = await client.post(
+            f"{base_url}{path}",
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            json=payload,
+        )
+
+    if response.status_code not in (200, 201):
+        raise HTTPException(status_code=502, detail=response.text[:500] or "DHIS2 request failed")
+    return response.json()
+
+
+async def _get_json(path: str, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    base_url = _required_env("DHIS2_BASE_URL").rstrip("/")
+    auth = (_required_env("DHIS2_USERNAME"), _required_env("DHIS2_PASSWORD"))
+    async with httpx.AsyncClient(timeout=30.0, auth=auth) as client:
+        response = await client.get(
+            f"{base_url}{path}",
+            headers={"Accept": "application/json"},
+            params=params,
+        )
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail=response.text[:500] or "DHIS2 request failed")
+    return response.json()
+
+
+def _import_reference(payload: dict[str, Any]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    response = payload.get("response", payload)
+    import_summaries = response.get("importSummaries") or []
+    if not import_summaries:
+        return None, None, None
+    summary = import_summaries[0] or {}
+    tei_uid = summary.get("reference")
+    enrollment_uid = None
+    event_uid = None
+    enrollment_summaries = (summary.get("enrollments") or {}).get("importSummaries") or []
+    if enrollment_summaries:
+        enrollment_uid = enrollment_summaries[0].get("reference")
+    event_uid = summary.get("reference")
+    return tei_uid, enrollment_uid, event_uid
+
+
+class HivTrackerAttributes(BaseModel):
+    nationalId: str
+    dob: str
+    sex: str
+    artStartDate: Optional[str] = None
+
+
+class HivEnrollmentRequest(BaseModel):
+    patientId: str
+    trackedEntityUid: Optional[str] = None
+    orgUnitUid: str
+    enrollmentDate: str
+    attributes: HivTrackerAttributes
+
+
+class TbTrackerAttributes(BaseModel):
+    nationalId: str
+    dob: str
+    sex: str
+    tbCategory: Optional[str] = None
+
+
+class TbEnrollmentRequest(BaseModel):
+    patientId: str
+    trackedEntityUid: Optional[str] = None
+    orgUnitUid: str
+    enrollmentDate: str
+    attributes: TbTrackerAttributes
+
+
+class ArtVisitRequest(BaseModel):
+    teiUid: str
+    orgUnitUid: str
+    visitDate: str
+    programStageUid: str
+    cd4: Optional[float] = None
+    viralLoad: Optional[float] = None
+    regimen: Optional[str] = None
+    weight: Optional[float] = None
+
+
+class TbVisitRequest(BaseModel):
+    teiUid: str
+    orgUnitUid: str
+    visitDate: str
+    programStageUid: str
+    weight: Optional[float] = None
+    smearResult: Optional[str] = None
+    outcome: Optional[str] = None
+
+
+@router.post("/enroll/hiv")
+async def enroll_hiv_tracker(body: HivEnrollmentRequest):
+    hiv_program_uid = _required_env("DHIS2_HIV_PROGRAM_UID")
+    tracked_entity_type_uid = _required_env("DHIS2_HIV_TEI_TYPE_UID")
+    payload = {
+        "trackedEntityType": tracked_entity_type_uid,
+        "orgUnit": body.orgUnitUid,
+        "attributes": [
+            {"attribute": _required_env("DHIS2_HIV_ATTR_NATIONAL_ID"), "value": body.attributes.nationalId},
+            {"attribute": _required_env("DHIS2_HIV_ATTR_DOB"), "value": body.attributes.dob},
+            {"attribute": _required_env("DHIS2_HIV_ATTR_SEX"), "value": body.attributes.sex},
+        ],
+        "enrollments": [
+            {
+                "program": hiv_program_uid,
+                "orgUnit": body.orgUnitUid,
+                "enrollmentDate": body.enrollmentDate,
+                "incidentDate": body.enrollmentDate,
+            }
+        ],
+    }
+    art_start_attr = os.getenv("DHIS2_HIV_ATTR_ART_START_DATE", "").strip()
+    if art_start_attr and body.attributes.artStartDate:
+        payload["attributes"].append({"attribute": art_start_attr, "value": body.attributes.artStartDate})
+    if body.trackedEntityUid:
+        payload["trackedEntityInstance"] = body.trackedEntityUid
+
+    response = await _post_json("/api/trackedEntityInstances", payload)
+    tei_uid, enrollment_uid, _ = _import_reference(response)
+    return {"teiUid": tei_uid, "enrollmentUid": enrollment_uid}
+
+
+@router.post("/enroll/tb")
+async def enroll_tb_tracker(body: TbEnrollmentRequest):
+    tb_program_uid = _required_env("DHIS2_TB_PROGRAM_UID")
+    tracked_entity_type_uid = _required_env("DHIS2_TB_TEI_TYPE_UID")
+    payload = {
+        "trackedEntityType": tracked_entity_type_uid,
+        "orgUnit": body.orgUnitUid,
+        "attributes": [
+            {"attribute": _required_env("DHIS2_TB_ATTR_NATIONAL_ID"), "value": body.attributes.nationalId},
+            {"attribute": _required_env("DHIS2_TB_ATTR_DOB"), "value": body.attributes.dob},
+            {"attribute": _required_env("DHIS2_TB_ATTR_SEX"), "value": body.attributes.sex},
+        ],
+        "enrollments": [
+            {
+                "program": tb_program_uid,
+                "orgUnit": body.orgUnitUid,
+                "enrollmentDate": body.enrollmentDate,
+                "incidentDate": body.enrollmentDate,
+            }
+        ],
+    }
+    if body.attributes.tbCategory:
+        payload["attributes"].append(
+            {"attribute": _required_env("DHIS2_TB_ATTR_CATEGORY"), "value": body.attributes.tbCategory}
+        )
+    if body.trackedEntityUid:
+        payload["trackedEntityInstance"] = body.trackedEntityUid
+
+    response = await _post_json("/api/trackedEntityInstances", payload)
+    tei_uid, enrollment_uid, _ = _import_reference(response)
+    return {"teiUid": tei_uid, "enrollmentUid": enrollment_uid}
+
+
+@router.post("/event/art-visit")
+async def push_art_visit_event(body: ArtVisitRequest):
+    payload = {
+        "program": _required_env("DHIS2_HIV_PROGRAM_UID"),
+        "programStage": body.programStageUid,
+        "orgUnit": body.orgUnitUid,
+        "trackedEntityInstance": body.teiUid,
+        "eventDate": body.visitDate,
+        "status": "COMPLETED",
+        "dataValues": [],
+    }
+    if body.cd4 is not None:
+        payload["dataValues"].append({"dataElement": _required_env("DHIS2_DE_CD4"), "value": body.cd4})
+    if body.viralLoad is not None:
+        payload["dataValues"].append({"dataElement": _required_env("DHIS2_DE_VL"), "value": body.viralLoad})
+    if body.regimen:
+        payload["dataValues"].append({"dataElement": _required_env("DHIS2_DE_REGIMEN"), "value": body.regimen})
+    if body.weight is not None:
+        payload["dataValues"].append({"dataElement": _required_env("DHIS2_DE_WEIGHT"), "value": body.weight})
+
+    response = await _post_json("/api/events", payload)
+    _, _, event_uid = _import_reference(response)
+    return {"eventUid": event_uid}
+
+
+@router.post("/event/tb-visit")
+async def push_tb_visit_event(body: TbVisitRequest):
+    payload = {
+        "program": _required_env("DHIS2_TB_PROGRAM_UID"),
+        "programStage": body.programStageUid,
+        "orgUnit": body.orgUnitUid,
+        "trackedEntityInstance": body.teiUid,
+        "eventDate": body.visitDate,
+        "status": "COMPLETED",
+        "dataValues": [],
+    }
+    if body.weight is not None:
+        payload["dataValues"].append({"dataElement": _required_env("DHIS2_DE_TB_WEIGHT"), "value": body.weight})
+    if body.smearResult:
+        payload["dataValues"].append({"dataElement": _required_env("DHIS2_DE_TB_SMEAR"), "value": body.smearResult})
+    if body.outcome:
+        payload["dataValues"].append({"dataElement": _required_env("DHIS2_DE_TB_OUTCOME"), "value": body.outcome})
+
+    response = await _post_json("/api/events", payload)
+    _, _, event_uid = _import_reference(response)
+    return {"eventUid": event_uid}
+
+
+@router.get("/tei/{patient_id}")
+async def lookup_tei(patient_id: str):
+    response = await _get_json(
+        "/api/trackedEntityInstances",
+        params={
+            "filter": f"{_required_env('DHIS2_HIV_ATTR_NATIONAL_ID')}:EQ:{patient_id}",
+            "program": _required_env("DHIS2_HIV_PROGRAM_UID"),
+        },
+    )
+    instances = response.get("trackedEntityInstances") or response.get("instances") or []
+    if not instances:
+        return {"teiUid": None, "enrollments": []}
+    first = instances[0]
+    return {"teiUid": first.get("trackedEntityInstance") or first.get("trackedEntity"), "enrollments": first.get("enrollments") or []}

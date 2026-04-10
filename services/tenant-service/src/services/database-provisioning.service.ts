@@ -41,6 +41,10 @@ import {
   TENANT_SA_NATIONAL_INTEROP_BUNDLE_VERSION,
   TENANT_SA_NATIONAL_INTEROP_STATEMENTS,
 } from '../generated/tenant-sa-national-interop.statements';
+import {
+  TENANT_DHIS2_TRACKER_DATIM_BUNDLE_VERSION,
+  TENANT_DHIS2_TRACKER_DATIM_STATEMENTS,
+} from '../generated/tenant-dhis2-tracker-datim.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1284,6 +1288,14 @@ export class DatabaseProvisioningService {
         version: TENANT_SA_NATIONAL_INTEROP_BUNDLE_VERSION,
         description: 'S135 — NHLS HL7 lab results, TIER.net ART exports, ETR.net TB notifications',
         statements: TENANT_SA_NATIONAL_INTEROP_STATEMENTS,
+      },
+      {
+        id: 'dhis2-tracker-datim',
+        label: 'DHIS2 Tracker TEI + DATIM MER 2.x',
+        version: TENANT_DHIS2_TRACKER_DATIM_BUNDLE_VERSION,
+        description:
+          'S136 — DHIS2 Tracker individual TEI enrollment, program stage events, DATIM MER indicator mappings and submissions',
+        statements: TENANT_DHIS2_TRACKER_DATIM_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

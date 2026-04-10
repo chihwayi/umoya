@@ -287,6 +287,8 @@ import { CapitationPayment } from '../entities/capitation-payment.entity';
 import { NhlsLabResult } from '../entities/nhls-lab-result.entity';
 import { TierNetExport } from '../entities/tier-net-export.entity';
 import { EtrNetNotification } from '../entities/etr-net-notification.entity';
+import { DatimIndicatorMapping } from '../entities/datim-indicator-mapping.entity';
+import { DatimSubmission } from '../entities/datim-submission.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -749,6 +751,8 @@ export class TenantService {
         NhlsLabResult,
         TierNetExport,
         EtrNetNotification,
+        DatimIndicatorMapping,
+        DatimSubmission,
       ],
       logging: false,
     });
