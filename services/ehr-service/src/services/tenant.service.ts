@@ -284,6 +284,9 @@ import { NhifScheme } from '../entities/nhif-scheme.entity';
 import { SchemeMember } from '../entities/scheme-member.entity';
 import { NhifClaim } from '../entities/nhif-claim.entity';
 import { CapitationPayment } from '../entities/capitation-payment.entity';
+import { NhlsLabResult } from '../entities/nhls-lab-result.entity';
+import { TierNetExport } from '../entities/tier-net-export.entity';
+import { EtrNetNotification } from '../entities/etr-net-notification.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -743,6 +746,9 @@ export class TenantService {
         SchemeMember,
         NhifClaim,
         CapitationPayment,
+        NhlsLabResult,
+        TierNetExport,
+        EtrNetNotification,
       ],
       logging: false,
     });

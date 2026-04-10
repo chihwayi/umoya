@@ -37,6 +37,10 @@ import {
   TENANT_NHIF_CBHI_BUNDLE_VERSION,
   TENANT_NHIF_CBHI_STATEMENTS,
 } from '../generated/tenant-nhif-cbhi.statements';
+import {
+  TENANT_SA_NATIONAL_INTEROP_BUNDLE_VERSION,
+  TENANT_SA_NATIONAL_INTEROP_STATEMENTS,
+} from '../generated/tenant-sa-national-interop.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1273,6 +1277,13 @@ export class DatabaseProvisioningService {
         version: TENANT_NHIF_CBHI_BUNDLE_VERSION,
         description: 'NHIF schemes, scheme members, claims, capitation payments',
         statements: TENANT_NHIF_CBHI_STATEMENTS,
+      },
+      {
+        id: 'sa-national-interop',
+        label: 'SA National System Interoperability',
+        version: TENANT_SA_NATIONAL_INTEROP_BUNDLE_VERSION,
+        description: 'S135 — NHLS HL7 lab results, TIER.net ART exports, ETR.net TB notifications',
+        statements: TENANT_SA_NATIONAL_INTEROP_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

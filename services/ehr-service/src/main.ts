@@ -61,6 +61,7 @@ async function bootstrap() {
   validateCriticalSecurityEnv();
   const app = await NestFactory.create(EhrModule);
   app.use(bodyParser.json({ limit: '10mb' }));
+  app.use(bodyParser.text({ type: ['text/plain', 'application/hl7-v2'], limit: '10mb' }));
   app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
   app.use((req: Request, res: Response, next: NextFunction) => {
     const existing = req.header('x-request-id') || req.header('X-Request-ID');
