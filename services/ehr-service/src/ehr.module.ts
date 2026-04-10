@@ -54,6 +54,7 @@ import { ProblemController } from './controllers/problem.controller';
 import { AllergyController } from './controllers/allergy.controller';
 import { EpiController } from './controllers/epi.controller';
 import { OutbreakController } from './controllers/outbreak.controller';
+import { MobileMoneyController } from './controllers/mobile-money.controller';
 import { LabTestController } from './controllers/lab-test.controller';
 import { LabTestCatalogController } from './controllers/lab-test-catalog.controller';
 import { LabOrderSetController } from './controllers/lab-order-set.controller';
@@ -210,6 +211,7 @@ import { ProblemService } from './services/problem.service';
 import { AllergyService } from './services/allergy.service';
 import { EpiService } from './services/epi.service';
 import { OutbreakService } from './services/outbreak.service';
+import { MobileMoneyService } from './services/mobile-money.service';
 import { LabTestService } from './services/lab-test.service';
 import { LabTestCatalogService } from './services/lab-test-catalog.service';
 import { LabOrderSetService } from './services/lab-order-set.service';
@@ -452,6 +454,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AllergyController,
     EpiController,
     OutbreakController,
+    MobileMoneyController,
     LabTestController,
     LabTestCatalogController,
     LabOrderSetController,
@@ -590,6 +593,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AllergyService,
     EpiService,
     OutbreakService,
+    MobileMoneyService,
     LabTestService,
     LabTestCatalogService,
     LabOrderSetService,

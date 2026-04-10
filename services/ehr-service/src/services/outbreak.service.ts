@@ -27,7 +27,7 @@ export class OutbreakService {
       return repo.findOne({ where: { id: body.id } }) as Promise<NotifiableDisease>;
     }
     const entity = repo.create(body);
-    return repo.save(entity);
+    return repo.save(entity) as unknown as Promise<NotifiableDisease>;
   }
 
   // ── Outbreak cases ────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ export class OutbreakService {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const repo = db.getRepository(OutbreakCase);
     const entity = repo.create({ ...body, reportedBy: userId });
-    const saved = await repo.save(entity);
+    const saved = (await repo.save(entity)) as unknown as OutbreakCase;
 
     // Threshold check — async, non-blocking
     this.checkThreshold(tenantId, saved).catch(() => {});
@@ -112,7 +112,7 @@ export class OutbreakService {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const repo = db.getRepository(ContactTrace);
     const entity = repo.create({ ...body, indexCaseId: caseId });
-    return repo.save(entity);
+    return repo.save(entity) as unknown as Promise<ContactTrace>;
   }
 
   async getContacts(tenantId: string, caseId: string): Promise<ContactTrace[]> {

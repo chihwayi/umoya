@@ -25,7 +25,7 @@ import {
   Edit,
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { ehrApi, billingApi } from '../services/api';
+import { ehrApi, ehrAxios, billingApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import { formatDateForAPI } from '../utils/dateUtils';
@@ -562,6 +562,8 @@ const BillingDashboard: React.FC = () => {
           <PaymentModal
             transaction={selectedTransaction}
             bill={selectedBill}
+            tenantSlug={tenantSlug}
+            token={token}
             onPayment={handleRecordPayment}
             onClose={() => {
               setShowPaymentModal(false);
@@ -578,9 +580,13 @@ const BillingDashboard: React.FC = () => {
 const PaymentModal: React.FC<{
   transaction?: any;
   bill?: any;
+  tenantSlug?: string;
+  token?: string;
   onPayment: (data: any) => void;
   onClose: () => void;
-}> = ({ transaction, bill, onPayment, onClose }) => {
+}> = ({ transaction, bill, tenantSlug, token, onPayment, onClose }) => {
+  const { showError, showSuccess } = useNotification();
+
   const [formData, setFormData] = useState({
     amount: (transaction?.balance || bill?.balanceAmount || 0).toString(),
     paymentMethod: 'cash',
@@ -589,12 +595,88 @@ const PaymentModal: React.FC<{
     note: '',
   });
 
+  // Mobile money state
+  const [mmProviders, setMmProviders] = useState<any[]>([]);
+  const [mmProvider, setMmProvider] = useState('');
+  const [mmPhone, setMmPhone] = useState('');
+  const [mmState, setMmState] = useState<'idle' | 'pending' | 'success' | 'failed'>('idle');
+  const [mmReceipt, setMmReceipt] = useState('');
+  const [mmFailReason, setMmFailReason] = useState('');
+  const [mmTxId, setMmTxId] = useState('');
+
+  const authH = { 'X-Tenant-ID': tenantSlug || '', Authorization: `Bearer ${token || ''}` };
+
+  // Load providers when mobile_money selected
+  useEffect(() => {
+    if (formData.paymentMethod !== 'mobile_money' || !tenantSlug) return;
+    ehrAxios.get('/payments/mobile-money/configs', { headers: authH })
+      .then((r) => setMmProviders(r.data || []))
+      .catch(() => setMmProviders([]));
+  }, [formData.paymentMethod, tenantSlug]);
+
+  // Poll transaction status while pending
+  useEffect(() => {
+    if (mmState !== 'pending' || !mmTxId || !tenantSlug) return;
+    let polls = 0;
+    const iv = setInterval(async () => {
+      polls++;
+      try {
+        const r = await ehrAxios.get(`/payments/mobile-money/${mmTxId}`, { headers: authH });
+        const tx = r.data;
+        if (tx?.status === 'success') {
+          clearInterval(iv);
+          setMmState('success');
+          setMmReceipt(tx.receiptNumber || tx.providerReference || mmTxId);
+          showSuccess('Payment Confirmed', `Receipt: ${tx.receiptNumber || tx.providerReference || 'confirmed'}`);
+          onPayment({ amount: formData.amount, paymentMethod: 'mobile_money', paymentReference: tx.receiptNumber, note: `${mmProvider} confirmed` });
+        } else if (tx?.status === 'failed' || tx?.status === 'cancelled') {
+          clearInterval(iv);
+          setMmState('failed');
+          setMmFailReason(tx.failureReason || 'Payment declined');
+        } else if (polls >= 12) {
+          clearInterval(iv);
+          setMmState('failed');
+          setMmFailReason('Timed out waiting for confirmation. Please try again.');
+        }
+      } catch {
+        // keep polling
+      }
+    }, 5000);
+    return () => clearInterval(iv);
+  }, [mmState, mmTxId, tenantSlug]);
+
+  const handleMobileMoneyPay = async () => {
+    if (!mmProvider) { showError('Validation', 'Please select a provider'); return; }
+    if (!mmPhone) { showError('Validation', 'Phone number is required'); return; }
+    const invoiceId = transaction?.id || bill?.id;
+    const patientId = transaction?.patientId || bill?.patientId || '';
+    if (!invoiceId) { showError('Validation', 'No invoice selected'); return; }
+
+    const config = mmProviders.find((p) => p.provider === mmProvider);
+    try {
+      const r = await ehrAxios.post('/payments/mobile-money/initiate', {
+        invoiceId,
+        patientId,
+        provider: mmProvider,
+        phoneNumber: mmPhone,
+        amount: parseFloat(formData.amount),
+        currency: config?.currency || 'USD',
+      }, { headers: authH });
+      setMmTxId(r.data.id);
+      setMmState('pending');
+    } catch (e: any) {
+      showError('Error', e?.response?.data?.message || 'Failed to initiate payment');
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.paymentMethod === 'mobile_money') return; // handled via handleMobileMoneyPay
     onPayment(formData);
   };
 
   const amount = transaction?.balance || bill?.balanceAmount || 0;
+  const isMM = formData.paymentMethod === 'mobile_money';
 
   return (
     <div className="bg-slate-800 rounded-2xl p-6 max-w-md w-full">
@@ -610,15 +692,17 @@ const PaymentModal: React.FC<{
             max={amount}
             step="0.01"
             required
+            disabled={mmState === 'pending'}
           />
         </div>
         <div>
           <label className="block text-white/60 text-sm mb-2">Payment Method</label>
           <select
             value={formData.paymentMethod}
-            onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+            onChange={(e) => { setFormData({ ...formData, paymentMethod: e.target.value }); setMmState('idle'); }}
             className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
             required
+            disabled={mmState === 'pending'}
           >
             <option value="cash">Cash</option>
             <option value="card">Card</option>
@@ -626,40 +710,131 @@ const PaymentModal: React.FC<{
             <option value="mobile_money">Mobile Money</option>
           </select>
         </div>
-        <div>
-          <label className="block text-white/60 text-sm mb-2">Reference Number</label>
-          <input
-            type="text"
-            value={formData.paymentReference}
-            onChange={(e) => setFormData({ ...formData, paymentReference: e.target.value })}
-            className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
-            placeholder="Optional"
-          />
-        </div>
-        <div>
-          <label className="block text-white/60 text-sm mb-2">Notes</label>
-          <textarea
-            value={formData.note}
-            onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-            className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
-            rows={3}
-            placeholder="Optional notes"
-          />
-        </div>
+
+        {/* ── Mobile Money Flow ── */}
+        {isMM && mmState === 'idle' && (
+          <>
+            <div>
+              <label className="block text-white/60 text-sm mb-2">Provider</label>
+              <select
+                value={mmProvider}
+                onChange={(e) => setMmProvider(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+              >
+                <option value="">Select provider...</option>
+                {mmProviders.map((p) => (
+                  <option key={p.id} value={p.provider}>
+                    {p.provider === 'mpesa' ? 'M-Pesa' :
+                     p.provider === 'mtn_momo' ? 'MTN MoMo' :
+                     p.provider === 'ecocash' ? 'EcoCash' :
+                     p.provider === 'airtel' ? 'Airtel Money' :
+                     p.provider === 'flutterwave' ? 'Flutterwave' : p.provider}
+                    {' '}({p.countryCode})
+                  </option>
+                ))}
+                {mmProviders.length === 0 && (
+                  <option disabled value="">No active providers configured</option>
+                )}
+              </select>
+            </div>
+            <div>
+              <label className="block text-white/60 text-sm mb-2">Phone Number</label>
+              <input
+                type="tel"
+                value={mmPhone}
+                onChange={(e) => setMmPhone(e.target.value)}
+                placeholder="e.g. 254712345678"
+                className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+              />
+            </div>
+          </>
+        )}
+
+        {isMM && mmState === 'pending' && (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-white/80 text-sm text-center">
+              Awaiting confirmation on your phone…
+            </p>
+            <p className="text-white/40 text-xs text-center">
+              Check your phone for a {mmProvider === 'mpesa' ? 'M-Pesa' : mmProvider.toUpperCase()} prompt
+            </p>
+          </div>
+        )}
+
+        {isMM && mmState === 'success' && (
+          <div className="bg-green-900/30 border border-green-700/40 rounded-xl px-4 py-4 text-center space-y-1">
+            <CheckCircle className="w-8 h-8 text-green-400 mx-auto" />
+            <p className="text-green-300 font-semibold">Payment Confirmed</p>
+            <p className="text-white/60 text-xs">Receipt: <span className="text-white font-mono">{mmReceipt}</span></p>
+          </div>
+        )}
+
+        {isMM && mmState === 'failed' && (
+          <div className="bg-red-900/30 border border-red-700/40 rounded-xl px-4 py-3 space-y-2">
+            <p className="text-red-300 text-sm font-medium">Payment Failed</p>
+            <p className="text-white/60 text-xs">{mmFailReason}</p>
+            <button
+              type="button"
+              onClick={() => setMmState('idle')}
+              className="text-xs text-purple-400 underline"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!isMM && (
+          <>
+            <div>
+              <label className="block text-white/60 text-sm mb-2">Reference Number</label>
+              <input
+                type="text"
+                value={formData.paymentReference}
+                onChange={(e) => setFormData({ ...formData, paymentReference: e.target.value })}
+                className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+                placeholder="Optional"
+              />
+            </div>
+            <div>
+              <label className="block text-white/60 text-sm mb-2">Notes</label>
+              <textarea
+                value={formData.note}
+                onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+                rows={3}
+                placeholder="Optional notes"
+              />
+            </div>
+          </>
+        )}
+
         <div className="flex gap-3">
           <button
             type="button"
             onClick={onClose}
             className="flex-1 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+            disabled={mmState === 'pending'}
           >
-            Cancel
+            {mmState === 'success' ? 'Close' : 'Cancel'}
           </button>
-          <button
-            type="submit"
-            className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
-          >
-            Record Payment
-          </button>
+          {isMM && mmState === 'idle' && (
+            <button
+              type="button"
+              onClick={handleMobileMoneyPay}
+              className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
+            >
+              Pay Now
+            </button>
+          )}
+          {!isMM && (
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
+            >
+              Record Payment
+            </button>
+          )}
         </div>
       </form>
     </div>

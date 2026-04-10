@@ -21,6 +21,10 @@ import {
   TENANT_OUTBREAK_SURVEILLANCE_BUNDLE_VERSION,
   TENANT_OUTBREAK_SURVEILLANCE_STATEMENTS,
 } from '../generated/tenant-outbreak-surveillance.statements';
+import {
+  TENANT_MOBILE_MONEY_BUNDLE_VERSION,
+  TENANT_MOBILE_MONEY_STATEMENTS,
+} from '../generated/tenant-mobile-money.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1229,6 +1233,13 @@ export class DatabaseProvisioningService {
         version: TENANT_OUTBREAK_SURVEILLANCE_BUNDLE_VERSION,
         description: 'S130 — Configurable notifiable disease alerts, MOH threshold alerts, SORMAS case notification, and contact tracing',
         statements: () => TENANT_OUTBREAK_SURVEILLANCE_STATEMENTS,
+      },
+      {
+        id: 'mobile-money',
+        label: 'Mobile Money Payment Gateway',
+        version: TENANT_MOBILE_MONEY_BUNDLE_VERSION,
+        description: 'S131 — Mobile money payment gateway integration (M-Pesa, MTN, EcoCash, Airtel, Flutterwave)',
+        statements: () => TENANT_MOBILE_MONEY_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',
