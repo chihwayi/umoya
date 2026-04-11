@@ -738,7 +738,7 @@ async def scd_complication_risk(req: ScdComplicationRiskRequest):
 Inject `ScdRegister`, `ScdCrisisEvent`, `ScdTreatmentRecord`, `ScdComplicationScreening` repositories and `CdssService`.
 
 Methods:
-- `enroll(patientId, enrolledBy, dto)` → saves `ScdRegister`; auto-flags `on_malaria_prophylaxis` field based on facility region if available
+- `enroll(patientId, enrolledBy, dto)` → saves `ScdRegister`; `on_malaria_prophylaxis` defaults to `false` — do **not** attempt to derive it from a facility region; the caller (frontend form) must supply it explicitly via the DTO. There is no canonical tenant/facility region source of truth in the current schema, so auto-detection is deferred; the field remains user-settable and editable via `updateRegister`.
 - `getRegister(patientId)` → latest register entry for patient
 - `updateRegister(id, dto)` → patch status, treatment flags, next review, TCD result
 - `recordCrisis(patientId, recordedBy, dto)` → saves `ScdCrisisEvent`; calls `cdssService.scdCrisisTriage()` and returns triage guidance inline
