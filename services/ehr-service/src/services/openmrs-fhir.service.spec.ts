@@ -3,11 +3,18 @@ import { OpenmrsFhirService } from './openmrs-fhir.service';
 
 jest.mock('axios');
 
+// CI test fixtures — loaded from environment variables; no credentials are
+// hardcoded here. Set OPENMRS_* vars in your CI environment or a gitignored
+// .env.test file. The fallback values are non-secret test stubs only.
+const TEST_ENV: Record<string, string> = {
+  OPENMRS_USERNAME: process.env.OPENMRS_USERNAME ?? 'ci-user',
+  OPENMRS_PASSWORD: process.env.OPENMRS_PASSWORD ?? 'ci-stub',
+};
+
 describe('OpenmrsFhirService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    process.env.OPENMRS_USERNAME = 'admin';
-    process.env.OPENMRS_PASSWORD = 'Admin123';
+    Object.assign(process.env, TEST_ENV);
   });
 
   it('creates or updates an OpenMRS patient link', async () => {
