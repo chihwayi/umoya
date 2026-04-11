@@ -73,6 +73,10 @@ import {
   TENANT_HTN_NCD_BUNDLE_VERSION,
   TENANT_HTN_NCD_STATEMENTS,
 } from '../generated/tenant-htn-ncd.statements';
+import {
+  TENANT_TM_HDI_BUNDLE_VERSION,
+  TENANT_TM_HDI_STATEMENTS,
+} from '../generated/tenant-tm-hdi.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1373,6 +1377,13 @@ export class DatabaseProvisioningService {
         version: TENANT_HTN_NCD_BUNDLE_VERSION,
         description: 'S143 — HTN register, serial BP readings, WHO PEN step therapy treatment reviews',
         statements: TENANT_HTN_NCD_STATEMENTS,
+      },
+      {
+        id: 'sprint143b_traditional_medicine_hdi',
+        label: 'Traditional Medicine Documentation + Herb-Drug Interaction Alerts',
+        version: TENANT_TM_HDI_BUNDLE_VERSION,
+        description: 'S143b — TM remedy records, HDI alerts, TM toxicity events',
+        statements: TENANT_TM_HDI_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

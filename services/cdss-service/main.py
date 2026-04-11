@@ -5237,6 +5237,17 @@ class FpMethodEligibilityRequest(BaseModel):
     breast_cancer_history: bool = False
 
 
+class TmHdiCheckRequest(BaseModel):
+    herb_names: List[str]
+    current_drugs: List[str]
+    drug_classes: List[str] = []
+
+
+class TmToxicityRiskRequest(BaseModel):
+    herb_names: List[str]
+    organ_concerns: List[str] = []
+
+
 def _supporting_data_dir() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parent / "data"
 
@@ -5848,6 +5859,108 @@ async def family_planning_methods():
             {"id": "cu_iud", "name": "Copper IUD", "type": "non_hormonal_iud", "duration": "10 years", "larc": True},
             {"id": "condom", "name": "Male/Female Condom", "type": "barrier", "duration": "per use", "larc": False},
         ]
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 143b — Traditional Medicine + Herb-Drug Interactions
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/cdss/tm/hdi-check")
+async def tm_hdi_check(req: TmHdiCheckRequest):
+    """
+    Check herb-drug interactions for a given list of herbs vs active drugs.
+    Returns matched interaction records sorted by severity.
+    """
+    data = _load_supporting_json("herb_drug_interactions.json")
+    interactions = data.get("interactions", [])
+    severity_order = {"contraindicated": 0, "major": 1, "moderate": 2, "minor": 3, "informational": 4}
+
+    hits = []
+    req_herbs_lower = [h.lower() for h in req.herb_names]
+    req_drugs_lower = [d.lower() for d in req.current_drugs]
+    req_classes_lower = [c.lower() for c in req.drug_classes]
+
+    for item in interactions:
+        item_herbs_lower = [n.lower() for n in item["herb_names"]]
+        herb_match = any(rh in ih or ih in rh for rh in req_herbs_lower for ih in item_herbs_lower)
+        if not herb_match:
+            continue
+
+        drug_match = any(rd in ed.lower() or ed.lower() in rd for rd in req_drugs_lower for ed in item.get("example_drugs", []))
+        class_match = any(rc in ic.lower() for rc in req_classes_lower for ic in item.get("drug_classes", []))
+
+        if drug_match or class_match:
+            hits.append({
+                "herb": item["herb_names"][0],
+                "snomed_concept_id": item.get("snomed_concept"),
+                "matched_drugs": [
+                    d for d in req.current_drugs
+                    if any(d.lower() in ed.lower() or ed.lower() in d.lower() for ed in item.get("example_drugs", []))
+                ],
+                "interaction_type": item["interaction_type"],
+                "mechanism": item.get("mechanism"),
+                "severity": item["severity"],
+                "clinical_effect": item["clinical_effect"],
+                "management": item.get("management"),
+                "evidence_level": item.get("evidence_level"),
+            })
+
+    hits.sort(key=lambda x: severity_order.get(x["severity"], 99))
+    has_major = any(h["severity"] in ("contraindicated", "major") for h in hits)
+
+    return {
+        "herbs_checked": req.herb_names,
+        "drugs_checked": req.current_drugs,
+        "interactions_found": len(hits),
+        "has_major_interaction": has_major,
+        "alert_level": "danger" if has_major else ("warning" if hits else "none"),
+        "interactions": hits,
+    }
+
+
+@app.post("/cdss/tm/toxicity-risk")
+async def tm_toxicity_risk(req: TmToxicityRiskRequest):
+    """
+    Flags if any herb in the list has known hepatotoxic or nephrotoxic risk.
+    """
+    data = _load_supporting_json("herb_drug_interactions.json")
+    hepatotoxic = [h.lower() for h in data.get("hepatotoxic_herbs", [])]
+    nephrotoxic = [h.lower() for h in data.get("nephrotoxic_herbs", [])]
+
+    flags = []
+
+    for herb in req.herb_names:
+        herb_l = herb.lower()
+        if any(herb_l in hh or hh in herb_l for hh in hepatotoxic):
+            flags.append({
+                "herb": herb,
+                "risk": "hepatotoxic",
+                "organ_system": "hepatic",
+                "clinical_note": "Known hepatotoxic herb. Monitor LFTs (ALT, AST, bilirubin). Causality assessment required for unexplained liver dysfunction.",
+            })
+        if any(herb_l in nh or nh in herb_l for nh in nephrotoxic):
+            flags.append({
+                "herb": herb,
+                "risk": "nephrotoxic",
+                "organ_system": "renal",
+                "clinical_note": "Known nephrotoxic herb. Monitor creatinine, eGFR, urinalysis.",
+            })
+
+    organ_filtered = [
+        flag for flag in flags
+        if not req.organ_concerns or flag["organ_system"] in req.organ_concerns
+    ]
+
+    return {
+        "herbs_checked": req.herb_names,
+        "toxicity_flags": organ_filtered,
+        "has_toxicity_risk": len(organ_filtered) > 0,
+        "recommendation": (
+            "Obtain relevant organ function labs and document in TM toxicity events."
+            if organ_filtered
+            else "No known toxicity risk flagged for these herbs."
+        ),
     }
 
 

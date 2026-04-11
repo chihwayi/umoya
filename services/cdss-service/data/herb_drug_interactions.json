@@ -1,0 +1,152 @@
+{
+  "version": "2026.04.11",
+  "source": "WHO-TM2 / Natural Medicines Database / Stockley's Herbal Medicines Interactions (representative subset)",
+  "interactions": [
+    {
+      "herb_names": ["St. John's Wort", "Hypericum perforatum"],
+      "snomed_concept": "412588008",
+      "drug_classes": ["anticoagulants", "immunosuppressants", "antiretrovirals", "oral_contraceptives", "antidepressants_ssri"],
+      "example_drugs": ["warfarin", "cyclosporine", "efavirenz", "ethinyl estradiol", "sertraline"],
+      "interaction_type": "pharmacokinetic",
+      "mechanism": "CYP3A4_induction + P-gp induction",
+      "severity": "major",
+      "clinical_effect": "Significantly reduces plasma levels of affected drugs, leading to therapeutic failure (e.g. INR drop, transplant rejection, HIV virologic failure, contraceptive failure, serotonin syndrome risk with SSRIs).",
+      "management": "Avoid concurrent use. If unavoidable, increase monitoring (INR, drug levels). Counsel patient on contraceptive failure risk.",
+      "evidence_level": "high"
+    },
+    {
+      "herb_names": ["Garlic", "Allium sativum"],
+      "snomed_concept": "256535006",
+      "drug_classes": ["anticoagulants", "antiplatelet_agents", "antiretrovirals"],
+      "example_drugs": ["warfarin", "aspirin", "ritonavir"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "additive_antiplatelet + CYP3A4_inhibition",
+      "severity": "moderate",
+      "clinical_effect": "Increased bleeding risk with anticoagulants/antiplatelets. High-dose garlic may reduce saquinavir levels via CYP3A4.",
+      "management": "Monitor INR closely. Advise patients to disclose garlic supplement use before surgery.",
+      "evidence_level": "moderate"
+    },
+    {
+      "herb_names": ["Ginkgo biloba"],
+      "snomed_concept": "256562001",
+      "drug_classes": ["anticoagulants", "antiplatelet_agents", "antiepileptics", "antidepressants_ssri"],
+      "example_drugs": ["warfarin", "aspirin", "valproate", "fluoxetine"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "additive_antiplatelet + serotonin_modulation",
+      "severity": "moderate",
+      "clinical_effect": "Increased bleeding risk. Case reports of seizures with valproate. Possible serotonin syndrome with SSRIs.",
+      "management": "Monitor coagulation. Avoid in patients on antiepileptics with narrow therapeutic window.",
+      "evidence_level": "moderate"
+    },
+    {
+      "herb_names": ["Kava", "Piper methysticum"],
+      "snomed_concept": "412596001",
+      "drug_classes": ["benzodiazepines", "antipsychotics", "anaesthetics", "alcohol"],
+      "example_drugs": ["diazepam", "haloperidol", "propofol"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "additive_CNS_depression",
+      "severity": "major",
+      "clinical_effect": "Dangerous additive sedation, respiratory depression. Hepatotoxicity risk (direct + additive with hepatotoxic drugs).",
+      "management": "Contraindicated with CNS depressants. Stop at least 24 h before anaesthesia. Liver function monitoring.",
+      "evidence_level": "high"
+    },
+    {
+      "herb_names": ["Valerian", "Valeriana officinalis"],
+      "snomed_concept": "256562002",
+      "drug_classes": ["benzodiazepines", "barbiturates", "anaesthetics"],
+      "example_drugs": ["lorazepam", "phenobarbital"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "additive_CNS_depression",
+      "severity": "moderate",
+      "clinical_effect": "Enhanced sedation, prolonged anaesthesia recovery.",
+      "management": "Taper valerian before elective surgery. Inform anaesthetist.",
+      "evidence_level": "moderate"
+    },
+    {
+      "herb_names": ["Echinacea", "Echinacea purpurea"],
+      "snomed_concept": "412577002",
+      "drug_classes": ["immunosuppressants", "hepatotoxic_drugs"],
+      "example_drugs": ["cyclosporine", "methotrexate"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "immune_stimulation + potential_hepatotoxicity",
+      "severity": "moderate",
+      "clinical_effect": "May antagonise immunosuppression. Possible additive hepatotoxicity with methotrexate.",
+      "management": "Avoid in transplant patients or anyone on immunosuppression.",
+      "evidence_level": "moderate"
+    },
+    {
+      "herb_names": ["Ginseng", "Panax ginseng"],
+      "snomed_concept": "227316000",
+      "drug_classes": ["anticoagulants", "antidiabetics", "stimulants"],
+      "example_drugs": ["warfarin", "metformin", "insulin", "caffeine"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "antiplatelet_effect + hypoglycaemia_potentiation",
+      "severity": "moderate",
+      "clinical_effect": "Increased bleeding risk. Additive hypoglycaemic effect with antidiabetics. Worsens INR variability.",
+      "management": "Monitor blood glucose and INR closely. Advise diabetic patients to report hypoglycaemic episodes.",
+      "evidence_level": "moderate"
+    },
+    {
+      "herb_names": ["Liquorice", "Glycyrrhiza glabra"],
+      "snomed_concept": "256563006",
+      "drug_classes": ["antihypertensives", "corticosteroids", "digoxin"],
+      "example_drugs": ["amlodipine", "prednisolone", "digoxin"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "pseudohyperaldosteronism + potassium_depletion",
+      "severity": "major",
+      "clinical_effect": "Sodium retention, hypokalaemia, oedema — antagonises antihypertensives. Potassium depletion potentiates digoxin toxicity.",
+      "management": "Avoid in hypertensive patients. Monitor electrolytes and digoxin levels.",
+      "evidence_level": "high"
+    },
+    {
+      "herb_names": ["Turmeric", "Curcuma longa"],
+      "snomed_concept": "227355007",
+      "drug_classes": ["anticoagulants", "antiplatelet_agents", "antidiabetics"],
+      "example_drugs": ["warfarin", "aspirin", "glibenclamide"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "additive_antiplatelet + CYP2C9_inhibition",
+      "severity": "minor",
+      "clinical_effect": "Mild increased bleeding risk at high supplemental doses. May slightly potentiate antidiabetics.",
+      "management": "Informational alert at culinary doses. Monitor INR with supplemental doses (>1 g/day curcumin).",
+      "evidence_level": "low"
+    },
+    {
+      "herb_names": ["Aloe vera (oral)", "Aloe barbadensis"],
+      "snomed_concept": "256604001",
+      "drug_classes": ["antidiabetics", "antiarrhythmics", "corticosteroids"],
+      "example_drugs": ["glibenclamide", "digoxin", "prednisolone"],
+      "interaction_type": "pharmacodynamic",
+      "mechanism": "hypoglycaemia_potentiation + hypokalaemia",
+      "severity": "moderate",
+      "clinical_effect": "Additive hypoglycaemia. Laxative effect depletes potassium → digoxin toxicity risk.",
+      "management": "Avoid prolonged oral use with antidiabetics/digoxin. Monitor electrolytes.",
+      "evidence_level": "moderate"
+    },
+    {
+      "herb_names": ["African potato", "Hypoxis hemerocallidea"],
+      "snomed_concept": "442562001",
+      "drug_classes": ["antiretrovirals"],
+      "example_drugs": ["efavirenz", "lopinavir", "nevirapine"],
+      "interaction_type": "pharmacokinetic",
+      "mechanism": "CYP3A4_inhibition",
+      "severity": "major",
+      "clinical_effect": "May reduce plasma ARV levels → HIV virologic failure. Commonly used in Southern Africa alongside ART.",
+      "management": "Strongly advise against concurrent use. Document and escalate to HIV clinician.",
+      "evidence_level": "moderate"
+    }
+  ],
+  "hepatotoxic_herbs": [
+    "Kava (Piper methysticum)",
+    "Comfrey (Symphytum officinale)",
+    "Pennyroyal (Mentha pulegium)",
+    "Chaparral (Larrea tridentata)",
+    "Germander (Teucrium chamaedrys)",
+    "Pyrrolizidine alkaloid-containing plants",
+    "Atractylis gummifera"
+  ],
+  "nephrotoxic_herbs": [
+    "Aristolochic acid-containing plants (e.g. Aristolochia spp.)",
+    "Thunder God Vine (Tripterygium wilfordii)",
+    "Licorice root (high dose)"
+  ]
+}

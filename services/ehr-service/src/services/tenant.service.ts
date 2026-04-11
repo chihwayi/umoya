@@ -186,6 +186,9 @@ import { FamilyPlanningFollowup } from '../entities/family-planning-followup.ent
 import { HtnRegister } from '../entities/htn-register.entity';
 import { BpReading } from '../entities/bp-reading.entity';
 import { NcdTreatmentReview } from '../entities/ncd-treatment-review.entity';
+import { TmRemedy } from '../entities/tm-remedy.entity';
+import { HdiAlert } from '../entities/hdi-alert.entity';
+import { TmToxicityEvent } from '../entities/tm-toxicity-event.entity';
 import { PsychiatricEncounter } from '../entities/psychiatric-encounter.entity';
 import { CrisisEvent } from '../entities/crisis-event.entity';
 import { SafePlan } from '../entities/safe-plan.entity';
@@ -672,6 +675,9 @@ export class TenantService {
         HtnRegister,
         BpReading,
         NcdTreatmentReview,
+        TmRemedy,
+        HdiAlert,
+        TmToxicityEvent,
         PsychiatricEncounter,
         CrisisEvent,
         SafePlan,

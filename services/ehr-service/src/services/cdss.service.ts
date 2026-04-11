@@ -2216,6 +2216,28 @@ export class CdssService {
     );
   }
 
+  async tmHdiCheck(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'tmHdiCheck',
+      '/cdss/tm/hdi-check',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async tmToxicityRisk(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'tmToxicityRisk',
+      '/cdss/tm/toxicity-risk',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   /**
    * Fetch patient historical data for CDSS analysis
    */

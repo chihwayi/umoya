@@ -11644,3 +11644,66 @@ export const hypertensionApi = {
     return response.data;
   },
 };
+
+export const traditionalMedicineApi = {
+  recordRemedy: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/traditional-medicine/patient/${patientId}/remedies`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getRemedies: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/traditional-medicine/patient/${patientId}/remedies`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateRemedy: async (id: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/traditional-medicine/remedies/${id}`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  checkInteractions: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/traditional-medicine/patient/${patientId}/interactions`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getAlerts: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/traditional-medicine/patient/${patientId}/alerts`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  acknowledgeAlert: async (alertId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/traditional-medicine/alerts/${alertId}/acknowledge`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordToxicityEvent: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/traditional-medicine/patient/${patientId}/toxicity`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getToxicityEvents: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/traditional-medicine/patient/${patientId}/toxicity`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  hdiCheck: async (dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/traditional-medicine/cdss/hdi-check', dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  toxicityRisk: async (dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/traditional-medicine/cdss/toxicity-risk', dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
