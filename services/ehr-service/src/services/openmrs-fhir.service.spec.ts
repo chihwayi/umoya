@@ -82,7 +82,10 @@ describe('OpenmrsFhirService', () => {
         id: 'openmrs-uuid-1',
       }),
       expect.objectContaining({
-        auth: { username: 'admin', password: 'Admin123' },
+        auth: {
+          username: TEST_ENV.OPENMRS_USERNAME,
+          password: TEST_ENV.OPENMRS_PASSWORD,
+        },
       }),
     );
     expect(response.id).toBe('openmrs-uuid-1');

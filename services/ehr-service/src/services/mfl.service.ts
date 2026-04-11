@@ -5,7 +5,9 @@ import { MflFacility } from '../entities/mfl-facility.entity';
 
 @Injectable()
 export class MflService {
-  private readonly mflUrl = String(process.env.KENYA_MFL_API_URL || '').trim();
+  private readonly mflUrl = String(
+    process.env.KENYA_MFL_API_URL || 'https://api.kmhflapp.or.ke/api/facilities/?format=json&page_size=100',
+  ).trim();
 
   constructor(private readonly tenantService: TenantService) {}
 

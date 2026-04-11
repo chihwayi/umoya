@@ -6,10 +6,49 @@ function readRepoFile(...segments: string[]): string {
   return fs.readFileSync(path.join(repoRoot, ...segments), 'utf8');
 }
 
+function readCdssPythonFiles(): Array<{ file: string; content: string }> {
+  const repoRoot = path.resolve(__dirname, '../../../../');
+  const cdssDir = path.join(repoRoot, 'services', 'cdss-service');
+  return fs
+    .readdirSync(cdssDir)
+    .filter((file) => file.endsWith('.py'))
+    .map((file) => ({
+      file,
+      content: fs.readFileSync(path.join(cdssDir, file), 'utf8'),
+    }));
+}
+
+function collectCdssRoutes(): string[] {
+  const routes: string[] = [];
+
+  for (const { content } of readCdssPythonFiles()) {
+    const routerPrefixes = Array.from(
+      content.matchAll(/router\s*=\s*APIRouter\(prefix="([^"]+)"/g),
+      (m) => m[1],
+    );
+    const routerPrefix = routerPrefixes[0] ?? '';
+
+    routes.push(
+      ...Array.from(
+        content.matchAll(/@app\.(get|post|put|delete)\("([^"]+)"/g),
+        (m) => `${m[1].toUpperCase()} ${m[2]}`,
+      ),
+    );
+
+    routes.push(
+      ...Array.from(
+        content.matchAll(/@router\.(get|post|put|delete)\("([^"]+)"/g),
+        (m) => `${m[1].toUpperCase()} ${routerPrefix}${m[2]}`,
+      ),
+    );
+  }
+
+  return routes;
+}
+
 describe('CDSS contract drift guard', () => {
   it('keeps EHR CDSS endpoints aligned with cdss-service routes', () => {
     const ehrCdssService = readRepoFile('services', 'ehr-service', 'src', 'services', 'cdss.service.ts');
-    const cdssMain = readRepoFile('services', 'cdss-service', 'main.py');
     let apiReference: string | null = null;
     try {
       apiReference = readRepoFile('docs', 'MEDICORE_SYSTEM_REFERENCE.md');
@@ -33,10 +72,7 @@ describe('CDSS contract drift guard', () => {
       new Set([...postWithPolicyPaths, ...requestWithPolicyPaths, ...getWithPolicyPaths]),
     ).sort();
 
-    const cdssPaths = Array.from(
-      cdssMain.matchAll(/@app\.(get|post|put|delete)\("([^"]+)"/g),
-      (m) => `${m[1].toUpperCase()} ${m[2]}`,
-    );
+    const cdssPaths = collectCdssRoutes();
     const cdssPathSet = new Set(cdssPaths.map((route) => route.replace(/^(GET|POST|PUT|DELETE)\s+/, '')));
 
     const missingInCdss = uniqueEhrPaths.filter((route) => !cdssPathSet.has(route));
@@ -49,11 +85,7 @@ describe('CDSS contract drift guard', () => {
   });
 
   it('does not define duplicate FastAPI method/path pairs', () => {
-    const cdssMain = readRepoFile('services', 'cdss-service', 'main.py');
-    const routes = Array.from(
-      cdssMain.matchAll(/@app\.(get|post|put|delete)\("([^"]+)"/g),
-      (m) => `${m[1].toUpperCase()} ${m[2]}`,
-    );
+    const routes = collectCdssRoutes();
     const duplicates = routes.filter((route, index) => routes.indexOf(route) !== index);
     expect(Array.from(new Set(duplicates))).toEqual([]);
   });
