@@ -1,0 +1,86 @@
+{
+  "guideline": "WHO Package of Essential NCD Interventions (WHO PEN) — Hypertension Protocol, 2013/2020 update",
+  "bp_targets": {
+    "general": { "systolic_lt": 140, "diastolic_lt": 90 },
+    "diabetes_or_ckd": { "systolic_lt": 130, "diastolic_lt": 80 },
+    "age_gte_80": { "systolic_lt": 150, "diastolic_lt": 90 }
+  },
+  "classification": {
+    "normal": { "sbp_lt": 120, "dbp_lt": 80, "label": "Normal" },
+    "elevated": { "sbp_range": [120, 129], "dbp_lt": 80, "label": "Elevated" },
+    "stage1": { "sbp_range": [130, 139], "dbp_range": [80, 89], "label": "Stage 1 Hypertension" },
+    "stage2": { "sbp_gte": 140, "dbp_gte": 90, "label": "Stage 2 Hypertension" },
+    "hypertensive_crisis": { "sbp_gte": 180, "dbp_gte": 120, "label": "Hypertensive Crisis — urgent/emergent" }
+  },
+  "step_therapy": {
+    "step1": {
+      "label": "Step 1 — Monotherapy",
+      "first_line": ["ACEI (e.g. enalapril 5–20 mg/day)", "ARB (e.g. losartan 50–100 mg/day)", "CCB (e.g. amlodipine 5–10 mg/day)", "Thiazide diuretic (e.g. HCTZ 12.5–25 mg/day)"],
+      "preferred_if_diabetes_ckd": "ACEI or ARB (nephroprotective)",
+      "preferred_if_post_mi": "ACEI + beta-blocker",
+      "preferred_if_heart_failure": "ACEI/ARB + beta-blocker + loop diuretic",
+      "avoid_in_pregnancy": ["ACEI", "ARB"],
+      "preferred_in_pregnancy": "methyldopa 250–500 mg TID or nifedipine LA 30–60 mg/day"
+    },
+    "step2": {
+      "label": "Step 2 — Dual Therapy (if Step 1 fails to reach target after 4 weeks)",
+      "combinations": [
+        "ACEI + CCB (preferred — reduces proteinuria, CVD events)",
+        "ACEI + Thiazide",
+        "CCB + Thiazide",
+        "ARB + CCB"
+      ]
+    },
+    "step3": {
+      "label": "Step 3 — Triple Therapy",
+      "combinations": ["ACEI/ARB + CCB + Thiazide diuretic"]
+    },
+    "step4": {
+      "label": "Step 4 — Resistant Hypertension",
+      "options": [
+        "Add spironolactone 25–50 mg/day (if eGFR >45, K+ normal)",
+        "Add alpha-blocker (doxazosin)",
+        "Add beta-blocker (bisoprolol)",
+        "Refer to specialist"
+      ]
+    }
+  },
+  "follow_up_schedule": {
+    "newly_diagnosed_uncontrolled": { "interval_weeks": 4, "label": "Review every 4 weeks until BP controlled" },
+    "controlled_low_risk": { "interval_months": 6, "label": "Review every 6 months" },
+    "controlled_high_risk_or_comorbidities": { "interval_months": 3, "label": "Review every 3 months" },
+    "hypertensive_crisis": { "interval_days": 0, "label": "Same-day emergency referral" }
+  },
+  "lifestyle_counselling": [
+    "Reduce salt intake to <5 g NaCl/day",
+    "DASH diet: increase fruit, vegetables, low-fat dairy; reduce saturated fat",
+    "Achieve/maintain healthy BMI (18.5–24.9 kg/m²)",
+    "Regular aerobic exercise ≥30 min/day, ≥5 days/week",
+    "Limit alcohol: ≤14 units/week (men), ≤7 units/week (women)",
+    "Smoking cessation counselling for all smokers",
+    "Stress management"
+  ],
+  "referral_criteria": [
+    "SBP ≥180 or DBP ≥120 (hypertensive emergency/urgency)",
+    "BP not controlled on step 3 triple therapy",
+    "Suspected secondary hypertension (young patient, refractory, signs of endocrine cause)",
+    "New end-organ damage: papilloedema, AKI, hypertensive encephalopathy",
+    "Pregnancy with severe hypertension (SBP ≥160)"
+  ],
+  "cvd_risk_factors": {
+    "non_modifiable": ["age_gte_55_male", "age_gte_65_female", "family_history_cvd"],
+    "modifiable": ["smoking", "diabetes", "dyslipidaemia", "obesity", "physical_inactivity", "unhealthy_diet", "excess_alcohol"],
+    "end_organ_damage": ["left_ventricular_hypertrophy", "ckd", "proteinuria", "retinopathy"]
+  },
+  "who_cvd_risk_thresholds": {
+    "low": { "10yr_risk_lt_pct": 10, "action": "Lifestyle counselling. No pharmacotherapy unless BP persistently ≥140/90." },
+    "moderate": { "10yr_risk_range_pct": [10, 20], "action": "Lifestyle + pharmacotherapy if BP ≥140/90 after 3 months of lifestyle measures." },
+    "high": { "10yr_risk_gte_pct": 20, "action": "Immediate pharmacotherapy + statin if total cholesterol ≥5 mmol/L." },
+    "very_high": { "10yr_risk_gte_pct": 30, "action": "Immediate dual/triple pharmacotherapy + statin + low-dose aspirin if no bleeding risk." }
+  },
+  "complication_monitoring": {
+    "baseline": ["BP both arms", "BMI/waist circumference", "urinalysis for proteinuria", "fasting glucose", "lipid profile", "serum creatinine/eGFR", "ECG if available"],
+    "annual": ["serum creatinine/eGFR", "urinalysis", "fasting glucose", "lipid profile", "fundoscopy if resources available"],
+    "every_visit": ["BP", "weight", "adherence review", "side-effect check"]
+  }
+}

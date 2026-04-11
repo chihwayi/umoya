@@ -34,6 +34,9 @@ import HIVStockManagement from '../components/HIVStockManagement';
 import HivReportsPanel from '../components/HivReportsPanel';
 import MaternityDashboard from '../components/MaternityDashboard';
 import MentalHealthDashboard from '../components/MentalHealthDashboard';
+import CervicalCancerDashboard from '../components/CervicalCancerDashboard';
+import FamilyPlanningDashboard from '../components/FamilyPlanningDashboard';
+import HypertensionDashboard from '../components/HypertensionDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
 import LabResultsViewer from '../components/LabResultsViewer';
@@ -233,8 +236,8 @@ const NurseDashboard: React.FC = () => {
   const [mhQuickSafetyPlan, setMhQuickSafetyPlan] = useState<any | null>(null);
   const [showMentalHealthModal, setShowMentalHealthModal] = useState(false);
   const [mentalHealthInitialTab, setMentalHealthInitialTab] = useState<'overview' | 'screening' | 'mhgap' | 'careplans' | 'followups' | 'crisis' | 'safeplan' | 'meds'>('careplans');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals'>('dashboard');
-  const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals' | 'cervical-screening' | 'family-planning' | 'hypertension'>('dashboard');
+  const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity' | 'women-health' | 'ncd'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
@@ -995,17 +998,40 @@ const NurseDashboard: React.FC = () => {
           { label: 'Guided WHO Workflow', tab: 'who-workflow', icon: Activity },
         ]
       },
-      { 
-        icon: Heart, 
-        label: 'Maternity & Obstetrics', 
-        desc: 'Prenatal & postnatal care', 
+      {
+        icon: Heart,
+        label: 'Maternity & Obstetrics',
+        desc: 'Prenatal & postnatal care',
         section: 'maternity' as const,
         tab: 'maternity',
         color: 'from-pink-500 to-rose-500',
         children: [
           { label: 'Maternity Workspace', tab: 'maternity', icon: Heart },
         ]
-      }
+      },
+      {
+        icon: Stethoscope,
+        label: "Women's Health",
+        desc: 'Cervical cancer & family planning',
+        section: 'women-health' as const,
+        tab: 'cervical-screening',
+        color: 'from-purple-500 to-violet-500',
+        children: [
+          { label: 'Cervical Cancer Screening', tab: 'cervical-screening', icon: Stethoscope },
+          { label: 'Family Planning', tab: 'family-planning', icon: Heart },
+        ],
+      },
+      {
+        icon: Activity,
+        label: 'NCD / Hypertension',
+        desc: 'HTN register, BP trends, WHO PEN step therapy',
+        section: 'ncd' as const,
+        tab: 'hypertension',
+        color: 'from-blue-500 to-cyan-500',
+        children: [
+          { label: 'Hypertension Register', tab: 'hypertension', icon: Activity },
+        ],
+      },
     ].filter((item) => {
       if (item.section === 'hiv') return hasModuleAccess(tenantInfo, 'hiv');
       if (item.section === 'maternity') return hasModuleAccess(tenantInfo, 'maternity');
@@ -5030,7 +5056,7 @@ const NurseDashboard: React.FC = () => {
                 Maternity & Obstetrics Care
               </h2>
             </div>
-            
+
             {/* WHO Smart Forms Integration */}
             <div className="mb-6">
               <MaternityWithSmartForms
@@ -5043,12 +5069,54 @@ const NurseDashboard: React.FC = () => {
                 }}
               />
             </div>
-            
+
             {/* Standard Maternity Dashboard */}
             <MaternityDashboard
               tenantSlug={tenantSlug!}
               token={localStorage.getItem('ehr_token') || ''}
             />
+          </div>
+        )}
+
+        {/* Women's Health Section */}
+        {activeSection === 'women-health' && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                <Stethoscope className="w-6 h-6 text-purple-600 mr-2" />
+                Women's Health
+              </h2>
+            </div>
+            {activeTab === 'cervical-screening' && selectedPatient && (
+              <CervicalCancerDashboard patientId={selectedPatient.id} />
+            )}
+            {activeTab === 'cervical-screening' && !selectedPatient && (
+              <div className="text-slate-500 text-sm">Select a patient from the queue to view cervical cancer screening records.</div>
+            )}
+            {activeTab === 'family-planning' && selectedPatient && (
+              <FamilyPlanningDashboard patientId={selectedPatient.id} />
+            )}
+            {activeTab === 'family-planning' && !selectedPatient && (
+              <div className="text-slate-500 text-sm">Select a patient from the queue to view family planning records.</div>
+            )}
+          </div>
+        )}
+
+        {/* NCD / Hypertension Section */}
+        {activeSection === 'ncd' && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                <Activity className="w-6 h-6 text-blue-600 mr-2" />
+                NCD / Hypertension Register
+              </h2>
+            </div>
+            {activeTab === 'hypertension' && selectedPatient && (
+              <HypertensionDashboard patientId={selectedPatient.id} />
+            )}
+            {activeTab === 'hypertension' && !selectedPatient && (
+              <div className="text-slate-500 text-sm">Select a patient from the queue to view hypertension records.</div>
+            )}
           </div>
         )}
       </div>

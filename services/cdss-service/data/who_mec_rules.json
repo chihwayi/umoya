@@ -1,0 +1,234 @@
+{
+  "guideline": "WHO Medical Eligibility Criteria for Contraceptive Use, 5th Edition (2015, updated 2016)",
+  "mec_categories": {
+    "1": "No restriction — method can be used without restriction",
+    "2": "Advantages generally outweigh risks — method can generally be used",
+    "3": "Risks generally outweigh advantages — method not recommended unless no alternatives available",
+    "4": "Unacceptable health risk — method must not be used"
+  },
+  "always_category_1": ["condom"],
+  "rules": [
+    {
+      "condition": "breastfeeding_lt_6_weeks",
+      "method": "coc",
+      "category": 4,
+      "notes": "Combined hormonal contraceptives contraindicated in breastfeeding women <6 weeks postpartum (infant exposure to oestrogen)"
+    },
+    {
+      "condition": "breastfeeding_lt_6_weeks",
+      "method": "pop",
+      "category": 2,
+      "notes": "Progestogen-only pill: generally safe but monitor infant"
+    },
+    {
+      "condition": "breastfeeding_lt_6_weeks",
+      "method": "dmpa_im",
+      "category": 2,
+      "notes": "Injectable progestogen: generally safe but trace exposure; monitor infant"
+    },
+    {
+      "condition": "breastfeeding_lt_6_weeks",
+      "method": "dmpa_sc",
+      "category": 2,
+      "notes": "Injectable progestogen SC: generally safe but trace exposure; monitor infant"
+    },
+    {
+      "condition": "breastfeeding_lt_6_weeks",
+      "method": "implant",
+      "category": 2,
+      "notes": "Progestogen implant: generally safe; trace exposure; monitor infant"
+    },
+    {
+      "condition": "breastfeeding_lt_6_weeks",
+      "method": "lng_iud",
+      "category": 2,
+      "notes": "LNG-IUD: trace progestogen; generally safe in breastfeeding"
+    },
+    {
+      "condition": "breastfeeding_lt_6_weeks",
+      "method": "cu_iud",
+      "category": 1,
+      "notes": "Copper IUD: non-hormonal; safe in breastfeeding"
+    },
+    {
+      "condition": "breastfeeding_6w_to_6m",
+      "method": "coc",
+      "category": 3,
+      "notes": "COC in breastfeeding 6 weeks–6 months: oestrogen may reduce milk supply. Use alternatives where possible."
+    },
+    {
+      "condition": "hypertension_gte_160",
+      "method": "coc",
+      "category": 4,
+      "notes": "Severe hypertension (systolic ≥160 mmHg): COC contraindicated — cardiovascular risk"
+    },
+    {
+      "condition": "hypertension_gte_160",
+      "method": "pop",
+      "category": 2,
+      "notes": "Progestogen-only pill generally acceptable in hypertension"
+    },
+    {
+      "condition": "hypertension_gte_160",
+      "method": "dmpa_im",
+      "category": 3,
+      "notes": "DMPA in severe hypertension: risks may outweigh benefits; consider alternatives"
+    },
+    {
+      "condition": "hypertension_gte_160",
+      "method": "dmpa_sc",
+      "category": 3,
+      "notes": "DMPA-SC in severe hypertension: risks may outweigh benefits"
+    },
+    {
+      "condition": "migraine_with_aura",
+      "method": "coc",
+      "category": 4,
+      "notes": "Migraine with aura: COC contraindicated — significantly increased stroke risk"
+    },
+    {
+      "condition": "prior_dvt_pe",
+      "method": "coc",
+      "category": 4,
+      "notes": "History of DVT or PE: COC contraindicated — high VTE recurrence risk"
+    },
+    {
+      "condition": "prior_dvt_pe",
+      "method": "pop",
+      "category": 2,
+      "notes": "Progestogen-only pill: generally acceptable after DVT/PE"
+    },
+    {
+      "condition": "prior_dvt_pe",
+      "method": "dmpa_im",
+      "category": 2,
+      "notes": "DMPA: generally acceptable after DVT/PE"
+    },
+    {
+      "condition": "prior_dvt_pe",
+      "method": "implant",
+      "category": 2,
+      "notes": "Progestogen implant: generally acceptable after DVT/PE"
+    },
+    {
+      "condition": "prior_dvt_pe",
+      "method": "cu_iud",
+      "category": 1,
+      "notes": "Copper IUD: non-hormonal, no VTE risk"
+    },
+    {
+      "condition": "breast_cancer_history",
+      "method": "coc",
+      "category": 4,
+      "notes": "Current or past breast cancer: all hormonal methods contraindicated"
+    },
+    {
+      "condition": "breast_cancer_history",
+      "method": "pop",
+      "category": 4,
+      "notes": "Current or past breast cancer: progestogen-only pill contraindicated"
+    },
+    {
+      "condition": "breast_cancer_history",
+      "method": "dmpa_im",
+      "category": 4,
+      "notes": "Current or past breast cancer: DMPA contraindicated"
+    },
+    {
+      "condition": "breast_cancer_history",
+      "method": "dmpa_sc",
+      "category": 4,
+      "notes": "Current or past breast cancer: DMPA-SC contraindicated"
+    },
+    {
+      "condition": "breast_cancer_history",
+      "method": "implant",
+      "category": 4,
+      "notes": "Current or past breast cancer: progestogen implant contraindicated"
+    },
+    {
+      "condition": "breast_cancer_history",
+      "method": "lng_iud",
+      "category": 4,
+      "notes": "Current or past breast cancer: LNG-IUD contraindicated"
+    },
+    {
+      "condition": "liver_disease_active",
+      "method": "coc",
+      "category": 4,
+      "notes": "Active/severe liver disease: COC contraindicated — hepatic metabolism impaired"
+    },
+    {
+      "condition": "liver_disease_active",
+      "method": "pop",
+      "category": 3,
+      "notes": "Active liver disease: progestogen-only pill generally not recommended"
+    },
+    {
+      "condition": "liver_disease_active",
+      "method": "implant",
+      "category": 3,
+      "notes": "Active liver disease: implant risks may outweigh benefits"
+    },
+    {
+      "condition": "liver_disease_active",
+      "method": "lng_iud",
+      "category": 2,
+      "notes": "LNG-IUD: mostly local effect; generally acceptable in liver disease"
+    },
+    {
+      "condition": "liver_disease_active",
+      "method": "cu_iud",
+      "category": 1,
+      "notes": "Copper IUD: non-hormonal; safe in liver disease"
+    },
+    {
+      "condition": "smoking_age_gte_35",
+      "method": "coc",
+      "category": 4,
+      "notes": "Smoking ≥35 years: COC contraindicated — high cardiovascular risk"
+    },
+    {
+      "condition": "smoking_age_gte_35",
+      "method": "pop",
+      "category": 1,
+      "notes": "Progestogen-only pill: safe in older smokers"
+    },
+    {
+      "condition": "hiv_arv_efv_nvp_rtv_pi",
+      "method": "coc",
+      "category": 3,
+      "notes": "ARVs (EFV, NVP, ritonavir-boosted PIs) reduce COC efficacy via CYP450 induction; COC unreliable — use alternatives"
+    },
+    {
+      "condition": "hiv_arv_efv_nvp_rtv_pi",
+      "method": "pop",
+      "category": 3,
+      "notes": "ARVs (EFV, NVP, PIs) may reduce POP efficacy; use DMPA, implant, or IUD instead"
+    },
+    {
+      "condition": "hiv_arv_efv_nvp_rtv_pi",
+      "method": "implant",
+      "category": 2,
+      "notes": "Implant efficacy may be reduced by EFV/NVP-based ARV regimens; advise of small residual risk"
+    },
+    {
+      "condition": "age_lt_18",
+      "method": "cu_iud",
+      "category": 2,
+      "notes": "Copper IUD in adolescents: generally acceptable; counsel on insertion discomfort and expulsion risk"
+    },
+    {
+      "condition": "age_lt_18",
+      "method": "lng_iud",
+      "category": 2,
+      "notes": "LNG-IUD in adolescents: generally acceptable; counsel appropriately"
+    },
+    {
+      "condition": "age_gte_40",
+      "method": "coc",
+      "category": 2,
+      "notes": "COC use ≥40 years: generally acceptable if no cardiovascular risk factors; use with caution"
+    }
+  ]
+}

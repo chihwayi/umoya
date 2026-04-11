@@ -26,6 +26,9 @@ import { InboxController } from './controllers/inbox.controller';
 import { TbController } from './controllers/tb.controller';
 import { PediatricsController } from './controllers/pediatrics.controller';
 import { MentalHealthController } from './controllers/mental-health.controller';
+import { CervicalCancerController } from './controllers/cervical-cancer.controller';
+import { FamilyPlanningController } from './controllers/family-planning.controller';
+import { HypertensionController } from './controllers/hypertension.controller';
 import { MalariaController } from './controllers/malaria.controller';
 import { GeriatricsController } from './controllers/geriatrics.controller';
 import { NeurologyController } from './controllers/neurology.controller';
@@ -196,6 +199,9 @@ import { InboxGateway } from './gateways/inbox.gateway';
 import { TbService } from './services/tb.service';
 import { PediatricsService } from './services/pediatrics.service';
 import { MentalHealthService } from './services/mental-health.service';
+import { CervicalCancerService } from './services/cervical-cancer.service';
+import { FamilyPlanningService } from './services/family-planning.service';
+import { HypertensionService } from './services/hypertension.service';
 import { MalariaService } from './services/malaria.service';
 import { GeriatricsService } from './services/geriatrics.service';
 import { NeurologyService } from './services/neurology.service';
@@ -448,6 +454,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TbController,
     PediatricsController,
     MentalHealthController,
+    CervicalCancerController,
+    FamilyPlanningController,
+    HypertensionController,
     MalariaController,
     GeriatricsController,
     NeurologyController,
@@ -671,6 +680,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TbService,
     PediatricsService,
     MentalHealthService,
+    CervicalCancerService,
+    FamilyPlanningService,
+    HypertensionService,
     MalariaService,
     GeriatricsService,
     NeurologyService,

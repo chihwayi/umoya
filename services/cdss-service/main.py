@@ -5210,8 +5210,44 @@ class ScreeningToolsQuery(BaseModel):
     language_code: str = "en"
 
 
-def _mental_health_data_dir() -> pathlib.Path:
+class CervicalScreenRecommendRequest(BaseModel):
+    method: str
+    result: str
+    acetowhite_area_pct: Optional[int] = None
+    lesion_location: Optional[str] = None
+    hpv_genotype: Optional[str] = None
+    patient_age: Optional[int] = None
+    prior_treatment: bool = False
+
+
+class FpMethodEligibilityRequest(BaseModel):
+    age: Optional[int] = None
+    parity: Optional[int] = None
+    breastfeeding_weeks_postpartum: Optional[int] = None
+    bmi: Optional[float] = None
+    smoking: bool = False
+    hypertension: bool = False
+    systolic_bp: Optional[int] = None
+    diabetes: bool = False
+    hiv_positive: bool = False
+    arv_regimen: Optional[str] = None
+    prior_dvt_or_pe: bool = False
+    migraine_with_aura: bool = False
+    liver_disease: bool = False
+    breast_cancer_history: bool = False
+
+
+def _supporting_data_dir() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parent / "data"
+
+
+def _load_supporting_json(filename: str) -> Dict[str, Any]:
+    with (_supporting_data_dir() / filename).open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _mental_health_data_dir() -> pathlib.Path:
+    return _supporting_data_dir()
 
 
 def _load_mhgap_rules() -> Dict[str, Any]:
@@ -5624,6 +5660,427 @@ async def list_screening_tools(tool: Optional[str] = None, language_code: str = 
             }
             for tool_entry in sorted(tools.values(), key=lambda item: item["id"])
         ]
+    }
+
+
+@app.post("/cdss/cervical-cancer/screen-recommend")
+async def cervical_cancer_screen_recommend(req: CervicalScreenRecommendRequest):
+    protocol = _load_supporting_json("cervical_cancer_protocol.json")
+    guideline = protocol.get("guideline", "WHO Cervical Cancer Prevention & Control (2021)")
+    method = str(req.method or "").upper()
+    result = str(req.result or "").lower()
+
+    if result == "suspicious_cancer":
+        return {
+            "recommendation": "refer_cancer_treatment",
+            "action": "Refer urgently to oncology or cancer treatment centre",
+            "eligible_for_ablative_treatment": False,
+            "refer_specialist": True,
+            "urgency": "urgent",
+            "guideline": guideline,
+        }
+
+    if result == "negative":
+        if method in ("VIA", "VILI"):
+            next_years = int(protocol["screen_and_treat_pathways"][method]["negative"]["next_screen_years"])
+        elif method == "HPV":
+            next_years = int(protocol["screen_and_treat_pathways"]["HPV"]["negative"]["next_screen_years"])
+        else:
+            next_years = 3
+        return {
+            "recommendation": "routine_rescreening",
+            "action": f"Result negative. Rescreening recommended in {next_years} year(s).",
+            "eligible_for_ablative_treatment": False,
+            "refer_specialist": False,
+            "urgency": "routine",
+            "guideline": guideline,
+        }
+
+    if method in ("VIA", "VILI") and result == "positive":
+        small_lesion = (req.acetowhite_area_pct or 100) <= 75
+        normalized_location = str(req.lesion_location or "").strip().lower()
+        ectocervix_location = normalized_location in ("", "ectocervix", "squamocolumnar_junction")
+        cryo_eligible = small_lesion and ectocervix_location
+        method_rules = protocol["screen_and_treat_pathways"][method]["positive"]
+        return {
+            "recommendation": "cryotherapy" if cryo_eligible else "refer_leep",
+            "action": method_rules["cryotherapy_action"] if cryo_eligible else "Lesion not eligible for cryotherapy (too large or extends into endocervix). Refer for LEEP/LLETZ.",
+            "eligible_for_ablative_treatment": cryo_eligible,
+            "refer_specialist": not cryo_eligible,
+            "urgency": "same_day",
+            "guideline": guideline,
+        }
+
+    if method == "HPV" and result == "positive":
+        high_risk = str(req.hpv_genotype or "").strip().lower() == "16_18"
+        return {
+            "recommendation": "refer_colposcopy" if high_risk else "via_triage",
+            "action": "HPV 16/18 positive. Refer for colposcopy and biopsy." if high_risk else "HPV positive (non-16/18). Perform VIA triage. If VIA positive, treat; if negative, rescreening in 12 months.",
+            "eligible_for_ablative_treatment": False,
+            "refer_specialist": high_risk,
+            "urgency": "within_4_weeks" if high_risk else "routine",
+            "guideline": guideline,
+        }
+
+    if result == "unsatisfactory":
+        return {
+            "recommendation": "repeat_in_3_months",
+            "action": "Screening was unsatisfactory. Repeat examination in 3 months.",
+            "eligible_for_ablative_treatment": False,
+            "refer_specialist": False,
+            "urgency": "routine",
+            "guideline": guideline,
+        }
+
+    return {
+        "recommendation": "clinical_review",
+        "action": "Discuss results with clinician.",
+        "eligible_for_ablative_treatment": False,
+        "refer_specialist": False,
+        "urgency": "routine",
+        "guideline": guideline,
+    }
+
+
+@app.post("/cdss/family-planning/method-eligibility")
+async def family_planning_method_eligibility(req: FpMethodEligibilityRequest):
+    ruleset = _load_supporting_json("who_mec_rules.json")
+    always_category_1 = set(ruleset.get("always_category_1", []))
+    methods_meta = [
+        {"method": "coc", "notes": "Combined hormonal oral contraceptive."},
+        {"method": "pop", "notes": "Progestogen-only oral contraceptive."},
+        {"method": "implant", "notes": "Long-acting reversible contraceptive."},
+        {"method": "dmpa_im", "notes": "3-month injectable contraceptive."},
+        {"method": "dmpa_sc", "notes": "Subcutaneous injectable contraceptive."},
+        {"method": "lng_iud", "notes": "Hormonal intrauterine device."},
+        {"method": "cu_iud", "notes": "Non-hormonal intrauterine device."},
+        {"method": "condom", "notes": "Barrier method and STI prevention."},
+    ]
+
+    categories: Dict[str, int] = {item["method"]: 1 for item in methods_meta}
+    notes: Dict[str, List[str]] = {item["method"]: [item["notes"]] for item in methods_meta}
+
+    active_conditions: List[str] = []
+    if req.breastfeeding_weeks_postpartum is not None and req.breastfeeding_weeks_postpartum < 6:
+        active_conditions.append("breastfeeding_lt_6_weeks")
+    if req.breastfeeding_weeks_postpartum is not None and 6 <= req.breastfeeding_weeks_postpartum < 26:
+        active_conditions.append("breastfeeding_6w_to_6m")
+    regimen = str(req.arv_regimen or "").strip().lower()
+    if req.hiv_positive and regimen in {"efv_nvp", "pi_based"}:
+        active_conditions.append("hiv_arv_efv_nvp_rtv_pi")
+    if req.systolic_bp is not None and req.systolic_bp >= 160:
+        active_conditions.append("hypertension_gte_160")
+    if req.migraine_with_aura:
+        active_conditions.append("migraine_with_aura")
+    if req.prior_dvt_or_pe:
+        active_conditions.append("prior_dvt_pe")
+    if req.breast_cancer_history:
+        active_conditions.append("breast_cancer_history")
+    if req.liver_disease:
+        active_conditions.append("liver_disease_active")
+    if req.age is not None and req.age < 18:
+        active_conditions.append("age_lt_18")
+    if req.age is not None and req.age >= 40:
+        active_conditions.append("age_gte_40")
+    if req.smoking and req.age is not None and req.age >= 35:
+        active_conditions.append("smoking_age_gte_35")
+
+    for rule in ruleset.get("rules", []):
+        condition = rule.get("condition")
+        method = rule.get("method")
+        if condition not in active_conditions or method in always_category_1:
+            continue
+        categories[method] = max(categories.get(method, 1), int(rule.get("category", 1)))
+        rule_note = str(rule.get("notes") or "").strip()
+        if rule_note and rule_note not in notes[method]:
+            notes[method].append(rule_note)
+
+    if req.hiv_positive and regimen == "dtg":
+        for method in ("coc", "implant"):
+            if "No clinically significant interaction with DTG" not in notes[method]:
+                notes[method].append("No clinically significant interaction with DTG")
+
+    if req.hiv_positive and regimen in {"efv_nvp", "pi_based"}:
+        for method, note in (
+            ("dmpa_im", "No clinically significant interaction with ARVs"),
+            ("dmpa_sc", "No clinically significant interaction with ARVs"),
+            ("lng_iud", "Suitable; local effect, minimal systemic absorption"),
+            ("cu_iud", "Suitable; non-hormonal, no drug interaction"),
+        ):
+            if note not in notes[method]:
+                notes[method].append(note)
+
+    if "Always recommended additionally for STI/HIV prevention" not in notes["condom"]:
+        notes["condom"].append("Always recommended additionally for STI/HIV prevention")
+
+    methods_response = []
+    for item in methods_meta:
+        method = item["method"]
+        methods_response.append({
+            "method": method,
+            "mec_category": 1 if method in always_category_1 else categories[method],
+            "notes": "; ".join(dict.fromkeys(notes[method])),
+        })
+
+    return {
+        "patient_summary": {
+            "age": req.age,
+            "hiv_positive": req.hiv_positive,
+            "arv_regimen": req.arv_regimen,
+        },
+        "methods": methods_response,
+        "recommended": [item["method"] for item in methods_response if item["mec_category"] <= 2],
+        "contraindicated": [item["method"] for item in methods_response if item["mec_category"] == 4],
+        "guideline": ruleset.get("guideline"),
+    }
+
+
+@app.get("/cdss/family-planning/methods")
+async def family_planning_methods():
+    return {
+        "methods": [
+            {"id": "coc", "name": "Combined Oral Contraceptive", "type": "hormonal_oral", "duration": "daily", "larc": False},
+            {"id": "pop", "name": "Progestogen-Only Pill", "type": "hormonal_oral", "duration": "daily", "larc": False},
+            {"id": "implant", "name": "Subdermal Implant", "type": "hormonal_implant", "duration": "3–5 years", "larc": True},
+            {"id": "dmpa_im", "name": "DMPA Injectable (IM)", "type": "hormonal_inject", "duration": "3 months", "larc": False},
+            {"id": "dmpa_sc", "name": "DMPA-SC Sayana Press", "type": "hormonal_inject", "duration": "3 months", "larc": False},
+            {"id": "lng_iud", "name": "Levonorgestrel IUD (Mirena)", "type": "hormonal_iud", "duration": "5 years", "larc": True},
+            {"id": "cu_iud", "name": "Copper IUD", "type": "non_hormonal_iud", "duration": "10 years", "larc": True},
+            {"id": "condom", "name": "Male/Female Condom", "type": "barrier", "duration": "per use", "larc": False},
+        ]
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 143 — Hypertension Register + WHO PEN NCD Protocol
+# ─────────────────────────────────────────────────────────────────────────────
+
+class HtnStepTherapyRequest(BaseModel):
+    current_step: int = 1                       # Current WHO PEN step (1–4)
+    sbp: int                                     # Latest systolic BP
+    dbp: int                                     # Latest diastolic BP
+    has_diabetes: bool = False
+    has_ckd: bool = False
+    has_heart_failure: bool = False
+    has_post_mi: bool = False
+    is_pregnant: bool = False
+    is_smoker: bool = False
+    cvd_risk_tier: Optional[str] = None         # low | moderate | high | very_high
+    on_medications: Optional[List[str]] = None  # Current medication names
+    age_years: Optional[int] = None
+    weeks_on_current_step: Optional[int] = None
+
+class HtnCvdRiskRequest(BaseModel):
+    age_years: int
+    sex: str                                     # male | female
+    sbp: int                                     # Systolic BP mmHg
+    total_cholesterol_mmol: Optional[float] = None
+    is_smoker: bool = False
+    has_diabetes: bool = False
+    has_ckd: bool = False
+    has_lvh: bool = False                        # Left ventricular hypertrophy
+    has_proteinuria: bool = False
+    family_history_cvd: bool = False
+
+def _classify_bp(sbp: int, dbp: int) -> str:
+    if sbp >= 180 or dbp >= 120:
+        return "hypertensive_crisis"
+    if sbp >= 140 or dbp >= 90:
+        return "stage2"
+    if sbp >= 130 or dbp >= 80:
+        return "stage1"
+    if sbp >= 120 and dbp < 80:
+        return "elevated"
+    return "normal"
+
+def _bp_at_target(sbp: int, dbp: int, has_diabetes: bool, has_ckd: bool, age_years: Optional[int]) -> bool:
+    if has_diabetes or has_ckd:
+        return sbp < 130 and dbp < 80
+    if age_years and age_years >= 80:
+        return sbp < 150 and dbp < 90
+    return sbp < 140 and dbp < 90
+
+@app.post("/cdss/htn/step-therapy")
+async def htn_step_therapy(req: HtnStepTherapyRequest):
+    protocol = _load_supporting_json("who_pen_htn_protocol.json")
+
+    classification = _classify_bp(req.sbp, req.dbp)
+    at_target = _bp_at_target(req.sbp, req.dbp, req.has_diabetes, req.has_ckd, req.age_years)
+
+    recommendations = []
+    warnings = []
+    next_step = req.current_step
+    action = "maintain"
+    follow_up = "controlled_low_risk"
+
+    # Urgent referral for hypertensive crisis
+    if classification == "hypertensive_crisis":
+        warnings.append("HYPERTENSIVE CRISIS: SBP ≥180 or DBP ≥120 — emergency/urgent referral required immediately.")
+        action = "referral"
+        follow_up = "hypertensive_crisis"
+        return {
+            "classification": classification,
+            "at_target": False,
+            "current_step": req.current_step,
+            "recommended_step": req.current_step,
+            "action": action,
+            "recommendations": protocol["referral_criteria"][:2],
+            "warnings": warnings,
+            "lifestyle_counselling": protocol["lifestyle_counselling"],
+            "follow_up": protocol["follow_up_schedule"]["hypertensive_crisis"],
+            "source": "WHO PEN HTN Protocol 2020",
+        }
+
+    # Pregnancy — special first line
+    if req.is_pregnant:
+        warnings.append("Patient is pregnant: ACEIs and ARBs are contraindicated.")
+        recommendations.append(protocol["step_therapy"]["step1"]["preferred_in_pregnancy"])
+        action = "maintain"
+    elif not at_target and req.current_step < 4:
+        # Step up if not at target and been on current step ≥4 weeks
+        if req.weeks_on_current_step is None or req.weeks_on_current_step >= 4:
+            next_step = req.current_step + 1
+            action = "step_up"
+            step_key = f"step{next_step}"
+            step_data = protocol["step_therapy"].get(step_key, {})
+            if "combinations" in step_data:
+                recommendations.extend(step_data["combinations"])
+            elif "first_line" in step_data:
+                if req.has_diabetes or req.has_ckd:
+                    recommendations.append(step_data.get("preferred_if_diabetes_ckd", step_data["first_line"][0]))
+                elif req.has_post_mi:
+                    recommendations.append(step_data.get("preferred_if_post_mi", step_data["first_line"][0]))
+                elif req.has_heart_failure:
+                    recommendations.append(step_data.get("preferred_if_heart_failure", step_data["first_line"][0]))
+                else:
+                    recommendations.extend(step_data["first_line"])
+            elif "options" in step_data:
+                recommendations.extend(step_data["options"])
+        else:
+            action = "maintain"
+            recommendations.append(f"Continue current Step {req.current_step} regimen. Review again after {4 - (req.weeks_on_current_step or 0)} more weeks.")
+    elif at_target:
+        action = "maintain"
+        recommendations.append(f"BP at target on Step {req.current_step}. Continue current regimen.")
+        if req.cvd_risk_tier in ("high", "very_high"):
+            follow_up = "controlled_high_risk_or_comorbidities"
+            recommendations.append("High CVD risk: consider statin if total cholesterol ≥5 mmol/L per WHO PEN.")
+        else:
+            follow_up = "controlled_low_risk"
+    elif req.current_step >= 4 and not at_target:
+        action = "referral"
+        recommendations.extend(protocol["referral_criteria"])
+        warnings.append("Resistant hypertension on Step 4 triple therapy — specialist referral indicated.")
+
+    # Add statin/aspirin guidance for very high CVD risk
+    if req.cvd_risk_tier == "very_high" and at_target:
+        recommendations.append(protocol["who_cvd_risk_thresholds"]["very_high"]["action"])
+    elif req.cvd_risk_tier == "high" and at_target:
+        recommendations.append(protocol["who_cvd_risk_thresholds"]["high"]["action"])
+
+    follow_up_detail = protocol["follow_up_schedule"].get(
+        follow_up if at_target else "newly_diagnosed_uncontrolled",
+        protocol["follow_up_schedule"]["newly_diagnosed_uncontrolled"]
+    )
+
+    return {
+        "classification": classification,
+        "at_target": at_target,
+        "current_step": req.current_step,
+        "recommended_step": next_step,
+        "action": action,
+        "recommendations": recommendations,
+        "warnings": warnings,
+        "lifestyle_counselling": protocol["lifestyle_counselling"],
+        "monitoring": protocol["complication_monitoring"]["every_visit"],
+        "follow_up": follow_up_detail,
+        "source": "WHO PEN HTN Protocol 2020",
+    }
+
+
+@app.post("/cdss/htn/cvd-risk")
+async def htn_cvd_risk(req: HtnCvdRiskRequest):
+    """
+    Simplified WHO CVD risk estimation (risk factor count proxy).
+    Full Framingham/WHO chart requires validated coefficients outside scope.
+    Returns tier (low/moderate/high/very_high) and recommended action.
+    """
+    protocol = _load_supporting_json("who_pen_htn_protocol.json")
+
+    risk_points = 0
+
+    # Age risk
+    if req.sex == "male" and req.age_years >= 55:
+        risk_points += 2
+    elif req.sex == "female" and req.age_years >= 65:
+        risk_points += 2
+    elif req.age_years >= 45:
+        risk_points += 1
+
+    # BP contribution
+    if req.sbp >= 160:
+        risk_points += 3
+    elif req.sbp >= 140:
+        risk_points += 2
+    elif req.sbp >= 130:
+        risk_points += 1
+
+    # Modifiable risk factors
+    if req.is_smoker:
+        risk_points += 2
+    if req.has_diabetes:
+        risk_points += 2
+    if req.total_cholesterol_mmol and req.total_cholesterol_mmol >= 5.0:
+        risk_points += 2
+    if req.family_history_cvd:
+        risk_points += 1
+
+    # End-organ damage
+    if req.has_ckd:
+        risk_points += 2
+    if req.has_lvh:
+        risk_points += 2
+    if req.has_proteinuria:
+        risk_points += 1
+
+    # Determine tier
+    if risk_points >= 8:
+        tier = "very_high"
+        estimated_risk_pct = 35.0
+    elif risk_points >= 5:
+        tier = "high"
+        estimated_risk_pct = 22.0
+    elif risk_points >= 3:
+        tier = "moderate"
+        estimated_risk_pct = 14.0
+    else:
+        tier = "low"
+        estimated_risk_pct = 6.0
+
+    thresholds = protocol["who_cvd_risk_thresholds"]
+    action = thresholds.get(tier, {}).get("action", "Lifestyle counselling.")
+
+    return {
+        "cvd_risk_tier": tier,
+        "estimated_10yr_risk_pct": estimated_risk_pct,
+        "risk_points": risk_points,
+        "action": action,
+        "risk_factors_identified": {
+            "age": req.age_years,
+            "sex": req.sex,
+            "sbp": req.sbp,
+            "smoker": req.is_smoker,
+            "diabetes": req.has_diabetes,
+            "high_cholesterol": bool(req.total_cholesterol_mmol and req.total_cholesterol_mmol >= 5.0),
+            "family_history_cvd": req.family_history_cvd,
+            "ckd": req.has_ckd,
+            "lvh": req.has_lvh,
+            "proteinuria": req.has_proteinuria,
+        },
+        "lifestyle_counselling": protocol["lifestyle_counselling"],
+        "monitoring_baseline": protocol["complication_monitoring"]["baseline"],
+        "source": "WHO PEN HTN Protocol 2020 / WHO CVD Risk Chart approach",
+        "note": "This is a simplified risk stratification. Use validated WHO CVD risk charts for definitive assessment.",
     }
 
 

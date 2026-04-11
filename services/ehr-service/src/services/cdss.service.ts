@@ -2163,6 +2163,59 @@ export class CdssService {
     }
   }
 
+  async cervicalCancerScreenRecommend(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'cervicalCancerScreenRecommend',
+      '/cdss/cervical-cancer/screen-recommend',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async familyPlanningMethodEligibility(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'familyPlanningMethodEligibility',
+      '/cdss/family-planning/method-eligibility',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async familyPlanningMethods(tenantId?: string): Promise<Record<string, any>> {
+    return this.getWithPolicy<Record<string, any>>(
+      'familyPlanningMethods',
+      '/cdss/family-planning/methods',
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async htnStepTherapy(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'htnStepTherapy',
+      '/cdss/htn/step-therapy',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async htnCvdRisk(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'htnCvdRisk',
+      '/cdss/htn/cvd-risk',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   /**
    * Fetch patient historical data for CDSS analysis
    */

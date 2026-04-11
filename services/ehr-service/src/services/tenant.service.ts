@@ -179,6 +179,13 @@ import { SchoolHealthRecord } from '../entities/school-health-record.entity';
 import { MentalHealthScreening } from '../entities/mental-health-screening.entity';
 import { MentalHealthCarePlan } from '../entities/mental-health-care-plan.entity';
 import { MentalHealthFollowup } from '../entities/mental-health-followup.entity';
+import { CervicalScreening } from '../entities/cervical-screening.entity';
+import { CervicalTreatment } from '../entities/cervical-treatment.entity';
+import { FamilyPlanningEnrollment } from '../entities/family-planning-enrollment.entity';
+import { FamilyPlanningFollowup } from '../entities/family-planning-followup.entity';
+import { HtnRegister } from '../entities/htn-register.entity';
+import { BpReading } from '../entities/bp-reading.entity';
+import { NcdTreatmentReview } from '../entities/ncd-treatment-review.entity';
 import { PsychiatricEncounter } from '../entities/psychiatric-encounter.entity';
 import { CrisisEvent } from '../entities/crisis-event.entity';
 import { SafePlan } from '../entities/safe-plan.entity';
@@ -658,6 +665,13 @@ export class TenantService {
         MentalHealthScreening,
         MentalHealthCarePlan,
         MentalHealthFollowup,
+        CervicalScreening,
+        CervicalTreatment,
+        FamilyPlanningEnrollment,
+        FamilyPlanningFollowup,
+        HtnRegister,
+        BpReading,
+        NcdTreatmentReview,
         PsychiatricEncounter,
         CrisisEvent,
         SafePlan,

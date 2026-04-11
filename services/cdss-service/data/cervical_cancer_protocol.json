@@ -1,0 +1,81 @@
+{
+  "guideline": "WHO Cervical Cancer Prevention & Control (2021)",
+  "target_population": "Women aged 25–65; HIV-positive women from age 25 or within 1 year of HIV diagnosis",
+  "screening_interval_years": {
+    "VIA": 3,
+    "VILI": 3,
+    "HPV": 5
+  },
+  "screen_and_treat_pathways": {
+    "VIA": {
+      "negative": {
+        "next_screen_years": 3,
+        "action": "Reassure and schedule rescreening in 3 years."
+      },
+      "positive": {
+        "cryo_eligibility": {
+          "max_acetowhite_area_pct": 75,
+          "eligible_locations": ["ectocervix", "squamocolumnar_junction", ""]
+        },
+        "cryotherapy_action": "Lesion eligible for cryotherapy. Treat same day (screen-and-treat). Schedule follow-up in 12 months.",
+        "leep_action": "Lesion not eligible for cryotherapy (too large or extends into endocervix). Refer for LEEP/LLETZ.",
+        "follow_up_months": 12
+      }
+    },
+    "VILI": {
+      "negative": {
+        "next_screen_years": 3,
+        "action": "Reassure and schedule rescreening in 3 years."
+      },
+      "positive": {
+        "cryo_eligibility": {
+          "max_acetowhite_area_pct": 75,
+          "eligible_locations": ["ectocervix", "squamocolumnar_junction", ""]
+        },
+        "cryotherapy_action": "Lesion eligible for cryotherapy. Treat same day (screen-and-treat). Schedule follow-up in 12 months.",
+        "leep_action": "Lesion not eligible for cryotherapy (too large or extends into endocervix). Refer for LEEP/LLETZ.",
+        "follow_up_months": 12
+      }
+    },
+    "HPV": {
+      "negative": {
+        "next_screen_years": 5,
+        "action": "HPV negative. Rescreening recommended in 5 years."
+      },
+      "positive": {
+        "high_risk_genotypes": ["16", "18", "16_18"],
+        "high_risk_action": "HPV 16/18 positive. Refer for colposcopy and biopsy.",
+        "other_positive_action": "HPV positive (non-16/18). Perform VIA triage. If VIA positive, treat; if VIA negative, rescreening in 12 months.",
+        "high_risk_urgency_weeks": 4,
+        "via_triage_rescreening_months": 12
+      }
+    }
+  },
+  "treatment_methods": {
+    "cryotherapy": {
+      "description": "Ablative treatment using CO2 or N2O to freeze and destroy abnormal tissue.",
+      "eligibility": "Lesion size ≤75% of transformation zone; entirely visible; not extending into endocervical canal.",
+      "contraindications": ["lesion extends into endocervix", "acetowhite area > 75%", "suspected invasive cancer"],
+      "follow_up_months": 12
+    },
+    "leep": {
+      "description": "Loop Electrosurgical Excision Procedure (LEEP/LLETZ). Excision of transformation zone.",
+      "eligibility": "Large lesion, endocervical extension, or failed cryotherapy.",
+      "follow_up_months": 6
+    },
+    "referral_cancer_treatment": {
+      "description": "Urgent referral to oncology or cancer treatment centre.",
+      "indications": ["suspicious_cancer", "confirmed invasive cancer", "stage IB or higher"]
+    }
+  },
+  "hpv_vaccination": {
+    "primary_target": "Girls aged 9–14 years (pre-sexual debut)",
+    "catch_up": "Women 15–45 if not previously vaccinated, according to national policy",
+    "vaccines": ["Cervarix (HPV 16/18)", "Gardasil 4 (HPV 6/11/16/18)", "Gardasil 9 (HPV 6/11/16/18/31/33/45/52/58)"]
+  },
+  "hiv_positive_specifics": {
+    "screening_start_age": 25,
+    "screening_interval_years": 1,
+    "notes": "HIV-positive women have higher risk; annual screening recommended."
+  }
+}

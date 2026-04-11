@@ -65,6 +65,14 @@ import {
   TENANT_MENTAL_HEALTH_MHGAP_BUNDLE_VERSION,
   TENANT_MENTAL_HEALTH_MHGAP_STATEMENTS,
 } from '../generated/tenant-mental-health-mhgap.statements';
+import {
+  TENANT_CERVICAL_FP_BUNDLE_VERSION,
+  TENANT_CERVICAL_FP_STATEMENTS,
+} from '../generated/tenant-cervical-fp.statements';
+import {
+  TENANT_HTN_NCD_BUNDLE_VERSION,
+  TENANT_HTN_NCD_STATEMENTS,
+} from '../generated/tenant-htn-ncd.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1351,6 +1359,20 @@ export class DatabaseProvisioningService {
         version: TENANT_MENTAL_HEALTH_MHGAP_BUNDLE_VERSION,
         description: 'S141 — mhGAP care plans, community follow-ups, multilingual screening tools, and screening columns',
         statements: TENANT_MENTAL_HEALTH_MHGAP_STATEMENTS,
+      },
+      {
+        id: 'sprint142_cervical_family_planning',
+        label: 'Cervical Cancer Screening + Family Planning',
+        version: TENANT_CERVICAL_FP_BUNDLE_VERSION,
+        description: 'S142 — cervical screening/treatment and family planning enrollment/follow-up',
+        statements: TENANT_CERVICAL_FP_STATEMENTS,
+      },
+      {
+        id: 'sprint143_htn_ncd_register',
+        label: 'Hypertension Register + NCD Treatment Reviews',
+        version: TENANT_HTN_NCD_BUNDLE_VERSION,
+        description: 'S143 — HTN register, serial BP readings, WHO PEN step therapy treatment reviews',
+        statements: TENANT_HTN_NCD_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',
