@@ -3,13 +3,20 @@ import { DatimMerService } from './datim-mer.service';
 
 jest.mock('axios');
 
+// CI test fixtures — loaded from environment variables; no credentials are
+// hardcoded here. Set DATIM_* vars in your CI environment or a gitignored
+// .env.test file. The fallback values are non-secret test stubs only.
+const TEST_ENV: Record<string, string> = {
+  DATIM_DATASET_UID: process.env.DATIM_DATASET_UID ?? 'DATASET-1',
+  DATIM_USERNAME: process.env.DATIM_USERNAME ?? 'ci-user',
+  DATIM_PASSWORD: process.env.DATIM_PASSWORD ?? 'ci-stub',
+  DATIM_BASE_URL: process.env.DATIM_BASE_URL ?? 'https://datim.example.test',
+};
+
 describe('DatimMerService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    process.env.DATIM_DATASET_UID = 'DATASET-1';
-    process.env.DATIM_USERNAME = 'datim-user';
-    process.env.DATIM_PASSWORD = 'datim-pass';
-    process.env.DATIM_BASE_URL = 'https://datim.example.test';
+    Object.assign(process.env, TEST_ENV);
   });
 
   it('previews DATIM indicators from real-table query shapes', async () => {
@@ -71,9 +78,9 @@ describe('DatimMerService', () => {
     const result = await service.submitToDatim('tenant-a', '202604', 'OU-1');
 
     expect(axios.post).toHaveBeenCalledWith(
-      'https://datim.example.test/api/dataValueSets',
+      `${TEST_ENV.DATIM_BASE_URL}/api/dataValueSets`,
       expect.objectContaining({
-        dataSet: 'DATASET-1',
+        dataSet: TEST_ENV.DATIM_DATASET_UID,
         period: '202604',
         orgUnit: 'OU-1',
         dataValues: expect.arrayContaining([

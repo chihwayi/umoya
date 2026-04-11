@@ -201,7 +201,7 @@ export class DatimMerService {
     const dataSet = String(process.env.DATIM_DATASET_UID || '').trim();
     const username = String(process.env.DATIM_USERNAME || '').trim();
     const password = String(process.env.DATIM_PASSWORD || '').trim();
-    const configuredBase = String(process.env.DATIM_BASE_URL || 'https://datim.org').trim();
+    const configuredBase = String(process.env.DATIM_BASE_URL || '').trim();
     const endpoint = configuredBase.includes('/api/dataValueSets')
       ? configuredBase
       : `${configuredBase.replace(/\/$/, '')}/api/dataValueSets`;
@@ -218,7 +218,7 @@ export class DatimMerService {
       })
       .filter((value): value is { dataElement: string; categoryOptionCombo: string; value: number } => Boolean(value));
 
-    if (!dataSet || !username || !password) {
+    if (!dataSet || !username || !password || !configuredBase) {
       const failed = submissionRepo.create({
         period,
         orgUnitUid,
