@@ -50,6 +50,10 @@ import {
   TENANT_OPENMRS_MFL_STATEMENTS,
 } from '../generated/tenant-openmrs-mfl.statements';
 import {
+  TENANT_CRVS_BUNDLE_VERSION,
+  TENANT_CRVS_STATEMENTS,
+} from '../generated/tenant-crvs.statements';
+import {
   TENANT_AT_MESSAGING_BUNDLE_VERSION,
   TENANT_AT_MESSAGING_STATEMENTS,
 } from '../generated/tenant-at-messaging.statements';
@@ -1311,6 +1315,13 @@ export class DatabaseProvisioningService {
         version: TENANT_OPENMRS_MFL_BUNDLE_VERSION,
         description: 'S138 — OpenMRS FHIR patient links and sync logs, plus Kenya MFL facility sync',
         statements: TENANT_OPENMRS_MFL_STATEMENTS,
+      },
+      {
+        id: 'sprint139_crvs',
+        label: 'CRVS Birth/Death Notification',
+        version: TENANT_CRVS_BUNDLE_VERSION,
+        description: 'S139 — birth notifications, death certificates, MDSR notifications',
+        statements: TENANT_CRVS_STATEMENTS,
       },
       {
         id: 'at-messaging',

@@ -41,6 +41,7 @@ import { EtrNetController } from './controllers/etr-net.controller';
 import { DatimMerController } from './controllers/datim-mer.controller';
 import { OpenmrsFhirController } from './controllers/openmrs-fhir.controller';
 import { MflController } from './controllers/mfl.controller';
+import { CrvsController } from './controllers/crvs.controller';
 import { IcuController } from './controllers/icu.controller';
 import { SdohController } from './controllers/sdoh.controller';
 import { NtdController } from './controllers/ntd.controller';
@@ -209,6 +210,7 @@ import { EtrNetService } from './services/etr-net.service';
 import { DatimMerService } from './services/datim-mer.service';
 import { OpenmrsFhirService } from './services/openmrs-fhir.service';
 import { MflService } from './services/mfl.service';
+import { CrvsService } from './services/crvs.service';
 import { IcuService } from './services/icu.service';
 import { SdohService } from './services/sdoh.service';
 import { NtdService } from './services/ntd.service';
@@ -459,6 +461,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DatimMerController,
     OpenmrsFhirController,
     MflController,
+    CrvsController,
     IcuController,
     SdohController,
     NtdController,
@@ -680,6 +683,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DatimMerService,
     OpenmrsFhirService,
     MflService,
+    CrvsService,
     IcuService,
     SdohService,
     NtdService,

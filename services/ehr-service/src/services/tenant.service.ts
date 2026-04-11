@@ -292,6 +292,9 @@ import { DatimSubmission } from '../entities/datim-submission.entity';
 import { AtMessageLog } from '../entities/at-message-log.entity';
 import { UssdSession } from '../entities/ussd-session.entity';
 import { NotificationTemplate } from '../entities/notification-template.entity';
+import { BirthNotification } from '../entities/birth-notification.entity';
+import { DeathCertificate } from '../entities/death-certificate.entity';
+import { MdsrNotification } from '../entities/mdsr-notification.entity';
 import { OpenmrsPatientLink } from '../entities/openmrs-patient-link.entity';
 import { MflFacility } from '../entities/mfl-facility.entity';
 import { OpenmrsSyncLog } from '../entities/openmrs-sync-log.entity';
@@ -762,6 +765,9 @@ export class TenantService {
         AtMessageLog,
         UssdSession,
         NotificationTemplate,
+        BirthNotification,
+        DeathCertificate,
+        MdsrNotification,
         OpenmrsPatientLink,
         MflFacility,
         OpenmrsSyncLog,
