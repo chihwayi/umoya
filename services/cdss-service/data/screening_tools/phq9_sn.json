@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "sn",
+  "language_name": "Shona",
+  "title": "Gwaro reHutano hweMurwere - 9",
+  "instructions": "Mumavhiki maviri apfuura, makambonetseka kangani nezvinhu zvinotevera?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Kwete zvachose"
+    },
+    {
+      "value": 1,
+      "label": "Mamwe mazuva"
+    },
+    {
+      "value": 2,
+      "label": "Anopfuura hafu yemazuva"
+    },
+    {
+      "value": 3,
+      "label": "Anenge mazuva ose"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Kusava nechido kana mufaro pakuita zvinhu"
+    },
+    {
+      "id": 2,
+      "text": "Kunzwa kusuruvara, kuderera mwoyo, kana kusava netariro"
+    },
+    {
+      "id": 3,
+      "text": "Kunetseka kurara, kuramba wakarara, kana kurara zvakanyanya"
+    },
+    {
+      "id": 4,
+      "text": "Kunzwa kuneta kana kushaya simba"
+    },
+    {
+      "id": 5,
+      "text": "Kushaya nzara kana kudya zvakanyanya"
+    },
+    {
+      "id": 6,
+      "text": "Kunzwa zvakaipa pamusoro pako kana sekunge warasa iwe kana mhuri yako"
+    },
+    {
+      "id": 7,
+      "text": "Kunetseka kuisa pfungwa pazvinhu zvakaita sekuverenga kana kuona terevhizheni"
+    },
+    {
+      "id": 8,
+      "text": "Kufamba kana kutaura zvishoma zvekuti vamwe vanozviona, kana kusagadzikana zvekuti unofamba kupfuura zvakajairika"
+    },
+    {
+      "id": 9,
+      "text": "Mifungo yekuti zviri nani kudai wakafa kana kuzvikuvadza"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

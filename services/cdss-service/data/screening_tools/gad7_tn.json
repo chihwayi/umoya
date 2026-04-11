@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "tn",
+  "language_name": "Setswana",
+  "title": "Sekala sa Matshwenyego a Kakaretso - 7",
+  "instructions": "Mo dibekeng tse pedi tse di fetileng, o ne o tshwenngwa gantsi jang ke mathata a a latelang?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Le e seng"
+    },
+    {
+      "value": 1,
+      "label": "Malatsi a se kae"
+    },
+    {
+      "value": 2,
+      "label": "Go feta halofo ya malatsi"
+    },
+    {
+      "value": 3,
+      "label": "Bontsintsi jwa malatsi"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Go ikutlwa o tshogile, o tshwenyegile, kgotsa o sa iketla"
+    },
+    {
+      "id": 2,
+      "text": "Go se kgone go emisa kgotsa go laola matshwenyego"
+    },
+    {
+      "id": 3,
+      "text": "Go tshwenyega thata ka dilo tse di farologaneng"
+    },
+    {
+      "id": 4,
+      "text": "Bothata jwa go ikhutsa"
+    },
+    {
+      "id": 5,
+      "text": "Go sa kgone go nna fatshe ka ntlha ya go sa iketle"
+    },
+    {
+      "id": 6,
+      "text": "Go tenega kgotsa go galefa motlhofo"
+    },
+    {
+      "id": 7,
+      "text": "Go ikutlwa o boifa jaaka e kete sengwe se se maswe se tla diragala"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

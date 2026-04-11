@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "en",
+  "language_name": "English",
+  "title": "Generalised Anxiety Disorder Scale - 7",
+  "instructions": "Over the last 2 weeks, how often have you been bothered by the following problems?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Not at all"
+    },
+    {
+      "value": 1,
+      "label": "Several days"
+    },
+    {
+      "value": 2,
+      "label": "More than half the days"
+    },
+    {
+      "value": 3,
+      "label": "Nearly every day"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Feeling nervous, anxious, or on edge"
+    },
+    {
+      "id": 2,
+      "text": "Not being able to stop or control worrying"
+    },
+    {
+      "id": 3,
+      "text": "Worrying too much about different things"
+    },
+    {
+      "id": 4,
+      "text": "Trouble relaxing"
+    },
+    {
+      "id": 5,
+      "text": "Being so restless that it is hard to sit still"
+    },
+    {
+      "id": 6,
+      "text": "Becoming easily annoyed or irritable"
+    },
+    {
+      "id": 7,
+      "text": "Feeling afraid as if something awful might happen"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

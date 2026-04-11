@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "ny",
+  "language_name": "Chichewa",
+  "title": "Sikelo cha Nkhawa Yamba - 7",
+  "instructions": "M’masabata awiri apitawa, mwakhala mukuvutitsidwa kangati ndi mavuto awa?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Ayi konse"
+    },
+    {
+      "value": 1,
+      "label": "Masiku ena"
+    },
+    {
+      "value": 2,
+      "label": "Kuposa theka la masiku"
+    },
+    {
+      "value": 3,
+      "label": "Pafupifupi tsiku lililonse"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Kumva mantha, nkhawa, kapena kusakhazikika"
+    },
+    {
+      "id": 2,
+      "text": "Kulephera kuyimitsa kapena kulamulira nkhawa"
+    },
+    {
+      "id": 3,
+      "text": "Kuda nkhawa kwambiri ndi zinthu zosiyanasiyana"
+    },
+    {
+      "id": 4,
+      "text": "Kuvutika kupumula"
+    },
+    {
+      "id": 5,
+      "text": "Kusakhazikika kwambiri moti zimavuta kukhala chete"
+    },
+    {
+      "id": 6,
+      "text": "Kukwiya kapena kukhumudwa mosavuta"
+    },
+    {
+      "id": 7,
+      "text": "Kumva mantha ngati kuti china choipa chichitika"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

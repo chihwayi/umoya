@@ -1,0 +1,88 @@
+{
+  "conditions": {
+    "depression": {
+      "icd10": "F32",
+      "keywords": ["sad", "depressed", "hopeless", "low mood", "worthless", "sleep", "appetite"],
+      "management_steps": [
+        "Assess for suicide/self-harm risk (ask directly)",
+        "Identify psychosocial stressors",
+        "Provide psychosocial support (problem-solving, behavioural activation)",
+        "Consider antidepressant (amitriptyline or fluoxetine) if moderate-severe",
+        "Review in 2 weeks; refer if no improvement at 4 weeks"
+      ],
+      "refer_if": ["psychosis", "bipolar", "no improvement at 4 weeks", "suicide risk high"]
+    },
+    "anxiety": {
+      "icd10": "F41",
+      "keywords": ["anxious", "worry", "panic", "fear", "palpitations", "restless"],
+      "management_steps": [
+        "Rule out medical causes (thyroid, cardiac)",
+        "Psychoeducation about anxiety",
+        "Relaxation techniques and breathing exercises",
+        "Consider benzodiazepine only for short-term (<2 weeks) severe acute anxiety",
+        "Review in 2-4 weeks; refer if persistent"
+      ],
+      "refer_if": ["severe panic disorder", "PTSD", "OCD"]
+    },
+    "psychosis": {
+      "icd10": "F20",
+      "keywords": ["voices", "hallucination", "delusion", "paranoid", "bizarre behaviour", "disorganised"],
+      "management_steps": [
+        "Ensure safety of patient and others",
+        "Administer antipsychotic (haloperidol or chlorpromazine) per local formulary",
+        "Refer urgently to mental health specialist",
+        "Educate family on supportive care",
+        "Follow up monthly once stabilised"
+      ],
+      "refer_if": ["first episode", "treatment-resistant", "risk of harm"]
+    },
+    "substance_use": {
+      "icd10": "F10",
+      "keywords": ["alcohol", "drugs", "substance", "withdrawal", "dependence", "craving"],
+      "management_steps": [
+        "Conduct AUDIT-C for alcohol use severity",
+        "Assess for withdrawal risk (seizures, delirium)",
+        "Provide brief motivational intervention",
+        "Refer to addiction counselling if available",
+        "Treat withdrawal medically if indicated"
+      ],
+      "refer_if": ["severe dependence", "withdrawal seizures", "dual diagnosis"]
+    },
+    "ptsd": {
+      "icd10": "F43.1",
+      "keywords": ["trauma", "flashback", "nightmare", "avoidance", "hypervigilant", "startle"],
+      "management_steps": [
+        "Validate patient's experience; psychoeducation about trauma reactions",
+        "Trauma-focused CBT (if available) or problem management plus",
+        "Avoid benzodiazepines for long-term use",
+        "Refer to specialist if symptoms persist beyond 3 months"
+      ],
+      "refer_if": ["severe dissociation", "suicidality", "complex PTSD"]
+    }
+  },
+  "score_cutoffs": {
+    "PHQ9": [
+      { "min": 0, "max": 4, "severity": "none", "action": "No specific intervention; reassure and monitor" },
+      { "min": 5, "max": 9, "severity": "mild", "action": "Watchful waiting; repeat PHQ-9 in 2-4 weeks" },
+      { "min": 10, "max": 14, "severity": "moderate", "action": "Psychosocial intervention; consider antidepressant; review in 2 weeks" },
+      { "min": 15, "max": 19, "severity": "moderately_severe", "action": "Antidepressant and/or psychotherapy; review in 1 week" },
+      { "min": 20, "max": 27, "severity": "severe", "action": "Immediate medication management; consider specialist referral" }
+    ],
+    "GAD7": [
+      { "min": 0, "max": 4, "severity": "none", "action": "No specific intervention" },
+      { "min": 5, "max": 9, "severity": "mild", "action": "Monitor; psychoeducation and self-help strategies" },
+      { "min": 10, "max": 14, "severity": "moderate", "action": "Psychosocial intervention; consider medication if impaired" },
+      { "min": 15, "max": 21, "severity": "severe", "action": "Combined medication and therapy; consider referral" }
+    ],
+    "AUDIT": [
+      { "min": 0, "max": 7, "severity": "low", "action": "Low-risk drinking; alcohol education" },
+      { "min": 8, "max": 15, "severity": "hazardous", "action": "Brief counselling; advice on safe limits" },
+      { "min": 16, "max": 19, "severity": "harmful", "action": "Refer to addiction counselling" },
+      { "min": 20, "max": 40, "severity": "dependent", "action": "Refer to specialist addiction services; assess withdrawal risk" }
+    ],
+    "SRQ": [
+      { "min": 0, "max": 7, "severity": "none", "action": "No significant distress detected" },
+      { "min": 8, "max": 20, "severity": "probable_disorder", "action": "Further assessment required; apply PHQ-9 or GAD-7" }
+    ]
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "zu",
+  "language_name": "Zulu",
+  "title": "Uhlu Lwemibuzo Yempilo Yengqondo - 9",
+  "instructions": "Emasontweni amabili adlule, uvamise kangakanani ukuphazanyiswa yilezi zinkinga ezilandelayo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Lutho neze"
+    },
+    {
+      "value": 1,
+      "label": "Izinsuku ezimbalwa"
+    },
+    {
+      "value": 2,
+      "label": "Ngaphezu kwesigamu sezinsuku"
+    },
+    {
+      "value": 3,
+      "label": "Cishe nsuku zonke"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Ukulahlekelwa intshisekelo noma injabulo ezintweni ozenzayo"
+    },
+    {
+      "id": 2,
+      "text": "Ukuzizwa udangele, ucindezelekile, noma ungenathemba"
+    },
+    {
+      "id": 3,
+      "text": "Ubunzima bokulala, ukuhlala ulele, noma ukulala kakhulu"
+    },
+    {
+      "id": 4,
+      "text": "Ukuzizwa ukhathele noma ungenamandla"
+    },
+    {
+      "id": 5,
+      "text": "Ukungabi nesifiso sokudla noma ukudla kakhulu"
+    },
+    {
+      "id": 6,
+      "text": "Ukuzizwa kabi ngawe noma sengathi wehlise wena noma umndeni wakho"
+    },
+    {
+      "id": 7,
+      "text": "Ubunzima bokugxila ezintweni njengokufunda noma ukubuka ithelevishini"
+    },
+    {
+      "id": 8,
+      "text": "Ukuhamba noma ukukhuluma kancane kakhulu abantu bakuqaphele, noma ukuphambene nalokho ungahlaliseki kakhulu kunokuvamile"
+    },
+    {
+      "id": 9,
+      "text": "Imicabango yokuthi kungaba ngcono uma ushonile noma uzilimaza"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

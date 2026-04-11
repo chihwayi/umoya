@@ -7,9 +7,9 @@ import {
   BarChart3, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
   CreditCard, Lock, FolderOpen, Target, LayoutDashboard,
-  Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown
+  Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown, Brain
 } from 'lucide-react';
-import { ehrApi, tenantApi } from '../services/api';
+import { cdssApi, ehrApi, tenantApi } from '../services/api';
 import ModalPortal from '../components/ModalPortal';
 import CreatePatientModal from '../components/CreatePatientModal';
 import CreateAppointmentModal from '../components/CreateAppointmentModal';
@@ -33,6 +33,7 @@ import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
 import HIVStockManagement from '../components/HIVStockManagement';
 import HivReportsPanel from '../components/HivReportsPanel';
 import MaternityDashboard from '../components/MaternityDashboard';
+import MentalHealthDashboard from '../components/MentalHealthDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
 import LabResultsViewer from '../components/LabResultsViewer';
@@ -224,6 +225,14 @@ const NurseDashboard: React.FC = () => {
     return cachedBranding ? { clinicName: cachedBranding.clinicName, logoUrl: cachedBranding.logoUrl } : null;
   });
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [mhQuickTools, setMhQuickTools] = useState<Array<{ id: string; name: string; languages: string[] }>>([]);
+  const [mhQuickTool, setMhQuickTool] = useState('PHQ9');
+  const [mhQuickLanguage, setMhQuickLanguage] = useState('en');
+  const [mhQuickScore, setMhQuickScore] = useState('');
+  const [mhQuickResult, setMhQuickResult] = useState<any | null>(null);
+  const [mhQuickSafetyPlan, setMhQuickSafetyPlan] = useState<any | null>(null);
+  const [showMentalHealthModal, setShowMentalHealthModal] = useState(false);
+  const [mentalHealthInitialTab, setMentalHealthInitialTab] = useState<'overview' | 'screening' | 'mhgap' | 'careplans' | 'followups' | 'crisis' | 'safeplan' | 'meds'>('careplans');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals'>('dashboard');
   const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -1625,6 +1634,33 @@ const NurseDashboard: React.FC = () => {
     notifyTenantSubscriptionStatus(tenantInfo, { showWarning, showError });
   }, [tenantInfo, showWarning, showError]);
 
+  useEffect(() => {
+    const loadMentalHealthQuickTools = async () => {
+      try {
+        const response = await cdssApi.listMhScreeningTools();
+        const tools = Array.isArray(response?.tools) ? response.tools : [];
+        setMhQuickTools(tools);
+        if (tools.length > 0) {
+          setMhQuickTool((current) => (tools.some((tool: any) => tool.id === current) ? current : tools[0].id));
+          const selected = tools.find((tool: any) => tool.id === mhQuickTool) || tools[0];
+          setMhQuickLanguage((current) =>
+            selected?.languages?.includes(current) ? current : selected?.languages?.[0] || 'en',
+          );
+        }
+      } catch {
+        // Non-blocking quick access helper
+      }
+    };
+    void loadMentalHealthQuickTools();
+  }, []);
+
+  useEffect(() => {
+    const selectedTool = mhQuickTools.find((tool) => tool.id === mhQuickTool);
+    if (selectedTool && !selectedTool.languages.includes(mhQuickLanguage)) {
+      setMhQuickLanguage(selectedTool.languages[0] || 'en');
+    }
+  }, [mhQuickLanguage, mhQuickTool, mhQuickTools]);
+
   const handleExecuteOrder = (orderId: string) => {
     setExecutingOrderId(orderId);
     setExecutionNotes('');
@@ -2813,6 +2849,54 @@ const NurseDashboard: React.FC = () => {
   };
 
   const renderDashboard = () => {
+    const deriveMhQuickRiskLevel = (tool: string, score: number): 'low' | 'moderate' | 'high' => {
+      if (tool === 'PHQ9') {
+        if (score >= 15) return 'high';
+        if (score >= 10) return 'moderate';
+      }
+      if (tool === 'GAD7') {
+        if (score >= 15) return 'high';
+        if (score >= 10) return 'moderate';
+      }
+      return 'low';
+    };
+
+    const runMhQuickInterpretation = async () => {
+      const numericScore = Number(mhQuickScore);
+      if (Number.isNaN(numericScore)) {
+        showError('Mental health', 'Enter a valid score before interpreting');
+        return;
+      }
+
+      try {
+        const result = await cdssApi.interpretMhScreening({
+          tool: mhQuickTool,
+          score: numericScore,
+          language_code: mhQuickLanguage,
+        });
+        setMhQuickResult(result);
+
+        const derivedRisk = deriveMhQuickRiskLevel(mhQuickTool, numericScore);
+        if (derivedRisk !== 'low') {
+          const safetyPlan = await cdssApi.getMhSafetyPlanTemplate({ risk_level: derivedRisk });
+          setMhQuickSafetyPlan(safetyPlan);
+        } else {
+          setMhQuickSafetyPlan(null);
+        }
+      } catch {
+        showError('Mental health', 'Failed to interpret the screening score');
+      }
+    };
+
+    const openMentalHealthWorkspace = (targetTab: 'careplans' | 'screening' | 'followups' | 'safeplan') => {
+      if (!selectedPatient) {
+        showError('Mental health', 'Select a patient from the queue first');
+        return;
+      }
+      setMentalHealthInitialTab(targetTab);
+      setShowMentalHealthModal(true);
+    };
+
     const getStatGradient = (label: string) => {
       switch (label) {
         case 'Patients Waiting': return 'from-blue-500 to-cyan-600';
@@ -3030,6 +3114,107 @@ const NurseDashboard: React.FC = () => {
           onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
           onExecuteRecommendationAction={handleExecuteRecommendationAction}
         />
+
+      <div className="rounded-2xl border border-slate-200/60 bg-white/70 p-4 shadow-md backdrop-blur-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <Brain className="h-5 w-5 text-violet-600" />
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Mental Health / mhGAP</h3>
+            <p className="text-sm text-slate-600">Quick screening interpretation, safety planning, and care-plan handoff.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <select
+            value={mhQuickTool}
+            onChange={(event) => setMhQuickTool(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+          >
+            {mhQuickTools.map((tool) => (
+              <option key={tool.id} value={tool.id}>
+                {tool.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={mhQuickLanguage}
+            onChange={(event) => setMhQuickLanguage(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+          >
+            {(mhQuickTools.find((tool) => tool.id === mhQuickTool)?.languages || ['en']).map((languageCode) => (
+              <option key={languageCode} value={languageCode}>
+                {languageCode.toUpperCase()}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            value={mhQuickScore}
+            onChange={(event) => setMhQuickScore(event.target.value)}
+            placeholder="Enter total score"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              void runMhQuickInterpretation();
+            }}
+            className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+          >
+            Interpret score
+          </button>
+        </div>
+
+        {mhQuickResult && (
+          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-violet-900">{mhQuickResult.tool_name || mhQuickResult.tool}</span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-violet-700">
+                {mhQuickResult.severity}
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-violet-800">{mhQuickResult.action}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => openMentalHealthWorkspace('careplans')}
+                className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100"
+              >
+                Open care plan form
+              </button>
+              <button
+                type="button"
+                onClick={() => openMentalHealthWorkspace('screening')}
+                className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100"
+              >
+                Open screening workspace
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mhQuickSafetyPlan && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-red-600" />
+              <p className="text-sm font-semibold text-red-800">Safety plan template</p>
+            </div>
+            <p className="mt-2 text-sm text-red-700">{mhQuickSafetyPlan.emergency_action}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-700">
+              {(mhQuickSafetyPlan.warning_signs || []).slice(0, 3).map((item: string) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => openMentalHealthWorkspace('safeplan')}
+              className="mt-3 rounded-lg bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+            >
+              Open safety plan workspace
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Quick Actions - Prominent Clickable Cards */}
       <div>
@@ -4929,6 +5114,34 @@ const NurseDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showMentalHealthModal && selectedPatient && (
+        <ModalPortal>
+          <div className="mx-auto max-h-[85vh] w-full max-w-6xl overflow-y-auto rounded-3xl border border-slate-200/50 bg-gradient-to-br from-white to-slate-50 p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Mental Health Workspace</h3>
+                <p className="text-sm text-slate-600">
+                  {selectedPatient.firstName} {selectedPatient.lastName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMentalHealthModal(false)}
+                className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+              >
+                Close
+              </button>
+            </div>
+            <MentalHealthDashboard
+              patientId={selectedPatient.id}
+              providerId={currentUser?.id || ''}
+              tenantSubdomain={tenantSlug || ''}
+              initialTab={mentalHealthInitialTab}
+            />
+          </div>
+        </ModalPortal>
       )}
 
       {/* Execute Order Modal */}

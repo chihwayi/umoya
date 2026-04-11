@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "ny",
+  "language_name": "Chichewa",
+  "title": "Mafunso a Zaumoyo wa Wodwala - 9",
+  "instructions": "M’masabata awiri apitawa, mwakhala mukuvutitsidwa kangati ndi mavuto awa?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Ayi konse"
+    },
+    {
+      "value": 1,
+      "label": "Masiku ena"
+    },
+    {
+      "value": 2,
+      "label": "Kuposa theka la masiku"
+    },
+    {
+      "value": 3,
+      "label": "Pafupifupi tsiku lililonse"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Kutaya chidwi kapena chisangalalo pochita zinthu"
+    },
+    {
+      "id": 2,
+      "text": "Kumva chisoni, kugwa mtima, kapena kusowa chiyembekezo"
+    },
+    {
+      "id": 3,
+      "text": "Vuto logona, kugona nthawi yayitali, kapena kudzuka nthawi zambiri"
+    },
+    {
+      "id": 4,
+      "text": "Kumva kutopa kapena kusowa mphamvu"
+    },
+    {
+      "id": 5,
+      "text": "Kusowa njala kapena kudya mopitirira muyeso"
+    },
+    {
+      "id": 6,
+      "text": "Kumva zoipa za inu nokha kapena ngati mwakhumudwitsa inu kapena banja lanu"
+    },
+    {
+      "id": 7,
+      "text": "Vuto loika maganizo pa zinthu monga kuwerenga kapena kuonera televizioni"
+    },
+    {
+      "id": 8,
+      "text": "Kuyenda kapena kulankhula pang’onopang’ono kwambiri anthu akuzindikira, kapena kukhala wosakhazikika kuposa mwachizolowezi"
+    },
+    {
+      "id": 9,
+      "text": "Maganizo oti zingakhale bwino mutamwalira kapena kudzivulaza"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

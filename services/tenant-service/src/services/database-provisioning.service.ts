@@ -61,6 +61,10 @@ import {
   TENANT_NTD_MALARIA_BUNDLE_VERSION,
   TENANT_NTD_MALARIA_STATEMENTS,
 } from '../generated/tenant-ntd-malaria.statements';
+import {
+  TENANT_MENTAL_HEALTH_MHGAP_BUNDLE_VERSION,
+  TENANT_MENTAL_HEALTH_MHGAP_STATEMENTS,
+} from '../generated/tenant-mental-health-mhgap.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1340,6 +1344,13 @@ export class DatabaseProvisioningService {
         version: TENANT_NTD_MALARIA_BUNDLE_VERSION,
         description: 'S140 — NTD assessments, MDA campaigns, structured malaria episodes',
         statements: TENANT_NTD_MALARIA_STATEMENTS,
+      },
+      {
+        id: 'sprint141_mental_health_mhgap',
+        label: 'mhGAP Mental Health + SADC Language Tools',
+        version: TENANT_MENTAL_HEALTH_MHGAP_BUNDLE_VERSION,
+        description: 'S141 — mhGAP care plans, community follow-ups, multilingual screening tools, and screening columns',
+        statements: TENANT_MENTAL_HEALTH_MHGAP_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

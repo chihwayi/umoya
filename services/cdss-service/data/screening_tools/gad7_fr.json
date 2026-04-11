@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "fr",
+  "language_name": "French",
+  "title": "Échelle du Trouble Anxieux Généralisé - 7",
+  "instructions": "Au cours des 2 dernières semaines, à quelle fréquence avez-vous été gêné par les problèmes suivants ?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Pas du tout"
+    },
+    {
+      "value": 1,
+      "label": "Plusieurs jours"
+    },
+    {
+      "value": 2,
+      "label": "Plus de la moitié des jours"
+    },
+    {
+      "value": 3,
+      "label": "Presque tous les jours"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Se sentir nerveux, anxieux ou à bout"
+    },
+    {
+      "id": 2,
+      "text": "Ne pas pouvoir arrêter ou contrôler l’inquiétude"
+    },
+    {
+      "id": 3,
+      "text": "S’inquiéter trop à propos de choses différentes"
+    },
+    {
+      "id": 4,
+      "text": "Avoir du mal à se détendre"
+    },
+    {
+      "id": 5,
+      "text": "Être tellement agité qu’il est difficile de rester assis"
+    },
+    {
+      "id": 6,
+      "text": "Devenir facilement irrité ou agacé"
+    },
+    {
+      "id": 7,
+      "text": "Avoir peur comme si quelque chose d’horrible allait arriver"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

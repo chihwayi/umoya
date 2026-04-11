@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "af",
+  "language_name": "Afrikaans",
+  "title": "Algemene Angsversteuringskaal - 7",
+  "instructions": "Oor die afgelope 2 weke, hoe gereeld was u gepla deur die volgende probleme?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Glad nie"
+    },
+    {
+      "value": 1,
+      "label": "Verskeie dae"
+    },
+    {
+      "value": 2,
+      "label": "Meer as die helfte van die dae"
+    },
+    {
+      "value": 3,
+      "label": "Byna elke dag"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Senuweeagtig, angstig, of gespanne voel"
+    },
+    {
+      "id": 2,
+      "text": "Nie in staat wees om bekommernis te stop of te beheer nie"
+    },
+    {
+      "id": 3,
+      "text": "Te veel oor verskillende dinge bekommer"
+    },
+    {
+      "id": 4,
+      "text": "Sukkel om te ontspan"
+    },
+    {
+      "id": 5,
+      "text": "So rusteloos wees dat dit moeilik is om stil te sit"
+    },
+    {
+      "id": 6,
+      "text": "Maklik geïrriteerd of prikkelbaar raak"
+    },
+    {
+      "id": 7,
+      "text": "Bang voel asof iets verskriklik gaan gebeur"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

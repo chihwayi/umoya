@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "tn",
+  "language_name": "Setswana",
+  "title": "Lenane la Dipotso tsa Boitekanelo jwa Molwetse - 9",
+  "instructions": "Mo dibekeng tse pedi tse di fetileng, o ne o tshwenngwa gantsi jang ke mathata a a latelang?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Le e seng"
+    },
+    {
+      "value": 1,
+      "label": "Malatsi a se kae"
+    },
+    {
+      "value": 2,
+      "label": "Go feta halofo ya malatsi"
+    },
+    {
+      "value": 3,
+      "label": "Bontsintsi jwa malatsi"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Go tlhoka kgatlhego kgotsa boipelo mo go direng dilo"
+    },
+    {
+      "id": 2,
+      "text": "Go ikutlwa o hutsafetse, o gateletswe, kgotsa o se na tsholofelo"
+    },
+    {
+      "id": 3,
+      "text": "Bothata jwa go robala, go tswelela o robetse, kgotsa go robala thata"
+    },
+    {
+      "id": 4,
+      "text": "Go ikutlwa o lapile kgotsa o se na maatla"
+    },
+    {
+      "id": 5,
+      "text": "Go tlhoka keletso ya dijo kgotsa go ja thata"
+    },
+    {
+      "id": 6,
+      "text": "Go ikutlwa o sa itumele ka wena kgotsa e kete o swabisitse wena kgotsa lelapa la gago"
+    },
+    {
+      "id": 7,
+      "text": "Bothata jwa go tlhoma mogopolo mo dilong tse di jaaka go bala kgotsa go lebelela thelebishene"
+    },
+    {
+      "id": 8,
+      "text": "Go tsamaya kgotsa go bua ka bonya thata mo batho ba ka lemogang, kgotsa go se kgone go ikhutsa go feta ka tlwaelo"
+    },
+    {
+      "id": 9,
+      "text": "Dikakanyo tsa gore go ka bo go le botoka fa o sule kgotsa wa intsha kotsi"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

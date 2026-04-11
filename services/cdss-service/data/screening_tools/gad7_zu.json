@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "zu",
+  "language_name": "Zulu",
+  "title": "Isikali Sokukhathazeka Okujwayelekile - 7",
+  "instructions": "Emasontweni amabili adlule, uvamise kangakanani ukuphazanyiswa yilezi zinkinga ezilandelayo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Lutho neze"
+    },
+    {
+      "value": 1,
+      "label": "Izinsuku ezimbalwa"
+    },
+    {
+      "value": 2,
+      "label": "Ngaphezu kwesigamu sezinsuku"
+    },
+    {
+      "value": 3,
+      "label": "Cishe nsuku zonke"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Ukuzizwa unovalo, ukhathazekile, noma ungakhululekile"
+    },
+    {
+      "id": 2,
+      "text": "Ukungakwazi ukuyeka noma ukulawula ukukhathazeka"
+    },
+    {
+      "id": 3,
+      "text": "Ukukhathazeka kakhulu ngezinto ezahlukene"
+    },
+    {
+      "id": 4,
+      "text": "Ubunzima bokuphumula"
+    },
+    {
+      "id": 5,
+      "text": "Ukungahlaliseki kuze kube nzima ukuhlala phansi"
+    },
+    {
+      "id": 6,
+      "text": "Ukucasuka noma ukudinwa kalula"
+    },
+    {
+      "id": 7,
+      "text": "Ukuzizwa wesaba sengathi kuzokwenzeka into embi"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

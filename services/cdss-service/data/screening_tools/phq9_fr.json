@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "fr",
+  "language_name": "French",
+  "title": "Questionnaire de Santé du Patient - 9",
+  "instructions": "Au cours des 2 dernières semaines, à quelle fréquence avez-vous été gêné par les problèmes suivants ?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Pas du tout"
+    },
+    {
+      "value": 1,
+      "label": "Plusieurs jours"
+    },
+    {
+      "value": 2,
+      "label": "Plus de la moitié des jours"
+    },
+    {
+      "value": 3,
+      "label": "Presque tous les jours"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Peu d’intérêt ou de plaisir à faire les choses"
+    },
+    {
+      "id": 2,
+      "text": "Se sentir triste, déprimé ou sans espoir"
+    },
+    {
+      "id": 3,
+      "text": "Avoir du mal à s’endormir, à rester endormi ou dormir trop"
+    },
+    {
+      "id": 4,
+      "text": "Se sentir fatigué ou manquer d’énergie"
+    },
+    {
+      "id": 5,
+      "text": "Avoir peu d’appétit ou trop manger"
+    },
+    {
+      "id": 6,
+      "text": "Avoir une mauvaise opinion de soi ou penser avoir déçu soi-même ou sa famille"
+    },
+    {
+      "id": 7,
+      "text": "Avoir du mal à se concentrer sur des choses comme lire ou regarder la télévision"
+    },
+    {
+      "id": 8,
+      "text": "Bouger ou parler si lentement que les autres l’ont remarqué, ou au contraire être tellement agité que vous bougez plus que d’habitude"
+    },
+    {
+      "id": 9,
+      "text": "Penser qu’il vaudrait mieux être mort ou se faire du mal"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

@@ -1,153 +1,182 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { MentalHealthService } from '../services/mental-health.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('mental-health')
+@UseGuards(JwtAuthGuard)
 export class MentalHealthController {
   constructor(private readonly mhService: MentalHealthService) {}
-
-  private tenant(headers: Record<string, string>): string {
-    return headers['x-tenant-subdomain'] || 'default';
-  }
 
   // ── Screenings ─────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/screenings')
   addScreening(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.mhService.addScreening(this.tenant(headers), { ...dto, patientId });
+    return this.mhService.addScreening(req.tenantId!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/screenings')
   getScreenings(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Query('tool') tool?: string,
   ) {
-    return this.mhService.getScreenings(this.tenant(headers), patientId, tool);
+    return this.mhService.getScreenings(req.tenantId!, patientId, tool);
   }
 
   @Get('patient/:patientId/screenings/latest')
   getLatestScreening(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Query('tool') tool: string,
   ) {
-    return this.mhService.getLatestScreening(this.tenant(headers), patientId, tool);
+    return this.mhService.getLatestScreening(req.tenantId!, patientId, tool);
   }
 
   // ── Psychiatric Encounters ──────────────────────────────────────────────────
 
   @Post('patient/:patientId/encounters')
   addEncounter(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.mhService.addEncounter(this.tenant(headers), { ...dto, patientId });
+    return this.mhService.addEncounter(req.tenantId!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/encounters')
   getEncounters(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.mhService.getEncounters(this.tenant(headers), patientId);
+    return this.mhService.getEncounters(req.tenantId!, patientId);
   }
 
   @Patch('encounters/:id')
   updateEncounter(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('id') id: string,
     @Body() dto: any,
   ) {
-    return this.mhService.updateEncounter(this.tenant(headers), id, dto);
+    return this.mhService.updateEncounter(req.tenantId!, id, dto);
   }
 
   // ── Crisis Events ───────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/crisis')
   addCrisisEvent(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.mhService.addCrisisEvent(this.tenant(headers), { ...dto, patientId });
+    return this.mhService.addCrisisEvent(req.tenantId!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/crisis')
   getCrisisEvents(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.mhService.getCrisisEvents(this.tenant(headers), patientId);
+    return this.mhService.getCrisisEvents(req.tenantId!, patientId);
   }
 
   @Patch('crisis/:id')
   updateCrisisEvent(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('id') id: string,
     @Body() dto: any,
   ) {
-    return this.mhService.updateCrisisEvent(this.tenant(headers), id, dto);
+    return this.mhService.updateCrisisEvent(req.tenantId!, id, dto);
   }
 
   // ── Safe Plans ──────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/safe-plan')
   upsertSafePlan(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.mhService.upsertSafePlan(this.tenant(headers), patientId, dto);
+    return this.mhService.upsertSafePlan(req.tenantId!, patientId, dto);
   }
 
   @Get('patient/:patientId/safe-plan')
   getActiveSafePlan(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.mhService.getActiveSafePlan(this.tenant(headers), patientId);
+    return this.mhService.getActiveSafePlan(req.tenantId!, patientId);
   }
 
   @Get('patient/:patientId/safe-plan/history')
   getSafePlanHistory(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.mhService.getSafePlanHistory(this.tenant(headers), patientId);
+    return this.mhService.getSafePlanHistory(req.tenantId!, patientId);
   }
 
   // ── Psychotropic Medications ────────────────────────────────────────────────
 
   @Post('patient/:patientId/medications')
   addMedication(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.mhService.addMedication(this.tenant(headers), { ...dto, patientId });
+    return this.mhService.addMedication(req.tenantId!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/medications')
   getMedications(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Query('active') active?: string,
   ) {
-    return this.mhService.getMedications(this.tenant(headers), patientId, active === 'true');
+    return this.mhService.getMedications(req.tenantId!, patientId, active === 'true');
   }
 
   @Patch('medications/:id')
   updateMedication(
-    @Headers() headers: Record<string, string>,
+    @Request() req: RequestWithTenant,
     @Param('id') id: string,
     @Body() dto: any,
   ) {
-    return this.mhService.updateMedication(this.tenant(headers), id, dto);
+    return this.mhService.updateMedication(req.tenantId!, id, dto);
+  }
+
+  @Post('care-plans')
+  createCarePlan(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.mhService.createCarePlan(req.tenantId!, req.user?.sub || req.user?.id || null, body);
+  }
+
+  @Get('care-plans/:patientId')
+  getCarePlans(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.mhService.getCarePlans(req.tenantId!, patientId);
+  }
+
+  @Patch('care-plans/:id')
+  updateCarePlan(@Param('id') id: string, @Body() body: any, @Request() req: RequestWithTenant) {
+    return this.mhService.updateCarePlan(req.tenantId!, id, body);
+  }
+
+  @Post('followups')
+  recordFollowup(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.mhService.recordFollowup(req.tenantId!, req.user?.sub || req.user?.id || null, body);
+  }
+
+  @Get('followups/:patientId')
+  getFollowups(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.mhService.getFollowups(req.tenantId!, patientId);
+  }
+
+  @Get('referral-pathway')
+  getReferralPathway(@Request() req: RequestWithTenant) {
+    return this.mhService.getReferralPathway(req.tenantId!);
   }
 
   // ── CDSS ────────────────────────────────────────────────────────────────────

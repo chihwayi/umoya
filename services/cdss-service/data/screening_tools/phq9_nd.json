@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "nd",
+  "language_name": "Ndebele",
+  "title": "Iphepha Lemibuzo Yempilo Yomuntu - 9",
+  "instructions": "Emavikini amabili adluleyo, uke waphazanyiswa kangaki yilezinkinga ezilandelayo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Hatshi lakancane"
+    },
+    {
+      "value": 1,
+      "label": "Insuku ezimbalwa"
+    },
+    {
+      "value": 2,
+      "label": "Okudlula ingxenye yensuku"
+    },
+    {
+      "value": 3,
+      "label": "Cishe zonke insuku"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Ukulahlekelwa yintshisekelo loba intokozo ekwenzeni izinto"
+    },
+    {
+      "id": 2,
+      "text": "Ukuzizwa udangele, ucindezelekile, loba ungelathemba"
+    },
+    {
+      "id": 3,
+      "text": "Ubunzima bokulala, ukuhlala ulele, loba ukulala kakhulu"
+    },
+    {
+      "id": 4,
+      "text": "Ukuzizwa ukhathele loba ungelamandla"
+    },
+    {
+      "id": 5,
+      "text": "Ukungabi lesifiso sokudla loba ukudla kakhulu"
+    },
+    {
+      "id": 6,
+      "text": "Ukuzizwa kubi ngawe loba sengathi wehlise wena loba umndeni wakho"
+    },
+    {
+      "id": 7,
+      "text": "Ubunzima bokugxila ezintweni ezifana lokufunda loba ukubukela ithelevishini"
+    },
+    {
+      "id": 8,
+      "text": "Ukuhamba loba ukukhuluma kancane kakhulu abantu bakubone, loba ukuphambana lalokho ungahlaliseki kakhulu kulokujwayelekile"
+    },
+    {
+      "id": 9,
+      "text": "Imicabango yokuthi kungaba ngcono uba ubufile loba uzilimaze"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

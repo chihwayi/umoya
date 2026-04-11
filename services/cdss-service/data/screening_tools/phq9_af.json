@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "af",
+  "language_name": "Afrikaans",
+  "title": "Pasiënt Gesondheidsvraelys - 9",
+  "instructions": "Oor die afgelope 2 weke, hoe gereeld was u gepla deur die volgende probleme?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Glad nie"
+    },
+    {
+      "value": 1,
+      "label": "Verskeie dae"
+    },
+    {
+      "value": 2,
+      "label": "Meer as die helfte van die dae"
+    },
+    {
+      "value": 3,
+      "label": "Byna elke dag"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Min belangstelling of plesier in dinge doen"
+    },
+    {
+      "id": 2,
+      "text": "Om af, depressief of hooploos te voel"
+    },
+    {
+      "id": 3,
+      "text": "Moeilikheid om aan die slaap te raak, aan die slaap te bly, of te veel te slaap"
+    },
+    {
+      "id": 4,
+      "text": "Moeg voel of min energie hê"
+    },
+    {
+      "id": 5,
+      "text": "Swak eetlus of te veel eet"
+    },
+    {
+      "id": 6,
+      "text": "Sleg voel oor uself of dat u uself of u familie teleurgestel het"
+    },
+    {
+      "id": 7,
+      "text": "Sukkel om op dinge te konsentreer, soos lees of televisie kyk"
+    },
+    {
+      "id": 8,
+      "text": "So stadig beweeg of praat dat ander dit kon opmerk, of die teenoorgestelde om so rusteloos te wees dat u meer beweeg as gewoonlik"
+    },
+    {
+      "id": 9,
+      "text": "Gedagtes dat u beter daaraan toe sou wees om dood te wees of uself seer te maak"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

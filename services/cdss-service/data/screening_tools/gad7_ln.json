@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "ln",
+  "language_name": "Lingala",
+  "title": "Echelle ya Mitungisi ya Monene - 7",
+  "instructions": "Na baposo mibale eleki, mbala boni ozalaki kotungisama na makambo oyo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Ata moke te"
+    },
+    {
+      "value": 1,
+      "label": "Mikolo moke"
+    },
+    {
+      "value": 2,
+      "label": "Koleka ndambo ya mikolo"
+    },
+    {
+      "value": 3,
+      "label": "Pene na mokolo nyonso"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Koyoka somo, mitungisi, to kozanga kimia"
+    },
+    {
+      "id": 2,
+      "text": "Kokoka te kotika to kokamba mitungisi"
+    },
+    {
+      "id": 3,
+      "text": "Komitungisa mingi na makambo mingi"
+    },
+    {
+      "id": 4,
+      "text": "Mokakatano ya kopema na motema"
+    },
+    {
+      "id": 5,
+      "text": "Kozanga kimia tii ete ezalaka mpasi kofanda kimia"
+    },
+    {
+      "id": 6,
+      "text": "Kosilika to koyokela moke motema mpasi mbangu"
+    },
+    {
+      "id": 7,
+      "text": "Koyoka lokola eloko moko mabe ekosalema"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

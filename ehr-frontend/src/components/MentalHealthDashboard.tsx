@@ -1,192 +1,453 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { cdssApi } from '../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Brain,
   AlertTriangle,
-  ShieldCheck,
-  Pill,
+  Brain,
   ClipboardList,
+  Languages,
+  Pill,
   Plus,
-  ChevronDown,
-  ChevronUp,
-  Activity,
+  ShieldCheck,
+  Users,
 } from 'lucide-react';
+import { cdssApi } from '../services/api';
+import { useNotification } from './GlobalNotification';
 
 interface Props {
   patientId: string;
   providerId: string;
   tenantSubdomain: string;
+  initialTab?: 'overview' | 'screening' | 'mhgap' | 'careplans' | 'followups' | 'crisis' | 'safeplan' | 'meds';
 }
 
-const RISK_COLOURS: Record<string, string> = {
-  low: 'bg-green-100 text-green-800',
-  moderate: 'bg-yellow-100 text-yellow-800',
-  high: 'bg-orange-100 text-orange-800',
-  imminent: 'bg-red-100 text-red-800 font-bold',
+type TabKey =
+  | 'overview'
+  | 'screening'
+  | 'mhgap'
+  | 'careplans'
+  | 'followups'
+  | 'crisis'
+  | 'safeplan'
+  | 'meds';
+
+type ScreeningToolSummary = {
+  id: string;
+  name: string;
+  languages: string[];
 };
 
-const SEV_COLOURS: Record<string, string> = {
+type ScreeningToolDefinition = {
+  tool_id: string;
+  language_code: string;
+  language_name: string;
+  title: string;
+  instructions: string;
+  response_options: Array<{ value: number; label: string }>;
+  questions: Array<{ id: number; text: string }>;
+  scoring?: { min: number; max: number };
+};
+
+const TAB_LABELS: Array<{ key: TabKey; label: string; icon: any }> = [
+  { key: 'overview', label: 'Overview', icon: Brain },
+  { key: 'screening', label: 'Screening', icon: ClipboardList },
+  { key: 'mhgap', label: 'mhGAP Assess', icon: Brain },
+  { key: 'careplans', label: 'Care Plans', icon: Users },
+  { key: 'followups', label: 'Follow-ups', icon: Users },
+  { key: 'crisis', label: 'Crisis', icon: AlertTriangle },
+  { key: 'safeplan', label: 'Safe Plan', icon: ShieldCheck },
+  { key: 'meds', label: 'Medications', icon: Pill },
+];
+
+const RISK_BADGE: Record<string, string> = {
+  low: 'bg-green-100 text-green-700',
+  moderate: 'bg-yellow-100 text-yellow-700',
+  high: 'bg-orange-100 text-orange-700',
+  imminent: 'bg-red-100 text-red-700',
+};
+
+const SEVERITY_TEXT: Record<string, string> = {
+  none: 'text-green-600',
   minimal: 'text-green-600',
   mild: 'text-yellow-600',
   moderate: 'text-orange-600',
   moderately_severe: 'text-orange-700 font-semibold',
-  severe: 'text-red-700 font-bold',
+  severe: 'text-red-700 font-semibold',
+  low: 'text-green-600',
+  hazardous: 'text-yellow-700',
+  harmful: 'text-orange-700',
+  dependent: 'text-red-700 font-semibold',
 };
 
-const PHQ9_QUESTIONS = [
-  'Little interest or pleasure in doing things',
-  'Feeling down, depressed, or hopeless',
-  'Trouble falling or staying asleep, or sleeping too much',
-  'Feeling tired or having little energy',
-  'Poor appetite or overeating',
-  'Feeling bad about yourself',
-  'Trouble concentrating on things',
-  'Moving or speaking slowly (or being fidgety/restless)',
-  'Thoughts that you would be better off dead',
-];
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: 'English',
+  sw: 'Swahili',
+  zu: 'Zulu',
+  xh: 'Xhosa',
+  af: 'Afrikaans',
+  sn: 'Shona',
+  nd: 'Ndebele',
+  tn: 'Setswana',
+  ny: 'Chichewa',
+  pt: 'Portuguese',
+  fr: 'French',
+  ln: 'Lingala',
+};
 
-const GAD7_QUESTIONS = [
-  'Feeling nervous, anxious, or on edge',
-  'Not being able to stop or control worrying',
-  'Worrying too much about different things',
-  'Trouble relaxing',
-  'Being so restless that it is hard to sit still',
-  'Becoming easily annoyed or irritable',
-  'Feeling afraid, as if something awful might happen',
-];
+const defaultCarePlan = {
+  diagnosisIcd10: '',
+  diagnosisName: '',
+  careLevel: 'community',
+  assignedChwId: '',
+  goals: '',
+  interventions: '',
+  medication: '',
+  reviewDate: '',
+};
 
-const OPTIONS = ['Not at all (0)', 'Several days (1)', 'More than half (2)', 'Nearly every day (3)'];
+const defaultFollowup = {
+  carePlanId: '',
+  followupDate: new Date().toISOString().slice(0, 10),
+  status: 'completed',
+  symptomChange: 'same',
+  medicationAdherent: true,
+  safetyConcern: false,
+  notes: '',
+  nextFollowupDate: '',
+};
 
-export default function MentalHealthDashboard({ patientId, providerId, tenantSubdomain }: Props) {
-  const [tab, setTab] = useState<'overview' | 'screening' | 'crisis' | 'safeplan' | 'meds'>('overview');
+const defaultMhgapForm = {
+  presentingComplaint: '',
+  durationWeeks: '',
+  functionalImpairment: false,
+  priorEpisode: false,
+  substanceUse: false,
+  safetyConcern: false,
+  ageYears: '',
+  pregnancy: false,
+};
+
+export default function MentalHealthDashboard({
+  patientId,
+  providerId,
+  tenantSubdomain,
+  initialTab = 'overview',
+}: Props) {
+  const { showError, showSuccess } = useNotification();
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const [screenings, setScreenings] = useState<any[]>([]);
-  const [encounters, setEncounters] = useState<any[]>([]);
   const [crisisEvents, setCrisisEvents] = useState<any[]>([]);
   const [activePlan, setActivePlan] = useState<any | null>(null);
   const [medications, setMedications] = useState<any[]>([]);
   const [medAlerts, setMedAlerts] = useState<Record<string, any>>({});
-
-  const [screenTool, setScreenTool] = useState<'PHQ-9' | 'GAD-7'>('PHQ-9');
+  const [carePlans, setCarePlans] = useState<any[]>([]);
+  const [followups, setFollowups] = useState<any[]>([]);
+  const [referralPathway, setReferralPathway] = useState<any | null>(null);
+  const [screeningTools, setScreeningTools] = useState<ScreeningToolSummary[]>([]);
+  const [screenTool, setScreenTool] = useState('PHQ9');
+  const [screenLanguage, setScreenLanguage] = useState('en');
+  const [screenToolDefinition, setScreenToolDefinition] = useState<ScreeningToolDefinition | null>(null);
   const [screenResponses, setScreenResponses] = useState<Record<string, number>>({});
   const [screenResult, setScreenResult] = useState<any | null>(null);
-  const [screenLoading, setScreenLoading] = useState(false);
+  const [mhgapForm, setMhgapForm] = useState(defaultMhgapForm);
+  const [mhgapResult, setMhgapResult] = useState<any | null>(null);
+  const [carePlanForm, setCarePlanForm] = useState(defaultCarePlan);
+  const [followupForm, setFollowupForm] = useState(defaultFollowup);
+  const [crisisForm, setCrisisForm] = useState({
+    crisisType: 'suicidal_ideation',
+    lethality: 'low',
+    meansAccess: false,
+    priorAttempts: 0,
+    outcome: '',
+    eventDate: new Date().toISOString().slice(0, 10),
+  });
+  const [medicationForm, setMedicationForm] = useState({
+    drugName: '',
+    drugClass: 'antidepressant',
+    doseMg: '',
+    frequency: '',
+    startDate: new Date().toISOString().slice(0, 10),
+    indication: '',
+  });
+  const [safetyRiskLevel, setSafetyRiskLevel] = useState('high');
+  const [safetyPlanTemplate, setSafetyPlanTemplate] = useState<any | null>(null);
 
-  const [showCrisisForm, setShowCrisisForm] = useState(false);
-  const [crisisDto, setCrisisDto] = useState<any>({ crisisType: 'suicidal_ideation', lethality: 'low', meansAccess: false, priorAttempts: 0 });
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
 
-  const [showMedForm, setShowMedForm] = useState(false);
-  const [medDto, setMedDto] = useState<any>({ drugName: '', drugClass: 'antidepressant', doseMg: '', frequency: '', startDate: new Date().toISOString().slice(0, 10), indication: '' });
-
-  const load = useCallback(async () => {
+  const loadDashboard = async () => {
     try {
-      const [sc, enc, cr, sp, meds] = await Promise.all([
+      const [
+        screeningHistory,
+        crisisHistory,
+        safePlan,
+        currentMeds,
+        carePlanHistory,
+        followupHistory,
+        pathway,
+        toolList,
+      ] = await Promise.all([
         cdssApi.getMhScreenings(patientId, tenantSubdomain),
-        cdssApi.getMhEncounters(patientId, tenantSubdomain),
         cdssApi.getMhCrisisEvents(patientId, tenantSubdomain),
         cdssApi.getActiveSafePlan(patientId, tenantSubdomain),
         cdssApi.getMhMedications(patientId, tenantSubdomain, true),
+        cdssApi.getMhCarePlans(patientId, tenantSubdomain),
+        cdssApi.getMhFollowups(patientId, tenantSubdomain),
+        cdssApi.getMhReferralPathway(tenantSubdomain),
+        cdssApi.listMhScreeningTools(),
       ]);
-      setScreenings(sc);
-      setEncounters(enc);
-      setCrisisEvents(cr);
-      setActivePlan(sp);
-      setMedications(meds);
 
-      // Run monitoring alerts for each active med
-      const alerts: Record<string, any> = {};
+      setScreenings(Array.isArray(screeningHistory) ? screeningHistory : []);
+      setCrisisEvents(Array.isArray(crisisHistory) ? crisisHistory : []);
+      setActivePlan(safePlan || null);
+      setMedications(Array.isArray(currentMeds) ? currentMeds : []);
+      setCarePlans(Array.isArray(carePlanHistory) ? carePlanHistory : []);
+      setFollowups(Array.isArray(followupHistory) ? followupHistory : []);
+      setReferralPathway(pathway || null);
+      setScreeningTools(Array.isArray(toolList?.tools) ? toolList.tools : []);
+
+      const nextAlerts: Record<string, any> = {};
       await Promise.all(
-        meds.map(async (m: any) => {
+        (Array.isArray(currentMeds) ? currentMeds : []).map(async (medication: any) => {
           try {
-            const res = await cdssApi.monitorMhMedication({
-              drug_name: m.drugName,
-              drug_class: m.drugClass,
-              dose_mg: m.doseMg,
-              last_level_value: m.lastLevelValue,
-              last_level_unit: m.lastLevelUnit,
-              last_level_date: m.lastLevelDate,
+            nextAlerts[medication.id] = await cdssApi.monitorMhMedication({
+              drug_name: medication.drugName,
+              drug_class: medication.drugClass,
+              dose_mg: medication.doseMg,
             });
-            alerts[m.id] = res;
-          } catch { /* non-blocking */ }
+          } catch {
+            // Non-blocking alert fetch
+          }
         }),
       );
-      setMedAlerts(alerts);
-    } catch (e) { /* ignore */ }
+      setMedAlerts(nextAlerts);
+    } catch {
+      showError('Mental health', 'Failed to load mental health workspace data');
+    }
+  };
+
+  useEffect(() => {
+    void loadDashboard();
   }, [patientId, tenantSubdomain]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const activeTool = screeningTools.find((tool) => tool.id === screenTool);
+    if (!activeTool) return;
+    if (!activeTool.languages.includes(screenLanguage)) {
+      setScreenLanguage(activeTool.languages[0] || 'en');
+    }
+  }, [screenTool, screenLanguage, screeningTools]);
 
-  const latestPhq = screenings.find(s => s.tool === 'PHQ-9');
-  const latestGad = screenings.find(s => s.tool === 'GAD-7');
-  const hasHighRisk = crisisEvents.some((c: any) => c.lethality === 'high' && c.outcome !== 'stabilised');
-  const hasCriticalMedAlert = Object.values(medAlerts).some((a: any) => a?.has_critical_alert);
+  useEffect(() => {
+    if (!screenTool) return;
+    const loadDefinition = async () => {
+      try {
+        const definition = await cdssApi.getMhScreeningToolDefinition(screenTool, screenLanguage);
+        setScreenToolDefinition(definition);
+        setScreenResponses({});
+      } catch {
+        showError('Screening tools', 'Failed to load translated screening questions');
+      }
+    };
+    void loadDefinition();
+  }, [screenTool, screenLanguage]);
 
-  async function runScreening() {
-    setScreenLoading(true);
+  const latestScreening = screenings[0] || null;
+  const hasSafetyConcern = followups.some((item) => item.safetyConcern) || crisisEvents.some((item) => item.lethality === 'high');
+  const criticalMedicationAlert = Object.values(medAlerts).some((alert: any) => alert?.has_critical_alert);
+  const currentLanguageLabel = LANGUAGE_LABELS[screenLanguage] || screenLanguage.toUpperCase();
+
+  const screeningTotal = useMemo(
+    () => Object.values(screenResponses).reduce((sum, value) => sum + (Number(value) || 0), 0),
+    [screenResponses],
+  );
+
+  const currentToolLanguages = screeningTools.find((tool) => tool.id === screenTool)?.languages || ['en'];
+
+  const screeningComplete =
+    screenToolDefinition && Object.keys(screenResponses).length === screenToolDefinition.questions.length;
+
+  const submitScreening = async () => {
+    if (!screenToolDefinition) return;
     try {
-      const result = await cdssApi.scoreMhScreening({ tool: screenTool, responses: screenResponses });
-      setScreenResult(result);
-      // Save the screening
+      const result = await cdssApi.interpretMhScreening({
+        tool: screenTool,
+        score: screeningTotal,
+        language_code: screenLanguage,
+      });
+      const questionNineValue =
+        screenTool === 'PHQ9' ? Number(screenResponses[String(9)] ?? 0) : 0;
+      const riskLevel = questionNineValue >= 1 ? 'high' : result.refer_specialist ? 'moderate' : 'low';
+
       await cdssApi.addMhScreening(patientId, tenantSubdomain, {
         screenedBy: providerId,
         tool: screenTool,
         responses: screenResponses,
-        totalScore: result.total_score,
+        totalScore: screeningTotal,
         severity: result.severity,
-        riskLevel: result.risk_level,
-        actionTaken: result.recommended_action,
+        riskLevel,
+        actionTaken: result.action,
+        languageCode: screenLanguage,
+        referred: Boolean(result.refer_specialist),
       });
-      await load();
-    } finally {
-      setScreenLoading(false);
+
+      setScreenResult({ ...result, riskLevel });
+      showSuccess('Screening saved', `${result.tool_name || result.tool} scored and recorded successfully`);
+      await loadDashboard();
+    } catch {
+      showError('Screening', 'Unable to interpret and save the screening');
     }
-  }
+  };
 
-  async function submitCrisis() {
-    await cdssApi.addMhCrisisEvent(patientId, tenantSubdomain, { ...crisisDto, reportedBy: providerId });
-    setShowCrisisForm(false);
-    setCrisisDto({ crisisType: 'suicidal_ideation', lethality: 'low', meansAccess: false, priorAttempts: 0 });
-    load();
-  }
+  const submitMhgapAssessment = async () => {
+    try {
+      const result = await cdssApi.assessMhGap({
+        presenting_complaint: mhgapForm.presentingComplaint,
+        duration_weeks: mhgapForm.durationWeeks ? Number(mhgapForm.durationWeeks) : undefined,
+        functional_impairment: mhgapForm.functionalImpairment,
+        prior_episode: mhgapForm.priorEpisode,
+        substance_use: mhgapForm.substanceUse,
+        safety_concern: mhgapForm.safetyConcern,
+        age_years: mhgapForm.ageYears ? Number(mhgapForm.ageYears) : undefined,
+        pregnancy: mhgapForm.pregnancy,
+      });
+      setMhgapResult(result);
+      showSuccess('mhGAP assessment', 'Rule-based mhGAP assessment completed');
+    } catch {
+      showError('mhGAP assessment', 'Failed to run mhGAP assessment');
+    }
+  };
 
-  async function submitMed() {
-    await cdssApi.addMhMedication(patientId, tenantSubdomain, { ...medDto, prescribedBy: providerId });
-    setShowMedForm(false);
-    setMedDto({ drugName: '', drugClass: 'antidepressant', doseMg: '', frequency: '', startDate: new Date().toISOString().slice(0, 10), indication: '' });
-    load();
-  }
+  const submitCarePlan = async () => {
+    try {
+      await cdssApi.createMhCarePlan(tenantSubdomain, {
+        patientId,
+        diagnosisIcd10: carePlanForm.diagnosisIcd10 || null,
+        diagnosisName: carePlanForm.diagnosisName || null,
+        careLevel: carePlanForm.careLevel,
+        assignedChwId: carePlanForm.assignedChwId || null,
+        goals: carePlanForm.goals,
+        interventions: carePlanForm.interventions,
+        medication: carePlanForm.medication || null,
+        reviewDate: carePlanForm.reviewDate || null,
+      });
+      setCarePlanForm(defaultCarePlan);
+      showSuccess('Care plan saved', 'Community mental health care plan created');
+      await loadDashboard();
+    } catch {
+      showError('Care plan', 'Failed to create the care plan');
+    }
+  };
 
-  const questions = screenTool === 'PHQ-9' ? PHQ9_QUESTIONS : GAD7_QUESTIONS;
+  const submitFollowup = async () => {
+    try {
+      await cdssApi.recordMhFollowup(tenantSubdomain, {
+        carePlanId: followupForm.carePlanId || null,
+        patientId,
+        followupDate: followupForm.followupDate,
+        status: followupForm.status,
+        symptomChange: followupForm.symptomChange,
+        medicationAdherent: followupForm.medicationAdherent,
+        safetyConcern: followupForm.safetyConcern,
+        notes: followupForm.notes || null,
+        nextFollowupDate: followupForm.nextFollowupDate || null,
+      });
+      setFollowupForm(defaultFollowup);
+      showSuccess('Follow-up recorded', 'Community follow-up saved successfully');
+      await loadDashboard();
+    } catch {
+      showError('Follow-up', 'Failed to record the follow-up');
+    }
+  };
+
+  const submitCrisis = async () => {
+    try {
+      await cdssApi.addMhCrisisEvent(patientId, tenantSubdomain, {
+        ...crisisForm,
+        reportedBy: providerId,
+      });
+      showSuccess('Crisis event saved', 'Crisis event recorded successfully');
+      await loadDashboard();
+    } catch {
+      showError('Crisis event', 'Failed to record the crisis event');
+    }
+  };
+
+  const submitMedication = async () => {
+    try {
+      await cdssApi.addMhMedication(patientId, tenantSubdomain, {
+        ...medicationForm,
+        prescribedBy: providerId,
+      });
+      showSuccess('Medication saved', 'Medication recorded successfully');
+      await loadDashboard();
+    } catch {
+      showError('Medication', 'Failed to add medication');
+    }
+  };
+
+  const generateSafetyPlan = async () => {
+    try {
+      const template = await cdssApi.getMhSafetyPlanTemplate({
+        risk_level: safetyRiskLevel,
+      });
+      setSafetyPlanTemplate(template);
+      showSuccess('Safety plan ready', 'Safety plan template generated');
+    } catch {
+      showError('Safety plan', 'Failed to generate safety plan template');
+    }
+  };
+
+  const saveSafetyPlan = async () => {
+    if (!safetyPlanTemplate) {
+      showError('Safety plan', 'Generate a safety plan template first');
+      return;
+    }
+
+    try {
+      await cdssApi.upsertSafePlan(patientId, tenantSubdomain, {
+        createdBy: providerId,
+        warningSigns: safetyPlanTemplate.warning_signs || [],
+        internalCoping: safetyPlanTemplate.coping_strategies || [],
+        socialDistractions: [],
+        supportContacts: safetyPlanTemplate.support_contacts || [],
+        professionalContacts: [],
+        meansRestriction: safetyPlanTemplate.means_restriction_advice || '',
+        reasonToLive: safetyPlanTemplate.emergency_action || '',
+      });
+      showSuccess('Safety plan saved', 'Structured safety plan saved to the patient record');
+      await loadDashboard();
+    } catch {
+      showError('Safety plan', 'Failed to save the safety plan');
+    }
+  };
 
   return (
     <div className="space-y-4">
-      {/* Banner alerts */}
-      {hasHighRisk && (
-        <div className="bg-red-50 border border-red-300 rounded-lg p-3 flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
-          <span className="text-red-800 font-semibold text-sm">High-lethality crisis event on record — review immediately</span>
-        </div>
-      )}
-      {hasCriticalMedAlert && (
-        <div className="bg-orange-50 border border-orange-300 rounded-lg p-3 flex items-center gap-2">
-          <Pill className="h-5 w-5 text-orange-600 flex-shrink-0" />
-          <span className="text-orange-800 font-semibold text-sm">Critical medication monitoring alert — check Medications tab</span>
+      {(hasSafetyConcern || criticalMedicationAlert) && (
+        <div className="space-y-2">
+          {hasSafetyConcern && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertTriangle className="h-4 w-4" />
+              Safety concern recorded in follow-up or crisis history. Review immediately.
+            </div>
+          )}
+          {criticalMedicationAlert && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+              <Pill className="h-4 w-4" />
+              A psychotropic medication monitoring alert is active for this patient.
+            </div>
+          )}
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-2 flex-wrap">
-        {([
-          ['overview',  'Overview',   Brain],
-          ['screening', 'Screening',  ClipboardList],
-          ['crisis',    'Crisis',     AlertTriangle],
-          ['safeplan',  'Safe Plan',  ShieldCheck],
-          ['meds',      'Medications',Pill],
-        ] as const).map(([key, label, Icon]) => (
+      <div className="flex flex-wrap gap-2">
+        {TAB_LABELS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
+            type="button"
             onClick={() => setTab(key)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              tab === key ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === key ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -195,451 +456,627 @@ export default function MentalHealthDashboard({ patientId, providerId, tenantSub
         ))}
       </div>
 
-      {/* ── Overview ─────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-white border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Latest PHQ-9</p>
-            {latestPhq ? (
-              <>
-                <p className="text-2xl font-bold">{latestPhq.totalScore}</p>
-                <p className={`text-xs ${SEV_COLOURS[latestPhq.severity] || ''}`}>{latestPhq.severity}</p>
-              </>
-            ) : <p className="text-sm text-gray-400 mt-1">Not done</p>}
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-lg border bg-white p-4">
+            <p className="text-xs text-gray-500">Latest screening</p>
+            <p className="mt-2 text-lg font-semibold">{latestScreening?.tool || 'None yet'}</p>
+            <p className={`text-sm ${SEVERITY_TEXT[latestScreening?.severity] || 'text-gray-500'}`}>
+              {latestScreening?.severity || 'No score yet'}
+            </p>
           </div>
-          <div className="bg-white border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Latest GAD-7</p>
-            {latestGad ? (
-              <>
-                <p className="text-2xl font-bold">{latestGad.totalScore}</p>
-                <p className={`text-xs ${SEV_COLOURS[latestGad.severity] || ''}`}>{latestGad.severity}</p>
-              </>
-            ) : <p className="text-sm text-gray-400 mt-1">Not done</p>}
+          <div className="rounded-lg border bg-white p-4">
+            <p className="text-xs text-gray-500">Care plans</p>
+            <p className="mt-2 text-2xl font-semibold">{carePlans.length}</p>
+            <p className="text-sm text-gray-500">Active and historical</p>
           </div>
-          <div className="bg-white border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Crisis Events</p>
-            <p className="text-2xl font-bold">{crisisEvents.length}</p>
-            <p className="text-xs text-gray-400">total recorded</p>
+          <div className="rounded-lg border bg-white p-4">
+            <p className="text-xs text-gray-500">Follow-ups</p>
+            <p className="mt-2 text-2xl font-semibold">{followups.length}</p>
+            <p className="text-sm text-gray-500">Community follow-up visits</p>
           </div>
-          <div className="bg-white border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Active Meds</p>
-            <p className="text-2xl font-bold">{medications.length}</p>
-            <p className="text-xs text-gray-400">psychotropic</p>
+          <div className="rounded-lg border bg-white p-4">
+            <p className="text-xs text-gray-500">Current language</p>
+            <p className="mt-2 text-lg font-semibold">{currentLanguageLabel}</p>
+            <p className="text-sm text-gray-500">For screening tools</p>
           </div>
 
-          {/* Latest risk level */}
-          {latestPhq?.riskLevel && (
-            <div className="col-span-2 md:col-span-4 bg-white border rounded-lg p-3">
-              <p className="text-xs text-gray-500 mb-1">Most Recent Screening Risk Level</p>
-              <span className={`px-2 py-1 rounded-full text-xs ${RISK_COLOURS[latestPhq.riskLevel] || ''}`}>
-                {latestPhq.riskLevel?.toUpperCase()}
-              </span>
-              <span className="ml-2 text-xs text-gray-600">{latestPhq.actionTaken}</span>
-            </div>
-          )}
-
-          {/* Safe plan summary */}
-          {activePlan && (
-            <div className="col-span-2 md:col-span-4 bg-green-50 border border-green-200 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <ShieldCheck className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-semibold text-green-800">Active Safety Plan on file</span>
+          {referralPathway && (
+            <div className="rounded-lg border bg-white p-4 md:col-span-4">
+              <p className="mb-2 text-sm font-semibold text-gray-900">Referral pathway</p>
+              <div className="grid gap-2 md:grid-cols-4">
+                {(referralPathway.levels || []).map((level: any) => (
+                  <div key={level.level} className="rounded-md bg-gray-50 p-3">
+                    <p className="text-xs font-semibold uppercase text-gray-600">{level.level}</p>
+                    <p className="mt-1 text-sm text-gray-700">{level.description}</p>
+                  </div>
+                ))}
               </div>
-              <p className="text-xs text-green-700">Reason to live: {activePlan.reasonToLive || '—'}</p>
-              <p className="text-xs text-green-700">Warning signs: {(activePlan.warningSigns || []).join(', ') || '—'}</p>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Screening ────────────────────────────────────────────────────── */}
       {tab === 'screening' && (
         <div className="space-y-4">
-          <div className="bg-white border rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <label className="text-sm font-medium">Tool:</label>
-              <select
-                value={screenTool}
-                onChange={e => { setScreenTool(e.target.value as any); setScreenResponses({}); setScreenResult(null); }}
-                className="border rounded px-2 py-1 text-sm"
-              >
-                <option value="PHQ-9">PHQ-9 (Depression)</option>
-                <option value="GAD-7">GAD-7 (Anxiety)</option>
-              </select>
-            </div>
-
-            <div className="space-y-3">
-              {questions.map((q, i) => (
-                <div key={i} className="bg-gray-50 rounded p-3">
-                  <p className="text-sm font-medium mb-2">{i + 1}. {q}</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    {OPTIONS.map((opt, val) => (
-                      <label key={val} className="flex items-center gap-1 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`q${i + 1}`}
-                          value={val}
-                          checked={screenResponses[String(i + 1)] === val}
-                          onChange={() => setScreenResponses(prev => ({ ...prev, [String(i + 1)]: val }))}
-                          className="accent-purple-600"
-                        />
-                        <span className="text-xs">{opt}</span>
-                      </label>
-                    ))}
-                  </div>
+          <div className="rounded-lg border bg-white p-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Tool</label>
+                <select
+                  value={screenTool}
+                  onChange={(event) => setScreenTool(event.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                >
+                  {screeningTools.map((tool) => (
+                    <option key={tool.id} value={tool.id}>
+                      {tool.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Language</label>
+                <select
+                  value={screenLanguage}
+                  onChange={(event) => setScreenLanguage(event.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                >
+                  {currentToolLanguages.map((languageCode) => (
+                    <option key={languageCode} value={languageCode}>
+                      {LANGUAGE_LABELS[languageCode] || languageCode.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <div className="flex items-center gap-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  <Languages className="h-4 w-4" />
+                  {screenToolDefinition?.title || 'Loading translation...'}
                 </div>
-              ))}
+              </div>
             </div>
 
-            <button
-              onClick={runScreening}
-              disabled={screenLoading || Object.keys(screenResponses).length < questions.length}
-              className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50"
-            >
-              {screenLoading ? 'Scoring…' : 'Score & Save'}
-            </button>
+            {screenToolDefinition && (
+              <>
+                <p className="mt-4 text-sm text-gray-600">{screenToolDefinition.instructions}</p>
+                <div className="mt-4 space-y-3">
+                  {screenToolDefinition.questions.map((question) => (
+                    <div key={question.id} className="rounded-lg bg-gray-50 p-3">
+                      <p className="mb-2 text-sm font-medium text-gray-800">
+                        {question.id}. {question.text}
+                      </p>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {screenToolDefinition.response_options.map((option) => (
+                          <label key={option.value} className="flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                              type="radio"
+                              name={`screening-${question.id}`}
+                              checked={screenResponses[String(question.id)] === option.value}
+                              onChange={() =>
+                                setScreenResponses((previous) => ({
+                                  ...previous,
+                                  [String(question.id)]: option.value,
+                                }))
+                              }
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void submitScreening()}
+                disabled={!screeningComplete}
+                className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                Interpret and save
+              </button>
+              <span className="text-sm text-gray-600">Total score: {screeningTotal}</span>
+            </div>
 
             {screenResult && (
-              <div className="mt-4 bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-1">
-                <p className="font-semibold text-purple-900">Score: {screenResult.total_score}</p>
-                <p className="text-sm text-purple-800">Severity: <span className={SEV_COLOURS[screenResult.severity]}>{screenResult.severity}</span></p>
-                <p className="text-sm text-purple-800">Risk: <span className={`px-1.5 py-0.5 rounded text-xs ${RISK_COLOURS[screenResult.risk_level]}`}>{screenResult.risk_level}</span></p>
-                <p className="text-xs text-purple-700 mt-1">{screenResult.recommended_action}</p>
+              <div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-4">
+                <p className="text-sm font-semibold text-purple-900">{screenResult.tool_name || screenResult.tool}</p>
+                <p className={`text-sm ${SEVERITY_TEXT[screenResult.severity] || 'text-gray-700'}`}>
+                  Severity: {screenResult.severity}
+                </p>
+                <p className="mt-1 text-sm text-purple-800">{screenResult.action}</p>
+                <p className="mt-2 text-xs text-purple-700">
+                  Referral needed: {screenResult.refer_specialist ? 'Yes' : 'No'} • Risk: {screenResult.riskLevel}
+                </p>
               </div>
             )}
           </div>
 
-          {/* History */}
-          {screenings.length > 0 && (
-            <div className="bg-white border rounded-lg p-4">
-              <p className="text-sm font-semibold mb-3">Screening History</p>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-xs">
-                  <thead>
-                    <tr className="border-b text-gray-500">
-                      <th className="text-left py-1 pr-3">Date</th>
-                      <th className="text-left py-1 pr-3">Tool</th>
-                      <th className="text-left py-1 pr-3">Score</th>
-                      <th className="text-left py-1 pr-3">Severity</th>
-                      <th className="text-left py-1">Risk</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {screenings.map(s => (
-                      <tr key={s.id} className="border-b hover:bg-gray-50">
-                        <td className="py-1 pr-3">{new Date(s.screenedAt).toLocaleDateString()}</td>
-                        <td className="py-1 pr-3">{s.tool}</td>
-                        <td className="py-1 pr-3 font-bold">{s.totalScore}</td>
-                        <td className={`py-1 pr-3 ${SEV_COLOURS[s.severity] || ''}`}>{s.severity}</td>
-                        <td className="py-1">
-                          <span className={`px-1.5 py-0.5 rounded ${RISK_COLOURS[s.riskLevel] || ''}`}>{s.riskLevel}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Crisis ───────────────────────────────────────────────────────── */}
-      {tab === 'crisis' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm font-semibold">Crisis Events ({crisisEvents.length})</p>
-            <button
-              onClick={() => setShowCrisisForm(v => !v)}
-              className="flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-700"
-            >
-              <Plus className="h-4 w-4" /> Record Event
-            </button>
-          </div>
-
-          {showCrisisForm && (
-            <div className="bg-white border border-red-200 rounded-lg p-4 space-y-3">
-              <p className="text-sm font-semibold text-red-800">New Crisis Event</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500">Crisis Type</label>
-                  <select value={crisisDto.crisisType} onChange={e => setCrisisDto((p: any) => ({ ...p, crisisType: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1">
-                    {['suicidal_ideation','suicide_attempt','self_harm','psychosis','aggression','substance_intoxication','panic_attack','other'].map(t => (
-                      <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Ideation Type</label>
-                  <select value={crisisDto.ideationType || ''} onChange={e => setCrisisDto((p: any) => ({ ...p, ideationType: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1">
-                    <option value="">N/A</option>
-                    {['passive','active_no_plan','active_with_plan','active_with_intent'].map(t => (
-                      <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Lethality</label>
-                  <select value={crisisDto.lethality} onChange={e => setCrisisDto((p: any) => ({ ...p, lethality: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1">
-                    {['low','medium','high'].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Prior Attempts</label>
-                  <input type="number" min={0} value={crisisDto.priorAttempts} onChange={e => setCrisisDto((p: any) => ({ ...p, priorAttempts: +e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
-                </div>
-                <div className="flex items-center gap-2 col-span-2">
-                  <input type="checkbox" id="means" checked={crisisDto.meansAccess} onChange={e => setCrisisDto((p: any) => ({ ...p, meansAccess: e.target.checked }))} />
-                  <label htmlFor="means" className="text-sm">Access to means</label>
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-gray-500">Intervention</label>
-                  <textarea rows={2} value={crisisDto.intervention || ''} onChange={e => setCrisisDto((p: any) => ({ ...p, intervention: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-gray-500">Outcome</label>
-                  <select value={crisisDto.outcome || ''} onChange={e => setCrisisDto((p: any) => ({ ...p, outcome: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1">
-                    <option value="">Select…</option>
-                    {['stabilised','admitted','referred','absconded','deceased','ongoing'].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={submitCrisis} className="bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-red-700">Save</button>
-                <button onClick={() => setShowCrisisForm(false)} className="border px-4 py-1.5 rounded-lg text-sm">Cancel</button>
-              </div>
-            </div>
-          )}
-
-          {crisisEvents.length === 0 && <p className="text-sm text-gray-400">No crisis events recorded.</p>}
-
-          {crisisEvents.map(ev => (
-            <div key={ev.id} className={`bg-white border rounded-lg p-4 ${ev.lethality === 'high' ? 'border-red-300' : ''}`}>
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-semibold capitalize">{ev.crisisType?.replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-gray-500">{new Date(ev.eventDate).toLocaleDateString()}</p>
-                </div>
-                <div className="flex gap-2">
-                  {ev.lethality && <span className={`text-xs px-2 py-0.5 rounded-full ${ev.lethality === 'high' ? 'bg-red-100 text-red-800' : ev.lethality === 'medium' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>{ev.lethality} lethality</span>}
-                  {ev.outcome && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{ev.outcome}</span>}
-                </div>
-              </div>
-              {ev.intervention && <p className="text-xs text-gray-600 mt-2">Intervention: {ev.intervention}</p>}
-              {ev.meansAccess && <p className="text-xs text-red-700 font-semibold mt-1">⚠ Access to means</p>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── Safe Plan ────────────────────────────────────────────────────── */}
-      {tab === 'safeplan' && (
-        <SafePlanTab
-          patientId={patientId}
-          providerId={providerId}
-          tenantSubdomain={tenantSubdomain}
-          activePlan={activePlan}
-          onSaved={load}
-        />
-      )}
-
-      {/* ── Medications ──────────────────────────────────────────────────── */}
-      {tab === 'meds' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm font-semibold">Psychotropic Medications ({medications.length} active)</p>
-            <button onClick={() => setShowMedForm(v => !v)} className="flex items-center gap-1 bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-purple-700">
-              <Plus className="h-4 w-4" /> Add Medication
-            </button>
-          </div>
-
-          {showMedForm && (
-            <div className="bg-white border rounded-lg p-4 space-y-3">
-              <p className="text-sm font-semibold">New Psychotropic Medication</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500">Drug Name</label>
-                  <input value={medDto.drugName} onChange={e => setMedDto((p: any) => ({ ...p, drugName: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" placeholder="e.g. Lithium carbonate" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Class</label>
-                  <select value={medDto.drugClass} onChange={e => setMedDto((p: any) => ({ ...p, drugClass: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1">
-                    {['antidepressant','antipsychotic','mood_stabilizer','anxiolytic','stimulant','hypnotic','other'].map(c => <option key={c} value={c}>{c.replace(/_/g,' ')}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Dose (mg)</label>
-                  <input type="number" value={medDto.doseMg} onChange={e => setMedDto((p: any) => ({ ...p, doseMg: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Frequency</label>
-                  <input value={medDto.frequency} onChange={e => setMedDto((p: any) => ({ ...p, frequency: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" placeholder="e.g. twice daily" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Start Date</label>
-                  <input type="date" value={medDto.startDate} onChange={e => setMedDto((p: any) => ({ ...p, startDate: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">Indication</label>
-                  <input value={medDto.indication} onChange={e => setMedDto((p: any) => ({ ...p, indication: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" placeholder="e.g. Bipolar I disorder" />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={submitMed} className="bg-purple-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-purple-700">Save</button>
-                <button onClick={() => setShowMedForm(false)} className="border px-4 py-1.5 rounded-lg text-sm">Cancel</button>
-              </div>
-            </div>
-          )}
-
-          {medications.length === 0 && <p className="text-sm text-gray-400">No active psychotropic medications.</p>}
-
-          {medications.map(m => {
-            const alert = medAlerts[m.id];
-            return (
-              <div key={m.id} className={`bg-white border rounded-lg p-4 ${alert?.has_critical_alert ? 'border-red-300' : ''}`}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm font-semibold">{m.drugName}</p>
-                    <p className="text-xs text-gray-500">{m.drugClass?.replace(/_/g,' ')} · {m.doseMg}mg {m.frequency}</p>
-                    <p className="text-xs text-gray-400">Started {m.startDate}</p>
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Screening history</p>
+            <div className="space-y-2">
+              {screenings.map((screening) => (
+                <div key={screening.id} className="rounded-md bg-gray-50 p-3 text-sm text-gray-700">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{screening.tool}</span>
+                    <span className={`${SEVERITY_TEXT[screening.severity] || ''}`}>{screening.severity}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${RISK_BADGE[screening.riskLevel] || 'bg-gray-100 text-gray-700'}`}>
+                      {screening.riskLevel || 'low'}
+                    </span>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${m.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{m.status}</span>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Score {screening.totalScore} • language {screening.languageCode || 'en'} • {new Date(screening.screenedAt).toLocaleDateString()}
+                  </p>
                 </div>
-
-                {alert && (
-                  <div className="mt-3 space-y-1">
-                    {alert.alerts?.map((a: any, i: number) => (
-                      <div key={i} className={`text-xs px-2 py-1 rounded ${a.severity === 'danger' ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-yellow-50 text-yellow-800 border border-yellow-200'}`}>
-                        {a.message}
-                      </div>
-                    ))}
-                    {alert.monitoring_due?.length > 0 && (
-                      <div className="text-xs text-gray-600 mt-1">
-                        <span className="font-medium">Monitoring due: </span>
-                        {alert.monitoring_due.slice(0, 2).join(' · ')}
-                        {alert.monitoring_due.length > 2 && ` +${alert.monitoring_due.length - 2} more`}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              ))}
+              {!screenings.length && <p className="text-sm text-gray-500">No screening history yet.</p>}
+            </div>
+          </div>
         </div>
       )}
-    </div>
-  );
-}
 
-// ── Safe Plan sub-component ───────────────────────────────────────────────────
-
-function SafePlanTab({ patientId, providerId, tenantSubdomain, activePlan, onSaved }: any) {
-  const [editing, setEditing] = useState(!activePlan);
-  const [dto, setDto] = useState({
-    warningSigns: activePlan?.warningSigns?.join('\n') || '',
-    internalCoping: activePlan?.internalCoping?.join('\n') || '',
-    socialDistractions: activePlan?.socialDistractions?.join('\n') || '',
-    supportContacts: activePlan?.supportContacts?.join('\n') || '',
-    professionalContacts: activePlan?.professionalContacts?.join('\n') || '',
-    meansRestriction: activePlan?.meansRestriction || '',
-    reasonToLive: activePlan?.reasonToLive || '',
-  });
-
-  async function save() {
-    await cdssApi.upsertSafePlan(patientId, tenantSubdomain, {
-      createdBy: providerId,
-      warningSigns: dto.warningSigns.split('\n').filter(Boolean),
-      internalCoping: dto.internalCoping.split('\n').filter(Boolean),
-      socialDistractions: dto.socialDistractions.split('\n').filter(Boolean),
-      supportContacts: dto.supportContacts.split('\n').filter(Boolean),
-      professionalContacts: dto.professionalContacts.split('\n').filter(Boolean),
-      meansRestriction: dto.meansRestriction,
-      reasonToLive: dto.reasonToLive,
-    });
-    setEditing(false);
-    onSaved();
-  }
-
-  const sections = [
-    ['Warning Signs', 'warningSigns', 'What thoughts, images, moods, or behaviours indicate a crisis may be developing?'],
-    ['Internal Coping', 'internalCoping', 'Things I can do on my own to distract myself'],
-    ['Social Distractions', 'socialDistractions', 'People and settings that provide distraction'],
-    ['Support Contacts', 'supportContacts', 'People I can ask for help (name and phone)'],
-    ['Professional Contacts', 'professionalContacts', 'Clinicians and crisis lines (name, number)'],
-  ] as const;
-
-  return (
-    <div className="space-y-4">
-      {!editing && activePlan && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
-          <div className="flex justify-between">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-green-600" />
-              <span className="font-semibold text-green-800">Active Safety Plan</span>
+      {tab === 'mhgap' && (
+        <div className="space-y-4 rounded-lg border bg-white p-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Presenting complaint</label>
+              <textarea
+                value={mhgapForm.presentingComplaint}
+                onChange={(event) => setMhgapForm((previous) => ({ ...previous, presentingComplaint: event.target.value }))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                rows={4}
+                placeholder="Describe the main complaint in the patient's own words"
+              />
             </div>
-            <button onClick={() => setEditing(true)} className="text-xs text-green-700 underline">Edit</button>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Duration (weeks)</label>
+              <input
+                value={mhgapForm.durationWeeks}
+                onChange={(event) => setMhgapForm((previous) => ({ ...previous, durationWeeks: event.target.value }))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Age (years)</label>
+              <input
+                value={mhgapForm.ageYears}
+                onChange={(event) => setMhgapForm((previous) => ({ ...previous, ageYears: event.target.value }))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              />
+            </div>
           </div>
-          {sections.map(([label, key]) => activePlan[key]?.length > 0 && (
-            <div key={key}>
-              <p className="text-xs font-medium text-green-700">{label}</p>
-              <ul className="list-disc list-inside">
-                {activePlan[key].map((item: string, i: number) => (
-                  <li key={i} className="text-xs text-green-900">{item}</li>
+          <div className="grid gap-2 md:grid-cols-4">
+            {[
+              ['functionalImpairment', 'Functional impairment'],
+              ['priorEpisode', 'Prior episode'],
+              ['substanceUse', 'Substance use'],
+              ['safetyConcern', 'Safety concern'],
+            ].map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean((mhgapForm as any)[key])}
+                  onChange={(event) => setMhgapForm((previous) => ({ ...previous, [key]: event.target.checked }))}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => void submitMhgapAssessment()}
+            className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            Run mhGAP assessment
+          </button>
+
+          {mhgapResult && (
+            <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
+              <p className="text-sm font-semibold text-purple-900">
+                {mhgapResult.condition} ({mhgapResult.icd10})
+              </p>
+              <p className={`text-sm ${SEVERITY_TEXT[mhgapResult.severity] || 'text-purple-800'}`}>
+                Severity: {mhgapResult.severity}
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-purple-800">
+                {(mhgapResult.management_steps || []).map((step: string) => (
+                  <li key={step}>{step}</li>
                 ))}
               </ul>
             </div>
-          ))}
-          {activePlan.meansRestriction && (
-            <div>
-              <p className="text-xs font-medium text-green-700">Means Restriction</p>
-              <p className="text-xs text-green-900">{activePlan.meansRestriction}</p>
-            </div>
-          )}
-          {activePlan.reasonToLive && (
-            <div>
-              <p className="text-xs font-medium text-green-700">Reason to Live</p>
-              <p className="text-xs text-green-900 italic">"{activePlan.reasonToLive}"</p>
-            </div>
           )}
         </div>
       )}
 
-      {(editing || !activePlan) && (
-        <div className="bg-white border rounded-lg p-4 space-y-4">
-          <p className="text-sm font-semibold">{activePlan ? 'Update' : 'Create'} Safety Plan (Stanley-Brown)</p>
-          {sections.map(([label, key, hint]) => (
-            <div key={key}>
-              <label className="text-xs font-medium text-gray-700">{label}</label>
-              <p className="text-xs text-gray-400 mb-1">{hint}</p>
+      {tab === 'careplans' && (
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Create care plan</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <input
+                placeholder="Diagnosis ICD-10"
+                value={carePlanForm.diagnosisIcd10}
+                onChange={(event) => setCarePlanForm((previous) => ({ ...previous, diagnosisIcd10: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+              <input
+                placeholder="Diagnosis name"
+                value={carePlanForm.diagnosisName}
+                onChange={(event) => setCarePlanForm((previous) => ({ ...previous, diagnosisName: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+              <select
+                value={carePlanForm.careLevel}
+                onChange={(event) => setCarePlanForm((previous) => ({ ...previous, careLevel: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="community">Community</option>
+                <option value="clinic">Clinic</option>
+                <option value="district">District</option>
+                <option value="specialist">Specialist</option>
+              </select>
+              <input
+                placeholder="Assigned CHW ID"
+                value={carePlanForm.assignedChwId}
+                onChange={(event) => setCarePlanForm((previous) => ({ ...previous, assignedChwId: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
               <textarea
-                rows={3}
-                value={dto[key]}
-                onChange={e => setDto(p => ({ ...p, [key]: e.target.value }))}
-                placeholder="One per line…"
-                className="w-full border rounded px-2 py-1 text-sm"
+                placeholder="Goals (comma separated)"
+                value={carePlanForm.goals}
+                onChange={(event) => setCarePlanForm((previous) => ({ ...previous, goals: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm md:col-span-2"
+                rows={2}
+              />
+              <textarea
+                placeholder="Interventions (comma separated)"
+                value={carePlanForm.interventions}
+                onChange={(event) => setCarePlanForm((previous) => ({ ...previous, interventions: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm md:col-span-2"
+                rows={2}
+              />
+              <input
+                placeholder="Medication"
+                value={carePlanForm.medication}
+                onChange={(event) => setCarePlanForm((previous) => ({ ...previous, medication: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+              <input
+                type="date"
+                value={carePlanForm.reviewDate}
+                onChange={(event) => setCarePlanForm((previous) => ({ ...previous, reviewDate: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
               />
             </div>
-          ))}
-          <div>
-            <label className="text-xs font-medium text-gray-700">Means Restriction</label>
-            <input value={dto.meansRestriction} onChange={e => setDto(p => ({ ...p, meansRestriction: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" placeholder="Describe steps taken to restrict access to means" />
+            <button
+              type="button"
+              onClick={() => void submitCarePlan()}
+              className="mt-4 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Save care plan
+            </button>
           </div>
-          <div>
-            <label className="text-xs font-medium text-gray-700">Reason to Live</label>
-            <input value={dto.reasonToLive} onChange={e => setDto(p => ({ ...p, reasonToLive: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" placeholder="Patient's stated reason to live" />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={save} className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-green-700">Save Plan</button>
-            {activePlan && <button onClick={() => setEditing(false)} className="border px-4 py-1.5 rounded-lg text-sm">Cancel</button>}
+
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Existing care plans</p>
+            <div className="space-y-3">
+              {carePlans.map((plan) => (
+                <div key={plan.id} className="rounded-md bg-gray-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">{plan.diagnosisName || 'Mental health care plan'}</span>
+                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">{plan.careLevel || 'community'}</span>
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{plan.status}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600">
+                    Review: {plan.reviewDate || 'Not set'} • CHW: {plan.assignedChwId || 'Unassigned'}
+                  </p>
+                </div>
+              ))}
+              {!carePlans.length && <p className="text-sm text-gray-500">No care plans recorded yet.</p>}
+            </div>
           </div>
         </div>
       )}
 
-      {!activePlan && !editing && (
-        <div className="text-center py-8">
-          <ShieldCheck className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-400">No active safety plan on file</p>
-          <button onClick={() => setEditing(true)} className="mt-2 text-sm text-purple-600 underline">Create one now</button>
+      {tab === 'followups' && (
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Record community follow-up</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <select
+                value={followupForm.carePlanId}
+                onChange={(event) => setFollowupForm((previous) => ({ ...previous, carePlanId: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="">No linked care plan</option>
+                {carePlans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.diagnosisName || plan.id}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={followupForm.followupDate}
+                onChange={(event) => setFollowupForm((previous) => ({ ...previous, followupDate: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+              <select
+                value={followupForm.status}
+                onChange={(event) => setFollowupForm((previous) => ({ ...previous, status: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="completed">Completed</option>
+                <option value="missed">Missed</option>
+                <option value="rescheduled">Rescheduled</option>
+              </select>
+              <select
+                value={followupForm.symptomChange}
+                onChange={(event) => setFollowupForm((previous) => ({ ...previous, symptomChange: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="improved">Improved</option>
+                <option value="same">Same</option>
+                <option value="worse">Worse</option>
+              </select>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={followupForm.medicationAdherent}
+                  onChange={(event) => setFollowupForm((previous) => ({ ...previous, medicationAdherent: event.target.checked }))}
+                />
+                Medication adherent
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={followupForm.safetyConcern}
+                  onChange={(event) => setFollowupForm((previous) => ({ ...previous, safetyConcern: event.target.checked }))}
+                />
+                Safety concern
+              </label>
+              <textarea
+                placeholder="Notes"
+                value={followupForm.notes}
+                onChange={(event) => setFollowupForm((previous) => ({ ...previous, notes: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm md:col-span-2"
+                rows={3}
+              />
+              <input
+                type="date"
+                value={followupForm.nextFollowupDate}
+                onChange={(event) => setFollowupForm((previous) => ({ ...previous, nextFollowupDate: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void submitFollowup()}
+              className="mt-4 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Save follow-up
+            </button>
+          </div>
+
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Follow-up history</p>
+            <div className="space-y-3">
+              {followups.map((followup) => (
+                <div key={followup.id} className="rounded-md bg-gray-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">{followup.followupDate}</span>
+                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">{followup.status || 'completed'}</span>
+                    {followup.safetyConcern && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">Safety concern</span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600">
+                    Symptom change: {followup.symptomChange || 'not recorded'} • Medication adherent:{' '}
+                    {followup.medicationAdherent === null || followup.medicationAdherent === undefined
+                      ? 'not recorded'
+                      : followup.medicationAdherent
+                        ? 'yes'
+                        : 'no'}
+                  </p>
+                </div>
+              ))}
+              {!followups.length && <p className="text-sm text-gray-500">No follow-up history yet.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'crisis' && (
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Record crisis event</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <select
+                value={crisisForm.crisisType}
+                onChange={(event) => setCrisisForm((previous) => ({ ...previous, crisisType: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="suicidal_ideation">Suicidal ideation</option>
+                <option value="self_harm">Self-harm</option>
+                <option value="agitation">Agitation</option>
+                <option value="psychosis">Psychosis</option>
+              </select>
+              <select
+                value={crisisForm.lethality}
+                onChange={(event) => setCrisisForm((previous) => ({ ...previous, lethality: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={crisisForm.meansAccess}
+                  onChange={(event) => setCrisisForm((previous) => ({ ...previous, meansAccess: event.target.checked }))}
+                />
+                Means access
+              </label>
+              <input
+                type="number"
+                value={crisisForm.priorAttempts}
+                onChange={(event) => setCrisisForm((previous) => ({ ...previous, priorAttempts: Number(event.target.value) }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+                placeholder="Prior attempts"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void submitCrisis()}
+              className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Save crisis event
+            </button>
+          </div>
+
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Crisis history</p>
+            <div className="space-y-3">
+              {crisisEvents.map((event) => (
+                <div key={event.id} className="rounded-md bg-gray-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">{event.crisisType}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${RISK_BADGE[event.lethality] || 'bg-gray-100 text-gray-700'}`}>
+                      {event.lethality}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {!crisisEvents.length && <p className="text-sm text-gray-500">No crisis history recorded.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'safeplan' && (
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Safety plan template</p>
+            <div className="flex flex-wrap gap-3">
+              <select
+                value={safetyRiskLevel}
+                onChange={(event) => setSafetyRiskLevel(event.target.value)}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="low">Low</option>
+                <option value="moderate">Moderate</option>
+                <option value="high">High</option>
+                <option value="imminent">Imminent</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void generateSafetyPlan()}
+                className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                Generate template
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveSafetyPlan()}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                Save as active plan
+              </button>
+            </div>
+
+            {safetyPlanTemplate && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+                <p className="text-sm font-semibold text-green-900">Generated safety plan</p>
+                <p className="mt-2 text-sm text-green-800">{safetyPlanTemplate.emergency_action}</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-green-800">
+                  {(safetyPlanTemplate.warning_signs || []).map((item: string) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {activePlan && (
+            <div className="rounded-lg border bg-white p-4">
+              <p className="mb-3 text-sm font-semibold text-gray-900">Active saved safety plan</p>
+              <p className="text-sm text-gray-700">Reason to live: {activePlan.reasonToLive || 'Not documented'}</p>
+              <p className="mt-2 text-sm text-gray-700">
+                Warning signs: {(activePlan.warningSigns || []).join(', ') || 'Not documented'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'meds' && (
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Add psychotropic medication</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <input
+                placeholder="Drug name"
+                value={medicationForm.drugName}
+                onChange={(event) => setMedicationForm((previous) => ({ ...previous, drugName: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+              <select
+                value={medicationForm.drugClass}
+                onChange={(event) => setMedicationForm((previous) => ({ ...previous, drugClass: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="antidepressant">Antidepressant</option>
+                <option value="antipsychotic">Antipsychotic</option>
+                <option value="mood_stabilizer">Mood stabilizer</option>
+              </select>
+              <input
+                placeholder="Dose"
+                value={medicationForm.doseMg}
+                onChange={(event) => setMedicationForm((previous) => ({ ...previous, doseMg: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+              <input
+                placeholder="Frequency"
+                value={medicationForm.frequency}
+                onChange={(event) => setMedicationForm((previous) => ({ ...previous, frequency: event.target.value }))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void submitMedication()}
+              className="mt-4 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Add medication
+            </button>
+          </div>
+
+          <div className="rounded-lg border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">Medication monitoring</p>
+            <div className="space-y-3">
+              {medications.map((medication) => (
+                <div key={medication.id} className="rounded-md bg-gray-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">{medication.drugName}</span>
+                    {medAlerts[medication.id]?.has_critical_alert && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">Critical alert</span>
+                    )}
+                  </div>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-gray-700">
+                    {(medAlerts[medication.id]?.monitoring_due || []).map((item: string) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              {!medications.length && <p className="text-sm text-gray-500">No active psychotropic medications.</p>}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "ln",
+  "language_name": "Lingala",
+  "title": "Mikanda ya Bokolongono ya Mobeli - 9",
+  "instructions": "Na baposo mibale eleki, mbala boni ozalaki kotungisama na makambo oyo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Ata moke te"
+    },
+    {
+      "value": 1,
+      "label": "Mikolo moke"
+    },
+    {
+      "value": 2,
+      "label": "Koleka ndambo ya mikolo"
+    },
+    {
+      "value": 3,
+      "label": "Pene na mokolo nyonso"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Kobungisa posa to esengo ya kosala makambo"
+    },
+    {
+      "id": 2,
+      "text": "Koyoka mawa, kobungisa elikya, to kozala na motema se down"
+    },
+    {
+      "id": 3,
+      "text": "Mokakatano ya kolala, kotikala olingi kolala, to kolala mingi"
+    },
+    {
+      "id": 4,
+      "text": "Koyoka bolembu to kozanga makasi"
+    },
+    {
+      "id": 5,
+      "text": "Kozanga posa ya kolia to kolia mingi"
+    },
+    {
+      "id": 6,
+      "text": "Koyoka mabe mpo na yo moko to lokola osilisi yo to libota na yo"
+    },
+    {
+      "id": 7,
+      "text": "Mokakatano ya kotia makanisi na makambo lokola kotanga to kotala televizyo"
+    },
+    {
+      "id": 8,
+      "text": "Kotambola to koloba malembe mingi tii bato bamonaka, to kokesana na yango kozanga kimia koleka momeseno"
+    },
+    {
+      "id": 9,
+      "text": "Makanisi ete ezalaki malamu soki ofa to omisalela mabe"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

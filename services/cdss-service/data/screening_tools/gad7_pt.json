@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "pt",
+  "language_name": "Portuguese",
+  "title": "Escala de Ansiedade Generalizada - 7",
+  "instructions": "Nas últimas 2 semanas, com que frequência você foi incomodado pelos seguintes problemas?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Nenhuma vez"
+    },
+    {
+      "value": 1,
+      "label": "Vários dias"
+    },
+    {
+      "value": 2,
+      "label": "Mais da metade dos dias"
+    },
+    {
+      "value": 3,
+      "label": "Quase todos os dias"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Sentir-se nervoso, ansioso ou no limite"
+    },
+    {
+      "id": 2,
+      "text": "Não conseguir parar ou controlar as preocupações"
+    },
+    {
+      "id": 3,
+      "text": "Preocupar-se demais com coisas diferentes"
+    },
+    {
+      "id": 4,
+      "text": "Dificuldade para relaxar"
+    },
+    {
+      "id": 5,
+      "text": "Ficar tão inquieto que é difícil ficar parado"
+    },
+    {
+      "id": 6,
+      "text": "Ficar irritado ou incomodado com facilidade"
+    },
+    {
+      "id": 7,
+      "text": "Sentir medo como se algo terrível fosse acontecer"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

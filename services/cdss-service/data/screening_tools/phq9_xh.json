@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "xh",
+  "language_name": "Xhosa",
+  "title": "Ikhweshine yeMpilo yoMguli - 9",
+  "instructions": "Kwiiveki ezi-2 ezidlulileyo, ubuphazanyiswa kangaphi zezi ngxaki zilandelayo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Akukho kwaphela"
+    },
+    {
+      "value": 1,
+      "label": "Iintsuku ezimbalwa"
+    },
+    {
+      "value": 2,
+      "label": "Ngaphezulu kwesiqingatha seentsuku"
+    },
+    {
+      "value": 3,
+      "label": "Phantse yonke imihla"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Ukuphelelwa ngumdla okanye lulonwabo ekwenzeni izinto"
+    },
+    {
+      "id": 2,
+      "text": "Ukuziva udakumbile, uxinene, okanye ungenathemba"
+    },
+    {
+      "id": 3,
+      "text": "Ingxaki yokulala, ukuhlala ulele, okanye ukulala kakhulu"
+    },
+    {
+      "id": 4,
+      "text": "Ukuziva udiniwe okanye ungenamandla"
+    },
+    {
+      "id": 5,
+      "text": "Ukungabi nomdla wokutya okanye ukutya kakhulu"
+    },
+    {
+      "id": 6,
+      "text": "Ukuziva kakubi ngawe okanye ngathi uwile wena okanye usapho lwakho"
+    },
+    {
+      "id": 7,
+      "text": "Ingxaki yokugxila kwizinto ezifana nokufunda okanye ukubukela umabonakude"
+    },
+    {
+      "id": 8,
+      "text": "Ukuhamba okanye ukuthetha kancinci kakhulu abantu bakuqaphele, okanye ngokuphambeneyo ungaphumli ngakumbi kunesiqhelo"
+    },
+    {
+      "id": 9,
+      "text": "Iingcinga zokuba kungangcono ukuba ubhubhile okanye uzonzakalise"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

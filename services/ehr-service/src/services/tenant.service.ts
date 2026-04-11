@@ -177,6 +177,8 @@ import { DevelopmentalMilestone } from '../entities/developmental-milestone.enti
 import { NeonatalRecord } from '../entities/neonatal-record.entity';
 import { SchoolHealthRecord } from '../entities/school-health-record.entity';
 import { MentalHealthScreening } from '../entities/mental-health-screening.entity';
+import { MentalHealthCarePlan } from '../entities/mental-health-care-plan.entity';
+import { MentalHealthFollowup } from '../entities/mental-health-followup.entity';
 import { PsychiatricEncounter } from '../entities/psychiatric-encounter.entity';
 import { CrisisEvent } from '../entities/crisis-event.entity';
 import { SafePlan } from '../entities/safe-plan.entity';
@@ -654,6 +656,8 @@ export class TenantService {
         NeonatalRecord,
         SchoolHealthRecord,
         MentalHealthScreening,
+        MentalHealthCarePlan,
+        MentalHealthFollowup,
         PsychiatricEncounter,
         CrisisEvent,
         SafePlan,

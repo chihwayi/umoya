@@ -94,6 +94,8 @@ export const tenantAxios = createAxiosInstance(TENANT_API_URL);
 export const ehrAxios = createAxiosInstance(EHR_API_URL);
 export const cdssAxios = createAxiosInstance(CDSS_API_URL);
 
+const getStoredAuthToken = (): string => localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+
 export const tenantApi = {
   getActiveTenants: async () => {
     const response = await tenantAxios.get('/tenants/active');
@@ -10337,26 +10339,26 @@ export const cdssApi = {
   // ── Sprint 68: Mental Health ────────────────────────────────────────────────
 
   getMhScreenings: async (patientId: string, tenantSubdomain: string, tool?: string) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const params: any = {};
     if (tool) params.tool = tool;
     const res = await ehrAxios.get(`/mental-health/patient/${patientId}/screenings`, {
       params,
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   addMhScreening: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.post(`/mental-health/patient/${patientId}/screenings`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   scoreMhScreening: async (data: { tool: string; responses: Record<string, number> }) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.post('/mental-health/cdss/screen', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -10364,74 +10366,74 @@ export const cdssApi = {
   },
 
   getMhEncounters: async (patientId: string, tenantSubdomain: string) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.get(`/mental-health/patient/${patientId}/encounters`, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   addMhEncounter: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.post(`/mental-health/patient/${patientId}/encounters`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   getMhCrisisEvents: async (patientId: string, tenantSubdomain: string) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.get(`/mental-health/patient/${patientId}/crisis`, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   addMhCrisisEvent: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.post(`/mental-health/patient/${patientId}/crisis`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   getActiveSafePlan: async (patientId: string, tenantSubdomain: string) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     try {
       const res = await ehrAxios.get(`/mental-health/patient/${patientId}/safe-plan`, {
-        headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+        headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
       });
       return res.data;
     } catch { return null; }
   },
 
   upsertSafePlan: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.post(`/mental-health/patient/${patientId}/safe-plan`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   getMhMedications: async (patientId: string, tenantSubdomain: string, activeOnly = false) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.get(`/mental-health/patient/${patientId}/medications`, {
       params: activeOnly ? { active: 'true' } : {},
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   addMhMedication: async (patientId: string, tenantSubdomain: string, dto: Record<string, any>) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.post(`/mental-health/patient/${patientId}/medications`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
   monitorMhMedication: async (data: Record<string, any>) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.post('/mental-health/cdss/medication/monitor', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -10439,9 +10441,98 @@ export const cdssApi = {
   },
 
   assessMhSuicideRisk: async (data: Record<string, any>) => {
-    const token = localStorage.getItem('token') || '';
+    const token = getStoredAuthToken();
     const res = await ehrAxios.post('/mental-health/cdss/risk', data, {
       headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  listMhScreeningTools: async () => {
+    const token = getStoredAuthToken();
+    const res = await cdssAxios.get('/cdss/mental-health/screening-tools', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getMhScreeningToolDefinition: async (tool: string, languageCode: string) => {
+    const token = getStoredAuthToken();
+    const res = await cdssAxios.get('/cdss/mental-health/screening-tools', {
+      params: { tool, language_code: languageCode },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  interpretMhScreening: async (data: { tool: string; score: number; language_code: string; age_years?: number; pregnancy?: boolean }) => {
+    const token = getStoredAuthToken();
+    const res = await cdssAxios.post('/cdss/mental-health/screening-interpret', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  assessMhGap: async (data: Record<string, any>) => {
+    const token = getStoredAuthToken();
+    const res = await cdssAxios.post('/cdss/mental-health/mhgap-assess', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getMhSafetyPlanTemplate: async (data: { risk_level: string; patient_age?: number; prior_attempt?: boolean }) => {
+    const token = getStoredAuthToken();
+    const res = await cdssAxios.post('/cdss/mental-health/safety-plan', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  createMhCarePlan: async (tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = getStoredAuthToken();
+    const res = await ehrAxios.post('/mental-health/care-plans', dto, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getMhCarePlans: async (patientId: string, tenantSubdomain: string) => {
+    const token = getStoredAuthToken();
+    const res = await ehrAxios.get(`/mental-health/care-plans/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  updateMhCarePlan: async (id: string, tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = getStoredAuthToken();
+    const res = await ehrAxios.patch(`/mental-health/care-plans/${id}`, dto, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  recordMhFollowup: async (tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = getStoredAuthToken();
+    const res = await ehrAxios.post('/mental-health/followups', dto, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getMhFollowups: async (patientId: string, tenantSubdomain: string) => {
+    const token = getStoredAuthToken();
+    const res = await ehrAxios.get(`/mental-health/followups/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getMhReferralPathway: async (tenantSubdomain: string) => {
+    const token = getStoredAuthToken();
+    const res = await ehrAxios.get('/mental-health/referral-pathway', {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },

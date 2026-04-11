@@ -5183,6 +5183,78 @@ class MedicationMonitorRequest(BaseModel):
     hepatic_function: Optional[str] = None       # normal / mild / moderate / severe
     adverse_effects: Optional[str] = None
 
+class MhGapAssessRequest(BaseModel):
+    presenting_complaint: str
+    duration_weeks: Optional[int] = None
+    functional_impairment: bool = False
+    prior_episode: bool = False
+    substance_use: bool = False
+    safety_concern: bool = False
+    age_years: Optional[int] = None
+    pregnancy: bool = False
+
+class ScreeningInterpretRequest(BaseModel):
+    tool: str
+    score: int
+    language_code: str = "en"
+    age_years: Optional[int] = None
+    pregnancy: bool = False
+
+class SafetyPlanRequest(BaseModel):
+    risk_level: str
+    patient_age: Optional[int] = None
+    prior_attempt: bool = False
+
+class ScreeningToolsQuery(BaseModel):
+    tool: str
+    language_code: str = "en"
+
+
+def _mental_health_data_dir() -> pathlib.Path:
+    return pathlib.Path(__file__).resolve().parent / "data"
+
+
+def _load_mhgap_rules() -> Dict[str, Any]:
+    with (_mental_health_data_dir() / "mhgap_rules.json").open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _screening_tool_file_path(tool: str, language_code: str) -> pathlib.Path:
+    normalized_tool = re.sub(r"[^a-z0-9]", "", str(tool).lower())
+    normalized_lang = str(language_code or "en").strip().lower() or "en"
+    return _mental_health_data_dir() / "screening_tools" / f"{normalized_tool}_{normalized_lang}.json"
+
+
+def _load_screening_tool_definition(tool: str, language_code: str) -> Dict[str, Any]:
+    preferred = _screening_tool_file_path(tool, language_code)
+    fallback = _screening_tool_file_path(tool, "en")
+    target = preferred if preferred.exists() else fallback
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Screening tool definition not found")
+    with target.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _tool_display_name(tool_definition: Dict[str, Any]) -> str:
+    return str(tool_definition.get("title") or tool_definition.get("name") or tool_definition.get("tool_id") or "").strip()
+
+
+def _normalize_screening_tool_id(tool: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9]", "", str(tool or "").upper())
+    aliases = {
+        "PHQ9": "PHQ9",
+        "GAD7": "GAD7",
+        "AUDIT": "AUDIT",
+        "SRQ": "SRQ",
+        "MINI": "MINI",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _mental_health_refer_specialist_from_action(action: str) -> bool:
+    lowered = str(action or "").lower()
+    return "refer" in lowered or "specialist" in lowered or "psychiatric" in lowered
+
 @app.post("/mental-health/screen")
 async def score_screening(req: ScreeningRequest):
     tool = req.tool
@@ -5407,6 +5479,151 @@ async def monitor_psychotropic(req: MedicationMonitorRequest):
         "monitoring_due": monitoring_due,
         "alert_count": len(alerts),
         "has_critical_alert": any(a["severity"] == "danger" for a in alerts),
+    }
+
+
+@app.post("/cdss/mental-health/mhgap-assess")
+async def mhgap_assess(req: MhGapAssessRequest):
+    rules = _load_mhgap_rules()
+    conditions = rules.get("conditions", {})
+    complaint = str(req.presenting_complaint or "").strip().lower()
+
+    matched_key = None
+    matched_condition: Optional[Dict[str, Any]] = None
+    for key, condition in conditions.items():
+        keywords = [str(keyword).strip().lower() for keyword in condition.get("keywords", [])]
+        if any(keyword and keyword in complaint for keyword in keywords):
+            matched_key = key
+            matched_condition = condition
+            break
+
+    if matched_condition is None:
+        return {
+            "condition": "General mental health concern",
+            "icd10": "Z03",
+            "severity": "mild" if not req.functional_impairment else "moderate",
+            "management_steps": [
+                "Perform structured screening with PHQ-9 or GAD-7",
+                "Assess for suicide or self-harm risk",
+                "Provide psychoeducation and brief supportive counselling",
+                "Review within 2 weeks or sooner if symptoms worsen",
+            ],
+            "refer_specialist": bool(req.safety_concern),
+            "safety_alert": bool(req.safety_concern),
+            "guideline": "WHO mhGAP-IG 2.0",
+        }
+
+    severity = "mild"
+    if req.safety_concern:
+        severity = "severe"
+    elif req.functional_impairment or req.prior_episode or req.substance_use:
+        severity = "moderate"
+
+    return {
+        "condition": str(matched_key or "mental_health").replace("_", " ").title(),
+        "icd10": matched_condition.get("icd10"),
+        "severity": severity,
+        "management_steps": matched_condition.get("management_steps", []),
+        "refer_specialist": bool(req.safety_concern or matched_key == "psychosis"),
+        "safety_alert": bool(req.safety_concern),
+        "guideline": "WHO mhGAP-IG 2.0",
+    }
+
+
+@app.post("/cdss/mental-health/screening-interpret")
+async def screening_interpret(req: ScreeningInterpretRequest):
+    rules = _load_mhgap_rules()
+    tool_id = _normalize_screening_tool_id(req.tool)
+    cutoffs = rules.get("score_cutoffs", {}).get(tool_id, [])
+    if not cutoffs:
+        raise HTTPException(status_code=404, detail="Unsupported screening tool")
+
+    matched = None
+    for cutoff in cutoffs:
+        if int(cutoff.get("min", 0)) <= req.score <= int(cutoff.get("max", 0)):
+            matched = cutoff
+            break
+    if matched is None:
+        matched = cutoffs[-1]
+
+    tool_definition = _load_screening_tool_definition(tool_id, req.language_code)
+    action = str(matched.get("action") or "").strip()
+    return {
+        "tool": tool_id,
+        "tool_name": _tool_display_name(tool_definition),
+        "score": req.score,
+        "severity": matched.get("severity"),
+        "action": action,
+        "refer_specialist": _mental_health_refer_specialist_from_action(action),
+        "guideline": "WHO mhGAP-IG 2.0",
+    }
+
+
+@app.post("/cdss/mental-health/safety-plan")
+async def mental_health_safety_plan(req: SafetyPlanRequest):
+    risk_level = str(req.risk_level or "low").strip().lower()
+    emergency_action = "Seek urgent clinical review and ensure patient is not left alone."
+    if risk_level == "imminent":
+        emergency_action = "Activate emergency services / inpatient referral immediately and maintain constant supervision."
+    elif risk_level == "high":
+        emergency_action = "Arrange urgent same-day mental health review and supervised transfer if needed."
+
+    return {
+        "risk_level": risk_level,
+        "warning_signs": [
+            "Sudden hopelessness or saying life is not worth living",
+            "Withdrawing from family or support systems",
+            "Escalating agitation, panic, or severe insomnia",
+        ],
+        "coping_strategies": [
+            "Move to a safer environment with another trusted person",
+            "Use grounding or breathing exercises for 10 minutes",
+            "Contact a trusted family member, CHW, or clinician immediately",
+        ],
+        "support_contacts": [
+            "Trusted family or caregiver",
+            "Assigned CHW or clinic nurse",
+            "Local crisis or mental health helpline",
+        ],
+        "means_restriction_advice": "Secure medications, pesticides, ropes, blades, and other potential means away from the patient.",
+        "emergency_action": emergency_action,
+        "guideline": "WHO mhGAP-IG 2.0",
+    }
+
+
+@app.get("/cdss/mental-health/screening-tools")
+async def list_screening_tools(tool: Optional[str] = None, language_code: str = "en"):
+    tools_dir = _mental_health_data_dir() / "screening_tools"
+    if tool:
+        return _load_screening_tool_definition(tool, language_code)
+
+    tools: Dict[str, Dict[str, Any]] = {}
+    for file_path in sorted(tools_dir.glob("*.json")):
+        with file_path.open("r", encoding="utf-8") as fh:
+            tool_definition = json.load(fh)
+        tool_id = str(tool_definition.get("tool_id") or "").strip().upper()
+        language = str(tool_definition.get("language_code") or "").strip().lower()
+        if not tool_id or not language:
+            continue
+        entry = tools.setdefault(
+            tool_id,
+            {
+                "id": tool_id,
+                "name": _tool_display_name(tool_definition),
+                "languages": [],
+            },
+        )
+        if language not in entry["languages"]:
+            entry["languages"].append(language)
+
+    return {
+        "tools": [
+            {
+                **tool_entry,
+                "languages": sorted(tool_entry["languages"]),
+            }
+            for tool_entry in sorted(tools.values(), key=lambda item: item["id"])
+        ]
     }
 
 

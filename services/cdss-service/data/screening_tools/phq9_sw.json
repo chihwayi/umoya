@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "sw",
+  "language_name": "Swahili",
+  "title": "Dodoso la Afya ya Mgonjwa - 9",
+  "instructions": "Katika wiki 2 zilizopita, ni mara ngapi umesumbuliwa na matatizo yafuatayo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Kamwe"
+    },
+    {
+      "value": 1,
+      "label": "Siku kadhaa"
+    },
+    {
+      "value": 2,
+      "label": "Zaidi ya nusu ya siku"
+    },
+    {
+      "value": 3,
+      "label": "Karibu kila siku"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Kupoteza hamu au furaha katika kufanya mambo"
+    },
+    {
+      "id": 2,
+      "text": "Kuhisi huzuni, kushuka moyo, au kukosa matumaini"
+    },
+    {
+      "id": 3,
+      "text": "Shida ya kupata usingizi, kuendelea kulala, au kulala kupita kiasi"
+    },
+    {
+      "id": 4,
+      "text": "Kuhisi uchovu au kukosa nguvu"
+    },
+    {
+      "id": 5,
+      "text": "Kukosa hamu ya kula au kula kupita kiasi"
+    },
+    {
+      "id": 6,
+      "text": "Kujihisi vibaya kuhusu nafsi yako au kwamba umejiangusha au umeiangusha familia yako"
+    },
+    {
+      "id": 7,
+      "text": "Kupata shida ya kuzingatia mambo kama kusoma au kutazama televisheni"
+    },
+    {
+      "id": 8,
+      "text": "Kusogea au kuongea polepole kiasi cha kuonekana, au kuwa na msisimko kiasi cha kutotulia kuliko kawaida"
+    },
+    {
+      "id": 9,
+      "text": "Mawazo kwamba ungekuwa afadhali umefariki au kujidhuru"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

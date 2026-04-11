@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "xh",
+  "language_name": "Xhosa",
+  "title": "Isikali soXhalaba Jikelele - 7",
+  "instructions": "Kwiiveki ezi-2 ezidlulileyo, ubuphazanyiswa kangaphi zezi ngxaki zilandelayo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Akukho kwaphela"
+    },
+    {
+      "value": 1,
+      "label": "Iintsuku ezimbalwa"
+    },
+    {
+      "value": 2,
+      "label": "Ngaphezulu kwesiqingatha seentsuku"
+    },
+    {
+      "value": 3,
+      "label": "Phantse yonke imihla"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Ukuziva unovalo, uxhalabile, okanye ungakhululekanga"
+    },
+    {
+      "id": 2,
+      "text": "Ukungakwazi ukuyeka okanye ukulawula ukuxhalaba"
+    },
+    {
+      "id": 3,
+      "text": "Ukuxhalaba kakhulu ngezinto ezininzi"
+    },
+    {
+      "id": 4,
+      "text": "Ingxaki yokuphumla"
+    },
+    {
+      "id": 5,
+      "text": "Ukungakwazi ukuhlala phantsi ngenxa yokungaphumli"
+    },
+    {
+      "id": 6,
+      "text": "Ukuba nomsindo okanye ukudinwa lula"
+    },
+    {
+      "id": 7,
+      "text": "Ukuziva usoyika ngathi into embi iza kwenzeka"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

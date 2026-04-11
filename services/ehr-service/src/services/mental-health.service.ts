@@ -2,6 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { MentalHealthScreening } from '../entities/mental-health-screening.entity';
+import { MentalHealthCarePlan } from '../entities/mental-health-care-plan.entity';
+import { MentalHealthFollowup } from '../entities/mental-health-followup.entity';
 import { PsychiatricEncounter } from '../entities/psychiatric-encounter.entity';
 import { CrisisEvent } from '../entities/crisis-event.entity';
 import { SafePlan } from '../entities/safe-plan.entity';
@@ -22,7 +24,7 @@ export class MentalHealthService {
     const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
     const repo = ds.getRepository(MentalHealthScreening);
     const record = repo.create(dto as any);
-    return repo.save(record);
+    return repo.save(record) as unknown as MentalHealthScreening;
   }
 
   async getScreenings(tenantSubdomain: string, patientId: string, tool?: string) {
@@ -48,7 +50,7 @@ export class MentalHealthService {
   async addEncounter(tenantSubdomain: string, dto: Partial<PsychiatricEncounter>) {
     const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
     const repo = ds.getRepository(PsychiatricEncounter);
-    return repo.save(repo.create(dto as any));
+    return repo.save(repo.create(dto as any)) as unknown as PsychiatricEncounter;
   }
 
   async getEncounters(tenantSubdomain: string, patientId: string) {
@@ -73,7 +75,7 @@ export class MentalHealthService {
   async addCrisisEvent(tenantSubdomain: string, dto: Partial<CrisisEvent>) {
     const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
     const repo = ds.getRepository(CrisisEvent);
-    return repo.save(repo.create(dto as any));
+    return repo.save(repo.create(dto as any)) as unknown as CrisisEvent;
   }
 
   async getCrisisEvents(tenantSubdomain: string, patientId: string) {
@@ -99,7 +101,7 @@ export class MentalHealthService {
     // Deactivate old active plan
     await repo.update({ patientId, isActive: true }, { isActive: false } as any);
     const plan = repo.create({ ...dto, patientId, isActive: true } as any);
-    return repo.save(plan);
+    return repo.save(plan) as unknown as SafePlan;
   }
 
   async getActiveSafePlan(tenantSubdomain: string, patientId: string) {
@@ -122,7 +124,77 @@ export class MentalHealthService {
   async addMedication(tenantSubdomain: string, dto: Partial<PsychotropicMedication>) {
     const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
     const repo = ds.getRepository(PsychotropicMedication);
-    return repo.save(repo.create(dto as any));
+    return repo.save(repo.create(dto as any)) as unknown as PsychotropicMedication;
+  }
+
+  // ── Community Care Plans & Follow-ups ─────────────────────────────────────
+
+  async createCarePlan(tenantId: string, userId: string | null, body: Partial<MentalHealthCarePlan>) {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = ds.getRepository(MentalHealthCarePlan);
+    const entity = repo.create({
+      ...body,
+      createdBy: userId,
+      assignedProvider: body.assignedProvider ?? userId ?? null,
+      goals: this.toTextArray(body.goals),
+      interventions: this.toTextArray(body.interventions),
+    } as any);
+    return repo.save(entity) as unknown as MentalHealthCarePlan;
+  }
+
+  async getCarePlans(tenantId: string, patientId: string) {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    return ds.getRepository(MentalHealthCarePlan).find({
+      where: { patientId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async updateCarePlan(tenantId: string, id: string, body: Partial<MentalHealthCarePlan>) {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = ds.getRepository(MentalHealthCarePlan);
+    const existing = await repo.findOne({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Care plan not found');
+    }
+    const next = {
+      ...body,
+      goals: body.goals === undefined ? undefined : this.toTextArray(body.goals),
+      interventions: body.interventions === undefined ? undefined : this.toTextArray(body.interventions),
+    } as any;
+    await repo.update(id, next);
+    return repo.findOne({ where: { id } });
+  }
+
+  async recordFollowup(tenantId: string, userId: string | null, body: Partial<MentalHealthFollowup>) {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = ds.getRepository(MentalHealthFollowup);
+    const entity = repo.create({
+      ...body,
+      conductedBy: userId,
+    } as any);
+    return repo.save(entity) as unknown as MentalHealthFollowup;
+  }
+
+  async getFollowups(tenantId: string, patientId: string) {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    return ds.getRepository(MentalHealthFollowup).find({
+      where: { patientId },
+      order: { followupDate: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
+  async getReferralPathway(_tenantId: string): Promise<Record<string, any>> {
+    return {
+      levels: [
+        { level: 'CHW', description: 'Community Health Worker — first point of contact; psychoeducation, referral triage' },
+        { level: 'Clinic', description: 'Primary care nurse/clinician — screening, medication initiation, brief counselling' },
+        { level: 'District', description: 'District hospital — clinical psychologist, complex medication management' },
+        { level: 'Specialist', description: 'Psychiatrist — inpatient, treatment-resistant, forensic cases' },
+      ],
+      emergency_contacts: ['National mental health helpline', 'Emergency services (locally configured)'],
+      guideline: 'WHO mhGAP-IG 2.0 / national mental health policy',
+    };
   }
 
   async getMedications(tenantSubdomain: string, patientId: string, activeOnly = false) {
@@ -262,5 +334,17 @@ export class MentalHealthService {
       recommendation: flags.length ? 'Review monitoring requirements above' : 'No specific psychotropic monitoring alerts',
       guideline: 'NICE Medicines Optimisation Guidance; Maudsley Prescribing Guidelines 14th Ed',
     };
+  }
+
+  private toTextArray(value: unknown): string[] | null {
+    if (Array.isArray(value)) {
+      const items = value.map((item) => String(item || '').trim()).filter(Boolean);
+      return items.length ? items : null;
+    }
+    if (typeof value === 'string') {
+      const items = value.split(',').map((item) => item.trim()).filter(Boolean);
+      return items.length ? items : null;
+    }
+    return null;
   }
 }

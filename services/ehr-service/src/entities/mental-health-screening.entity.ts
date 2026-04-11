@@ -32,6 +32,12 @@ export class MentalHealthScreening {
   @Column({ name: 'action_taken', type: 'text', nullable: true })
   actionTaken: string | null;
 
+  @Column({ name: 'language_code', default: 'en' })
+  languageCode: string;
+
+  @Column({ name: 'referred', default: false })
+  referred: boolean;
+
   @Column({ name: 'follow_up_date', type: 'date', nullable: true })
   followUpDate: string | null;
 

@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "sw",
+  "language_name": "Swahili",
+  "title": "Kipimo cha Wasiwasi wa Jumla - 7",
+  "instructions": "Katika wiki 2 zilizopita, ni mara ngapi umesumbuliwa na matatizo yafuatayo?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Kamwe"
+    },
+    {
+      "value": 1,
+      "label": "Siku kadhaa"
+    },
+    {
+      "value": 2,
+      "label": "Zaidi ya nusu ya siku"
+    },
+    {
+      "value": 3,
+      "label": "Karibu kila siku"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Kuhisi woga, wasiwasi, au kukosa utulivu"
+    },
+    {
+      "id": 2,
+      "text": "Kushindwa kuacha au kudhibiti wasiwasi"
+    },
+    {
+      "id": 3,
+      "text": "Kuwa na wasiwasi sana kuhusu mambo mengi"
+    },
+    {
+      "id": 4,
+      "text": "Kupata shida kupumzika"
+    },
+    {
+      "id": 5,
+      "text": "Kutotulia kiasi kwamba ni vigumu kukaa kimya"
+    },
+    {
+      "id": 6,
+      "text": "Kukasirika au kuudhika kirahisi"
+    },
+    {
+      "id": 7,
+      "text": "Kuhisi hofu kana kwamba jambo baya litatokea"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "tool_id": "PHQ9",
+  "language_code": "pt",
+  "language_name": "Portuguese",
+  "title": "Questionário de Saúde do Paciente - 9",
+  "instructions": "Nas últimas 2 semanas, com que frequência você foi incomodado pelos seguintes problemas?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Nenhuma vez"
+    },
+    {
+      "value": 1,
+      "label": "Vários dias"
+    },
+    {
+      "value": 2,
+      "label": "Mais da metade dos dias"
+    },
+    {
+      "value": 3,
+      "label": "Quase todos os dias"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Pouco interesse ou prazer em fazer as coisas"
+    },
+    {
+      "id": 2,
+      "text": "Sentir-se triste, deprimido ou sem esperança"
+    },
+    {
+      "id": 3,
+      "text": "Dificuldade para adormecer, permanecer dormindo ou dormir demais"
+    },
+    {
+      "id": 4,
+      "text": "Sentir-se cansado ou com pouca energia"
+    },
+    {
+      "id": 5,
+      "text": "Pouco apetite ou comer demais"
+    },
+    {
+      "id": 6,
+      "text": "Sentir-se mal consigo mesmo ou achar que decepcionou você ou sua família"
+    },
+    {
+      "id": 7,
+      "text": "Dificuldade para se concentrar em coisas como ler ou assistir televisão"
+    },
+    {
+      "id": 8,
+      "text": "Mover-se ou falar tão devagar que outras pessoas perceberam, ou o contrário, ficar tão inquieto que se move mais do que o normal"
+    },
+    {
+      "id": 9,
+      "text": "Pensamentos de que seria melhor estar morto ou de se machucar"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 27
+  }
+}

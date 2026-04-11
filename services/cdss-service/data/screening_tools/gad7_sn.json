@@ -1,0 +1,59 @@
+{
+  "tool_id": "GAD7",
+  "language_code": "sn",
+  "language_name": "Shona",
+  "title": "Chiyero cheKushushikana Kwakawanda - 7",
+  "instructions": "Mumavhiki maviri apfuura, makambonetseka kangani nezvinhu zvinotevera?",
+  "response_options": [
+    {
+      "value": 0,
+      "label": "Kwete zvachose"
+    },
+    {
+      "value": 1,
+      "label": "Mamwe mazuva"
+    },
+    {
+      "value": 2,
+      "label": "Anopfuura hafu yemazuva"
+    },
+    {
+      "value": 3,
+      "label": "Anenge mazuva ose"
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "text": "Kunzwa kuvhunduka, kushushikana, kana kusagadzikana"
+    },
+    {
+      "id": 2,
+      "text": "Kutadza kumisa kana kudzora kushushikana"
+    },
+    {
+      "id": 3,
+      "text": "Kushushikana zvakanyanya nezvinhu zvakasiyana"
+    },
+    {
+      "id": 4,
+      "text": "Kunetseka kuzorora"
+    },
+    {
+      "id": 5,
+      "text": "Kusagadzikana zvekuti zvakaoma kugara wakanyarara"
+    },
+    {
+      "id": 6,
+      "text": "Kushatirwa kana kutsamwa nyore"
+    },
+    {
+      "id": 7,
+      "text": "Kunzwa kutya sekunge chinhu chakaipa chiri kuitika"
+    }
+  ],
+  "scoring": {
+    "min": 0,
+    "max": 21
+  }
+}
