@@ -1,0 +1,106 @@
+{
+  "AL": [
+    {
+      "min_kg": 5,
+      "max_kg": 14,
+      "tablets_per_dose": 1,
+      "dose_mg": 20,
+      "label": "1 tablet (20 mg artemether / 120 mg lumefantrine) twice daily for 3 days"
+    },
+    {
+      "min_kg": 15,
+      "max_kg": 24,
+      "tablets_per_dose": 2,
+      "dose_mg": 40,
+      "label": "2 tablets (40 mg artemether / 240 mg lumefantrine) twice daily for 3 days"
+    },
+    {
+      "min_kg": 25,
+      "max_kg": 34,
+      "tablets_per_dose": 3,
+      "dose_mg": 60,
+      "label": "3 tablets (60 mg artemether / 360 mg lumefantrine) twice daily for 3 days"
+    },
+    {
+      "min_kg": 35,
+      "max_kg": 200,
+      "tablets_per_dose": 4,
+      "dose_mg": 80,
+      "label": "4 tablets (80 mg artemether / 480 mg lumefantrine) twice daily for 3 days"
+    }
+  ],
+  "ASAQ": [
+    {
+      "min_kg": 4.5,
+      "max_kg": 8,
+      "tablets_per_dose": 0.5,
+      "dose_mg": 25,
+      "label": "½ tablet (25 mg artesunate / 67.5 mg amodiaquine) once daily for 3 days"
+    },
+    {
+      "min_kg": 9,
+      "max_kg": 17,
+      "tablets_per_dose": 1,
+      "dose_mg": 50,
+      "label": "1 tablet (50 mg artesunate / 135 mg amodiaquine) once daily for 3 days"
+    },
+    {
+      "min_kg": 18,
+      "max_kg": 35,
+      "tablets_per_dose": 2,
+      "dose_mg": 100,
+      "label": "2 tablets (100 mg artesunate / 270 mg amodiaquine) once daily for 3 days"
+    },
+    {
+      "min_kg": 36,
+      "max_kg": 200,
+      "tablets_per_dose": 4,
+      "dose_mg": 200,
+      "label": "4 tablets (200 mg artesunate / 540 mg amodiaquine) once daily for 3 days"
+    }
+  ],
+  "DHAPPQ": [
+    {
+      "min_kg": 5,
+      "max_kg": 7,
+      "tablets_per_dose": 0.5,
+      "dose_mg": 20,
+      "label": "½ paediatric tablet (20 mg DHA / 160 mg piperaquine) once daily for 3 days"
+    },
+    {
+      "min_kg": 8,
+      "max_kg": 12,
+      "tablets_per_dose": 1,
+      "dose_mg": 40,
+      "label": "1 paediatric tablet (40 mg DHA / 320 mg piperaquine) once daily for 3 days"
+    },
+    {
+      "min_kg": 13,
+      "max_kg": 23,
+      "tablets_per_dose": 1,
+      "dose_mg": 40,
+      "label": "1 adult tablet (40 mg DHA / 320 mg piperaquine) once daily for 3 days"
+    },
+    {
+      "min_kg": 24,
+      "max_kg": 35,
+      "tablets_per_dose": 2,
+      "dose_mg": 80,
+      "label": "2 adult tablets (80 mg DHA / 640 mg piperaquine) once daily for 3 days"
+    },
+    {
+      "min_kg": 36,
+      "max_kg": 74,
+      "tablets_per_dose": 3,
+      "dose_mg": 120,
+      "label": "3 adult tablets (120 mg DHA / 960 mg piperaquine) once daily for 3 days"
+    },
+    {
+      "min_kg": 75,
+      "max_kg": 200,
+      "tablets_per_dose": 4,
+      "dose_mg": 160,
+      "label": "4 adult tablets (160 mg DHA / 1280 mg piperaquine) once daily for 3 days"
+    }
+  ]
+}
