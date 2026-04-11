@@ -42,6 +42,7 @@ import { DatimMerController } from './controllers/datim-mer.controller';
 import { OpenmrsFhirController } from './controllers/openmrs-fhir.controller';
 import { MflController } from './controllers/mfl.controller';
 import { CrvsController } from './controllers/crvs.controller';
+import { MalariaEpisodeController } from './controllers/malaria-episode.controller';
 import { IcuController } from './controllers/icu.controller';
 import { SdohController } from './controllers/sdoh.controller';
 import { NtdController } from './controllers/ntd.controller';
@@ -211,6 +212,7 @@ import { DatimMerService } from './services/datim-mer.service';
 import { OpenmrsFhirService } from './services/openmrs-fhir.service';
 import { MflService } from './services/mfl.service';
 import { CrvsService } from './services/crvs.service';
+import { MalariaEpisodeService } from './services/malaria-episode.service';
 import { IcuService } from './services/icu.service';
 import { SdohService } from './services/sdoh.service';
 import { NtdService } from './services/ntd.service';
@@ -462,6 +464,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OpenmrsFhirController,
     MflController,
     CrvsController,
+    MalariaEpisodeController,
     IcuController,
     SdohController,
     NtdController,
@@ -684,6 +687,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OpenmrsFhirService,
     MflService,
     CrvsService,
+    MalariaEpisodeService,
     IcuService,
     SdohService,
     NtdService,

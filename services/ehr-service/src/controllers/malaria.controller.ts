@@ -1,12 +1,14 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Headers, UseGuards } from '@nestjs/common';
 import { MalariaService } from '../services/malaria.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('malaria')
 export class MalariaController {
   constructor(private readonly malariaService: MalariaService) {}
 
   private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
+    return h['x-tenant-id'] || h['x-tenant-subdomain'] || 'default';
   }
 
   // ── Cases ──────────────────────────────────────────────────────────────────

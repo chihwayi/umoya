@@ -295,6 +295,9 @@ import { NotificationTemplate } from '../entities/notification-template.entity';
 import { BirthNotification } from '../entities/birth-notification.entity';
 import { DeathCertificate } from '../entities/death-certificate.entity';
 import { MdsrNotification } from '../entities/mdsr-notification.entity';
+import { NtdAssessment } from '../entities/ntd-assessment.entity';
+import { MdaCampaign } from '../entities/mda-campaign.entity';
+import { MalariaEpisode } from '../entities/malaria-episode.entity';
 import { OpenmrsPatientLink } from '../entities/openmrs-patient-link.entity';
 import { MflFacility } from '../entities/mfl-facility.entity';
 import { OpenmrsSyncLog } from '../entities/openmrs-sync-log.entity';
@@ -768,6 +771,9 @@ export class TenantService {
         BirthNotification,
         DeathCertificate,
         MdsrNotification,
+        NtdAssessment,
+        MdaCampaign,
+        MalariaEpisode,
         OpenmrsPatientLink,
         MflFacility,
         OpenmrsSyncLog,

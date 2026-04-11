@@ -11,6 +11,7 @@ type RetriableAxiosConfig = {
 
 const TENANT_API_URL = runtimeUrls.tenantApi;
 const EHR_API_URL = runtimeUrls.ehrApi;
+const CDSS_API_URL = runtimeUrls.cdssApi || runtimeUrls.ehrApi;
 
 if (!TENANT_API_URL || !EHR_API_URL) {
   console.warn('One or more API URLs are missing in environment variables. Configure REACT_APP_API_BASE_URL or explicit API URLs.');
@@ -91,6 +92,7 @@ const createAxiosInstance = (baseURL: string) => {
 // Create instances
 export const tenantAxios = createAxiosInstance(TENANT_API_URL);
 export const ehrAxios = createAxiosInstance(EHR_API_URL);
+export const cdssAxios = createAxiosInstance(CDSS_API_URL);
 
 export const tenantApi = {
   getActiveTenants: async () => {
@@ -10449,7 +10451,7 @@ export const cdssApi = {
   registerMalariaCase: async (tenantSubdomain: string, dto: Record<string, any>) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.post('/malaria', dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10458,7 +10460,7 @@ export const cdssApi = {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.get('/malaria', {
       params: { patientId },
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10466,7 +10468,7 @@ export const cdssApi = {
   updateMalariaCase: async (id: string, tenantSubdomain: string, dto: Record<string, any>) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.patch(`/malaria/${id}`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10474,7 +10476,7 @@ export const cdssApi = {
   addMalariaTest: async (caseId: string, tenantSubdomain: string, dto: Record<string, any>) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.post(`/malaria/${caseId}/tests`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10482,7 +10484,7 @@ export const cdssApi = {
   getMalariaTests: async (caseId: string, tenantSubdomain: string) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.get(`/malaria/${caseId}/tests`, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10490,7 +10492,7 @@ export const cdssApi = {
   startMalariaTreatment: async (caseId: string, tenantSubdomain: string, dto: Record<string, any>) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.post(`/malaria/${caseId}/treatments`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10498,7 +10500,7 @@ export const cdssApi = {
   getMalariaTreatments: async (caseId: string, tenantSubdomain: string) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.get(`/malaria/${caseId}/treatments`, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10506,7 +10508,7 @@ export const cdssApi = {
   addMalariaContact: async (caseId: string, tenantSubdomain: string, dto: Record<string, any>) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.post(`/malaria/${caseId}/contacts`, dto, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10514,7 +10516,39 @@ export const cdssApi = {
   getMalariaContacts: async (caseId: string, tenantSubdomain: string) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.get(`/malaria/${caseId}/contacts`, {
-      headers: { 'x-tenant-subdomain': tenantSubdomain, Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  recordMalariaEpisode: async (tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post('/malaria/episodes', dto, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getMalariaEpisodes: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/malaria/episodes/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  recordMalariaIptp: async (tenantSubdomain: string, dto: Record<string, any>) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.post('/malaria/iptp/record', dto, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getMalariaIptpHistory: async (patientId: string, tenantSubdomain: string) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await ehrAxios.get(`/malaria/iptp/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -10530,6 +10564,30 @@ export const cdssApi = {
   scoreMalariaSeverity: async (data: Record<string, any>) => {
     const token = localStorage.getItem('token') || '';
     const res = await ehrAxios.post('/malaria/cdss/severity', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getActDose: async (data: { weight_kg: number; species?: string; regimen?: string }) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await cdssAxios.post('/malaria/act-dose', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  checkG6pd: async (data: { species: string; intend_primaquine: boolean; g6pd_tested: boolean; g6pd_result?: string }) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await cdssAxios.post('/malaria/g6pd-check', data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  },
+
+  getIptpDue: async (data: { gestational_age_weeks: number; prior_dose_count: number; last_dose_date?: string }) => {
+    const token = localStorage.getItem('token') || '';
+    const res = await cdssAxios.post('/malaria/iptp-due', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;

@@ -1,16 +1,16 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Headers, Query, Request, UseGuards } from '@nestjs/common';
 import { NtdService } from '../services/ntd.service';
 import { NtdConditionMapper } from '../fhir/mappers/ntd-condition.mapper';
-import { NtdCase } from '../entities/ntd-case.entity';
-import { CholeraCase } from '../entities/cholera-case.entity';
-import { TyphoidCase } from '../entities/typhoid-case.entity';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
+@UseGuards(JwtAuthGuard)
 @Controller('ntd')
 export class NtdController {
   constructor(private readonly svc: NtdService) {}
 
   private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
+    return h['x-tenant-id'] || h['x-tenant-subdomain'] || 'default';
   }
 
   // ── NTD Cases ──────────────────────────────────────────────────────────────
@@ -62,6 +62,33 @@ export class NtdController {
   @Patch('typhoid/:id')
   updateTyphoidCase(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
     return this.svc.updateTyphoidCase(this.tenant(h), id, dto);
+  }
+
+  @Post('assess')
+  recordAssessment(@Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = req.user?.sub || req.user?.id || '';
+    return this.svc.recordAssessment(req.tenantId!, userId, body);
+  }
+
+  @Get('assessments/:patientId')
+  getPatientAssessments(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.svc.getPatientAssessments(req.tenantId!, patientId);
+  }
+
+  @Post('mda/campaigns')
+  createCampaign(@Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = req.user?.sub || req.user?.id || '';
+    return this.svc.createCampaign(req.tenantId!, userId, body);
+  }
+
+  @Get('mda/campaigns')
+  listCampaigns(@Request() req: RequestWithTenant) {
+    return this.svc.listCampaigns(req.tenantId!);
+  }
+
+  @Patch('mda/campaigns/:id/record')
+  recordTreatedCount(@Param('id') id: string, @Body() body: { count: number }, @Request() req: RequestWithTenant) {
+    return this.svc.recordTreatedCount(req.tenantId!, id, Number(body?.count) || 0);
   }
 
   // ── Regional Disease Reports ───────────────────────────────────────────────

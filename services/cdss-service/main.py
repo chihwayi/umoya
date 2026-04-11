@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
 import time
 import asyncio
@@ -5444,6 +5444,22 @@ class MalariaSeverityRequest(BaseModel):
     age_years: Optional[float] = None
     species: Optional[str] = None
 
+class ActDoseRequest(BaseModel):
+    weight_kg: float
+    species: str = "falciparum"
+    regimen: str = "AL"
+
+class G6pdCheckRequest(BaseModel):
+    species: str
+    intend_primaquine: bool
+    g6pd_tested: bool
+    g6pd_result: Optional[str] = None
+
+class IptpDueRequest(BaseModel):
+    gestational_age_weeks: int
+    prior_dose_count: int
+    last_dose_date: Optional[str] = None
+
 @app.post("/malaria/treatment")
 async def malaria_treatment_recommendation(req: MalariaTreatmentRequest):
     regimen = None
@@ -5617,6 +5633,115 @@ async def malaria_severity_score(req: MalariaSeverityRequest):
         "recommendations": recommendations,
         "inpatient_required": is_severe,
         "icu_consider": score >= 6,
+    }
+
+
+@app.post("/malaria/act-dose")
+async def malaria_act_dose(req: ActDoseRequest):
+    data_path = pathlib.Path(__file__).resolve().parent / "data" / "act_dosing.json"
+    regimen = (req.regimen or "AL").upper()
+    with data_path.open("r", encoding="utf-8") as handle:
+        dosing = json.load(handle)
+
+    regimen_bands = dosing.get(regimen, [])
+    if req.weight_kg < 5:
+        return {
+            "regimen": regimen,
+            "weight_kg": req.weight_kg,
+            "tablets_per_dose": None,
+            "dose_mg": None,
+            "label": None,
+            "warning": "Weight below 5 kg — consult paediatrician",
+        }
+
+    for band in regimen_bands:
+        if band["min_kg"] <= req.weight_kg <= band["max_kg"]:
+            return {
+                "regimen": regimen,
+                "weight_kg": req.weight_kg,
+                "tablets_per_dose": band["tablets_per_dose"],
+                "dose_mg": band["dose_mg"],
+                "label": band["label"],
+                "warning": None,
+            }
+
+    raise HTTPException(status_code=400, detail="No dosing band found for supplied weight/regimen")
+
+
+@app.post("/malaria/g6pd-check")
+async def malaria_g6pd_check(req: G6pdCheckRequest):
+    result = (req.g6pd_result or "").strip().lower()
+
+    if req.intend_primaquine and not req.g6pd_tested:
+        return {
+            "safe_to_give": False,
+            "warning": "G6PD status unknown — test before prescribing primaquine",
+            "recommendation": "Do not give primaquine until G6PD status is confirmed.",
+        }
+
+    if result == "deficient":
+        return {
+            "safe_to_give": False,
+            "warning": "G6PD deficiency — avoid standard primaquine; use weekly low-dose protocol (supervised)",
+            "recommendation": "Avoid standard primaquine and seek supervised alternative radical cure planning.",
+        }
+
+    if result == "intermediate":
+        return {
+            "safe_to_give": False,
+            "warning": "Intermediate G6PD — seek specialist guidance before primaquine",
+            "recommendation": "Discuss risks with a specialist before prescribing primaquine.",
+        }
+
+    return {
+        "safe_to_give": True,
+        "warning": None,
+        "recommendation": "Primaquine can be given if clinically indicated and no other contraindications exist.",
+    }
+
+
+@app.post("/malaria/iptp-due")
+async def malaria_iptp_due(req: IptpDueRequest):
+    if req.gestational_age_weeks < 13:
+        return {
+            "next_dose_number": req.prior_dose_count + 1,
+            "due_now": False,
+            "next_due_date": None,
+            "message": "IPTp is not yet due before 13 weeks gestation.",
+        }
+
+    if req.prior_dose_count >= 3:
+        return {
+            "next_dose_number": req.prior_dose_count,
+            "due_now": False,
+            "next_due_date": None,
+            "message": "Three IPTp doses already recorded. Continue ANC monitoring per local guideline.",
+        }
+
+    if not req.last_dose_date:
+        return {
+            "next_dose_number": req.prior_dose_count + 1,
+            "due_now": True,
+            "next_due_date": datetime.utcnow().date().isoformat(),
+            "message": f"IPTp dose {req.prior_dose_count + 1} is due now.",
+        }
+
+    try:
+        last_dose = datetime.fromisoformat(req.last_dose_date).date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid last_dose_date; expected ISO date") from exc
+
+    next_due = last_dose + timedelta(weeks=4)
+    due_now = datetime.utcnow().date() >= next_due
+    return {
+        "next_dose_number": req.prior_dose_count + 1,
+        "due_now": due_now,
+        "next_due_date": next_due.isoformat(),
+        "message": (
+            f"IPTp dose {req.prior_dose_count + 1} is due now."
+            if due_now
+            else f"IPTp dose {req.prior_dose_count + 1} is next due on {next_due.isoformat()}."
+        ),
     }
 
 

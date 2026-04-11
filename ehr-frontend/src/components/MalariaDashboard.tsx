@@ -25,18 +25,44 @@ const RESULT_COLOURS: Record<string, string> = {
 };
 
 export default function MalariaDashboard({ patientId, providerId, tenantSubdomain }: Props) {
-  const [tab, setTab] = useState<'overview' | 'tests' | 'treatment' | 'contacts'>('overview');
+  const [tab, setTab] = useState<'overview' | 'episodes' | 'tests' | 'treatment' | 'contacts'>('overview');
   const [cases, setCases] = useState<any[]>([]);
   const [activeCase, setActiveCase] = useState<any | null>(null);
   const [tests, setTests] = useState<any[]>([]);
   const [treatments, setTreatments] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
+  const [episodes, setEpisodes] = useState<any[]>([]);
+  const [iptpHistory, setIptpHistory] = useState<any[]>([]);
   const [severityResult, setSeverityResult] = useState<any | null>(null);
   const [treatmentRec, setTreatmentRec] = useState<any | null>(null);
+  const [actDoseResult, setActDoseResult] = useState<any | null>(null);
+  const [g6pdCheckResult, setG6pdCheckResult] = useState<any | null>(null);
+  const [iptpGuidance, setIptpGuidance] = useState<any | null>(null);
 
   // Forms
   const [showCaseForm, setShowCaseForm] = useState(false);
   const [caseDto, setCaseDto] = useState<any>({ caseType: 'uncomplicated', species: 'falciparum' });
+  const [showEpisodeForm, setShowEpisodeForm] = useState(false);
+  const [episodeDto, setEpisodeDto] = useState<any>({
+    episodeDate: new Date().toISOString().slice(0, 10),
+    rdtResult: 'positive_pf',
+    speciesConfirmed: 'falciparum',
+    severityCriteria: [],
+    severityGrade: '',
+    g6pdTested: false,
+    g6pdResult: '',
+    primaquineGiven: false,
+    treatmentRegimen: 'AL',
+    weightKg: '',
+    actDoseMg: '',
+    iptpDoseNumber: '',
+    iptpSpGiven: false,
+    gestationalAgeWeeks: '',
+    lastIptpDoseDate: '',
+    admitted: false,
+    outcome: '',
+    notes: '',
+  });
   const [showTestForm, setShowTestForm] = useState(false);
   const [testDto, setTestDto] = useState<any>({ testType: 'RDT', result: 'positive', gametocytes: false });
   const [showTxForm, setShowTxForm] = useState(false);
@@ -45,6 +71,16 @@ export default function MalariaDashboard({ patientId, providerId, tenantSubdomai
   const [contactDto, setContactDto] = useState<any>({ contactName: '', rdtResult: 'pending', treated: false, itnProvided: false });
   const [sevDto, setSevDto] = useState<any>({});
   const [recDto, setRecDto] = useState<any>({ species: 'falciparum', case_type: 'uncomplicated', pregnant: false });
+
+  const severityChecklist = [
+    { key: 'impaired_consciousness', label: 'Impaired consciousness (GCS < 11)' },
+    { key: 'prostration', label: 'Prostration / extreme weakness' },
+    { key: 'multiple_convulsions', label: 'Multiple convulsions (>2 in 24h)' },
+    { key: 'respiratory_distress', label: 'Respiratory distress' },
+    { key: 'abnormal_bleeding', label: 'Abnormal bleeding' },
+    { key: 'jaundice', label: 'Jaundice' },
+    { key: 'haemoglobinuria', label: 'Haemoglobinuria' },
+  ] as const;
 
   const loadCases = useCallback(async () => {
     const data = await cdssApi.listMalariaCases(patientId, tenantSubdomain);
@@ -63,8 +99,103 @@ export default function MalariaDashboard({ patientId, providerId, tenantSubdomai
     setContacts(c);
   }, [tenantSubdomain]);
 
+  const loadEpisodeData = useCallback(async () => {
+    const [episodeRows, iptpRows] = await Promise.all([
+      cdssApi.getMalariaEpisodes(patientId, tenantSubdomain),
+      cdssApi.getMalariaIptpHistory(patientId, tenantSubdomain),
+    ]);
+    setEpisodes(Array.isArray(episodeRows) ? episodeRows : []);
+    setIptpHistory(Array.isArray(iptpRows) ? iptpRows : []);
+  }, [patientId, tenantSubdomain]);
+
   useEffect(() => { loadCases(); }, [loadCases]);
   useEffect(() => { if (activeCase) loadCaseDetails(activeCase.id); }, [activeCase, loadCaseDetails]);
+  useEffect(() => { loadEpisodeData(); }, [loadEpisodeData]);
+
+  useEffect(() => {
+    const weight = Number(episodeDto.weightKg);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      setActDoseResult(null);
+      return;
+    }
+
+    let cancelled = false;
+    cdssApi
+      .getActDose({ weight_kg: weight, species: episodeDto.speciesConfirmed || 'falciparum' })
+      .then((result) => {
+        if (cancelled) return;
+        setActDoseResult(result);
+        setEpisodeDto((current: any) => ({
+          ...current,
+          actDoseMg: result?.dose_mg ?? current.actDoseMg,
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) setActDoseResult(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [episodeDto.weightKg, episodeDto.speciesConfirmed]);
+
+  useEffect(() => {
+    if (!episodeDto.primaquineGiven) {
+      setG6pdCheckResult(null);
+      return;
+    }
+
+    let cancelled = false;
+    cdssApi
+      .checkG6pd({
+        species: episodeDto.speciesConfirmed || 'falciparum',
+        intend_primaquine: true,
+        g6pd_tested: episodeDto.g6pdTested === true,
+        g6pd_result: episodeDto.g6pdResult || undefined,
+      })
+      .then((result) => {
+        if (!cancelled) setG6pdCheckResult(result);
+      })
+      .catch(() => {
+        if (!cancelled) setG6pdCheckResult(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [episodeDto.primaquineGiven, episodeDto.g6pdTested, episodeDto.g6pdResult, episodeDto.speciesConfirmed]);
+
+  useEffect(() => {
+    if (!episodeDto.iptpSpGiven) {
+      setIptpGuidance(null);
+      return;
+    }
+
+    const gestationalAgeWeeks = Number(episodeDto.gestationalAgeWeeks);
+    const priorDoseCount = Math.max(Number(episodeDto.iptpDoseNumber || 0) - 1, 0);
+    if (!Number.isFinite(gestationalAgeWeeks) || gestationalAgeWeeks <= 0) {
+      setIptpGuidance(null);
+      return;
+    }
+
+    let cancelled = false;
+    cdssApi
+      .getIptpDue({
+        gestational_age_weeks: gestationalAgeWeeks,
+        prior_dose_count: priorDoseCount,
+        last_dose_date: episodeDto.lastIptpDoseDate || undefined,
+      })
+      .then((result) => {
+        if (!cancelled) setIptpGuidance(result);
+      })
+      .catch(() => {
+        if (!cancelled) setIptpGuidance(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [episodeDto.iptpSpGiven, episodeDto.gestationalAgeWeeks, episodeDto.iptpDoseNumber, episodeDto.lastIptpDoseDate]);
 
   async function submitCase() {
     const c = await cdssApi.registerMalariaCase(tenantSubdomain, { ...caseDto, patientId, registeredBy: providerId });
@@ -103,6 +234,78 @@ export default function MalariaDashboard({ patientId, providerId, tenantSubdomai
   async function runTreatmentRec() {
     const result = await cdssApi.recommendMalariaTreatment(recDto);
     setTreatmentRec(result);
+  }
+
+  async function runEpisodeSeverityScore() {
+    const payload = episodeDto.severityCriteria.reduce(
+      (acc: Record<string, boolean>, key: string) => ({ ...acc, [key]: true }),
+      {},
+    );
+    const result = await cdssApi.scoreMalariaSeverity(payload);
+    setSeverityResult(result);
+    setEpisodeDto((current: any) => ({
+      ...current,
+      severityGrade: result?.severity_class || current.severityGrade,
+    }));
+  }
+
+  async function submitEpisode() {
+    await cdssApi.recordMalariaEpisode(tenantSubdomain, {
+      patientId,
+      episodeDate: episodeDto.episodeDate,
+      rdtResult: episodeDto.rdtResult,
+      speciesConfirmed: episodeDto.speciesConfirmed || null,
+      parasiteDensity: episodeDto.parasiteDensity || null,
+      severityCriteria: episodeDto.severityCriteria,
+      severityGrade: episodeDto.severityGrade || severityResult?.severity_class || null,
+      g6pdTested: episodeDto.g6pdTested,
+      g6pdResult: episodeDto.g6pdResult || null,
+      primaquineGiven: episodeDto.primaquineGiven,
+      treatmentRegimen: episodeDto.treatmentRegimen || null,
+      weightKg: episodeDto.weightKg || null,
+      actDoseMg: episodeDto.actDoseMg || actDoseResult?.dose_mg || null,
+      iptpDoseNumber: episodeDto.iptpSpGiven ? (episodeDto.iptpDoseNumber || null) : null,
+      iptpSpGiven: episodeDto.iptpSpGiven,
+      admitted: episodeDto.admitted,
+      outcome: episodeDto.outcome || null,
+      notes: episodeDto.notes || null,
+    });
+
+    if (episodeDto.iptpSpGiven) {
+      await cdssApi.recordMalariaIptp(tenantSubdomain, {
+        patientId,
+        episodeDate: episodeDto.episodeDate,
+        weightKg: episodeDto.weightKg || null,
+        iptpDoseNumber: episodeDto.iptpDoseNumber || null,
+        notes: episodeDto.notes || null,
+      });
+    }
+
+    setShowEpisodeForm(false);
+    setEpisodeDto({
+      episodeDate: new Date().toISOString().slice(0, 10),
+      rdtResult: 'positive_pf',
+      speciesConfirmed: 'falciparum',
+      severityCriteria: [],
+      severityGrade: '',
+      g6pdTested: false,
+      g6pdResult: '',
+      primaquineGiven: false,
+      treatmentRegimen: 'AL',
+      weightKg: '',
+      actDoseMg: '',
+      iptpDoseNumber: '',
+      iptpSpGiven: false,
+      gestationalAgeWeeks: '',
+      lastIptpDoseDate: '',
+      admitted: false,
+      outcome: '',
+      notes: '',
+    });
+    setActDoseResult(null);
+    setG6pdCheckResult(null);
+    setIptpGuidance(null);
+    await loadEpisodeData();
   }
 
   return (
@@ -223,6 +426,7 @@ export default function MalariaDashboard({ patientId, providerId, tenantSubdomai
           <div className="flex gap-2 flex-wrap">
             {([
               ['overview',   'CDSS Tools',  Activity],
+              ['episodes',   'Episodes',     AlertTriangle],
               ['tests',      'Tests',        FlaskConical],
               ['treatment',  'Treatment',    Pill],
               ['contacts',   'Contacts',     Users],
@@ -359,6 +563,215 @@ export default function MalariaDashboard({ patientId, providerId, tenantSubdomai
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {tab === 'episodes' && (
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <p className="text-sm font-semibold">Structured Episodes ({episodes.length})</p>
+                <button onClick={() => setShowEpisodeForm(v => !v)} className="flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-700">
+                  <Plus className="h-4 w-4" /> Add Episode
+                </button>
+              </div>
+
+              {showEpisodeForm && (
+                <div className="bg-white border rounded-lg p-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500">Episode Date</label>
+                      <input type="date" value={episodeDto.episodeDate} onChange={e => setEpisodeDto((p: any) => ({ ...p, episodeDate: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">RDT Result</label>
+                      <select value={episodeDto.rdtResult} onChange={e => setEpisodeDto((p: any) => ({ ...p, rdtResult: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1">
+                        {['positive_pf', 'positive_pv', 'positive_mixed', 'negative'].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Species</label>
+                      <select value={episodeDto.speciesConfirmed} onChange={e => setEpisodeDto((p: any) => ({ ...p, speciesConfirmed: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1">
+                        {['falciparum', 'vivax', 'malariae', 'ovale', 'mixed', 'unknown'].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Parasite Density</label>
+                      <input type="number" value={episodeDto.parasiteDensity || ''} onChange={e => setEpisodeDto((p: any) => ({ ...p, parasiteDensity: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Weight (kg)</label>
+                      <input type="number" value={episodeDto.weightKg} onChange={e => setEpisodeDto((p: any) => ({ ...p, weightKg: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Treatment Regimen</label>
+                      <input value={episodeDto.treatmentRegimen} onChange={e => setEpisodeDto((p: any) => ({ ...p, treatmentRegimen: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-gray-600">WHO Severity Criteria</p>
+                    <div className="grid md:grid-cols-2 gap-2">
+                      {severityChecklist.map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={episodeDto.severityCriteria.includes(key)}
+                            onChange={e =>
+                              setEpisodeDto((p: any) => ({
+                                ...p,
+                                severityCriteria: e.target.checked
+                                  ? [...p.severityCriteria, key]
+                                  : p.severityCriteria.filter((item: string) => item !== key),
+                              }))
+                            }
+                            className="accent-red-600"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <button onClick={runEpisodeSeverityScore} className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-700">Run Severity Check</button>
+                    {severityResult && (
+                      <div className={`rounded-lg p-3 ${severityResult.severity_class === 'severe' ? 'bg-red-50 border border-red-300' : 'bg-green-50 border border-green-300'}`}>
+                        <p className={`font-bold text-sm ${severityResult.severity_class === 'severe' ? 'text-red-800' : 'text-green-800'}`}>
+                          {severityResult.severity_class?.toUpperCase()} — Score {severityResult.severity_score}
+                        </p>
+                        {severityResult.criteria_met?.map((criterion: string, index: number) => (
+                          <p key={index} className="text-xs text-gray-700 mt-0.5">• {criterion}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {actDoseResult && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                      <p className="text-sm font-semibold text-orange-900">ACT Dose Recommendation</p>
+                      <p className="text-xs text-orange-700 mt-1">{actDoseResult.label || 'No standard dose available'}</p>
+                      {actDoseResult.warning && <p className="text-xs text-red-700 mt-1">⚠ {actDoseResult.warning}</p>}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={episodeDto.g6pdTested} onChange={e => setEpisodeDto((p: any) => ({ ...p, g6pdTested: e.target.checked }))} />
+                      G6PD tested
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={episodeDto.primaquineGiven} onChange={e => setEpisodeDto((p: any) => ({ ...p, primaquineGiven: e.target.checked }))} />
+                      Primaquine intended/given
+                    </label>
+                  </div>
+
+                  {episodeDto.g6pdTested && (
+                    <div>
+                      <label className="text-xs text-gray-500">G6PD Result</label>
+                      <select value={episodeDto.g6pdResult} onChange={e => setEpisodeDto((p: any) => ({ ...p, g6pdResult: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1">
+                        <option value="">Select…</option>
+                        <option value="normal">normal</option>
+                        <option value="deficient">deficient</option>
+                        <option value="intermediate">intermediate</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {g6pdCheckResult && !g6pdCheckResult.safe_to_give && (
+                    <div className="bg-red-50 border border-red-300 rounded-lg p-3">
+                      <p className="text-sm font-semibold text-red-800">G6PD Warning</p>
+                      <p className="text-xs text-red-700 mt-1">{g6pdCheckResult.warning}</p>
+                      <p className="text-xs text-red-700 mt-1">{g6pdCheckResult.recommendation}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={episodeDto.iptpSpGiven} onChange={e => setEpisodeDto((p: any) => ({ ...p, iptpSpGiven: e.target.checked }))} />
+                      IPTp SP given
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={episodeDto.admitted} onChange={e => setEpisodeDto((p: any) => ({ ...p, admitted: e.target.checked }))} />
+                      Admitted
+                    </label>
+                  </div>
+
+                  {episodeDto.iptpSpGiven && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-500">IPTp Dose Number</label>
+                        <input type="number" value={episodeDto.iptpDoseNumber} onChange={e => setEpisodeDto((p: any) => ({ ...p, iptpDoseNumber: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Gestational Age (weeks)</label>
+                        <input type="number" value={episodeDto.gestationalAgeWeeks} onChange={e => setEpisodeDto((p: any) => ({ ...p, gestationalAgeWeeks: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-xs text-gray-500">Last IPTp Dose Date</label>
+                        <input type="date" value={episodeDto.lastIptpDoseDate} onChange={e => setEpisodeDto((p: any) => ({ ...p, lastIptpDoseDate: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" />
+                      </div>
+                      {iptpGuidance && (
+                        <div className={`col-span-2 rounded-lg p-3 ${iptpGuidance.due_now ? 'bg-green-50 border border-green-200' : 'bg-blue-50 border border-blue-200'}`}>
+                          <p className="text-xs font-semibold text-gray-800">{iptpGuidance.message}</p>
+                          {iptpGuidance.next_due_date && <p className="text-xs text-gray-600 mt-1">Next due: {iptpGuidance.next_due_date}</p>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-xs text-gray-500">Notes</label>
+                    <textarea value={episodeDto.notes} onChange={e => setEpisodeDto((p: any) => ({ ...p, notes: e.target.value }))} className="w-full border rounded px-2 py-1 text-sm mt-1" rows={3} />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={submitEpisode} className="bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-red-700">Save Episode</button>
+                    <button onClick={() => setShowEpisodeForm(false)} className="border px-4 py-1.5 rounded-lg text-sm">Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {episodes.length === 0 && <p className="text-sm text-gray-400">No structured episodes recorded.</p>}
+
+              {episodes.map(ep => (
+                <div key={ep.id} className="bg-white border rounded-lg p-4">
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <p className="text-sm font-semibold">{ep.rdtResult || 'No RDT'} · {ep.speciesConfirmed || 'Unknown species'}</p>
+                      <p className="text-xs text-gray-500">{ep.episodeDate}</p>
+                    </div>
+                    {ep.severityGrade && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${ep.severityGrade === 'severe' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                        {ep.severityGrade}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 grid md:grid-cols-3 gap-2 text-xs text-gray-600">
+                    <p>ACT dose: {ep.actDoseMg || '-'} mg</p>
+                    <p>Primaquine: {ep.primaquineGiven ? 'yes' : 'no'}</p>
+                    <p>Outcome: {ep.outcome || '-'}</p>
+                  </div>
+                  {Array.isArray(ep.severityCriteria) && ep.severityCriteria.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {ep.severityCriteria.map((criterion: string) => (
+                        <span key={criterion} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                          {criterion.replace(/_/g, ' ')}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <div className="bg-white border rounded-lg p-4">
+                <p className="text-sm font-semibold">IPTp History ({iptpHistory.length})</p>
+                <div className="mt-3 space-y-2">
+                  {iptpHistory.map((row) => (
+                    <div key={row.id} className="flex justify-between text-sm border-b border-gray-100 pb-2">
+                      <span>Dose {row.iptpDoseNumber || '-'}</span>
+                      <span className="text-gray-500">{row.episodeDate}</span>
+                    </div>
+                  ))}
+                  {iptpHistory.length === 0 && <p className="text-sm text-gray-400">No IPTp doses recorded.</p>}
+                </div>
               </div>
             </div>
           )}

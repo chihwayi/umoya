@@ -57,6 +57,10 @@ import {
   TENANT_AT_MESSAGING_BUNDLE_VERSION,
   TENANT_AT_MESSAGING_STATEMENTS,
 } from '../generated/tenant-at-messaging.statements';
+import {
+  TENANT_NTD_MALARIA_BUNDLE_VERSION,
+  TENANT_NTD_MALARIA_STATEMENTS,
+} from '../generated/tenant-ntd-malaria.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1329,6 +1333,13 @@ export class DatabaseProvisioningService {
         version: TENANT_AT_MESSAGING_BUNDLE_VERSION,
         description: "S137 — Africa's Talking SMS/USSD, WhatsApp health notifications, message logs, USSD session state",
         statements: TENANT_AT_MESSAGING_STATEMENTS,
+      },
+      {
+        id: 'sprint140_ntd_malaria',
+        label: 'NTD Programs + Malaria Clinical Depth',
+        version: TENANT_NTD_MALARIA_BUNDLE_VERSION,
+        description: 'S140 — NTD assessments, MDA campaigns, structured malaria episodes',
+        statements: TENANT_NTD_MALARIA_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

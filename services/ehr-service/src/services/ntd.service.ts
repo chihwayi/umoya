@@ -6,6 +6,8 @@ import { NtdCase } from '../entities/ntd-case.entity';
 import { CholeraCase } from '../entities/cholera-case.entity';
 import { TyphoidCase } from '../entities/typhoid-case.entity';
 import { RegionalDiseaseReport } from '../entities/regional-disease-report.entity';
+import { NtdAssessment } from '../entities/ntd-assessment.entity';
+import { MdaCampaign } from '../entities/mda-campaign.entity';
 
 @Injectable()
 export class NtdService {
@@ -38,6 +40,71 @@ export class NtdService {
     const repo = ds.getRepository(NtdCase);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
+  }
+
+  async recordAssessment(tenantId: string, userId: string, body: any): Promise<NtdAssessment> {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = ds.getRepository(NtdAssessment);
+    const entity = repo.create({
+      patientId: body.patientId,
+      diseaseType: body.diseaseType,
+      assessmentDate: body.assessmentDate,
+      assessedBy: userId || body.assessedBy || null,
+      diseaseStage: body.diseaseStage ?? null,
+      disabilityGrade: this.toNullableNumber(body.disabilityGrade),
+      mdaEligible: typeof body.mdaEligible === 'boolean' ? body.mdaEligible : null,
+      treatmentGiven: body.treatmentGiven ?? null,
+      doseMg: this.toNullableNumber(body.doseMg),
+      lotNumber: body.lotNumber ?? null,
+      followUpDate: body.followUpDate ?? null,
+      notes: body.notes ?? null,
+    });
+    return repo.save(entity) as unknown as NtdAssessment;
+  }
+
+  async getPatientAssessments(tenantId: string, patientId: string): Promise<NtdAssessment[]> {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    return ds.getRepository(NtdAssessment).find({
+      where: { patientId },
+      order: { assessmentDate: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
+  async createCampaign(tenantId: string, userId: string, body: any): Promise<MdaCampaign> {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = ds.getRepository(MdaCampaign);
+    const entity = repo.create({
+      campaignName: body.campaignName,
+      diseaseType: body.diseaseType,
+      drugName: body.drugName,
+      startDate: body.startDate,
+      endDate: body.endDate,
+      targetPopulation: this.toNullableNumber(body.targetPopulation),
+      treatedCount: this.toNullableNumber(body.treatedCount) ?? 0,
+      coverageArea: body.coverageArea ?? null,
+      dhis2DatasetUid: body.dhis2DatasetUid ?? null,
+      createdBy: userId || body.createdBy || null,
+    });
+    return repo.save(entity) as unknown as MdaCampaign;
+  }
+
+  async recordTreatedCount(tenantId: string, campaignId: string, count: number): Promise<MdaCampaign> {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = ds.getRepository(MdaCampaign);
+    const existing = await repo.findOne({ where: { id: campaignId } });
+    if (!existing) {
+      throw new Error('MDA campaign not found');
+    }
+    const nextCount = (existing.treatedCount || 0) + count;
+    await repo.update(campaignId, { treatedCount: nextCount });
+    return await repo.findOne({ where: { id: campaignId } }) as MdaCampaign;
+  }
+
+  async listCampaigns(tenantId: string): Promise<MdaCampaign[]> {
+    const ds = await this.tenantService.getTenantDatabase(tenantId);
+    return ds.getRepository(MdaCampaign).find({
+      order: { startDate: 'DESC', createdAt: 'DESC' },
+    });
   }
 
   // ── Cholera Cases ─────────────────────────────────────────────────────────
@@ -169,6 +236,14 @@ export class NtdService {
     const [year, month] = period.split('-').map(Number);
     const last = new Date(year, month, 0);
     return last.toISOString().split('T')[0];
+  }
+
+  private toNullableNumber(value: any): number | null {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   // ── CDSS ──────────────────────────────────────────────────────────────────

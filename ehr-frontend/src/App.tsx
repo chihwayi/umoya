@@ -68,6 +68,7 @@ const Dhis2DatimDashboard = lazy(() => import('./pages/Dhis2DatimDashboard'));
 const MessagingDashboard = lazy(() => import('./pages/MessagingDashboard'));
 const OpenMrsMflDashboard = lazy(() => import('./pages/OpenMrsMflDashboard'));
 const CrvsDashboard = lazy(() => import('./pages/CrvsDashboard'));
+const NtdDashboard = lazy(() => import('./pages/NtdDashboard'));
 
 const TenantScopedNhifDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -102,6 +103,13 @@ const TenantScopedCrvsDashboard: React.FC = () => {
   const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
   if (!tenantSlug) return null;
   return <CrvsDashboard tenantSlug={tenantSlug} token={token} />;
+};
+
+const TenantScopedNtdDashboard: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <NtdDashboard tenantSlug={tenantSlug} token={token} />;
 };
 
 const TenantScopedMessagingDashboard: React.FC = () => {
@@ -1027,6 +1035,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <TenantScopedCrvsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/ntd"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedNtdDashboard />
                 </RoleProtectedRoute>
               }
             />
