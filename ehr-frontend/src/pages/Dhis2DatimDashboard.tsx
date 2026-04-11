@@ -117,7 +117,7 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
   const token = tokenProp || getStoredToken();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
-  const cdssBaseUrl = ((import.meta as any)?.env?.VITE_CDSS_URL as string | undefined) || 'http://localhost:8000';
+  const cdssBaseUrl = process.env.REACT_APP_CDSS_URL || 'http://localhost:8000';
   const cdssAxios = useMemo(
     () =>
       axios.create({
