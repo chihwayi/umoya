@@ -292,6 +292,9 @@ import { DatimSubmission } from '../entities/datim-submission.entity';
 import { AtMessageLog } from '../entities/at-message-log.entity';
 import { UssdSession } from '../entities/ussd-session.entity';
 import { NotificationTemplate } from '../entities/notification-template.entity';
+import { OpenmrsPatientLink } from '../entities/openmrs-patient-link.entity';
+import { MflFacility } from '../entities/mfl-facility.entity';
+import { OpenmrsSyncLog } from '../entities/openmrs-sync-log.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -759,6 +762,9 @@ export class TenantService {
         AtMessageLog,
         UssdSession,
         NotificationTemplate,
+        OpenmrsPatientLink,
+        MflFacility,
+        OpenmrsSyncLog,
       ],
       logging: false,
     });

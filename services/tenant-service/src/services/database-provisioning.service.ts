@@ -46,6 +46,10 @@ import {
   TENANT_DHIS2_TRACKER_DATIM_STATEMENTS,
 } from '../generated/tenant-dhis2-tracker-datim.statements';
 import {
+  TENANT_OPENMRS_MFL_BUNDLE_VERSION,
+  TENANT_OPENMRS_MFL_STATEMENTS,
+} from '../generated/tenant-openmrs-mfl.statements';
+import {
   TENANT_AT_MESSAGING_BUNDLE_VERSION,
   TENANT_AT_MESSAGING_STATEMENTS,
 } from '../generated/tenant-at-messaging.statements';
@@ -1300,6 +1304,13 @@ export class DatabaseProvisioningService {
         description:
           'S136 — DHIS2 Tracker individual TEI enrollment, program stage events, DATIM MER indicator mappings and submissions',
         statements: TENANT_DHIS2_TRACKER_DATIM_STATEMENTS,
+      },
+      {
+        id: 'openmrs-mfl',
+        label: 'OpenMRS FHIR Adapter & Kenya MFL Sync',
+        version: TENANT_OPENMRS_MFL_BUNDLE_VERSION,
+        description: 'S138 — OpenMRS FHIR patient links and sync logs, plus Kenya MFL facility sync',
+        statements: TENANT_OPENMRS_MFL_STATEMENTS,
       },
       {
         id: 'at-messaging',
