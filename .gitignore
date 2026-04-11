@@ -47,6 +47,7 @@ jspm_packages/
 # Optional eslint cache
 .eslintcache
 .login
+.africatalking
 .postvisitai
 docs/medicore-ad.html
 
