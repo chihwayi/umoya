@@ -77,6 +77,10 @@ import {
   TENANT_TM_HDI_BUNDLE_VERSION,
   TENANT_TM_HDI_STATEMENTS,
 } from '../generated/tenant-tm-hdi.statements';
+import {
+  TENANT_SCD_BUNDLE_VERSION,
+  TENANT_SCD_STATEMENTS,
+} from '../generated/tenant-scd.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1384,6 +1388,13 @@ export class DatabaseProvisioningService {
         version: TENANT_TM_HDI_BUNDLE_VERSION,
         description: 'S143b — TM remedy records, HDI alerts, TM toxicity events',
         statements: TENANT_TM_HDI_STATEMENTS,
+      },
+      {
+        id: 'sprint144_scd_haemoglobinopathy',
+        label: 'Sickle Cell Disease Register + Complication Protocol',
+        version: TENANT_SCD_BUNDLE_VERSION,
+        description: 'S144 — SCD register, crisis events, treatment records, complication screenings',
+        statements: TENANT_SCD_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

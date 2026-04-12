@@ -1,0 +1,101 @@
+{
+  "version": "2026.04.11",
+  "source": "ASH 2020 SCD Guidelines + WHO SCD management resource (representative protocol)",
+  "genotypes": {
+    "HbSS": { "severity": "severe", "common_name": "Sickle Cell Anaemia" },
+    "HbSC": { "severity": "moderate", "common_name": "Haemoglobin SC Disease" },
+    "HbS_beta_thal": { "severity": "moderate_to_severe", "common_name": "Sickle Beta-Thalassaemia" },
+    "HbAS": { "severity": "carrier", "common_name": "Sickle Cell Trait" },
+    "HbAC": { "severity": "carrier", "common_name": "Haemoglobin C Trait" }
+  },
+  "hydroxyurea": {
+    "indication_genotypes": ["HbSS", "HbS_beta_thal"],
+    "indication_criteria": [
+      "\u22653 VOC per year requiring medical attention",
+      "History of ACS",
+      "Severe symptomatic anaemia (Hb <6 g/dL)",
+      "All children \u22659 months (ASH 2020 universal HU recommendation for HbSS)"
+    ],
+    "starting_dose_mg_per_kg": 15,
+    "max_dose_mg_per_kg": 35,
+    "dose_escalation_interval_weeks": 8,
+    "dose_increment_mg_per_kg": 5,
+    "hold_thresholds": {
+      "anc_x10_9_below": 2.0,
+      "platelets_x10_9_below": 80,
+      "reticulocytes_x10_9_below": 80,
+      "hb_g_dl_below": 5.0
+    },
+    "response_targets": {
+      "hbf_pct_above": 20,
+      "mcv_fl_above": 100,
+      "hb_g_dl_above": 8.5
+    },
+    "monitoring_schedule": {
+      "on_titration_weeks": 8,
+      "on_stable_dose_months": 3
+    },
+    "monitoring_labs": ["CBC_with_diff", "reticulocytes", "HbF_if_available", "LFTs", "creatinine"]
+  },
+  "prophylaxis": {
+    "penicillin": {
+      "indication": "All HbSS/HbS-beta-thal from 2 months of age",
+      "under_5_dose": "Penicillin V 125 mg BD",
+      "age_5_to_adult_dose": "Penicillin V 250 mg BD",
+      "stop_age_years": null,
+      "note": "Continue indefinitely if spleen has auto-infarcted or splenectomy performed"
+    },
+    "folic_acid": {
+      "dose_adults": "5 mg daily",
+      "dose_children": "2.5 mg daily (under 12)"
+    },
+    "malaria_prophylaxis": {
+      "indication": "All SCD patients in endemic regions",
+      "preferred": "Proguanil 100 mg daily (children: weight-based)",
+      "alternative": "Chloroquine 5 mg/kg weekly (where sensitive)"
+    }
+  },
+  "tcd_classification": {
+    "normal_cm_s_below": 170,
+    "conditional_cm_s": [170, 200],
+    "abnormal_cm_s_above": 200,
+    "abnormal_action": "Refer urgently for chronic transfusion programme or HU intensification \u2014 stroke risk >10% per year",
+    "conditional_action": "Repeat TCD in 3 months; ensure HU optimised",
+    "screening_frequency_years": 1
+  },
+  "crisis_management": {
+    "voc_mild": {
+      "definition": "Pain score 1\u20134, manageable at home",
+      "management": "Oral NSAIDs (ibuprofen/diclofenac), oral paracetamol, high oral fluids \u22652L/day, warm compress, rest",
+      "escalate_if": "No relief in 2h, pain worsening, fever, vomiting"
+    },
+    "voc_moderate": {
+      "definition": "Pain score 5\u20137, requires clinic attendance",
+      "management": "IV access, IV fluids 1.5\u00d7 maintenance, oral or IV morphine 0.05\u20130.1 mg/kg, anti-emetic, O2 if SpO2 <94%",
+      "escalate_if": "Pain uncontrolled at 1h, signs of ACS (cough, pleuritic chest pain, fever + new CXR infiltrate)"
+    },
+    "voc_severe": {
+      "definition": "Pain score 8\u201310 or life-threatening complication",
+      "management": "Hospital admission, IV morphine PCA or regular dosing, IV fluids, blood group & crossmatch, incentive spirometry, haematology consult"
+    },
+    "acs_triggers": ["new_cough", "pleuritic_chest_pain", "fever", "new_infiltrate_on_cxr", "falling_spo2"],
+    "acs_management": "Admit urgently, O2 to maintain SpO2 \u226595%, IV fluids (not aggressive), empiric antibiotics (cover Mycoplasma/Chlamydia), exchange transfusion if deteriorating, incentive spirometry",
+    "splenic_sequestration_action": "Urgent transfusion to raise Hb by 2 g/dL (not fully correct \u2014 risk of hyper-viscosity). Splenectomy referral for recurrent episodes.",
+    "stroke_action": "Immediate exchange transfusion targeting HbS <30%. CT/MRI brain. Chronic transfusion programme post-stroke."
+  },
+  "annual_complication_schedule": [
+    { "screening": "tcd", "frequency": "annually_age_2_to_16", "urgency": "mandatory" },
+    { "screening": "eye", "frequency": "annually", "urgency": "recommended" },
+    { "screening": "renal", "frequency": "annually", "urgency": "mandatory" },
+    { "screening": "cardiac_echo", "frequency": "every_3_years", "urgency": "recommended" },
+    { "screening": "growth", "frequency": "every_6_months_under_18", "urgency": "recommended" },
+    { "screening": "neurocognitive", "frequency": "annually_under_18", "urgency": "recommended" }
+  ],
+  "vaccination_requirements": [
+    "Pneumococcal conjugate + polysaccharide (PCV13 then PPSV23 at \u22652 years)",
+    "Annual influenza",
+    "Meningococcal MenACWY",
+    "Haemophilus influenzae type b (Hib)",
+    "Hepatitis B (due to transfusion risk)"
+  ]
+}

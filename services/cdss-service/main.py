@@ -5965,6 +5965,260 @@ async def tm_toxicity_risk(req: TmToxicityRiskRequest):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Sprint 144 — Sickle Cell Disease + Haemoglobinopathy Protocol
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ScdHydroxyureaRequest(BaseModel):
+    patient_weight_kg: float
+    age_years: float
+    genotype: str
+    current_dose_mg: Optional[float] = None
+    indication: str = "standard"
+    hb_g_dl: Optional[float] = None
+    mcv_fl: Optional[float] = None
+    wbc_x10_9: Optional[float] = None
+    anc_x10_9: Optional[float] = None
+    platelets_x10_9: Optional[float] = None
+    reticulocytes_x10_9: Optional[float] = None
+    hbf_pct: Optional[float] = None
+    weeks_on_current_dose: Optional[int] = None
+
+
+class ScdCrisisTriageRequest(BaseModel):
+    crisis_type: str
+    pain_score: Optional[int] = None
+    spo2_pct: Optional[int] = None
+    fever: bool = False
+    new_chest_symptoms: bool = False
+    hb_g_dl: Optional[float] = None
+    new_neuro_symptoms: bool = False
+    age_years: Optional[float] = None
+
+
+class ScdComplicationRiskRequest(BaseModel):
+    genotype: str
+    age_years: float
+    tcd_velocity_cm_s: Optional[float] = None
+    has_stroke_history: bool = False
+    hb_g_dl: Optional[float] = None
+    on_hydroxyurea: bool = False
+    hbf_pct: Optional[float] = None
+    prior_acs_episodes: int = 0
+    has_renal_disease: bool = False
+    systolic_bp: Optional[float] = None
+
+
+@app.post("/cdss/scd/hydroxyurea-dose")
+async def scd_hydroxyurea_dose(req: ScdHydroxyureaRequest):
+    """
+    Weight-based HU dose calculation with lab-gated hold/escalation logic.
+    """
+    data = _load_supporting_json("scd_protocol.json")
+    hu_data = data["hydroxyurea"]
+    hold = hu_data["hold_thresholds"]
+    targets = hu_data["response_targets"]
+
+    warnings = []
+    hold_flags = []
+
+    if req.anc_x10_9 is not None and req.anc_x10_9 < hold["anc_x10_9_below"]:
+        hold_flags.append(f"ANC {req.anc_x10_9} ×10⁹/L < {hold['anc_x10_9_below']} — HOLD hydroxyurea")
+    if req.platelets_x10_9 is not None and req.platelets_x10_9 < hold["platelets_x10_9_below"]:
+        hold_flags.append(f"Platelets {req.platelets_x10_9} ×10⁹/L < {hold['platelets_x10_9_below']} — HOLD hydroxyurea")
+    if req.hb_g_dl is not None and req.hb_g_dl < hold["hb_g_dl_below"]:
+        hold_flags.append(f"Hb {req.hb_g_dl} g/dL < {hold['hb_g_dl_below']} — HOLD hydroxyurea")
+
+    if hold_flags:
+        return {
+            "action": "hold",
+            "reason": hold_flags,
+            "resume_when": "Recheck CBC in 2–4 weeks. Resume when counts recover above thresholds.",
+            "recommended_dose_mg": None,
+            "next_review_weeks": 2,
+        }
+
+    start_dose_mg = round(req.patient_weight_kg * hu_data["starting_dose_mg_per_kg"] / 100) * 100
+    max_dose_mg = round(req.patient_weight_kg * hu_data["max_dose_mg_per_kg"] / 100) * 100
+
+    if req.current_dose_mg is None:
+        return {
+            "action": "start",
+            "recommended_dose_mg": start_dose_mg,
+            "dose_mg_per_kg": round(start_dose_mg / req.patient_weight_kg, 1),
+            "max_dose_mg": max_dose_mg,
+            "monitoring_interval_weeks": hu_data["monitoring_schedule"]["on_titration_weeks"],
+            "monitoring_labs": hu_data["monitoring_labs"],
+            "warnings": warnings,
+        }
+
+    at_target = (
+        (req.hbf_pct or 0) >= targets["hbf_pct_above"] or
+        (req.mcv_fl or 0) >= targets["mcv_fl_above"] or
+        (req.hb_g_dl or 0) >= targets["hb_g_dl_above"]
+    )
+    can_escalate = (
+        (req.weeks_on_current_dose or 0) >= hu_data["monitoring_schedule"]["on_titration_weeks"] and
+        req.current_dose_mg < max_dose_mg and
+        not at_target
+    )
+
+    if can_escalate:
+        increment = req.patient_weight_kg * 5
+        new_dose_mg = min(round((req.current_dose_mg + increment) / 100) * 100, max_dose_mg)
+        return {
+            "action": "escalate",
+            "recommended_dose_mg": new_dose_mg,
+            "previous_dose_mg": req.current_dose_mg,
+            "dose_mg_per_kg": round(new_dose_mg / req.patient_weight_kg, 1),
+            "monitoring_interval_weeks": hu_data["monitoring_schedule"]["on_titration_weeks"],
+            "monitoring_labs": hu_data["monitoring_labs"],
+            "warnings": warnings,
+        }
+
+    return {
+        "action": "continue",
+        "recommended_dose_mg": req.current_dose_mg,
+        "dose_mg_per_kg": round(req.current_dose_mg / req.patient_weight_kg, 1),
+        "at_target": at_target,
+        "monitoring_interval_weeks": hu_data["monitoring_schedule"]["on_stable_dose_months"] * 4,
+        "monitoring_labs": hu_data["monitoring_labs"],
+        "warnings": warnings,
+    }
+
+
+@app.post("/cdss/scd/crisis-triage")
+async def scd_crisis_triage(req: ScdCrisisTriageRequest):
+    """
+    Crisis severity classification and emergency escalation guidance.
+    """
+    data = _load_supporting_json("scd_protocol.json")
+    cm = data["crisis_management"]
+
+    if req.crisis_type == "stroke" or req.new_neuro_symptoms:
+        return {
+            "severity": "life_threatening",
+            "crisis_type": "stroke",
+            "immediate_action": "EMERGENCY: Activate stroke protocol. Urgent exchange transfusion targeting HbS <30%. Obtain CT/MRI brain stat. Do NOT delay for imaging if exchange is available.",
+            "management": cm["stroke_action"],
+            "escalate_now": True,
+        }
+
+    if req.crisis_type == "acs" or req.new_chest_symptoms:
+        return {
+            "severity": "severe",
+            "crisis_type": "acs",
+            "immediate_action": "Admit urgently. O2 to SpO2 ≥95%. Empiric antibiotics covering atypical organisms. Incentive spirometry. Blood group & crossmatch for exchange transfusion if SpO2 falling.",
+            "management": cm["acs_management"],
+            "escalate_now": True,
+        }
+
+    if req.crisis_type == "splenic_sequestration":
+        return {
+            "severity": "severe",
+            "crisis_type": "splenic_sequestration",
+            "immediate_action": "Urgent transfusion — raise Hb by 2 g/dL only (avoid hyperviscosity). IV access. Blood group & crossmatch.",
+            "management": cm["splenic_sequestration_action"],
+            "escalate_now": True,
+        }
+
+    pain = req.pain_score or 0
+    if req.fever or (req.spo2_pct and req.spo2_pct < 94) or pain >= 8:
+        level = cm["voc_severe"]
+        severity = "severe"
+    elif pain >= 5:
+        level = cm["voc_moderate"]
+        severity = "moderate"
+    else:
+        level = cm["voc_mild"]
+        severity = "mild"
+
+    return {
+        "severity": severity,
+        "crisis_type": "voc",
+        "management": level["management"],
+        "escalate_if": level.get("escalate_if"),
+        "escalate_now": severity in ("severe",),
+        "analgesia_ladder": {
+            "mild": "Oral NSAIDs + paracetamol",
+            "moderate": "Oral/IV morphine 0.05–0.1 mg/kg + anti-emetic",
+            "severe": "IV morphine PCA or regular dosing + haematology consult",
+        }[severity],
+    }
+
+
+@app.post("/cdss/scd/complication-risk")
+async def scd_complication_risk(req: ScdComplicationRiskRequest):
+    """
+    Multi-domain complication risk flags: stroke, ACS, renal, cardiac.
+    """
+    data = _load_supporting_json("scd_protocol.json")
+    tcd_cls = data["tcd_classification"]
+    schedule = data["annual_complication_schedule"]
+    risks = []
+
+    if req.tcd_velocity_cm_s is not None:
+        if req.tcd_velocity_cm_s >= tcd_cls["abnormal_cm_s_above"]:
+            risks.append({
+                "domain": "stroke",
+                "risk_level": "high",
+                "finding": f"TCD {req.tcd_velocity_cm_s} cm/s — ABNORMAL",
+                "action": tcd_cls["abnormal_action"],
+            })
+        elif req.tcd_velocity_cm_s >= tcd_cls["conditional_cm_s"][0]:
+            risks.append({
+                "domain": "stroke",
+                "risk_level": "moderate",
+                "finding": f"TCD {req.tcd_velocity_cm_s} cm/s — CONDITIONAL",
+                "action": tcd_cls["conditional_action"],
+            })
+    if req.has_stroke_history:
+        risks.append({
+            "domain": "stroke",
+            "risk_level": "very_high",
+            "finding": "Prior stroke — on chronic transfusion programme?",
+            "action": "Confirm enrolment in chronic transfusion programme targeting HbS <30%.",
+        })
+
+    if req.prior_acs_episodes >= 2:
+        risks.append({
+            "domain": "pulmonary",
+            "risk_level": "high",
+            "finding": f"≥2 prior ACS episodes ({req.prior_acs_episodes})",
+            "action": "Escalate HU to maximum tolerated dose. Consider chronic transfusion.",
+        })
+
+    if req.hb_g_dl is not None and req.hb_g_dl < 7.0:
+        risks.append({
+            "domain": "anaemia",
+            "risk_level": "moderate",
+            "finding": f"Hb {req.hb_g_dl} g/dL — below 7 g/dL",
+            "action": "Review HU response (HbF%). Blood group & hold. Consider transfusion if symptomatic.",
+        })
+
+    if req.has_renal_disease:
+        risks.append({
+            "domain": "renal",
+            "risk_level": "moderate",
+            "finding": "Known renal disease",
+            "action": "Annual eGFR + urine ACR. ACE inhibitor/ARB for microalbuminuria. Avoid NSAIDs.",
+        })
+
+    overall = "high" if any(r["risk_level"] in ("high", "very_high") for r in risks) else \
+              "moderate" if risks else "low"
+
+    overdue_screens = [s["screening"] for s in schedule if s.get("urgency") == "mandatory"]
+
+    return {
+        "genotype": req.genotype,
+        "overall_risk": overall,
+        "risk_flags": risks,
+        "vaccinations_required": data["vaccination_requirements"],
+        "overdue_screening_check": overdue_screens,
+        "hu_indicator": not req.on_hydroxyurea and req.genotype in ("HbSS", "HbS_beta_thal"),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Sprint 143 — Hypertension Register + WHO PEN NCD Protocol
 # ─────────────────────────────────────────────────────────────────────────────
 

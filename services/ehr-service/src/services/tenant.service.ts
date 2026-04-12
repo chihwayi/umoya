@@ -189,6 +189,10 @@ import { NcdTreatmentReview } from '../entities/ncd-treatment-review.entity';
 import { TmRemedy } from '../entities/tm-remedy.entity';
 import { HdiAlert } from '../entities/hdi-alert.entity';
 import { TmToxicityEvent } from '../entities/tm-toxicity-event.entity';
+import { ScdRegister } from '../entities/scd-register.entity';
+import { ScdCrisisEvent } from '../entities/scd-crisis-event.entity';
+import { ScdTreatmentRecord } from '../entities/scd-treatment-record.entity';
+import { ScdComplicationScreening } from '../entities/scd-complication-screening.entity';
 import { PsychiatricEncounter } from '../entities/psychiatric-encounter.entity';
 import { CrisisEvent } from '../entities/crisis-event.entity';
 import { SafePlan } from '../entities/safe-plan.entity';
@@ -678,6 +682,10 @@ export class TenantService {
         TmRemedy,
         HdiAlert,
         TmToxicityEvent,
+        ScdRegister,
+        ScdCrisisEvent,
+        ScdTreatmentRecord,
+        ScdComplicationScreening,
         PsychiatricEncounter,
         CrisisEvent,
         SafePlan,
@@ -801,6 +809,10 @@ export class TenantService {
         OpenmrsPatientLink,
         MflFacility,
         OpenmrsSyncLog,
+        ScdRegister,
+        ScdCrisisEvent,
+        ScdTreatmentRecord,
+        ScdComplicationScreening,
       ],
       logging: false,
     });

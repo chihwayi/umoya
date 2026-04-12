@@ -2238,6 +2238,39 @@ export class CdssService {
     );
   }
 
+  async scdHydroxyureaDose(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'scdHydroxyureaDose',
+      '/cdss/scd/hydroxyurea-dose',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async scdCrisisTriage(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'scdCrisisTriage',
+      '/cdss/scd/crisis-triage',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async scdComplicationRisk(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'scdComplicationRisk',
+      '/cdss/scd/complication-risk',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   /**
    * Fetch patient historical data for CDSS analysis
    */

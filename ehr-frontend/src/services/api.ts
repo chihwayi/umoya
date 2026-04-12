@@ -11707,3 +11707,84 @@ export const traditionalMedicineApi = {
     return response.data;
   },
 };
+
+export const scdApi = {
+  enroll: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/scd/patient/${patientId}/register`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getRegister: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/scd/patient/${patientId}/register`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateRegister: async (id: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/scd/register/${id}`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordCrisis: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/scd/patient/${patientId}/crisis`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getCrisisHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/scd/patient/${patientId}/crisis`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordTreatment: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/scd/patient/${patientId}/treatment`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getTreatmentHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/scd/patient/${patientId}/treatment`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordScreening: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/scd/patient/${patientId}/screening`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getScreeningHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/scd/patient/${patientId}/screening`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getComplicationRisk: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/scd/patient/${patientId}/risk`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  hydroxyureaDose: async (dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/scd/cdss/hydroxyurea-dose', dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  crisisTriage: async (dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/scd/cdss/crisis-triage', dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  complicationRisk: async (dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/scd/cdss/complication-risk', dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};

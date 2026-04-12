@@ -30,6 +30,7 @@ import { CervicalCancerController } from './controllers/cervical-cancer.controll
 import { FamilyPlanningController } from './controllers/family-planning.controller';
 import { HypertensionController } from './controllers/hypertension.controller';
 import { TraditionalMedicineController } from './controllers/traditional-medicine.controller';
+import { ScdController } from './controllers/scd.controller';
 import { MalariaController } from './controllers/malaria.controller';
 import { GeriatricsController } from './controllers/geriatrics.controller';
 import { NeurologyController } from './controllers/neurology.controller';
@@ -204,6 +205,7 @@ import { CervicalCancerService } from './services/cervical-cancer.service';
 import { FamilyPlanningService } from './services/family-planning.service';
 import { HypertensionService } from './services/hypertension.service';
 import { TraditionalMedicineService } from './services/traditional-medicine.service';
+import { ScdService } from './services/scd.service';
 import { MalariaService } from './services/malaria.service';
 import { GeriatricsService } from './services/geriatrics.service';
 import { NeurologyService } from './services/neurology.service';
@@ -460,6 +462,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     FamilyPlanningController,
     HypertensionController,
     TraditionalMedicineController,
+    ScdController,
     MalariaController,
     GeriatricsController,
     NeurologyController,
@@ -687,6 +690,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     FamilyPlanningService,
     HypertensionService,
     TraditionalMedicineService,
+    ScdService,
     MalariaService,
     GeriatricsService,
     NeurologyService,
