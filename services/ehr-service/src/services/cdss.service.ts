@@ -2304,6 +2304,17 @@ export class CdssService {
     );
   }
 
+  async zoonoticAssess(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'zoonoticAssess',
+      '/cdss/zoonotic/assess',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   /**
    * Fetch patient historical data for CDSS analysis
    */

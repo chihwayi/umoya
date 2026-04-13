@@ -5996,6 +5996,17 @@ class EpilepsyStatusEpilepticusRequest(BaseModel):
     drugs_available: List[str] = Field(default_factory=list)
 
 
+class ZoonoticAssessRequest(BaseModel):
+    animal_type: str
+    exposure_type: str
+    exposure_date: Optional[str] = None
+    animal_ill: Optional[bool] = None
+    animal_vaccinated: Optional[bool] = None
+    patient_symptoms: Optional[List[str]] = []
+    days_since_exposure: Optional[int] = None
+    exposure_location: Optional[str] = None
+
+
 @app.post("/cdss/epilepsy/aed-dose")
 async def epilepsy_aed_dose(req: EpilepsyAedDoseRequest):
     data = _load_supporting_json("epilepsy_protocol.json")
@@ -6196,6 +6207,120 @@ async def epilepsy_status_epilepticus(req: EpilepsyStatusEpilepticusRequest):
         "next_phase_trigger": f"If seizure continues beyond {phases[min(current_phase_index + 1, 3)]['time_minutes']} min, escalate to Phase {min(current_phase_index + 2, 4)}",
         "is_status_epilepticus": req.duration_minutes >= 5,
     }
+
+
+@app.post("/cdss/zoonotic/assess")
+async def zoonotic_assess(req: ZoonoticAssessRequest):
+    data = _load_supporting_json("zoonotic_protocol.json")
+    diseases = data["zoonotic_diseases"]
+    high_risk = data["high_risk_combinations"]
+    pep_protocol = data["rabies_pep_protocol"]
+    vet_triggers = set(data["vet_notification_triggers"])
+
+    suspected = []
+    pep_indication = False
+    pep_category = None
+    urgency = "routine"
+    vet_notification_required = False
+    alerts = []
+
+    animal_type = (req.animal_type or "").lower()
+    exposure_type = (req.exposure_type or "").lower()
+
+    for combo in high_risk:
+        if combo["animal"].lower() == animal_type and combo["exposure"].lower() == exposure_type:
+            suspected.append(combo["risk"])
+            if combo["urgency"] == "emergency":
+                urgency = "emergency"
+            elif combo["urgency"] == "urgent_notifiable" and urgency != "emergency":
+                urgency = "urgent"
+                vet_notification_required = True
+            elif combo["urgency"] == "urgent_outpatient" and urgency == "routine":
+                urgency = "urgent"
+            alerts.append({
+                "risk": combo["risk"],
+                "action": combo["action"],
+                "urgency": combo["urgency"],
+            })
+
+    for disease_key, disease in diseases.items():
+        if animal_type in [a.lower() for a in disease.get("animals", [])] and exposure_type in [e.lower() for e in disease.get("transmission", [])]:
+            if disease_key not in suspected:
+                suspected.append(disease_key)
+
+    symptom_matches = {}
+    symptoms = [symptom.lower() for symptom in (req.patient_symptoms or [])]
+    for disease_key in suspected:
+        disease = diseases.get(disease_key, {})
+        features = disease.get("clinical_features", [])
+        if isinstance(features, dict):
+            flattened = []
+            for values in features.values():
+                if isinstance(values, list):
+                    flattened.extend(values)
+                else:
+                    flattened.append(values)
+            features = flattened
+        matched = [
+            symptom
+            for symptom in symptoms
+            if any(symptom in str(feature).lower() or str(feature).lower() in symptom for feature in features)
+        ]
+        symptom_matches[disease_key] = len(matched)
+
+    suspected_sorted = sorted(suspected, key=lambda disease_key: symptom_matches.get(disease_key, 0), reverse=True)
+
+    if "rabies" in suspected:
+        pep_indication = True
+        if exposure_type == "bite" and animal_type == "bat":
+            pep_category = "III"
+        elif exposure_type == "bite" and not req.animal_vaccinated:
+            pep_category = "III" if (req.animal_ill or req.animal_ill is None) else "II"
+        elif exposure_type in ["scratch", "contact"]:
+            pep_category = "II"
+        else:
+            pep_category = "II"
+
+    for disease_key in suspected:
+        if disease_key in vet_triggers:
+            vet_notification_required = True
+            break
+
+    management_summaries = []
+    for disease_key in suspected_sorted[:3]:
+        disease = diseases.get(disease_key, {})
+        management_summaries.append({
+            "disease": disease_key,
+            "icd11": data["icd11_map"].get(disease_key, ""),
+            "incubation": disease.get("incubation_days"),
+            "management": disease.get("management") or disease.get("treatment"),
+            "lab_diagnosis": disease.get("lab_diagnosis", []),
+            "symptom_overlap": symptom_matches.get(disease_key, 0),
+            "notifiable": disease_key in vet_triggers,
+        })
+
+    response = {
+        "suspected_zoonoses": suspected_sorted,
+        "primary_suspect": suspected_sorted[0] if suspected_sorted else None,
+        "urgency": urgency,
+        "alerts": alerts,
+        "management_summaries": management_summaries,
+        "vet_notification_required": vet_notification_required,
+        "pep_indication": pep_indication,
+    }
+
+    if pep_indication:
+        response["pep_recommendation"] = {
+            "category": pep_category,
+            "protocol": "essen_5_dose",
+            "schedule_days": pep_protocol["essen_protocol"]["schedule_days"],
+            "vaccine": pep_protocol["essen_protocol"]["vaccine"],
+            "rig_required": pep_category == "III",
+            "rig_note": pep_protocol["rig_dosing"]["route"] if pep_category == "III" else None,
+            "immediate_action": "Wound wash soap + water 15 min. Start vaccine day 0 (today).",
+        }
+
+    return response
 
 
 # ─────────────────────────────────────────────────────────────────────────────

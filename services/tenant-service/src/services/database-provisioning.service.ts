@@ -85,6 +85,10 @@ import {
   TENANT_EPILEPSY_BUNDLE_VERSION,
   TENANT_EPILEPSY_STATEMENTS,
 } from '../generated/tenant-epilepsy.statements';
+import {
+  TENANT_ONE_HEALTH_PACTR_BUNDLE_VERSION,
+  TENANT_ONE_HEALTH_PACTR_STATEMENTS,
+} from '../generated/tenant-one-health-pactr.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1416,6 +1420,13 @@ export class DatabaseProvisioningService {
         version: TENANT_EPILEPSY_BUNDLE_VERSION,
         description: 'S145 — epilepsy register, AED therapy records, AED toxicity events',
         statements: TENANT_EPILEPSY_STATEMENTS,
+      },
+      {
+        id: 'sprint146_one_health_pactr',
+        label: 'One Health / Zoonotic Pathways + PACTR Trial Integration',
+        version: TENANT_ONE_HEALTH_PACTR_BUNDLE_VERSION,
+        description: 'S146 — animal exposures, one health reports, rabies PEP, PACTR trial matching',
+        statements: TENANT_ONE_HEALTH_PACTR_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

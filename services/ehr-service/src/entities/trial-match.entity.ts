@@ -42,6 +42,12 @@ export class TrialMatch {
   @Column({ name: 'contact_email', nullable: true })
   contactEmail: string;
 
+  @Column({ name: 'registry', nullable: true })
+  registry: string | null;
+
+  @Column({ name: 'registry_id', nullable: true })
+  registryId: string | null;
+
   @CreateDateColumn({ name: 'matched_at' })
   matchedAt: Date;
 }

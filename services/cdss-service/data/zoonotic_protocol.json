@@ -1,0 +1,177 @@
+{
+  "version": "WHO-AFRO-2024 / WHO-Rabies-2018 / OIE-OneHealth",
+  "source": "WHO AFRO Zoonotic Disease Protocols, WHO Expert Consultation on Rabies 2018, OIE One Health Framework",
+  "animal_types": ["cattle", "goat", "sheep", "dog", "cat", "rodent", "wildlife", "poultry", "camel", "pig", "bat", "monkey"],
+  "exposure_types": {
+    "bite": "Direct bite - break in skin; highest rabies transmission risk",
+    "scratch": "Scratch or abrasion from claws/teeth - moderate risk",
+    "contact": "Mucous membrane or broken skin contact with saliva/body fluids",
+    "consumption": "Consumption of raw/undercooked meat or unpasteurised dairy",
+    "vector_borne": "Tick, flea, or fly bite in context of animal contact"
+  },
+  "zoonotic_diseases": {
+    "rabies": {
+      "icd11": "1C82",
+      "endemic_sadc": true,
+      "transmission": ["bite", "scratch", "contact"],
+      "animals": ["dog", "cat", "bat", "monkey", "wildlife"],
+      "incubation_days": { "min": 10, "max": 90, "typical": 30 },
+      "risk_factors": ["unprovoked bite", "bite on head/neck/hands", "multiple bites", "animal ill or died after bite", "animal not vaccinated"],
+      "clinical_features": ["hydrophobia", "aerophobia", "agitation", "paralysis", "ascending_weakness"],
+      "pep_indicated": true,
+      "mortality_untreated": "near 100%",
+      "management": "Immediate wound wash (soap + water 15 min), rabies PEP (see rabies_pep_protocol), rabies immunoglobulin (RIG) for Category III exposures"
+    },
+    "brucellosis": {
+      "icd11": "1B95",
+      "endemic_sadc": true,
+      "transmission": ["consumption", "contact"],
+      "animals": ["cattle", "goat", "sheep", "camel", "pig"],
+      "incubation_days": { "min": 5, "max": 60, "typical": 21 },
+      "clinical_features": ["undulant_fever", "night_sweats", "arthralgia", "hepatosplenomegaly", "malaise"],
+      "lab_diagnosis": ["serology (Rose Bengal, SAT)", "blood culture x3", "Brucella agglutination titre >=1:160"],
+      "treatment": "Doxycycline 100mg BD x 6 weeks + Rifampicin 600mg OD x 6 weeks (or Doxycycline + Streptomycin IM for severe/neurobrucellosis)",
+      "note": "Most common zoonosis in SADC pastoral communities. Check cattle/goat vaccination status. Notifiable."
+    },
+    "rift_valley_fever": {
+      "icd11": "1D43",
+      "endemic_sadc": true,
+      "transmission": ["contact", "consumption", "vector_borne"],
+      "animals": ["cattle", "sheep", "goat"],
+      "incubation_days": { "min": 2, "max": 6 },
+      "clinical_features": ["sudden_fever", "severe_headache", "myalgia", "photophobia", "haemorrhage_severe_cases", "encephalitis_1_percent"],
+      "lab_diagnosis": ["PCR in acute phase", "IgM/IgG serology", "LFT - elevated transaminases"],
+      "treatment": "Supportive. Ribavirin may reduce severity if started early (specialist decision). Barrier nursing. Notifiable - outbreak trigger.",
+      "outbreak_trigger": true,
+      "note": "Epidemic-prone. Aedes and Culex mosquitoes amplify. Notify national surveillance immediately."
+    },
+    "anthrax": {
+      "icd11": "1B97",
+      "endemic_sadc": true,
+      "transmission": ["contact", "consumption"],
+      "animals": ["cattle", "sheep", "goat", "wildlife"],
+      "incubation_days": { "min": 1, "max": 5 },
+      "forms": {
+        "cutaneous": "Painless black eschar - 95% of cases; treat with Amoxicillin 500mg TDS x 7 days or Ciprofloxacin 500mg BD x 7 days",
+        "gastrointestinal": "Nausea, vomiting, bloody diarrhoea after consuming infected meat - high mortality; IV Ciprofloxacin + Metronidazole",
+        "inhalational": "Rare; near 100% mortality without treatment; medical emergency"
+      },
+      "treatment": "Ciprofloxacin 500mg BD x 7-60 days OR Doxycycline 100mg BD. Add anthrax antitoxin in severe cases (if available).",
+      "note": "Handle carcasses with PPE. Notifiable. Do NOT perform post-mortem on suspected anthrax animals - releases spores."
+    },
+    "leptospirosis": {
+      "icd11": "1C10",
+      "endemic_sadc": true,
+      "transmission": ["contact", "vector_borne"],
+      "animals": ["rodent", "cattle", "pig", "dog"],
+      "incubation_days": { "min": 2, "max": 30, "typical": 10 },
+      "clinical_features": ["fever", "myalgia", "conjunctival_suffusion", "jaundice_weil_disease", "renal_failure", "haemorrhage"],
+      "lab_diagnosis": ["MAT serology (gold standard)", "PCR blood in acute phase", "LFT, renal function, FBC"],
+      "treatment": "Mild: Doxycycline 100mg BD x 7 days. Severe (Weil's disease): IV Penicillin G 1.5MU Q6H or IV Ceftriaxone 1g OD x 7 days.",
+      "note": "Exposure via flood water, rice paddies, livestock urine. Rodent control key prevention."
+    },
+    "q_fever": {
+      "icd11": "1C30",
+      "endemic_sadc": true,
+      "transmission": ["contact", "consumption", "vector_borne"],
+      "animals": ["cattle", "sheep", "goat"],
+      "incubation_days": { "min": 14, "max": 39 },
+      "clinical_features": ["high_fever", "severe_headache", "pneumonia", "hepatitis", "endocarditis_chronic"],
+      "treatment": "Acute: Doxycycline 100mg BD x 14-21 days. Chronic Q fever/endocarditis: Doxycycline + Hydroxychloroquine x 18 months (specialist).",
+      "note": "Coxiella burnetii survives in dry environments for months. Parturient animals high risk."
+    },
+    "human_african_trypanosomiasis": {
+      "icd11": "1F50",
+      "endemic_sadc": ["Tanzania", "DRC", "Mozambique", "Zimbabwe", "Malawi"],
+      "transmission": ["vector_borne"],
+      "animals": ["cattle", "wildlife"],
+      "vector": "Tsetse fly (Glossina species)",
+      "clinical_features": {
+        "stage_1": ["fever", "lymphadenopathy_posterior_cervical", "winterbottom_sign", "chancre_at_bite_site"],
+        "stage_2": ["neurological_confusion", "sleep_disorder", "coma"]
+      },
+      "treatment": "Stage 1: Pentamidine (T. b. gambiense) or Suramin (T. b. rhodesiense). Stage 2: Eflornithine (gambiense) or Melarsoprol (rhodesiense). Specialist only.",
+      "note": "Notifiable. Report to national HAT control programme. WHO supports free treatment in endemic areas."
+    }
+  },
+  "rabies_pep_protocol": {
+    "wound_categories": {
+      "I": "Touching/feeding animal, licks on intact skin - no PEP required",
+      "II": "Nibbling/minor scratches without bleeding - wound wash + vaccine only",
+      "III": "Single/multiple transdermal bites, scratches with bleeding, licks on broken skin, mucous membrane contact - wound wash + vaccine + RIG"
+    },
+    "essen_protocol": {
+      "doses": 5,
+      "schedule_days": [0, 3, 7, 14, 28],
+      "vaccine": "Rabies vaccine (cell-culture derived: HDCV, PCECV, or PVRV)",
+      "dose_ml": 1.0,
+      "route": "IM deltoid (adults) / anterolateral thigh (infants)",
+      "note": "Day 0 = day of exposure/presentation. All 5 doses must be completed."
+    },
+    "zagreb_protocol": {
+      "doses": 4,
+      "schedule_days": [0, 0, 7, 21],
+      "note": "2 doses on day 0 (different sites), then day 7 and 21. WHO-accepted alternative."
+    },
+    "rig_dosing": {
+      "human_rig_iu_per_kg": 20,
+      "equine_rig_iu_per_kg": 40,
+      "route": "Infiltrate as much as possible into wound, remainder IM at distant site from vaccine",
+      "timing": "Same day as first vaccine dose (day 0) - never after day 7"
+    }
+  },
+  "high_risk_combinations": [
+    {
+      "animal": "dog",
+      "exposure": "bite",
+      "risk": "rabies",
+      "action": "IMMEDIATE wound wash + Category assessment + Start PEP day 0",
+      "urgency": "emergency"
+    },
+    {
+      "animal": "bat",
+      "exposure": "contact",
+      "risk": "rabies",
+      "action": "Treat as Category III regardless - bats have minor bites not always noticed",
+      "urgency": "emergency"
+    },
+    {
+      "animal": "cattle",
+      "exposure": "consumption",
+      "risk": "brucellosis",
+      "action": "Serology + stool culture if febrile. Doxycycline + Rifampicin if confirmed.",
+      "urgency": "urgent_outpatient"
+    },
+    {
+      "animal": "cattle",
+      "exposure": "contact",
+      "risk": "rift_valley_fever",
+      "action": "PCR + serology if febrile within 6 days. Notify surveillance if suspected.",
+      "urgency": "urgent_notifiable"
+    },
+    {
+      "animal": "rodent",
+      "exposure": "contact",
+      "risk": "leptospirosis",
+      "action": "Doxycycline prophylaxis if high-risk flood exposure. Serology if symptomatic.",
+      "urgency": "routine_with_prophylaxis"
+    }
+  ],
+  "vet_notification_triggers": [
+    "rabies",
+    "rift_valley_fever",
+    "anthrax",
+    "brucellosis",
+    "q_fever",
+    "human_african_trypanosomiasis"
+  ],
+  "icd11_map": {
+    "rabies": "1C82",
+    "brucellosis": "1B95",
+    "rift_valley_fever": "1D43",
+    "anthrax": "1B97",
+    "leptospirosis": "1C10",
+    "q_fever": "1C30",
+    "human_african_trypanosomiasis": "1F50"
+  }
+}

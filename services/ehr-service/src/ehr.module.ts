@@ -173,6 +173,7 @@ import { SupplyChainAiController } from './controllers/supply-chain-ai.controlle
 import { ModelRegistryController } from './controllers/model-registry.controller';
 import { StaffNotificationsController } from './controllers/staff-notifications.controller';
 import { RegistrationIntelligenceController } from './controllers/registration-intelligence.controller';
+import { OneHealthController } from './controllers/one-health.controller';
 import { AtMessagingController } from './controllers/at-messaging.controller';
 
 // Services
@@ -402,6 +403,7 @@ import { ModelRegistryService } from './services/model-registry.service';
 import { TelemedicinePostVisitBridgeService } from './services/telemedicine-postvisit-bridge.service';
 import { StaffNotificationsService } from './services/staff-notifications.service';
 import { RegistrationIntelligenceService } from './services/registration-intelligence.service';
+import { OneHealthService } from './services/one-health.service';
 import { AtMessagingService } from './services/at-messaging.service';
 import { KnowledgeIngestService } from './services/knowledge-ingest.service';
 import { ClaimsAiService } from './services/claims-ai.service';
@@ -605,6 +607,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ModelRegistryController,
     StaffNotificationsController,
     RegistrationIntelligenceController,
+    OneHealthController,
     KnowledgeController,
     ClaimsAiController,
     RegistrationAiController,
@@ -840,6 +843,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ModelRegistryService,
     StaffNotificationsService,
     RegistrationIntelligenceService,
+    OneHealthService,
     KnowledgeIngestService,
     ClaimsAiService,
     RiskStratificationService,

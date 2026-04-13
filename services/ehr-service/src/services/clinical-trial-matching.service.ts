@@ -97,6 +97,53 @@ export class ClinicalTrialMatchingService {
     return repo.findOneBy({ id: matchId });
   }
 
+  async matchPACTRTrials(subdomain: string, patientId: string, condition?: string): Promise<TrialMatch[]> {
+    const ds = await this.tenantService.getTenantDatabase(subdomain);
+    const profile = await this.buildPatientProfile(ds, patientId);
+    const searchCondition = condition || profile.primaryDiagnosis;
+    if (!searchCondition) return [];
+
+    const trials = await this.fetchPACTRTrials(searchCondition);
+    if (!trials.length) return [];
+
+    const repo = ds.getRepository(TrialMatch);
+    const saved: TrialMatch[] = [];
+
+    for (const trial of trials.slice(0, 15)) {
+      const existing = await repo.findOneBy({ patientId, nctId: trial.registryId });
+      if (existing) continue;
+
+      saved.push(await repo.save(repo.create({
+        patientId,
+        nctId: trial.registryId,
+        trialTitle: trial.title ?? 'Untitled',
+        phase: trial.phase ?? null,
+        condition: searchCondition,
+        eligibilityScore: 0.6,
+        inclusionMet: [],
+        exclusionFlags: [],
+        sponsor: trial.sponsor ?? null,
+        locations: trial.locations ?? [],
+        status: 'matched',
+        contactEmail: trial.contactEmail ?? null,
+      } as any)));
+    }
+
+    for (const record of saved) {
+      await ds.query(
+        `UPDATE trial_matches SET registry = 'pactr', registry_id = $1 WHERE id = $2`,
+        [record.nctId, record.id],
+      );
+    }
+
+    this.logger.log(`Matched ${saved.length} PACTR trials for patient ${patientId} (${searchCondition})`);
+    return saved;
+  }
+
+  async searchPACTR(condition: string): Promise<any[]> {
+    return this.fetchPACTRTrials(condition);
+  }
+
   // ── Weekly re-match cron ───────────────────────────────────────────────────
 
   @Cron('0 3 * * 1') // Monday 03:00
@@ -160,6 +207,42 @@ export class ClinicalTrialMatchingService {
       })).filter((t: any) => t.nctId);
     } catch (e: any) {
       this.logger.warn(`ClinicalTrials.gov API unavailable: ${e?.message}`);
+      return [];
+    }
+  }
+
+  private async fetchPACTRTrials(condition: string): Promise<any[]> {
+    const ictrpUrl = 'https://trialsearch.who.int/api/search';
+    try {
+      const { data } = await axios.get(ictrpUrl, {
+        params: {
+          query: condition,
+          registry: 'PACTR',
+          recruiting: 'Y',
+          format: 'json',
+        },
+        timeout: 12000,
+        headers: { Accept: 'application/json' },
+      });
+      const trials = Array.isArray(data?.trials) ? data.trials : Array.isArray(data?.result) ? data.result : [];
+      return trials
+        .map((t: any) => ({
+          registryId: t.TrialID || t.trialId || t.id,
+          registry: 'pactr',
+          title: t.public_title || t.Scientific_title || t.title,
+          phase: t.phase || t.Phase || null,
+          sponsor: t.Primary_sponsor || t.sponsor || null,
+          condition: t.Condition || t.Health_condition || condition,
+          contactEmail: t.Contact_email || t.contact_email || null,
+          locations: String(t.Countries || t.countries || '')
+            .split(';')
+            .map((c: string) => c.trim())
+            .filter(Boolean),
+          url: t.url || `https://pactr.samrc.ac.za/RegistryDisplay.aspx?TrialID=${t.TrialID || t.trialId}`,
+        }))
+        .filter((trial: any) => trial.registryId);
+    } catch (e: any) {
+      this.logger.warn(`WHO ICTRP/PACTR API unavailable: ${e?.message}`);
       return [];
     }
   }

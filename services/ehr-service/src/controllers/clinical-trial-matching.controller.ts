@@ -14,6 +14,15 @@ export class ClinicalTrialMatchingController {
     return this.svc.matchTrials(subdomain, patientId, condition);
   }
 
+  @Post('match/pactr')
+  matchPACTRTrials(
+    @Body('subdomain') subdomain: string,
+    @Body('patientId') patientId: string,
+    @Body('condition') condition?: string,
+  ) {
+    return this.svc.matchPACTRTrials(subdomain, patientId, condition);
+  }
+
   @Get('patient/:patientId')
   getMatches(@Param('patientId') patientId: string, @Query('subdomain') subdomain: string) {
     return this.svc.getMatches(subdomain, patientId);
@@ -26,5 +35,10 @@ export class ClinicalTrialMatchingController {
     @Body('status') status: string,
   ) {
     return this.svc.updateStatus(subdomain, id, status);
+  }
+
+  @Get('pactr/search')
+  searchPACTR(@Query('condition') condition: string) {
+    return this.svc.searchPACTR(condition);
   }
 }
