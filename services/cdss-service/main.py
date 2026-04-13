@@ -5965,6 +5965,240 @@ async def tm_toxicity_risk(req: TmToxicityRiskRequest):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Sprint 145 — Epilepsy NCD Register + AED Protocol
+# ─────────────────────────────────────────────────────────────────────────────
+
+class EpilepsyAedDoseRequest(BaseModel):
+    seizure_type: str
+    patient_age_years: float
+    patient_weight_kg: Optional[float] = None
+    sex: Optional[str] = None
+    is_wra: Optional[bool] = False
+    current_aeds: List[str] = Field(default_factory=list)
+    concurrent_arv: Optional[bool] = False
+    concurrent_tb_treatment: Optional[bool] = False
+    comorbidities: List[str] = Field(default_factory=list)
+    low_resource_setting: Optional[bool] = True
+
+
+class EpilepsyDrugInteractionRequest(BaseModel):
+    aed_name: str
+    concurrent_drugs: List[str]
+    is_wra: Optional[bool] = False
+
+
+class EpilepsyStatusEpilepticusRequest(BaseModel):
+    duration_minutes: float
+    phase_reached: Optional[int] = None
+    patient_age_years: float
+    patient_weight_kg: Optional[float] = None
+    iv_access: Optional[bool] = True
+    drugs_available: List[str] = Field(default_factory=list)
+
+
+@app.post("/cdss/epilepsy/aed-dose")
+async def epilepsy_aed_dose(req: EpilepsyAedDoseRequest):
+    data = _load_supporting_json("epilepsy_protocol.json")
+    dosing = data["aed_dosing"]
+    interactions = data["drug_interactions"]
+
+    warnings = []
+    selected_aed = None
+
+    is_pediatric = req.patient_age_years < 18
+    is_focal = "focal" in req.seizure_type.lower()
+    is_absence = "absence" in req.seizure_type.lower()
+    is_gtc = "generalised" in req.seizure_type.lower() or "tonic" in req.seizure_type.lower()
+
+    if req.is_wra:
+        warnings.append("Women of reproductive age: AVOID sodium valproate — teratogenic (neural tube defects, neurodevelopmental harm). Preferred AED: lamotrigine.")
+        selected_aed = "lamotrigine"
+        warnings.append("Folic acid 5mg daily recommended for all women of reproductive age on AEDs.")
+        warnings.append("All enzyme-inducing AEDs (phenobarbital, carbamazepine, phenytoin) reduce OCP efficacy — advise barrier contraception.")
+    elif is_pediatric:
+        if is_absence:
+            selected_aed = "sodium_valproate" if "liver_disease" not in (req.comorbidities or []) else "ethosuximide"
+        elif is_focal:
+            selected_aed = "phenobarbital" if req.low_resource_setting else "carbamazepine"
+        else:
+            selected_aed = "phenobarbital" if req.low_resource_setting else "sodium_valproate"
+    else:
+        if is_focal:
+            selected_aed = "phenobarbital" if req.low_resource_setting else "carbamazepine"
+        elif is_gtc:
+            selected_aed = "phenobarbital" if req.low_resource_setting else "sodium_valproate"
+        else:
+            selected_aed = "phenobarbital"
+
+    if selected_aed == "sodium_valproate" and "liver_disease" in (req.comorbidities or []):
+        selected_aed = "phenobarbital"
+        warnings.append("Sodium valproate contraindicated in liver disease — switched to phenobarbital.")
+    if selected_aed == "sodium_valproate" and "pregnancy" in (req.comorbidities or []):
+        selected_aed = "lamotrigine"
+        warnings.append("Sodium valproate CONTRAINDICATED in pregnancy. Switching to lamotrigine — urgent specialist review required.")
+
+    dose_info = dosing.get(selected_aed, {})
+    if is_pediatric and req.patient_weight_kg:
+        dose_recommendation = {
+            "starting_dose_mg": round(dose_info.get("pediatric_mg_per_kg_starting", 0) * req.patient_weight_kg, 1),
+            "max_dose_mg": round(dose_info.get("pediatric_mg_per_kg_max", 0) * req.patient_weight_kg, 1),
+            "frequency": dose_info.get("adult_frequency", "daily"),
+            "weight_kg": req.patient_weight_kg,
+        }
+    else:
+        dose_recommendation = {
+            "starting_dose_mg": dose_info.get("adult_starting_mg"),
+            "maintenance_range_mg": dose_info.get("adult_maintenance_range_mg"),
+            "target_dose_mg": dose_info.get("adult_target_mg"),
+            "frequency": dose_info.get("adult_frequency"),
+        }
+
+    interaction_alerts = []
+    for interaction in interactions:
+        normalized_aed = interaction["aed"].lower().replace(" ", "_")
+        if normalized_aed != selected_aed.lower().replace(" ", "_"):
+            continue
+        if req.concurrent_arv and "arv" in interaction.get("interacting_drug_class", "").lower():
+            interaction_alerts.append({
+                "severity": interaction["severity"],
+                "interaction": f"{selected_aed} + ARVs: {interaction['effect']}",
+                "management": interaction["management"],
+            })
+        if req.concurrent_tb_treatment and "tb" in interaction.get("interacting_drug_class", "").lower():
+            interaction_alerts.append({
+                "severity": interaction["severity"],
+                "interaction": f"{selected_aed} + TB drugs: {interaction['effect']}",
+                "management": interaction["management"],
+            })
+
+    return {
+        "recommended_aed": selected_aed,
+        "dose_recommendation": dose_recommendation,
+        "drug_level_monitoring": data.get("drug_level_thresholds", {}).get(selected_aed, {}),
+        "interaction_alerts": sorted(
+            interaction_alerts,
+            key=lambda x: {"critical": 0, "major": 1, "moderate": 2}.get(x["severity"], 3),
+        ),
+        "warnings": warnings,
+        "notes": dose_info.get("notes", ""),
+        "follow_up": data["follow_up_schedule"]["newly_diagnosed"],
+    }
+
+
+@app.post("/cdss/epilepsy/drug-interactions")
+async def epilepsy_drug_interactions(req: EpilepsyDrugInteractionRequest):
+    data = _load_supporting_json("epilepsy_protocol.json")
+    interactions = data["drug_interactions"]
+    wra_safety = data["wra_aed_safety"]
+
+    alerts = []
+    aed_normalised = req.aed_name.lower().replace(" ", "_")
+
+    for interaction in interactions:
+        if interaction["aed"].lower().replace(" ", "_") != aed_normalised:
+            continue
+        for concurrent in req.concurrent_drugs:
+            concurrent_lower = concurrent.lower()
+            examples_lower = [e.lower() for e in interaction.get("examples", [])]
+            drug_class = interaction.get("interacting_drug_class", "").lower()
+            if concurrent_lower in examples_lower or any(concurrent_lower in ex for ex in examples_lower) or concurrent_lower in drug_class:
+                alerts.append({
+                    "aed": req.aed_name,
+                    "interacting_drug": concurrent,
+                    "drug_class": interaction["interacting_drug_class"],
+                    "mechanism": interaction["mechanism"],
+                    "clinical_effect": interaction["effect"],
+                    "severity": interaction["severity"],
+                    "management": interaction["management"],
+                })
+
+    wra_warnings = []
+    contraindicated = [w.lower().replace(" ", "_") for w in wra_safety["contraindicated"]]
+    caution = [w.lower().replace(" ", "_") for w in wra_safety["caution_counselling_required"]]
+    if req.is_wra and aed_normalised in contraindicated:
+        wra_warnings.append(f"{req.aed_name} is CONTRAINDICATED in women of reproductive age. {wra_safety['notes']}")
+    elif req.is_wra and aed_normalised in caution:
+        wra_warnings.append(f"{req.aed_name} requires counselling for women of reproductive age. {wra_safety['notes']}")
+
+    sorted_alerts = sorted(
+        alerts,
+        key=lambda x: {"critical": 0, "major": 1, "moderate": 2, "minor": 3}.get(x["severity"], 4),
+    )
+
+    return {
+        "aed": req.aed_name,
+        "interaction_count": len(sorted_alerts),
+        "alerts": sorted_alerts,
+        "wra_warnings": wra_warnings,
+        "has_critical": any(a["severity"] == "critical" for a in sorted_alerts),
+    }
+
+
+@app.post("/cdss/epilepsy/status-epilepticus")
+async def epilepsy_status_epilepticus(req: EpilepsyStatusEpilepticusRequest):
+    data = _load_supporting_json("epilepsy_protocol.json")
+    protocol = data["status_epilepticus_protocol"]
+    phases = protocol["phases"]
+
+    is_pediatric = req.patient_age_years < 18
+    if req.duration_minutes < 5:
+        current_phase_index = 0
+    elif req.duration_minutes < 20:
+        current_phase_index = 1
+    elif req.duration_minutes < 40:
+        current_phase_index = 2
+    else:
+        current_phase_index = 3
+
+    current_phase = phases[current_phase_index]
+    action = {
+        "phase": current_phase["phase"],
+        "time_window": current_phase["time_minutes"],
+        "immediate_action": current_phase["action"],
+        "drug": current_phase.get("drug"),
+        "is_refractory": current_phase_index >= 3,
+    }
+
+    if current_phase.get("drug") and current_phase["drug"] != "ICU_referral":
+        drug = current_phase["drug"]
+        if is_pediatric and req.patient_weight_kg:
+            dose = current_phase.get("dose_pediatric", "").replace(
+                "0.3 mg/kg", f"{round(0.3 * req.patient_weight_kg, 1)} mg"
+            ).replace(
+                "0.5 mg/kg", f"{round(0.5 * req.patient_weight_kg, 1)} mg"
+            ).replace(
+                "20 mg/kg", f"{round(20 * req.patient_weight_kg, 0):.0f} mg"
+            ).replace(
+                "1 mg/kg/min", f"{round(req.patient_weight_kg, 0):.0f} mg/min max rate"
+            )
+            action["dose"] = dose or current_phase.get("dose_pediatric", "")
+        else:
+            adult_dose = current_phase.get("dose_adult", "")
+            if drug == "phenobarbital" and req.patient_weight_kg:
+                adult_dose = adult_dose.replace("20 mg/kg", f"{round(20 * req.patient_weight_kg, 0):.0f}mg")
+            action["dose"] = adult_dose
+        action["alternative"] = current_phase.get("alternative", None)
+        if drug == "diazepam" and not req.iv_access:
+            action["route_note"] = "No IV access — use rectal diazepam"
+        if drug in (req.drugs_available or []) or not req.drugs_available:
+            action["drug_available"] = True
+        else:
+            action["drug_available"] = False
+            action["drug_note"] = f"{drug} not listed as available — check pharmacy. Alternative: {current_phase.get('alternative', 'seek senior help')}"
+
+    if current_phase_index >= 3:
+        action["urgent_referral"] = "URGENT ICU referral for refractory status epilepticus. Mortality 20–30% without anaesthetic management."
+
+    return {
+        "duration_minutes": req.duration_minutes,
+        "se_definition": protocol["definition"],
+        "current_recommendation": action,
+        "next_phase_trigger": f"If seizure continues beyond {phases[min(current_phase_index + 1, 3)]['time_minutes']} min, escalate to Phase {min(current_phase_index + 2, 4)}",
+        "is_status_epilepticus": req.duration_minutes >= 5,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Sprint 144 — Sickle Cell Disease + Haemoglobinopathy Protocol
 # ─────────────────────────────────────────────────────────────────────────────
 

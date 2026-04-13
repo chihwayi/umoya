@@ -193,6 +193,9 @@ import { ScdRegister } from '../entities/scd-register.entity';
 import { ScdCrisisEvent } from '../entities/scd-crisis-event.entity';
 import { ScdTreatmentRecord } from '../entities/scd-treatment-record.entity';
 import { ScdComplicationScreening } from '../entities/scd-complication-screening.entity';
+import { EpilepsyRegister } from '../entities/epilepsy-register.entity';
+import { AedTherapyRecord } from '../entities/aed-therapy-record.entity';
+import { AedToxicityEvent } from '../entities/aed-toxicity-event.entity';
 import { PsychiatricEncounter } from '../entities/psychiatric-encounter.entity';
 import { CrisisEvent } from '../entities/crisis-event.entity';
 import { SafePlan } from '../entities/safe-plan.entity';
@@ -686,6 +689,9 @@ export class TenantService {
         ScdCrisisEvent,
         ScdTreatmentRecord,
         ScdComplicationScreening,
+        EpilepsyRegister,
+        AedTherapyRecord,
+        AedToxicityEvent,
         PsychiatricEncounter,
         CrisisEvent,
         SafePlan,

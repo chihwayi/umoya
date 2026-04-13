@@ -2271,6 +2271,39 @@ export class CdssService {
     );
   }
 
+  async epilepsyAedDose(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'epilepsyAedDose',
+      '/cdss/epilepsy/aed-dose',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async epilepsyDrugInteractions(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'epilepsyDrugInteractions',
+      '/cdss/epilepsy/drug-interactions',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async epilepsyStatusEpilepticus(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'epilepsyStatusEpilepticus',
+      '/cdss/epilepsy/status-epilepticus',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   /**
    * Fetch patient historical data for CDSS analysis
    */

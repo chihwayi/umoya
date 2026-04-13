@@ -1,0 +1,245 @@
+{
+  "version": "mhGAP-IG-2.0 / ILAE-2017 / WHO-Emergency-2024",
+  "source": "WHO mhGAP Intervention Guide 2.0, ILAE 2017 Classification, WHO Emergency Triage Guidelines",
+  "ilae_seizure_types": {
+    "focal_aware": "Focal onset, awareness retained (previously 'simple partial')",
+    "focal_impaired": "Focal onset, awareness impaired (previously 'complex partial')",
+    "focal_to_bilateral_tonic_clonic": "Focal to bilateral tonic-clonic",
+    "generalised_tonic_clonic": "Generalised onset tonic-clonic",
+    "absence": "Generalised onset absence",
+    "myoclonic": "Generalised onset myoclonic",
+    "atonic": "Generalised onset atonic (drop attack)",
+    "unknown_onset": "Unknown onset"
+  },
+  "ilae_syndromes": [
+    "Childhood absence epilepsy",
+    "Juvenile absence epilepsy",
+    "Juvenile myoclonic epilepsy",
+    "Lennox-Gastaut syndrome",
+    "Dravet syndrome",
+    "Self-limited epilepsy with centrotemporal spikes (SECTS)",
+    "Temporal lobe epilepsy",
+    "Frontal lobe epilepsy",
+    "Unclassified"
+  ],
+  "etiologies": {
+    "structural": ["stroke", "tumour", "cortical dysplasia", "hippocampal sclerosis", "trauma", "neurocysticercosis"],
+    "genetic": ["Dravet (SCN1A)", "JME", "childhood absence"],
+    "infectious": ["cerebral malaria", "HIV encephalopathy", "bacterial meningitis (sequelae)", "neurocysticercosis"],
+    "metabolic": ["hypoglycaemia", "hyponatraemia", "hypocalcaemia", "uraemia"],
+    "immune": ["autoimmune encephalitis"],
+    "unknown": ["unknown etiology"]
+  },
+  "aed_first_line": {
+    "adults_generalised_tonic_clonic": {
+      "first_choice": "sodium_valproate",
+      "alternative_male": "carbamazepine",
+      "alternative_wra": "lamotrigine",
+      "avoid_in_wra": "sodium_valproate",
+      "avoid_reason_wra": "Teratogenic — associated with neural tube defects and neurodevelopmental impairment in offspring. Contraindicated in women of reproductive age unless no alternatives and effective contraception in place."
+    },
+    "adults_focal": {
+      "first_choice": "carbamazepine",
+      "alternative": "phenobarbital",
+      "low_resource_first_choice": "phenobarbital"
+    },
+    "children_generalised": {
+      "first_choice": "sodium_valproate",
+      "alternative": "phenobarbital",
+      "absence_first_choice": "sodium_valproate"
+    },
+    "children_focal": {
+      "first_choice": "carbamazepine",
+      "alternative": "phenobarbital"
+    },
+    "low_resource_fallback": "phenobarbital"
+  },
+  "aed_dosing": {
+    "phenobarbital": {
+      "adult_starting_mg": 60,
+      "adult_maintenance_range_mg": [60, 180],
+      "adult_frequency": "once daily at night",
+      "pediatric_mg_per_kg_starting": 3,
+      "pediatric_mg_per_kg_max": 6,
+      "therapeutic_level_mcg_ml": { "min": 15, "max": 40 },
+      "notes": "Most affordable AED in LMIC. Strong CYP3A4/CYP2C9 inducer — significant ARV and TB drug interactions."
+    },
+    "sodium_valproate": {
+      "adult_starting_mg": 400,
+      "adult_maintenance_range_mg": [400, 2000],
+      "adult_frequency": "twice daily",
+      "pediatric_mg_per_kg_starting": 10,
+      "pediatric_mg_per_kg_max": 40,
+      "therapeutic_level_mcg_ml": { "min": 50, "max": 100 },
+      "contraindications": ["pregnancy", "liver_disease", "pancreatitis", "urea_cycle_disorders"],
+      "wra_warning": true,
+      "notes": "Monitor LFTs. Teratogenic — neural tube defects. Avoid in women of reproductive age."
+    },
+    "carbamazepine": {
+      "adult_starting_mg": 100,
+      "adult_target_mg": 400,
+      "adult_maintenance_range_mg": [200, 1200],
+      "adult_frequency": "twice daily",
+      "pediatric_mg_per_kg_starting": 5,
+      "pediatric_mg_per_kg_max": 20,
+      "therapeutic_level_mcg_ml": { "min": 4, "max": 12 },
+      "notes": "CYP3A4 inducer (auto-induction). Reduces rifampicin efficacy and ARV levels. Monitor Na — risk of hyponatraemia."
+    },
+    "phenytoin": {
+      "adult_starting_mg": 150,
+      "adult_maintenance_range_mg": [200, 400],
+      "adult_frequency": "twice daily",
+      "therapeutic_level_mcg_ml": { "min": 10, "max": 20 },
+      "notes": "Non-linear kinetics — small dose increases can cause toxicity. INH inhibits CYP2C9 → phenytoin toxicity risk."
+    },
+    "lamotrigine": {
+      "adult_starting_mg": 25,
+      "adult_titration_weeks": 8,
+      "adult_maintenance_range_mg": [100, 400],
+      "adult_frequency": "twice daily",
+      "notes": "Preferred for women of reproductive age. Slow titration required to reduce SJS risk."
+    }
+  },
+  "drug_interactions": [
+    {
+      "aed": "phenobarbital",
+      "interacting_drug_class": "ARVs (NNRTIs / PIs)",
+      "examples": ["efavirenz", "nevirapine", "lopinavir/ritonavir", "atazanavir"],
+      "mechanism": "CYP3A4 induction",
+      "effect": "Phenobarbital reduces ARV plasma levels by 30–75% → virological failure risk",
+      "severity": "critical",
+      "management": "Avoid combination where possible. If unavoidable: switch to integrase inhibitor-based ART (dolutegravir — less affected). Monitor viral load closely."
+    },
+    {
+      "aed": "phenobarbital",
+      "interacting_drug_class": "TB drugs",
+      "examples": ["rifampicin"],
+      "mechanism": "Additive CYP3A4 induction (bidirectional)",
+      "effect": "Phenobarbital levels may decrease; rifampicin efficacy maintained but monitor phenobarb levels",
+      "severity": "moderate",
+      "management": "Monitor clinical seizure control. Check phenobarbital drug level after starting TB therapy."
+    },
+    {
+      "aed": "carbamazepine",
+      "interacting_drug_class": "TB drugs",
+      "examples": ["rifampicin"],
+      "mechanism": "CYP3A4 induction by rifampicin",
+      "effect": "CBZ plasma levels reduced 50–70% — seizure breakthrough risk",
+      "severity": "critical",
+      "management": "Increase CBZ dose with close drug level monitoring. Consider switching AED during TB treatment."
+    },
+    {
+      "aed": "carbamazepine",
+      "interacting_drug_class": "ARVs",
+      "examples": ["lopinavir/ritonavir", "atazanavir"],
+      "mechanism": "CYP3A4 mutual induction/inhibition",
+      "effect": "CBZ levels may increase (ritonavir inhibits CYP3A4) or decrease — unpredictable",
+      "severity": "major",
+      "management": "Prefer alternative AED. If combined: measure CBZ level and titrate carefully."
+    },
+    {
+      "aed": "phenytoin",
+      "interacting_drug_class": "TB drugs",
+      "examples": ["isoniazid (INH)"],
+      "mechanism": "INH inhibits CYP2C9",
+      "effect": "Phenytoin toxicity (nystagmus, ataxia, confusion) at therapeutic doses",
+      "severity": "major",
+      "management": "Monitor phenytoin level within 2 weeks of starting INH. Reduce phenytoin dose if level elevated."
+    },
+    {
+      "aed": "sodium_valproate",
+      "interacting_drug_class": "ARVs",
+      "examples": ["lopinavir/ritonavir"],
+      "mechanism": "Lopinavir/ritonavir induces VPA glucuronidation",
+      "effect": "VPA levels reduced up to 75% — seizure risk",
+      "severity": "major",
+      "management": "Monitor VPA level after starting lopinavir/ritonavir. May need dose increase."
+    },
+    {
+      "aed": "sodium_valproate",
+      "interacting_drug_class": "other_aed",
+      "examples": ["lamotrigine"],
+      "mechanism": "VPA inhibits lamotrigine glucuronidation (UGT)",
+      "effect": "Lamotrigine levels double — toxicity risk (dizziness, diplopia, SJS)",
+      "severity": "major",
+      "management": "Halve lamotrigine starting dose and titrate more slowly when combined with VPA."
+    }
+  ],
+  "drug_level_thresholds": {
+    "phenobarbital": { "subtherapeutic_below": 15, "toxic_above": 40, "unit": "mcg/mL" },
+    "sodium_valproate": { "subtherapeutic_below": 50, "toxic_above": 100, "unit": "mcg/mL" },
+    "carbamazepine": { "subtherapeutic_below": 4, "toxic_above": 12, "unit": "mcg/mL" },
+    "phenytoin": { "subtherapeutic_below": 10, "toxic_above": 20, "unit": "mcg/mL" }
+  },
+  "status_epilepticus_protocol": {
+    "definition": "Seizure lasting ≥5 minutes OR ≥2 seizures without recovery of consciousness",
+    "phases": [
+      {
+        "phase": 1,
+        "time_minutes": "0–5",
+        "action": "Position patient, protect airway, O2, IV access, glucose check",
+        "drug": null
+      },
+      {
+        "phase": 2,
+        "time_minutes": "5–20",
+        "action": "Benzodiazepine — first line",
+        "drug": "diazepam",
+        "dose_adult": "10mg IV over 2 min OR 10–20mg rectal (if no IV)",
+        "dose_pediatric": "0.3 mg/kg IV (max 10mg) OR 0.5 mg/kg rectal",
+        "repeat": "May repeat once after 5 min if seizure continues",
+        "alternative": "Lorazepam 4mg IV (adult) / 0.1 mg/kg IV (child)"
+      },
+      {
+        "phase": 3,
+        "time_minutes": "20–40",
+        "action": "If benzodiazepine failed — second line",
+        "drug": "phenobarbital",
+        "dose_adult": "20 mg/kg IV at 50–100 mg/min (max 1g)",
+        "dose_pediatric": "20 mg/kg IV at max 1 mg/kg/min",
+        "note": "Phenytoin 20mg/kg IV at ≤50 mg/min if phenobarb unavailable"
+      },
+      {
+        "phase": 4,
+        "time_minutes": ">40 (refractory SE)",
+        "action": "Refer urgently to ICU. Intubation + anaesthesia (propofol/midazolam/thiopentone)",
+        "drug": "ICU_referral",
+        "note": "Mortality 20–30% in refractory SE"
+      }
+    ]
+  },
+  "aed_toxicity_profiles": {
+    "phenobarbital": {
+      "common": ["sedation", "cognitive_impairment", "hyperactivity_children", "osteoporosis"],
+      "serious": ["hepatotoxicity", "bone_marrow_suppression", "paradoxical_excitement"],
+      "monitoring": ["LFT at baseline and 3-monthly", "FBC if prolonged use"]
+    },
+    "sodium_valproate": {
+      "common": ["weight_gain", "tremor", "alopecia", "nausea"],
+      "serious": ["hepatotoxicity", "pancreatitis", "thrombocytopenia", "encephalopathy", "teratogenicity"],
+      "monitoring": ["LFT monthly for first 6 months then 6-monthly", "platelet count", "VPA level"]
+    },
+    "carbamazepine": {
+      "common": ["dizziness", "diplopia", "ataxia", "nausea"],
+      "serious": ["Stevens-Johnson_syndrome", "hyponatraemia", "agranulocytosis", "aplastic_anaemia"],
+      "monitoring": ["FBC and Na at baseline and 3-monthly", "CBZ level", "LFT"]
+    },
+    "phenytoin": {
+      "common": ["gingival_hyperplasia", "hirsuitism", "coarsened_facies"],
+      "serious": ["Stevens-Johnson_syndrome", "cerebellar_atrophy_chronic", "osteoporosis"],
+      "monitoring": ["phenytoin level", "FBC", "LFT", "dental hygiene review"]
+    }
+  },
+  "wra_aed_safety": {
+    "contraindicated": ["sodium_valproate"],
+    "caution_counselling_required": ["carbamazepine", "phenobarbital", "phenytoin"],
+    "preferred": ["lamotrigine"],
+    "notes": "All AEDs except lamotrigine reduce OCP efficacy via CYP induction. Advise barrier contraception. Folic acid 5mg daily for all women of reproductive age on AEDs."
+  },
+  "follow_up_schedule": {
+    "newly_diagnosed": "2 weeks, then 1 month, then 3-monthly until stable",
+    "stable": "6-monthly",
+    "seizure_free_2_years": "Annual review, discuss AED withdrawal (specialist decision)",
+    "drug_level_monitoring": "At baseline, 4 weeks after dose change, then annually or with clinical change"
+  }
+}

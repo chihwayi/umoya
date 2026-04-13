@@ -81,13 +81,17 @@ import {
   TENANT_SCD_BUNDLE_VERSION,
   TENANT_SCD_STATEMENTS,
 } from '../generated/tenant-scd.statements';
+import {
+  TENANT_EPILEPSY_BUNDLE_VERSION,
+  TENANT_EPILEPSY_STATEMENTS,
+} from '../generated/tenant-epilepsy.statements';
 
 interface ProvisioningBundle {
   id: string;
   label: string;
   version: string;
   description?: string;
-  statements?: () => string[];
+  statements?: (() => string[]) | string[];
   triggers?: () => string[];
   tasks?: Array<(tenantDb: DataSource) => Promise<void>>;
 }
@@ -151,6 +155,16 @@ export class DatabaseProvisioningService {
         .replace(/CREATE EXTENSION\s+/gi, 'CREATE EXTENSION IF NOT EXISTS ')
         .replace(/IF NOT EXISTS\s+IF NOT EXISTS/gi, 'IF NOT EXISTS'),
     );
+  }
+
+  private resolveBundleStatements(bundle: ProvisioningBundle): string[] {
+    if (!bundle.statements) {
+      return [];
+    }
+    const statements = typeof bundle.statements === 'function'
+      ? bundle.statements()
+      : bundle.statements;
+    return this.normalizeStatements(statements);
   }
 
   private async ensureSchemaVersionTable(tenantDb: DataSource) {
@@ -1395,6 +1409,13 @@ export class DatabaseProvisioningService {
         version: TENANT_SCD_BUNDLE_VERSION,
         description: 'S144 — SCD register, crisis events, treatment records, complication screenings',
         statements: TENANT_SCD_STATEMENTS,
+      },
+      {
+        id: 'sprint145_epilepsy_ncd_register',
+        label: 'Epilepsy NCD Register + AED Therapy Protocol',
+        version: TENANT_EPILEPSY_BUNDLE_VERSION,
+        description: 'S145 — epilepsy register, AED therapy records, AED toxicity events',
+        statements: TENANT_EPILEPSY_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',
@@ -4397,7 +4418,7 @@ export class DatabaseProvisioningService {
           });
 
           const bundleErrors: Array<{ phase: 'statement' | 'trigger' | 'task'; message: string; sqlPreview?: string }> = [];
-          const statements = bundle.statements ? this.normalizeStatements(bundle.statements()) : [];
+          const statements = this.resolveBundleStatements(bundle);
           for (const statement of statements) {
             if (!statement.trim()) continue;
             try {

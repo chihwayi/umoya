@@ -11788,3 +11788,84 @@ export const scdApi = {
     return response.data;
   },
 };
+
+export const epilepsyApi = {
+  enroll: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/epilepsy/patient/${patientId}/enroll`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getRegister: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/epilepsy/patient/${patientId}/register`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateRegister: async (id: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/epilepsy/register/${id}`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordAed: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/epilepsy/patient/${patientId}/aed`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getAedTherapy: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/epilepsy/patient/${patientId}/aed`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  stopAed: async (id: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/epilepsy/aed/${id}/stop`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordToxicity: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/epilepsy/patient/${patientId}/toxicity`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getToxicityEvents: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/epilepsy/patient/${patientId}/toxicity`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getAedDose: async (dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/epilepsy/cdss/aed-dose', dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  checkDrugInteractions: async (dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/epilepsy/cdss/drug-interactions', dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getStatusEpilepticusProtocol: async (dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/epilepsy/cdss/status-epilepticus', dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSeizureHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/neurology/patient/${patientId}/seizures`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'x-tenant-subdomain': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordSeizure: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/neurology/patient/${patientId}/seizures`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'x-tenant-subdomain': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
