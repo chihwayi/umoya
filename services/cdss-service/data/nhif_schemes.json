@@ -1,0 +1,49 @@
+{
+  "schemes": {
+    "NHIF_G1": {
+      "code": "NHIF_G1",
+      "name": "NHIF Government Employee Scheme",
+      "capitation_rate_per_member_monthly": 15.00,
+      "co_pay_rules": {
+        "outpatient": 0.05,
+        "inpatient": 25.00,
+        "specialist": 10.00,
+        "all_services": 5.00
+      },
+      "currency": "USD",
+      "country": "Zimbabwe",
+      "claim_submission": "Submit via NHIF Portal",
+      "id_format": "^NHIF-G-[0-9]{6}$",
+      "id_example": "NHIF-G-123456"
+    },
+    "NHIF_P1": {
+      "code": "NHIF_P1",
+      "name": "NHIF Private Sector Scheme",
+      "capitation_rate_per_member_monthly": 12.50,
+      "co_pay_rules": {
+        "outpatient": 0.10,
+        "inpatient": 50.00,
+        "specialist": 20.00,
+        "all_services": 10.00
+      },
+      "currency": "USD",
+      "country": "Zimbabwe",
+      "claim_submission": "Submit via EDI",
+      "id_format": "^NHIF-P-[0-9]{6}$",
+      "id_example": "NHIF-P-123456"
+    },
+    "CBHI_C1": {
+      "code": "CBHI_C1",
+      "name": "Community Based Health Insurance (CBHI)",
+      "capitation_rate_per_member_monthly": 8.00,
+      "co_pay_rules": {
+        "all_services": 0.00
+      },
+      "currency": "USD",
+      "country": "Zimbabwe",
+      "claim_submission": "Submit via District Health Office",
+      "id_format": "^CBHI-[0-9]{6}$",
+      "id_example": "CBHI-123456"
+    }
+  }
+}

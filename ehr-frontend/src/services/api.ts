@@ -11933,3 +11933,48 @@ export const oneHealthApi = {
     return response.data;
   },
 };
+
+export const nhifApi = {
+  enrollMember: async (patientId: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/nhif/patient/${patientId}/enroll`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getMembership: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/nhif/patient/${patientId}/membership`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  createClaim: async (patientId: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/nhif/patient/${patientId}/claims`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  submitClaim: async (claimId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/nhif/claims/${claimId}/submit`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getClaims: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/nhif/patient/${patientId}/claims`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getTariffs: async (schemeCode: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/nhif/schemes/${schemeCode}/tariffs`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  checkEligibility: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/nhif/cdss/check-eligibility', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};

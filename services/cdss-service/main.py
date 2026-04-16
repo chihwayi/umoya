@@ -14283,6 +14283,85 @@ async def care_gaps_batch_detect(payload: CareGapBatchPayload):
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 149 — NHIF / CBHI Capitation Billing
+# ─────────────────────────────────────────────────────────────────────────────
+
+class NhifEligibilityRequest(BaseModel):
+    membership_number: str
+    scheme_code: str
+    national_id: Optional[str] = None
+
+
+class NhifCopayRequest(BaseModel):
+    scheme_code: str
+    service_codes: Optional[List[str]] = []
+
+
+@app.post("/nhif/eligibility/check")
+async def nhif_eligibility_check(req: NhifEligibilityRequest):
+    data = _load_supporting_json("nhif_schemes.json")
+    schemes = data.get("schemes", {})
+    scheme = schemes.get(req.scheme_code)
+
+    if not scheme:
+        return {
+            "eligible": False,
+            "reason": f"Unknown scheme code: {req.scheme_code}",
+            "transparency": "Local policy engine"
+        }
+
+    # ID format validation
+    import re
+    pattern = scheme.get("id_format")
+    if pattern and not re.match(pattern, req.membership_number):
+        return {
+            "eligible": False,
+            "reason": f"Invalid ID format. Expected like {scheme.get('id_example')}",
+            "transparency": "Local format validator"
+        }
+
+    return {
+        "eligible": True,
+        "scheme_name": scheme.get("name"),
+        "capitation_model": True,
+        "monthly_rate": scheme.get("capitation_rate_per_member_monthly"),
+        "currency": scheme.get("currency"),
+        "transparency": "NHIF/CBHI rule-based simulation"
+    }
+
+
+@app.post("/nhif/billing/calculate-copay")
+async def nhif_calculate_copay(req: NhifCopayRequest):
+    data = _load_supporting_json("nhif_schemes.json")
+    schemes = data.get("schemes", {})
+    scheme = schemes.get(req.scheme_code)
+
+    if not scheme:
+        raise HTTPException(status_code=400, detail=f"Scheme {req.scheme_code} not found")
+
+    rules = scheme.get("co_pay_rules", {})
+    capitation_amount = scheme.get("capitation_rate_per_member_monthly", 0)
+    
+    # Simple logic: if any service is 'specialist', use specialist co-pay
+    # Otherwise use all_services or outpatient percentage
+    co_pay = rules.get("all_services", 5.00)
+    
+    if req.service_codes:
+        for code in req.service_codes:
+            if "SPEC" in code.upper():
+                co_pay = rules.get("specialist", 10.00)
+                break
+
+    return {
+        "scheme_code": req.scheme_code,
+        "capitation_amount": capitation_amount,
+        "co_pay_amount": co_pay,
+        "currency": scheme.get("currency"),
+        "rules_applied": "Specialist surcharge applied" if co_pay > rules.get("all_services", 5.0) else "Standard capitation co-pay"
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

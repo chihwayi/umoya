@@ -1,4 +1,4 @@
-export const TENANT_NHIF_CBHI_BUNDLE_VERSION = '2026.04.09.6';
+export const TENANT_NHIF_CBHI_BUNDLE_VERSION = '2026.04.15.1';
 
 export const TENANT_NHIF_CBHI_STATEMENTS = (): string[] => [
   `CREATE TABLE IF NOT EXISTS nhif_schemes (
@@ -66,4 +66,62 @@ export const TENANT_NHIF_CBHI_STATEMENTS = (): string[] => [
   `CREATE INDEX IF NOT EXISTS idx_nhif_claims_patient ON nhif_claims(patient_id)`,
   `CREATE INDEX IF NOT EXISTS idx_nhif_claims_scheme ON nhif_claims(nhif_scheme_id)`,
   `CREATE INDEX IF NOT EXISTS idx_capitation_scheme ON capitation_payments(nhif_scheme_id)`,
+
+  /* Sprint 149: NHIF / CBHI Capitation Billing Extended Tables */
+  `CREATE TABLE IF NOT EXISTS nhif_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL,
+    scheme_code TEXT NOT NULL,
+    membership_number TEXT NOT NULL,
+    national_id TEXT,
+    principal_member_id UUID,
+    is_principal BOOLEAN NOT NULL DEFAULT true,
+    enrollment_date DATE,
+    expiry_date DATE,
+    status TEXT NOT NULL DEFAULT 'active',
+    monthly_contribution NUMERIC(10,2),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_nhif_members_patient ON nhif_members(patient_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_nhif_members_scheme ON nhif_members(scheme_code)`,
+  `CREATE INDEX IF NOT EXISTS idx_nhif_members_number ON nhif_members(membership_number)`,
+
+  `CREATE TABLE IF NOT EXISTS capitation_claims (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL,
+    nhif_member_id UUID NOT NULL,
+    scheme_code TEXT NOT NULL,
+    claim_period_month INTEGER NOT NULL,
+    claim_period_year INTEGER NOT NULL,
+    visit_date DATE,
+    service_codes TEXT[] NOT NULL DEFAULT '{}',
+    diagnosis_codes TEXT[] NOT NULL DEFAULT '{}',
+    capitation_amount NUMERIC(10,2),
+    co_pay_amount NUMERIC(10,2) DEFAULT 0,
+    claim_status TEXT NOT NULL DEFAULT 'draft',
+    scheme_reference TEXT,
+    submission_date DATE,
+    approval_date DATE,
+    rejection_reason TEXT,
+    created_by UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_capitation_claims_patient ON capitation_claims(patient_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_capitation_claims_period ON capitation_claims(claim_period_year, claim_period_month)`,
+  `CREATE INDEX IF NOT EXISTS idx_capitation_claims_status ON capitation_claims(claim_status)`,
+
+  `CREATE TABLE IF NOT EXISTS scheme_tariff_schedules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    scheme_code TEXT NOT NULL,
+    service_code TEXT NOT NULL,
+    service_description TEXT NOT NULL,
+    tariff_amount NUMERIC(10,2) NOT NULL,
+    currency_code VARCHAR(3) NOT NULL DEFAULT 'USD',
+    effective_from DATE,
+    effective_to DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_tariff_scheme ON scheme_tariff_schedules(scheme_code, service_code)`,
 ];

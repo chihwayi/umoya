@@ -82,4 +82,42 @@ export class NhifController {
   checkEligibility(@Param('memberId') memberId: string, @Request() req: RequestWithTenant) {
     return this.nhifService.checkEligibility(req.tenantId, memberId);
   }
+
+  /* Sprint 149: NHIF / CBHI Capitation Billing Endpoints */
+
+  @Post('patient/:patientId/enroll')
+  async enrollCapitation(@Param('patientId') patientId: string, @Body() body: any, @Request() req: RequestWithTenant) {
+    return this.nhifService.enrollMemberCapitation(req.tenantId, patientId, body);
+  }
+
+  @Get('patient/:patientId/membership')
+  async getMembershipCapitation(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.nhifService.getMemberCapitation(req.tenantId, patientId);
+  }
+
+  @Post('patient/:patientId/claims')
+  async createClaimCapitation(@Param('patientId') patientId: string, @Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id ?? '';
+    return this.nhifService.createCapitationClaim(req.tenantId, patientId, userId, body);
+  }
+
+  @Post('claims/:id/submit')
+  async submitClaimCapitation(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.nhifService.submitCapitationClaim(req.tenantId, id);
+  }
+
+  @Get('patient/:patientId/claims')
+  async getClaimsByPatientCapitation(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.nhifService.getClaimsByPatient(req.tenantId, patientId);
+  }
+
+  @Get('schemes/:schemeCode/tariffs')
+  async getTariffsCapitation(@Param('schemeCode') schemeCode: string, @Request() req: RequestWithTenant) {
+    return this.nhifService.getTariffSchedule(req.tenantId, schemeCode);
+  }
+
+  @Post('cdss/check-eligibility')
+  async checkEligibilityCapitation(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.nhifService.verifyEligibilityCapitation(req.tenantId, body);
+  }
 }

@@ -7,7 +7,7 @@ import {
   BarChart3, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
   CreditCard, Lock, FolderOpen, Target, LayoutDashboard, Leaf,
-  Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown, Brain, PawPrint
+  Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown, Brain, PawPrint, Baby, Wallet, MessageSquare
 } from 'lucide-react';
 import { cdssApi, ehrApi, tenantApi } from '../services/api';
 import ModalPortal from '../components/ModalPortal';
@@ -41,6 +41,7 @@ import TraditionalMedicineDashboard from '../components/TraditionalMedicineDashb
 import ScdDashboard from '../components/ScdDashboard';
 import EpilepsyDashboard from '../components/EpilepsyDashboard';
 import OneHealthDashboard from '../components/OneHealthDashboard';
+import NhifDashboard from '../components/NhifDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
 import LabResultsViewer from '../components/LabResultsViewer';
@@ -240,8 +241,8 @@ const NurseDashboard: React.FC = () => {
   const [mhQuickSafetyPlan, setMhQuickSafetyPlan] = useState<any | null>(null);
   const [showMentalHealthModal, setShowMentalHealthModal] = useState(false);
   const [mentalHealthInitialTab, setMentalHealthInitialTab] = useState<'overview' | 'screening' | 'mhgap' | 'careplans' | 'followups' | 'crisis' | 'safeplan' | 'meds'>('careplans');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals' | 'cervical-screening' | 'family-planning' | 'hypertension' | 'traditional-medicine' | 'scd' | 'epilepsy' | 'one-health'>('dashboard');
-  const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity' | 'women-health' | 'ncd'>('main');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals' | 'cervical-screening' | 'family-planning' | 'hypertension' | 'traditional-medicine' | 'scd' | 'epilepsy' | 'one-health' | 'nhif'>('dashboard');
+  const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity' | 'women-health' | 'ncd' | 'finance'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
@@ -1038,6 +1039,17 @@ const NurseDashboard: React.FC = () => {
           { label: 'Sickle Cell Disease', tab: 'scd', icon: Droplets },
           { label: 'Epilepsy', tab: 'epilepsy', icon: Brain },
           { label: 'One Health', tab: 'one-health', icon: PawPrint },
+        ],
+      },
+      {
+        icon: Wallet,
+        label: 'Finance',
+        desc: 'Billing & NHIF capitation',
+        section: 'finance' as const,
+        tab: 'nhif',
+        color: 'from-orange-500 to-amber-500',
+        children: [
+          { label: 'NHIF / CBHI', tab: 'nhif', icon: CreditCard },
         ],
       },
     ].filter((item) => {
@@ -5148,6 +5160,30 @@ const NurseDashboard: React.FC = () => {
             )}
             {activeTab === 'one-health' && !selectedPatient && (
               <div className="text-slate-500 text-sm">Select a patient to view the One Health register</div>
+            )}
+          </div>
+        )}
+
+        {/* Finance Section */}
+        {activeSection === 'finance' && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                <Wallet className="w-6 h-6 text-orange-600 mr-2" />
+                Finance
+              </h2>
+            </div>
+            {activeTab === 'nhif' && selectedPatient?.id && (
+              <NhifDashboard
+                tenantSlug={tenantSlug ?? ''}
+                patientId={selectedPatient.id}
+                token={localStorage.getItem('ehr_token') || ''}
+              />
+            )}
+            {activeTab === 'nhif' && !selectedPatient?.id && (
+              <div className="p-8 text-center text-gray-500 italic bg-white shadow rounded-lg">
+                Please select a patient from the queue to manage NHIF/CBHI capitation.
+              </div>
             )}
           </div>
         )}

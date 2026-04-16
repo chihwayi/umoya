@@ -4864,4 +4864,26 @@ export class CdssService {
       return null;
     }
   }
+
+  /* Sprint 149: NHIF / CBHI CDSS Methods */
+
+  async nhifCheckEligibility(payload: Record<string, any>, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'nhif_eligibility_check',
+      '/nhif/eligibility/check',
+      payload,
+      10000,
+      tenantId,
+    );
+  }
+
+  async nhifCalculateCopay(payload: Record<string, any>, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'nhif_copay_calculation',
+      '/nhif/billing/calculate-copay',
+      payload,
+      10000,
+      tenantId,
+    );
+  }
 }

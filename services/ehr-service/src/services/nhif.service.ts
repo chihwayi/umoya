@@ -1,14 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { NhifScheme } from '../entities/nhif-scheme.entity';
 import { SchemeMember } from '../entities/scheme-member.entity';
 import { NhifClaim } from '../entities/nhif-claim.entity';
 import { CapitationPayment } from '../entities/capitation-payment.entity';
+import { NhifMember } from '../entities/nhif-member.entity';
+import { CapitationClaim } from '../entities/capitation-claim.entity';
+import { SchemeTariffSchedule } from '../entities/scheme-tariff-schedule.entity';
 
 @Injectable()
 export class NhifService {
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
 
   async createScheme(tenantId: string, body: any): Promise<NhifScheme> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
@@ -143,6 +150,66 @@ export class NhifService {
         source: 'api_error',
         error: err?.response?.data ?? err?.message ?? 'Eligibility API unreachable',
       };
+    }
+  }
+
+  /* Sprint 149: Capitation Billing Methods */
+
+  async enrollMemberCapitation(tenantId: string, patientId: string, body: any): Promise<NhifMember> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = db.getRepository(NhifMember);
+    const existing = await repo.findOne({ where: { patientId, schemeCode: body.schemeCode } });
+    if (existing) {
+      Object.assign(existing, { membershipNumber: body.membershipNumber, nationalId: body.nationalId, enrollmentDate: body.enrollmentDate, expiryDate: body.expiryDate, status: 'active' });
+      return repo.save(existing);
+    }
+    const member = repo.create({ patientId, ...body } as any) as unknown as NhifMember;
+    return repo.save(member);
+  }
+
+  async getMemberCapitation(tenantId: string, patientId: string): Promise<NhifMember | null> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    return db.getRepository(NhifMember).findOne({ where: { patientId, status: 'active' } });
+  }
+
+  async createCapitationClaim(tenantId: string, patientId: string, userId: string, body: any): Promise<CapitationClaim> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = db.getRepository(CapitationClaim);
+    const claim = repo.create({ patientId, createdBy: userId, claimStatus: 'draft', ...body } as any) as unknown as CapitationClaim;
+    try {
+      const copay = await this.cdssService.nhifCalculateCopay({ scheme_code: body.schemeCode, service_codes: body.serviceCodes ?? [] }, tenantId);
+      if (copay) {
+        claim.coPayAmount = copay.co_pay_amount ?? 0;
+        claim.capitationAmount = copay.capitation_amount ?? null;
+      }
+    } catch {}
+    return repo.save(claim);
+  }
+
+  async submitCapitationClaim(tenantId: string, claimId: string): Promise<CapitationClaim> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = db.getRepository(CapitationClaim);
+    const claim = await repo.findOneOrFail({ where: { id: claimId } });
+    claim.claimStatus = 'submitted';
+    claim.submissionDate = new Date().toISOString().split('T')[0];
+    return repo.save(claim);
+  }
+
+  async getClaimsByPatient(tenantId: string, patientId: string): Promise<CapitationClaim[]> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    return db.getRepository(CapitationClaim).find({ where: { patientId }, order: { createdAt: 'DESC' } });
+  }
+
+  async getTariffSchedule(tenantId: string, schemeCode: string): Promise<SchemeTariffSchedule[]> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    return db.getRepository(SchemeTariffSchedule).find({ where: { schemeCode } });
+  }
+
+  async verifyEligibilityCapitation(tenantId: string, body: any): Promise<Record<string, any>> {
+    try {
+      return await this.cdssService.nhifCheckEligibility(body, tenantId);
+    } catch {
+      return { eligible: false, error: 'Eligibility check unavailable' };
     }
   }
 }

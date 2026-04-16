@@ -62,7 +62,7 @@ export class ClinicalTrialMatchingService {
       const existing = await repo.findOneBy({ patientId, nctId: match.nctId });
       if (existing) continue;
 
-      saved.push(await repo.save(repo.create({
+      const newMatch = repo.create({
         patientId,
         nctId: match.nctId,
         trialTitle: trial.title,
@@ -75,7 +75,8 @@ export class ClinicalTrialMatchingService {
         locations: trial.locations || [],
         status: 'matched',
         contactEmail: trial.contactEmail,
-      })));
+      } as any) as unknown as TrialMatch;
+      saved.push(await repo.save(newMatch));
     }
 
     this.logger.log(`Matched ${saved.length} trials for patient ${patientId} (${searchCondition})`);
@@ -113,7 +114,7 @@ export class ClinicalTrialMatchingService {
       const existing = await repo.findOneBy({ patientId, nctId: trial.registryId });
       if (existing) continue;
 
-      saved.push(await repo.save(repo.create({
+      const newMatch = repo.create({
         patientId,
         nctId: trial.registryId,
         trialTitle: trial.title ?? 'Untitled',
@@ -126,7 +127,8 @@ export class ClinicalTrialMatchingService {
         locations: trial.locations ?? [],
         status: 'matched',
         contactEmail: trial.contactEmail ?? null,
-      } as any)));
+      } as any) as unknown as TrialMatch;
+      saved.push(await repo.save(newMatch));
     }
 
     for (const record of saved) {
