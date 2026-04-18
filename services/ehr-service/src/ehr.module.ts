@@ -41,6 +41,7 @@ import { DermatologyController } from './controllers/dermatology.controller';
 import { PalliativeController } from './controllers/palliative.controller';
 import { NutritionController } from './controllers/nutrition.controller';
 import { NhifController } from './controllers/nhif.controller';
+import { CbhiController } from './controllers/cbhi.controller';
 import { NhlsHl7Controller } from './controllers/nhls-hl7.controller';
 import { TierNetController } from './controllers/tier-net.controller';
 import { EtrNetController } from './controllers/etr-net.controller';
@@ -71,6 +72,7 @@ import { EpiController } from './controllers/epi.controller';
 import { OutbreakController } from './controllers/outbreak.controller';
 import { OutbreakProtocolModule } from './outbreak/outbreak.module';
 import { SurveillanceModule } from './surveillance/surveillance.module';
+import { NtdModule } from './ntd/ntd.module';
 import { MobileMoneyController } from './controllers/mobile-money.controller';
 import { ChwController } from './controllers/chw.controller';
 import { LabTestController } from './controllers/lab-test.controller';
@@ -223,6 +225,7 @@ import { DermatologyService } from './services/dermatology.service';
 import { PalliativeService } from './services/palliative.service';
 import { NutritionService } from './services/nutrition.service';
 import { NhifService } from './services/nhif.service';
+import { CbhiService } from './services/cbhi.service';
 import { NhlsHl7Service } from './services/nhls-hl7.service';
 import { TierNetService } from './services/tier-net.service';
 import { EtrNetService } from './services/etr-net.service';
@@ -450,6 +453,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     }),
     OutbreakProtocolModule,
     SurveillanceModule,
+    NtdModule,
   ],
   controllers: [
     AuthController,
@@ -487,6 +491,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PalliativeController,
     NutritionController,
     NhifController,
+    CbhiController,
     NhlsHl7Controller,
     TierNetController,
     EtrNetController,
@@ -720,6 +725,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PalliativeService,
     NutritionService,
     NhifService,
+    CbhiService,
     NhlsHl7Service,
     TierNetService,
     EtrNetService,

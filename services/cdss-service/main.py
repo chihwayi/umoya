@@ -1544,6 +1544,59 @@ class YellowFeverSeverityResponse(BaseModel):
     notifiable: bool = True
 
 
+# ── Sprint 153: NTD Clinical Depth: Leprosy, Filariasis Models ──────────────
+
+class LeprosyMdtRequest(BaseModel):
+    classification: str                  # 'PB' | 'MB'
+    ridley_jopling_type: Optional[str] = None
+    nfi_present: bool = False
+    nfi_nerves_affected: List[str] = []
+    reaction_type: Optional[str] = None
+    doses_completed: int = 0
+    doses_missed: int = 0
+    age_years: int
+    pregnant: bool = False
+    hiv_positive: bool = False
+
+class LeprosyMdtResponse(BaseModel):
+    mdt_regimen: str
+    treatment_duration_months: int
+    monthly_supervised_drugs: str        # rifampicin 600mg + clofazimine 300mg (MB) / rifampicin 600mg (PB)
+    daily_self_drugs: str
+    nfi_management: str
+    reaction_management: str
+    steroid_dose: Optional[str] = None
+    compliance_threshold_pct: int
+    disability_prevention_actions: List[str]
+    contact_screening_required: bool
+    confidence: float
+    citations: List[str]
+
+class FilariasisSafetyRequest(BaseModel):
+    disease_type: str                    # 'lymphatic_wuchereria' | 'loiasis'
+    loa_loa_mf_count: Optional[int] = None
+    age_years: int
+    weight_kg: float
+    pregnant: bool = False
+    epilepsy: bool = False
+    lymphoedema_stage: Optional[int] = None
+
+class FilariasisSafetyResponse(BaseModel):
+    dec_safe: bool
+    ivermectin_safe: bool
+    albendazole_safe: bool
+    contraindications: List[str]
+    safety_rationale: str
+    recommended_regimen: str
+    dose_dec_mg: Optional[float] = None
+    dose_ivermectin_mg: Optional[float] = None
+    dose_albendazole_mg: Optional[float] = None
+    pre_treatment_mf_count_required: bool
+    morbidity_management: List[str]
+    confidence: float
+    citations: List[str]
+
+
 # Health Check
 @app.get("/")
 async def root():
@@ -6378,6 +6431,33 @@ class EbsTriageResponse(BaseModel):
     abstained: bool = False
 
 
+class CbhiClaimAdjudicationRequest(BaseModel):
+    claim_number: str
+    scheme_id: str
+    principal_diagnosis_icd: str
+    secondary_diagnoses: List[str]
+    procedures: List[Dict[str, Any]]
+    total_billed: float
+    claimed_amount: float
+    length_of_stay_days: Optional[int] = None
+    patient_age_years: int
+    similar_claims_last_90_days: int
+    procedure_count: int
+
+
+class CbhiClaimAdjudicationResponse(BaseModel):
+    fraud_score: float
+    approval_recommendation: str
+    flags: List[str]
+    flag_explanations: Dict[str, str]
+    recommended_approved_amount: float
+    review_priority: str
+    denial_reasons: List[str]
+    confidence: float
+    citations: List[str]
+    abstained: bool = False
+
+
 def _vhf_specimens(pathogen: str) -> List[str]:
     pathogen_value = str(pathogen or "").lower()
     if pathogen_value.startswith("mpox"):
@@ -6719,6 +6799,39 @@ async def ebs_signal_triage(req: EbsTriageRequest):
     ihr_assessment_required, sormas_report_required, confidence.
     """
     return await call_governed_json(prompt, surface="ebs_signal_triage", phi_present=False)
+
+
+@app.post("/cdss/cbhi/claim-adjudication", response_model=CbhiClaimAdjudicationResponse)
+async def cbhi_claim_adjudication(req: CbhiClaimAdjudicationRequest):
+    prompt = f"""
+    You are a health insurance claims adjudicator using AfHEA CBHI Claims Audit Framework
+    and WHO Health Financing Fraud Detection Guidelines.
+
+    Claim details:
+    - Claim number: {req.claim_number}
+    - Scheme: {req.scheme_id}
+    - Principal diagnosis: {req.principal_diagnosis_icd}
+    - Secondary diagnoses: {req.secondary_diagnoses}
+    - Procedures ({req.procedure_count}): {req.procedures}
+    - Total billed: {req.total_billed}
+    - Claimed amount: {req.claimed_amount}
+    - Length of stay: {req.length_of_stay_days}
+    - Patient age: {req.patient_age_years}
+    - Similar claims in last 90 days: {req.similar_claims_last_90_days}
+
+    Assess for:
+    1. possible_duplicate
+    2. unbundling_suspected
+    3. upcoding_suspected
+    4. diagnosis_procedure_mismatch
+    5. excessive_los
+    6. above_tariff
+
+    Return strict JSON with:
+    fraud_score, approval_recommendation, flags, flag_explanations,
+    recommended_approved_amount, review_priority, denial_reasons, confidence, citations.
+    """
+    return await call_governed_json(prompt, surface="cbhi_claim_adjudication", phi_present=True)
 
 
 @app.post("/cdss/zoonotic/assess")
@@ -15310,6 +15423,68 @@ async def yellow_fever_severity(req: YellowFeverSeverityRequest):
         "supportive_care_priority": ["Fluid balance", "Coagulopathy monitoring", "Glucose maintenance"],
         "notifiable": True
     }
+
+
+# ── Sprint 153: NTD Clinical Depth: Leprosy, Filariasis ─────────────────────
+
+@app.post("/cdss/ntd/leprosy-mdt", response_model=LeprosyMdtResponse)
+async def leprosy_mdt_guidance(req: LeprosyMdtRequest):
+    """
+    WHO Leprosy MDT guidance: regimen selection, reaction management, disability prevention.
+    Based on WHO 2018 Guidelines for the Diagnosis, Treatment and Prevention of Leprosy.
+    """
+    prompt = f"""
+    You are a leprosy specialist using WHO 2018 Leprosy Guidelines and WHO MDT blister pack protocols.
+
+    Patient:
+    - Classification: {req.classification} ({req.ridley_jopling_type})
+    - NFI: {req.nfi_present} — nerves: {req.nfi_nerves_affected}
+    - Reaction: {req.reaction_type}
+    - Treatment adherence: {req.doses_completed} doses completed, {req.doses_missed} missed
+    - Age: {req.age_years}, Pregnant: {req.pregnant}, HIV+: {req.hiv_positive}
+
+    Provide:
+    1. MDT regimen (PB=rifampicin 600mg monthly supervised + dapsone 100mg daily x6; MB=rifampicin 600mg+clofazimine 300mg monthly + dapsone 100mg+clofazimine 50mg daily x12)
+    2. NFI: if present → prednisolone 40mg/day tapering; nerve function assessment monthly
+    3. Type 1 reversal: prednisolone 40-60mg/day tapering over 3-6 months; continue MDT
+    4. Type 2 ENI: thalidomide 100-300mg/day (males only); clofazimine 100mg TID or prednisolone
+    5. Disability prevention: foot care, protective footwear, eye drops, self-care education
+    6. HIV co-infection: dapsone toxicity monitoring; consider cotrimoxazole interaction
+
+    Return JSON matching the LeprosyMdtResponse schema.
+    """
+    result = await call_governed_json(prompt, surface="leprosy_mdt", phi_present=True)
+    return result
+
+@app.post("/cdss/ntd/filariasis-safety", response_model=FilariasisSafetyResponse)
+async def filariasis_treatment_safety(req: FilariasisSafetyRequest):
+    """
+    Filariasis MDA drug safety check — critical for Loa loa co-endemicity where DEC/ivermectin
+    cause fatal encephalopathy if Loa loa MF count > 8000/mL. Based on WHO 2017 LF Elimination Guidelines.
+    """
+    prompt = f"""
+    You are an NTD specialist using WHO 2017 Lymphatic Filariasis Elimination Guidelines and
+    WHO 2012 Loa loa safety guidelines for ivermectin MDA.
+
+    Patient:
+    - Disease: {req.disease_type}
+    - Loa loa MF count: {req.loa_loa_mf_count} per mL (CRITICAL: >8000/mL → DEC AND ivermectin CONTRAINDICATED)
+    - Age: {req.age_years}, Weight: {req.weight_kg} kg
+    - Pregnant: {req.pregnant} (DEC contraindicated in pregnancy and children <2)
+    - Epilepsy: {req.epilepsy}
+    - Lymphoedema stage: {req.lymphoedema_stage}
+
+    Safety rules:
+    1. Loa loa MF > 8000/mL: BOTH DEC and ivermectin CONTRAINDICATED (risk of fatal encephalopathy)
+    2. Loa loa MF 1000-8000/mL: ivermectin with extreme caution, close monitoring
+    3. Pregnancy: DEC contraindicated; albendazole after 1st trimester only
+    4. Children <2: albendazole + ivermectin; DEC only in LF-endemic (non-Loa loa) areas
+    5. LF regimen: DEC 6mg/kg/day x12 days (single agent) OR albendazole 400mg + DEC/ivermectin single dose MDA
+
+    Return JSON matching the FilariasisSafetyResponse schema.
+    """
+    result = await call_governed_json(prompt, surface="filariasis_safety", phi_present=True)
+    return result
 
 
 if __name__ == "__main__":

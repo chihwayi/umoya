@@ -2359,6 +2359,17 @@ export class CdssService {
     );
   }
 
+  async cbhiClaimAdjudication(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'cbhiClaimAdjudication',
+      '/cdss/cbhi/claim-adjudication',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async maternalEmoncClassify(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',
@@ -4971,6 +4982,28 @@ export class CdssService {
       '/nhif/billing/calculate-copay',
       payload,
       10000,
+      tenantId,
+    );
+  }
+
+  /* Sprint 153: NTD Clinical Depth Methods */
+
+  async ntdLeprosyMdt(payload: any, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'ntd_leprosy_mdt',
+      '/cdss/ntd/leprosy-mdt',
+      payload,
+      15000,
+      tenantId,
+    );
+  }
+
+  async ntdFilariasisSafety(payload: any, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'ntd_filariasis_safety',
+      '/cdss/ntd/filariasis-safety',
+      payload,
+      15000,
       tenantId,
     );
   }

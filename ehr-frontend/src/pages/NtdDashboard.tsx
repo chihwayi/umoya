@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Bug, CalendarDays, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Bug, CalendarDays, RefreshCw, Stethoscope } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
+import NtdClinicalDepthDashboard from '../components/ntd/NtdDashboard';
 
 interface NtdDashboardProps {
   tenantSlug: string;
   token?: string;
 }
 
-type TabKey = 'assessments' | 'campaigns';
+type TabKey = 'assessments' | 'campaigns' | 'clinical_depth';
 
 const diseaseTypes = [
   'schistosomiasis',
@@ -246,6 +247,18 @@ const NtdDashboard: React.FC<NtdDashboardProps> = ({ tenantSlug: tenantSlugProp,
             <CalendarDays className="h-4 w-4" />
             MDA Campaigns
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('clinical_depth')}
+            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${
+              tab === 'clinical_depth'
+                ? 'border-cyan-600 bg-cyan-500/10 text-cyan-200'
+                : 'border-slate-800 bg-slate-900/80 text-slate-300 hover:border-slate-700 hover:text-white'
+            }`}
+          >
+            <Stethoscope className="h-4 w-4" />
+            Clinical Depth (S153)
+          </button>
         </div>
 
         {tab === 'assessments' && (
@@ -354,6 +367,10 @@ const NtdDashboard: React.FC<NtdDashboardProps> = ({ tenantSlug: tenantSlugProp,
               )}
             </div>
           </div>
+        )}
+
+        {tab === 'clinical_depth' && (
+          <NtdClinicalDepthDashboard />
         )}
       </div>
     </div>

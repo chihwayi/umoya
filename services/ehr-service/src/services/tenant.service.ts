@@ -337,9 +337,16 @@ import { MpoxLesionAssessment } from '../entities/mpox-lesion-assessment.entity'
 import { PlagueCase } from '../outbreak/entities/plague-case.entity';
 import { YellowFeverCase } from '../outbreak/entities/yellow-fever-case.entity';
 import { MeningitisCase } from '../outbreak/entities/meningitis-case.entity';
+import { LeprosyCase } from '../ntd/entities/leprosy-case.entity';
+import { OnchocerciasisCase } from '../ntd/entities/onchocerciasis-case.entity';
+import { FilariasisCase } from '../ntd/entities/filariasis-case.entity';
 import { SormasSyncLog } from '../surveillance/entities/sormas-sync-log.entity';
 import { IhrNotification } from '../surveillance/entities/ihr-notification.entity';
 import { EbsSignal } from '../surveillance/entities/ebs-signal.entity';
+import { CbhiHousehold } from '../cbhi/entities/cbhi-household.entity';
+import { CbhiHouseholdMember } from '../cbhi/entities/cbhi-household-member.entity';
+import { CbhiContribution } from '../cbhi/entities/cbhi-contribution.entity';
+import { CbhiClaim } from '../cbhi/entities/cbhi-claim.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -852,9 +859,16 @@ export class TenantService {
         PlagueCase,
         YellowFeverCase,
         MeningitisCase,
+        LeprosyCase,
+        OnchocerciasisCase,
+        FilariasisCase,
         SormasSyncLog,
         IhrNotification,
         EbsSignal,
+        CbhiHousehold,
+        CbhiHouseholdMember,
+        CbhiContribution,
+        CbhiClaim,
         ScdRegister,
         ScdCrisisEvent,
         ScdTreatmentRecord,

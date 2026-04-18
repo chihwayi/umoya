@@ -12272,6 +12272,65 @@ export const surveillanceApi = {
   },
 };
 
+export const ntdApi = {
+  // Leprosy
+  createLeprosyCase: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/ntd/leprosy', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getLeprosyCases: async (patientId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/ntd/leprosy', {
+      params: { patientId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getLeprosyMdtGuidance: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/ntd/leprosy/mdt-guidance', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  // Onchocerciasis
+  createOnchocerciasisCase: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/ntd/onchocerciasis', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getOnchocerciasisCases: async (patientId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/ntd/onchocerciasis', {
+      params: { patientId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  // Filariasis
+  createFilariasisCase: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/ntd/filariasis', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getFilariasisCases: async (patientId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/ntd/filariasis', {
+      params: { patientId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  checkFilariasisSafety: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/ntd/filariasis/safety-check', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 export const nhifApi = {
   enrollMember: async (patientId: string, data: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/nhif/patient/${patientId}/enroll`, data, {
@@ -12311,6 +12370,83 @@ export const nhifApi = {
   },
   checkEligibility: async (data: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/nhif/cdss/check-eligibility', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
+export const cbhiApi = {
+  registerHousehold: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cbhi/households', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getHouseholds: async (schemeId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/cbhi/households', {
+      params: { schemeId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getHousehold: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/cbhi/households/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateHousehold: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/cbhi/households/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  verifyMembership: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/cbhi/verify/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  addMember: async (householdId: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/cbhi/households/${householdId}/members`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordContribution: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cbhi/contributions', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getContributions: async (householdId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/cbhi/contributions/${householdId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  submitClaim: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cbhi/claims', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getClaims: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/cbhi/claims', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  adjudicateClaim: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/cbhi/claims/${id}/adjudicate`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getCbhiSummary: async (schemeId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/cbhi/summary/${schemeId}`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;

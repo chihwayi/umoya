@@ -110,9 +110,17 @@ import {
   TENANT_PLAGUE_YFM_STATEMENTS,
 } from '../generated/tenant-plague-yfm-protocols.statements';
 import {
+  TENANT_NTD_DEPTH_BUNDLE_VERSION,
+  TENANT_NTD_DEPTH_STATEMENTS,
+} from '../generated/tenant-ntd-clinical-depth.statements';
+import {
   TENANT_SORMAS_IHR_BUNDLE_VERSION,
   TENANT_SORMAS_IHR_STATEMENTS,
 } from '../generated/tenant-sormas-ihr-pipeline.statements';
+import {
+  TENANT_CBHI_DEEP_BUNDLE_VERSION,
+  TENANT_CBHI_DEEP_STATEMENTS,
+} from '../generated/tenant-cbhi-deep-module.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1509,11 +1517,25 @@ export class DatabaseProvisioningService {
         statements: TENANT_PLAGUE_YFM_STATEMENTS,
       },
       {
+        id: 'sprint153_ntd_clinical_depth',
+        label: 'Sprint 153 — NTD Depth: Leprosy MDT, Onchocerciasis, Filariasis',
+        version: TENANT_NTD_DEPTH_BUNDLE_VERSION,
+        description: 'Creates leprosy_cases, onchocerciasis_cases, filariasis_cases tables',
+        statements: TENANT_NTD_DEPTH_STATEMENTS,
+      },
+      {
         id: 'sprint152_sormas_ihr_pipeline',
         label: 'Sprint 152 — SORMAS Bridge + IHR Alert Pipeline',
         version: TENANT_SORMAS_IHR_BUNDLE_VERSION,
         description: 'Creates sormas_sync_log, ihr_notifications, ebs_signals tables',
         statements: TENANT_SORMAS_IHR_STATEMENTS,
+      },
+      {
+        id: 'sprint154_cbhi_deep_module',
+        label: 'Sprint 154 — CBHI Deep Module (Contributions, Exemptions, Claims AI)',
+        version: TENANT_CBHI_DEEP_BUNDLE_VERSION,
+        description: 'Creates cbhi_households, cbhi_household_members, cbhi_contributions, cbhi_claims tables',
+        statements: TENANT_CBHI_DEEP_STATEMENTS,
       },
     ];
   }
