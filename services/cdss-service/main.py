@@ -6327,6 +6327,57 @@ class MpoxSeverityResponse(BaseModel):
     citations: List[str]
 
 
+class IhrAnnex2Request(BaseModel):
+    disease: str
+    is_pheic_listed: bool
+    case_count: int
+    death_count: int
+    unusual_or_unexpected: bool
+    significant_public_health_impact: bool
+    significant_international_spread: bool
+    trade_travel_restriction_risk: bool
+    affected_country: str
+    days_since_first_case: int
+    healthcare_workers_affected: bool
+    laboratory_confirmed: bool
+
+
+class IhrAnnex2Response(BaseModel):
+    pheic_notification_required: bool
+    notification_urgency: str
+    annex2_criteria_met: List[str]
+    annex2_decision_path: str
+    nfp_notification_required: bool
+    recommended_actions: List[str]
+    reporting_template: str
+    confidence: float
+    citations: List[str]
+    abstained: bool = False
+
+
+class EbsTriageRequest(BaseModel):
+    signal_source: str
+    signal_type: str
+    disease_suspected: Optional[str] = None
+    case_count: Optional[int] = None
+    death_count: Optional[int] = None
+    description: str
+    district: str
+    days_since_signal: int
+    similar_signals_last_30_days: int
+
+
+class EbsTriageResponse(BaseModel):
+    risk_level: str
+    verification_priority: str
+    investigation_required: bool
+    recommended_action: str
+    ihr_assessment_required: bool
+    sormas_report_required: bool
+    confidence: float
+    abstained: bool = False
+
+
 def _vhf_specimens(pathogen: str) -> List[str]:
     pathogen_value = str(pathogen or "").lower()
     if pathogen_value.startswith("mpox"):
@@ -6611,6 +6662,63 @@ async def mpox_severity_assessment(req: MpoxSeverityRequest):
             "WHO interim guidance on therapeutics for mpox and supportive care",
         ],
     }
+
+
+@app.post("/cdss/surveillance/ihr-annex2", response_model=IhrAnnex2Response)
+async def ihr_annex2_assessment(req: IhrAnnex2Request):
+    prompt = f"""
+    You are a WHO IHR 2005 expert trained on the IHR Annex 2 decision instrument.
+
+    Event details:
+    - Disease: {req.disease}
+    - PHEIC-listed disease: {req.is_pheic_listed}
+    - Cases: {req.case_count}
+    - Deaths: {req.death_count}
+    - Country: {req.affected_country}
+    - Days since first case: {req.days_since_first_case}
+    - Unusual or unexpected: {req.unusual_or_unexpected}
+    - Significant public health impact: {req.significant_public_health_impact}
+    - Significant international spread: {req.significant_international_spread}
+    - Trade or travel restriction risk: {req.trade_travel_restriction_risk}
+    - Healthcare workers affected: {req.healthcare_workers_affected}
+    - Laboratory confirmed: {req.laboratory_confirmed}
+
+    Apply the IHR Annex 2 decision algorithm:
+    1. If this is a listed PHEIC disease, immediate notification is required.
+    2. Otherwise, if any two or more Annex 2 criteria are met, National Focal Point notification is required within 24 hours.
+    3. Recommend practical next actions and draft a short reporting template suitable for escalation.
+
+    Return strict JSON with:
+    pheic_notification_required, notification_urgency, annex2_criteria_met, annex2_decision_path,
+    nfp_notification_required, recommended_actions, reporting_template, confidence, citations.
+    """
+    return await call_governed_json(prompt, surface="ihr_annex2_assessment", phi_present=False)
+
+
+@app.post("/cdss/surveillance/ebs-triage", response_model=EbsTriageResponse)
+async def ebs_signal_triage(req: EbsTriageRequest):
+    prompt = f"""
+    You are a surveillance epidemiologist using WHO Event-Based Surveillance Operational Guidelines and Africa CDC EBS guidance.
+
+    Signal details:
+    - Source: {req.signal_source}
+    - Type: {req.signal_type}
+    - Disease suspected: {req.disease_suspected}
+    - Cases: {req.case_count}
+    - Deaths: {req.death_count}
+    - Description: {req.description}
+    - District: {req.district}
+    - Days since signal: {req.days_since_signal}
+    - Similar signals in last 30 days: {req.similar_signals_last_30_days}
+
+    Triage this signal using conservative public-health risk logic.
+    Cluster deaths, unusual haemorrhagic illness, explosive clusters, and likely cross-border spread should escalate.
+
+    Return strict JSON with:
+    risk_level, verification_priority, investigation_required, recommended_action,
+    ihr_assessment_required, sormas_report_required, confidence.
+    """
+    return await call_governed_json(prompt, surface="ebs_signal_triage", phi_present=False)
 
 
 @app.post("/cdss/zoonotic/assess")

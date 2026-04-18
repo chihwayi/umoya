@@ -109,6 +109,10 @@ import {
   TENANT_PLAGUE_YFM_BUNDLE_VERSION,
   TENANT_PLAGUE_YFM_STATEMENTS,
 } from '../generated/tenant-plague-yfm-protocols.statements';
+import {
+  TENANT_SORMAS_IHR_BUNDLE_VERSION,
+  TENANT_SORMAS_IHR_STATEMENTS,
+} from '../generated/tenant-sormas-ihr-pipeline.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1503,6 +1507,13 @@ export class DatabaseProvisioningService {
         version: TENANT_PLAGUE_YFM_BUNDLE_VERSION,
         description: 'Creates plague_cases, yellow_fever_cases, meningitis_cases tables',
         statements: TENANT_PLAGUE_YFM_STATEMENTS,
+      },
+      {
+        id: 'sprint152_sormas_ihr_pipeline',
+        label: 'Sprint 152 — SORMAS Bridge + IHR Alert Pipeline',
+        version: TENANT_SORMAS_IHR_BUNDLE_VERSION,
+        description: 'Creates sormas_sync_log, ihr_notifications, ebs_signals tables',
+        statements: TENANT_SORMAS_IHR_STATEMENTS,
       },
     ];
   }

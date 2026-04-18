@@ -2337,6 +2337,28 @@ export class CdssService {
     );
   }
 
+  async surveillanceIhrAnnex2(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'surveillanceIhrAnnex2',
+      '/cdss/surveillance/ihr-annex2',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async surveillanceEbsTriage(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'surveillanceEbsTriage',
+      '/cdss/surveillance/ebs-triage',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async maternalEmoncClassify(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',

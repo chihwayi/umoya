@@ -69,6 +69,7 @@ const MessagingDashboard = lazy(() => import('./pages/MessagingDashboard'));
 const OpenMrsMflDashboard = lazy(() => import('./pages/OpenMrsMflDashboard'));
 const CrvsDashboard = lazy(() => import('./pages/CrvsDashboard'));
 const NtdDashboard = lazy(() => import('./pages/NtdDashboard'));
+const SurveillanceDashboard = lazy(() => import('./pages/SurveillanceDashboard'));
 
 const TenantScopedNhifDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -979,6 +980,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="epi">
                   <OutbreakDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/surveillance"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'infection_control', 'public_health']}>
+                  <SurveillanceDashboard />
                 </RoleProtectedRoute>
               }
             />

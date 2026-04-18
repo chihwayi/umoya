@@ -12196,6 +12196,82 @@ export const outbreakApi = {
   },
 };
 
+export const surveillanceApi = {
+  pushToSormas: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/surveillance/sormas/push', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSormasSyncStatus: async (caseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/surveillance/sormas/sync-status/${caseId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSormasLogs: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/surveillance/sormas/logs', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  retrySormasSync: async (logId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/surveillance/sormas/retry/${logId}`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  createIhr: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/surveillance/ihr', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getIhrNotifications: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/surveillance/ihr', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateIhr: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/surveillance/ihr/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  runAnnex2Assessment: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/surveillance/ihr/${id}/annex2-assessment`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  reportEbsSignal: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/surveillance/ebs', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getEbsSignals: async (status: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/surveillance/ebs', {
+      params: { status },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateEbsSignal: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/surveillance/ebs/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSurveillanceSummary: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/surveillance/summary', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 export const nhifApi = {
   enrollMember: async (patientId: string, data: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/nhif/patient/${patientId}/enroll`, data, {

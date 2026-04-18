@@ -337,6 +337,9 @@ import { MpoxLesionAssessment } from '../entities/mpox-lesion-assessment.entity'
 import { PlagueCase } from '../outbreak/entities/plague-case.entity';
 import { YellowFeverCase } from '../outbreak/entities/yellow-fever-case.entity';
 import { MeningitisCase } from '../outbreak/entities/meningitis-case.entity';
+import { SormasSyncLog } from '../surveillance/entities/sormas-sync-log.entity';
+import { IhrNotification } from '../surveillance/entities/ihr-notification.entity';
+import { EbsSignal } from '../surveillance/entities/ebs-signal.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -849,6 +852,9 @@ export class TenantService {
         PlagueCase,
         YellowFeverCase,
         MeningitisCase,
+        SormasSyncLog,
+        IhrNotification,
+        EbsSignal,
         ScdRegister,
         ScdCrisisEvent,
         ScdTreatmentRecord,
