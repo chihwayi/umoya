@@ -14362,6 +14362,368 @@ async def nhif_calculate_copay(req: NhifCopayRequest):
     }
 
 
+class EmoncClassifyRequest(BaseModel):
+    sf1_parenteral_antibiotics: str = "unknown"
+    sf2_parenteral_oxytocics: str = "unknown"
+    sf3_parenteral_anticonvulsants: str = "unknown"
+    sf4_manual_removal_placenta: str = "unknown"
+    sf5_removal_retained_products: str = "unknown"
+    sf6_neonatal_resuscitation: str = "unknown"
+    sf7_assisted_vaginal_delivery: str = "unknown"
+    sf8_caesarean_section: str = "unknown"
+    sf9_blood_transfusion: str = "unknown"
+
+
+class MaternalDeathAuditRequest(BaseModel):
+    death_category: str
+    primary_cause: Optional[str] = None
+    delay_1_recognition: Optional[bool] = None
+    delay_2_reaching: Optional[bool] = None
+    delay_3_care: Optional[bool] = None
+    gestational_age_weeks: Optional[int] = None
+    mode_of_admission: Optional[str] = None
+    contributing_causes: Optional[List[str]] = []
+
+
+@app.post("/cdss/maternal/emonc-classify")
+async def emonc_classify(req: EmoncClassifyRequest):
+    sf_values = {
+        "sf1": req.sf1_parenteral_antibiotics,
+        "sf2": req.sf2_parenteral_oxytocics,
+        "sf3": req.sf3_parenteral_anticonvulsants,
+        "sf4": req.sf4_manual_removal_placenta,
+        "sf5": req.sf5_removal_retained_products,
+        "sf6": req.sf6_neonatal_resuscitation,
+        "sf7": req.sf7_assisted_vaginal_delivery,
+        "sf8": req.sf8_caesarean_section,
+        "sf9": req.sf9_blood_transfusion,
+    }
+    basic_sfs = ["sf1", "sf2", "sf3", "sf4", "sf5", "sf6", "sf7"]
+    comprehensive_sfs = ["sf8", "sf9"]
+
+    basic_performed = [sf for sf in basic_sfs if sf_values.get(sf) == "performed"]
+    comprehensive_performed = [sf for sf in comprehensive_sfs if sf_values.get(sf) == "performed"]
+    basic_gaps = [sf for sf in basic_sfs if sf_values.get(sf) != "performed"]
+
+    if len(basic_performed) == 7 and len(comprehensive_performed) == 2:
+        classification = "CEmONC"
+        level = "Comprehensive Emergency Obstetric & Neonatal Care"
+        message = "All 9 signal functions performed. This facility qualifies as a CEmONC facility."
+    elif len(basic_performed) == 7:
+        classification = "BEmONC"
+        level = "Basic Emergency Obstetric & Neonatal Care"
+        message = "All 7 basic signal functions performed. Missing C-section and/or blood transfusion for CEmONC."
+    elif len(basic_performed) >= 4:
+        classification = "partial_BEmONC"
+        level = "Partial Basic EmONC"
+        message = f"Only {len(basic_performed)}/7 basic signal functions performed. Full BEmONC requires all 7."
+    else:
+        classification = "not_EmONC"
+        level = "Not EmONC"
+        message = f"Fewer than 4 basic signal functions performed ({len(basic_performed)}/7)."
+
+    sf_labels = {
+        "sf1": "Parenteral antibiotics (sepsis)",
+        "sf2": "Parenteral oxytocics (PPH)",
+        "sf3": "Parenteral anticonvulsants (MgSO4)",
+        "sf4": "Manual removal of retained placenta",
+        "sf5": "Removal of retained products (MVA/D&C)",
+        "sf6": "Neonatal resuscitation",
+        "sf7": "Assisted vaginal delivery",
+        "sf8": "Caesarean section",
+        "sf9": "Blood transfusion",
+    }
+
+    gaps = [{"signal_function": sf, "label": sf_labels[sf], "status": sf_values.get(sf, "unknown")} for sf in basic_gaps]
+    comp_gaps = [{"signal_function": sf, "label": sf_labels[sf], "status": sf_values.get(sf, "unknown")} for sf in comprehensive_sfs if sf_values.get(sf) != "performed"]
+
+    return {
+        "classification": classification,
+        "level": level,
+        "message": message,
+        "basic_performed": len(basic_performed),
+        "basic_required": 7,
+        "comprehensive_performed": len(comprehensive_performed),
+        "comprehensive_required": 2,
+        "gaps": gaps,
+        "comprehensive_gaps": comp_gaps,
+        "recommendation": "Address signal function gaps to improve facility EmONC readiness." if gaps else "Maintain current EmONC capability and repeat the assessment quarterly.",
+        "abstained": False,
+    }
+
+
+@app.post("/cdss/maternal/death-audit-review")
+async def maternal_death_audit_review(req: MaternalDeathAuditRequest):
+    delays_identified = []
+
+    if req.delay_1_recognition:
+        delays_identified.append({
+            "delay": 1,
+            "type": "Recognition / decision to seek care",
+            "common_causes": [
+                "Danger signs not recognised early",
+                "Cultural or family decision barriers",
+                "Cost concerns",
+                "Prior negative health-system experience",
+            ],
+            "action": "Strengthen community danger-sign education and rapid referral triggers.",
+        })
+    if req.delay_2_reaching:
+        delays_identified.append({
+            "delay": 2,
+            "type": "Reaching an appropriate facility",
+            "common_causes": [
+                "No transport available",
+                "Long travel distance",
+                "Road access barrier",
+                "Referral pathway unclear",
+            ],
+            "action": "Improve transport escalation pathways and referral coordination.",
+        })
+    if req.delay_3_care:
+        delays_identified.append({
+            "delay": 3,
+            "type": "Receiving adequate care at facility",
+            "common_causes": [
+                "Staff shortage",
+                "Delayed diagnosis",
+                "Missing blood or essential medicines",
+                "Insufficient EmONC capability",
+            ],
+            "action": "Review EmONC gaps, staffing, blood access, and emergency response timelines.",
+        })
+
+    avoidability_flags = []
+    if req.delay_3_care:
+        avoidability_flags.append("Facility-level delay suggests potentially avoidable mortality; audit emergency readiness and supply chain.")
+    if req.death_category == "direct_obstetric":
+        avoidability_flags.append("Direct obstetric death warrants explicit review against WHO and FIGO emergency obstetric standards.")
+    if req.gestational_age_weeks and req.gestational_age_weeks >= 28:
+        avoidability_flags.append("Death at or beyond 28 weeks should trigger linked perinatal audit review.")
+
+    icd_mm_guidance = {
+        "direct_obstetric": "Direct obstetric death: due to obstetric complication, intervention, omission, or incorrect treatment during pregnancy or postpartum.",
+        "indirect_obstetric": "Indirect obstetric death: due to a pre-existing or newly developed condition aggravated by pregnancy.",
+        "coincidental": "Coincidental death: not related to or aggravated by pregnancy.",
+        "undetermined": "Undetermined death: insufficient information to classify confidently.",
+    }
+
+    audit_questions = [
+        "Was antenatal care received, and how many visits were completed?",
+        "Were danger signs recognised and acted on promptly?",
+        "Was referral initiated without avoidable delay?",
+        "Was transport available within 30 minutes of the referral decision?",
+        "Was the receiving facility capable of managing the presenting complication?",
+        "Were oxytocin, magnesium sulfate, antibiotics, IV fluids, and blood available when indicated?",
+        "Was senior clinical review obtained in time?",
+        "Was partograph use complete for labouring patients when applicable?",
+        "Was notification submitted within 24 hours?",
+    ]
+
+    return {
+        "death_category": req.death_category,
+        "icd_mm_guidance": icd_mm_guidance.get(req.death_category, ""),
+        "delays_identified": delays_identified,
+        "number_of_delays": len(delays_identified),
+        "avoidability_flags": avoidability_flags,
+        "likely_avoidable": len(avoidability_flags) > 0,
+        "audit_questions": audit_questions,
+        "next_steps": [
+            "Complete maternal death notification within 24 hours.",
+            "Convene multidisciplinary review within 7 days.",
+            "Document Three Delays and avoidability assessment.",
+            "Assign accountable owners and due dates for corrective actions.",
+            "Submit required district reporting artifacts.",
+        ],
+        "abstained": False,
+    }
+
+
+class DiabeticFootRiskRequest(BaseModel):
+    right_wagner_grade: Optional[int] = None
+    left_wagner_grade: Optional[int] = None
+    right_foot_sensation: Optional[str] = "intact"
+    left_foot_sensation: Optional[str] = "intact"
+    right_foot_pulses: Optional[str] = "present"
+    left_foot_pulses: Optional[str] = "present"
+    right_abi: Optional[float] = None
+    left_abi: Optional[float] = None
+    infection_signs: Optional[List[str]] = []
+    ulcer_present: Optional[bool] = False
+    hba1c: Optional[float] = None
+    diabetes_duration_years: Optional[int] = None
+
+
+class CkdManagementRequest(BaseModel):
+    egfr: float
+    uacr_mg_g: Optional[float] = None
+    cause: Optional[str] = None
+    sbp: Optional[int] = None
+    potassium: Optional[float] = None
+    on_metformin: Optional[bool] = None
+    on_ace_arb: Optional[bool] = None
+    haemoglobin: Optional[float] = None
+
+
+@app.post("/cdss/ncd/diabetic-foot-risk")
+async def diabetic_foot_risk(req: DiabeticFootRiskRequest):
+    max_wagner = max(req.right_wagner_grade or 0, req.left_wagner_grade or 0)
+    infection_count = len(req.infection_signs or [])
+
+    if max_wagner >= 4 or (max_wagner >= 3 and infection_count >= 2):
+        risk_level = "critical"
+        action = "Urgent surgical referral. High major-amputation risk. Admit patient."
+    elif max_wagner == 3 or (max_wagner >= 2 and infection_count >= 1):
+        risk_level = "high"
+        action = "Urgent wound or surgical review within 24 hours. Start systemic antibiotics and off-loading."
+    elif max_wagner == 2:
+        risk_level = "high"
+        action = "Deep ulcer. Assess for tendon or bone involvement. Refer to wound care team and enforce off-loading."
+    elif max_wagner == 1:
+        risk_level = "moderate"
+        action = "Superficial ulcer. Moist dressing, off-loading, and review within 3 to 5 days."
+    elif (
+        req.right_foot_sensation in ["reduced", "absent"]
+        or req.left_foot_sensation in ["reduced", "absent"]
+        or req.right_foot_pulses in ["diminished", "absent"]
+        or req.left_foot_pulses in ["diminished", "absent"]
+    ):
+        risk_level = "moderate"
+        action = "High-risk foot without active ulcer. Preventive footwear, foot-care education, and 3-monthly reassessment."
+    else:
+        risk_level = "low"
+        action = "Low-risk foot. Annual review with hygiene and footwear counseling."
+
+    abi_flags = []
+    for side, abi in [("right", req.right_abi), ("left", req.left_abi)]:
+        if abi is None:
+            continue
+        if abi < 0.4:
+            abi_flags.append(f"{side.capitalize()} ABI {abi:.2f}: critical ischaemia, urgent vascular referral")
+        elif abi < 0.6:
+            abi_flags.append(f"{side.capitalize()} ABI {abi:.2f}: severe PAD, vascular review advised")
+        elif abi < 0.9:
+            abi_flags.append(f"{side.capitalize()} ABI {abi:.2f}: mild-moderate PAD, monitor and consider referral")
+        elif abi > 1.3:
+            abi_flags.append(f"{side.capitalize()} ABI {abi:.2f}: non-compressible vessel, consider toe-brachial index")
+
+    wagner_descriptions = {
+        0: "Grade 0: no open lesion, high-risk foot",
+        1: "Grade 1: superficial ulcer",
+        2: "Grade 2: deep ulcer without abscess or osteomyelitis",
+        3: "Grade 3: deep ulcer with abscess, osteomyelitis, or septic arthritis",
+        4: "Grade 4: localized gangrene",
+        5: "Grade 5: extensive gangrene of whole foot",
+    }
+
+    return {
+        "risk_level": risk_level,
+        "max_wagner_grade": max_wagner,
+        "wagner_description": wagner_descriptions.get(max_wagner, ""),
+        "recommended_action": action,
+        "amputation_risk": "very_high" if max_wagner >= 4 else ("high" if max_wagner >= 3 else ("moderate" if max_wagner >= 1 else "low")),
+        "abi_flags": abi_flags,
+        "infection_assessment": (
+            "start systemic antibiotics"
+            if infection_count >= 2
+            else "monitor closely" if infection_count == 1 else "no active infection signs reported"
+        ),
+        "next_screening_weeks": 1 if risk_level == "critical" else (4 if risk_level == "high" else (13 if risk_level == "moderate" else 52)),
+        "care_principles": [
+            "Off-loading is essential for plantar ulcers",
+            "Debride necrotic tissue when appropriate",
+            "Escalate quickly if ischaemia or infection is suspected",
+            "Optimize glycaemic control during wound healing",
+        ],
+        "abstained": False,
+    }
+
+
+@app.post("/cdss/ncd/ckd-management")
+async def ckd_management(req: CkdManagementRequest):
+    egfr = req.egfr
+    if egfr >= 90:
+        stage, progression_risk = "G1", "low_if_no_markers"
+        stage_description = "Normal or high kidney function"
+    elif egfr >= 60:
+        stage, progression_risk = "G2", "low"
+        stage_description = "Mildly decreased kidney function"
+    elif egfr >= 45:
+        stage, progression_risk = "G3a", "moderate"
+        stage_description = "Mild-to-moderately decreased kidney function"
+    elif egfr >= 30:
+        stage, progression_risk = "G3b", "moderate_high"
+        stage_description = "Moderately to severely decreased kidney function"
+    elif egfr >= 15:
+        stage, progression_risk = "G4", "high"
+        stage_description = "Severely decreased kidney function"
+    else:
+        stage, progression_risk = "G5", "kidney_failure"
+        stage_description = "Kidney failure"
+
+    uacr = req.uacr_mg_g
+    if uacr is None:
+        albumin_cat = "unknown"
+    elif uacr < 30:
+        albumin_cat = "A1"
+    elif uacr < 300:
+        albumin_cat = "A2"
+    else:
+        albumin_cat = "A3"
+
+    med_flags = []
+    if req.on_metformin and egfr < 30:
+        med_flags.append({"drug": "Metformin", "flag": "STOP", "reason": "eGFR <30, lactic acidosis risk"})
+    elif req.on_metformin and egfr < 45:
+        med_flags.append({"drug": "Metformin", "flag": "REDUCE_DOSE", "reason": "eGFR 30-44, reduce dose and monitor"})
+    if not req.on_ace_arb and req.cause in ["diabetic", "diabetic_nephropathy", "hypertensive", "hypertensive_nephropathy"] and egfr >= 30:
+        med_flags.append({
+            "drug": "ACE inhibitor / ARB",
+            "flag": "START_IF_NOT_CONTRAINDICATED",
+            "reason": "Renoprotective in diabetic or hypertensive nephropathy",
+        })
+    if req.potassium and req.potassium > 5.5:
+        med_flags.append({
+            "drug": "ACE inhibitor / ARB / potassium-sparing agents",
+            "flag": "CAUTION",
+            "reason": f"Potassium {req.potassium} mmol/L, review hyperkalaemia risk",
+        })
+    if req.haemoglobin and req.haemoglobin < 10.0 and egfr < 45:
+        med_flags.append({
+            "drug": "ESA",
+            "flag": "CONSIDER",
+            "reason": f"Hb {req.haemoglobin} g/dL with CKD {stage}, assess CKD anaemia management",
+        })
+
+    recommendations = [f"CKD {stage}: {stage_description}"]
+    if egfr < 30:
+        recommendations.append("Refer to nephrology urgently")
+    elif egfr < 45:
+        recommendations.append("Refer to nephrology for co-management")
+    if req.sbp and req.sbp > 130:
+        recommendations.append("Target BP below 130/80 in CKD if tolerated")
+    recommendations.extend([
+        "Monitor eGFR and albuminuria every 3 to 6 months",
+        "Review nephrotoxic medicines and avoid NSAIDs where possible",
+        "Counsel on sodium restriction and renal-protective lifestyle measures",
+    ])
+
+    return {
+        "ckd_stage": stage,
+        "stage_description": stage_description,
+        "egfr": egfr,
+        "progression_risk": progression_risk,
+        "albuminuria_category": albumin_cat,
+        "uacr": uacr,
+        "medication_flags": med_flags,
+        "recommendations": recommendations,
+        "referral_required": egfr < 45,
+        "urgency": "urgent" if egfr < 15 else ("soon" if egfr < 30 else "routine"),
+        "next_review_months": 1 if egfr < 15 else (3 if egfr < 30 else (6 if egfr < 45 else 12)),
+        "abstained": False,
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

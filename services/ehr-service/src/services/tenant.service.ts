@@ -319,6 +319,12 @@ import { NotificationTemplate } from '../entities/notification-template.entity';
 import { BirthNotification } from '../entities/birth-notification.entity';
 import { DeathCertificate } from '../entities/death-certificate.entity';
 import { MdsrNotification } from '../entities/mdsr-notification.entity';
+import { MaternalDeath } from '../entities/maternal-death.entity';
+import { MaternalDeathReview } from '../entities/maternal-death-review.entity';
+import { EmoncSignal } from '../entities/emonc-signal.entity';
+import { DiabeticFootAssessment } from '../entities/diabetic-foot-assessment.entity';
+import { RetinopathyScreening } from '../entities/retinopathy-screening.entity';
+import { CkdStagingRecord } from '../entities/ckd-staging-record.entity';
 import { NtdAssessment } from '../entities/ntd-assessment.entity';
 import { MdaCampaign } from '../entities/mda-campaign.entity';
 import { MalariaEpisode } from '../entities/malaria-episode.entity';
@@ -819,6 +825,12 @@ export class TenantService {
         BirthNotification,
         DeathCertificate,
         MdsrNotification,
+        MaternalDeath,
+        MaternalDeathReview,
+        EmoncSignal,
+        DiabeticFootAssessment,
+        RetinopathyScreening,
+        CkdStagingRecord,
         NtdAssessment,
         MdaCampaign,
         MalariaEpisode,

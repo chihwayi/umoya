@@ -174,6 +174,8 @@ import { ModelRegistryController } from './controllers/model-registry.controller
 import { StaffNotificationsController } from './controllers/staff-notifications.controller';
 import { RegistrationIntelligenceController } from './controllers/registration-intelligence.controller';
 import { OneHealthController } from './controllers/one-health.controller';
+import { MaternalMortalityController } from './controllers/maternal-mortality.controller';
+import { NcdComplicationController } from './controllers/ncd-complication.controller';
 import { AtMessagingController } from './controllers/at-messaging.controller';
 
 // Services
@@ -404,6 +406,8 @@ import { TelemedicinePostVisitBridgeService } from './services/telemedicine-post
 import { StaffNotificationsService } from './services/staff-notifications.service';
 import { RegistrationIntelligenceService } from './services/registration-intelligence.service';
 import { OneHealthService } from './services/one-health.service';
+import { MaternalMortalityService } from './services/maternal-mortality.service';
+import { NcdComplicationService } from './services/ncd-complication.service';
 import { AtMessagingService } from './services/at-messaging.service';
 import { KnowledgeIngestService } from './services/knowledge-ingest.service';
 import { ClaimsAiService } from './services/claims-ai.service';
@@ -608,6 +612,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     StaffNotificationsController,
     RegistrationIntelligenceController,
     OneHealthController,
+    MaternalMortalityController,
+    NcdComplicationController,
     KnowledgeController,
     ClaimsAiController,
     RegistrationAiController,
@@ -844,6 +850,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     StaffNotificationsService,
     RegistrationIntelligenceService,
     OneHealthService,
+    MaternalMortalityService,
+    NcdComplicationService,
     KnowledgeIngestService,
     ClaimsAiService,
     RiskStratificationService,

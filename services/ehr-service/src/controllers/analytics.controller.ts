@@ -64,6 +64,13 @@ export class AnalyticsController {
     return this.reportBuilderService.listTemplates(req.tenantDb, query);
   }
 
+  @Get('templates/default')
+  @ApiOperation({ summary: 'Get default analytics templates' })
+  @ApiResponse({ status: 200, description: 'Default analytics templates retrieved successfully' })
+  async getDefaultTemplates(@Req() req: RequestWithTenant) {
+    return this.analyticsService.getDefaultTemplates(req.tenantDb);
+  }
+
   @Get('templates/:id')
   @ApiOperation({ summary: 'Get a report template by ID' })
   @ApiParam({ name: 'id', description: 'Template ID' })
@@ -396,4 +403,3 @@ export class AnalyticsController {
     return this.analyticsService.getBenchmarks(req.tenantDb, metricName);
   }
 }
-

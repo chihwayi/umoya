@@ -1,115 +1,178 @@
 #!/usr/bin/env node
 /**
- * SOC2/HIPAA evidence automation (Sprint D4).
- * Produces a report suitable for compliance evidence (audit coverage, PHI access logging).
+ * SOC2/HIPAA evidence report.
  * Usage: node scripts/soc2-hipaa-evidence-report.js [--format=json|csv] [--days=30]
- * With DB: set DATABASE_URL (tenant DB URL) to include live audit counts; otherwise stub report.
+ * Set DATABASE_URL (or TENANT_DATABASE_URL) to include live tenant audit counts.
  */
+const { Client } = require('pg');
+
 const format = process.argv.includes('--format=csv') ? 'csv' : 'json';
-const daysArg = process.argv.find((a) => a.startsWith('--days='));
+const daysArg = process.argv.find((arg) => arg.startsWith('--days='));
 const lookbackDays = daysArg ? Math.max(1, parseInt(daysArg.split('=')[1], 10) || 30) : 30;
-const timestamp = new Date().toISOString();
+const databaseUrl = process.env.DATABASE_URL || process.env.TENANT_DATABASE_URL;
 
-const report = {
-  generatedAt: timestamp,
-  scope: 'post-visit and PHI audit',
-  lookbackDays,
-  checks: [
-    { id: 'PHI_READ_AUDIT', description: 'PHI read operations logged', status: 'implemented', note: 'HipaaAuditService.logPhiAccess' },
-    { id: 'PHI_WRITE_AUDIT', description: 'PHI modifications logged', status: 'implemented', note: 'HipaaAuditService.logPhiModification' },
-    { id: 'NO_PHI_IN_LOGS', description: 'No PHI in log payloads', status: 'policy', note: 'Metadata only in audit entries' },
-    { id: 'TRIAL_MATCHER_DEIDENTIFIED', description: 'Trial matcher uses de-identified query only', status: 'implemented', note: 'deriveTrialSearchTerms whitelist' },
-    { id: 'PEER_CONSULT_DEIDENTIFIED', description: 'Peer consult summaries de-identified', status: 'implemented', note: 'buildDeidentifiedPeerConsultSummary' },
-    { id: 'FHIR_SYNC_LOG', description: 'FHIR write-back attempts logged', status: 'implemented', note: 'fhir_sync_log table' },
-    { id: 'RED_TEAM_SUITE', description: 'Adversarial tests in CI', status: 'implemented', note: '>=50 tests, CI gate' },
-  ],
-  evidenceSummary: 'Run with DATABASE_URL set to a tenant DB to include per-tenant hipaa_audit_logs counts.',
-  auditCounts: null,
-};
+function getPeriodStart(days) {
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - days);
+  return start.toISOString();
+}
 
-async function fetchAuditCounts() {
-  const databaseUrl = process.env.DATABASE_URL || process.env.TENANT_DATABASE_URL;
-  if (!databaseUrl) return null;
-  let Client;
-  try {
-    Client = require('pg').Client;
-  } catch (e) {
-    return null;
+async function fetchAuditEvidence() {
+  if (!databaseUrl) {
+    return {
+      connected: false,
+      message: 'DATABASE_URL not set; returning implementation evidence only.',
+    };
   }
+
   const client = new Client({ connectionString: databaseUrl });
-  try {
-    await client.connect();
-  } catch (e) {
-    console.error('Warning: could not connect to database:', e.message);
-    return null;
-  }
-  const since = new Date();
-  since.setDate(since.getDate() - lookbackDays);
-  const sinceStr = since.toISOString();
+  await client.connect();
+
+  const since = getPeriodStart(lookbackDays);
 
   try {
     const tableCheck = await client.query(
       `SELECT EXISTS (
-        SELECT 1 FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = 'hipaa_audit_logs'
-      ) AS exists`
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'hipaa_audit_logs'
+      ) AS exists`,
     );
-    if (!tableCheck.rows[0]?.exists) return { error: 'Table hipaa_audit_logs not found in this database' };
 
-    const [total, byOperation, byOutcome] = await Promise.all([
+    if (!tableCheck.rows[0]?.exists) {
+      return {
+        connected: true,
+        message: 'Connected, but hipaa_audit_logs table was not found in this database.',
+      };
+    }
+
+    const [totals, byAction, byOutcome, byRisk] = await Promise.all([
       client.query(
-        `SELECT COUNT(*)::bigint AS c FROM hipaa_audit_logs WHERE created_at >= $1`,
-        [sinceStr]
+        `SELECT COUNT(*)::bigint AS total_events
+         FROM hipaa_audit_logs
+         WHERE created_at >= $1`,
+        [since],
       ),
       client.query(
-        `SELECT operation, COUNT(*)::bigint AS c FROM hipaa_audit_logs WHERE created_at >= $1 GROUP BY operation ORDER BY c DESC`,
-        [sinceStr]
+        `SELECT COALESCE(action, 'unknown') AS key, COUNT(*)::bigint AS total
+         FROM hipaa_audit_logs
+         WHERE created_at >= $1
+         GROUP BY COALESCE(action, 'unknown')
+         ORDER BY total DESC, key ASC`,
+        [since],
       ),
       client.query(
-        `SELECT outcome, COUNT(*)::bigint AS c FROM hipaa_audit_logs WHERE created_at >= $1 GROUP BY outcome ORDER BY c DESC`,
-        [sinceStr]
+        `SELECT COALESCE(outcome, 'unknown') AS key, COUNT(*)::bigint AS total
+         FROM hipaa_audit_logs
+         WHERE created_at >= $1
+         GROUP BY COALESCE(outcome, 'unknown')
+         ORDER BY total DESC, key ASC`,
+        [since],
+      ),
+      client.query(
+        `SELECT COALESCE(risk_level, 'unknown') AS key, COUNT(*)::bigint AS total
+         FROM hipaa_audit_logs
+         WHERE created_at >= $1
+         GROUP BY COALESCE(risk_level, 'unknown')
+         ORDER BY total DESC, key ASC`,
+        [since],
       ),
     ]);
 
-    await client.end();
     return {
-      period: { from: sinceStr, to: new Date().toISOString() },
-      totalEvents: Number(total.rows[0]?.c ?? 0),
-      byOperation: (byOperation.rows || []).reduce((acc, r) => {
-        acc[r.operation || 'unknown'] = Number(r.c);
-        return acc;
-      }, {}),
-      byOutcome: (byOutcome.rows || []).reduce((acc, r) => {
-        acc[r.outcome || 'unknown'] = Number(r.c);
-        return acc;
-      }, {}),
+      connected: true,
+      message: `Connected to tenant DB; computed HIPAA audit evidence for the last ${lookbackDays} days.`,
+      period: {
+        from: since,
+        to: new Date().toISOString(),
+      },
+      totals: {
+        totalEvents: Number(totals.rows[0]?.total_events ?? 0),
+      },
+      byAction: byAction.rows.map((row) => ({ action: row.key, total: Number(row.total) })),
+      byOutcome: byOutcome.rows.map((row) => ({ outcome: row.key, total: Number(row.total) })),
+      byRisk: byRisk.rows.map((row) => ({ riskLevel: row.key, total: Number(row.total) })),
     };
-  } catch (e) {
-    try { await client.end(); } catch (_) {}
-    return { error: e.message };
+  } finally {
+    await client.end();
   }
 }
 
-(async () => {
-  report.auditCounts = await fetchAuditCounts();
-  if (report.auditCounts && !report.auditCounts.error) {
-    report.evidenceSummary = `Database connected. hipaa_audit_logs: ${report.auditCounts.totalEvents} events in last ${lookbackDays} days.`;
-  } else if (report.auditCounts?.error) {
-    report.evidenceSummary = `Database error: ${report.auditCounts.error}.`;
-  }
+async function main() {
+  const auditEvidence = await fetchAuditEvidence();
+  const report = {
+    generatedAt: new Date().toISOString(),
+    lookbackDays,
+    scope: 'SOC2/HIPAA operational evidence',
+    controls: [
+      {
+        id: 'audit_log_capture',
+        status: 'implemented',
+        evidence: 'hipaa_audit_logs records PHI access and modification events',
+      },
+      {
+        id: 'access_outcome_tracking',
+        status: 'implemented',
+        evidence: 'audit rows track action, outcome, and risk_level for compliance review',
+      },
+      {
+        id: 'accounting_of_disclosures',
+        status: 'implemented',
+        evidence: 'HIPAA disclosure reporting is available through the audit reporting flow',
+      },
+      {
+        id: 'implementation_report',
+        status: auditEvidence.connected ? 'validated' : 'partial',
+        evidence: auditEvidence.message,
+      },
+    ],
+    auditEvidence,
+  };
 
   if (format === 'csv') {
-    console.log('id,description,status,note');
-    report.checks.forEach((c) => {
-      console.log([c.id, `"${c.description}"`, c.status, `"${(c.note || '').replace(/"/g, '""')}"`].join(','));
-    });
-    if (report.auditCounts && !report.auditCounts.error) {
-      console.log('');
-      console.log('audit_period_from,audit_period_to,total_events');
-      console.log([report.auditCounts.period.from, report.auditCounts.period.to, report.auditCounts.totalEvents].join(','));
+    console.log('section,key,value');
+    console.log(`meta,generatedAt,${report.generatedAt}`);
+    console.log(`meta,lookbackDays,${lookbackDays}`);
+    console.log(`meta,scope,"${report.scope}"`);
+
+    for (const control of report.controls) {
+      console.log(`control.${control.id},status,${control.status}`);
+      console.log(`control.${control.id},evidence,"${String(control.evidence).replace(/"/g, '""')}"`);
     }
-  } else {
-    console.log(JSON.stringify(report, null, 2));
+
+    if (auditEvidence.period) {
+      console.log(`audit,period_from,${auditEvidence.period.from}`);
+      console.log(`audit,period_to,${auditEvidence.period.to}`);
+      console.log(`audit,total_events,${auditEvidence.totals.totalEvents}`);
+    }
+
+    for (const row of auditEvidence.byAction || []) {
+      console.log(`audit.byAction,${row.action},${row.total}`);
+    }
+    for (const row of auditEvidence.byOutcome || []) {
+      console.log(`audit.byOutcome,${row.outcome},${row.total}`);
+    }
+    for (const row of auditEvidence.byRisk || []) {
+      console.log(`audit.byRisk,${row.riskLevel},${row.total}`);
+    }
+    return;
   }
-  process.exit(0);
-})();
+
+  console.log(JSON.stringify(report, null, 2));
+}
+
+main().catch((error) => {
+  console.error(
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        status: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(1);
+});

@@ -8853,6 +8853,12 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+  getDefaultTemplates: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/analytics/templates/default', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
 
   // Scheduled Reports
   createSchedule: async (tenantSlug: string, token: string, createDto: any) => {
@@ -11645,6 +11651,56 @@ export const hypertensionApi = {
   },
 };
 
+export const ncdComplicationApi = {
+  recordFootAssessment: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/ncd-complications/foot/${patientId}`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getFootHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/ncd-complications/foot/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordRetinopathy: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/ncd-complications/retinopathy/${patientId}`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getRetinopathyHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/ncd-complications/retinopathy/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordCkd: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/ncd-complications/ckd/${patientId}`, dto, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getCkdHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/ncd-complications/ckd/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getRegister: async (
+    token: string,
+    tenantSlug: string,
+    params?: { complicationType?: string; highRiskOnly?: boolean },
+  ) => {
+    const response = await ehrAxios.get('/ncd-complications/register', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 export const traditionalMedicineApi = {
   recordRemedy: async (patientId: string, dto: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/traditional-medicine/patient/${patientId}/remedies`, dto, {
@@ -11928,6 +11984,73 @@ export const oneHealthApi = {
   searchPACTR: async (condition: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get('/trials/pactr/search', {
       params: { condition },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
+export const maternalMortalityApi = {
+  reportDeath: async (data: Record<string, any>, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/maternal-mortality/deaths', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listDeaths: async (
+    params: { from?: string; to?: string; reviewStatus?: string } | undefined,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get('/maternal-mortality/deaths', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateReviewStatus: async (deathId: string, reviewStatus: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(
+      `/maternal-mortality/deaths/${deathId}/review-status`,
+      { reviewStatus },
+      { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+    );
+    return response.data;
+  },
+  createReview: async (deathId: string, data: Record<string, any>, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/maternal-mortality/deaths/${deathId}/reviews`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getReviews: async (deathId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/maternal-mortality/deaths/${deathId}/reviews`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordEmoncAssessment: async (data: Record<string, any>, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/maternal-mortality/emonc', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getLatestEmonc: async (facilityId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/maternal-mortality/emonc/latest', {
+      params: { facilityId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getEmoncHistory: async (facilityId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/maternal-mortality/emonc/history', {
+      params: { facilityId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSummary: async (year: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/maternal-mortality/summary', {
+      params: { year },
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;

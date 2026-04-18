@@ -37,6 +37,7 @@ import MentalHealthDashboard from '../components/MentalHealthDashboard';
 import CervicalCancerDashboard from '../components/CervicalCancerDashboard';
 import FamilyPlanningDashboard from '../components/FamilyPlanningDashboard';
 import HypertensionDashboard from '../components/HypertensionDashboard';
+import NcdComplicationDashboard from '../components/NcdComplicationDashboard';
 import TraditionalMedicineDashboard from '../components/TraditionalMedicineDashboard';
 import ScdDashboard from '../components/ScdDashboard';
 import EpilepsyDashboard from '../components/EpilepsyDashboard';
@@ -241,7 +242,7 @@ const NurseDashboard: React.FC = () => {
   const [mhQuickSafetyPlan, setMhQuickSafetyPlan] = useState<any | null>(null);
   const [showMentalHealthModal, setShowMentalHealthModal] = useState(false);
   const [mentalHealthInitialTab, setMentalHealthInitialTab] = useState<'overview' | 'screening' | 'mhgap' | 'careplans' | 'followups' | 'crisis' | 'safeplan' | 'meds'>('careplans');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals' | 'cervical-screening' | 'family-planning' | 'hypertension' | 'traditional-medicine' | 'scd' | 'epilepsy' | 'one-health' | 'nhif'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals' | 'cervical-screening' | 'family-planning' | 'hypertension' | 'ncd-complications' | 'traditional-medicine' | 'scd' | 'epilepsy' | 'one-health' | 'nhif'>('dashboard');
   const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity' | 'women-health' | 'ncd' | 'finance'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -1035,6 +1036,7 @@ const NurseDashboard: React.FC = () => {
         color: 'from-blue-500 to-cyan-500',
         children: [
           { label: 'Hypertension Register', tab: 'hypertension', icon: Activity },
+          { label: 'NCD Complications', tab: 'ncd-complications', icon: Activity },
           { label: 'Traditional Medicine', tab: 'traditional-medicine', icon: Leaf },
           { label: 'Sickle Cell Disease', tab: 'scd', icon: Droplets },
           { label: 'Epilepsy', tab: 'epilepsy', icon: Brain },
@@ -5136,6 +5138,9 @@ const NurseDashboard: React.FC = () => {
             )}
             {activeTab === 'hypertension' && !selectedPatient && (
               <div className="text-slate-500 text-sm">Select a patient from the queue to view hypertension records.</div>
+            )}
+            {activeTab === 'ncd-complications' && (
+              <NcdComplicationDashboard patientId={selectedPatient?.id ?? null} />
             )}
             {activeTab === 'traditional-medicine' && selectedPatient && (
               <TraditionalMedicineDashboard patientId={selectedPatient.id} />

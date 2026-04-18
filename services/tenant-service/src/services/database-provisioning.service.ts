@@ -89,6 +89,18 @@ import {
   TENANT_ONE_HEALTH_PACTR_BUNDLE_VERSION,
   TENANT_ONE_HEALTH_PACTR_STATEMENTS,
 } from '../generated/tenant-one-health-pactr.statements';
+import {
+  TENANT_REPORTING_COMPLETENESS_BUNDLE_VERSION,
+  TENANT_REPORTING_COMPLETENESS_STATEMENTS,
+} from '../generated/tenant-reporting-completeness.statements';
+import {
+  TENANT_MATERNAL_MORTALITY_EMONC_BUNDLE_VERSION,
+  TENANT_MATERNAL_MORTALITY_EMONC_STATEMENTS,
+} from '../generated/tenant-maternal-mortality-emonc.statements';
+import {
+  TENANT_NCD_COMPLICATIONS_BUNDLE_VERSION,
+  TENANT_NCD_COMPLICATIONS_STATEMENTS,
+} from '../generated/tenant-ncd-complications.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1427,6 +1439,27 @@ export class DatabaseProvisioningService {
         version: TENANT_ONE_HEALTH_PACTR_BUNDLE_VERSION,
         description: 'S146 — animal exposures, one health reports, rabies PEP, PACTR trial matching',
         statements: TENANT_ONE_HEALTH_PACTR_STATEMENTS,
+      },
+      {
+        id: 'sprint126_reporting_completeness',
+        label: 'Reporting Completeness — lab turnaround, HIPAA disclosures, tax, analytics templates',
+        version: TENANT_REPORTING_COMPLETENESS_BUNDLE_VERSION,
+        description: 'S126 — seeds 5 default analytics templates; fixes compliance reporting gaps',
+        statements: TENANT_REPORTING_COMPLETENESS_STATEMENTS,
+      },
+      {
+        id: 'sprint147_maternal_mortality_emonc',
+        label: 'Maternal Mortality Audit & EmONC Signal Function Tracking',
+        version: TENANT_MATERNAL_MORTALITY_EMONC_BUNDLE_VERSION,
+        description: 'S147 — maternal_deaths, maternal_death_reviews, emonc_signals tables',
+        statements: TENANT_MATERNAL_MORTALITY_EMONC_STATEMENTS,
+      },
+      {
+        id: 'sprint148_ncd_complications',
+        label: 'NCD Complication Registry — Diabetic Foot, Retinopathy, CKD Staging',
+        version: TENANT_NCD_COMPLICATIONS_BUNDLE_VERSION,
+        description: 'S148 — diabetic_foot_assessments, retinopathy_screenings, ckd_staging_records, ncd_complication_summaries',
+        statements: TENANT_NCD_COMPLICATIONS_STATEMENTS,
       },
       {
         id: 'tenant_entity_alignment',

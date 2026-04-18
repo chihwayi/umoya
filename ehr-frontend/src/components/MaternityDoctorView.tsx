@@ -22,6 +22,7 @@ import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import MaternityEnrollmentDetailModal from './MaternityEnrollmentDetailModal';
 import { GuidelineSearchPanel } from './GuidelineSearchPanel';
+import MaternalMortalityDashboard from './MaternalMortalityDashboard';
 
 interface MaternityDoctorViewProps {
   tenantSlug: string;
@@ -40,7 +41,7 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
   const [loading, setLoading] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
   const [applyingTaskId, setApplyingTaskId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'high-risk' | 'deliveries' | 'overdue'>('high-risk');
+  const [activeTab, setActiveTab] = useState<'high-risk' | 'deliveries' | 'overdue' | 'mortality'>('high-risk');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string | null>(null);
   
@@ -773,6 +774,19 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
               Overdue ANC Visits ({overdueANC.length})
             </div>
           </button>
+          <button
+            onClick={() => setActiveTab('mortality')}
+            className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+              activeTab === 'mortality'
+                ? 'border-rose-500 text-rose-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Mortality Audit
+            </div>
+          </button>
         </nav>
       </div>
 
@@ -784,6 +798,8 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
         </div>
       ) : (
         <>
+          {activeTab === 'mortality' && <MaternalMortalityDashboard tenantSlug={tenantSlug} token={token} />}
+
           {/* High-Risk Pregnancies */}
           {activeTab === 'high-risk' && (
             <div className="space-y-4">

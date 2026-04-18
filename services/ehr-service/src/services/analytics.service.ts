@@ -206,6 +206,17 @@ export class AnalyticsService {
     };
   }
 
+  async getDefaultTemplates(tenantDb: DataSource): Promise<any[]> {
+    this.ensureTenantDb(tenantDb);
+
+    return tenantDb.query(
+      `SELECT *
+       FROM analytics_templates
+       WHERE is_default = true
+       ORDER BY name ASC`,
+    );
+  }
+
   /**
    * Create or update a metric
    */
@@ -453,5 +464,4 @@ export class AnalyticsService {
     return dateFrom.toISOString().split('T')[0];
   }
 }
-
 
