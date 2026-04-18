@@ -6209,6 +6209,359 @@ async def epilepsy_status_epilepticus(req: EpilepsyStatusEpilepticusRequest):
     }
 
 
+class VhfRiskTriageRequest(BaseModel):
+    pathogen: str
+    symptom_onset_days: Optional[int] = None
+    fever: Optional[bool] = None
+    rash: Optional[bool] = None
+    haemorrhage: Optional[bool] = None
+    vomiting: Optional[bool] = None
+    diarrhoea: Optional[bool] = None
+    myalgia: Optional[bool] = None
+    headache: Optional[bool] = None
+    pharyngitis: Optional[bool] = None
+    travel_endemic_area: Optional[bool] = None
+    animal_contact: Optional[bool] = None
+    contact_with_vhf_case: Optional[bool] = None
+    healthcare_worker: Optional[bool] = None
+    lab_pcr_result: Optional[str] = None
+    age_years: Optional[int] = None
+    immunocompromised: Optional[bool] = None
+    pregnant: Optional[bool] = None
+
+
+class VhfRiskTriageResponse(BaseModel):
+    classification: str
+    risk_level: str
+    isolation_required: bool
+    ppe_level: str
+    notifiable: bool
+    notify_within_hours: int
+    recommended_specimens: List[str]
+    immediate_actions: List[str]
+    treatment_guidance: str
+    prognosis_notes: str
+    confidence: float
+    citations: List[str]
+
+
+class MpoxSeverityRequest(BaseModel):
+    stage: str
+    day_of_illness: int
+    lesion_count_category: str
+    mucocutaneous_sites: List[str] = Field(default_factory=list)
+    corneal_involvement: bool = False
+    respiratory_involvement: bool = False
+    secondary_infection: bool = False
+    cns_involvement: bool = False
+    immunocompromised: Optional[bool] = None
+    hiv_positive: Optional[bool] = None
+    age_years: Optional[int] = None
+    pregnant: Optional[bool] = None
+    clade: Optional[str] = None
+
+
+class MpoxSeverityResponse(BaseModel):
+    severity_score: float
+    severity_category: str
+    antiviral_indicated: bool
+    antiviral_drug: Optional[str]
+    antiviral_dose: Optional[str]
+    hospitalisation_required: bool
+    icu_risk: bool
+    isolation_duration_days: int
+    care_principles: List[str]
+    monitoring_parameters: List[str]
+    confidence: float
+    citations: List[str]
+
+
+def _vhf_specimens(pathogen: str) -> List[str]:
+    pathogen_value = str(pathogen or "").lower()
+    if pathogen_value.startswith("mpox"):
+        return ["lesion swab", "lesion fluid", "oropharyngeal swab", "blood"]
+    if pathogen_value in {"ebola", "marburg", "lassa", "crimean_congo"}:
+        return ["whole blood", "plasma", "serum", "PCR sample"]
+    if pathogen_value == "rvf":
+        return ["whole blood", "serum", "PCR sample"]
+    return ["whole blood", "diagnostic PCR sample"]
+
+
+def _tecovirimat_dose(age_years: Optional[int]) -> str:
+    if age_years is None:
+        return "Tecovirimat per weight band; use adult dosing if >= 40 kg."
+    if age_years >= 13:
+        return "Tecovirimat 600 mg PO twice daily for 14 days with a fatty meal."
+    return "Tecovirimat dose by pediatric weight band for 14 days; use specialist or protocol table confirmation."
+
+
+@app.post("/cdss/vhf/risk-triage", response_model=VhfRiskTriageResponse)
+async def vhf_risk_triage(req: VhfRiskTriageRequest):
+    pathogen = str(req.pathogen or "").lower()
+    vhf_pathogens = {"ebola", "marburg", "lassa", "rvf", "crimean_congo"}
+    epi_link = any([
+        req.travel_endemic_area is True,
+        req.animal_contact is True,
+        req.contact_with_vhf_case is True,
+        req.healthcare_worker is True,
+    ])
+    symptom_count = sum(
+        bool(value)
+        for value in [
+            req.fever,
+            req.rash,
+            req.haemorrhage,
+            req.vomiting,
+            req.diarrhoea,
+            req.myalgia,
+            req.headache,
+            req.pharyngitis,
+        ]
+    )
+
+    if req.lab_pcr_result == "positive":
+        classification = "confirmed"
+    elif pathogen.startswith("mpox"):
+        if bool(req.rash) and epi_link:
+            classification = "probable"
+        elif bool(req.rash) or (bool(req.fever) and epi_link):
+            classification = "suspected"
+        else:
+            classification = "low_risk"
+    elif pathogen in vhf_pathogens:
+        if epi_link and (bool(req.haemorrhage) or symptom_count >= 3):
+            classification = "probable"
+        elif epi_link and symptom_count >= 2:
+            classification = "suspected"
+        elif bool(req.haemorrhage) and symptom_count >= 2:
+            classification = "suspected"
+        else:
+            classification = "low_risk"
+    else:
+        classification = "suspected" if epi_link and symptom_count >= 2 else "low_risk"
+
+    risk_level = "low"
+    if classification == "confirmed":
+        risk_level = "critical" if pathogen in vhf_pathogens or bool(req.haemorrhage) else "high"
+    elif classification == "probable":
+        risk_level = "critical" if pathogen in {"ebola", "marburg", "crimean_congo"} else "high"
+    elif classification == "suspected":
+        risk_level = "high" if bool(req.haemorrhage) or symptom_count >= 4 else "moderate"
+
+    if pathogen in {"ebola", "marburg", "lassa", "crimean_congo"} or bool(req.haemorrhage):
+        ppe_level = "enhanced_vhf"
+    elif pathogen.startswith("mpox"):
+        ppe_level = "airborne_contact"
+    elif pathogen == "rvf":
+        ppe_level = "droplet"
+    else:
+        ppe_level = "standard"
+
+    isolation_required = classification != "low_risk"
+    notifiable = classification in {"probable", "confirmed"} or (classification == "suspected" and pathogen in vhf_pathogens)
+    if classification in {"probable", "confirmed"} and pathogen in {"ebola", "marburg", "lassa", "crimean_congo", "mpox_clade_i"}:
+        notify_within_hours = 0
+    elif classification in {"probable", "confirmed"}:
+        notify_within_hours = 24
+    elif classification == "suspected":
+        notify_within_hours = 24 if pathogen in vhf_pathogens else 72
+    else:
+        notify_within_hours = 72
+
+    immediate_actions: List[str] = []
+    if isolation_required:
+        immediate_actions.append("Isolate the patient immediately and restrict unnecessary movement.")
+    if ppe_level == "enhanced_vhf":
+        immediate_actions.append("Activate enhanced VHF PPE: gown, gloves, N95, face shield, and boot covers.")
+    elif ppe_level == "airborne_contact":
+        immediate_actions.append("Use contact plus respiratory protection for lesion handling and close-contact care.")
+    immediate_actions.append("Collect recommended specimens using trained staff and infection-prevention controls.")
+    if notifiable:
+        immediate_actions.append("Notify district and national public-health authorities within the required reporting window.")
+    if bool(req.contact_with_vhf_case):
+        immediate_actions.append("Begin contact listing and 21-day follow-up for exposed contacts.")
+
+    if pathogen.startswith("mpox"):
+        treatment_guidance = "Provide analgesia, skin and mucosal care, hydration, and assess antiviral eligibility for severe disease or high-risk host factors."
+        prognosis_notes = "Clade I mpox and immunocompromised hosts carry higher complication risk; monitor for ocular, genital, respiratory, and CNS involvement."
+    elif pathogen in {"ebola", "marburg", "lassa", "crimean_congo"}:
+        treatment_guidance = "Urgent admission to a dedicated isolation area with aggressive fluid management, organ support, and pathogen-specific protocol review."
+        prognosis_notes = "These pathogens carry high mortality risk when diagnosis or isolation is delayed."
+    else:
+        treatment_guidance = "Supportive management, serial reassessment, and public-health notification workflow as indicated."
+        prognosis_notes = "Outcomes improve with early recognition, isolation, and supportive care."
+
+    data_points = sum(
+        value is not None
+        for value in [
+            req.symptom_onset_days,
+            req.fever,
+            req.rash,
+            req.haemorrhage,
+            req.vomiting,
+            req.diarrhoea,
+            req.myalgia,
+            req.headache,
+            req.pharyngitis,
+            req.travel_endemic_area,
+            req.animal_contact,
+            req.contact_with_vhf_case,
+            req.healthcare_worker,
+            req.lab_pcr_result,
+            req.age_years,
+            req.immunocompromised,
+            req.pregnant,
+        ]
+    )
+    confidence = round(min(0.98, 0.55 + (data_points * 0.02)), 3)
+
+    return {
+        "classification": classification,
+        "risk_level": risk_level,
+        "isolation_required": isolation_required,
+        "ppe_level": ppe_level,
+        "notifiable": notifiable,
+        "notify_within_hours": notify_within_hours,
+        "recommended_specimens": _vhf_specimens(pathogen),
+        "immediate_actions": immediate_actions,
+        "treatment_guidance": treatment_guidance,
+        "prognosis_notes": prognosis_notes,
+        "confidence": confidence,
+        "citations": [
+            "WHO Mpox Clinical Management and Infection Prevention and Control, 2022",
+            "WHO Ebola and Marburg clinical guidance and case definitions",
+            "International Health Regulations (2005) Annex 2 decision instrument",
+            "Africa CDC infection prevention and control guidance for VHF outbreaks",
+        ],
+    }
+
+
+@app.post("/cdss/vhf/mpox-severity", response_model=MpoxSeverityResponse)
+async def mpox_severity_assessment(req: MpoxSeverityRequest):
+    lesion_scores = {
+        "few_<10": 1.0,
+        "moderate_10-100": 3.0,
+        "many_>100": 5.0,
+    }
+    stage_scores = {
+        "prodrome": 1.0,
+        "macules": 1.0,
+        "papules": 1.5,
+        "vesicles": 2.0,
+        "pustules": 2.5,
+        "crusting": 1.5,
+        "resolving": 1.0,
+    }
+
+    score = lesion_scores.get(req.lesion_count_category, 1.0) + stage_scores.get(req.stage, 1.0)
+    score += min(2.0, 0.5 * len(req.mucocutaneous_sites or []))
+    if req.corneal_involvement:
+        score += 2.5
+    if req.respiratory_involvement:
+        score += 2.5
+    if req.secondary_infection:
+        score += 1.5
+    if req.cns_involvement:
+        score += 3.0
+    if req.immunocompromised:
+        score += 1.5
+    if req.hiv_positive:
+        score += 1.0
+    if req.pregnant:
+        score += 1.0
+    if req.age_years is not None and (req.age_years < 8 or req.age_years >= 65):
+        score += 1.0
+    if str(req.clade or "").startswith("I"):
+        score += 0.5
+
+    severity_score = round(min(10.0, score), 1)
+    if severity_score < 4:
+        severity_category = "mild"
+    elif severity_score < 7:
+        severity_category = "moderate"
+    elif severity_score < 9:
+        severity_category = "severe"
+    else:
+        severity_category = "critical"
+
+    antiviral_indicated = any([
+        severity_category in {"severe", "critical"},
+        req.immunocompromised is True,
+        req.hiv_positive is True,
+        req.corneal_involvement,
+        req.cns_involvement,
+        str(req.clade or "").startswith("I"),
+    ])
+    antiviral_drug = "tecovirimat" if antiviral_indicated else None
+    antiviral_dose = _tecovirimat_dose(req.age_years) if antiviral_indicated else None
+
+    hospitalisation_required = any([
+        severity_category in {"severe", "critical"},
+        req.corneal_involvement,
+        req.respiratory_involvement,
+        req.cns_involvement,
+        req.secondary_infection,
+        req.pregnant is True,
+    ])
+    icu_risk = any([
+        severity_category == "critical",
+        req.respiratory_involvement,
+        req.cns_involvement,
+    ])
+
+    care_principles = [
+        "Maintain strict isolation until all lesions have crusted and re-epithelialised.",
+        "Provide analgesia, hydration, nutritional support, and skin or wound care.",
+        "Treat bacterial superinfection promptly when present.",
+    ]
+    if req.corneal_involvement:
+        care_principles.append("Urgent ophthalmology review for ocular disease.")
+    if req.cns_involvement:
+        care_principles.append("Urgent neurologic monitoring and higher-level supportive care.")
+    if antiviral_indicated:
+        care_principles.append("Start antiviral therapy per local access protocol and monitor response closely.")
+
+    monitoring_parameters = [
+        "Pain score and oral intake",
+        "Temperature and hydration status",
+        "Daily lesion burden and stage progression",
+        "Signs of bacterial superinfection",
+    ]
+    if req.corneal_involvement:
+        monitoring_parameters.append("Visual symptoms and ocular examination findings")
+    if req.respiratory_involvement:
+        monitoring_parameters.append("Respiratory rate, oxygen saturation, and work of breathing")
+    if req.cns_involvement:
+        monitoring_parameters.append("Mental status and seizure activity")
+
+    confidence = round(
+        min(
+            0.98,
+            0.62 + (0.03 * len(req.mucocutaneous_sites or [])) + (0.02 if req.clade else 0),
+        ),
+        3,
+    )
+
+    return {
+        "severity_score": severity_score,
+        "severity_category": severity_category,
+        "antiviral_indicated": antiviral_indicated,
+        "antiviral_drug": antiviral_drug,
+        "antiviral_dose": antiviral_dose,
+        "hospitalisation_required": hospitalisation_required,
+        "icu_risk": icu_risk,
+        "isolation_duration_days": 21,
+        "care_principles": care_principles,
+        "monitoring_parameters": monitoring_parameters,
+        "confidence": confidence,
+        "citations": [
+            "WHO Mpox Clinical Management and Infection Prevention and Control, 2022",
+            "UKHSA Mpox clinical guidance, 2022",
+            "WHO interim guidance on therapeutics for mpox and supportive care",
+        ],
+    }
+
+
 @app.post("/cdss/zoonotic/assess")
 async def zoonotic_assess(req: ZoonoticAssessRequest):
     data = _load_supporting_json("zoonotic_protocol.json")

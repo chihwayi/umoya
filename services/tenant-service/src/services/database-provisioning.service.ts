@@ -86,6 +86,10 @@ import {
   TENANT_EPILEPSY_STATEMENTS,
 } from '../generated/tenant-epilepsy.statements';
 import {
+  TENANT_VHF_CASE_MANAGEMENT_BUNDLE_VERSION,
+  TENANT_VHF_CASE_MANAGEMENT_STATEMENTS,
+} from '../generated/tenant-vhf-case-management.statements';
+import {
   TENANT_ONE_HEALTH_PACTR_BUNDLE_VERSION,
   TENANT_ONE_HEALTH_PACTR_STATEMENTS,
 } from '../generated/tenant-one-health-pactr.statements';
@@ -101,6 +105,10 @@ import {
   TENANT_NCD_COMPLICATIONS_BUNDLE_VERSION,
   TENANT_NCD_COMPLICATIONS_STATEMENTS,
 } from '../generated/tenant-ncd-complications.statements';
+import {
+  TENANT_PLAGUE_YFM_BUNDLE_VERSION,
+  TENANT_PLAGUE_YFM_STATEMENTS,
+} from '../generated/tenant-plague-yfm-protocols.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1462,6 +1470,13 @@ export class DatabaseProvisioningService {
         statements: TENANT_NCD_COMPLICATIONS_STATEMENTS,
       },
       {
+        id: 'sprint150_vhf_case_management',
+        label: 'Sprint 150 — Mpox / Ebola / VHF Case Management',
+        version: TENANT_VHF_CASE_MANAGEMENT_BUNDLE_VERSION,
+        description: 'Creates vhf_cases, vhf_contacts, mpox_lesion_assessments tables',
+        statements: TENANT_VHF_CASE_MANAGEMENT_STATEMENTS,
+      },
+      {
         id: 'tenant_entity_alignment',
         label: 'Tenant Entity Alignment',
         version: TENANT_ENTITY_ALIGNMENT_BUNDLE_VERSION,
@@ -1481,6 +1496,13 @@ export class DatabaseProvisioningService {
         version: TENANT_ENTITY_STRUCTURE_ALIGNMENT_BUNDLE_VERSION,
         description: 'Generated structural backfill bundle for entity-declared indexes, unique constraints, and foreign keys',
         statements: () => TENANT_ENTITY_STRUCTURE_ALIGNMENT_STATEMENTS,
+      },
+      {
+        id: 'sprint151_plague_yfm_protocols',
+        label: 'Sprint 151 — Plague, Yellow Fever, Meningitis Protocols',
+        version: TENANT_PLAGUE_YFM_BUNDLE_VERSION,
+        description: 'Creates plague_cases, yellow_fever_cases, meningitis_cases tables',
+        statements: TENANT_PLAGUE_YFM_STATEMENTS,
       },
     ];
   }

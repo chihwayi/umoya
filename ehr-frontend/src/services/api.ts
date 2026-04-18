@@ -11926,6 +11926,80 @@ export const epilepsyApi = {
   },
 };
 
+export const vhfApi = {
+  reportCase: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/vhf/cases', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getCases: async (
+    token: string,
+    tenantSlug: string,
+    params?: { pathogen?: string; classification?: string },
+  ) => {
+    const response = await ehrAxios.get('/vhf/cases', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getCase: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/vhf/cases/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateCase: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/vhf/cases/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  addContact: async (caseId: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/vhf/cases/${caseId}/contacts`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getContacts: async (caseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/vhf/cases/${caseId}/contacts`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateContactStatus: async (contactId: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/vhf/contacts/${contactId}/status`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordLesionAssessment: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/vhf/mpox/lesion-assessment', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getLesionHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/vhf/mpox/lesion-history/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  triageCase: async (caseId: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/vhf/cases/${caseId}/triage`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSurveillanceSummary: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/vhf/surveillance/summary', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 export const oneHealthApi = {
   recordExposure: async (patientId: string, data: Record<string, any>, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/one-health/patient/${patientId}/exposures`, data, {

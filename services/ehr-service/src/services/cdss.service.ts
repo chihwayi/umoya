@@ -2304,6 +2304,28 @@ export class CdssService {
     );
   }
 
+  async vhfRiskTriage(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'vhfRiskTriage',
+      '/cdss/vhf/risk-triage',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async mpoxSeverity(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'mpoxSeverity',
+      '/cdss/vhf/mpox-severity',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async zoonoticAssess(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',

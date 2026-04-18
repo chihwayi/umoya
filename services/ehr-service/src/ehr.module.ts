@@ -126,6 +126,7 @@ import { AnesthesiaController } from './controllers/anesthesia.controller';
 import { BcmaController } from './controllers/bcma.controller';
 import { BloodBankController } from './controllers/blood-bank.controller';
 import { InfectionControlController } from './controllers/infection-control.controller';
+import { VhfController } from './controllers/vhf.controller';
 import { RevenueCycleController } from './controllers/revenue-cycle.controller';
 import { CdiController } from './controllers/cdi.controller';
 import { CaseManagementController } from './controllers/case-management.controller';
@@ -342,6 +343,7 @@ import { AnesthesiaService } from './services/anesthesia.service';
 import { BcmaService } from './services/bcma.service';
 import { BloodBankService } from './services/blood-bank.service';
 import { InfectionControlService } from './services/infection-control.service';
+import { VhfService } from './services/vhf.service';
 import { RevenueCycleService } from './services/revenue-cycle.service';
 import { CdiService } from './services/cdi.service';
 import { CaseManagementService } from './services/case-management.service';
@@ -564,6 +566,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     BcmaController,
     BloodBankController,
     InfectionControlController,
+    VhfController,
     RevenueCycleController,
     CdiController,
     CaseManagementController,
@@ -793,6 +796,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     BcmaService,
     BloodBankService,
     InfectionControlService,
+    VhfService,
     RevenueCycleService,
     CdiService,
     CaseManagementService,

@@ -11,6 +11,7 @@ import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 import PromptDialog from '../components/PromptDialog';
 import ModalPortal from '../components/ModalPortal';
 import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
+import VhfSurveillanceDashboard from '../components/VhfSurveillanceDashboard';
 
 interface InfectionControlDashboardProps {
   embedded?: boolean;
@@ -967,6 +968,10 @@ const InfectionControlDashboard: React.FC<InfectionControlDashboardProps> = ({ e
               className="mt-4"
             />
           )}
+        </div>
+
+        <div className="mb-6">
+          <VhfSurveillanceDashboard tenantSlug={tenantSlug || ''} token={token} />
         </div>
 
         {/* Hand Hygiene Compliance Panel (K4) */}

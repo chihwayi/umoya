@@ -331,6 +331,9 @@ import { MalariaEpisode } from '../entities/malaria-episode.entity';
 import { OpenmrsPatientLink } from '../entities/openmrs-patient-link.entity';
 import { MflFacility } from '../entities/mfl-facility.entity';
 import { OpenmrsSyncLog } from '../entities/openmrs-sync-log.entity';
+import { VhfCase } from '../entities/vhf-case.entity';
+import { VhfContact } from '../entities/vhf-contact.entity';
+import { MpoxLesionAssessment } from '../entities/mpox-lesion-assessment.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -837,6 +840,9 @@ export class TenantService {
         OpenmrsPatientLink,
         MflFacility,
         OpenmrsSyncLog,
+        VhfCase,
+        VhfContact,
+        MpoxLesionAssessment,
         ScdRegister,
         ScdCrisisEvent,
         ScdTreatmentRecord,
