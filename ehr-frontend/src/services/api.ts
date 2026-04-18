@@ -12131,6 +12131,71 @@ export const maternalMortalityApi = {
   },
 };
 
+export const outbreakApi = {
+  // Plague
+  createPlagueCase: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/outbreak/plague', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getPlagueCases: async (patientId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/outbreak/plague', {
+      params: { patientId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getPlagueTreatment: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await cdssAxios.post('/cdss/outbreak/plague-treatment', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  // Yellow Fever
+  createYellowFeverCase: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/outbreak/yellow-fever', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getYellowFeverCases: async (patientId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/outbreak/yellow-fever', {
+      params: { patientId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getYellowFeverSeverity: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await cdssAxios.post('/cdss/outbreak/yellow-fever-severity', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  // Meningitis
+  createMeningitisCase: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/outbreak/meningitis', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getMeningitisCases: async (patientId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/outbreak/meningitis', {
+      params: { patientId },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getMeningitisManagement: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await cdssAxios.post('/cdss/outbreak/meningitis-management', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 export const nhifApi = {
   enrollMember: async (patientId: string, data: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/nhif/patient/${patientId}/enroll`, data, {

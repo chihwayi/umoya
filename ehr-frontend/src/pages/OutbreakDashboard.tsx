@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
+import OutbreakProtocolDashboard from '../components/outbreak/OutbreakDashboard';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ const OutbreakDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
 
-  const [tab, setTab] = useState<'dashboard' | 'cases' | 'contacts' | 'diseases'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'cases' | 'contacts' | 'diseases' | 'protocols'>('dashboard');
   const [loading, setLoading] = useState(false);
 
   // Dashboard
@@ -383,7 +384,7 @@ const OutbreakDashboard: React.FC = () => {
       {/* Tabs */}
       <div className="px-6 pt-4">
         <div className="flex gap-1 bg-slate-900/60 border border-slate-800 rounded-xl p-1 w-fit">
-          {(['dashboard', 'cases', 'contacts', 'diseases'] as const).map((t) => (
+          {(['dashboard', 'cases', 'contacts', 'diseases', 'protocols'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -391,7 +392,7 @@ const OutbreakDashboard: React.FC = () => {
                 tab === t ? 'bg-red-500/20 text-red-300 border border-red-700/40' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {t === 'diseases' ? 'Notifiable Diseases' : t.charAt(0).toUpperCase() + t.slice(1)}
+              {t === 'diseases' ? 'Notifiable Diseases' : (t === 'protocols' ? 'Protocols (S151)' : t.charAt(0).toUpperCase() + t.slice(1))}
             </button>
           ))}
         </div>
@@ -894,6 +895,11 @@ const OutbreakDashboard: React.FC = () => {
               </table>
             </div>
           </>
+        )}
+
+        {/* ── PROTOCOLS TAB (S151) ── */}
+        {tab === 'protocols' && (
+          <OutbreakProtocolDashboard />
         )}
       </div>
     </div>

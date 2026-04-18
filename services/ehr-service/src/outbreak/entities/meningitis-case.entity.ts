@@ -1,0 +1,53 @@
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+
+@Entity({ name: 'meningitis_cases' })
+export class MeningitisCase {
+  @PrimaryGeneratedColumn('uuid') id: string;
+  @Column({ name: 'patient_id' }) patientId: string;
+  @Column({ name: 'reported_by' }) reportedBy: string;
+  @Column({ name: 'pathogen_suspected' }) pathogenSuspected: string;
+  @Column({ name: 'serogroup', nullable: true }) serogroup: string;
+  @Column({ name: 'onset_date', type: 'date', nullable: true }) onsetDate: string;
+  @Column({ name: 'date_reported', type: 'date' }) dateReported: string;
+  @Column({ name: 'fever', default: true }) fever: boolean;
+  @Column({ name: 'neck_stiffness', default: false }) neckStiffness: boolean;
+  @Column({ name: 'photophobia', default: false }) photophobia: boolean;
+  @Column({ name: 'altered_consciousness', default: false }) alteredConsciousness: boolean;
+  @Column({ name: 'gcs_score', nullable: true }) gcsScore: number;
+  @Column({ name: 'rash_type', nullable: true }) rashType: string;
+  @Column({ name: 'rash_distribution', nullable: true }) rashDistribution: string;
+  @Column({ name: 'kernig_sign', default: false }) kernigSign: boolean;
+  @Column({ name: 'brudzinski_sign', default: false }) brudzinskiSign: boolean;
+  @Column({ name: 'seizures', default: false }) seizures: boolean;
+  @Column({ name: 'csf_collected', default: false }) csfCollected: boolean;
+  @Column({ name: 'csf_collection_date', type: 'date', nullable: true }) csfCollectionDate: string;
+  @Column({ name: 'csf_appearance', nullable: true }) csfAppearance: string;
+  @Column({ name: 'csf_wbc_per_mm3', nullable: true }) csfWbcPerMm3: number;
+  @Column({ name: 'csf_predominant_cell', nullable: true }) csfPredominantCell: string;
+  @Column({ name: 'csf_protein_g_l', type: 'decimal', precision: 5, scale: 2, nullable: true }) csfProteinGL: number;
+  @Column({ name: 'csf_glucose_mmol_l', type: 'decimal', precision: 5, scale: 2, nullable: true }) csfGlucoseMmolL: number;
+  @Column({ name: 'csf_blood_glucose_ratio', type: 'decimal', precision: 4, scale: 2, nullable: true }) csfBloodGlucoseRatio: number;
+  @Column({ name: 'csf_gram_stain', nullable: true }) csfGramStain: string;
+  @Column({ name: 'csf_culture', nullable: true }) csfCulture: string;
+  @Column({ name: 'csf_pcr', nullable: true }) csfPcr: string;
+  @Column({ name: 'csf_result', type: 'jsonb', default: {} }) csfResult: object;
+  @Column({ name: 'antibiotic_given', nullable: true }) antibioticGiven: string;
+  @Column({ name: 'antibiotic_start_datetime', type: 'timestamp', nullable: true }) antibioticStartDatetime: Date;
+  @Column({ name: 'steroid_given', default: false }) steroidGiven: boolean;
+  @Column({ name: 'steroid_drug', nullable: true }) steroidDrug: string;
+  @Column({ name: 'vaccination_status', nullable: true }) vaccinationStatus: string;
+  @Column({ name: 'chemoprophylaxis_given', type: 'jsonb', default: [] }) chemoprophylaxisGiven: object[];
+  @Column({ name: 'contacts_notified', default: 0 }) contactsNotified: number;
+  @Column({ name: 'hearing_test_done', default: false }) hearingTestDone: boolean;
+  @Column({ name: 'hearing_test_result', nullable: true }) hearingTestResult: string;
+  @Column({ name: 'neurological_sequelae', type: 'jsonb', default: [] }) neurologicalSequelae: string[];
+  @Column({ name: 'notified_district', default: false }) notifiedDistrict: boolean;
+  @Column({ name: 'notified_national', default: false }) notifiedNational: boolean;
+  @Column({ name: 'notified_at', type: 'timestamp', nullable: true }) notifiedAt: Date;
+  @Column({ name: 'classification', default: 'suspected' }) classification: string;
+  @Column({ name: 'outcome', nullable: true }) outcome: string;
+  @Column({ name: 'outcome_date', type: 'date', nullable: true }) outcomeDate: string;
+  @Column({ name: 'case_fatality', default: false }) caseFatality: boolean;
+  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
+  @UpdateDateColumn({ name: 'updated_at' }) updatedAt: Date;
+}

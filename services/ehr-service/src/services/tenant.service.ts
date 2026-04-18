@@ -334,6 +334,9 @@ import { OpenmrsSyncLog } from '../entities/openmrs-sync-log.entity';
 import { VhfCase } from '../entities/vhf-case.entity';
 import { VhfContact } from '../entities/vhf-contact.entity';
 import { MpoxLesionAssessment } from '../entities/mpox-lesion-assessment.entity';
+import { PlagueCase } from '../outbreak/entities/plague-case.entity';
+import { YellowFeverCase } from '../outbreak/entities/yellow-fever-case.entity';
+import { MeningitisCase } from '../outbreak/entities/meningitis-case.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -843,6 +846,9 @@ export class TenantService {
         VhfCase,
         VhfContact,
         MpoxLesionAssessment,
+        PlagueCase,
+        YellowFeverCase,
+        MeningitisCase,
         ScdRegister,
         ScdCrisisEvent,
         ScdTreatmentRecord,

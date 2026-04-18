@@ -1493,6 +1493,57 @@ class RiskScoreResponse(BaseModel):
     guideline_citations: List[Dict[str, Any]] = []
 
 
+# ── Sprint 151: Plague, Yellow Fever, Meningitis Models ─────────────────────
+
+class PlagueTreatmentRequest(BaseModel):
+    form: str # bubonic, pneumonic, septicaemic
+    age: float
+    weight: Optional[float] = None
+    is_pregnant: bool = False
+    has_meningitis: bool = False
+    allergies: List[str] = []
+
+class PlagueTreatmentResponse(BaseModel):
+    recommended_regimen: str
+    drugs: List[Dict[str, Any]]
+    duration_days: int
+    precautions: List[str]
+    contact_prophylaxis: str
+
+class MeningitisManagementRequest(BaseModel):
+    age_months: int
+    pathogen_suspected: Optional[str] = None
+    csf_wbc: Optional[int] = None
+    csf_glucose_ratio: Optional[float] = None
+    csf_protein: Optional[float] = None
+    has_purpura: bool = False
+    weight: Optional[float] = None
+
+class MeningitisManagementResponse(BaseModel):
+    recommended_antibiotics: List[str]
+    dosing_schedule: str
+    steroids_indicated: bool
+    fluid_management: str
+    isolation_type: str
+    public_health_alert: bool
+
+class YellowFeverSeverityRequest(BaseModel):
+    day_of_illness: int
+    has_jaundice: bool
+    has_haemorrhage: bool
+    bilirubin_umol_l: Optional[float] = None
+    alt_u_l: Optional[float] = None
+    creatinine_umol_l: Optional[float] = None
+    platelets: Optional[int] = None
+
+class YellowFeverSeverityResponse(BaseModel):
+    severity_category: str # mild, moderate, severe/malignant
+    management_location: str # home, ward, ICU
+    risk_of_renal_failure: float
+    supportive_care_priority: List[str]
+    notifiable: bool = True
+
+
 # Health Check
 @app.get("/")
 async def root():
@@ -15074,6 +15125,82 @@ async def ckd_management(req: CkdManagementRequest):
         "urgency": "urgent" if egfr < 15 else ("soon" if egfr < 30 else "routine"),
         "next_review_months": 1 if egfr < 15 else (3 if egfr < 30 else (6 if egfr < 45 else 12)),
         "abstained": False,
+    }
+
+
+# ── Sprint 151: Plague, Yellow Fever, Meningitis Protocols ──────────────────
+
+@app.post("/cdss/outbreak/plague-treatment", response_model=PlagueTreatmentResponse)
+async def plague_treatment(req: PlagueTreatmentRequest):
+    # WHO Guidelines for Plague Case Management 2021
+    regimen = "Gentamicin (First-line)"
+    drugs = [{"name": "Gentamicin", "dose": "5mg/kg IM/IV OD", "note": "Preferred for all forms"}]
+    
+    if req.form == "pneumonic" or req.has_meningitis:
+        regimen = "Gentamicin + Ciprofloxacin"
+        drugs.append({"name": "Ciprofloxacin", "dose": "400mg IV BD", "note": "Added for CNS coverage or pneumonic severity"})
+    
+    if req.is_pregnant:
+        regimen = "Gentamicin" # Gentamicin is preferred even in pregnancy for plague
+        precautions = ["Monitor renal function", "Fetal monitoring"]
+    else:
+        precautions = ["Monitor renal function"]
+
+    return {
+        "recommended_regimen": regimen,
+        "drugs": drugs,
+        "duration_days": 10,
+        "precautions": precautions,
+        "contact_prophylaxis": "Doxycycline 100mg BD for 7 days"
+    }
+
+@app.post("/cdss/outbreak/meningitis-management", response_model=MeningitisManagementResponse)
+async def meningitis_management(req: MeningitisManagementRequest):
+    # WHO/MSF Bacterial Meningitis Protocols
+    antibiotics = ["Ceftriaxone"]
+    dosing = "100mg/kg IV OD (Max 4g)"
+    steroids = True
+    fluid = "Restrict to 2/3 maintenance if SIADH suspected"
+    
+    if req.age_months < 3:
+        antibiotics = ["Cefotaxime", "Ampicillin"]
+        dosing = "Cefotaxime 50mg/kg q6h + Ampicillin 50mg/kg q6h"
+        steroids = False
+        
+    if req.has_purpura:
+        fluid = "Aggressive resuscitation for meningococcaemia shock"
+        
+    return {
+        "recommended_antibiotics": antibiotics,
+        "dosing_schedule": dosing,
+        "steroids_indicated": steroids,
+        "fluid_management": fluid,
+        "isolation_type": "Droplet (for first 24h of effective therapy)",
+        "public_health_alert": True
+    }
+
+@app.post("/cdss/outbreak/yellow-fever-severity", response_model=YellowFeverSeverityResponse)
+async def yellow_fever_severity(req: YellowFeverSeverityRequest):
+    severity = "mild"
+    location = "home"
+    risk = 0.05
+    
+    if req.has_jaundice or req.day_of_illness > 6:
+        severity = "moderate"
+        location = "ward"
+        risk = 0.25
+        
+    if req.has_haemorrhage or (req.bilirubin_umol_l and req.bilirubin_umol_l > 100):
+        severity = "severe/malignant"
+        location = "ICU"
+        risk = 0.75
+        
+    return {
+        "severity_category": severity,
+        "management_location": location,
+        "risk_of_renal_failure": risk,
+        "supportive_care_priority": ["Fluid balance", "Coagulopathy monitoring", "Glucose maintenance"],
+        "notifiable": True
     }
 
 

@@ -69,6 +69,7 @@ import { ProblemController } from './controllers/problem.controller';
 import { AllergyController } from './controllers/allergy.controller';
 import { EpiController } from './controllers/epi.controller';
 import { OutbreakController } from './controllers/outbreak.controller';
+import { OutbreakProtocolModule } from './outbreak/outbreak.module';
 import { MobileMoneyController } from './controllers/mobile-money.controller';
 import { ChwController } from './controllers/chw.controller';
 import { LabTestController } from './controllers/lab-test.controller';
@@ -446,6 +447,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
       secret: jwtSecret,
       signOptions: { expiresIn: '8h' },
     }),
+    OutbreakProtocolModule,
   ],
   controllers: [
     AuthController,
