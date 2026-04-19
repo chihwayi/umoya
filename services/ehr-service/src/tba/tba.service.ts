@@ -264,35 +264,36 @@ export class TbaService {
 
   async notifyCRVS(tenantId: string, birthId: string): Promise<any> {
     const repository = await this.getRepository<HomeBirthRecord>(tenantId, HomeBirthRecord);
-    // Await the findOne method
     const birthRecord = await repository.findOne({ where: { id: birthId }, relations: ['tba'] });
 
     if (!birthRecord) throw new Error('Home birth record not found');
     if (birthRecord.crvsNotified) return { message: 'Already notified', status: 'already_notified' };
 
-    // Basic check: only notify if it's a live birth
     if (birthRecord.birthOutcome !== 'live_birth') {
       return { message: 'Only live births are eligible for CRVS notification', status: 'not_eligible' };
     }
 
-      // TODO: Investigate CRVS integration. 'notifyBirth' method not found on CrvsService.
-      // const crvsResponse = await this.crvsService.notifyBirth(tenantId, birthRecord.id, {
-      //   motherName: birthRecord.motherName,
-      //   birthDate: birthRecord.birthDate,
-      //   babySex: birthRecord.babySex,
-      //   babyAlive: birthRecord.babyAlive,
-      //   motherAlive: birthRecord.maternalAlive,
-      //   village: birthRecord.motherVillage,
-      //   tbaId: birthRecord.tbaId,
-      //   attendedByType: birthRecord.attendedByType,
-      //   // Add more data as required by CRVS service
-      // });
+    const certificateNumber = await this.crvsService.notifyHomeBirth(tenantId, {
+      motherPatientId: birthRecord.motherPatientId,
+      motherName: birthRecord.motherName,
+      birthDate: birthRecord.birthDate,
+      birthType: 'single',
+      gestationalAgeWeeks: birthRecord.gestationalAgeWeeks,
+      birthWeightGrams: birthRecord.birthWeightKg ? Math.round(Number(birthRecord.birthWeightKg) * 1000) : null,
+      babySex: birthRecord.babySex,
+      babyAlive: birthRecord.babyAlive,
+      placeOfBirth: 'home',
+      deliveryMode: 'home_delivery',
+    });
 
-      // // Update birth record with CRVS notification status and ID
-      // await repository.update(birthId, { crvsNotified: true, crvsNotificationDate: new Date().toISOString().split('T')[0], birthCertificateNumber: crvsResponse.certificateId });
-      // // logger.log was used instead of logger.info
-      // this.logger.log(`CRVS notification successful for home birth ID: ${birthId}`);
-      // return { message: 'CRVS notification successful', status: 'notified', certificateId: crvsResponse.certificateId };
+    await repository.update(birthId, {
+      crvsNotified: true,
+      crvsNotificationDate: new Date().toISOString().split('T')[0],
+      birthCertificateNumber: certificateNumber ?? undefined,
+    });
+
+    this.logger.log(`CRVS notification successful for home birth ID: ${birthId}`);
+    return { message: 'CRVS notification successful', status: 'notified', certificateNumber };
   }
 
   async getTbaSummary(tenantId: string, district?: string, filters?: any): Promise<any> {

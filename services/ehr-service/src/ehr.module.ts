@@ -49,7 +49,6 @@ import { DatimMerController } from './controllers/datim-mer.controller';
 import { OpenmrsFhirController } from './controllers/openmrs-fhir.controller';
 import { MflController } from './controllers/mfl.controller';
 import { CrvsController } from './controllers/crvs.controller';
-import { TbaController } from './tba/tba.controller';
 import { MalariaEpisodeController } from './controllers/malaria-episode.controller';
 import { IcuController } from './controllers/icu.controller';
 import { SdohController } from './controllers/sdoh.controller';
@@ -236,7 +235,6 @@ import { DatimMerService } from './services/datim-mer.service';
 import { OpenmrsFhirService } from './services/openmrs-fhir.service';
 import { MflService } from './services/mfl.service';
 import { CrvsService } from './services/crvs.service';
-import { TbaService } from './tba/tba.service';
 import { MalariaEpisodeService } from './services/malaria-episode.service';
 import { IcuService } from './services/icu.service';
 import { SdohService } from './services/sdoh.service';
@@ -499,7 +497,6 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OpenmrsFhirController,
     MflController,
     CrvsController,
-    TbaController,
     MalariaEpisodeController,
     IcuController,
     SdohController,
@@ -832,7 +829,6 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RegistrationAiService,
     ProactiveAiService,
     AtMessagingService,
-    TbaService,
     TenantService,
     CdssService,
     CrvsService,
