@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, User, Calendar, Phone, Mail, MapPin, Heart, Shield, 
-  AlertTriangle, Edit, FileText, Clock, Activity
+  ArrowLeft, User, Phone, Heart, Shield,
+  AlertTriangle, Edit, Clock
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -11,6 +11,8 @@ import MedicationTimeline from '../components/MedicationTimeline';
 import MedicationReconciliation from '../components/MedicationReconciliation';
 import PatientProTrends from '../components/PatientProTrends';
 import PatientProSchedules from '../components/PatientProSchedules';
+import UbuntuCulturalPanel from '../components/UbuntuCulturalPanel';
+import NcidPanel from '../components/NcidPanel';
 
 interface Patient {
   id: string;
@@ -42,11 +44,7 @@ const PatientDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { showError } = useNotification();
 
-  useEffect(() => {
-    fetchPatient();
-  }, [patientId]);
-
-  const fetchPatient = async () => {
+  const fetchPatient = useCallback(async () => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token || !tenantSlug || !patientId) return;
@@ -59,7 +57,11 @@ const PatientDetail: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate, patientId, showError, tenantSlug]);
+
+  useEffect(() => {
+    void fetchPatient();
+  }, [fetchPatient]);
 
   const calculateAge = (dateOfBirth: string) => {
     const today = new Date();
@@ -104,6 +106,15 @@ const PatientDetail: React.FC = () => {
   }
 
   const authToken = (typeof window !== 'undefined' && localStorage.getItem('ehr_token')) || '';
+
+  const diagnosisTokens = patient.medicalHistory
+    ? patient.medicalHistory
+        .split(/[,;\n]/)
+        .map(s => s.trim())
+        .filter(Boolean)
+    : [];
+  const sexForNcid =
+    patient.gender?.toLowerCase().startsWith('f') ? 'female' : patient.gender?.toLowerCase().startsWith('m') ? 'male' : 'other';
 
   return (
     <div className="p-6">
@@ -327,6 +338,22 @@ const PatientDetail: React.FC = () => {
       <div className="mt-6">
         <MedicationReconciliation patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} />
       </div>
+
+      {/* Ubuntu Cultural Health */}
+      <div className="mt-6">
+        <UbuntuCulturalPanel patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} />
+      </div>
+
+      {/* NCID — national identifiers & programme gaps */}
+      <NcidPanel
+        patientId={patient.id}
+        tenantSlug={tenantSlug!}
+        token={authToken}
+        diagnoses={diagnosisTokens.length ? diagnosisTokens : patient.medicalHistory ? [patient.medicalHistory] : []}
+        ageYears={patient.age ?? calculateAge(patient.dateOfBirth)}
+        sex={sexForNcid}
+        isPregnant={false}
+      />
 
       {/* PRO Trends */}
       <div className="mt-6">

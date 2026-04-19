@@ -9084,6 +9084,122 @@ export const uhcApi = {
   },
 };
 
+/** Sprint 161 — NCID (tenant-scoped via X-Tenant-ID + Bearer token). */
+export const ncidApi = {
+  registerNcid: async (
+    tenantSlug: string,
+    token: string,
+    body: {
+      patientId: string;
+      countryCode: string;
+      idType: string;
+      idNumber: string;
+      isPrimary?: boolean;
+      verificationMethod?: string;
+      verifiedBy?: string;
+    },
+  ) => {
+    const response = await ehrAxios.post('/ncid/register', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getPatientIds: async (tenantSlug: string, token: string, patientId: string) => {
+    const response = await ehrAxios.get(`/ncid/patient/${encodeURIComponent(patientId)}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getProgrammes: async (tenantSlug: string, token: string, patientId: string) => {
+    const response = await ehrAxios.get(`/ncid/patient/${encodeURIComponent(patientId)}/programmes`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  analyseGaps: async (
+    tenantSlug: string,
+    token: string,
+    patientId: string,
+    body: { diagnoses: string[]; ageYears: number; sex: string; isPregnant: boolean },
+  ) => {
+    const response = await ehrAxios.post(`/ncid/patient/${encodeURIComponent(patientId)}/gaps`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  upsertProgrammeLinkage: async (
+    tenantSlug: string,
+    token: string,
+    body: {
+      patientId: string;
+      programme: string;
+      programmeNumber?: string;
+      enrolledAt?: string;
+      facilityEnrolled?: string;
+    },
+  ) => {
+    const response = await ehrAxios.post('/ncid/programme-linkage', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  scoreDeduplication: async (
+    tenantSlug: string,
+    token: string,
+    body: {
+      patientIdA: string;
+      patientIdB: string;
+      demographics: {
+        a: {
+          givenName: string;
+          familyName: string;
+          dob: string;
+          sex: string;
+          phone?: string;
+          mothersName?: string;
+          village?: string;
+        };
+        b: {
+          givenName: string;
+          familyName: string;
+          dob: string;
+          sex: string;
+          phone?: string;
+          mothersName?: string;
+          village?: string;
+        };
+      };
+    },
+  ) => {
+    const response = await ehrAxios.post('/ncid/deduplication/score', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getPendingDuplicates: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/ncid/duplicates/pending', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  resolveDuplicate: async (
+    tenantSlug: string,
+    token: string,
+    flagId: string,
+    body: {
+      status: 'confirmed_duplicate' | 'confirmed_different' | 'merged' | 'dismissed';
+      resolvedBy: string;
+      mergedIntoPatientId?: string;
+      notes?: string;
+    },
+  ) => {
+    const response = await ehrAxios.patch(`/ncid/duplicates/${encodeURIComponent(flagId)}/resolve`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+};
+
 export const knowledgeBaseApi = {
   uploadDocument: (formData: FormData, token: string, tenantSlug: string) =>
     ehrAxios.post('/knowledge/documents', formData, {

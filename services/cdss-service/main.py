@@ -15889,6 +15889,437 @@ async def filariasis_treatment_safety(req: FilariasisSafetyRequest):
     return result
 
 
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Sprint 161: NCID — National Client Identification
+# ═════════════════════════════════════════════════════════════════════════════
+
+try:
+    import jellyfish  # type: ignore
+except Exception:  # pragma: no cover
+    jellyfish = None  # type: ignore
+
+
+def _ncid_soundex(value: str) -> str:
+    s = (value or "").strip()
+    if not s:
+        return ""
+    if jellyfish is not None:
+        try:
+            return jellyfish.soundex(s.upper()) or ""
+        except Exception:
+            pass
+    return s.upper()[:4] if s else ""
+
+
+class NcidPatientDemographics(BaseModel):
+    given_name: str = ""
+    family_name: str = ""
+    date_of_birth: str = ""
+    sex: str = "unknown"
+    phone_number: Optional[str] = None
+    mothers_name: Optional[str] = None
+    village_or_suburb: Optional[str] = None
+    national_id_hash: Optional[str] = None
+
+
+class NcidDuplicateScoreRequest(BaseModel):
+    patient_id: str
+    tenant_id: str
+    patient_a: NcidPatientDemographics
+    patient_b: NcidPatientDemographics
+    locale: str = "en"
+
+
+class NcidDuplicateScoreResponse(BaseModel):
+    match_score: float
+    match_method: str
+    matched_fields: List[str]
+    recommendation: str
+    confidence: float
+    reasoning: str
+    citations: List[Dict[str, Any]]
+    abstained: bool = False
+
+
+@app.post("/cdss/ncid/duplicate-score", response_model=NcidDuplicateScoreResponse)
+async def ncid_duplicate_score(req: NcidDuplicateScoreRequest):
+    pa, pb = req.patient_a, req.patient_b
+    score = 0.0
+    matched: List[str] = []
+
+    if pa.national_id_hash and pb.national_id_hash and pa.national_id_hash == pb.national_id_hash:
+        score += 0.50
+        matched.append("national_id_hash")
+
+    if pa.date_of_birth and pb.date_of_birth and pa.date_of_birth == pb.date_of_birth:
+        score += 0.30
+        matched.append("date_of_birth")
+    if pa.sex == pb.sex and pa.sex and pa.sex != "unknown":
+        score += 0.05
+        matched.append("sex")
+
+    if _ncid_soundex(pa.family_name) == _ncid_soundex(pb.family_name) and pa.family_name:
+        score += 0.20
+        matched.append("family_name_soundex")
+    if _ncid_soundex(pa.given_name) == _ncid_soundex(pb.given_name) and pa.given_name:
+        score += 0.15
+        matched.append("given_name_soundex")
+
+    if pa.phone_number and pb.phone_number:
+        if pa.phone_number[-4:] == pb.phone_number[-4:]:
+            score += 0.10
+            matched.append("phone_last4")
+
+    if pa.mothers_name and pb.mothers_name and _ncid_soundex(pa.mothers_name) == _ncid_soundex(pb.mothers_name):
+        score += 0.15
+        matched.append("mothers_name_soundex")
+
+    if pa.village_or_suburb and pb.village_or_suburb:
+        if pa.village_or_suburb.lower().strip() == pb.village_or_suburb.lower().strip():
+            score += 0.10
+            matched.append("village_or_suburb")
+
+    score = min(score, 1.0)
+
+    if score >= 0.85:
+        rec = "merge"
+    elif score >= 0.60:
+        rec = "manual_review"
+    else:
+        rec = "keep_separate"
+
+    reasoning = (
+        f"Deterministic match score {score:.3f}. Matched fields: {', '.join(matched) if matched else 'none'}."
+    )
+    confidence = float(score)
+    abstained = True
+
+    try:
+        if LLMProvider is not None:
+            llm = LLMProvider()
+            llm_prompt = (
+                "You are a patient deduplication assistant. Given match score "
+                f"{score:.3f} and matched fields {matched}, respond with JSON only: "
+                '{"reasoning":"string","confidence":0.0}' + f" Context locale: {req.locale}."
+            )
+            generated = await llm.generate_json(
+                prompt=llm_prompt,
+                schema_description='{"reasoning":"string","confidence":number}',
+                use_case="ncid_deduplication",
+                tenant_id=(req.tenant_id or "").strip() or None,
+            )
+            if isinstance(generated, dict) and generated.get("reasoning"):
+                reasoning = str(generated.get("reasoning"))
+                try:
+                    confidence = float(generated.get("confidence", confidence))
+                except Exception:
+                    pass
+                abstained = False
+    except Exception:
+        pass
+
+    mm = "demographic"
+    if "national_id_hash" in matched:
+        mm = "id_number_hash"
+    elif len(matched) >= 3:
+        mm = "combined"
+
+    return NcidDuplicateScoreResponse(
+        match_score=round(score, 3),
+        match_method=mm,
+        matched_fields=matched,
+        recommendation=rec,
+        confidence=round(min(max(confidence, 0.0), 1.0), 3),
+        reasoning=reasoning,
+        citations=[{"text": "WHO Patient Identification Best Practices", "source": "WHO 2021"}],
+        abstained=abstained,
+    )
+
+
+class NcidProgrammeGapRequest(BaseModel):
+    patient_id: str
+    tenant_id: str
+    active_programmes: List[str]
+    diagnoses: List[str]
+    age_years: int
+    sex: str
+    is_pregnant: bool = False
+    locale: str = "en"
+
+
+class NcidProgrammeGap(BaseModel):
+    missing_programme: str
+    reason: str
+    priority: str
+    action: str
+
+
+class NcidProgrammeGapResponse(BaseModel):
+    gaps_detected: List[NcidProgrammeGap]
+    summary: str
+    confidence: float
+    citations: List[Dict[str, Any]]
+    abstained: bool = False
+
+
+@app.post("/cdss/ncid/programme-gaps", response_model=NcidProgrammeGapResponse)
+async def ncid_programme_gaps(req: NcidProgrammeGapRequest):
+    diag_lower = [d.lower() for d in (req.diagnoses or [])]
+    enrolled = set(req.active_programmes or [])
+    gaps: List[NcidProgrammeGap] = []
+
+    def diag_match(*terms: str) -> bool:
+        return any(t in d for t in terms for d in diag_lower)
+
+    if diag_match("hiv", "hiv positive", "hiv+", "b20", "b24"):
+        if "hiv_art" not in enrolled:
+            gaps.append(
+                NcidProgrammeGap(
+                    missing_programme="hiv_art",
+                    reason="Patient has HIV diagnosis but is not enrolled in ART programme",
+                    priority="urgent",
+                    action="Enrol in ART programme immediately; baseline CD4 and VL required",
+                )
+            )
+        if "tb_preventive" not in enrolled:
+            gaps.append(
+                NcidProgrammeGap(
+                    missing_programme="tb_preventive",
+                    reason="HIV+ patients require TB preventive therapy (IPT) — 6H or 3HP regimen",
+                    priority="high",
+                    action="Screen for active TB; if excluded, initiate IPT",
+                )
+            )
+        if req.sex == "female" and "cervical_cancer" not in enrolled:
+            gaps.append(
+                NcidProgrammeGap(
+                    missing_programme="cervical_cancer",
+                    reason="HIV+ women have 5× higher risk of cervical cancer; VIA/HPV screening indicated",
+                    priority="high",
+                    action="Enrol in cervical cancer screening programme; VIA or HPV test",
+                )
+            )
+
+    if diag_match("active tb", "tuberculosis", "a15", "a16", "a17", "a18", "a19"):
+        if "tb_dots" not in enrolled:
+            gaps.append(
+                NcidProgrammeGap(
+                    missing_programme="tb_dots",
+                    reason="Active TB requires supervised DOTS enrolment",
+                    priority="urgent",
+                    action="Enrol in TB DOTS programme; notify district TB coordinator",
+                )
+            )
+
+    if diag_match("hypertension", "htn", "high blood pressure", "i10", "i11", "i12", "i13"):
+        if "ncd_htn" not in enrolled:
+            gaps.append(
+                NcidProgrammeGap(
+                    missing_programme="ncd_htn",
+                    reason="Hypertension diagnosis not linked to NCD HTN programme register",
+                    priority="high",
+                    action="Register patient in NCD Hypertension programme for adherence tracking",
+                )
+            )
+
+    if diag_match("diabetes", "type 2 dm", "type 1 dm", "e11", "e10", "e13", "e14"):
+        if "ncd_dm" not in enrolled:
+            gaps.append(
+                NcidProgrammeGap(
+                    missing_programme="ncd_dm",
+                    reason="Diabetes diagnosis not linked to NCD DM programme register",
+                    priority="high",
+                    action="Register in NCD Diabetes programme; HbA1c baseline required",
+                )
+            )
+
+    if req.is_pregnant and "anc_mch" not in enrolled:
+        gaps.append(
+            NcidProgrammeGap(
+                missing_programme="anc_mch",
+                reason="Pregnant patient not enrolled in ANC/MCH programme",
+                priority="urgent",
+                action="Register in ANC; schedule booking visit and HIV/syphilis screen",
+            )
+        )
+
+    if req.age_years < 5 and "epi_child" not in enrolled:
+        gaps.append(
+            NcidProgrammeGap(
+                missing_programme="epi_child",
+                reason="Child under 5 not enrolled in immunisation programme",
+                priority="high",
+                action="Enrol in EPI; check and update vaccination card",
+            )
+        )
+
+    if diag_match("sickle cell", "d57"):
+        if "ncd_sickle_cell" not in enrolled:
+            gaps.append(
+                NcidProgrammeGap(
+                    missing_programme="ncd_sickle_cell",
+                    reason="Sickle cell disease not linked to NCD register for hydroxyurea and prophylaxis tracking",
+                    priority="high",
+                    action="Enrol in Sickle Cell NCD programme",
+                )
+            )
+
+    if diag_match("epilepsy", "seizure", "g40", "g41"):
+        if "ncd_epilepsy" not in enrolled:
+            gaps.append(
+                NcidProgrammeGap(
+                    missing_programme="ncd_epilepsy",
+                    reason="Epilepsy not linked to NCD epilepsy register for AED tracking",
+                    priority="high",
+                    action="Enrol in Epilepsy NCD programme; AED medication reconciliation",
+                )
+            )
+
+    if not gaps:
+        return NcidProgrammeGapResponse(
+            gaps_detected=[],
+            summary="No cross-programme enrolment gaps detected for current diagnoses.",
+            confidence=0.92,
+            citations=[],
+            abstained=False,
+        )
+
+    summary = f"{len(gaps)} programme enrolment gap(s) detected based on diagnoses."
+    confidence = 0.85
+    abstained = True
+
+    try:
+        if LLMProvider is not None:
+            llm = LLMProvider()
+            gap_list = "\n".join([f"- {g.missing_programme}: {g.reason} [{g.priority}]" for g in gaps])
+            llm_prompt = (
+                f"Summarize these programme gaps for continuity of care (2-3 sentences). "
+                f"Patient age {req.age_years}, sex {req.sex}, pregnant {req.is_pregnant}. "
+                f"Programmes: {req.active_programmes}. Diagnoses: {req.diagnoses}. Gaps:\n{gap_list}"
+            )
+            generated = await llm.generate_json(
+                prompt=llm_prompt,
+                schema_description='{"summary":"string","confidence":number}',
+                use_case="ncid_programme_gaps",
+                tenant_id=(req.tenant_id or "").strip() or None,
+            )
+            if isinstance(generated, dict) and generated.get("summary"):
+                summary = str(generated.get("summary"))
+                try:
+                    confidence = float(generated.get("confidence", 0.88))
+                except Exception:
+                    pass
+                abstained = False
+    except Exception:
+        pass
+
+    return NcidProgrammeGapResponse(
+        gaps_detected=gaps,
+        summary=summary,
+        confidence=round(min(max(confidence, 0.0), 1.0), 3),
+        citations=[
+            {"text": "WHO Consolidated HIV Guidelines 2023", "source": "WHO 2023"},
+            {"text": "IUATLD TB-HIV Co-management Guidelines", "source": "IUATLD 2019"},
+        ],
+        abstained=abstained,
+    )
+
+
+class NcidValidateRequest(BaseModel):
+    id_type: str
+    id_number: str
+    country_code: str
+
+
+class NcidValidateResponse(BaseModel):
+    valid: bool
+    formatted_number: Optional[str] = None
+    error_message: Optional[str] = None
+    check_digit_valid: Optional[bool] = None
+
+
+@app.post("/cdss/ncid/validate-id", response_model=NcidValidateResponse)
+async def ncid_validate_id(req: NcidValidateRequest):
+    num = req.id_number.strip().upper()
+    country = req.country_code.upper()
+    id_type = req.id_type.lower()
+
+    if country == "ZW" and id_type == "national_id":
+        pattern = r"^(\d{2})-(\d{6})-([A-Z])-(\d{2})$"
+        m = re.match(pattern, num)
+        if m:
+            return NcidValidateResponse(valid=True, formatted_number=num)
+        flat = re.sub(r"[-\s]", "", num)
+        m2 = re.match(r"^(\d{2})(\d{6})([A-Z])(\d{2})$", flat)
+        if m2:
+            formatted = f"{m2.group(1)}-{m2.group(2)}-{m2.group(3)}-{m2.group(4)}"
+            return NcidValidateResponse(valid=True, formatted_number=formatted)
+        return NcidValidateResponse(
+            valid=False,
+            error_message="ZW ID must be DD-NNNNNN-L-NN (e.g. 63-123456-F-20)",
+        )
+
+    if country == "ZA" and id_type == "national_id":
+        digits = re.sub(r"\s", "", num)
+        if not re.match(r"^\d{13}$", digits):
+            return NcidValidateResponse(valid=False, error_message="ZA ID must be 13 digits")
+        total = 0
+        for i, d in enumerate(digits):
+            n = int(d)
+            if i % 2 == 1:
+                n *= 2
+                if n > 9:
+                    n -= 9
+            total += n
+        luhn_ok = total % 10 == 0
+        return NcidValidateResponse(
+            valid=luhn_ok,
+            formatted_number=digits,
+            check_digit_valid=luhn_ok,
+            error_message=None if luhn_ok else "ZA ID failed Luhn check digit validation",
+        )
+
+    if country == "ZM" and id_type == "nrc":
+        pattern = r"^\d{6}/\d{2}/\d$"
+        m = re.match(pattern, num)
+        if m:
+            return NcidValidateResponse(valid=True, formatted_number=num)
+        flat = re.sub(r"[\s/]", "", num)
+        if re.match(r"^\d{9}$", flat):
+            formatted = f"{flat[:6]}/{flat[6:8]}/{flat[8]}"
+            return NcidValidateResponse(valid=True, formatted_number=formatted)
+        return NcidValidateResponse(valid=False, error_message="ZM NRC must be NNNNNN/NN/N")
+
+    if country == "MZ" and id_type == "nuip":
+        digits = re.sub(r"\s", "", num)
+        if re.match(r"^\d{8}$", digits):
+            return NcidValidateResponse(valid=True, formatted_number=digits)
+        return NcidValidateResponse(valid=False, error_message="MZ NUIP must be 8 digits")
+
+    if country == "TZ" and id_type == "nida":
+        digits = re.sub(r"[\s-]", "", num)
+        if re.match(r"^\d{14}$", digits):
+            return NcidValidateResponse(valid=True, formatted_number=digits)
+        return NcidValidateResponse(valid=False, error_message="TZ NIDA must be 14 digits")
+
+    if country == "KE" and id_type == "national_id":
+        digits = re.sub(r"\s", "", num)
+        if re.match(r"^\d{7,8}$", digits):
+            return NcidValidateResponse(valid=True, formatted_number=digits)
+        return NcidValidateResponse(valid=False, error_message="KE National ID must be 7–8 digits")
+
+    if re.match(r"^[A-Z0-9\-/]{4,20}$", num):
+        return NcidValidateResponse(valid=True, formatted_number=num)
+
+    return NcidValidateResponse(
+        valid=False,
+        error_message=f"ID number format not recognised for {country}/{id_type}",
+    )
+
+
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

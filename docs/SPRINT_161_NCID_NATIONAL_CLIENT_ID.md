@@ -6,7 +6,7 @@
 **Bundle ID**: `sprint161_ncid_national_client_id`  
 **Prerequisite reading**: `MEDICORE_REFERENCE.md` — architecture, DB rules, CDSS call patterns.
 
----
+-----
 
 ## 1. Clinical Rationale
 

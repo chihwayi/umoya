@@ -6,7 +6,7 @@
 **Bundle ID**: `sprint154_cbhi_deep_module`  
 **Prerequisite reading**: `MEDICORE_REFERENCE.md` — architecture, DB rules, CDSS call patterns.
 
----
+-----
 
 ## 1. Clinical Rationale
 

@@ -8,6 +8,20 @@
 
 ---
 
+## Executive summary
+
+| Outcome | Description |
+|---------|-------------|
+| **Tenant schema** | `uhc_indicator_snapshots` stores period/facility-level UHC & SDG-aligned metrics; `sdg_indicator_targets` holds WHO/global vs national targets for gap analysis. |
+| **Computation** | `UhcAnalyticsService` aggregates numerators/denominators from existing clinical modules (maternity, EPI, HIV/TB, HTN, CBHI, etc.). |
+| **Intelligence** | CDSS `/cdss/analytics/uhc-gap-analysis` produces UHC SCI-style composite, gap flags, priority actions, and confidence — persisted on the snapshot when not abstaining. |
+| **Reporting** | Quarterly scheduler + optional push of mapped values to existing DHIS2 integration (S136). |
+| **UX** | EHR dashboard (`UhcSdgDashboard`) for public health / admin: scorecard, trends, editable targets. |
+
+**Cross-sprint dependencies**: maternal mortality / MDSR (**S147**), CBHI depth (**S154**), DHIS2 (**S136**), DISA/SmartCare indicator alignment (**S157**) where national reporting requires reconciled denominators.
+
+---
+
 ## 1. Clinical Rationale
 
 Every MediCore facility generates rich clinical data across 150+ sprints of functionality, but no single dashboard answers: "Are we achieving UHC? Are we on track for SDG 3 targets?" This sprint builds the analytics layer that converts the clinical data into WHO UHC Service Coverage Index components and SDG 3 health indicator metrics.
@@ -113,7 +127,7 @@ export const TENANT_UHC_SDG_STATEMENTS: string[] = [
 
   `CREATE INDEX IF NOT EXISTS idx_sdg_targets_code ON sdg_indicator_targets(indicator_code)`,
 
-  -- Seed SDG targets
+  // Seed SDG targets (use // here — this file is TypeScript, not raw SQL)
   `INSERT INTO sdg_indicator_targets (indicator_code, indicator_name, sdg_goal, target_value, national_target, unit, data_source) VALUES
     ('anc4_coverage', 'ANC ≥4 visits coverage', 'SDG 3.1', 90, 80, 'percentage', 'maternity_records'),
     ('skilled_birth_attendance', 'Skilled birth attendance rate', 'SDG 3.1', 95, 90, 'percentage', 'delivery_records'),
@@ -193,7 +207,7 @@ export class UhcIndicatorSnapshot {
 
 **File: `services/ehr-service/src/analytics/entities/sdg-indicator-target.entity.ts`** — mirror `sdg_indicator_targets` columns.
 
-Register both in `tenant.service.ts`.
+Register both entities in `UhcAnalyticsModule` (or `ehr.module.ts` / `TypeOrmModule.forFeature([...])` as per project pattern), not in the tenant service.
 
 ---
 
@@ -555,7 +569,46 @@ Register `UhcAnalyticsScheduler` in the module providers array. Ensure `Schedule
 
 ---
 
-## 9. Post-Implementation Steps
+## 9. Methodology, DHIS2 alignment, and caveats
+
+### 9.1 WHO UHC Service Coverage Index (SCI)
+
+The CDSS prompt in §4 follows the spirit of the **WHO UHC Service Coverage Index**: a composite of tracer indicators across reproductive/maternal/newborn/child health, infectious disease, NCDs, and service capacity/financial protection. Official WHO publications and indicator definitions change over time — before production sign-off, reconcile tracer lists and domain weighting with the latest WHO guidance for the reporting year.
+
+**SDG 3**: Uses UN SDG indicator metadata where applicable (e.g. 3.1.1, 3.2.1, 3.2.2, 3.3.x, 3.4.x, 3.8.x). MediCore stores **facility-computable** proxies; national official statistics may still come from census/surveys — document gaps on the dashboard.
+
+### 9.2 Zimbabwe / MoHCC context
+
+Seed values in §2a (`national_target` column) are **illustrative defaults** for development (e.g. Zimbabwe National Health Strategy alignment). Replace with MoHCC-approved thresholds per programme when deploying. Keep `target_value` (global/WHO ambition) vs `national_target` (country) distinct in UI and exports.
+
+### 9.3 DHIS2 mapping (extend S136)
+
+Do **not** duplicate DHIS2 clients. In `pushToDhis2` (§5), map `uhc_indicator_snapshots` columns to tenant-configured DHIS2 **data element** or **indicator** IDs (stored in existing DHIS2 metadata tables or env/config from S136). Example mapping stub:
+
+| MediCore field | Example DHIS2 artefact | Notes |
+|----------------|------------------------|-------|
+| `anc4_coverage` | Programme-specific DE | Period = snapshot period |
+| `dtp3_coverage` | EPI programme DE | |
+| `uhc_sci_composite` | Custom indicator or derived DE | May be computed outside DHIS2 |
+| `period_year`, `period_quarter` | Period dimension | Use DHIS2 period type consistent with national HMIS |
+
+Validate pushed values in DHIS2 Data Entry or API response before enabling scheduled push in production.
+
+### 9.4 SQL and table-name caveats
+
+The illustrative queries in `UhcAnalyticsService` (§5) use table names such as `maternity_records`, `immunisation_records`, `hiv_art_register`, `tb_treatment_records`, `hypertension_register`, `cbhi_households`. **Align these to real MediCore tenant table and column names** (may differ after migrations). Prefer shared repository methods or typed queries where they exist to avoid drift.
+
+Null denominators: every `COUNT(*) / NULLIF(...)` pattern should guard against misleading 100% when numerators exist but denominators are empty; consider returning `NULL` and surfacing “insufficient data” in the UI.
+
+Multi-tenant isolation: all aggregate queries **must** filter by tenant/facility scope consistent with existing EHR services (tenant ID, facility ID, or RLS expectations).
+
+### 9.5 RBAC and audit
+
+Routes in §6 use roles such as `public_health`. Ensure these roles exist in the auth module and match product policy. Changing national targets (`PATCH .../targets/:code`) should append an audit log entry if the platform has audit middleware (recommended).
+
+---
+
+## 10. Post-Implementation Steps
 
 ```bash
 docker compose build tenant-service
@@ -591,11 +644,11 @@ git commit -m "feat: implement Sprint 160 — UHC Service Coverage Index and WHO
 
 ---
 
-## 10. Done-When Checklist
+## 11. Done-When Checklist
 
 - [ ] `tenant-uhc-sdg-indicators.statements.ts` — 2 tables + 11 seeded SDG targets
 - [ ] Bundle registered in `database-provisioning.service.ts`
-- [ ] `UhcIndicatorSnapshot` + `SdgIndicatorTarget` entities in `tenant.service.ts`
+- [ ] `UhcIndicatorSnapshot` + `SdgIndicatorTarget` entities registered in analytics module / `TypeOrmModule.forFeature`
 - [ ] `UhcAnalyticsModule` in `ehr.module.ts`
 - [ ] `UhcAnalyticsService` with compute logic querying 6+ clinical modules
 - [ ] `UhcAnalyticsScheduler` — quarterly cron job
@@ -609,4 +662,7 @@ git commit -m "feat: implement Sprint 160 — UHC Service Coverage Index and WHO
 - [ ] `provision-repair-all.sh` clean; seeded targets visible in DB
 - [ ] `npx tsc --noEmit` — 0 errors
 - [ ] `npm run lint` — 0 errors
+- [ ] Seed `national_target` values reviewed for deployment country (MoHCC / programme leads)
+- [ ] DHIS2 data element mapping documented or configured for `pushToDhis2` (S136)
+- [ ] Illustrative SQL in `UhcAnalyticsService` aligned to real MediCore table/column names and tenant scope
 - [ ] Git committed: `feat: implement Sprint 160 — UHC Service Coverage Index and WHO SDG health indicators dashboard`

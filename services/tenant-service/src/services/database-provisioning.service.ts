@@ -145,6 +145,10 @@ import {
   TENANT_UHC_SDG_BUNDLE_VERSION,
   TENANT_UHC_SDG_STATEMENTS,
 } from '../generated/tenant-uhc-sdg-indicators.statements';
+import {
+  TENANT_NCID_BUNDLE_VERSION,
+  TENANT_NCID_STATEMENTS,
+} from '../generated/tenant-ncid.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1441,6 +1445,14 @@ export class DatabaseProvisioningService {
         version: TENANT_UHC_SDG_BUNDLE_VERSION,
         description: 'Creates uhc_indicator_snapshots, sdg_indicator_targets tables; seeds 11 SDG targets',
         statements: TENANT_UHC_SDG_STATEMENTS,
+      },
+      {
+        id: 'sprint161_ncid_national_client_id',
+        label: 'Sprint 161 - NCID National Client Identification',
+        version: TENANT_NCID_BUNDLE_VERSION,
+        description:
+          'ncid_registrations, ncid_duplicate_flags, ncid_programme_linkages — national ID registry and deduplication',
+        statements: TENANT_NCID_STATEMENTS,
       },
       {
         id: 'sprint139_crvs',

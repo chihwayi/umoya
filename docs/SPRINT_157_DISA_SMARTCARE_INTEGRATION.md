@@ -6,7 +6,7 @@
 **Bundle ID**: `sprint157_disa_smartcare_integration`  
 **Prerequisite reading**: `MEDICORE_REFERENCE.md` — architecture, DB rules, CDSS call patterns.
 
----
+-----
 
 ## 1. Clinical Rationale
 

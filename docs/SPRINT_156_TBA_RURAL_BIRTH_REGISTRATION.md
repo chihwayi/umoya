@@ -6,7 +6,7 @@
 **Bundle ID**: `sprint156_tba_birth_registration`  
 **Prerequisite reading**: `MEDICORE_REFERENCE.md` — architecture, DB rules, CDSS call patterns.
 
----
+-----
 
 ## 1. Clinical Rationale
 

@@ -6,7 +6,7 @@
 **Bundle ID**: `sprint159_ubuntu_cultural_health`  
 **Prerequisite reading**: `MEDICORE_REFERENCE.md` — architecture, DB rules, CDSS call patterns.
 
----
+------
 
 ## 1. Clinical Rationale
 

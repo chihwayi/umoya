@@ -5082,4 +5082,37 @@ export class CdssService {
       tenantId,
     );
   }
+
+  /** Sprint 161 — NCID duplicate scoring */
+  async ncidDuplicateScore(payload: Record<string, any>, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'ncid_duplicate_score',
+      '/cdss/ncid/duplicate-score',
+      payload,
+      30000,
+      tenantId,
+    );
+  }
+
+  /** Sprint 161 — NCID programme gap analysis */
+  async ncidProgrammeGaps(payload: Record<string, any>, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'ncid_programme_gaps',
+      '/cdss/ncid/programme-gaps',
+      payload,
+      30000,
+      tenantId,
+    );
+  }
+
+  /** Sprint 161 — NCID national ID format validation */
+  async ncidValidateId(payload: Record<string, any>, tenantId?: string): Promise<any> {
+    return this.postWithPolicy<any>(
+      'ncid_validate_id',
+      '/cdss/ncid/validate-id',
+      payload,
+      15000,
+      tenantId,
+    );
+  }
 }

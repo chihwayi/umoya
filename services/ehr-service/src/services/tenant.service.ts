@@ -360,6 +360,9 @@ import { FamilyCouncilConsent } from '../cultural/entities/family-council-consen
 import { UbuntuWellbeingAssessment } from '../cultural/entities/ubuntu-wellbeing-assessment.entity';
 import { UhcIndicatorSnapshot } from '../analytics/entities/uhc-indicator-snapshot.entity';
 import { SdgIndicatorTarget } from '../analytics/entities/sdg-indicator-target.entity';
+import { NcidRegistration } from '../entities/ncid-registration.entity';
+import { NcidDuplicateFlag } from '../entities/ncid-duplicate-flag.entity';
+import { NcidProgrammeLinkage } from '../entities/ncid-programme-linkage.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -895,6 +898,9 @@ export class TenantService {
         UssdClinicalEntry,
         UhcIndicatorSnapshot,
         SdgIndicatorTarget,
+        NcidRegistration,
+        NcidDuplicateFlag,
+        NcidProgrammeLinkage,
       ],
       logging: false,
     });

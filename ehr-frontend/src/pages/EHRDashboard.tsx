@@ -9,7 +9,7 @@ import {
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2, Scan, Droplet,
   CheckCircle, Camera, FlaskConical, HeartPulse, Package, Video,
-  AlertCircle, Bed, Baby, DollarSign
+  AlertCircle, Bed, Baby, DollarSign, Fingerprint
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, tenantApi, cdssApi } from '../services/api';
@@ -243,6 +243,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Settings, label: 'System Settings', desc: 'Global system configuration', color: 'from-gray-500 to-slate-500', route: 'settings' },
           { icon: BarChart3, label: 'System Analytics', desc: 'Usage statistics & performance metrics', color: 'from-cyan-500 to-blue-500', route: 'analytics' },
           { icon: TrendingUp, label: 'UHC & SDG', desc: 'WHO tracers, national targets, programme scorecard', color: 'from-emerald-600 to-teal-600', route: 'analytics/uhc-sdg' },
+          { icon: Fingerprint, label: 'NCID deduplication', desc: 'Review CDSS duplicate patient flags', color: 'from-indigo-600 to-violet-600', route: 'ncid/deduplication' },
         ];
       default:
         return baseActions;

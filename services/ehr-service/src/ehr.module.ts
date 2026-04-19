@@ -42,6 +42,7 @@ import { PalliativeController } from './controllers/palliative.controller';
 import { NutritionController } from './controllers/nutrition.controller';
 import { NhifController } from './controllers/nhif.controller';
 import { CbhiController } from './controllers/cbhi.controller';
+import { NcidController } from './controllers/ncid.controller';
 import { NhlsHl7Controller } from './controllers/nhls-hl7.controller';
 import { TierNetController } from './controllers/tier-net.controller';
 import { EtrNetController } from './controllers/etr-net.controller';
@@ -234,6 +235,7 @@ import { PalliativeService } from './services/palliative.service';
 import { NutritionService } from './services/nutrition.service';
 import { NhifService } from './services/nhif.service';
 import { CbhiService } from './services/cbhi.service';
+import { NcidService } from './services/ncid.service';
 import { NhlsHl7Service } from './services/nhls-hl7.service';
 import { TierNetService } from './services/tier-net.service';
 import { EtrNetService } from './services/etr-net.service';
@@ -499,6 +501,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NutritionController,
     NhifController,
     CbhiController,
+    NcidController,
     NhlsHl7Controller,
     TierNetController,
     EtrNetController,
@@ -839,6 +842,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AtMessagingService,
     CrvsService,
     CbhiService,
+    NcidService,
     CdssDecisionLogService,
     CdssOutcomeBatchService,
     NurseTaskService,

@@ -36,6 +36,7 @@ const TelemedicineDashboard = lazy(() => import('./pages/TelemedicineDashboard')
 const TelemedicineConsultationPage = lazy(() => import('./pages/TelemedicineConsultationPage'));
 const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'));
 const UhcSdgDashboard = lazy(() => import('./pages/UhcSdgDashboard'));
+const NcidDeduplicationPage = lazy(() => import('./pages/NcidDeduplicationPage'));
 const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then(m => ({ default: m.KnowledgeBasePage })));
 const AiOpsDashboard = lazy(() => import('./pages/AiOpsDashboard').then(m => ({ default: m.AiOpsDashboard })));
 const EDDashboard = lazy(() => import('./pages/EDDashboard'));
@@ -957,6 +958,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin', 'doctor', 'public_health']}>
                   <UhcSdgDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/ncid/deduplication"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <NcidDeduplicationPage />
                 </RoleProtectedRoute>
               }
             />
