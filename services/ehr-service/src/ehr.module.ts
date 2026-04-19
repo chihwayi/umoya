@@ -73,6 +73,7 @@ import { OutbreakController } from './controllers/outbreak.controller';
 import { OutbreakProtocolModule } from './outbreak/outbreak.module';
 import { SurveillanceModule } from './surveillance/surveillance.module';
 import { NtdModule } from './ntd/ntd.module';
+import { LanguageModule } from './settings/language.module';
 import { MobileMoneyController } from './controllers/mobile-money.controller';
 import { ChwController } from './controllers/chw.controller';
 import { LabTestController } from './controllers/lab-test.controller';
@@ -454,6 +455,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OutbreakProtocolModule,
     SurveillanceModule,
     NtdModule,
+    LanguageModule,
   ],
   controllers: [
     AuthController,

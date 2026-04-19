@@ -12452,3 +12452,30 @@ export const cbhiApi = {
     return response.data;
   },
 };
+
+// ── Language / i18n ───────────────────────────────────────────────────────────
+export const languageApi = {
+  getSupportedLanguages: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/settings/languages', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getUserLanguage: async (userId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/settings/language/${userId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  setUserLanguage: async (
+    userId: string,
+    data: { uiLanguage: string; clinicalNoteLanguage?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.put(`/settings/language/${userId}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};

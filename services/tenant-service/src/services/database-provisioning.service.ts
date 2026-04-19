@@ -114,6 +114,10 @@ import {
   TENANT_NTD_DEPTH_STATEMENTS,
 } from '../generated/tenant-ntd-clinical-depth.statements';
 import {
+  TENANT_TBA_BIRTH_BUNDLE_VERSION,
+  TENANT_TBA_BIRTH_STATEMENTS,
+} from '../generated/tenant-tba-birth-registration.statements';
+import {
   TENANT_SORMAS_IHR_BUNDLE_VERSION,
   TENANT_SORMAS_IHR_STATEMENTS,
 } from '../generated/tenant-sormas-ihr-pipeline.statements';
@@ -121,6 +125,10 @@ import {
   TENANT_CBHI_DEEP_BUNDLE_VERSION,
   TENANT_CBHI_DEEP_STATEMENTS,
 } from '../generated/tenant-cbhi-deep-module.statements';
+import {
+  TENANT_LANGUAGE_PREFS_BUNDLE_VERSION,
+  TENANT_LANGUAGE_PREFS_STATEMENTS,
+} from '../generated/tenant-language-preferences.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1524,6 +1532,13 @@ export class DatabaseProvisioningService {
         statements: TENANT_NTD_DEPTH_STATEMENTS,
       },
       {
+        id: 'sprint156_tba_birth_registration',
+        label: 'Sprint 156 — TBA Module + Rural Birth Registration',
+        version: TENANT_TBA_BIRTH_BUNDLE_VERSION,
+        description: 'Creates tba_register, home_birth_records tables',
+        statements: TENANT_TBA_BIRTH_STATEMENTS,
+      },
+      {
         id: 'sprint152_sormas_ihr_pipeline',
         label: 'Sprint 152 — SORMAS Bridge + IHR Alert Pipeline',
         version: TENANT_SORMAS_IHR_BUNDLE_VERSION,
@@ -1536,6 +1551,13 @@ export class DatabaseProvisioningService {
         version: TENANT_CBHI_DEEP_BUNDLE_VERSION,
         description: 'Creates cbhi_households, cbhi_household_members, cbhi_contributions, cbhi_claims tables',
         statements: TENANT_CBHI_DEEP_STATEMENTS,
+      },
+      {
+        id: 'sprint155_language_pack_i18n',
+        label: 'Sprint 155 — Language Pack i18n (user_language_preferences)',
+        version: TENANT_LANGUAGE_PREFS_BUNDLE_VERSION,
+        description: 'Creates user_language_preferences table; seeds default English row',
+        statements: TENANT_LANGUAGE_PREFS_STATEMENTS,
       },
     ];
   }

@@ -6,7 +6,7 @@
 **Bundle ID**: `sprint155_language_pack_i18n`  
 **Prerequisite reading**: `MEDICORE_REFERENCE.md` — architecture, DB rules, CDSS call patterns.
 
----
+-----
 
 ## 1. Clinical Rationale
 

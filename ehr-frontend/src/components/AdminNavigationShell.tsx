@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Bell, Heart, LogOut, Menu, Settings, User, Users, X, CheckCheck, ExternalLink, type LucideIcon } from 'lucide-react';
 import { tenantApi, cdssApi } from '../services/api';
+import LanguageSwitcher from './LanguageSwitcher';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -336,6 +337,7 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
 
             <div className="flex items-center gap-3">
               {topBarActions}
+              <LanguageSwitcher />
               {/* ── Notification Bell ── */}
               <div className="relative" ref={notifPanelRef}>
                 <button

@@ -347,6 +347,7 @@ import { CbhiHousehold } from '../cbhi/entities/cbhi-household.entity';
 import { CbhiHouseholdMember } from '../cbhi/entities/cbhi-household-member.entity';
 import { CbhiContribution } from '../cbhi/entities/cbhi-contribution.entity';
 import { CbhiClaim } from '../cbhi/entities/cbhi-claim.entity';
+import { UserLanguagePreference } from '../settings/entities/user-language-preference.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -873,6 +874,7 @@ export class TenantService {
         ScdCrisisEvent,
         ScdTreatmentRecord,
         ScdComplicationScreening,
+        UserLanguagePreference,
       ],
       logging: false,
     });

@@ -1453,6 +1453,7 @@ class DrugInteractionRequest(BaseModel):
     drug_ids: List[str] = Field(..., description="List of drug UUIDs to check")
     patient_id: Optional[str] = Field(None, description="Patient ID for context")
     drugs_data: Optional[List[Dict[str, Any]]] = Field(None, description="Optional: Pre-fetched drug data from EHR service")
+    locale: str = Field("en", description="ISO 639-1 language code for response language")
 
 
 class DrugInteractionResponse(BaseModel):
@@ -1557,6 +1558,7 @@ class LeprosyMdtRequest(BaseModel):
     age_years: int
     pregnant: bool = False
     hiv_positive: bool = False
+    locale: str = "en"
 
 class LeprosyMdtResponse(BaseModel):
     mdt_regimen: str
@@ -1580,6 +1582,7 @@ class FilariasisSafetyRequest(BaseModel):
     pregnant: bool = False
     epilepsy: bool = False
     lymphoedema_stage: Optional[int] = None
+    locale: str = "en"
 
 class FilariasisSafetyResponse(BaseModel):
     dec_safe: bool
@@ -6313,6 +6316,24 @@ async def epilepsy_status_epilepticus(req: EpilepsyStatusEpilepticusRequest):
     }
 
 
+LOCALE_NAMES = {
+    "en": "English", "pt": "Portuguese", "fr": "French",
+    "sw": "Swahili", "zu": "Zulu", "af": "Afrikaans",
+    "sn": "Shona", "nd": "Ndebele",
+}
+
+def locale_instruction(locale: str) -> str:
+    """Returns a prompt suffix instructing the LLM to respond in the given language."""
+    lang = LOCALE_NAMES.get(locale, "English")
+    if locale == "en":
+        return ""
+    return (
+        f"\n\nIMPORTANT: Respond in {lang} language (ISO code: {locale}). "
+        "Clinical terms, drug names, and ICD codes may remain in English/Latin where standard "
+        f"medical practice dictates, but all explanations, recommendations, and patient-facing "
+        f"text must be in {lang}."
+    )
+
 class VhfRiskTriageRequest(BaseModel):
     pathogen: str
     symptom_onset_days: Optional[int] = None
@@ -6328,6 +6349,7 @@ class VhfRiskTriageRequest(BaseModel):
     animal_contact: Optional[bool] = None
     contact_with_vhf_case: Optional[bool] = None
     healthcare_worker: Optional[bool] = None
+    locale: str = "en"
     lab_pcr_result: Optional[str] = None
     age_years: Optional[int] = None
     immunocompromised: Optional[bool] = None
@@ -6393,6 +6415,7 @@ class IhrAnnex2Request(BaseModel):
     days_since_first_case: int
     healthcare_workers_affected: bool
     laboratory_confirmed: bool
+    locale: str = "en"
 
 
 class IhrAnnex2Response(BaseModel):
@@ -6418,6 +6441,7 @@ class EbsTriageRequest(BaseModel):
     district: str
     days_since_signal: int
     similar_signals_last_30_days: int
+    locale: str = "en"
 
 
 class EbsTriageResponse(BaseModel):
@@ -6443,6 +6467,7 @@ class CbhiClaimAdjudicationRequest(BaseModel):
     patient_age_years: int
     similar_claims_last_90_days: int
     procedure_count: int
+    locale: str = "en"
 
 
 class CbhiClaimAdjudicationResponse(BaseModel):
@@ -6771,7 +6796,7 @@ async def ihr_annex2_assessment(req: IhrAnnex2Request):
     Return strict JSON with:
     pheic_notification_required, notification_urgency, annex2_criteria_met, annex2_decision_path,
     nfp_notification_required, recommended_actions, reporting_template, confidence, citations.
-    """
+    """ + locale_instruction(req.locale)
     return await call_governed_json(prompt, surface="ihr_annex2_assessment", phi_present=False)
 
 
@@ -6797,7 +6822,7 @@ async def ebs_signal_triage(req: EbsTriageRequest):
     Return strict JSON with:
     risk_level, verification_priority, investigation_required, recommended_action,
     ihr_assessment_required, sormas_report_required, confidence.
-    """
+    """ + locale_instruction(req.locale)
     return await call_governed_json(prompt, surface="ebs_signal_triage", phi_present=False)
 
 
@@ -6830,7 +6855,7 @@ async def cbhi_claim_adjudication(req: CbhiClaimAdjudicationRequest):
     Return strict JSON with:
     fraud_score, approval_recommendation, flags, flag_explanations,
     recommended_approved_amount, review_priority, denial_reasons, confidence, citations.
-    """
+    """ + locale_instruction(req.locale)
     return await call_governed_json(prompt, surface="cbhi_claim_adjudication", phi_present=True)
 
 
@@ -15008,6 +15033,7 @@ class MaternalDeathAuditRequest(BaseModel):
     gestational_age_weeks: Optional[int] = None
     mode_of_admission: Optional[str] = None
     contributing_causes: Optional[List[str]] = []
+    locale: str = "en"
 
 
 @app.post("/cdss/maternal/emonc-classify")
@@ -15452,7 +15478,7 @@ async def leprosy_mdt_guidance(req: LeprosyMdtRequest):
     6. HIV co-infection: dapsone toxicity monitoring; consider cotrimoxazole interaction
 
     Return JSON matching the LeprosyMdtResponse schema.
-    """
+    """ + locale_instruction(req.locale)
     result = await call_governed_json(prompt, surface="leprosy_mdt", phi_present=True)
     return result
 
@@ -15482,7 +15508,7 @@ async def filariasis_treatment_safety(req: FilariasisSafetyRequest):
     5. LF regimen: DEC 6mg/kg/day x12 days (single agent) OR albendazole 400mg + DEC/ivermectin single dose MDA
 
     Return JSON matching the FilariasisSafetyResponse schema.
-    """
+    """ + locale_instruction(req.locale)
     result = await call_governed_json(prompt, surface="filariasis_safety", phi_present=True)
     return result
 
