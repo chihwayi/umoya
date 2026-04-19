@@ -11,7 +11,8 @@ import {
   Mic
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
-import { ehrApi, cdssApi, tenantApi } from '../services/api';
+import { ehrApi, cdssApi, tenantApi, liteApi } from '../services/api';
+import LiteModeToggle from '../components/LiteModeToggle';
 import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
 import PatientQueue from '../components/PatientQueue';
@@ -2204,9 +2205,11 @@ const DoctorDashboard: React.FC = () => {
                     >
                       <Calendar className="h-4 w-4" />
                       Availability
-                    </button>
-                    <RealtimeStatusIndicator
+                      </button>
+                      <LiteModeToggle />
+                      <RealtimeStatusIndicator
                       isConnected={!connectionError}
+
                       lastUpdate={lastUpdate}
                       isUpdating={isUpdating}
                       error={connectionError}

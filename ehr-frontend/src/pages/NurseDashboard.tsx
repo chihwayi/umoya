@@ -9,7 +9,8 @@ import {
   CreditCard, Lock, FolderOpen, Target, LayoutDashboard, Leaf,
   Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown, Brain, PawPrint, Baby, Wallet, MessageSquare
 } from 'lucide-react';
-import { cdssApi, ehrApi, tenantApi } from '../services/api';
+import { cdssApi, ehrApi, tenantApi, liteApi } from '../services/api';
+import LiteModeToggle from '../components/LiteModeToggle';
 import ModalPortal from '../components/ModalPortal';
 import CreatePatientModal from '../components/CreatePatientModal';
 import CreateAppointmentModal from '../components/CreateAppointmentModal';
@@ -3491,6 +3492,8 @@ const NurseDashboard: React.FC = () => {
                 <BookOpen className="w-5 h-5" />
                 <span className="hidden lg:inline text-sm font-medium">Guidelines</span>
               </button>
+
+              <LiteModeToggle />
 
               {/* Proactive AI Alert Bell */}
               <ProactiveAlertBell
