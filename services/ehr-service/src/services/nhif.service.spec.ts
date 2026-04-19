@@ -32,7 +32,8 @@ describe('NhifService', () => {
     const tenantService = {
       getTenantDatabase: jest.fn().mockResolvedValue(db),
     };
-    const service = new NhifService(tenantService as any);
+    const cdssService = {} as any;
+    const service = new NhifService(tenantService as any, cdssService);
 
     const result = await service.checkEligibility('tenant-1', 'member-1');
 

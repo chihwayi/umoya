@@ -89,4 +89,4 @@ describe('CervicalCancerService', () => {
     );
     expect(result.id).toBe('treat-1');
   });
-}
+});
