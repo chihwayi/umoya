@@ -836,6 +836,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TenantService,
     CdssService,
     CrvsService,
+    CbhiService,
   ],
 })
 export class EhrModule {
