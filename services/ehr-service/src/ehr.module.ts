@@ -73,6 +73,7 @@ import { OutbreakController } from './controllers/outbreak.controller';
 import { OutbreakProtocolModule } from './outbreak/outbreak.module';
 import { SurveillanceModule } from './surveillance/surveillance.module';
 import { NtdModule } from './ntd/ntd.module';
+import { LiteModule } from './lite/lite.module';
 import { LanguageModule } from './settings/language.module';
 import { MobileMoneyController } from './controllers/mobile-money.controller';
 import { ChwController } from './controllers/chw.controller';
@@ -184,6 +185,7 @@ import { MaternalMortalityController } from './controllers/maternal-mortality.co
 import { NcdComplicationController } from './controllers/ncd-complication.controller';
 import { AtMessagingController } from './controllers/at-messaging.controller';
 import { TbaModule } from './tba/tba.module';
+import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -450,8 +452,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OutbreakProtocolModule,
     SurveillanceModule,
     NtdModule,
+    LiteModule,
     LanguageModule,
     TbaModule,
+    DisaSmartcareModule,
   ],
   controllers: [
     AuthController,
@@ -617,20 +621,16 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ModelMonitoringController,
     PatientAiController,
     ClinicalTrialMatchingController,
-    SupplyChainAiService,
+    SupplyChainAiController,
     ModelRegistryController,
-    StaffNotificationsService,
+    StaffNotificationsController,
     RegistrationIntelligenceController,
-    OneHealthService,
-    MaternalMortalityService,
-    NcdComplicationService,
-    KnowledgeIngestService,
-    ClaimsAiService,
-    RiskStratificationService,
-    OutcomeCollectionService,
-    RegistrationAiService,
-    ProactiveAiService,
-    AtMessagingService,
+    OneHealthController,
+    MaternalMortalityController,
+    NcdComplicationController,
+    KnowledgeController,
+    ClaimsAiController,
+    AtMessagingController,
   ],
   providers: [
     AuthService,
@@ -829,10 +829,23 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RegistrationAiService,
     ProactiveAiService,
     AtMessagingService,
-    TenantService,
-    CdssService,
     CrvsService,
     CbhiService,
+    CdssDecisionLogService,
+    CdssOutcomeBatchService,
+    NurseTaskService,
+    CareGapSchedulerService,
+    AmbientGateway,
+    InboxGateway,
+    CriticalAlertGateway,
+    VoiceTranscriptionGateway,
+    HypertensionService,
+    TraditionalMedicineService,
+    ScdService,
+    EpilepsyService,
+    NhifService,
+    JwtStrategy,
+    RolesGuard,
   ],
 })
 export class EhrModule {

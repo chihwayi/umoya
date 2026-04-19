@@ -349,7 +349,12 @@ import { CbhiContribution } from '../cbhi/entities/cbhi-contribution.entity';
 import { CbhiClaim } from '../cbhi/entities/cbhi-claim.entity';
 import { TbaRegister } from '../tba/entities/tba-register.entity';
 import { HomeBirthRecord } from '../tba/entities/home-birth-record.entity';
+import { DisaSyncLog } from '../interop/entities/disa-sync-log.entity';
+import { SmartcarePatientLink } from '../interop/entities/smartcare-patient-link.entity';
+import { CrossBorderPatientFlag } from '../interop/entities/cross-border-patient-flag.entity';
 import { UserLanguagePreference } from '../settings/entities/user-language-preference.entity';
+import { OfflineSyncQueue } from '../lite/entities/offline-sync-queue.entity';
+import { UssdClinicalEntry } from '../lite/entities/ussd-clinical-entry.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -874,11 +879,12 @@ export class TenantService {
         CbhiClaim,
         TbaRegister,
         HomeBirthRecord,
-        ScdRegister,
-        ScdCrisisEvent,
-        ScdTreatmentRecord,
-        ScdComplicationScreening,
+        DisaSyncLog,
+        SmartcarePatientLink,
+        CrossBorderPatientFlag,
         UserLanguagePreference,
+        OfflineSyncQueue,
+        UssdClinicalEntry,
       ],
       logging: false,
     });
