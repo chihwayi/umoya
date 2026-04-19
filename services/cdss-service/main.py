@@ -5368,6 +5368,7 @@ class SdohRiskRequest(BaseModel):
     chronic_disease: bool
     hiv_positive: bool
     pregnant: bool
+    locale: str = "en"
 
 
 class SdohRiskResponse(BaseModel):
@@ -5393,6 +5394,7 @@ class UbuntuPsychosocialRequest(BaseModel):
     help_seeking_barriers: List[str]
     chronic_illness: bool
     hiv_positive: bool
+    locale: str = "en"
 
 
 class UbuntuPsychosocialResponse(BaseModel):
@@ -6154,7 +6156,7 @@ async def sdoh_risk_assessment(req: SdohRiskRequest):
     Return JSON with:
     sdoh_risk_score, sdoh_risk_level, key_risk_factors,
     social_worker_referral_needed, recommended_community_resources, confidence.
-    """
+    """ + locale_instruction(req.locale)
     result = await call_governed_json(prompt, surface="sdoh_risk_assessment", phi_present=True)
     return result
 
@@ -6186,7 +6188,7 @@ async def ubuntu_psychosocial_assessment(req: UbuntuPsychosocialRequest):
     Return JSON with:
     psychosocial_risk, herb_drug_interaction_risk, culturally_adapted_interventions,
     referral_recommendations, ubuntu_strengths_to_leverage, confidence, citations.
-    """
+    """ + locale_instruction(req.locale)
     result = await call_governed_json(prompt, surface="ubuntu_psychosocial", phi_present=True)
     return result
 
@@ -6662,6 +6664,7 @@ class CrossBorderContinuityRequest(BaseModel):
     current_cd4: Optional[int] = None
     current_regimen: Optional[str] = None
     patient_disclosed_foreign_treatment: bool
+    locale: str = "en"
 
 
 class CrossBorderContinuityResponse(BaseModel):
@@ -7129,7 +7132,7 @@ async def cross_border_continuity(req: CrossBorderContinuityRequest):
     Return strict JSON with:
     continuity_gap_detected, gap_severity, gap_explanation, recommended_actions,
     estimated_days_off_art, resistance_risk, confidence.
-    """
+    """ + locale_instruction(req.locale)
     return await call_governed_json(prompt, surface="cross_border_continuity", phi_present=True)
 
 

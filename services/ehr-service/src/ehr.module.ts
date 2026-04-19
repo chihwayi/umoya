@@ -843,6 +843,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CrvsService,
     CbhiService,
     NcidService,
+    SdohService,
     CdssDecisionLogService,
     CdssOutcomeBatchService,
     NurseTaskService,
