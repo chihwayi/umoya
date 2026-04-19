@@ -49,6 +49,7 @@ import { DatimMerController } from './controllers/datim-mer.controller';
 import { OpenmrsFhirController } from './controllers/openmrs-fhir.controller';
 import { MflController } from './controllers/mfl.controller';
 import { CrvsController } from './controllers/crvs.controller';
+import { TbaController } from './tba/tba.controller';
 import { MalariaEpisodeController } from './controllers/malaria-episode.controller';
 import { IcuController } from './controllers/icu.controller';
 import { SdohController } from './controllers/sdoh.controller';
@@ -183,6 +184,7 @@ import { OneHealthController } from './controllers/one-health.controller';
 import { MaternalMortalityController } from './controllers/maternal-mortality.controller';
 import { NcdComplicationController } from './controllers/ncd-complication.controller';
 import { AtMessagingController } from './controllers/at-messaging.controller';
+import { TbaModule } from './tba/tba.module';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -234,6 +236,7 @@ import { DatimMerService } from './services/datim-mer.service';
 import { OpenmrsFhirService } from './services/openmrs-fhir.service';
 import { MflService } from './services/mfl.service';
 import { CrvsService } from './services/crvs.service';
+import { TbaService } from './tba/tba.service';
 import { MalariaEpisodeService } from './services/malaria-episode.service';
 import { IcuService } from './services/icu.service';
 import { SdohService } from './services/sdoh.service';
@@ -407,27 +410,21 @@ import { ModelMonitoringService } from './services/model-monitoring.service';
 import { PatientAiService } from './services/patient-ai.service';
 import { ClinicalTrialMatchingService } from './services/clinical-trial-matching.service';
 import { SupplyChainAiService } from './services/supply-chain-ai.service';
-import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
-import { TelemedicineGateway } from './gateways/telemedicine.gateway';
 import { ModelRegistryService } from './services/model-registry.service';
-import { TelemedicinePostVisitBridgeService } from './services/telemedicine-postvisit-bridge.service';
 import { StaffNotificationsService } from './services/staff-notifications.service';
 import { RegistrationIntelligenceService } from './services/registration-intelligence.service';
 import { OneHealthService } from './services/one-health.service';
 import { MaternalMortalityService } from './services/maternal-mortality.service';
 import { NcdComplicationService } from './services/ncd-complication.service';
-import { AtMessagingService } from './services/at-messaging.service';
 import { KnowledgeIngestService } from './services/knowledge-ingest.service';
 import { ClaimsAiService } from './services/claims-ai.service';
 import { RiskStratificationService } from './services/risk-stratification.service';
 import { OutcomeCollectionService } from './services/outcome-collection.service';
 import { RegistrationAiService } from './services/registration-ai.service';
-import { RegistrationAiController } from './controllers/registration-ai.controller';
 import { ProactiveAiService } from './services/proactive-ai.service';
-import { AiSurfaceContractService } from './services/ai-surface-contract.service';
-import { PatientIntelligenceService } from './services/patient-intelligence.service';
-import { DicomController } from './controllers/dicom.controller';
-import { ProactiveAiController } from './controllers/proactive-ai.controller';
+import { AtMessagingService } from './services/at-messaging.service';
+import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
+import { TelemedicineGateway } from './gateways/telemedicine.gateway';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
 
 // Strategies & Guards
@@ -456,6 +453,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     SurveillanceModule,
     NtdModule,
     LanguageModule,
+    TbaModule,
   ],
   controllers: [
     AuthController,
@@ -501,6 +499,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OpenmrsFhirController,
     MflController,
     CrvsController,
+    TbaController,
     MalariaEpisodeController,
     IcuController,
     SdohController,
@@ -621,25 +620,24 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ModelMonitoringController,
     PatientAiController,
     ClinicalTrialMatchingController,
-    SupplyChainAiController,
+    SupplyChainAiService,
     ModelRegistryController,
-    StaffNotificationsController,
+    StaffNotificationsService,
     RegistrationIntelligenceController,
-    OneHealthController,
-    MaternalMortalityController,
-    NcdComplicationController,
-    KnowledgeController,
-    ClaimsAiController,
-    RegistrationAiController,
-    DicomController,
-    ProactiveAiController,
-    AtMessagingController,
+    OneHealthService,
+    MaternalMortalityService,
+    NcdComplicationService,
+    KnowledgeIngestService,
+    ClaimsAiService,
+    RiskStratificationService,
+    OutcomeCollectionService,
+    RegistrationAiService,
+    ProactiveAiService,
+    AtMessagingService,
   ],
   providers: [
     AuthService,
     PatientService,
-    AiSurfaceContractService,
-    PatientIntelligenceService,
     PatientHistoryService,
     AppointmentService,
     MedicalRecordService,
@@ -700,46 +698,6 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TerminologyImportService,
     Icd10Service,
     CdssHookService,
-    CdssDecisionLogService,
-    CdssOutcomeBatchService,
-    NurseTaskService,
-    CareGapSchedulerService,
-    AmbientService,
-    AmbientGateway,
-    AppointmentPrecharterService,
-    InboxTriageService,
-    InboxGateway,
-    TbService,
-    PediatricsService,
-    MentalHealthService,
-    CervicalCancerService,
-    FamilyPlanningService,
-    HypertensionService,
-    TraditionalMedicineService,
-    ScdService,
-    EpilepsyService,
-    MalariaService,
-    GeriatricsService,
-    NeurologyService,
-    PulmonologyService,
-    NephrologyService,
-    DermatologyService,
-    PalliativeService,
-    NutritionService,
-    NhifService,
-    CbhiService,
-    NhlsHl7Service,
-    TierNetService,
-    EtrNetService,
-    DatimMerService,
-    OpenmrsFhirService,
-    MflService,
-    CrvsService,
-    MalariaEpisodeService,
-    IcuService,
-    SdohService,
-    NtdService,
-    PmtctService,
     SpecialtyAutomationService,
     MetricsService,
     MedicationHistoryService,
@@ -760,7 +718,6 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TelemedicineService,
     TelemedicineVideoService,
     TelemedicineGateway,
-    TelemedicinePostVisitBridgeService,
     RemoteMonitoringService,
     TelemedicineConsentService,
     DigitalPrescriptionService,
@@ -875,10 +832,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RegistrationAiService,
     ProactiveAiService,
     AtMessagingService,
-    CriticalAlertGateway,
-    VoiceTranscriptionGateway,
-    RolesGuard,
-    JwtStrategy,
+    TbaService,
+    TenantService,
+    CdssService,
+    CrvsService,
   ],
 })
 export class EhrModule {

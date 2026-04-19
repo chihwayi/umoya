@@ -2370,6 +2370,28 @@ export class CdssService {
     );
   }
 
+  async tbaSupervisionRisk(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'tbaSupervisionRisk',
+      '/cdss/tba/supervision-risk',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async homeBirthRisk(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'homeBirthRisk',
+      '/cdss/tba/home-birth-risk',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async maternalEmoncClassify(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',

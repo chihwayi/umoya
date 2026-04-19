@@ -12453,6 +12453,77 @@ export const cbhiApi = {
   },
 };
 
+export const tbaApi = {
+  registerTba: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/tba/register', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getTbas: async (district: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/tba/register', {
+      params: { district },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getTba: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/tba/register/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateTba: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/tba/register/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  scoreTbaRisk: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/tba/register/${id}/score-risk`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordBirth: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/tba/births', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getBirths: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/tba/births', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getBirth: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/tba/births/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateBirth: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/tba/births/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  notifyCrvs: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/tba/births/${id}/notify-crvs`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSummary: async (district: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/tba/summary/${district}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 // ── Language / i18n ───────────────────────────────────────────────────────────
 export const languageApi = {
   getSupportedLanguages: async (token: string, tenantSlug: string) => {

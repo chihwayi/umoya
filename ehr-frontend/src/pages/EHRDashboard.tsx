@@ -182,6 +182,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Activity, label: 'Vitals', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', route: 'nurse/vitals' },
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
           { icon: Baby, label: 'Maternity', desc: 'Obstetric care & deliveries', color: 'from-pink-500 to-rose-500', route: 'nurse/maternity' },
+          { icon: Baby, label: 'TBA Birth Registration', desc: 'Register TBAs, score supervision risk & log rural births', color: 'from-fuchsia-500 to-pink-500', route: 'tba' },
           { icon: FileText, label: 'Care Plans', desc: 'Nursing care plans', color: 'from-green-500 to-emerald-500', route: 'nurse/care-plans' },
           { icon: FileText, label: 'Reports', desc: 'Lab & immunization reports (view/export)', color: 'from-violet-500 to-purple-500', route: 'reports' },
         ];
@@ -216,6 +217,7 @@ const EHRDashboard: React.FC = () => {
         return [
           { icon: CreditCard, label: 'Accounts Dashboard', desc: 'Financial overview & KPIs', color: 'from-amber-500 to-orange-500', route: 'accounts' },
           { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial overview', color: 'from-purple-500 to-pink-500', route: 'billing' },
+          { icon: CreditCard, label: 'CBHI Deep Module', desc: 'Households, contributions, waivers & adjudication', color: 'from-cyan-500 to-blue-500', route: 'cbhi' },
           { icon: FileText, label: 'Reports', desc: 'View and export all reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
           { icon: FileText, label: 'Medical Aid Claims', desc: 'File, track & manage claims', color: 'from-emerald-500 to-teal-500', route: 'claims' },
           { icon: BarChart3, label: 'Revenue Analytics', desc: 'Track income by service line', color: 'from-purple-500 to-pink-500', route: 'accounts/analytics' },
@@ -226,6 +228,8 @@ const EHRDashboard: React.FC = () => {
           { icon: Users, label: 'User Management', desc: 'Manage staff accounts, roles & permissions', color: 'from-slate-500 to-gray-500', route: 'users' },
           { icon: FileText, label: 'Reports', desc: 'View and export all reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
           { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial reports', color: 'from-purple-500 to-pink-500', route: 'billing' },
+          { icon: CreditCard, label: 'CBHI Deep Module', desc: 'Scheme households, exemptions, premiums & claims', color: 'from-cyan-500 to-blue-500', route: 'cbhi' },
+          { icon: Baby, label: 'TBA Birth Registration', desc: 'Traditional birth attendant register, home births & CRVS escalation', color: 'from-fuchsia-500 to-pink-500', route: 'tba' },
           { icon: Shield, label: 'HIPAA Compliance', desc: 'Audit logs, breach detection & compliance', color: 'from-indigo-500 to-blue-500', route: 'hipaa-compliance' },
           { icon: Eye, label: 'Audit Logs', desc: 'System activity & access logs', color: 'from-purple-500 to-violet-500', route: 'hipaa-compliance' },
           { icon: Database, label: 'Data Management', desc: 'Backup, restore & data migration', color: 'from-blue-500 to-cyan-500', route: 'data' },

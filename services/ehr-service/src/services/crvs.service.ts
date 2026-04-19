@@ -81,6 +81,31 @@ export class CrvsService {
     });
   }
 
+  async notifyHomeBirth(tenantId: string, body: any): Promise<string | null> {
+    const payload = {
+      eventType: 'birth',
+      patientId: body.patientId ?? body.motherPatientId ?? null,
+      motherPatientId: body.motherPatientId ?? null,
+      motherName: body.motherName ?? null,
+      birthDate: body.birthDate,
+      birthType: body.birthType,
+      gestationalAgeWeeks: this.toNullableNumber(body.gestationalAgeWeeks),
+      birthWeightGrams: this.toNullableNumber(body.birthWeightGrams),
+      deliveryMode: body.deliveryMode ?? 'home_delivery',
+      birthOrder: Number(body.birthOrder) || 1,
+      plurality: body.plurality ?? null,
+      placeOfBirth: body.placeOfBirth ?? 'home',
+      babySex: body.babySex ?? null,
+      babyAlive: typeof body.babyAlive === 'boolean' ? body.babyAlive : null,
+    };
+
+    try {
+      return await this.submitToCrvsApi(payload, 'birth');
+    } catch (error: any) {
+      throw new NotFoundException(this.errorMessage(error));
+    }
+  }
+
   async registerDeath(tenantId: string, body: any): Promise<DeathCertificate> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const repo = db.getRepository(DeathCertificate);

@@ -63,6 +63,8 @@ const OutbreakDashboard = lazy(() => import('./pages/OutbreakDashboard'));
 const CHWDashboard = lazy(() => import('./pages/CHWDashboard'));
 const NutritionDashboard = lazy(() => import('./pages/NutritionDashboard'));
 const NhifDashboard = lazy(() => import('./pages/NhifDashboard'));
+const CbhiDashboard = lazy(() => import('./pages/CbhiDashboard'));
+const TbaDashboard = lazy(() => import('./pages/TbaDashboard'));
 const SaInteropDashboard = lazy(() => import('./pages/SaInteropDashboard'));
 const Dhis2DatimDashboard = lazy(() => import('./pages/Dhis2DatimDashboard'));
 const MessagingDashboard = lazy(() => import('./pages/MessagingDashboard'));
@@ -1012,6 +1014,22 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <TenantScopedNhifDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/cbhi"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'billing', 'receptionist']}>
+                  <CbhiDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/tba"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'chw']} moduleKey="tba">
+                  <TbaDashboard />
                 </RoleProtectedRoute>
               }
             />
