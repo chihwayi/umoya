@@ -2392,6 +2392,17 @@ export class CdssService {
     );
   }
 
+  async crossBorderContinuity(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'crossBorderContinuity',
+      '/cdss/interop/cross-border-continuity',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async maternalEmoncClassify(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',

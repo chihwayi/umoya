@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import * as bodyParser from 'body-parser';
+import * as compression from 'compression';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EhrModule } from './ehr.module';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
@@ -60,6 +61,7 @@ function validateCriticalSecurityEnv(): void {
 async function bootstrap() {
   validateCriticalSecurityEnv();
   const app = await NestFactory.create(EhrModule);
+  app.use(compression());
   app.use(bodyParser.json({ limit: '10mb' }));
   app.use(bodyParser.text({ type: ['text/plain', 'application/hl7-v2'], limit: '10mb' }));
   app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));

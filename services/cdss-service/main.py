@@ -6530,6 +6530,31 @@ class HomeBirthRiskResponse(BaseModel):
     abstained: bool = False
 
 
+class CrossBorderContinuityRequest(BaseModel):
+    origin_country: str
+    current_country: str
+    art_start_date_imported: Optional[str] = None
+    last_regimen_imported: Optional[str] = None
+    last_vl_imported: Optional[float] = None
+    last_vl_date_imported: Optional[str] = None
+    days_since_last_foreign_visit: int
+    current_vl: Optional[float] = None
+    current_cd4: Optional[int] = None
+    current_regimen: Optional[str] = None
+    patient_disclosed_foreign_treatment: bool
+
+
+class CrossBorderContinuityResponse(BaseModel):
+    continuity_gap_detected: bool
+    gap_severity: str
+    gap_explanation: str
+    recommended_actions: List[str]
+    estimated_days_off_art: Optional[int] = None
+    resistance_risk: str
+    confidence: float
+    abstained: bool = False
+
+
 def _vhf_specimens(pathogen: str) -> List[str]:
     pathogen_value = str(pathogen or "").lower()
     if pathogen_value.startswith("mpox"):
@@ -6959,6 +6984,33 @@ async def home_birth_risk(req: HomeBirthRiskRequest):
     immediate_actions, crvs_notification_required, confidence.
     """ + locale_instruction(req.locale)
     return await call_governed_json(prompt, surface="home_birth_risk", phi_present=True)
+
+
+@app.post("/cdss/interop/cross-border-continuity", response_model=CrossBorderContinuityResponse)
+async def cross_border_continuity(req: CrossBorderContinuityRequest):
+    prompt = f"""
+    You are an HIV programme specialist using WHO Consolidated HIV Guidelines 2021
+    and SADC Cross-Border HIV Patient Management Protocol.
+
+    Migrant patient:
+    - Origin: {req.origin_country} -> Current: {req.current_country}
+    - ART history: started {req.art_start_date_imported}, last regimen: {req.last_regimen_imported}
+    - Last VL: {req.last_vl_imported} (date: {req.last_vl_date_imported})
+    - Days since last foreign facility visit: {req.days_since_last_foreign_visit}
+    - Current: VL={req.current_vl}, CD4={req.current_cd4}, regimen={req.current_regimen}
+    - Disclosed foreign treatment: {req.patient_disclosed_foreign_treatment}
+
+    Assess:
+    1. Treatment gap (>30 days off ART = moderate risk; >90 days = high risk)
+    2. Regimen continuity (same regimen or switch needed?)
+    3. VL rebound risk
+    4. Recommended actions for care continuity
+
+    Return strict JSON with:
+    continuity_gap_detected, gap_severity, gap_explanation, recommended_actions,
+    estimated_days_off_art, resistance_risk, confidence.
+    """
+    return await call_governed_json(prompt, surface="cross_border_continuity", phi_present=True)
 
 
 @app.post("/cdss/zoonotic/assess")

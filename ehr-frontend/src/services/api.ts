@@ -2,6 +2,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { handleAutoLogout, isOnProtectedRoute } from '../utils/autoLogout';
 import { runtimeUrls } from '../config/runtime';
+import { queueOfflineOperation, triggerBackgroundSync } from '../utils/offlineQueue';
 // Re-export CDSS types so consumers can import from one place
 export type { CdssBaseResponse, CdssCitation, CdssConfidenceBand, CdssAbstentionReason } from '../types/cdss';
 
@@ -40,18 +41,38 @@ const createAxiosInstance = (baseURL: string) => {
           (config.headers as any)['X-Request-ID'] = uuidv4();
         }
       } catch {}
+      
+      const liteMode = localStorage.getItem('liteMode') === 'true';
+      if (liteMode) {
+        config.headers['X-Lite-Mode'] = '1';
+        config.params = { ...config.params, lite: '1' };
+      }
+      
       return config;
     },
     (error) => Promise.reject(error)
   );
 
-  // Response interceptor to handle 401 errors
+  // Response interceptor to handle 401 errors and offline queuing
   instance.interceptors.response.use(
     (response) => response,
     async (error) => {
       const config = (error?.config || {}) as RetriableAxiosConfig & {
         method?: string;
+        data?: string;
+        url?: string;
       };
+
+      if (!navigator.onLine && config.method?.toLowerCase() === 'post') {
+        await queueOfflineOperation({
+          localEntityId: uuidv4(),
+          operationType: config.url ?? 'unknown',
+          entityType: 'unknown',
+          payload: JSON.parse(config.data ?? '{}'),
+        });
+        await triggerBackgroundSync();
+        return Promise.reject(new Error('Queued for offline sync'));
+      }
       const method = String(config.method || 'get').toLowerCase();
       const retryCount = config.__retryCount || 0;
       const statusCode = Number(error?.response?.status || 0);
@@ -12524,6 +12545,51 @@ export const tbaApi = {
   },
 };
 
+export const interopApi = {
+  pullDisaVl: async (data: { nid: string; patientId?: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/interop/disa/pull-vl', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getDisaHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/interop/disa/history/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  linkSmartcare: async (data: { localPatientId: string; smartcareUuid: string; artNumber?: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/interop/smartcare/link', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSmartcareLink: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/interop/smartcare/link/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  flagCrossBorder: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/interop/cross-border/flag', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  assessContinuity: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/interop/cross-border/continuity/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getInteropSummary: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/interop/summary', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 // ── Language / i18n ───────────────────────────────────────────────────────────
 export const languageApi = {
   getSupportedLanguages: async (token: string, tenantSlug: string) => {
@@ -12545,6 +12611,21 @@ export const languageApi = {
     tenantSlug: string,
   ) => {
     const response = await ehrAxios.put(`/settings/language/${userId}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
+export const liteApi = {
+  syncOfflineQueue: async (items: any[], token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/lite/sync', { items }, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getPendingSyncCount: async (deviceId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/lite/pending-sync/${deviceId}`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;

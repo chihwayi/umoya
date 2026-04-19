@@ -129,6 +129,14 @@ import {
   TENANT_LANGUAGE_PREFS_BUNDLE_VERSION,
   TENANT_LANGUAGE_PREFS_STATEMENTS,
 } from '../generated/tenant-language-preferences.statements';
+import {
+  TENANT_DISA_SMARTCARE_BUNDLE_VERSION,
+  TENANT_DISA_SMARTCARE_STATEMENTS,
+} from '../generated/tenant-disa-smartcare.statements';
+import {
+  TENANT_LOW_BANDWIDTH_BUNDLE_VERSION,
+  TENANT_LOW_BANDWIDTH_STATEMENTS,
+} from '../generated/tenant-low-bandwidth-lite.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1397,6 +1405,20 @@ export class DatabaseProvisioningService {
         version: TENANT_OPENMRS_MFL_BUNDLE_VERSION,
         description: 'S138 — OpenMRS FHIR patient links and sync logs, plus Kenya MFL facility sync',
         statements: TENANT_OPENMRS_MFL_STATEMENTS,
+      },
+      {
+        id: 'sprint157_disa_smartcare_integration',
+        label: 'Sprint 157 — DISA VL Integration + SmartCare Zambia',
+        version: TENANT_DISA_SMARTCARE_BUNDLE_VERSION,
+        description: 'Creates disa_sync_log, smartcare_patient_links, cross_border_patient_flags tables',
+        statements: TENANT_DISA_SMARTCARE_STATEMENTS,
+      },
+      {
+        id: 'sprint158_low_bandwidth_lite',
+        label: 'Sprint 158 — Low-Bandwidth Lite Mode + USSD Clinical Entry',
+        version: TENANT_LOW_BANDWIDTH_BUNDLE_VERSION,
+        description: 'Creates offline_sync_queue, ussd_clinical_entries tables',
+        statements: TENANT_LOW_BANDWIDTH_STATEMENTS,
       },
       {
         id: 'sprint139_crvs',

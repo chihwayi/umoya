@@ -351,15 +351,16 @@ export class AtMessagingService {
         '2. My Medications\n' +
         '3. Lab Results\n' +
         '4. Emergency Contacts\n' +
+        '5. CHW Menu (Clinical)\n' +
         '0. Exit'
       );
     }
 
-    const [first, second] = steps;
+    const [first, ...rest] = steps;
 
     switch (first) {
       case '1':
-        if (!second) {
+        if (rest.length === 0) {
           return (
             'CON Appointments\n' +
             '1. View next appointment\n' +
@@ -367,13 +368,13 @@ export class AtMessagingService {
             '0. Back'
           );
         }
-        if (second === '1') return 'END Your next appointment details will be sent via SMS.';
-        if (second === '2') return 'END To book an appointment, please call your facility or visit the clinic.';
-        if (second === '0') return this.resolveMenu([]);
+        if (rest[0] === '1') return 'END Your next appointment details will be sent via SMS.';
+        if (rest[0] === '2') return 'END To book an appointment, please call your facility or visit the clinic.';
+        if (rest[0] === '0') return this.resolveMenu([]);
         break;
 
       case '2':
-        if (!second) {
+        if (rest.length === 0) {
           return (
             'CON Medications\n' +
             '1. View active medications\n' +
@@ -381,31 +382,98 @@ export class AtMessagingService {
             '0. Back'
           );
         }
-        if (second === '1') return 'END Your active medications list will be sent via SMS shortly.';
-        if (second === '2') return 'END Your refill request has been submitted. The pharmacy will contact you.';
-        if (second === '0') return this.resolveMenu([]);
+        if (rest[0] === '1') return 'END Your active medications list will be sent via SMS shortly.';
+        if (rest[0] === '2') return 'END Your refill request has been submitted. The pharmacy will contact you.';
+        if (rest[0] === '0') return this.resolveMenu([]);
         break;
 
       case '3':
-        if (!second) {
+        if (rest.length === 0) {
           return (
             'CON Lab Results\n' +
             '1. Check if results are ready\n' +
             '0. Back'
           );
         }
-        if (second === '1') return 'END You will receive an SMS when your lab results are ready for collection.';
-        if (second === '0') return this.resolveMenu([]);
+        if (rest[0] === '1') return 'END You will receive an SMS when your lab results are ready for collection.';
+        if (rest[0] === '0') return this.resolveMenu([]);
         break;
 
       case '4':
         return 'END Emergency: 999 | Ambulance: 0800 723 253 | Facility: +254 20 000 0000';
+
+      case '5':
+        // CHW Clinical Menu
+        if (rest.length === 0) {
+          return (
+            'CON MediCore CHW Menu\n' +
+            '1. Patient Lookup\n' +
+            '2. Record Vitals\n' +
+            '3. Symptom Check\n' +
+            '4. Referral\n' +
+            '0. Back'
+          );
+        }
+        return this.resolveChwMenu(rest);
 
       case '0':
         return 'END Thank you for using MediCore Health. Goodbye!';
     }
 
     return 'END Invalid option. Please try again.';
+  }
+
+  private resolveChwMenu(steps: string[]): string {
+    const [action, ...rest] = steps;
+
+    switch (action) {
+      case '1': // Patient Lookup
+        if (rest.length === 0) return 'CON Enter Patient ID or Phone:\n';
+        return `END Searching for patient ${rest[0]}... You will receive an SMS with details.`;
+
+      case '2': // Record Vitals
+        if (rest.length === 0) return 'CON Enter Weight (kg):\n';
+        if (rest.length === 1) return 'CON Enter Temperature (°C):\n';
+        if (rest.length === 2) {
+          const [weight, temp] = rest;
+          return `CON Vitals:\nWeight: ${weight} kg\nTemp: ${temp}°C\n1. Confirm\n2. Re-enter`;
+        }
+        if (rest[2] === '1') {
+          // In a real implementation, this would trigger LiteService.processUssdEntry
+          return 'END Vitals saved successfully.';
+        }
+        return this.resolveChwMenu(['2']); // Re-enter
+
+      case '3': // Symptom Check
+        if (rest.length === 0) return 'CON Symptoms (1=Yes, 0=No):\nFever?\n';
+        if (rest.length === 1) return 'CON Symptoms:\nCough?\n';
+        if (rest.length === 2) return 'CON Symptoms:\nDifficulty breathing?\n';
+        return 'END Symptom checklist submitted.';
+
+      case '4': // Referral
+        if (rest.length === 0) {
+          return (
+            'CON Select Referral Reason:\n' +
+            '1. Danger signs\n' +
+            '2. High fever\n' +
+            '3. Unable to walk\n' +
+            '4. Haemorrhage\n' +
+            '5. Other'
+          );
+        }
+        if (rest.length === 1) {
+          const reasons = ['Danger signs', 'High fever', 'Unable to walk', 'Haemorrhage', 'Other'];
+          const reason = reasons[parseInt(rest[0]) - 1] || 'Other';
+          return `CON Refer patient?\nReason: ${reason}\n1. Yes - Send\n2. No`;
+        }
+        if (rest[1] === '1') return 'END Referral sent to facility.';
+        return 'END Referral cancelled.';
+
+      case '0':
+        return this.resolveMenu([]);
+    }
+
+    return 'END Invalid CHW option.';
   }
 
   private menuFromSteps(steps: string[]): string {

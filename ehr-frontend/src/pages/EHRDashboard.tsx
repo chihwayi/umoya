@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, tenantApi, cdssApi } from '../services/api';
+import LiteModeToggle from '../components/LiteModeToggle';
 import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
 import {
   cacheTenantBranding,
@@ -158,6 +159,7 @@ const EHRDashboard: React.FC = () => {
           { icon: FlaskConical, label: 'Oncology Center', desc: 'Regimens, tumor board, adverse events', color: 'from-rose-500 to-purple-500', route: 'doctor/oncology' },
           { icon: HeartPulse, label: 'Cardiology Hub', desc: 'Risk stratification & finance locks', color: 'from-red-500 to-rose-500', route: 'doctor/cardiology' },
           { icon: Eye, label: 'Ophthalmology Suite', desc: 'Eye exams, imaging, follow-ups', color: 'from-sky-500 to-cyan-500', route: 'doctor/ophthalmology' },
+          { icon: Globe, label: 'DISA + SmartCare', desc: 'Cross-border HIV continuity, DISA VL pull & SmartCare ART sync', color: 'from-cyan-500 to-blue-500', route: 'interop' },
         ];
       case 'nurse':
       case 'nurse_accounts':
@@ -183,6 +185,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
           { icon: Baby, label: 'Maternity', desc: 'Obstetric care & deliveries', color: 'from-pink-500 to-rose-500', route: 'nurse/maternity' },
           { icon: Baby, label: 'TBA Birth Registration', desc: 'Register TBAs, score supervision risk & log rural births', color: 'from-fuchsia-500 to-pink-500', route: 'tba' },
+          { icon: Globe, label: 'DISA + SmartCare', desc: 'DISA VL pull and SmartCare continuity checks for migrant HIV patients', color: 'from-cyan-500 to-blue-500', route: 'interop' },
           { icon: FileText, label: 'Care Plans', desc: 'Nursing care plans', color: 'from-green-500 to-emerald-500', route: 'nurse/care-plans' },
           { icon: FileText, label: 'Reports', desc: 'Lab & immunization reports (view/export)', color: 'from-violet-500 to-purple-500', route: 'reports' },
         ];
@@ -230,6 +233,7 @@ const EHRDashboard: React.FC = () => {
           { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial reports', color: 'from-purple-500 to-pink-500', route: 'billing' },
           { icon: CreditCard, label: 'CBHI Deep Module', desc: 'Scheme households, exemptions, premiums & claims', color: 'from-cyan-500 to-blue-500', route: 'cbhi' },
           { icon: Baby, label: 'TBA Birth Registration', desc: 'Traditional birth attendant register, home births & CRVS escalation', color: 'from-fuchsia-500 to-pink-500', route: 'tba' },
+          { icon: Globe, label: 'DISA + SmartCare', desc: 'Mozambique DISA VL pull, Zambia SmartCare sync, and cross-border continuity', color: 'from-cyan-500 to-blue-500', route: 'interop' },
           { icon: Shield, label: 'HIPAA Compliance', desc: 'Audit logs, breach detection & compliance', color: 'from-indigo-500 to-blue-500', route: 'hipaa-compliance' },
           { icon: Eye, label: 'Audit Logs', desc: 'System activity & access logs', color: 'from-purple-500 to-violet-500', route: 'hipaa-compliance' },
           { icon: Database, label: 'Data Management', desc: 'Backup, restore & data migration', color: 'from-blue-500 to-cyan-500', route: 'data' },
@@ -717,6 +721,7 @@ const EHRDashboard: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-4">
+              <LiteModeToggle />
               {user.role !== 'admin' && (
                 <div className="relative hidden sm:block">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-4 h-4" />
