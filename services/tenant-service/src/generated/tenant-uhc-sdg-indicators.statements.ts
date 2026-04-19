@@ -1,0 +1,75 @@
+export const TENANT_UHC_SDG_BUNDLE_VERSION = '2026.04.17.1';
+
+export const TENANT_UHC_SDG_STATEMENTS: string[] = [
+  `CREATE TABLE IF NOT EXISTS uhc_indicator_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    period_year INTEGER NOT NULL,
+    period_quarter INTEGER,
+    period_month INTEGER,
+    facility_code TEXT,
+    facility_name TEXT,
+    district TEXT,
+    anc1_coverage DECIMAL(5,2),
+    anc4_coverage DECIMAL(5,2),
+    skilled_birth_attendance DECIMAL(5,2),
+    c_section_rate DECIMAL(5,2),
+    maternal_mortality_ratio DECIMAL(8,2),
+    neonatal_mortality_rate DECIMAL(5,2),
+    u5_mortality_rate DECIMAL(5,2),
+    dtp3_coverage DECIMAL(5,2),
+    measles_coverage DECIMAL(5,2),
+    fully_immunised_coverage DECIMAL(5,2),
+    hiv_art_coverage DECIMAL(5,2),
+    hiv_viral_suppression DECIMAL(5,2),
+    tb_treatment_success_rate DECIMAL(5,2),
+    tb_case_detection_rate DECIMAL(5,2),
+    htn_treatment_coverage DECIMAL(5,2),
+    htn_controlled DECIMAL(5,2),
+    dm_treatment_coverage DECIMAL(5,2),
+    modern_contraceptive_prevalence DECIMAL(5,2),
+    unmet_need_fp DECIMAL(5,2),
+    uhc_sci_composite DECIMAL(5,2),
+    out_of_pocket_catastrophic_pct DECIMAL(5,2),
+    cbhi_coverage DECIMAL(5,2),
+    computed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    computation_method TEXT NOT NULL DEFAULT 'facility_query',
+    cdss_gap_flags JSONB DEFAULT '[]',
+    cdss_priority_actions JSONB DEFAULT '[]',
+    cdss_confidence DECIMAL(4,3),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS idx_uhc_snapshots_period ON uhc_indicator_snapshots(period_year, period_quarter)`,
+  `CREATE INDEX IF NOT EXISTS idx_uhc_snapshots_facility ON uhc_indicator_snapshots(facility_code)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uidx_uhc_snapshots_period_facility ON uhc_indicator_snapshots(period_year, period_quarter, period_month, facility_code)`,
+
+  `CREATE TABLE IF NOT EXISTS sdg_indicator_targets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    indicator_code TEXT NOT NULL UNIQUE,
+    indicator_name TEXT NOT NULL,
+    sdg_goal TEXT NOT NULL,
+    target_value DECIMAL(8,2) NOT NULL,
+    target_year INTEGER NOT NULL DEFAULT 2030,
+    national_target DECIMAL(8,2),
+    unit TEXT NOT NULL DEFAULT 'percentage',
+    data_source TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS idx_sdg_targets_code ON sdg_indicator_targets(indicator_code)`,
+
+  `INSERT INTO sdg_indicator_targets (indicator_code, indicator_name, sdg_goal, target_value, national_target, unit, data_source) VALUES
+    ('anc4_coverage', 'ANC ≥4 visits coverage', 'SDG 3.1', 90, 80, 'percentage', 'maternity_records'),
+    ('skilled_birth_attendance', 'Skilled birth attendance rate', 'SDG 3.1', 95, 90, 'percentage', 'delivery_records'),
+    ('maternal_mortality_ratio', 'Maternal Mortality Ratio', 'SDG 3.1', 70, 100, 'per_100k_live_births', 'maternal_deaths'),
+    ('u5_mortality_rate', 'Under-5 Mortality Rate', 'SDG 3.2', 25, 35, 'per_1000_live_births', 'birth_death_records'),
+    ('dtp3_coverage', 'DTP3 immunisation coverage', 'SDG 3.2', 90, 85, 'percentage', 'immunisation_records'),
+    ('hiv_art_coverage', 'ART coverage among PLHIV', 'SDG 3.3', 95, 90, 'percentage', 'art_register'),
+    ('hiv_viral_suppression', 'HIV viral suppression rate', 'SDG 3.3', 95, 90, 'percentage', 'lab_vl_results'),
+    ('tb_treatment_success_rate', 'TB treatment success rate', 'SDG 3.3', 90, 85, 'percentage', 'tb_treatment_outcomes'),
+    ('htn_treatment_coverage', 'Hypertension treatment coverage', 'SDG 3.4', 80, 70, 'percentage', 'htn_register'),
+    ('uhc_sci_composite', 'UHC Service Coverage Index', 'SDG 3.8', 80, 75, 'index_0_100', 'computed'),
+    ('cbhi_coverage', 'CBHI enrolment coverage', 'SDG 3.8', 80, 60, 'percentage', 'cbhi_households')
+  ON CONFLICT (indicator_code) DO NOTHING`,
+];

@@ -5355,6 +5355,56 @@ class TmToxicityRiskRequest(BaseModel):
     organ_concerns: List[str] = []
 
 
+class SdohRiskRequest(BaseModel):
+    food_insecurity: str
+    housing_type: str
+    household_income_usd_month: Optional[float]
+    employment_status: str
+    social_grant_recipient: bool
+    education_level: str
+    gbv_screen_positive: Optional[bool]
+    child_protection_concern: bool
+    extended_family_support: str
+    chronic_disease: bool
+    hiv_positive: bool
+    pregnant: bool
+
+
+class SdohRiskResponse(BaseModel):
+    sdoh_risk_score: int
+    sdoh_risk_level: str
+    key_risk_factors: List[str]
+    social_worker_referral_needed: bool
+    recommended_community_resources: List[str]
+    confidence: float
+
+
+class UbuntuPsychosocialRequest(BaseModel):
+    social_connectedness: str
+    community_belonging: str
+    spiritual_wellbeing: str
+    grief_bereavement: bool
+    grief_type: Optional[str]
+    traditional_healer_active: bool
+    traditional_healer_treatment: Optional[str]
+    phq9_score: Optional[int]
+    gad7_score: Optional[int]
+    stigma_experienced: bool
+    help_seeking_barriers: List[str]
+    chronic_illness: bool
+    hiv_positive: bool
+
+
+class UbuntuPsychosocialResponse(BaseModel):
+    psychosocial_risk: str
+    herb_drug_interaction_risk: str
+    culturally_adapted_interventions: List[str]
+    referral_recommendations: List[str]
+    ubuntu_strengths_to_leverage: List[str]
+    confidence: float
+    citations: List[str]
+
+
 def _supporting_data_dir() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parent / "data"
 
@@ -6069,6 +6119,76 @@ async def tm_toxicity_risk(req: TmToxicityRiskRequest):
             else "No known toxicity risk flagged for these herbs."
         ),
     }
+
+
+@app.post("/cdss/cultural/sdoh-risk", response_model=SdohRiskResponse)
+async def sdoh_risk_assessment(req: SdohRiskRequest):
+    prompt = f"""
+    You are a social determinants of health specialist using WHO SDOH framework
+    and Southern Africa poverty and vulnerability indicators.
+
+    Patient social profile:
+    - Food security: {req.food_insecurity}
+    - Housing: {req.housing_type}
+    - Income: USD {req.household_income_usd_month}/month
+    - Employment: {req.employment_status}
+    - Social grant: {req.social_grant_recipient}
+    - Education: {req.education_level}
+    - GBV screen positive: {req.gbv_screen_positive}
+    - Child protection concern: {req.child_protection_concern}
+    - Family support: {req.extended_family_support}
+    - Health: chronic_disease={req.chronic_disease}, HIV={req.hiv_positive}, pregnant={req.pregnant}
+
+    Compute SDOH risk score 0-100 where higher = more vulnerability:
+    - Severe food insecurity +25
+    - Informal or homeless housing +20
+    - GBV screen positive +20
+    - Income below 50 USD/month +15
+    - Illiteracy or no education +10
+    - No or weak family support +10
+    - Child protection concern +15
+
+    Recommend realistic community resources for Southern Africa context:
+    food banks, social grants, GBV shelters, faith community support, stokvels, burial societies.
+
+    Return JSON with:
+    sdoh_risk_score, sdoh_risk_level, key_risk_factors,
+    social_worker_referral_needed, recommended_community_resources, confidence.
+    """
+    result = await call_governed_json(prompt, surface="sdoh_risk_assessment", phi_present=True)
+    return result
+
+
+@app.post("/cdss/cultural/ubuntu-psychosocial", response_model=UbuntuPsychosocialResponse)
+async def ubuntu_psychosocial_assessment(req: UbuntuPsychosocialRequest):
+    prompt = f"""
+    You are a clinical psychologist specialised in Ubuntu-based psychosocial care in Southern Africa,
+    using mhGAP Intervention Guide 2.0 and culturally adapted mental health frameworks for sub-Saharan Africa.
+
+    Patient:
+    - Social connectedness: {req.social_connectedness}
+    - Community belonging: {req.community_belonging}
+    - Spiritual wellbeing: {req.spiritual_wellbeing}
+    - Grief or bereavement: {req.grief_bereavement} ({req.grief_type})
+    - Traditional healer concurrent: {req.traditional_healer_active} - treatment: {req.traditional_healer_treatment}
+    - PHQ-9: {req.phq9_score}, GAD-7: {req.gad7_score}
+    - Stigma: {req.stigma_experienced}
+    - Barriers: {req.help_seeking_barriers}
+    - Chronic illness: {req.chronic_illness}, HIV positive: {req.hiv_positive}
+
+    Provide:
+    1. Psychosocial risk level
+    2. Herb-drug interaction risk from traditional healer if active
+    3. Culturally adapted interventions that work in Ubuntu contexts
+    4. Referral recommendations
+    5. Ubuntu strengths to leverage like community, spiritual resources, and collective resilience
+
+    Return JSON with:
+    psychosocial_risk, herb_drug_interaction_risk, culturally_adapted_interventions,
+    referral_recommendations, ubuntu_strengths_to_leverage, confidence, citations.
+    """
+    result = await call_governed_json(prompt, surface="ubuntu_psychosocial", phi_present=True)
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -15603,6 +15723,108 @@ async def yellow_fever_severity(req: YellowFeverSeverityRequest):
         "supportive_care_priority": ["Fluid balance", "Coagulopathy monitoring", "Glucose maintenance"],
         "notifiable": True
     }
+
+
+class UhcGapAnalysisRequest(BaseModel):
+    indicators: Dict[str, float] = Field(default_factory=dict)
+    targets: Dict[str, float] = Field(default_factory=dict)
+    facility_type: str = "district"
+    country: str = "Zimbabwe"
+    year: int = 2026
+
+
+class UhcGapAnalysisResponse(BaseModel):
+    uhc_sci_score: float
+    gap_flags: List[str]
+    priority_actions: List[str]
+    sdg3_on_track: bool
+    high_impact_interventions: List[str]
+    confidence: float
+    citations: List[str]
+    abstained: bool = False
+
+
+def _uhc_gap_analysis_deterministic(req: UhcGapAnalysisRequest) -> Dict[str, Any]:
+    """Geometric-mean SCI-style composite (0–100) from tracer coverage vs targets; no PHI."""
+    ratios: List[float] = []
+    gap_flags: List[str] = []
+    gap_details: List[tuple[str, float]] = []
+    ind = req.indicators or {}
+    tgt = req.targets or {}
+    for code, raw_tgt in tgt.items():
+        try:
+            t = float(raw_tgt)
+        except Exception:
+            continue
+        if t <= 0:
+            continue
+        if code not in ind:
+            continue
+        try:
+            c = float(ind[code])
+        except Exception:
+            continue
+        ratio = min(1.0, max(0.0, c / t))
+        ratios.append(ratio)
+        shortfall = t - c
+        if shortfall > max(10.0, 0.1 * t):
+            gap_flags.append(f"{code}_below_target")
+        gap_details.append((code, shortfall))
+    gap_details.sort(key=lambda x: -x[1])
+    sci = 0.0
+    if ratios:
+        prod = 1.0
+        for r in ratios:
+            prod *= r
+        sci = round(prod ** (1.0 / len(ratios)) * 100.0, 1)
+    top = gap_details[:3]
+    priority_actions = [
+        f"Close gap on {c}: improve by ~{g:.1f} vs national/WHO target"
+        for c, g in top
+    ]
+    high_impact: List[str] = []
+    if top:
+        code0 = top[0][0]
+        if "hiv" in code0 or "art" in code0:
+            high_impact.append("Scale ART initiation, adherence support, and viral load monitoring.")
+        if "anc" in code0 or "dtp" in code0 or "measles" in code0:
+            high_impact.append("Increase routine immunisation outreach and ANC continuity.")
+        if "htn" in code0:
+            high_impact.append("Expand hypertension screening and stepped-care treatment.")
+        if "tb" in code0:
+            high_impact.append("Strengthen TB cohort follow-up and treatment completion.")
+        if "cbhi" in code0:
+            high_impact.append("Grow CBHI enrolment through community mobilisation and exemptions.")
+    if not high_impact:
+        high_impact.append("Use district dashboards to prioritise programmes with largest population benefit.")
+
+    abstained = len(ratios) == 0
+    sdg3_on_track = (len(gap_flags) <= max(1, len(ratios) // 2)) if ratios else False
+    confidence = 0.82 if ratios else 0.35
+
+    return {
+        "uhc_sci_score": sci,
+        "gap_flags": gap_flags,
+        "priority_actions": priority_actions[:8] or (["Gather tracer indicator denominators before gap ranking"] if abstained else []),
+        "sdg3_on_track": sdg3_on_track,
+        "high_impact_interventions": high_impact[:8],
+        "confidence": confidence,
+        "citations": [
+            "WHO UHC Service Coverage Index — tracer indicators (2023 methodology overview)",
+            "WHO Primary Health Care measurement for universal health coverage",
+            "UN SDG 3 — Good Health and Well-being — indicator metadata",
+        ],
+        "abstained": abstained,
+    }
+
+
+@app.post("/cdss/analytics/uhc-gap-analysis", response_model=UhcGapAnalysisResponse)
+async def uhc_gap_analysis(req: UhcGapAnalysisRequest):
+    """
+    WHO UHC Service Coverage Index-style composite and SDG 3 gap analysis for facility aggregates.
+    Deterministic engine (no PHI); suitable when LLM governance is unavailable.
+    """
+    return _uhc_gap_analysis_deterministic(req)
 
 
 # ── Sprint 153: NTD Clinical Depth: Leprosy, Filariasis ─────────────────────

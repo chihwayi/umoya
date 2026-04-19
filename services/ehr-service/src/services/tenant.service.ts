@@ -355,6 +355,11 @@ import { CrossBorderPatientFlag } from '../interop/entities/cross-border-patient
 import { UserLanguagePreference } from '../settings/entities/user-language-preference.entity';
 import { OfflineSyncQueue } from '../lite/entities/offline-sync-queue.entity';
 import { UssdClinicalEntry } from '../lite/entities/ussd-clinical-entry.entity';
+import { SocialDeterminant } from '../cultural/entities/social-determinant.entity';
+import { FamilyCouncilConsent } from '../cultural/entities/family-council-consent.entity';
+import { UbuntuWellbeingAssessment } from '../cultural/entities/ubuntu-wellbeing-assessment.entity';
+import { UhcIndicatorSnapshot } from '../analytics/entities/uhc-indicator-snapshot.entity';
+import { SdgIndicatorTarget } from '../analytics/entities/sdg-indicator-target.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -846,6 +851,9 @@ export class TenantService {
         AtMessageLog,
         UssdSession,
         NotificationTemplate,
+        SocialDeterminant,
+        FamilyCouncilConsent,
+        UbuntuWellbeingAssessment,
         BirthNotification,
         DeathCertificate,
         MdsrNotification,
@@ -885,6 +893,8 @@ export class TenantService {
         UserLanguagePreference,
         OfflineSyncQueue,
         UssdClinicalEntry,
+        UhcIndicatorSnapshot,
+        SdgIndicatorTarget,
       ],
       logging: false,
     });

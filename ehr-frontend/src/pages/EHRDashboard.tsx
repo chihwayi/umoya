@@ -151,6 +151,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Pill, label: 'Prescriptions', desc: 'Medication management', color: 'from-orange-500 to-red-500' },
           { icon: TestTube, label: 'Lab Orders', desc: 'Request & review tests', color: 'from-pink-500 to-rose-500' },
           { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-violet-500 to-purple-500', route: 'analytics' },
+          { icon: TrendingUp, label: 'UHC & SDG', desc: 'Coverage index, tracers & national targets', color: 'from-emerald-600 to-teal-600', route: 'analytics/uhc-sdg' },
           { icon: FileText, label: 'Reports', desc: 'View and export reports (CSV/PDF)', color: 'from-violet-500 to-purple-500', route: 'reports' },
           { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board, ESI triage & metrics', color: 'from-red-600 to-orange-600', route: 'emergency' },
           { icon: Bed, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', route: 'bed-management' },
@@ -241,6 +242,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Building, label: 'Tenant Settings', desc: 'Clinic configuration & preferences', color: 'from-emerald-500 to-teal-500', route: 'tenant-settings' },
           { icon: Settings, label: 'System Settings', desc: 'Global system configuration', color: 'from-gray-500 to-slate-500', route: 'settings' },
           { icon: BarChart3, label: 'System Analytics', desc: 'Usage statistics & performance metrics', color: 'from-cyan-500 to-blue-500', route: 'analytics' },
+          { icon: TrendingUp, label: 'UHC & SDG', desc: 'WHO tracers, national targets, programme scorecard', color: 'from-emerald-600 to-teal-600', route: 'analytics/uhc-sdg' },
         ];
       default:
         return baseActions;

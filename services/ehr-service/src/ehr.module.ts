@@ -75,6 +75,7 @@ import { SurveillanceModule } from './surveillance/surveillance.module';
 import { NtdModule } from './ntd/ntd.module';
 import { LiteModule } from './lite/lite.module';
 import { LanguageModule } from './settings/language.module';
+import { CulturalModule } from './cultural/cultural.module';
 import { MobileMoneyController } from './controllers/mobile-money.controller';
 import { ChwController } from './controllers/chw.controller';
 import { LabTestController } from './controllers/lab-test.controller';
@@ -111,6 +112,9 @@ import { ClaimsAiController } from './controllers/claims-ai.controller';
 import { DoctorAvailabilityController } from './controllers/doctor-availability.controller';
 import { TelemedicineController } from './controllers/telemedicine.controller';
 import { AnalyticsController } from './controllers/analytics.controller';
+import { UhcAnalyticsController } from './analytics/uhc-analytics.controller';
+import { UhcAnalyticsService } from './analytics/uhc-analytics.service';
+import { UhcAnalyticsScheduler } from './analytics/uhc-analytics.scheduler';
 import { AppointmentResourceController } from './controllers/appointment-resource.controller';
 import { ClinicalTemplateController } from './controllers/clinical-template.controller';
 import { PatientPortalController } from './controllers/patient-portal.controller';
@@ -454,6 +458,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NtdModule,
     LiteModule,
     LanguageModule,
+    CulturalModule,
     TbaModule,
     DisaSmartcareModule,
   ],
@@ -556,6 +561,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DoctorAvailabilityController,
     TelemedicineController,
     AnalyticsController,
+    UhcAnalyticsController,
     AppointmentResourceController,
     ClinicalTemplateController,
     PatientPortalController,
@@ -722,6 +728,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ScheduledReportsService,
     ClinicalOutcomesService,
     AnalyticsService,
+    UhcAnalyticsService,
+    UhcAnalyticsScheduler,
     ReportExportService,
     EmailService,
     FileStorageService,

@@ -2238,6 +2238,28 @@ export class CdssService {
     );
   }
 
+  async culturalSdohRisk(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'culturalSdohRisk',
+      '/cdss/cultural/sdoh-risk',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async culturalUbuntuPsychosocial(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'culturalUbuntuPsychosocial',
+      '/cdss/cultural/ubuntu-psychosocial',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async scdHydroxyureaDose(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',
@@ -5037,6 +5059,26 @@ export class CdssService {
       '/cdss/ntd/filariasis-safety',
       payload,
       15000,
+      tenantId,
+    );
+  }
+
+  /** Sprint 160 — WHO UHC Service Coverage gap analysis */
+  async uhcGapAnalysis(
+    payload: {
+      indicators: Record<string, number>;
+      targets: Record<string, number>;
+      facility_type?: string;
+      country?: string;
+      year: number;
+    },
+    tenantId?: string,
+  ): Promise<any> {
+    return this.postWithPolicy<any>(
+      'uhc_gap_analysis',
+      '/cdss/analytics/uhc-gap-analysis',
+      payload,
+      30000,
       tenantId,
     );
   }

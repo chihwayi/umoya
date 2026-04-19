@@ -137,6 +137,14 @@ import {
   TENANT_LOW_BANDWIDTH_BUNDLE_VERSION,
   TENANT_LOW_BANDWIDTH_STATEMENTS,
 } from '../generated/tenant-low-bandwidth-lite.statements';
+import {
+  TENANT_UBUNTU_BUNDLE_VERSION,
+  TENANT_UBUNTU_STATEMENTS,
+} from '../generated/tenant-ubuntu-cultural-health.statements';
+import {
+  TENANT_UHC_SDG_BUNDLE_VERSION,
+  TENANT_UHC_SDG_STATEMENTS,
+} from '../generated/tenant-uhc-sdg-indicators.statements';
 
 interface ProvisioningBundle {
   id: string;
@@ -1419,6 +1427,20 @@ export class DatabaseProvisioningService {
         version: TENANT_LOW_BANDWIDTH_BUNDLE_VERSION,
         description: 'Creates offline_sync_queue, ussd_clinical_entries tables',
         statements: TENANT_LOW_BANDWIDTH_STATEMENTS,
+      },
+      {
+        id: 'sprint159_ubuntu_cultural_health',
+        label: 'Sprint 159 — Ubuntu Cultural Health Model',
+        version: TENANT_UBUNTU_BUNDLE_VERSION,
+        description: 'Creates social_determinants, family_council_consents, ubuntu_wellbeing_assessments tables',
+        statements: TENANT_UBUNTU_STATEMENTS,
+      },
+      {
+        id: 'sprint160_uhc_sdg_indicators',
+        label: 'Sprint 160 — UHC Service Coverage Index + WHO SDG Health Indicators',
+        version: TENANT_UHC_SDG_BUNDLE_VERSION,
+        description: 'Creates uhc_indicator_snapshots, sdg_indicator_targets tables; seeds 11 SDG targets',
+        statements: TENANT_UHC_SDG_STATEMENTS,
       },
       {
         id: 'sprint139_crvs',

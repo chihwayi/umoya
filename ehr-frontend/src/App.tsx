@@ -35,6 +35,7 @@ const ClaimsDashboard = lazy(() => import('./pages/ClaimsDashboard'));
 const TelemedicineDashboard = lazy(() => import('./pages/TelemedicineDashboard'));
 const TelemedicineConsultationPage = lazy(() => import('./pages/TelemedicineConsultationPage'));
 const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'));
+const UhcSdgDashboard = lazy(() => import('./pages/UhcSdgDashboard'));
 const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then(m => ({ default: m.KnowledgeBasePage })));
 const AiOpsDashboard = lazy(() => import('./pages/AiOpsDashboard').then(m => ({ default: m.AiOpsDashboard })));
 const EDDashboard = lazy(() => import('./pages/EDDashboard'));
@@ -948,6 +949,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin', 'doctor', 'accounts']}>
                   <AnalyticsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/analytics/uhc-sdg"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor', 'public_health']}>
+                  <UhcSdgDashboard />
                 </RoleProtectedRoute>
               }
             />
