@@ -1,4 +1,5 @@
 import { api } from './api';
+import { OfflineQueue } from './offlineQueue';
 
 export interface ApiVital {
   id: string;
@@ -46,6 +47,15 @@ export interface RecordVitalsDto {
   height?: number;
 }
 
+function isNetworkError(err: unknown): boolean {
+  const e = err as any;
+  return !e?.response && (
+    e?.code === 'ERR_NETWORK' ||
+    e?.code === 'ECONNABORTED' ||
+    e?.message === 'Network Error'
+  );
+}
+
 export const VitalsService = {
   /** Latest N readings for a patient */
   list: (patientId: string, limit = 20) =>
@@ -62,8 +72,24 @@ export const VitalsService = {
   forCurrentPatient: (limit = 30) =>
     api.get<any[]>(`/patient-portal/vitals?limit=${limit}`).then(r => r.data),
 
-  record: (dto: RecordVitalsDto) =>
-    api.post<{ success: boolean; vitals: ApiVital; cdssInsights: any }>(
-      '/vitals', dto,
-    ).then(r => r.data),
+  record: async (
+    dto: RecordVitalsDto,
+  ): Promise<{ success: boolean; vitals: ApiVital | null; cdssInsights: any; queued?: boolean }> => {
+    try {
+      const res = await api.post<{ success: boolean; vitals: ApiVital; cdssInsights: any }>('/vitals', dto);
+      return res.data;
+    } catch (err) {
+      if (isNetworkError(err)) {
+        const firstName = (dto as any).patientFirstName ?? '';
+        await OfflineQueue.enqueue({
+          endpoint: '/vitals',
+          method: 'POST',
+          body: dto,
+          label: `Vitals${firstName ? ' – ' + firstName : ''} (patient ${dto.patientId.slice(0, 8)})`,
+        });
+        return { success: true, vitals: null, cdssInsights: null, queued: true };
+      }
+      throw err;
+    }
+  },
 };

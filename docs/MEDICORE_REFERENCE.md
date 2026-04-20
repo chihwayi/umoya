@@ -1,6 +1,6 @@
 # MediCore Reference
 
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-21
 **Source-of-truth for:** system architecture, tech stack, AI governance patterns, reporting landscape, and competitive strategy.
 
 ---
@@ -526,6 +526,7 @@ All 61 AI-First recommendations addressed. Zero open gaps.
 | S154–S156 | CBHI deep module (household registry + fraud CDSS), Language Pack i18n (8 languages), TBA rural birth registration + CRVS auto-notification |
 | S157–S161 | DISA Mozambique VL/EID + SmartCare Zambia ART, Low-bandwidth lite mode + PWA + USSD data entry, Ubuntu cultural health (SDOH/family council/psychosocial), UHC SCI + SDG 3 indicators, NCID national client ID + cross-facility deduplication |
 | S162–S163 | Mobile: Herb-drug interaction alert in DoctorRoundsScreen ward round modal; PACTR trial eligibility badge in DoctorAIScreen Specialty Actions |
+| S164–S167b | Mobile security hardening + offline mode: biometric login gate with `LockScreen` overlay (S164); FCM push notifications — `expo-notifications`, Android channel, `POST /push-tokens` backend, token registration (S165); session auto-lock — AppState background lock + 5-min inactivity timer via `useSessionLock` + `ActivityTracker` (S166); offline read cache — axios interceptor caches all GET responses to AsyncStorage (6h TTL), amber `OfflineBanner`, `useNetworkStore` (S167a); offline write queue — `OfflineQueue` + `useOfflineSync` queues vitals and task-complete writes when offline, auto-drains on network restore, pending badge in NurseShiftScreen (S167b). JWT ↔ tenant cross-validation security fix: `tenantId` embedded in JWT at login, `JwtAuthGuard.handleRequest` cross-checks against `X-Tenant-ID` header — tokens from one clinic cannot replay against another. |
 
 ---
 
@@ -606,7 +607,7 @@ MediCore already has impressive breadth. The risk now is adding more. Strongest 
 - **Revenue cycle intelligence** — real-time eligibility, denial work queue, payer aging by provider/service line, resubmission workflow
 - **Post-visit AI and patient follow-through**
 
-### 11.2 Mobile — Status: Complete (Sprint 124–125, extended S143–S163)
+### 11.2 Mobile — Status: Complete (S124–S125, extended S143–S167b)
 
 The React Native mobile app (`mobile/`) is feature-complete and production-ready for all three roles.
 
@@ -621,6 +622,7 @@ The React Native mobile app (`mobile/`) is feature-complete and production-ready
 **Nurse:**
 - Shift worklist with task completion, triage queue (ESI levels), vitals entry with CDSS insights, SBAR generation, fall risk assessment, messaging
 - NCD Crisis capture (S143–S145): structured point-of-care forms for SCD vaso-occlusive crisis, epilepsy seizure events, and NCD complications (HTN/diabetic/CKD) with AI protocol card
+- Offline vitals submission (S167b): vitals queued to AsyncStorage when offline; auto-syncs when network returns; "N pending sync" badge visible in shift header
 
 **Patient:**
 - Home dashboard, appointments (book/cancel), medications + adherence, post-visit AI chat, telemedicine (Daily.co)
@@ -629,9 +631,19 @@ The React Native mobile app (`mobile/`) is feature-complete and production-ready
 - NHIF/CBHI insurance coverage card (S149): gradient card showing scheme, member number, status, co-pay %, benefit balance
 - Billing + payments, health records + care gaps
 
+**Security & Reliability (S164–S167b):**
+- **Biometric login gate (S164):** `LockScreen` overlay shown on app launch when JWT exists — auto-triggers Face ID / fingerprint via `expo-local-authentication`. Navigation state preserved under overlay. `isUnlocked` / `lock()` / `unlock()` in `useAuthStore`.
+- **Push notifications (S165):** `expo-notifications` wired — permission request, Android `medicore-critical` channel, Expo push token → `POST /push-tokens` (upsert per user). `push_tokens` table in each tenant DB.
+- **Session auto-lock (S166):** `useSessionLock` hook — `AppState` listener locks immediately on background; 5-min inactivity timer resets on any touch via `ActivityTracker` gesture wrapper.
+- **Offline read cache (S167a):** All axios GET responses saved to AsyncStorage (6h TTL) via response interceptor. `ERR_NETWORK` falls back to cache — every screen shows last known data. `useNetworkStore` (`isOnline` Zustand store). Amber slide-in `OfflineBanner`. Read cache wiped on logout/clinic-change (PHI hygiene).
+- **Offline write queue (S167b):** `OfflineQueue` (AsyncStorage) + `useOfflineSync` hook drains on foreground/network-restore. `VitalsService.record()` and `NurseWorklistService.completeTask()` enqueue on network error instead of showing an error dialog. Write queue intentionally survives logout so queued vitals sync after re-authentication.
+
 All mobile service modules call real EHR-service endpoints. `POST /governed/json` routing hub wires all CDSS AI surfaces. `npx tsc --noEmit` → 0 errors. Zero mock data.
 
-**Before app store submission:** Fill EAS project ID in `mobile/app.json`, add `google-services.json` for FCM, configure signing certificates.
+**Before app store submission:**
+- Fill EAS project ID in `mobile/app.json`
+- Add `google-services.json` (Android FCM) and `GoogleService-Info.plist` (iOS APNs) — Expo managed push works without these for dev builds; production EAS builds require them
+- Configure signing certificates (EAS Build)
 
 ### 11.3 Release Sequencing
 

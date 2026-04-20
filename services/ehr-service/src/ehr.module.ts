@@ -189,6 +189,7 @@ import { OneHealthController } from './controllers/one-health.controller';
 import { MaternalMortalityController } from './controllers/maternal-mortality.controller';
 import { NcdComplicationController } from './controllers/ncd-complication.controller';
 import { AtMessagingController } from './controllers/at-messaging.controller';
+import { PushTokensController } from './controllers/push-tokens.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -640,6 +641,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     KnowledgeController,
     ClaimsAiController,
     AtMessagingController,
+    PushTokensController,
   ],
   providers: [
     AuthService,

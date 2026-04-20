@@ -21,6 +21,7 @@ import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, AiPulse, Dot }
 import { NurseWorklistService } from '../../services/nurseWorklist';
 import { CdssService, SbarResult, FallRiskResult } from '../../services/cdss';
 import { MessagesService } from '../../services/messages';
+import { useOfflineSync } from '../../hooks/useOfflineSync';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -807,6 +808,7 @@ interface AiSheetPatient {
 
 export const NurseShiftScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { pendingCount: pendingSyncCount, isSyncing } = useOfflineSync();
   const [activeTab,  setActiveTab]  = useState<ShiftTab>('worklist');
   const [tasks,      setTasks]      = useState<ShiftTask[]>([]);
   const [triage,     setTriage]     = useState<TriagePatient[]>([]);
@@ -924,6 +926,15 @@ export const NurseShiftScreen: React.FC = () => {
         title={activeTab === 'worklist' ? 'Shift Worklist' : 'Triage'}
         subtitle={`${pendingCount} tasks remaining`}
         accent={C.purple}
+        rightSlot={
+          pendingSyncCount > 0 ? (
+            <View style={mainStyles.syncBadge}>
+              <Text style={mainStyles.syncBadgeText}>
+                {isSyncing ? 'Syncing…' : `${pendingSyncCount} pending sync`}
+              </Text>
+            </View>
+          ) : null
+        }
       />
 
       {/* Sub-tabs */}
@@ -1058,6 +1069,18 @@ export const NurseShiftScreen: React.FC = () => {
 
 const mainStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
+  syncBadge: {
+    backgroundColor: '#92400E',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginLeft: 8,
+  },
+  syncBadgeText: {
+    fontFamily: FONT.uiSb,
+    fontSize: 11,
+    color: '#FEF3C7',
+  },
   tabBar: {
     flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 10,
     borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.surface,

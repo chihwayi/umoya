@@ -122,12 +122,13 @@ All AI calls go through a governed pathway that enforces consent checks, PHI red
 
 ## Security & Compliance
 
-- JWT authentication with 2FA
-- Tenant-scoped data isolation — every request requires `X-Tenant-ID`
+- JWT authentication with 2FA and cross-tenant validation — `tenantId` embedded in JWT payload; `JwtAuthGuard` cross-checks against `X-Tenant-ID` header, preventing token replay across clinics
+- Tenant-scoped data isolation — every request requires `X-Tenant-ID`; DB-per-tenant architecture
 - HIPAA audit interception on all PHI access (append-only `hipaa_audit_logs`)
 - Consent guard middleware before every CDSS PHI call
 - AES-256-GCM encryption at rest for sensitive clinical columns
 - CDSS PHI redaction, egress allowlisting, and encryption key rotation
+- Mobile: biometric login gate (Face ID / fingerprint), session auto-lock (background + 5-min inactivity), offline read cache clears PHI on logout
 - SOC2/HIPAA evidence report script: `npm run report:soc2-hipaa`
 
 ---
@@ -208,5 +209,5 @@ npm run report:soc2-hipaa
 
 | Document | Contents |
 |---|---|
-| [docs/MEDICORE_REFERENCE.md](./docs/MEDICORE_REFERENCE.md) | Architecture, tech stack, AI governance, CDSS endpoint registry (161 sprints), HIPAA rules, interoperability, sprint history |
+| [docs/MEDICORE_REFERENCE.md](./docs/MEDICORE_REFERENCE.md) | Architecture, tech stack, AI governance, CDSS endpoint registry (167 sprints), HIPAA rules, interoperability, sprint history |
 | [.env.example](./.env.example) | All required environment variables |

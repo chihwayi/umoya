@@ -26,6 +26,8 @@ import { C, FONT } from './src/design/tokens';
 import { useAppPrivacyState, audit, suspectCompromisedEnvironment } from './src/utils/security';
 import { useSessionLock } from './src/hooks/useSessionLock';
 import { ActivityTracker } from './src/components/shared/ActivityTracker';
+import { useOfflineSync } from './src/hooks/useOfflineSync';
+import { OfflineBanner } from './src/components/shared/OfflineBanner';
 
 // Keep splash visible until fonts + auth are ready
 SplashScreen.preventAutoHideAsync();
@@ -48,6 +50,7 @@ export default function App() {
   const { hydrate, tenant, isLoading } = useAuthStore();
   const { isPrivate } = useAppPrivacyState();
   const { resetInactivityTimer } = useSessionLock();
+  useOfflineSync();
 
   const [fontsLoaded] = useFonts({
     Sora_400Regular,
@@ -98,6 +101,7 @@ export default function App() {
             <RootNavigator />
           </NavigationContainer>
         </ActivityTracker>
+        <OfflineBanner />
 
         {/* HIPAA screen privacy overlay — covers app-switcher snapshot & screen record */}
         {isPrivate && (

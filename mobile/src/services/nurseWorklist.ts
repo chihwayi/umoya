@@ -1,4 +1,5 @@
 import { api } from './api';
+import { OfflineQueue } from './offlineQueue';
 
 export interface NurseWorklistTask {
   id: string;
@@ -31,6 +32,15 @@ export interface NurseWorklistState {
   alerts: { id: string; message: string; severity: string }[];
 }
 
+function isNetworkError(err: unknown): boolean {
+  const e = err as any;
+  return !e?.response && (
+    e?.code === 'ERR_NETWORK' ||
+    e?.code === 'ECONNABORTED' ||
+    e?.message === 'Network Error'
+  );
+}
+
 export const NurseWorklistService = {
   state: () =>
     api.get<NurseWorklistState>('/nurse-worklist/state').then(r => r.data),
@@ -38,6 +48,21 @@ export const NurseWorklistService = {
   crossModuleFeed: () =>
     api.get<any>('/nurse-worklist/cross-module-feed').then(r => r.data),
 
-  completeTask: (id: string) =>
-    api.patch<{ success: boolean }>(`/nurse-worklist/tasks/${id}/complete`, {}).then(r => r.data),
+  completeTask: async (id: string): Promise<{ success: boolean; queued?: boolean }> => {
+    try {
+      const res = await api.patch<{ success: boolean }>(`/nurse-worklist/tasks/${id}/complete`, {});
+      return res.data;
+    } catch (err) {
+      if (isNetworkError(err)) {
+        await OfflineQueue.enqueue({
+          endpoint: `/nurse-worklist/tasks/${id}/complete`,
+          method: 'PATCH',
+          body: {},
+          label: `Task complete (${id.slice(0, 8)})`,
+        });
+        return { success: true, queued: true };
+      }
+      throw err;
+    }
+  },
 };

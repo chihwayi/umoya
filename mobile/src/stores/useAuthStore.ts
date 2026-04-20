@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import { OfflineCache } from '../services/offlineCache';
 
 export type UserRole = 'doctor' | 'nurse' | 'patient';
 
@@ -93,6 +94,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       SecureStore.deleteItemAsync(KEYS.JWT),
       SecureStore.deleteItemAsync(KEYS.ROLE),
       SecureStore.deleteItemAsync(KEYS.USER),
+      OfflineCache.clearAll(),
     ]);
     set({ jwt: null, role: null, user: null, isUnlocked: false });
     // Tenant is intentionally kept — patient/staff picks the same clinic again
@@ -113,6 +115,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       SecureStore.deleteItemAsync(KEYS.JWT),
       SecureStore.deleteItemAsync(KEYS.ROLE),
       SecureStore.deleteItemAsync(KEYS.USER),
+      OfflineCache.clearAll(),
     ]);
     set({ tenant: null, jwt: null, role: null, user: null, isUnlocked: false });
   },

@@ -1,6 +1,8 @@
 import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { ensurePublicApiBaseUrl, EHR_BASE_OVERRIDE } from '../config/env';
+import { OfflineCache } from './offlineCache';
+import { useNetworkStore } from '../stores/useNetworkStore';
 
 let _apiInstance: AxiosInstance | null = null;
 
@@ -39,6 +41,48 @@ export function buildApiClient(baseUrl: string): AxiosInstance {
       }
       return Promise.reject(err);
     }
+  );
+
+  // ── Offline cache interceptor ─────────────────────────────────────────────
+  // This must be registered AFTER the 401 interceptor above.
+  instance.interceptors.response.use(
+    (res) => {
+      useNetworkStore.getState().setOnline(true);
+      if (res.config.method?.toLowerCase() === 'get' && res.config.url) {
+        OfflineCache.save(res.config.url, res.data);
+      }
+      return res;
+    },
+    async (err) => {
+      const isNetworkError =
+        !err.response &&
+        (err.code === 'ERR_NETWORK' ||
+          err.code === 'ECONNABORTED' ||
+          err.message === 'Network Error');
+
+      if (isNetworkError) {
+        useNetworkStore.getState().setOnline(false);
+
+        if (err.config?.method?.toLowerCase() === 'get' && err.config?.url) {
+          const cached = await OfflineCache.load(err.config.url);
+          if (cached) {
+            return {
+              data: cached.data,
+              status: 200,
+              statusText: 'OK (cached)',
+              headers: {
+                'x-from-cache': 'true',
+                'x-cached-at': String(cached.savedAt),
+              },
+              config: err.config,
+              request: err.request,
+            };
+          }
+        }
+      }
+
+      return Promise.reject(err);
+    },
   );
 
   _apiInstance = instance;

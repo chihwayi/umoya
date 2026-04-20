@@ -47,6 +47,7 @@ const interestOptions = [
   'Cancer and specialty modules',
   'Claims and revenue cycle',
   'Patient portal and mobile app',
+  'Offline-first point-of-care mobile',
   'Sickle cell and haemoglobinopathy',
   'Traditional medicine herb-drug alerts',
   'NHIF/CBHI and capitation billing',
@@ -87,6 +88,7 @@ const audiences = [
       'PostVisit AI summaries with patient-safe publishing',
       'Specialty-specific workflows: HIV, oncology, maternity, cardiology',
       'Real-time doctor-nurse coordination and alert loops',
+      'Offline-first mobile — ward rounds work without Wi-Fi; vitals queue and sync automatically',
     ],
   },
   {
@@ -109,7 +111,8 @@ const audiences = [
     points: [
       'HIPAA-aware audit logging on every action',
       'SNOMED CT and ICD-10 coded clinical data',
-      'Role-based access with JWT-secured API surface',
+      'Cross-tenant JWT validation — tokens are clinic-scoped and cannot replay across facilities',
+      'Biometric app lock, session auto-lock, and offline PHI cache wipe on logout',
       'FHIR-exportable records for referrals and transfers',
     ],
   },
@@ -135,7 +138,8 @@ const audiences = [
       'Vaccination registers and immunization schedules',
       'DHIS2 aggregate and tracker data push',
       'Maternal health, TB, NCD, sickle cell, and epilepsy program dashboards',
-        'SORMAS + IHR Annex 2 outbreak notification and PACTR trial registry integration',
+      'SORMAS + IHR Annex 2 outbreak notification and PACTR trial registry integration',
+      'Offline point-of-care mobile — works on 2G/3G and without Wi-Fi in remote facilities',
     ],
   },
   {

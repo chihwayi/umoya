@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -298,7 +299,14 @@ export const NurseVitalsScreen: React.FC = () => {
         const v = values[f.key];
         if (v) dto[f.key] = parseFloat(v);
       });
-      await VitalsService.record(dto as any);
+      const result = await VitalsService.record(dto as any);
+      if (result.queued) {
+        Alert.alert(
+          'Saved Offline',
+          'Vitals saved locally and will sync automatically when network returns.',
+          [{ text: 'OK' }],
+        );
+      }
       setSaved(true);
     } catch {
       setSaved(true); // show saved even on network error — offline tolerance
