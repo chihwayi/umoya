@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { DataSource } from 'typeorm';
 import 'multer';
 import axios from 'axios';
-import * as FormData from 'form-data';
+import FormData from 'form-data';
 import { createHash } from 'crypto';
 import { config, env } from '@medicore/config';
 import {

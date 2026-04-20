@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import axios from 'axios';
-import * as FormData from 'form-data';
+import FormData from 'form-data';
 import { createHash } from 'crypto';
 import { DataSource } from 'typeorm';
 import { MedicalNlpService } from './medical-nlp.service';

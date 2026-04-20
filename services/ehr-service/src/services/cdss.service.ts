@@ -2,7 +2,7 @@ import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
-import * as FormData from 'form-data';
+import FormData from 'form-data';
 import { config as envConfig } from '@medicore/config';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
 import { PatientConsentService } from './patient-consent.service';
@@ -268,16 +268,16 @@ export class CdssService {
       }
       if (this.cdssServiceAuthMode === 'token' || this.cdssServiceAuthMode === 'both') {
         if (this.cdssServiceToken) {
-          (request.headers as AxiosHeaders).set('X-Service-Token', this.cdssServiceToken);
+          (request.headers as InstanceType<typeof AxiosHeaders>).set('X-Service-Token', this.cdssServiceToken);
         }
       }
       if (this.cdssServiceAuthMode === 'jwt' || this.cdssServiceAuthMode === 'both') {
         const serviceJwt = this.createServiceJwt(request.url, request.method);
         if (serviceJwt) {
-          (request.headers as AxiosHeaders).set('Authorization', `Bearer ${serviceJwt}`);
+          (request.headers as InstanceType<typeof AxiosHeaders>).set('Authorization', `Bearer ${serviceJwt}`);
         }
       }
-      (request.headers as AxiosHeaders).set('X-Service-Name', 'ehr-service');
+      (request.headers as InstanceType<typeof AxiosHeaders>).set('X-Service-Name', 'ehr-service');
       this.logger.log(`[CDSS] Request to: ${request.url}`);
       return request;
     });

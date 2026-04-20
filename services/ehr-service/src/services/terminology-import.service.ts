@@ -3,7 +3,7 @@ import { Injectable, Logger, BadRequestException, OnModuleDestroy } from '@nestj
 import { DataSource } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as AdmZip from 'adm-zip';
+import AdmZip from 'adm-zip';
 import * as readline from 'readline';
 import { getMasterDbConfig } from '../utils/runtime-env';
 

@@ -51,7 +51,7 @@
     "detox": "^20.26.2",
     "jest": "^29.7.0",
     "jest-circus": "^29.7.0",
-    "typescript": "~5.9.2"
+    "typescript": "^6.0.3"
   },
   "private": true
 }

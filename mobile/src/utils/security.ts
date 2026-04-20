@@ -221,6 +221,6 @@ export const useInactivityLock = (onLock: () => void): (() => void) => {
 export const suspectCompromisedEnvironment = (): boolean => {
   if (__DEV__) return false; // skip in dev
   // Expo Go indicates an unpackaged environment
-  if (typeof (global as any).ExpoModules?.ExpoGo !== 'undefined') return true;
+  if (typeof (globalThis as any).ExpoModules?.ExpoGo !== 'undefined') return true;
   return false;
 };
