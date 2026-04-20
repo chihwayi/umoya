@@ -20,7 +20,7 @@ export class AuthController {
     const ipAddress = (req as any).ip || (req as any).connection?.remoteAddress;
     const userAgent = (req as any).get('User-Agent');
     
-    return this.authService.login(loginDto, req.tenantDb, ipAddress, userAgent);
+    return this.authService.login(loginDto, req.tenantDb, req.tenantId, ipAddress, userAgent);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -101,6 +101,6 @@ export class AuthController {
   @Post('2fa/complete-login')
   @ApiOperation({ summary: 'Complete login with TOTP code after requiresTwoFactor' })
   async complete2FALogin(@Request() req: RequestWithTenant, @Body() body: { tempToken: string; code: string }) {
-    return this.authService.complete2FALogin(body.tempToken, body.code, req.tenantDb);
+    return this.authService.complete2FALogin(body.tempToken, body.code, req.tenantDb, req.tenantId);
   }
 }

@@ -23,7 +23,16 @@ import {
   AiBadge,
   AiPulse,
 } from '../ui';
-import { CdssService, InteractionResult, DosingResult, RiskScoreResult, GuidelineResult, DiagnosisResult, LabInterpretResult } from '../../services/cdss';
+import {
+  CdssService,
+  InteractionResult,
+  DosingResult,
+  RiskScoreResult,
+  GuidelineResult,
+  DiagnosisResult,
+  LabInterpretResult,
+  PactrEligibilityResult,
+} from '../../services/cdss';
 import {
   ApiBloodBankOperationalBrief,
   ApiPacuPatient,
@@ -292,6 +301,9 @@ const CDSSScreen: React.FC = () => {
   const [pacuPatients, setPacuPatients] = useState<ApiPacuPatient[]>([]);
   const [criticalImaging, setCriticalImaging] = useState<ApiDoctorImagingResult[]>([]);
   const [specialtyLoading, setSpecialtyLoading] = useState(true);
+  const [pactrPatientId, setPactrPatientId] = useState('');
+  const [pactrResult, setPactrResult] = useState<PactrEligibilityResult | null | 'loading'>(null);
+  const pactrDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeDef = CDSS_TOOLS.find((t) => t.key === activeTool);
   const pacuReadyCount = pacuPatients.filter((item) => Boolean(item.dischargeCriteriaMet)).length;
@@ -321,7 +333,21 @@ const CDSSScreen: React.FC = () => {
   );
   const hasPacuCard = pacuPatients.length > 0;
   const hasImagingCard = criticalImaging.length > 0;
-  const hasAnySpecialtyCard = hasSepsisCard || hasOncologyCard || hasBloodBankCard || hasPacuCard || hasImagingCard;
+  const hasPactrCard = pactrPatientId.trim().length >= 3 &&
+    (pactrResult === 'loading' || (pactrResult !== null && pactrResult.trials.length > 0));
+  const hasAnySpecialtyCard =
+    hasSepsisCard || hasOncologyCard || hasBloodBankCard || hasPacuCard || hasImagingCard || hasPactrCard;
+
+  const loadPactrEligibility = useCallback(async (patientId: string) => {
+    const trimmed = patientId.trim();
+    if (trimmed.length < 3) {
+      setPactrResult(null);
+      return;
+    }
+    setPactrResult('loading');
+    const result = await CdssService.getPactrTrialEligibility(trimmed);
+    setPactrResult(result);
+  }, []);
 
   const loadSpecialtyActions = useCallback(async () => {
     setSpecialtyLoading(true);
@@ -346,6 +372,28 @@ const CDSSScreen: React.FC = () => {
   useEffect(() => {
     loadSpecialtyActions();
   }, [loadSpecialtyActions]);
+
+  useEffect(() => {
+    const trimmed = pactrPatientId.trim();
+    if (pactrDebounceRef.current) {
+      clearTimeout(pactrDebounceRef.current);
+      pactrDebounceRef.current = null;
+    }
+    if (trimmed.length < 3) {
+      setPactrResult(null);
+      return;
+    }
+    pactrDebounceRef.current = setTimeout(() => {
+      loadPactrEligibility(trimmed);
+    }, 400);
+
+    return () => {
+      if (pactrDebounceRef.current) {
+        clearTimeout(pactrDebounceRef.current);
+        pactrDebounceRef.current = null;
+      }
+    };
+  }, [loadPactrEligibility, pactrPatientId]);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim() || !activeTool) return;
@@ -668,6 +716,52 @@ const CDSSScreen: React.FC = () => {
               </Card>
             )}
 
+            {hasPactrCard && (
+              <Card accent={C.blue} style={cdssStyles.specialtyCard}>
+                <View style={cdssStyles.specialtyCardHeader}>
+                  <AiBadge text="PACTR · TRIAL ELIGIBILITY" />
+                  {pactrResult !== 'loading' && pactrResult ? (
+                    <Badge color={C.blue} size="xs">
+                      {`${pactrResult.trials.length} matching`}
+                    </Badge>
+                  ) : null}
+                </View>
+                {pactrResult === 'loading' ? (
+                  <View style={cdssStyles.pactrLoadingRow}>
+                    <ActivityIndicator color={C.blue} size="small" />
+                    <Text style={cdssStyles.specialtyLoadingText}>Checking PACTR registry…</Text>
+                  </View>
+                ) : pactrResult ? (
+                  pactrResult.trials.map((trial) => {
+                    const visibleCriteria = trial.criteriaMatched.slice(0, 4);
+                    const remainingCount = Math.max(0, trial.criteriaMatched.length - visibleCriteria.length);
+                    return (
+                      <View key={trial.id} style={cdssStyles.pactrTrialRow}>
+                        <Text style={cdssStyles.specialtyQueueTitle}>
+                          {`${trial.phase} — ${trial.title}`}
+                        </Text>
+                        <Text style={cdssStyles.specialtyQueueBody}>
+                          {`Sponsor: ${trial.sponsor} · Condition: ${trial.condition}`}
+                        </Text>
+                        <View style={cdssStyles.pactrCriteriaRow}>
+                          {visibleCriteria.map((criterion) => (
+                            <View key={`${trial.id}-${criterion}`} style={cdssStyles.pactrChip}>
+                              <Text style={cdssStyles.pactrChipText}>{criterion}</Text>
+                            </View>
+                          ))}
+                          {remainingCount > 0 ? (
+                            <View style={cdssStyles.pactrChip}>
+                              <Text style={cdssStyles.pactrChipText}>{`+ ${remainingCount} more`}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    );
+                  })
+                ) : null}
+              </Card>
+            )}
+
             {!hasAnySpecialtyCard && (
               <Card accent={C.teal} style={cdssStyles.specialtyCard}>
                 <View style={cdssStyles.specialtyCardHeader}>
@@ -686,6 +780,25 @@ const CDSSScreen: React.FC = () => {
             )}
           </>
         )}
+      </View>
+
+      <View style={cdssStyles.pactrInputRow}>
+        <Icon name="search" size={16} color={C.textMuted} />
+        <TextInput
+          value={pactrPatientId}
+          onChangeText={setPactrPatientId}
+          onBlur={() => {
+            if (pactrPatientId.trim().length >= 3) {
+              loadPactrEligibility(pactrPatientId.trim());
+            }
+          }}
+          placeholder="Patient MRN or ID for trial eligibility check..."
+          placeholderTextColor={C.textMuted}
+          style={cdssStyles.pactrInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
       </View>
 
       {/* Tool grid */}
@@ -864,6 +977,56 @@ const cdssStyles = StyleSheet.create({
     backgroundColor: C.blue + '16',
   },
   specialtyActionBtnText: { fontFamily: FONT.uiBd, fontSize: 11, color: C.blue, textTransform: 'uppercase', letterSpacing: 0.35 },
+  pactrInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  pactrInput: {
+    flex: 1,
+    fontFamily: FONT.uiMd,
+    fontSize: 13,
+    color: C.textPrimary,
+  },
+  pactrLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  pactrTrialRow: {
+    backgroundColor: C.surface,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 12,
+    gap: 6,
+  },
+  pactrCriteriaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  pactrChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.pill,
+    backgroundColor: C.teal + '18',
+    borderWidth: 1,
+    borderColor: C.teal + '35',
+  },
+  pactrChipText: {
+    fontFamily: FONT.uiMd,
+    fontSize: 10,
+    color: C.teal,
+  },
   toolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   toolCard: {
     width: '47%',

@@ -24,6 +24,8 @@ import { NurseShiftScreen }  from '../components/nurse/NurseShiftScreen';
 import { NurseVitalsScreen } from '../components/nurse/NurseVitalsScreen';
 // Nurse screens — S116
 import { NurseMessagesScreen } from '../components/nurse/NurseMessagesScreen';
+// Nurse screens — S143–S145 (NCD point-of-care)
+import { NurseNcdCrisisScreen } from '../components/nurse/NurseNcdCrisisScreen';
 
 // Patient screens — S113
 import { PatientHomeScreen }      from '../components/patient/PatientHomeScreen';
@@ -72,9 +74,10 @@ const DoctorNavigator = () => (
 
 // ── Nurse Navigator ───────────────────────────────────────────────────────────
 const NURSE_TABS = [
-  { icon: 'shift'  as const, label: 'Shift'    },
-  { icon: 'pulse'  as const, label: 'Vitals'   },
-  { icon: 'chat'   as const, label: 'Messages' },
+  { icon: 'shift'      as const, label: 'Shift'    },
+  { icon: 'pulse'      as const, label: 'Vitals'   },
+  { icon: 'chat'       as const, label: 'Messages' },
+  { icon: 'stethoscope' as const, label: 'NCD'     },
 ];
 
 const NurseNavigator = () => (
@@ -82,9 +85,10 @@ const NurseNavigator = () => (
     tabBar={(props) => <CustomTabBar {...props} accent={C.purple} tabs={NURSE_TABS} />}
     screenOptions={{ headerShown: false }}
   >
-    <NurseTabs.Screen name="NShift"    component={NurseShiftScreen}    />
-    <NurseTabs.Screen name="NVitals"   component={NurseVitalsScreen}   />
-    <NurseTabs.Screen name="NMessages" component={NurseMessagesScreen} />
+    <NurseTabs.Screen name="NShift"    component={NurseShiftScreen}     />
+    <NurseTabs.Screen name="NVitals"   component={NurseVitalsScreen}    />
+    <NurseTabs.Screen name="NMessages" component={NurseMessagesScreen}  />
+    <NurseTabs.Screen name="NNcdCrisis" component={NurseNcdCrisisScreen} />
   </NurseTabs.Navigator>
 );
 

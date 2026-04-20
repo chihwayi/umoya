@@ -1,6 +1,6 @@
 # MediCore Reference
 
-**Last updated:** 2026-03-28
+**Last updated:** 2026-04-20
 **Source-of-truth for:** system architecture, tech stack, AI governance patterns, reporting landscape, and competitive strategy.
 
 ---
@@ -81,17 +81,28 @@ Useful URLs after boot:
 
 ```
 services/ehr-service/src/
-├── app.module.ts           ← TypeORM entity registration (add new entities HERE)
+├── ehr.module.ts           ← Root module — controllers, providers, sub-module imports
 ├── controllers/            ← HTTP route handlers
 ├── services/               ← Business logic + CDSS proxy calls
 ├── entities/               ← TypeORM entity classes → PostgreSQL tables
 ├── dto/                    ← Request/response DTOs
-└── transformers/           ← Column transformers (e.g. encryption)
+├── transformers/           ← Column transformers (e.g. encryption)
+├── tba/                    ← TBA sub-module (TbaModule, TbaService, TbaController)
+├── interop/                ← DISA/SmartCare sub-module (DisaSmartcareModule)
+├── lite/                   ← Low-bandwidth lite mode sub-module (LiteModule)
+├── cultural/               ← Ubuntu cultural health sub-module (CulturalModule)
+├── analytics/              ← UHC/SDG analytics (UhcAnalyticsService, scheduler, controller)
+├── settings/               ← Language/i18n sub-module (LanguageModule)
+├── ntd/                    ← NTD sub-module (NtdModule)
+├── outbreak/               ← Outbreak protocol sub-module (OutbreakProtocolModule)
+└── surveillance/           ← Surveillance sub-module (SurveillanceModule)
 ```
 
 Key packages: `@nestjs/core ^10`, `typeorm ^0.3.17`, `@nestjs/jwt`, `class-validator`, `ioredis`, `minio`.
 
 TypeORM config (entities array): `services/ehr-service/src/services/tenant.service.ts`
+
+**Sub-module pattern:** Separate NestJS modules for cohesive functional areas. Each sub-module re-declares `TenantService` and `CdssService` in its own `providers:[]` — these are NOT inherited from `EhrModule`. Every sub-module must be added to `EhrModule`'s `imports:[]` array.
 
 ### 2.3 CDSS Service (FastAPI) Layout
 
@@ -248,7 +259,30 @@ export const getMyFeatureData = async (patientId: string): Promise<MyFeatureResp
 };
 ```
 
-### 3.4 Adding a CDSS Endpoint (Python)
+### 3.4 i18n / Locale Instruction Pattern (S155)
+
+All LLM-powered CDSS endpoints support multilingual output. Every `*Request` model that reaches an LLM must have a `locale: str = "en"` field, and the prompt must end with `locale_instruction(req.locale)`.
+
+```python
+class MyRequest(BaseModel):
+    # ... clinical fields ...
+    locale: str = "en"         # always add this
+
+@app.post("/cdss/my-feature")
+async def my_feature(req: MyRequest):
+    prompt = f"""
+    ... clinical prompt ...
+    """ + locale_instruction(req.locale)   # always append this
+    return await call_governed_json(prompt, surface="my_feature", phi_present=True)
+```
+
+`locale_instruction()` is a no-op for `"en"` — it only adds text for the 7 other supported locales (`pt`, `fr`, `sw`, `zu`, `af`, `sn`, `nd`). Purely deterministic endpoints (rule-based, no LLM) do **not** need locale wiring.
+
+Supported locale codes: `en` (English), `pt` (Portuguese), `fr` (French), `sw` (Swahili), `zu` (Zulu), `af` (Afrikaans), `sn` (Shona), `nd` (Ndebele).
+
+---
+
+### 3.5 Adding a CDSS Endpoint (Python)
 
 ```python
 # services/cdss-service/main.py — add after existing routes
@@ -378,6 +412,38 @@ Do not invent endpoint paths. Extend these or add new ones in `main.py`.
 | `/cdss/registration/sdoh-score` | POST | RegistrationAiService |
 | `/cdss/registration/ocr-insurance-card` | POST (multipart) | RegistrationAiService |
 
+### Africa / SADC Clinical Endpoints (S143–S161)
+| Endpoint | Method | Sprint | Description |
+|---|---|---|---|
+| `/cdss/htn/step-therapy` | POST | S143 | WHO PEN hypertension step therapy guidance |
+| `/cdss/htn/cvd-risk` | POST | S143 | Framingham/WHO 10-year CVD risk score |
+| `/cdss/scd/hydroxyurea-dose` | POST | S144 | Sickle cell hydroxyurea dosing |
+| `/cdss/scd/crisis-triage` | POST | S144 | Vaso-occlusive crisis triage and management |
+| `/cdss/scd/complication-risk` | POST | S144 | Sickle cell complication risk stratification |
+| `/cdss/epilepsy/aed-dose` | POST | S145 | AED dosing by seizure type and weight |
+| `/cdss/epilepsy/drug-interactions` | POST | S145 | AED-drug interaction checker |
+| `/cdss/epilepsy/status-epilepticus` | POST | S145 | Status epilepticus emergency protocol |
+| `/cdss/zoonotic/assess` | POST | S146 | One Health zoonotic exposure risk assessment |
+| `/cdss/maternal/emonc-classify` | POST | S147 | Facility EmONC classification (UN 9 signal functions) |
+| `/cdss/maternal/death-audit-review` | POST | S147 | Maternal death Three Delays analysis + audit guide |
+| `/cdss/ncd/diabetic-foot-risk` | POST | S148 | Wagner grade + amputation risk + referral triage |
+| `/cdss/vhf/risk-triage` | POST | S150 | VHF (Ebola/Marburg/Lassa/Mpox/CCHF) risk triage |
+| `/cdss/vhf/contact-trace` | POST | S150 | Contact tracing risk stratification |
+| `/cdss/mpox/severity` | POST | S150 | Mpox severity scoring + antiviral indication |
+| `/cdss/vhf/ihr-annex2` | POST | S152 | IHR Annex 2 PHEIC notification decision tree |
+| `/cdss/ihr/annex2-assessment` | POST | S152 | IHR Annex 2 structured assessment |
+| `/cdss/ebs/signal-triage` | POST | S152 | Event-Based Surveillance signal triage |
+| `/cdss/ntd/leprosy-mdt` | POST | S153 | WHO leprosy MDT regimen selection |
+| `/cdss/ntd/filariasis-safety` | POST | S153 | Loa loa MF safety gate for ivermectin/DEC |
+| `/cdss/cbhi/claim-adjudication` | POST | S154 | CBHI claim fraud detection + adjudication |
+| `/cdss/tba/risk-assessment` | POST | S156 | TBA-attended birth risk stratification |
+| `/cdss/tba/home-birth-risk` | POST | S156 | Home birth safety risk scoring |
+| `/cdss/interop/cross-border-continuity` | POST | S157 | SADC cross-border HIV ART continuity gap assessment |
+| `/cdss/cultural/sdoh-risk` | POST | S159 | SDOH vulnerability risk score (HFIAS + WHO SDOH) |
+| `/cdss/cultural/ubuntu-psychosocial` | POST | S159 | Ubuntu-adapted psychosocial risk + mhGAP triage |
+| `/cdss/analytics/uhc-gap-analysis` | POST | S160 | UHC Service Coverage Index + SDG 3 gap analysis |
+| `/cdss/ncid/duplicate-score` | POST | S161 | Patient deduplication match scoring |
+
 ### Governance & Monitoring
 | Endpoint | Method | Description |
 |---|---|---|
@@ -396,24 +462,29 @@ Do not invent endpoint paths. Extend these or add new ones in `main.py`.
 
 | What | Where |
 |---|---|
-| Add a TypeORM entity | `services/ehr-service/src/entities/` |
+| Add a TypeORM entity | `services/ehr-service/src/entities/` (or sub-module entities dir) |
 | Register entity | `services/ehr-service/src/services/tenant.service.ts` → `entities:[]` |
 | Add provisioning SQL | `services/tenant-service/src/services/database-provisioning.service.ts` |
 | Add EHR API endpoint | `services/ehr-service/src/controllers/` + `src/services/` |
+| Register service in DI | `services/ehr-service/src/ehr.module.ts` → `providers:[]` |
+| Register controller in DI | `services/ehr-service/src/ehr.module.ts` → `controllers:[]` |
+| Add sub-module | Create `*.module.ts`, add to `ehr.module.ts` → `imports:[]` |
 | Add CDSS endpoint | `services/cdss-service/main.py` |
+| Wire i18n to LLM prompt | Add `locale: str = "en"` to request model + `+ locale_instruction(req.locale)` at end of prompt string |
 | Add frontend API call | `ehr-frontend/src/services/api.ts` |
 | Add frontend component | `ehr-frontend/src/components/` |
 | Add patient portal page | `patient-portal/src/pages/` + `App.tsx` |
+| Add mobile screen | `mobile/` Expo app |
 | HIPAA audit logging | `services/ehr-service/src/services/hipaa-audit.service.ts` |
 | Consent checking | `services/ehr-service/src/services/consent.service.ts` |
 | Encryption transformer | `services/ehr-service/src/transformers/encryption.transformer.ts` |
-| Module registration | `services/ehr-service/src/app.module.ts` |
+| Language preferences | `services/ehr-service/src/settings/language.module.ts` |
 
 ---
 
 ## 9. AI-First Maturity — Completion Record
 
-All 61 AI-First recommendations addressed across Sprints 111–125. Zero open gaps.
+All 61 AI-First recommendations addressed. Zero open gaps.
 
 | Dimension | Status |
 |---|---|
@@ -429,8 +500,32 @@ All 61 AI-First recommendations addressed across Sprints 111–125. Zero open ga
 | Registration AI | Phonetic match + OCR + SDOH intake |
 | Mobile AI (governed) | `POST /governed/json` hub: SBAR, fall risk, med rec, diagnosis, dosing, labs |
 | Clinical trial matching | ClinicalTrials.gov v2 API (`/api/v2/studies`) integrated in post-visit |
+| i18n / Multilingual AI | 8 languages — locale field on all LLM request models, `locale_instruction()` wired |
+| NCID deduplication AI | Cross-facility patient deduplication with LLM-assisted match reasoning |
+| UHC/SDG analytics | WHO UHC SCI composite + SDG 3 gap analysis (deterministic, quarterly scheduler) |
 
-**Sprint history (condensed):** S59–S95 core EHR build → S96–S102 AI gap closure → S104–S108 telemedicine + PostVisit → S111–S118 AI-First hardening + frontend transparency → S119–S123 Order Intelligence, Nursing Suite, Med Rec AI, Discharge, Self-Learning → S124 Mobile point-of-care (8 features) → S125 Mobile backend wiring (7 endpoint gaps closed).
+**Sprint history (complete):**
+| Range | Summary |
+|---|---|
+| S1–S58 | Core EHR platform (multi-tenant, roles, billing, FHIR, HIV, TB, Maternity, Lab, Pharmacy, ED) |
+| S59–S95 | 37-sprint AI-First build (proactive AI, care gaps, ambient scribe, specialty modules, federated learning) |
+| S96–S102 | World-class gap closure (Radiology AI, real-time alerts, model drift, patient AI, trial matching, supply chain, CDSS) |
+| S103 | Autonomous learning loop + model registry |
+| S104–S108 | Telemedicine real video, WebSocket gateway, state machine, PostVisit bridge, God Class decomposition |
+| S109–S111 | Mobile Expo app, ICD-11/SNOMED, encounter + pharmacy intelligence |
+| S112–S118 | P0 safety, UI completeness, clinical RAG/pgvector, denial prediction, risk stratification, registration AI, DICOM viewer, AI transparency |
+| S119–S123 | Order set AI, nursing care plan AI, med rec, discharge summary AI, A/B shadow mode + fairness metrics |
+| S124–S125 | Mobile point-of-care (8 features) + mobile backend wiring (7 endpoint gaps closed) |
+| S126 | Reporting completeness — lab turnaround, compliance finance reports |
+| S127–S128 | Proactive AI Nervous System + AI cohesion |
+| S129–S134 | EPI/Immunization, Outbreak surveillance, Mobile money, CHW module, SAM/CMAM nutrition, NHIF/CBHI billing |
+| S135–S140 | SA national interop, DHIS2/DATIM, SMS/USSD (Africa's Talking), OpenMRS FHIR, CRVS, NTD/malaria depth |
+| S141–S146 | mhGAP psychiatry, Cervical cancer + FP, HTN + WHO PEN, Traditional medicine + HDI safety, Sickle cell disease, Epilepsy + AED protocols, One Health + PACTR |
+| S147–S149 | Maternal Mortality Audit + EmONC, NCD Complication Registry (diabetic foot/retinopathy/CKD), NHIF/CBHI capitation |
+| S150–S153 | Mpox/Ebola/VHF case management, Plague/Yellow Fever/Meningitis, SORMAS + IHR Annex 2 pipeline, NTD clinical depth (Leprosy/Filariasis) |
+| S154–S156 | CBHI deep module (household registry + fraud CDSS), Language Pack i18n (8 languages), TBA rural birth registration + CRVS auto-notification |
+| S157–S161 | DISA Mozambique VL/EID + SmartCare Zambia ART, Low-bandwidth lite mode + PWA + USSD data entry, Ubuntu cultural health (SDOH/family council/psychosocial), UHC SCI + SDG 3 indicators, NCID national client ID + cross-facility deduplication |
+| S162–S163 | Mobile: Herb-drug interaction alert in DoctorRoundsScreen ward round modal; PACTR trial eligibility badge in DoctorAIScreen Specialty Actions |
 
 ---
 
@@ -511,21 +606,32 @@ MediCore already has impressive breadth. The risk now is adding more. Strongest 
 - **Revenue cycle intelligence** — real-time eligibility, denial work queue, payer aging by provider/service line, resubmission workflow
 - **Post-visit AI and patient follow-through**
 
-### 11.2 Mobile — Status: Complete (Sprint 124–125)
+### 11.2 Mobile — Status: Complete (Sprint 124–125, extended S143–S163)
 
 The React Native mobile app (`mobile/`) is feature-complete and production-ready for all three roles.
 
-**Doctor:** Ward rounds, patient bedside summary, vitals + trending, AI CDSS tools, differential diagnosis, drug interactions, lab interpretation, imaging text reports, medication reconciliation, escalations, messaging.
+**Doctor:**
+- Ward rounds with bedside patient detail modal (AI Summary, Herb-Drug Interaction alert, Active Alerts, Vitals + Trending, Round Note)
+- Herb-drug interaction card (S162): fires `CdssService.checkHerbDrugInteractions()` non-blocking; surfaces traditional medicine disclosure warnings with severity-based border coloring
+- CDSS AI tools: differential diagnosis, drug interactions, dose calculator, risk scores, WHO guidelines, lab interpretation
+- PACTR clinical trial eligibility badge (S163): in Specialty Actions panel, patient MRN input triggers `GET /pactr/trials/eligible`
+- Specialty Actions: Sepsis Watch, Oncology Snapshot, Blood Bank Safety, PACU Recovery, Critical Imaging, PACTR Trials
+- Voice dictation (SOAP structuring), imaging text reports, medication reconciliation, escalations, messaging
 
-**Nurse:** Shift worklist with task completion, triage queue (ESI levels), vitals entry with CDSS insights, SBAR generation, fall risk assessment, messaging.
+**Nurse:**
+- Shift worklist with task completion, triage queue (ESI levels), vitals entry with CDSS insights, SBAR generation, fall risk assessment, messaging
+- NCD Crisis capture (S143–S145): structured point-of-care forms for SCD vaso-occlusive crisis, epilepsy seizure events, and NCD complications (HTN/diabetic/CKD) with AI protocol card
 
-**Patient:** Home dashboard, appointments (book/cancel), medications + adherence, post-visit AI chat, billing + payments, health records + care gaps, telemedicine (Daily.co).
+**Patient:**
+- Home dashboard, appointments (book/cancel), medications + adherence, post-visit AI chat, telemedicine (Daily.co)
+- Multilingual AI companion (S155): 6-language locale selector (EN/SW/SN/ZU/FR/PT) — re-fetches on language switch
+- Ubuntu SDOH Wellbeing tab (S157–S159): `GET /cultural/social-determinants/:id/latest`, SDOH risk card + Ubuntu psychosocial assessment
+- NHIF/CBHI insurance coverage card (S149): gradient card showing scheme, member number, status, co-pay %, benefit balance
+- Billing + payments, health records + care gaps
 
-All 20 mobile service modules call real EHR-service endpoints. `POST /governed/json` routing hub wires all CDSS AI surfaces. Zero TypeScript errors. Zero mock data.
+All mobile service modules call real EHR-service endpoints. `POST /governed/json` routing hub wires all CDSS AI surfaces. `npx tsc --noEmit` → 0 errors. Zero mock data.
 
 **Before app store submission:** Fill EAS project ID in `mobile/app.json`, add `google-services.json` for FCM, configure signing certificates.
-
-Full mobile reference: `docs/MEDICORE_MOBILE_REFERENCE.md`
 
 ### 11.3 Release Sequencing
 

@@ -47,6 +47,11 @@ const interestOptions = [
   'Cancer and specialty modules',
   'Claims and revenue cycle',
   'Patient portal and mobile app',
+  'Sickle cell and haemoglobinopathy',
+  'Traditional medicine herb-drug alerts',
+  'NHIF/CBHI and capitation billing',
+  'PACTR clinical trial matching',
+  'Ubuntu SDOH and cultural health',
 ];
 
 const STANDARDS = [
@@ -65,7 +70,7 @@ const STANDARDS = [
 ];
 
 const stats = [
-  { value: '40+', label: 'Clinical modules', sub: 'From maternity to oncology' },
+  { value: '50+', label: 'Clinical modules', sub: 'From maternity to traditional medicine' },
   { value: 'FHIR R4', label: 'Native data model', sub: 'Structured, exportable, referrable' },
   { value: 'Real-time', label: 'CDSS alerts', sub: 'Dose checks, risk flags, protocols' },
   { value: 'DHIS2', label: 'Program reporting', sub: 'HIV, maternal, vaccine cohorts' },
@@ -129,7 +134,8 @@ const audiences = [
       'HIV program workflows with cohort and retention tracking',
       'Vaccination registers and immunization schedules',
       'DHIS2 aggregate and tracker data push',
-      'Maternal health, TB, and NCD program dashboards',
+      'Maternal health, TB, NCD, sickle cell, and epilepsy program dashboards',
+        'SORMAS + IHR Annex 2 outbreak notification and PACTR trial registry integration',
     ],
   },
   {
@@ -182,6 +188,12 @@ const aiFeatures = [
     title: 'Telemedicine + Async AI Review',
     description: 'Video consultations, secure async messaging, and AI-assisted consultation notes in a single integrated telemedicine workflow.',
     color: '#FF7A40',
+  },
+  {
+    icon: Globe,
+    title: 'SADC & Africa-Specific AI',
+    description: 'Herb-drug interaction alerts for traditional medicine disclosures, sickle cell crisis triage, PACTR clinical trial matching, Ubuntu psychosocial SDOH scoring, and IHR Annex 2 outbreak notification — built for the African clinical context.',
+    color: '#00C896',
   },
 ];
 
@@ -263,16 +275,27 @@ const modules = [
   { label: 'Infection Control', icon: Shield, color: '#00C896' },
   { label: 'Population Health', icon: BarChart3, color: '#2B7FFF' },
   { label: 'Patient App + Portal', icon: Smartphone, color: '#FF7A40' },
+  { label: 'Sickle Cell Disease', icon: Activity, color: '#FF7A40' },
+  { label: 'Epilepsy + NCD Register', icon: Zap, color: '#2B7FFF' },
+  { label: 'Traditional Medicine CDSS', icon: Sparkles, color: '#00C896' },
+  { label: 'Maternal Mortality Audit', icon: HeartPulse, color: '#FF7A40' },
+  { label: 'Ubuntu SDOH Wellbeing', icon: Users, color: '#00C896' },
+  { label: 'NHIF / CBHI Insurance', icon: Wallet, color: '#2B7FFF' },
+  { label: 'PACTR Clinical Trials', icon: FlaskConical, color: '#FF7A40' },
+  { label: 'Cross-border Continuity', icon: Globe, color: '#00C896' },
+  { label: 'NCD Complications', icon: TrendingUp, color: '#2B7FFF' },
 ];
 
 const liveActivityItems = [
   { type: 'cdss', text: 'CDSS: Sepsis risk score elevated — initiating SIRS criteria review', color: '#FF7A40' },
   { type: 'ai', text: 'PostVisit AI: Generating SNOMED-coded discharge summary...', color: '#00C896' },
-  { type: 'alert', text: 'Critical alert: Hb 5.2 g/dL — notified attending physician and nurse station', color: '#2B7FFF' },
+  { type: 'herb', text: 'Herb-drug alert: Umhlonyane + Warfarin — MAJOR interaction flagged in ward round', color: '#FF7A40' },
   { type: 'lang', text: 'Voice AI: Transcribed Setswana clinical notes → structured SOAP encounter', color: '#00C896' },
   { type: 'dhis2', text: 'DHIS2 sync: 14 ANC records pushed to national aggregate (Zambia MOH)', color: '#00C896' },
-  { type: 'fhir', text: 'FHIR R4: Patient bundle exported for cross-border referral transfer', color: '#2B7FFF' },
-  { type: 'icd', text: 'ICD-10: Auto-suggested Z34.0 for ANC first trimester visit', color: '#FF7A40' },
+  { type: 'pactr', text: 'PACTR trial match: Patient eligible for Phase II SCD hydroxyurea dose optimisation trial', color: '#2B7FFF' },
+  { type: 'fhir', text: 'FHIR R4: Patient bundle exported for cross-border SADC ART continuity transfer', color: '#2B7FFF' },
+  { type: 'scd', text: 'SCD crisis: Vaso-occlusive crisis triage initiated — hydration + analgesia protocol loaded', color: '#FF7A40' },
+  { type: 'icd', text: 'ICD-10: Auto-suggested Z34.0 for ANC first trimester visit', color: '#00C896' },
 ];
 
 export default function LandingPage() {
@@ -508,7 +531,7 @@ export default function LandingPage() {
 
                 {/* Compliance badges */}
                 <div className="mt-8 flex flex-wrap gap-2">
-                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7', '40+ languages'].map((tag) => (
+                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7', '50+ modules', '40+ languages'].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8FA8CC]"
@@ -862,11 +885,11 @@ export default function LandingPage() {
                 style={{ fontFamily: '"Fraunces", serif' }}
                 className="text-4xl font-black text-white md:text-5xl"
               >
-                40+ modules.{' '}
+                50+ modules.{' '}
                 <span className="gradient-text-teal">Zero gaps in care.</span>
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-sm text-[#7A9CC0]">
-                From emergency triage to post-visit AI, from HIV cohort tracking to revenue cycle — every clinical service line is covered.
+                From emergency triage to post-visit AI, from sickle cell disease to PACTR clinical trial matching — every clinical service line in Southern and Eastern Africa is covered.
               </p>
             </div>
 
@@ -929,7 +952,7 @@ export default function LandingPage() {
                       icon: Database,
                       color: '#FF7A40',
                       title: 'Test any module end-to-end',
-                      body: 'CDSS, PostVisit AI, maternity, diabetes, lab, radiology, HIV, oncology, DHIS2, claims, and more.',
+                      body: 'CDSS, PostVisit AI, maternity, diabetes, sickle cell, epilepsy, traditional medicine herb-drug, PACTR trials, Ubuntu SDOH, NHIF/CBHI, lab, radiology, HIV, oncology, DHIS2, claims, and more.',
                     },
                     {
                       icon: ShieldCheck,
@@ -1122,7 +1145,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[#5A7A9A]">
-                  SADC-first clinical AI platform — multilingual voice scribe (40+ languages), real-time CDSS, PostVisit AI, FHIR R4 interoperability, DHIS2 national reporting, and 40+ specialty workflows. Serving clinics across Southern, Eastern, and Western Africa.
+                  SADC-first clinical AI platform — multilingual voice scribe (40+ languages), real-time CDSS, PostVisit AI, FHIR R4 interoperability, DHIS2 national reporting, 50+ specialty workflows including sickle cell, epilepsy, traditional medicine herb-drug alerts, PACTR trial matching, Ubuntu SDOH, and NHIF/CBHI insurance. Serving clinics across Southern, Eastern, and Western Africa.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC', 'SADC'].map((s) => (
@@ -1150,7 +1173,7 @@ export default function LandingPage() {
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#4A6A8A]">Clinical Focus</p>
                 <div className="mt-3 space-y-2 text-xs text-[#6A8AAA]">
-                  {['Maternity + newborn', 'Diabetes + chronic care', 'Lab + radiology', 'HIV program workflow', 'Cancer + oncology', 'Emergency department', 'Cardiology + ophthalmology', 'Claims + billing'].map((item) => (
+                  {['Maternity + newborn', 'Diabetes + chronic care', 'Lab + radiology', 'HIV program workflow', 'Cancer + oncology', 'Emergency department', 'Sickle cell + haemoglobinopathy', 'Epilepsy + NCD register', 'Traditional medicine CDSS', 'Maternal mortality audit', 'Ubuntu SDOH wellbeing', 'NHIF / CBHI insurance', 'Claims + billing'].map((item) => (
                     <p key={item}>{item}</p>
                   ))}
                 </div>
@@ -1191,10 +1214,10 @@ export default function LandingPage() {
           <div className="border-t border-white/[0.05] px-5 py-4 lg:px-8">
             <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[11px] text-[#3A5A7A]">
-                © {currentYear} MediCore EHR. SADC-first · Built for Africa · Used globally — serving clinicians, NGOs, and MOH programs across 16 SADC nations.
+                © {currentYear} MediCore EHR. SADC-first · Built for Africa · Used globally — serving clinicians, NGOs, and MOH programs across 16 SADC nations. 50+ clinical modules.
               </p>
               <p className="text-[11px] text-[#2A4060]">
-                FHIR R4 · SNOMED CT · ICD-10 · DHIS2 · LOINC · RxNorm · HIPAA-aware · HL7 · 40+ languages
+                FHIR R4 · SNOMED CT · ICD-10 · DHIS2 · LOINC · RxNorm · HIPAA-aware · HL7 · PACTR · 40+ languages
               </p>
             </div>
           </div>

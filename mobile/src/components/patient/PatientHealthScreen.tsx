@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  FlatList, Animated, Modal, Pressable,
+  FlatList, Animated, Modal, Pressable, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,10 +13,11 @@ import { DocumentsService } from '../../services/documents';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { PatientProfileService, ApiPatientProfile, ApiCondition, ApiAllergy } from '../../services/patientProfile';
 import { CdssService } from '../../services/cdss';
+import { api } from '../../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SubTab = 'profile' | 'vitals' | 'labs' | 'services' | 'documents';
+type SubTab = 'profile' | 'vitals' | 'labs' | 'services' | 'documents' | 'wellbeing';
 
 interface VitalEntry {
   label: string;
@@ -346,6 +347,7 @@ const SubTabBar: React.FC<{ active: SubTab; onChange: (t: SubTab) => void }> = (
     { key: 'labs',      label: 'Labs'      },
     { key: 'services',  label: 'Devices'   },
     { key: 'documents', label: 'Documents' },
+    { key: 'wellbeing', label: 'Wellbeing' },
   ];
   return (
     <ScrollView
@@ -775,6 +777,175 @@ const DocumentsTab: React.FC<{ docs: MedDocument[]; loading: boolean }> = ({ doc
   </ScrollView>
 );
 
+// ── Wellbeing Tab ─────────────────────────────────────────────────────────────
+
+interface SdohAssessment {
+  sdohRiskLevel: 'HIGH' | 'MODERATE' | 'LOW' | null;
+  sdohDomains: string[];
+  ubuntuScore: number | null;
+  ubuntuRiskLevel: 'HIGH' | 'MODERATE' | 'LOW' | null;
+  recommendations: string[];
+  abstained: boolean;
+}
+
+async function fetchWellbeingAssessment(patientId: string): Promise<SdohAssessment> {
+  try {
+    const res = await api.get<any>(`/cultural/social-determinants/${patientId}/latest`);
+    const d = res.data;
+    return {
+      sdohRiskLevel:  d?.sdohRiskLevel ?? null,
+      sdohDomains:    d?.riskDomains ?? [],
+      ubuntuScore:    d?.ubuntuScore ?? null,
+      ubuntuRiskLevel: d?.ubuntuRiskLevel ?? null,
+      recommendations: d?.recommendations ?? [],
+      abstained: false,
+    };
+  } catch {
+    return { sdohRiskLevel: null, sdohDomains: [], ubuntuScore: null, ubuntuRiskLevel: null, recommendations: [], abstained: true };
+  }
+}
+
+const WELLBEING_COLOR: Record<string, string> = { HIGH: C.red, MODERATE: C.amber, LOW: C.green };
+
+const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
+  const [assessment, setAssessment] = React.useState<SdohAssessment | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!patientId) { setLoading(false); return; }
+    fetchWellbeingAssessment(patientId)
+      .then(setAssessment)
+      .finally(() => setLoading(false));
+  }, [patientId]);
+
+  const sdohColor  = assessment?.sdohRiskLevel  ? WELLBEING_COLOR[assessment.sdohRiskLevel]  : C.textMuted;
+  const ubuntuColor = assessment?.ubuntuRiskLevel ? WELLBEING_COLOR[assessment.ubuntuRiskLevel] : C.textMuted;
+
+  return (
+    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {/* Header */}
+      <LinearGradient colors={[C.purple + '30', C.teal + '18']} style={wbStyles.banner}>
+        <AiBadge text="UBUNTU HEALTH" />
+        <Text style={wbStyles.bannerTitle}>Holistic Wellbeing</Text>
+        <Text style={wbStyles.bannerSub}>
+          SDOH risk factors and Ubuntu psychosocial wellbeing assessment
+        </Text>
+      </LinearGradient>
+
+      {loading && (
+        <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+          <ActivityIndicator color={C.purple} />
+        </View>
+      )}
+
+      {!loading && assessment && !assessment.abstained && (
+        <>
+          {/* SDOH Risk */}
+          <Text style={styles.sectionTitle}>Social Determinants of Health</Text>
+          <Card style={[wbStyles.riskCard, { borderColor: sdohColor + '50' }]}>
+            <View style={wbStyles.riskHeader}>
+              <View style={[wbStyles.riskBadge, { backgroundColor: sdohColor + '18', borderColor: sdohColor + '40' }]}>
+                <Text style={[wbStyles.riskLevel, { color: sdohColor }]}>
+                  {assessment.sdohRiskLevel ?? '—'} RISK
+                </Text>
+              </View>
+              <Text style={wbStyles.riskSub}>SDOH Assessment</Text>
+            </View>
+            {assessment.sdohDomains.length > 0 && (
+              <View style={wbStyles.domainRow}>
+                {assessment.sdohDomains.map((d) => (
+                  <View key={d} style={[wbStyles.domainChip, { borderColor: sdohColor + '40' }]}>
+                    <Text style={[wbStyles.domainText, { color: sdohColor }]}>{d}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+
+          {/* Ubuntu Psychosocial */}
+          <Text style={styles.sectionTitle}>Ubuntu Psychosocial Wellbeing</Text>
+          <Card style={[wbStyles.riskCard, { borderColor: ubuntuColor + '50' }]}>
+            <View style={wbStyles.riskHeader}>
+              <View style={[wbStyles.riskBadge, { backgroundColor: ubuntuColor + '18', borderColor: ubuntuColor + '40' }]}>
+                <Text style={[wbStyles.riskLevel, { color: ubuntuColor }]}>
+                  {assessment.ubuntuRiskLevel ?? '—'} RISK
+                </Text>
+              </View>
+              {assessment.ubuntuScore !== null && (
+                <Text style={wbStyles.ubuntuScore}>Score: {assessment.ubuntuScore}/10</Text>
+              )}
+            </View>
+            <Text style={wbStyles.ubuntuSub}>
+              Social connectedness, family support, cultural identity, and community belonging
+            </Text>
+          </Card>
+
+          {/* Recommendations */}
+          {assessment.recommendations.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>Recommendations</Text>
+              <Card>
+                {assessment.recommendations.map((r, i) => (
+                  <View key={i} style={[wbStyles.recRow, i > 0 && { borderTopWidth: 1, borderTopColor: C.border }]}>
+                    <View style={wbStyles.recBullet}>
+                      <Icon name="sparkle" size={12} color={C.teal} />
+                    </View>
+                    <Text style={wbStyles.recText}>{r}</Text>
+                  </View>
+                ))}
+              </Card>
+            </>
+          )}
+        </>
+      )}
+
+      {!loading && (!assessment || assessment.abstained) && (
+        <Card style={wbStyles.noDataCard}>
+          <AiBadge text="No Assessment Yet" />
+          <Text style={wbStyles.noDataTitle}>No wellbeing assessment on file</Text>
+          <Text style={wbStyles.noDataSub}>
+            Ask your care team to complete a social determinants of health and Ubuntu wellbeing assessment at your next visit.
+          </Text>
+        </Card>
+      )}
+
+      {/* CTA */}
+      <TouchableOpacity style={wbStyles.assessBtn} activeOpacity={0.85}>
+        <Icon name="sparkle" size={16} color="#000" />
+        <Text style={wbStyles.assessBtnText}>Request Wellbeing Assessment</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+};
+
+const wbStyles = StyleSheet.create({
+  banner:       { borderRadius: RADIUS.lg, padding: 16, gap: 8, borderWidth: 1, borderColor: C.border, marginBottom: 4 },
+  bannerTitle:  { fontFamily: FONT.uiBk, fontSize: 17, color: C.text, letterSpacing: -0.2 },
+  bannerSub:    { fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, lineHeight: 18 },
+  riskCard:     { borderWidth: 1.5, gap: 10 },
+  riskHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  riskBadge:    { borderRadius: RADIUS.pill, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 5 },
+  riskLevel:    { fontFamily: FONT.uiBk, fontSize: 14, letterSpacing: 0.5 },
+  riskSub:      { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
+  domainRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  domainChip:   { borderRadius: RADIUS.pill, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
+  domainText:   { fontFamily: FONT.uiBd, fontSize: 11 },
+  ubuntuScore:  { fontFamily: FONT.mono, fontSize: 14, color: C.textPrimary },
+  ubuntuSub:    { fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, lineHeight: 18 },
+  recRow:       { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, paddingHorizontal: 4 },
+  recBullet:    { marginTop: 2 },
+  recText:      { flex: 1, fontFamily: FONT.ui, fontSize: 13, color: C.text, lineHeight: 19 },
+  noDataCard:   { alignItems: 'center', gap: 10, paddingVertical: 20 },
+  noDataTitle:  { fontFamily: FONT.uiBd, fontSize: 15, color: C.textPrimary },
+  noDataSub:    { fontFamily: FONT.ui, fontSize: 12, color: C.textMuted, textAlign: 'center', lineHeight: 18 },
+  assessBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 13, borderRadius: RADIUS.pill,
+    backgroundColor: C.teal, marginTop: 4,
+  },
+  assessBtnText: { fontFamily: FONT.uiBd, fontSize: 14, color: '#000' },
+});
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 // ─── Loading skeleton row ──────────────────────────────────────────────────────
@@ -881,6 +1052,7 @@ export const PatientHealthScreen: React.FC = () => {
         {tab === 'labs'      && <LabsTab labs={labs} loading={loading} labInterpretations={labInterpretations} />}
         {tab === 'services'  && <ServicesTab />}
         {tab === 'documents' && <DocumentsTab docs={docs} loading={loading} />}
+        {tab === 'wellbeing' && <WellbeingTab patientId={user?.patientMrn ?? user?.id ?? ''} />}
       </View>
     </View>
   );
@@ -900,9 +1072,9 @@ const styles = StyleSheet.create({
   tabBar:        { maxHeight: 44, borderBottomWidth: 1, borderBottomColor: C.border },
   tabBarContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 6, flexDirection: 'row' },
   tab:           { paddingHorizontal: 14, paddingVertical: 5, borderRadius: RADIUS.pill, backgroundColor: 'transparent' },
-  tabActive:     { backgroundColor: C.green + '22' },
+  tabActive:     { backgroundColor: C.teal + '22' },
   tabText:       { fontFamily: FONT.uiBd, fontSize: 12, color: C.textMuted, letterSpacing: 0.2 },
-  tabTextActive: { color: C.green },
+  tabTextActive: { color: C.teal },
 
   // Tab content wrapper
   tabContent: { padding: 16, paddingBottom: 32, gap: 12 },

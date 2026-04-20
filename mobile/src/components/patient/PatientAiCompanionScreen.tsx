@@ -17,6 +17,23 @@ import {
   ApiPatientCompanionTimelineItem,
 } from '../../services/patientPortal';
 
+// ─── Locale config ────────────────────────────────────────────────────────────
+
+interface LocaleOption {
+  code: string;
+  label: string;
+  flag: string;
+}
+
+const LOCALES: LocaleOption[] = [
+  { code: 'en', label: 'English',    flag: 'EN' },
+  { code: 'sw', label: 'Swahili',    flag: 'SW' },
+  { code: 'sn', label: 'Shona',      flag: 'SN' },
+  { code: 'zu', label: 'Zulu',       flag: 'ZU' },
+  { code: 'fr', label: 'Français',   flag: 'FR' },
+  { code: 'pt', label: 'Português',  flag: 'PT' },
+];
+
 const KIND_META: Record<ApiPatientCompanionTimelineItem['kind'], { icon: any; color: string; label: string }> = {
   followup: { icon: 'sparkle', color: C.teal, label: 'Follow-up' },
   telemedicine: { icon: 'telehealth', color: C.blue, label: 'Telemedicine' },
@@ -62,12 +79,13 @@ export const PatientAiCompanionScreen: React.FC<PatientAiCompanionScreenProps> =
   const [payload, setPayload] = useState<ApiPatientCompanionPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [locale, setLocale] = useState('en');
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const result = await PatientPortalService.getAiCompanion();
+      const result = await PatientPortalService.getAiCompanion(locale);
       setPayload(result);
     } catch {
       /* Keep prior state */
@@ -79,7 +97,7 @@ export const PatientAiCompanionScreen: React.FC<PatientAiCompanionScreenProps> =
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, locale]);
 
   const topAction = payload?.nextActions?.[0] || null;
 
@@ -107,6 +125,26 @@ export const PatientAiCompanionScreen: React.FC<PatientAiCompanionScreenProps> =
         subtitle="One place for your next steps"
         onBack={() => navigation?.goBack?.()}
       />
+
+      {/* Language selector */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.localeBar}
+        contentContainerStyle={styles.localeBarContent}
+      >
+        {LOCALES.map((loc) => (
+          <TouchableOpacity
+            key={loc.code}
+            style={[styles.localeChip, locale === loc.code && styles.localeChipActive]}
+            onPress={() => setLocale(loc.code)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.localeFlag, locale === loc.code && { color: C.teal }]}>{loc.flag}</Text>
+            <Text style={[styles.localeLabel, locale === loc.code && { color: C.teal }]}>{loc.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -242,6 +280,19 @@ export const PatientAiCompanionScreen: React.FC<PatientAiCompanionScreenProps> =
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   content: { padding: 16, gap: 18, paddingBottom: 40 },
+
+  // Locale bar
+  localeBar:        { maxHeight: 42, borderBottomWidth: 1, borderBottomColor: C.border },
+  localeBarContent: { paddingHorizontal: 16, paddingVertical: 6, gap: 6, flexDirection: 'row', alignItems: 'center' },
+  localeChip:       {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: RADIUS.pill, backgroundColor: C.card,
+    borderWidth: 1, borderColor: C.border,
+  },
+  localeChipActive: { backgroundColor: C.teal + '18', borderColor: C.teal + '50' },
+  localeFlag:       { fontFamily: FONT.uiBd, fontSize: 10, color: C.textMuted, letterSpacing: 0.4 },
+  localeLabel:      { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
   heroCard: { gap: 10 },
   heroHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   heroDate: { fontFamily: FONT.mono, fontSize: 10, color: C.textMuted },

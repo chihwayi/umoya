@@ -103,8 +103,8 @@ export const PatientPortalService = {
   getAiInsights: () =>
     api.get<ApiAiHealthInsight>('/patient-portal/ai-insights').then(r => r.data),
 
-  getAiCompanion: () =>
-    api.get<ApiPatientCompanionPayload>('/patient-portal/patient-ai/companion').then(r => r.data),
+  getAiCompanion: (locale = 'en') =>
+    api.get<ApiPatientCompanionPayload>(`/patient-portal/patient-ai/companion?locale=${locale}`).then(r => r.data),
 
   getCurrentAdmission: () =>
     api.get<ApiAdmission | null>('/patient-portal/current-admission').then(r => r.data),

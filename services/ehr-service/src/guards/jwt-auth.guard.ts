@@ -26,16 +26,24 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if (err || !user) {
       throw err || new UnauthorizedException('Invalid or expired token');
     }
-    
+
+    const request = context.switchToHttp().getRequest();
+
     // Check if user has temporary token and is trying to access non-password-change endpoints
-    if (user.temporary && context) {
-      const request = context.switchToHttp().getRequest();
+    if (user.temporary) {
       const allowedPaths = ['/auth/change-password', '/auth/force-password-change'];
-      
       if (!allowedPaths.some(path => request.url.includes(path))) {
         throw new UnauthorizedException('Password change required');
       }
     }
+
+    // Cross-validate: the tenant encoded in the JWT must match the tenant in the request header.
+    // Prevents a valid token issued for Clinic A from being replayed against Clinic B's database.
+    const requestTenantId = request.tenantId as string | undefined;
+    if (requestTenantId && user.tenantId && user.tenantId !== requestTenantId) {
+      throw new UnauthorizedException('Token is not valid for this tenant');
+    }
+
     return user;
   }
 }

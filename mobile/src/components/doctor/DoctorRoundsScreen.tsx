@@ -21,7 +21,9 @@ import { PatientsService, patientName, patientAge } from '../../services/patient
 import { VitalsService } from '../../services/vitals';
 import { EscalationsService } from '../../services/escalations';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { CdssService } from '../../services/cdss';
+import { CdssService, HerbDrugResult } from '../../services/cdss';
+import { PrescriptionsService } from '../../services/prescriptions';
+import { api } from '../../services/api';
 import { DoctorImagingReportScreen } from './DoctorImagingReportScreen';
 import { DoctorMedRecScreen } from './DoctorMedRecScreen';
 
@@ -65,6 +67,7 @@ interface Patient {
   postVisitPending: boolean;
   mlRisk: number | null;          // 0–1 deterioration probability from CDSS
   riskTier: string | null;        // 'Critical' | 'High' | 'Medium' | 'Low' | 'Minimal'
+  herbDrugResult: HerbDrugResult | null | 'loading';
 }
 
 // ─── API → screen type mapper ─────────────────────────────────────────────────
@@ -117,6 +120,7 @@ function mapApiToPatient(p: any, vitals: any[] = [], alerts: any[] = []): Patien
     postVisitPending: false,
     mlRisk:           null,
     riskTier:         null,
+    herbDrugResult:   null,
   };
 }
 
@@ -316,6 +320,33 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose, onOpenI
 
   const accentColor = SEVERITY_COLOR[patient.severity];
 
+  const herbBorderColor = (() => {
+    const result = patient.herbDrugResult;
+    if (result === 'loading' || !result) return C.orange;
+    const sevRank: Record<'major' | 'moderate' | 'minor', number> = { major: 3, moderate: 2, minor: 1 };
+    const max = (result.interactions ?? []).reduce<'major' | 'moderate' | 'minor' | null>((acc, it) => {
+      if (!it?.severity) return acc;
+      if (!acc) return it.severity;
+      return sevRank[it.severity] > sevRank[acc] ? it.severity : acc;
+    }, null);
+    if (max === 'major') return C.red;
+    if (max === 'moderate') return C.amber;
+    if (max === 'minor') return C.teal;
+    return C.orange;
+  })();
+
+  const herbMaxSeverity = (() => {
+    const result = patient.herbDrugResult;
+    if (result === 'loading' || !result) return null;
+    const sevRank: Record<'major' | 'moderate' | 'minor', number> = { major: 3, moderate: 2, minor: 1 };
+    const max = (result.interactions ?? []).reduce<'major' | 'moderate' | 'minor' | null>((acc, it) => {
+      if (!it?.severity) return acc;
+      if (!acc) return it.severity;
+      return sevRank[it.severity] > sevRank[acc] ? it.severity : acc;
+    }, null);
+    return max;
+  })();
+
   const handleClose = () => {
     Animated.timing(slideAnim, {
       toValue: 600,
@@ -351,6 +382,72 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose, onOpenI
             </View>
             <Text style={detailStyles.aiText}>{patient.aiSummary}</Text>
           </Card>
+
+          {/* Traditional Medicine — Herb/Drug Interactions (S162) */}
+          {(patient.herbDrugResult === 'loading' || patient.herbDrugResult) && (
+            <Card
+              accent={C.orange}
+              style={[
+                detailStyles.section,
+                {
+                  borderColor: herbBorderColor + '66',
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <Icon name="sparkle" size={16} color={C.orange} />
+                  <Text style={{ fontFamily: FONT.uiBd, fontSize: 12, color: C.textPrimary, letterSpacing: 0.6 }}>
+                    TRADITIONAL MEDICINE
+                  </Text>
+                </View>
+                <AiBadge text="HERB-DRUG CHECK" />
+              </View>
+
+              {patient.herbDrugResult === 'loading' ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                  <ActivityIndicator color={C.orange} />
+                  <Text style={{ fontFamily: FONT.ui, fontSize: 12, color: C.textMuted }}>
+                    Checking interactions…
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {herbMaxSeverity && (
+                    <View style={{ marginTop: 10, alignSelf: 'flex-start' }}>
+                      <Badge
+                        color={herbMaxSeverity === 'major' ? C.red : herbMaxSeverity === 'moderate' ? C.amber : C.teal}
+                        size="xs"
+                      >
+                        {herbMaxSeverity.toUpperCase()}
+                      </Badge>
+                    </View>
+                  )}
+
+                  {((patient.herbDrugResult as HerbDrugResult).abstained ||
+                    ((patient.herbDrugResult as HerbDrugResult).interactions ?? []).length === 0) && (
+                    <Text style={{ marginTop: 10, fontFamily: FONT.ui, fontSize: 12, color: C.textMuted }}>
+                      No herb-drug interactions identified
+                    </Text>
+                  )}
+
+                  {((patient.herbDrugResult as HerbDrugResult).interactions ?? []).map((it, idx) => (
+                    <View key={`${it.herb}-${it.drug}-${idx}`} style={{ marginTop: 10 }}>
+                      <Text style={{ fontFamily: FONT.uiSb, fontSize: 12, color: C.textPrimary }}>
+                        {it.herb} + {it.drug}{' '}
+                        <Text style={{ fontFamily: FONT.mono, fontSize: 11, color: C.textSecondary }}>
+                          · {it.severity.toUpperCase()}
+                        </Text>
+                      </Text>
+                      <Text style={{ fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, marginTop: 4 }}>
+                        {it.warning}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+            </Card>
+          )}
 
           {/* Active Alerts */}
           {patient.alerts.length > 0 && (
@@ -642,6 +739,38 @@ export const DoctorRoundsScreen: React.FC = () => {
             ));
           }
         });
+      });
+
+      // S162 — Herb/Drug interactions (Traditional medicine disclosures) — non-blocking, fire and forget
+      enriched.forEach((patient) => {
+        (async () => {
+          try {
+            // Fetch current medication names (best-effort). If unavailable, still run the herb check with [].
+            const rx = await PrescriptionsService.forPatient(patient.id);
+            const medicationNames = (rx ?? [])
+              .filter((r: any) => !r?.status || r.status === 'active' || r.status === 'dispensed')
+              .map((r: any) => String(r.drugName ?? r.genericName ?? '').trim())
+              .filter(Boolean);
+
+            // Only show the card if there is at least one disclosure (zero-noise rule).
+            const disclosuresRes = await api.get<{ disclosures: Array<{ herb: string }> }>(
+              `/cultural/social-determinants/${patient.id}/traditional-medicine-disclosures`,
+            );
+            const herbs = (disclosuresRes.data?.disclosures ?? []).map((d) => d.herb).filter(Boolean);
+            if (herbs.length === 0) return;
+
+            setPatients((prev) =>
+              prev.map((p) => (p.id === patient.id ? { ...p, herbDrugResult: 'loading' } : p)),
+            );
+
+            const res = await CdssService.checkHerbDrugInteractions(patient.id, medicationNames);
+            setPatients((prev) =>
+              prev.map((p) => (p.id === patient.id ? { ...p, herbDrugResult: res } : p)),
+            );
+          } catch {
+            // swallow — never block rounds
+          }
+        })();
       });
     } catch {
       // keep previous data on error

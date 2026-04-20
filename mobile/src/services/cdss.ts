@@ -26,6 +26,19 @@ export interface InteractionResult {
   abstained: boolean;
 }
 
+export interface HerbDrugInteraction {
+  herb: string;
+  drug: string;
+  severity: 'major' | 'moderate' | 'minor';
+  warning: string;
+}
+
+export interface HerbDrugResult {
+  interactions: HerbDrugInteraction[];
+  confidence: number;
+  abstained: boolean;
+}
+
 export interface DosingResult {
   recommendation: string;
   dose: string;
@@ -142,6 +155,22 @@ export interface MedRecResult {
   recommendations: string[];
 }
 
+export interface PactrTrial {
+  id: string;
+  title: string;
+  phase: string;
+  sponsor: string;
+  condition: string;
+  criteriaMatched: string[];
+  registryUrl?: string;
+}
+
+export interface PactrEligibilityResult {
+  trials: PactrTrial[];
+  patientId: string;
+  checkedAt: string;
+}
+
 // ─── Safe fallbacks ───────────────────────────────────────────────────────────
 
 const ABSTAINED_INTERACTION: InteractionResult = { interactions: [], confidence: 0, abstained: true };
@@ -164,6 +193,40 @@ export const CdssService = {
       return res.data ?? ABSTAINED_INTERACTION;
     } catch {
       return ABSTAINED_INTERACTION;
+    }
+  },
+
+  /**
+   * Herb-drug interaction check (traditional medicine disclosures).
+   *
+   * Flow:
+   * 1) GET /cultural/social-determinants/:patientId/traditional-medicine-disclosures
+   * 2) POST /cdss/traditional-medicine/herb-drug-interactions
+   *
+   * Returns:
+   * - HerbDrugResult if disclosures exist (even if interactions empty / abstained)
+   * - null if no disclosures or if the check fails
+   */
+  async checkHerbDrugInteractions(
+    patientId: string,
+    currentMedications: string[],
+  ): Promise<HerbDrugResult | null> {
+    try {
+      const disclosuresRes = await api.get<{
+        disclosures: Array<{ herb: string; form: string; frequency: string }>;
+      }>(`/cultural/social-determinants/${patientId}/traditional-medicine-disclosures`);
+
+      const disclosures = disclosuresRes.data?.disclosures ?? [];
+      const herbs = disclosures.map((d) => d.herb).filter(Boolean);
+      if (herbs.length === 0) return null;
+
+      const interactionsRes = await api.post<HerbDrugResult>(
+        '/cdss/traditional-medicine/herb-drug-interactions',
+        { herbs, currentMedications },
+      );
+      return interactionsRes.data ?? { interactions: [], confidence: 0, abstained: true };
+    } catch {
+      return null;
     }
   },
 
@@ -452,6 +515,28 @@ export const CdssService = {
       });
       if (res.data?.abstained) return null;
       return res.data?.result ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * PACTR trial eligibility check.
+   * GET /pactr/trials/eligible?patientId=:patientId
+   */
+  async getPactrTrialEligibility(patientId: string): Promise<PactrEligibilityResult | null> {
+    try {
+      const trimmed = patientId.trim();
+      if (!trimmed) {
+        return null;
+      }
+      const res = await api.get<PactrEligibilityResult>(
+        `/pactr/trials/eligible?patientId=${encodeURIComponent(trimmed)}`,
+      );
+      if (!res.data?.trials?.length) {
+        return null;
+      }
+      return res.data;
     } catch {
       return null;
     }

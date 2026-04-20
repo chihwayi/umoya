@@ -13,10 +13,40 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
-import { Icon, Badge, Card, ScreenHeader, SectionHeader } from '../ui';
+import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge } from '../ui';
 import { ApiBillQuote, BillingService } from '../../services/billing';
 import { PaymentsService } from '../../services/payments';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { api } from '../../services/api';
+
+// ─── NHIF / CBHI Coverage ─────────────────────────────────────────────────────
+
+interface InsuranceCoverage {
+  scheme: 'NHIF' | 'CBHI' | 'MEDICAL_AID' | null;
+  memberNumber: string;
+  memberName: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'UNKNOWN';
+  validTo: string | null;
+  copayPercent: number | null;
+  benefitBalance: number | null;
+  currency: string;
+}
+
+async function fetchInsuranceCoverage(): Promise<InsuranceCoverage | null> {
+  try {
+    const res = await api.get<InsuranceCoverage>('/patient-portal/insurance/coverage');
+    return res.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const SCHEME_COLOR: Record<string, string> = {
+  NHIF: C.teal, CBHI: C.green, MEDICAL_AID: C.blue,
+};
+const STATUS_BG: Record<string, string> = {
+  ACTIVE: C.green, INACTIVE: C.textMuted, SUSPENDED: C.red, UNKNOWN: C.textMuted,
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -499,6 +529,7 @@ export const PatientBillsScreen: React.FC = () => {
   const { user } = useAuthStore();
   const [invoices,     setInvoices]     = useState<Invoice[]>([]);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+  const [coverage,     setCoverage]     = useState<InsuranceCoverage | null>(null);
 
   useEffect(() => {
     const patientId = user?.patientMrn ?? user?.id;
@@ -506,6 +537,7 @@ export const PatientBillsScreen: React.FC = () => {
     BillingService.forCurrentPatient()
       .then(list => setInvoices((list ?? []).map(mapApiBill)))
       .catch(() => setInvoices([]));
+    fetchInsuranceCoverage().then(setCoverage).catch(() => {});
   }, [user?.id]);
 
   const dueInvoices  = invoices.filter((i) => i.status === 'due');
@@ -523,6 +555,48 @@ export const PatientBillsScreen: React.FC = () => {
       <ScreenHeader title="My Bills" subtitle="Payments & Invoices" accent={C.amber} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={mainStyles.content}>
+
+        {/* NHIF / CBHI Coverage Card */}
+        {coverage && coverage.scheme && (
+          <LinearGradient
+            colors={[(SCHEME_COLOR[coverage.scheme] ?? C.teal) + 'CC', (SCHEME_COLOR[coverage.scheme] ?? C.teal) + '55']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={insStyles.card}
+          >
+            <View style={insStyles.topRow}>
+              <View>
+                <Text style={insStyles.schemeName}>{coverage.scheme}</Text>
+                <Text style={insStyles.memberName}>{coverage.memberName}</Text>
+                <Text style={insStyles.memberNum}>Member No: {coverage.memberNumber}</Text>
+              </View>
+              <View style={[insStyles.statusPill, { backgroundColor: STATUS_BG[coverage.status] + '33', borderColor: STATUS_BG[coverage.status] + '66' }]}>
+                <Text style={[insStyles.statusText, { color: STATUS_BG[coverage.status] }]}>{coverage.status}</Text>
+              </View>
+            </View>
+            <View style={insStyles.statsRow}>
+              {coverage.copayPercent !== null && (
+                <View style={insStyles.stat}>
+                  <Text style={insStyles.statVal}>{coverage.copayPercent}%</Text>
+                  <Text style={insStyles.statLbl}>Co-pay</Text>
+                </View>
+              )}
+              {coverage.benefitBalance !== null && (
+                <View style={insStyles.stat}>
+                  <Text style={insStyles.statVal}>{coverage.currency} {coverage.benefitBalance.toFixed(0)}</Text>
+                  <Text style={insStyles.statLbl}>Benefit Balance</Text>
+                </View>
+              )}
+              {coverage.validTo && (
+                <View style={insStyles.stat}>
+                  <Text style={insStyles.statVal}>
+                    {new Date(coverage.validTo).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                  </Text>
+                  <Text style={insStyles.statLbl}>Valid Until</Text>
+                </View>
+              )}
+            </View>
+          </LinearGradient>
+        )}
 
         {/* Balance summary */}
         {totalDue > 0 && (
@@ -607,6 +681,20 @@ export const PatientBillsScreen: React.FC = () => {
     </View>
   );
 };
+
+const insStyles = StyleSheet.create({
+  card:       { borderRadius: RADIUS.lg, padding: 16, gap: 12, marginBottom: 2 },
+  topRow:     { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  schemeName: { fontFamily: FONT.uiBk, fontSize: 18, color: '#fff', letterSpacing: 1.5 },
+  memberName: { fontFamily: FONT.uiBd, fontSize: 13, color: '#ffffffcc', marginTop: 2 },
+  memberNum:  { fontFamily: FONT.mono, fontSize: 10, color: '#ffffff99', marginTop: 1 },
+  statusPill: { borderRadius: RADIUS.pill, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
+  statusText: { fontFamily: FONT.uiBd, fontSize: 10, letterSpacing: 0.5 },
+  statsRow:   { flexDirection: 'row', gap: 20 },
+  stat:       { gap: 2 },
+  statVal:    { fontFamily: FONT.mono, fontSize: 14, color: '#fff' },
+  statLbl:    { fontFamily: FONT.ui, fontSize: 10, color: '#ffffff99', textTransform: 'uppercase', letterSpacing: 0.4 },
+});
 
 const mainStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },

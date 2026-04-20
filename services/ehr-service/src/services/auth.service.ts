@@ -10,7 +10,7 @@ import { LoginDto } from '../dto/auth.dto';
 export class AuthService {
   constructor(private jwtService: JwtService) {}
 
-  async login(loginDto: LoginDto, tenantDb: DataSource, ipAddress: string, userAgent: string) {
+  async login(loginDto: LoginDto, tenantDb: DataSource, tenantId: string, ipAddress: string, userAgent: string) {
     const userRepository = tenantDb.getRepository(User);
     
     const user = await userRepository.findOne({
@@ -53,7 +53,7 @@ export class AuthService {
     if (user.mustChangePassword) {
       return {
         token: this.jwtService.sign(
-          { sub: user.id, email: user.email, role: user.role, temporary: true },
+          { sub: user.id, email: user.email, role: user.role, tenantId, temporary: true },
           { expiresIn: '15m' }
         ),
         mustChangePassword: true,
@@ -69,10 +69,11 @@ export class AuthService {
     }
 
     // Generate JWT token
-    const payload = { 
-      sub: user.id, 
-      email: user.email, 
+    const payload = {
+      sub: user.id,
+      email: user.email,
       role: user.role,
+      tenantId,
       firstName: user.firstName,
       lastName: user.lastName
     };
@@ -180,7 +181,7 @@ export class AuthService {
     await userRepository.save(user);
   }
 
-  async complete2FALogin(tempToken: string, code: string, tenantDb: DataSource) {
+  async complete2FALogin(tempToken: string, code: string, tenantDb: DataSource, tenantId: string) {
     let payload: any;
     try {
       payload = this.jwtService.verify(tempToken);
@@ -195,7 +196,7 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Invalid authenticator code');
     user.lastLogin = new Date();
     await userRepository.save(user);
-    const jwtPayload = { sub: user.id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName };
+    const jwtPayload = { sub: user.id, email: user.email, role: user.role, tenantId, firstName: user.firstName, lastName: user.lastName };
     return {
       token: this.jwtService.sign(jwtPayload),
       mustChangePassword: false,
