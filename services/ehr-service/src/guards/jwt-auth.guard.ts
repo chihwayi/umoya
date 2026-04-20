@@ -39,9 +39,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     // Cross-validate: the tenant encoded in the JWT must match the tenant in the request header.
     // Prevents a valid token issued for Clinic A from being replayed against Clinic B's database.
+    // If the request carries a tenantId (set by TenantMiddleware), the JWT MUST also carry one
+    // and it MUST match — a token with no tenantId claim is rejected for tenant-scoped requests.
     const requestTenantId = request.tenantId as string | undefined;
-    if (requestTenantId && user.tenantId && user.tenantId !== requestTenantId) {
-      throw new UnauthorizedException('Token is not valid for this tenant');
+    if (requestTenantId) {
+      if (!user.tenantId) {
+        throw new UnauthorizedException('Token does not carry a tenant claim');
+      }
+      if (user.tenantId !== requestTenantId) {
+        throw new UnauthorizedException('Token is not valid for this tenant');
+      }
     }
 
     return user;

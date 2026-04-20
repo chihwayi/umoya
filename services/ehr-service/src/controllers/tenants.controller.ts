@@ -63,12 +63,7 @@ export class TenantsController {
       };
     } catch (error) {
       console.error('Error fetching active tenants:', error);
-      // Return fallback tenant
-      return {
-        tenants: [
-          { id: '1', subdomain: 'demo-clinic', name: 'Demo Clinic' },
-        ],
-      };
+      throw error;
     }
   }
 
@@ -129,16 +124,7 @@ export class TenantsController {
         throw error;
       }
       console.error(`Error fetching tenant with subdomain ${subdomain}:`, error);
-      // Fallback for development on error
-      if (process.env.NODE_ENV === 'development' && subdomain === 'test') {
-          return {
-            id: 'test-tenant-id',
-            subdomain: 'test',
-            name: 'Test Clinic',
-            status: 'active'
-          };
-      }
-      throw new NotFoundException(`Tenant with subdomain "${subdomain}" not found`);
+      throw error;
     }
   }
 }
