@@ -33,10 +33,13 @@ interface AuthState {
   user: AuthUser | null;
   tenant: Tenant | null;
   isLoading: boolean;
+  isUnlocked: boolean;
   // Actions
   hydrate: () => Promise<void>;
   login: (jwt: string, role: UserRole, user: AuthUser) => Promise<void>;
   logout: () => Promise<void>;
+  unlock: () => void;
+  lock: () => void;
   setTenant: (tenant: Tenant) => Promise<void>;
   clearTenant: () => Promise<void>;
 }
@@ -54,6 +57,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   tenant: null,
   isLoading: true,
+  isUnlocked: false,
 
   hydrate: async () => {
     try {
@@ -90,9 +94,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       SecureStore.deleteItemAsync(KEYS.ROLE),
       SecureStore.deleteItemAsync(KEYS.USER),
     ]);
-    set({ jwt: null, role: null, user: null });
+    set({ jwt: null, role: null, user: null, isUnlocked: false });
     // Tenant is intentionally kept — patient/staff picks the same clinic again
   },
+
+  unlock: () => set({ isUnlocked: true }),
+
+  lock: () => set({ isUnlocked: false }),
 
   setTenant: async (tenant) => {
     await SecureStore.setItemAsync(KEYS.TENANT, JSON.stringify(tenant));
@@ -106,6 +114,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       SecureStore.deleteItemAsync(KEYS.ROLE),
       SecureStore.deleteItemAsync(KEYS.USER),
     ]);
-    set({ tenant: null, jwt: null, role: null, user: null });
+    set({ tenant: null, jwt: null, role: null, user: null, isUnlocked: false });
   },
 }));

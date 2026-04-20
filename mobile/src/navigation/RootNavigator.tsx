@@ -1,13 +1,16 @@
 import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuthStore } from '../stores/useAuthStore';
+import { registerPushToken, setupNotificationListeners } from '../services/pushNotifications';
 import { C } from '../design/tokens';
 import { CustomTabBar } from './TabBar';
 
 // Auth screens
 import { TenantSelectScreen } from '../components/shared/TenantSelectScreen';
 import { LoginScreen } from '../components/shared/LoginScreen';
+import { LockScreen } from '../components/shared/LockScreen';
 
 // Doctor screens — S110
 import { DoctorRoundsScreen }    from '../components/doctor/DoctorRoundsScreen';
@@ -137,7 +140,19 @@ const RoleRouter = () => {
 
 // ── Root Navigator ────────────────────────────────────────────────────────────
 export const RootNavigator = () => {
-  const { jwt, tenant, clearTenant } = useAuthStore();
+  const { jwt, tenant, isUnlocked, unlock, logout, clearTenant } = useAuthStore();
+
+  // Register push token once authenticated + unlocked
+  React.useEffect(() => {
+    if (!jwt || !isUnlocked) return;
+    registerPushToken();
+    const cleanup = setupNotificationListeners((_notification) => {
+      // Deep-link logic: navigate to the relevant screen.
+      // For now, a tap just brings the app to foreground (default behaviour).
+      // Extend here in a future sprint when deep-link routing is added.
+    });
+    return cleanup;
+  }, [jwt, isUnlocked]);
 
   // No tenant → force tenant selection
   if (!tenant) {
@@ -154,12 +169,32 @@ export const RootNavigator = () => {
   if (!jwt) {
     return (
       <LoginScreen
-        onLoggedIn={() => {/* store update triggers re-render */}}
+        onLoggedIn={unlock}
         onChangeTenant={clearTenant}
       />
     );
   }
 
-  // Authenticated → show role-based app
-  return <RoleRouter />;
+  // Authenticated → keep navigation mounted.
+  // When locked, present LockScreen as an overlay so navigation state is preserved.
+  return (
+    <View style={styles.container}>
+      <View style={isUnlocked ? styles.unlocked : styles.lockedUnderlay} pointerEvents={isUnlocked ? 'auto' : 'none'}>
+        <RoleRouter />
+      </View>
+
+      {!isUnlocked && (
+        <View style={styles.lockOverlay} pointerEvents="auto">
+          <LockScreen onUnlocked={unlock} onSignOut={logout} />
+        </View>
+      )}
+    </View>
+  );
 };
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  unlocked: { flex: 1 },
+  lockedUnderlay: { flex: 1 },
+  lockOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 9999 },
+});

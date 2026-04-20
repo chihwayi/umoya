@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { View, StyleSheet, StatusBar, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -23,7 +23,9 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { useAuthStore } from './src/stores/useAuthStore';
 import { buildApiClient } from './src/services/api';
 import { C, FONT } from './src/design/tokens';
-import { useAppPrivacyState, useInactivityLock, audit, suspectCompromisedEnvironment } from './src/utils/security';
+import { useAppPrivacyState, audit, suspectCompromisedEnvironment } from './src/utils/security';
+import { useSessionLock } from './src/hooks/useSessionLock';
+import { ActivityTracker } from './src/components/shared/ActivityTracker';
 
 // Keep splash visible until fonts + auth are ready
 SplashScreen.preventAutoHideAsync();
@@ -43,8 +45,9 @@ const NAVIGATION_THEME = {
 };
 
 export default function App() {
-  const { hydrate, tenant, isLoading, clearTenant } = useAuthStore();
+  const { hydrate, tenant, isLoading } = useAuthStore();
   const { isPrivate } = useAppPrivacyState();
+  const { resetInactivityTimer } = useSessionLock();
 
   const [fontsLoaded] = useFonts({
     Sora_400Regular,
@@ -56,12 +59,7 @@ export default function App() {
     JetBrainsMono_700Bold,
   });
 
-  // Lock session after 5 min of inactivity — force re-login
-  const handleInactivityLock = useCallback(() => {
-    audit('SESSION_LOCK', { detail: 'inactivity_timeout_5min' });
-    clearTenant(); // returns to TenantSelect / Login flow
-  }, [clearTenant]);
-  useInactivityLock(handleInactivityLock);
+  // Note: Sprint 166 handles inactivity/background auto-lock via `useSessionLock`
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(C.bg);
@@ -95,9 +93,11 @@ export default function App() {
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-        <NavigationContainer theme={NAVIGATION_THEME}>
-          <RootNavigator />
-        </NavigationContainer>
+        <ActivityTracker onActivity={resetInactivityTimer}>
+          <NavigationContainer theme={NAVIGATION_THEME}>
+            <RootNavigator />
+          </NavigationContainer>
+        </ActivityTracker>
 
         {/* HIPAA screen privacy overlay — covers app-switcher snapshot & screen record */}
         {isPrivate && (
