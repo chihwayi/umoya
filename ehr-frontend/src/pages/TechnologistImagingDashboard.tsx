@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Activity, Camera, CalendarDays, BookOpen, X, Settings, LayoutDashboard, Brain } from 'lucide-react';
-import { cdssApi } from '../services/api';
+import { cdssApi, ehrApi } from '../services/api';
 import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import TechnologistImagingWorklist from '../components/TechnologistImagingWorklist';
 import AdminNavigationShell from '../components/AdminNavigationShell';
@@ -9,6 +9,7 @@ import AdminNavigationShell from '../components/AdminNavigationShell';
 const TechnologistImagingDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [currentUser, setCurrentUser] = React.useState<any | null>(null);
+  const [draftPostVisitCount, setDraftPostVisitCount] = React.useState(0);
 
   // AI Protocol Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -26,6 +27,33 @@ const TechnologistImagingDashboard: React.FC = () => {
 
   const token = React.useMemo(() => localStorage.getItem('ehr_token') || '', []);
 
+  React.useEffect(() => {
+    if (!tenantSlug || !token) return undefined;
+
+    let cancelled = false;
+    const loadDraftSessions = async () => {
+      try {
+        const response = await ehrApi.listPostVisitSessions(token, tenantSlug, {
+          status: 'draft_ready',
+          limit: 5,
+        });
+        if (!cancelled) {
+          const data = response.data;
+          setDraftPostVisitCount(data?.total ?? data?.sessions?.length ?? 0);
+        }
+      } catch {
+        if (!cancelled) setDraftPostVisitCount(0);
+      }
+    };
+
+    loadDraftSessions();
+    const timer = setInterval(loadDraftSessions, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [tenantSlug, token]);
+
   if (!tenantSlug) {
     return null;
   }
@@ -40,7 +68,15 @@ const TechnologistImagingDashboard: React.FC = () => {
       headerTone="imaging"
       navigationItems={[
         { key: 'dashboard', label: 'Dashboard', path: `${tenantBasePath}/dashboard`, icon: LayoutDashboard, exact: true },
-        { key: 'imaging-tech', label: 'Imaging Queue', path: `${tenantBasePath}/technologist/imaging`, icon: Camera, exact: true },
+        { key: 'imaging-tech', label: 'Imaging Queue', path: `${tenantBasePath}/technologist/imaging`, icon: Camera, exact: true, moduleKey: 'radiology' },
+        {
+          key: 'post-visit-reviews',
+          label: `Post-Visit Reviews${draftPostVisitCount ? ` (${draftPostVisitCount})` : ''}`,
+          path: `${tenantBasePath}/post-visit/doctor`,
+          icon: BookOpen,
+          exact: false,
+          moduleKey: 'patient_portal',
+        },
         { key: 'settings', label: 'Profile Settings', path: `${tenantBasePath}/settings`, icon: Settings, exact: true },
       ]}
     >

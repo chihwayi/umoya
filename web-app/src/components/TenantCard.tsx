@@ -72,6 +72,9 @@ export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, 
                   <span className="rounded-full px-2 py-0.5 text-[10px] font-bold capitalize" style={{ background: tc.color + '15', color: tc.color, border: `1px solid ${tc.color}30` }}>
                     {tenant.subscriptionTier}
                   </span>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold capitalize bg-white/[0.08] text-[#8FA8CC] border border-white/[0.1]">
+                    {tenant.deploymentMode ?? 'clinic'}
+                  </span>
                   <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: sc.color + '12', color: sc.color, border: `1px solid ${sc.color}25` }}>
                     {sc.label}
                   </span>

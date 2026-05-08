@@ -14,6 +14,9 @@ import {
   TenantSubscriptionPaymentProvider,
   DemoAccessRequest,
   DemoAccessRequestStatus,
+  MigrationDryRunResult,
+  MigrationImportResult,
+  MigrationJob,
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
@@ -148,6 +151,11 @@ export const tenantAPI = {
 
   getTenantById: async (id: string): Promise<Tenant> => {
     const response = await api.get(`/tenants/${id}`);
+    return response.data;
+  },
+
+  getRolloutReadiness: async () => {
+    const response = await api.get('/rollout/tenants');
     return response.data;
   },
 
@@ -290,6 +298,41 @@ export const tenantAPI = {
 
   repairAllTenants: async (): Promise<{ message: string; count: number }> => {
     const response = await api.post('/admin/tenants/repair-all');
+    return response.data;
+  },
+};
+
+export const migrationAPI = {
+  uploadMigrationFile: async (tenantId: string, file: File): Promise<MigrationJob> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/migration/patients/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'X-Tenant-ID': tenantId,
+      },
+    });
+    return response.data;
+  },
+
+  getMigrationJob: async (tenantId: string, jobId: string): Promise<MigrationJob> => {
+    const response = await api.get(`/migration/patients/jobs/${jobId}`, {
+      headers: { 'X-Tenant-ID': tenantId },
+    });
+    return response.data;
+  },
+
+  runDryRun: async (tenantId: string, jobId: string): Promise<MigrationDryRunResult> => {
+    const response = await api.post(`/migration/patients/jobs/${jobId}/dry-run`, {}, {
+      headers: { 'X-Tenant-ID': tenantId },
+    });
+    return response.data;
+  },
+
+  importMigration: async (tenantId: string, jobId: string): Promise<MigrationImportResult> => {
+    const response = await api.post(`/migration/patients/jobs/${jobId}/import`, { confirm: true }, {
+      headers: { 'X-Tenant-ID': tenantId },
+    });
     return response.data;
   },
 };

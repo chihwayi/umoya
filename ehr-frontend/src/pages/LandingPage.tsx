@@ -53,6 +53,10 @@ const interestOptions = [
   'NHIF/CBHI and capitation billing',
   'PACTR clinical trial matching',
   'Ubuntu SDOH and cultural health',
+  'Subscription & SaaS billing enforcement',
+  'Deployment mode gating (clinic / hospital / ministry)',
+  'CRVS civil registration & birth/death reporting',
+  'Multi-language mobile (8 African languages)',
 ];
 
 const STANDARDS = [
@@ -73,7 +77,7 @@ const STANDARDS = [
 const stats = [
   { value: '50+', label: 'Clinical modules', sub: 'From maternity to traditional medicine' },
   { value: 'FHIR R4', label: 'Native data model', sub: 'Structured, exportable, referrable' },
-  { value: 'Real-time', label: 'CDSS alerts', sub: 'Dose checks, risk flags, protocols' },
+  { value: '8 langs', label: 'Mobile languages', sub: 'Auto-detected from device locale' },
   { value: 'DHIS2', label: 'Program reporting', sub: 'HIV, maternal, vaccine cohorts' },
 ];
 
@@ -98,6 +102,8 @@ const audiences = [
     headline: 'One platform. Every revenue line. Zero gaps.',
     points: [
       'Claims, medical-aid, and billing in the same system',
+      'SaaS billing enforcer — demo trials auto-expire, grace periods auto-suspend, payments extend access in one API call',
+      'Deployment mode gating — clinic, hospital, or ministry tier hides irrelevant modules automatically',
       'Multi-tenant architecture — isolate each facility',
       'Lab, radiology, pharmacy, and nursing all connected',
       'Patient portal for post-visit engagement and retention',
@@ -139,6 +145,8 @@ const audiences = [
       'DHIS2 aggregate and tracker data push',
       'Maternal health, TB, NCD, sickle cell, and epilepsy program dashboards',
       'SORMAS + IHR Annex 2 outbreak notification and PACTR trial registry integration',
+      'CRVS integration — birth and death events auto-reported to national civil registries',
+      'Mobile app in 8 languages (en, fr, pt, sw, sn, zu, nd, af) — locale auto-detected from device',
       'Offline point-of-care mobile — works on 2G/3G and without Wi-Fi in remote facilities',
     ],
   },
@@ -150,6 +158,8 @@ const audiences = [
     points: [
       'FHIR R4 REST API with full resource coverage',
       'HL7 v2/v3 and CDA R2 for legacy system bridges',
+      'CRVS transport — birth and death events posted to national civil registries via HTTP or webhook',
+      'Referral transport — facility-to-facility referrals via webhook with nodemailer email fallback',
       'Webhook-based event streaming for external systems',
       'Multi-tenant provisioning with per-tenant DB isolation',
     ],
@@ -288,6 +298,10 @@ const modules = [
   { label: 'PACTR Clinical Trials', icon: FlaskConical, color: '#FF7A40' },
   { label: 'Cross-border Continuity', icon: Globe, color: '#00C896' },
   { label: 'NCD Complications', icon: TrendingUp, color: '#2B7FFF' },
+  { label: 'SaaS Billing Enforcer', icon: Wallet, color: '#00C896' },
+  { label: 'Deployment Mode Gating', icon: Lock, color: '#2B7FFF' },
+  { label: 'CRVS Civil Registration', icon: FileText, color: '#FF7A40' },
+  { label: 'Multilingual Mobile (8 langs)', icon: Globe, color: '#00C896' },
 ];
 
 const liveActivityItems = [
@@ -300,6 +314,10 @@ const liveActivityItems = [
   { type: 'fhir', text: 'FHIR R4: Patient bundle exported for cross-border SADC ART continuity transfer', color: '#2B7FFF' },
   { type: 'scd', text: 'SCD crisis: Vaso-occlusive crisis triage initiated — hydration + analgesia protocol loaded', color: '#FF7A40' },
   { type: 'icd', text: 'ICD-10: Auto-suggested Z34.0 for ANC first trimester visit', color: '#00C896' },
+  { type: 'billing', text: 'Billing enforcer: Demo tenant expired → suspended after 14-day trial period', color: '#FF7A40' },
+  { type: 'gating', text: 'Module gating: OR and Blood Bank routes hidden for clinic-mode tenant (Lusaka Primary)', color: '#2B7FFF' },
+  { type: 'crvs', text: 'CRVS: Birth notification sent to Zimbabwe Civil Registry for patient ID NR-2026-00441', color: '#00C896' },
+  { type: 'i18n', text: 'Mobile i18n: Device locale "sw-TZ" detected → app language switched to Swahili', color: '#2B7FFF' },
 ];
 
 export default function LandingPage() {
@@ -499,7 +517,7 @@ export default function LandingPage() {
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00C896] opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00C896]" />
                   </span>
-                  SADC-first · Built for Africa · Used globally
+                  SADC-first · Built for Africa · SaaS-ready · 8 Languages
                 </div>
 
                 <h1
@@ -513,7 +531,7 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="mt-6 max-w-2xl text-[1.05rem] leading-[1.85] text-[#8FAACA]">
-                  MediCore is an AI-first clinical platform built for SADC, Africa, and beyond. Real-time CDSS, PostVisit AI, multilingual voice support (40+ languages), FHIR R4 interoperability, DHIS2 program reporting, and 40+ specialty workflows — designed for clinicians across Johannesburg, Nairobi, Lusaka, Gaborone, Maputo, and wherever care happens.
+                  MediCore is an AI-first clinical platform built for SADC, Africa, and beyond. Real-time CDSS, PostVisit AI, FHIR R4 interoperability, DHIS2 program reporting, SaaS billing enforcement, deployment mode gating (clinic / hospital / ministry), CRVS civil registration, and a multilingual mobile app in 8 African languages — designed for clinicians across Johannesburg, Nairobi, Lusaka, Gaborone, Maputo, and wherever care happens.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -535,7 +553,7 @@ export default function LandingPage() {
 
                 {/* Compliance badges */}
                 <div className="mt-8 flex flex-wrap gap-2">
-                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7', '50+ modules', '40+ languages'].map((tag) => (
+                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7', '50+ modules', '8 languages', 'SaaS billing', 'CRVS'].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8FA8CC]"
@@ -1149,7 +1167,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[#5A7A9A]">
-                  SADC-first clinical AI platform — multilingual voice scribe (40+ languages), real-time CDSS, PostVisit AI, FHIR R4 interoperability, DHIS2 national reporting, 50+ specialty workflows including sickle cell, epilepsy, traditional medicine herb-drug alerts, PACTR trial matching, Ubuntu SDOH, and NHIF/CBHI insurance. Serving clinics across Southern, Eastern, and Western Africa.
+                  SADC-first clinical AI platform — multilingual mobile in 8 African languages, real-time CDSS, PostVisit AI, SaaS billing enforcement, deployment mode gating (clinic / hospital / ministry), CRVS civil registration, FHIR R4 interoperability, DHIS2 national reporting, 50+ specialty workflows including sickle cell, epilepsy, traditional medicine herb-drug alerts, PACTR trial matching, Ubuntu SDOH, and NHIF/CBHI insurance. Serving clinics across Southern, Eastern, and Western Africa.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC', 'SADC'].map((s) => (
@@ -1167,7 +1185,7 @@ export default function LandingPage() {
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#4A6A8A]">Platform</p>
                 <div className="mt-3 space-y-2 text-xs text-[#6A8AAA]">
-                  {['CDSS + AI guidance', 'PostVisit AI', 'FHIR R4 data model', 'DHIS2 integration', 'SNOMED CT charting', 'Real-time alerts', 'Telemedicine + video', 'Patient portal'].map((item) => (
+                  {['CDSS + AI guidance', 'PostVisit AI', 'SaaS billing enforcer', 'Deployment mode gating', 'CRVS civil registration', 'Multilingual mobile (8 langs)', 'FHIR R4 data model', 'DHIS2 integration', 'SNOMED CT charting', 'Real-time alerts', 'Telemedicine + video', 'Patient portal'].map((item) => (
                     <p key={item}>{item}</p>
                   ))}
                 </div>

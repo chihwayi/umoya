@@ -618,8 +618,13 @@ const chatStyles = StyleSheet.create({
 
 type PVTab = 'summary' | 'chat';
 
-export const PatientPostVisitScreen: React.FC = () => {
+interface PatientPostVisitScreenProps {
+  route?: { params?: { sessionId?: string } };
+}
+
+export const PatientPostVisitScreen: React.FC<PatientPostVisitScreenProps> = ({ route }) => {
   const insets  = useSafeAreaInsets();
+  const routeSessionId = route?.params?.sessionId;
   const [visits,       setVisits]       = useState<VisitNote[]>([]);
   const [selectedNote, setSelectedNote] = useState<VisitNote | null>(null);
   const [activeTab,    setActiveTab]    = useState<PVTab>('summary');
@@ -639,13 +644,13 @@ export const PatientPostVisitScreen: React.FC = () => {
           }),
         );
         setVisits(mapped);
-        setSelectedNote(mapped[0] ?? null);
+        setSelectedNote(mapped.find((note) => note.id === routeSessionId) ?? mapped[0] ?? null);
       })
       .catch(() => {
         setVisits([]);
         setSelectedNote(null);
       });
-  }, []);
+  }, [routeSessionId]);
 
   const handleAskAbout = (q: string) => {
     setChatQuestion(q);

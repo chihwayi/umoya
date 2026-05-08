@@ -1,0 +1,128 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "logout": "Log out",
+    "search": "Search",
+    "noResults": "No results"
+  },
+  "nav": {
+    "home": "Home",
+    "appointments": "Appointments",
+    "health": "My Health",
+    "meds": "Medications",
+    "bills": "Bills",
+    "messages": "Messages",
+    "education": "Learn",
+    "notifications": "Notifications",
+    "shift": "My Shift",
+    "vitals": "Vitals",
+    "rounds": "Rounds",
+    "patients": "Patients",
+    "ai": "AI Assistant"
+  },
+  "patient": {
+    "name": "Full Name",
+    "dob": "Date of Birth",
+    "sex": "Sex",
+    "phone": "Phone Number",
+    "id_number": "ID Number",
+    "blood_group": "Blood Group",
+    "age": "Age",
+    "next_of_kin": "Next of Kin"
+  },
+  "clinical": {
+    "vitals": "Vital Signs",
+    "weight": "Weight (kg)",
+    "height": "Height (cm)",
+    "bp": "Blood Pressure",
+    "temp": "Temperature (°C)",
+    "pulse": "Pulse (bpm)",
+    "spo2": "SpO₂ (%)",
+    "diagnosis": "Diagnosis",
+    "prescription": "Prescription",
+    "chief_complaint": "Chief Complaint",
+    "plan": "Management Plan",
+    "referral": "Referral"
+  },
+  "billing": {
+    "invoice": "Invoice",
+    "payment": "Payment",
+    "receipt": "Receipt",
+    "outstanding": "Outstanding Balance",
+    "paid": "Paid"
+  },
+  "auth": {
+    "login": "Sign In",
+    "email": "Email",
+    "password": "Password",
+    "biometric": "Use Biometrics",
+    "sessionExpired": "Session expired. Please sign in again."
+  },
+  "postVisit": {
+    "visitSummary": "Visit Summary",
+    "status": "Status",
+    "subjective": "What You Reported",
+    "assessment": "Assessment",
+    "plan": "Your Care Plan",
+    "notFound": "Visit summary not available yet."
+  },
+  "meds": {
+    "requestRefill": "Request Refill",
+    "refillPending": "Refill Pending",
+    "refillApproved": "Refill Approved",
+    "refillCancelled": "Refill request cancelled",
+    "refillRequested": "Refill request submitted",
+    "refillSoon": "Refill Soon",
+    "refillDays": "Refill in",
+    "days": "days"
+  },
+  "adherence": {
+    "markTaken": "Mark as Taken",
+    "taken": "Taken",
+    "missed": "Missed",
+    "upcoming": "Upcoming",
+    "thisWeek": "This Week",
+    "markFailed": "Could not log dose. Please try again.",
+    "summary": "Adherence Summary"
+  },
+  "education": {
+    "title": "Health Education",
+    "subtitle": "Learn about your health",
+    "all": "All",
+    "minRead": "min read",
+    "by": "By"
+  },
+  "family": {
+    "title": "Family Access",
+    "subtitle": "Manage who can view your records",
+    "addCaregiver": "Add Caregiver / Guardian",
+    "activeGrants": "Active Access Grants",
+    "noGrants": "No caregivers have access to your records",
+    "infoText": "Caregivers you add here can view parts of your health record. You can revoke access at any time.",
+    "viewOnly": "View Only",
+    "fullAccess": "Full Access",
+    "emergencyOnly": "Emergency Only",
+    "expires": "Expires",
+    "noExpiry": "No expiry",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke Access",
+    "revokeConfirm": "Remove {{name}} from your caregivers? They will no longer be able to see your records.",
+    "grantAccess": "Grant Access",
+    "requiredFields": "Name and email are required",
+    "fieldName": "Caregiver Name",
+    "fieldNamePlaceholder": "Full name",
+    "fieldEmail": "Email Address",
+    "fieldPhone": "Phone (optional)",
+    "fieldRelationship": "Relationship (optional)",
+    "fieldRelationshipPlaceholder": "e.g. Spouse, Parent, Child",
+    "fieldAccessLevel": "Access Level",
+    "fieldExpiry": "Access Expires On (optional)"
+  }
+}

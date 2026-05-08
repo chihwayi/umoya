@@ -209,5 +209,5 @@ npm run report:soc2-hipaa
 
 | Document | Contents |
 |---|---|
-| [docs/MEDICORE_REFERENCE.md](./docs/MEDICORE_REFERENCE.md) | Architecture, tech stack, AI governance, CDSS endpoint registry (167 sprints), HIPAA rules, interoperability, sprint history |
+| [docs/rollout/README.md](./docs/rollout/README.md) | Architecture rules, DB provisioning patterns, agent constraints, completed sprint index (S01–S16) |
 | [.env.example](./.env.example) | All required environment variables |

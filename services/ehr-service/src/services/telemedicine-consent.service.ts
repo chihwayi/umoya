@@ -64,7 +64,7 @@ export class TelemedicineConsentService {
   async checkConsent(
     tenantDb: DataSource,
     patientId: string,
-    consentType: string,
+    consentType = 'general_telehealth',
   ): Promise<boolean> {
     this.ensureTenantDb(tenantDb);
 
@@ -163,4 +163,3 @@ export class TelemedicineConsentService {
     };
   }
 }
-

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, Dot } from '../ui';
 import { EscalateModal } from './NurseShiftScreen';
@@ -34,6 +35,8 @@ interface VitalField {
   warnLow?:      number;
   warnHigh?:     number;
   subLabel?: string;
+  labelKey?: string;
+  subLabelKey?: string;
 }
 
 type AiFlag = {
@@ -51,11 +54,11 @@ interface AiInterpretation {
 // ─── Vital field definitions ──────────────────────────────────────────────────
 
 const VITAL_FIELDS: VitalField[] = [
-  { key: 'sbp',   label: 'Systolic BP',  unit: 'mmHg', hint: '120',  keyboard: 'numeric',      warnLow: 90,  warnHigh: 140, criticalLow: 80,  criticalHigh: 180, subLabel: 'Blood Pressure' },
+  { key: 'sbp',   label: 'Systolic BP',  unit: 'mmHg', hint: '120',  keyboard: 'numeric',      warnLow: 90,  warnHigh: 140, criticalLow: 80,  criticalHigh: 180, subLabel: 'Blood Pressure', subLabelKey: 'clinical.bp' },
   { key: 'dbp',   label: 'Diastolic BP', unit: 'mmHg', hint: '80',   keyboard: 'numeric',      warnLow: 60,  warnHigh: 90,  criticalLow: 50,  criticalHigh: 120 },
-  { key: 'hr',    label: 'Heart Rate',   unit: 'bpm',  hint: '72',   keyboard: 'numeric',      warnLow: 50,  warnHigh: 100, criticalLow: 40,  criticalHigh: 130 },
-  { key: 'temp',  label: 'Temperature',  unit: '°C',   hint: '36.6', keyboard: 'decimal-pad',  warnLow: 36,  warnHigh: 37.5, criticalLow: 35, criticalHigh: 39.5 },
-  { key: 'spo2',  label: 'SpO₂',         unit: '%',    hint: '98',   keyboard: 'numeric',      warnLow: 94,  criticalLow: 90 },
+  { key: 'hr',    label: 'Heart Rate',   unit: 'bpm',  hint: '72',   keyboard: 'numeric',      warnLow: 50,  warnHigh: 100, criticalLow: 40,  criticalHigh: 130, labelKey: 'clinical.pulse' },
+  { key: 'temp',  label: 'Temperature',  unit: '°C',   hint: '36.6', keyboard: 'decimal-pad',  warnLow: 36,  warnHigh: 37.5, criticalLow: 35, criticalHigh: 39.5, labelKey: 'clinical.temp' },
+  { key: 'spo2',  label: 'SpO₂',         unit: '%',    hint: '98',   keyboard: 'numeric',      warnLow: 94,  criticalLow: 90, labelKey: 'clinical.spo2' },
   { key: 'rr',    label: 'Resp. Rate',   unit: '/min', hint: '16',   keyboard: 'numeric',      warnLow: 10,  warnHigh: 20,  criticalLow: 8,   criticalHigh: 30 },
   { key: 'pain',  label: 'Pain Score',   unit: '/10',  hint: '0',    keyboard: 'numeric',      warnHigh: 6,  criticalHigh: 9 },
   { key: 'bgl',   label: 'Blood Glucose',unit: 'mmol/L',hint: '',    keyboard: 'decimal-pad',  warnLow: 4,   warnHigh: 11,  criticalLow: 2.8, criticalHigh: 20 },
@@ -133,6 +136,7 @@ interface VitalCellProps {
 }
 
 const VitalCell: React.FC<VitalCellProps> = ({ field, value, onChange }) => {
+  const { t } = useTranslation();
   const status = getValueStatus(field, value);
   const color  = STATUS_COLOR[status];
   const isFilled = value.length > 0;
@@ -140,7 +144,7 @@ const VitalCell: React.FC<VitalCellProps> = ({ field, value, onChange }) => {
   return (
     <View style={[cellStyles.cell, isFilled && { borderColor: color + '60' }]}>
       {field.subLabel && (
-        <Text style={cellStyles.subLabel}>{field.subLabel}</Text>
+        <Text style={cellStyles.subLabel}>{field.subLabelKey ? t(field.subLabelKey) : field.subLabel}</Text>
       )}
       <View style={cellStyles.inputRow}>
         <TextInput
@@ -155,7 +159,7 @@ const VitalCell: React.FC<VitalCellProps> = ({ field, value, onChange }) => {
         />
         <Text style={[cellStyles.unit, isFilled && { color: color + 'CC' }]}>{field.unit}</Text>
       </View>
-      <Text style={cellStyles.label}>{field.label}</Text>
+      <Text style={cellStyles.label}>{field.labelKey ? t(field.labelKey) : field.label}</Text>
       {status === 'critical' && (
         <View style={cellStyles.criticalDot}>
           <Dot color={C.red} size={6} pulse />
@@ -203,6 +207,7 @@ const cellStyles = StyleSheet.create({
 
 export const NurseVitalsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [patientSearch,   setPatientSearch]   = useState('');
   const [recentPatients,  setRecentPatients]  = useState<RecentPatient[]>([]);
@@ -482,7 +487,7 @@ export const NurseVitalsScreen: React.FC = () => {
                 <Text style={[styles.saveBtnText, saved && { color: C.green }]}>
                   {saved
                     ? `Vitals saved for ${selectedPatient?.name.split(' ')[0]}`
-                    : 'Save Vitals'}
+                    : t('common.save')}
                 </Text>
               </>
           }

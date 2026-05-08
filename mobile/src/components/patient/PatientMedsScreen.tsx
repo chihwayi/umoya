@@ -14,9 +14,10 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge } from '../ui';
-import { PrescriptionsService } from '../../services/prescriptions';
+import { PrescriptionsService, AdherenceSummary, AdherenceLogEntry } from '../../services/prescriptions';
 import { PatientPortalService, ApiImmunization, ApiImmunizationForecast } from '../../services/patientPortal';
 import { useAuthStore } from '../../stores/useAuthStore';
 
@@ -38,6 +39,7 @@ interface Medication {
   prescribedBy: string;
   prescribedDate: string;
   refillDaysLeft: number;
+  pendingRefillId?: string;
   mechanism: string;
   warnings: string[];
 }
@@ -46,10 +48,41 @@ interface Medication {
 
 const MED_COLORS = [C.teal, C.blue, C.purple, C.amber, C.red, C.green];
 
-function mapApiPrescription(p: any, idx: number): Medication {
-  const adherence: AdherenceDay[] = Array.from({ length: 7 }, (_, i) =>
-    i < 6 ? 'taken' : 'future'
-  );
+function getAdherencePct(days: AdherenceDay[], fallback: number): number {
+  const loggedDays = days.filter(day => day !== 'future');
+  if (loggedDays.length === 0) return fallback;
+  return Math.round((loggedDays.filter(day => day === 'taken').length / loggedDays.length) * 100);
+}
+
+function mapApiPrescription(
+  p: any,
+  idx: number,
+  summaryMap: Map<string, AdherenceSummary>,
+  logsMap: Map<string, AdherenceLogEntry[]>
+): Medication {
+  const summary = summaryMap.get(p.id);
+  const logs = logsMap.get(p.id) ?? [];
+
+  // Build a 7-day adherence array from logs
+  const today = new Date();
+  const adherence: AdherenceDay[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i)); // Mon to Sun relative to today
+    const isFuture = d > today;
+    if (isFuture) return 'future';
+    const dateStr = d.toISOString().split('T')[0];
+    const log = logs.find(l => l.scheduledTime.startsWith(dateStr));
+    if (!log) return 'future'; // no scheduled dose that day
+    return log.taken ? 'taken' : 'missed';
+  });
+
+  // Check if taken today
+  const todayStr = today.toISOString().split('T')[0];
+  const takenToday = logs.some(l => l.scheduledTime.startsWith(todayStr) && l.taken);
+
+  // Estimate days left from API quantity/refills or fallback
+  const refillDaysLeft = p.daysSupplyRemaining ?? p.quantity ?? 30;
+
   return {
     id:             p.id,
     name:           p.drugName ?? p.genericName ?? 'Medication',
@@ -57,15 +90,16 @@ function mapApiPrescription(p: any, idx: number): Medication {
     schedule:       p.frequency ?? 'As prescribed',
     time:           '08:00',
     color:          MED_COLORS[idx % MED_COLORS.length],
-    takenToday:     false,
+    takenToday,
     adherence,
-    adherencePct:   83,
+    adherencePct:   summary ? Math.round(summary.adherenceRate) : 0,
     note:           p.instructions ?? '',
-    prescribedBy:   p.prescribedBy ?? 'Your doctor',
+    prescribedBy:   p.prescribedBy
+      ?? ([p.prescriber?.firstName, p.prescriber?.lastName].filter(Boolean).join(' ') || 'Your doctor'),
     prescribedDate: p.prescribedDate
       ? new Date(p.prescribedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       : '—',
-    refillDaysLeft: 30,
+    refillDaysLeft,
     mechanism:      '',
     warnings:       p.contraindications ?? p.sideEffects ?? [],
   };
@@ -110,15 +144,20 @@ interface MedDetailProps {
   med: Medication | null;
   onClose: () => void;
   onAskAI: (name: string) => void;
+  onRefillRequested: (prescriptionId: string, requestId: string) => void;
+  onRefillCancelled: (prescriptionId: string) => void;
 }
 
-const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI }) => {
+const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRefillRequested, onRefillCancelled }) => {
   const slideAnim  = useRef(new Animated.Value(600)).current;
   const insets     = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [downloading, setDownloading] = useState(false);
   const [emailModal,  setEmailModal]  = useState(false);
   const [emailInput,  setEmailInput]  = useState('');
   const [sending,     setSending]     = useState(false);
+  const [requestingRefill, setRequestingRefill] = useState(false);
+  const [cancellingRefill, setCancellingRefill] = useState(false);
 
   React.useEffect(() => {
     if (med) {
@@ -196,11 +235,63 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI }) => 
           {/* Refill */}
           <Card style={sheetStyles.section}>
             <View style={sheetStyles.refillRow}>
-              <Text style={sheetStyles.refillLabel}>Refill in</Text>
+              <Text style={sheetStyles.refillLabel}>{t('meds.refillDays')}</Text>
               <Text style={[sheetStyles.refillDays, { color: med.refillDaysLeft < 7 ? C.amber : C.teal }]}>
-                {med.refillDaysLeft} days
+                {med.refillDaysLeft} {t('meds.days')}
               </Text>
             </View>
+
+            {med.pendingRefillId ? (
+              <View style={sheetStyles.refillPendingRow}>
+                <Badge color={C.amber} size="sm">{t('meds.refillPending')}</Badge>
+                <TouchableOpacity
+                  style={sheetStyles.refillCancelBtn}
+                  onPress={async () => {
+                    setCancellingRefill(true);
+                    try {
+                      await PrescriptionsService.cancelRefillRequest(med.pendingRefillId!);
+                      onRefillCancelled(med.id);
+                      Alert.alert(t('meds.refillCancelled'));
+                    } catch {
+                      Alert.alert(t('common.error'));
+                    } finally {
+                      setCancellingRefill(false);
+                    }
+                  }}
+                  disabled={cancellingRefill}
+                  activeOpacity={0.8}
+                >
+                  <Text style={sheetStyles.refillCancelText}>
+                    {cancellingRefill ? t('common.loading') : t('common.cancel')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[sheetStyles.refillBtn, { borderColor: C.teal + '50', backgroundColor: C.teal + '15' }]}
+                onPress={async () => {
+                  setRequestingRefill(true);
+                  try {
+                    const req = await PrescriptionsService.requestRefill(med.id, { urgency: 'routine' });
+                    onRefillRequested(med.id, req.id);
+                    Alert.alert(t('meds.refillRequested'));
+                  } catch {
+                    Alert.alert(t('common.error'));
+                  } finally {
+                    setRequestingRefill(false);
+                  }
+                }}
+                disabled={requestingRefill}
+                activeOpacity={0.85}
+              >
+                {requestingRefill
+                  ? <ActivityIndicator size="small" color={C.teal} />
+                  : <Icon name="refresh" size={15} color={C.teal} />}
+                <Text style={[sheetStyles.refillBtnText, { color: C.teal }]}>
+                  {requestingRefill ? t('common.loading') : t('meds.requestRefill')}
+                </Text>
+              </TouchableOpacity>
+            )}
           </Card>
 
           <TouchableOpacity
@@ -299,6 +390,11 @@ const sheetStyles = StyleSheet.create({
   refillRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   refillLabel: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textSecondary },
   refillDays: { fontFamily: FONT.uiBk, fontSize: 18 },
+  refillPendingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  refillCancelBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: C.border },
+  refillCancelText: { fontFamily: FONT.uiBd, fontSize: 12, color: C.textSecondary },
+  refillBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 11, borderRadius: RADIUS.md, borderWidth: 1, marginTop: 10 },
+  refillBtnText: { fontFamily: FONT.uiBd, fontSize: 14 },
   askBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 13, paddingHorizontal: 16, borderRadius: RADIUS.lg, borderWidth: 1, justifyContent: 'center' },
   askBtnText: { fontFamily: FONT.uiBd, fontSize: 14 },
   rxActions: { flexDirection: 'row', gap: 10 },
@@ -323,6 +419,7 @@ interface MedCardProps {
 const MedCard: React.FC<MedCardProps> = ({ med, onMark, onDetail }) => {
   const scaleAnim  = useRef(new Animated.Value(1)).current;
   const checkOpacity = useRef(new Animated.Value(med.takenToday ? 1 : 0)).current;
+  const { t } = useTranslation();
 
   const handleMark = () => {
     if (med.takenToday) return;
@@ -347,8 +444,11 @@ const MedCard: React.FC<MedCardProps> = ({ med, onMark, onDetail }) => {
               <Text style={styles.medSchedule}>{med.schedule} · {med.time}</Text>
             </View>
             <Animated.View style={{ opacity: checkOpacity }}>
-              {med.takenToday && <Badge color={C.green}>Taken</Badge>}
+              {med.takenToday && <Badge color={C.green}>{t('adherence.taken')}</Badge>}
             </Animated.View>
+            {med.pendingRefillId && !med.takenToday && (
+              <Badge color={C.amber} size="sm">{t('meds.refillPending')}</Badge>
+            )}
           </View>
 
           {/* Note */}
@@ -370,7 +470,7 @@ const MedCard: React.FC<MedCardProps> = ({ med, onMark, onDetail }) => {
               activeOpacity={0.8}
             >
               <Icon name="check" size={14} color={med.color} />
-              <Text style={[styles.markBtnText, { color: med.color }]}>Mark as Taken</Text>
+              <Text style={[styles.markBtnText, { color: med.color }]}>{t('adherence.markTaken')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -383,6 +483,7 @@ const MedCard: React.FC<MedCardProps> = ({ med, onMark, onDetail }) => {
 
 export const PatientMedsScreen: React.FC = () => {
   const insets  = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const [meds,         setMeds]         = useState<Medication[]>([]);
   const [detail,       setDetail]       = useState<Medication | null>(null);
@@ -392,8 +493,35 @@ export const PatientMedsScreen: React.FC = () => {
   useEffect(() => {
     const patientId = user?.patientMrn ?? user?.id;
     if (!patientId) return;
-    PrescriptionsService.forCurrentPatient()
-      .then(list => setMeds((list ?? []).map(mapApiPrescription)))
+
+    const endDate   = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    Promise.all([
+      PrescriptionsService.forCurrentPatient(),
+      PrescriptionsService.getAdherenceSummary({ startDate, endDate }),
+      PrescriptionsService.getAdherenceLogs({ startDate, endDate, limit: 200 }),
+    ])
+      .then(([list, summaries, logs]) => {
+        const summaryMap = new Map<string, AdherenceSummary>(
+          (summaries ?? []).map(s => [s.prescriptionId, s])
+        );
+        const logsMap = new Map<string, AdherenceLogEntry[]>();
+        (logs ?? []).forEach(l => {
+          const arr = logsMap.get(l.prescriptionId) ?? [];
+          arr.push(l);
+          logsMap.set(l.prescriptionId, arr);
+        });
+        setMeds((list ?? []).map((p, i) => mapApiPrescription(p, i, summaryMap, logsMap)));
+        PrescriptionsService.getRefillRequests('pending')
+          .then(requests => {
+            setMeds(prev => prev.map(m => {
+              const req = requests.find(r => r.prescriptionId === m.id);
+              return req ? { ...m, pendingRefillId: req.id } : m;
+            }));
+          })
+          .catch(() => {});
+      })
       .catch(() => setMeds([]));
     PatientPortalService.getImmunizations()
       .then(list => setImmunizations(list ?? []))
@@ -409,14 +537,44 @@ export const PatientMedsScreen: React.FC = () => {
     ? Math.round(meds.reduce((s, m) => s + m.adherencePct, 0) / meds.length)
     : 0;
 
-  const handleMark = useCallback((id: string) => {
-    setMeds((prev) => prev.map((m) => m.id === id ? { ...m, takenToday: true } : m));
+  const handleMark = useCallback(async (id: string) => {
+    let previousMed: Medication | undefined;
+
+    // Optimistic update first so the UI feels instant
+    setMeds((prev) => prev.map((m) => {
+      if (m.id !== id) return m;
+      previousMed = m;
+      const adherence = m.adherence.map((day, i) => i === 6 ? 'taken' : day) as AdherenceDay[];
+      return { ...m, takenToday: true, adherence, adherencePct: getAdherencePct(adherence, m.adherencePct) };
+    }));
+
+    try {
+      await PrescriptionsService.logAdherence(id, {
+        scheduledTime: new Date().toISOString(),
+        taken: true,
+        takenTime: new Date().toISOString(),
+      });
+    } catch {
+      // Roll back optimistic update on failure
+      setMeds((prev) => prev.map((m) => m.id === id ? previousMed ?? { ...m, takenToday: false } : m));
+      Alert.alert(t('common.error'), t('adherence.markFailed'));
+    }
+  }, [t]);
+
+  const handleRefillRequested = useCallback((prescriptionId: string, requestId: string) => {
+    setMeds(prev => prev.map(m => m.id === prescriptionId ? { ...m, pendingRefillId: requestId } : m));
+    setDetail(prev => prev && prev.id === prescriptionId ? { ...prev, pendingRefillId: requestId } : prev);
+  }, []);
+
+  const handleRefillCancelled = useCallback((prescriptionId: string) => {
+    setMeds(prev => prev.map(m => m.id === prescriptionId ? { ...m, pendingRefillId: undefined } : m));
+    setDetail(prev => prev && prev.id === prescriptionId ? { ...prev, pendingRefillId: undefined } : prev);
   }, []);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <LinearGradient colors={['#030B18', C.bg]} style={StyleSheet.absoluteFill} />
-      <ScreenHeader title="My Medications" subtitle="Adherence Tracker" accent={C.blue} />
+      <ScreenHeader title={t('nav.meds')} subtitle="Adherence Tracker" accent={C.blue} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
 
@@ -428,18 +586,18 @@ export const PatientMedsScreen: React.FC = () => {
           </View>
           <View style={[styles.statCard, { borderColor: C.blue + '40', backgroundColor: C.blue + '10' }]}>
             <Text style={[styles.statNum, { color: C.blue }]}>{overallPct}%</Text>
-            <Text style={styles.statLabel}>This Week</Text>
+            <Text style={styles.statLabel}>{t('adherence.thisWeek')}</Text>
           </View>
           <View style={[styles.statCard, { borderColor: C.purple + '40', backgroundColor: C.purple + '10' }]}>
             <Text style={[styles.statNum, { color: C.purple }]}>{meds.filter(m => m.refillDaysLeft < 7).length}</Text>
-            <Text style={styles.statLabel}>Refill Soon</Text>
+            <Text style={styles.statLabel}>{t('meds.refillSoon')}</Text>
           </View>
         </View>
 
         {/* AI adherence summary */}
         <Card accent={C.teal} style={styles.aiCard}>
           <View style={styles.aiRow}>
-            <AiBadge text="AI Adherence Summary" />
+            <AiBadge text={`AI ${t('adherence.summary')}`} />
           </View>
           <Text style={styles.aiText}>
             {overallPct >= 90
@@ -456,7 +614,7 @@ export const PatientMedsScreen: React.FC = () => {
           <SectionHeader action={`${takenToday} of ${totalToday} done`}>Today's Schedule</SectionHeader>
           {meds.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No medications on file</Text>
+              <Text style={styles.emptyStateText}>{t('common.noResults')}</Text>
             </View>
           ) : meds.map((med) => (
             <MedCard key={med.id} med={med} onMark={handleMark} onDetail={setDetail} />
@@ -528,6 +686,8 @@ export const PatientMedsScreen: React.FC = () => {
         med={detail}
         onClose={() => setDetail(null)}
         onAskAI={(name) => setDetail(null)}
+        onRefillRequested={handleRefillRequested}
+        onRefillCancelled={handleRefillCancelled}
       />
     </View>
   );

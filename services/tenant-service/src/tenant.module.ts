@@ -7,7 +7,17 @@ import { TenantController } from './controllers/tenant.controller';
 import { AdminMaintenanceController } from './controllers/admin-maintenance.controller';
 import { TenantUserController } from './controllers/tenant-user.controller';
 import { TenantAnalyticsController } from './controllers/tenant-analytics.controller';
+import { RolloutController } from './controllers/rollout.controller';
+import { PaymentWebhookController } from './controllers/payment-webhook.controller';
 import { TenantService } from './services/tenant.service';
+import { BillingEnforcerService } from './services/billing-enforcer.service';
+import { SmsService } from './services/sms.service';
+import { FlutterwaveProvider } from './payment/providers/flutterwave.provider';
+import { MpesaProvider } from './payment/providers/mpesa.provider';
+import { ZimSwitchProvider } from './payment/providers/zimswitch.provider';
+import { StripeProvider } from './payment/providers/stripe.provider';
+import { PaymentGatewayFactory } from './payment/payment-gateway.factory';
+import { PaymentService } from './payment/payment.service';
 import { TenantAnalyticsService } from './services/tenant-analytics.service';
 import { DatabaseProvisioningService } from './services/database-provisioning.service';
 import { TenantDatabaseService } from './services/tenant-database.service';
@@ -62,9 +72,17 @@ function resolveJwtSecret(): string {
     }),
     TypeOrmModule.forFeature([Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest]),
   ],
-  controllers: [TenantController, TenantUserController, TenantAnalyticsController, AuthController, AdminMaintenanceController, BackupController, DemoAccessRequestController],
+  controllers: [TenantController, TenantUserController, TenantAnalyticsController, RolloutController, PaymentWebhookController, AuthController, AdminMaintenanceController, BackupController, DemoAccessRequestController],
   providers: [
     TenantService, 
+    BillingEnforcerService,
+    SmsService,
+    FlutterwaveProvider,
+    MpesaProvider,
+    ZimSwitchProvider,
+    StripeProvider,
+    PaymentGatewayFactory,
+    PaymentService,
     TenantAnalyticsService, 
     DatabaseProvisioningService, 
     TenantDatabaseService,

@@ -452,6 +452,18 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint18ReferralManagementSchemaStatements(),
       },
       {
+        id: 'referralTransportColumns',
+        label: 'Referral transport columns',
+        version: '2026.05.08.1',
+        description: 'Adds receiving facility webhook transport column to referrals table',
+        statements: () => [
+          `
+          ALTER TABLE referrals
+            ADD COLUMN IF NOT EXISTS referred_to_facility_webhook VARCHAR(500) DEFAULT NULL
+          `,
+        ],
+      },
+      {
         id: 'sprint19_document_management',
         label: 'Sprint 19 - Document Management UI',
         version: '2025.12.02',
@@ -1615,6 +1627,52 @@ export class DatabaseProvisioningService {
         description: 'Creates user_language_preferences table; seeds default English row',
         statements: TENANT_LANGUAGE_PREFS_STATEMENTS,
       },
+      {
+        id: 'sprint165_push_tokens',
+        label: 'Sprint 165 — FCM Push Notification Tokens',
+        version: '2026.04.21.1',
+        description: 'push_tokens table for per-user FCM/Expo token storage with upsert-safe unique constraint on (user_id, token)',
+        statements: () => this.getSprint165PushTokensStatements(),
+      },
+      {
+        id: 'pro_clinician_feedback',
+        label: 'PRO Clinician Feedback',
+        version: '2026.05.08.1',
+        description: 'Stores clinician-to-patient messages tied to PRO questionnaire responses; adds acknowledged_by/at and notes columns to pro_alerts',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS pro_clinician_feedback (
+             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             patient_questionnaire_id UUID NOT NULL,
+             clinician_id TEXT,
+             message TEXT NOT NULL,
+             is_read BOOLEAN NOT NULL DEFAULT FALSE,
+             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+           )`,
+          `CREATE INDEX IF NOT EXISTS idx_pro_feedback_questionnaire
+             ON pro_clinician_feedback(patient_questionnaire_id)`,
+          `ALTER TABLE pro_alerts
+             ADD COLUMN IF NOT EXISTS acknowledged_by TEXT`,
+          `ALTER TABLE pro_alerts
+             ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ`,
+          `ALTER TABLE pro_alerts
+             ADD COLUMN IF NOT EXISTS notes TEXT`,
+        ],
+      },
+    ];
+  }
+
+  private getSprint165PushTokensStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS push_tokens (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id     UUID NOT NULL,
+        token       TEXT NOT NULL,
+        platform    TEXT,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (user_id, token)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON push_tokens(user_id)`,
     ];
   }
 
@@ -11979,6 +12037,7 @@ RECOMMENDATIONS:
         referred_to_facility_address TEXT,
         referred_to_facility_phone VARCHAR(50),
         referred_to_facility_email VARCHAR(255),
+        referred_to_facility_webhook VARCHAR(500),
         referral_type VARCHAR(50) NOT NULL CHECK (referral_type IN (
           'specialist',
           'laboratory',

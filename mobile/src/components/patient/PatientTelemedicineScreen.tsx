@@ -273,6 +273,21 @@ export const PatientTelemedicineScreen: React.FC<PatientTelemedicineScreenProps>
 
   useEffect(() => { loadConsultations(); }, [loadConsultations]);
 
+  useEffect(() => {
+    const socket = (globalThis as any).telemedicineSocket;
+    if (!socket?.on) return undefined;
+
+    const handlePostVisitReady = (payload: { sessionId: string; hasRecording: boolean }) => {
+      navigation?.replace?.('PostVisitSummary', {
+        sessionId: payload.sessionId,
+        hasRecording: payload.hasRecording,
+      });
+    };
+
+    socket.on('tele:postvisit_ready', handlePostVisitReady);
+    return () => socket.off?.('tele:postvisit_ready', handlePostVisitReady);
+  }, [navigation]);
+
   const handleJoin = async (consultation: ApiConsultation) => {
     setCallState('connecting');
     setActiveConsultation(consultation);

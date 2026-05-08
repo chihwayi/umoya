@@ -7,6 +7,7 @@ import { NotificationsService } from './notifications.service';
 import { TenantService } from './tenant.service';
 import { TelemedicineGateway } from '../gateways/telemedicine.gateway';
 import { TelemedicinePostVisitBridgeService } from './telemedicine-postvisit-bridge.service';
+import { TelemedicineConsentService } from './telemedicine-consent.service';
 import {
   CreateTelemedicineConsultationDto,
   UpdateTelemedicineConsultationDto,
@@ -36,6 +37,7 @@ export class TelemedicineService {
     @Optional() private readonly tenantService?: TenantService,
     @Optional() private readonly teleGateway?: TelemedicineGateway,
     @Optional() private readonly postVisitBridge?: TelemedicinePostVisitBridgeService,
+    @Optional() private readonly consentService?: TelemedicineConsentService,
   ) {}
 
   // ── 15-minute reminder cron ──────────────────────────────────────────────────
@@ -686,6 +688,16 @@ export class TelemedicineService {
       throw new BadRequestException('Requesting user is not the patient for this consultation');
     }
 
+    // Enforce patient consent before issuing a meeting token
+    if (role === 'patient' && this.consentService) {
+      const hasConsent = await this.consentService.checkConsent(tenantDb, consultation.patient_id);
+      if (!hasConsent) {
+        throw new BadRequestException(
+          'Patient has not granted telehealth consent. Use POST /telemedicine/consultations/:id/consent to grant consent before joining.',
+        );
+      }
+    }
+
     const displayName = role === 'doctor' ? consultation.doctor_name : consultation.patient_name;
     const token = await this.videoService.getMeetingToken(
       consultation.meeting_room_id,
@@ -719,4 +731,3 @@ export class TelemedicineService {
     return { ...status, meetingRoomId: consultation.meeting_room_id };
   }
 }
-

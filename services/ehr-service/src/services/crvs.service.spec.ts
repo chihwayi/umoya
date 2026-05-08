@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import axios from 'axios';
 import { CrvsService } from './crvs.service';
 
@@ -20,8 +21,8 @@ describe('CrvsService', () => {
     process.env.CRVS_API_KEY = '';
 
     const repo = {
-      create: jest.fn((value) => value),
-      save: jest.fn(async (value) => ({ id: 'birth-1', ...value })),
+      create: jest.fn((value: any) => value),
+      save: jest.fn(async (value: any) => ({ id: 'birth-1', ...value })),
       update: jest.fn(async () => undefined),
       findOne: jest.fn(async () => ({
         id: 'birth-1',
@@ -49,8 +50,8 @@ describe('CrvsService', () => {
     process.env.CRVS_API_KEY = '';
 
     const repo = {
-      create: jest.fn((value) => value),
-      save: jest.fn(async (value) => ({ id: 'birth-2', ...value })),
+      create: jest.fn((value: any) => value),
+      save: jest.fn(async (value: any) => ({ id: 'birth-2', ...value })),
       update: jest.fn(async () => undefined),
       findOne: jest.fn(async () => ({
         id: 'birth-2',
@@ -73,11 +74,11 @@ describe('CrvsService', () => {
   });
 
   it('registerDeath creates a death certificate and calls the CRVS API when env vars are present', async () => {
-    (axios.post as jest.Mock).mockResolvedValue({ data: { reference: 'CRVS-REF-1' } });
+    (axios.post as any).mockResolvedValue({ data: { reference: 'CRVS-REF-1' } });
 
     const repo = {
-      create: jest.fn((value) => value),
-      save: jest.fn(async (value) => ({ id: 'death-1', ...value })),
+      create: jest.fn((value: any) => value),
+      save: jest.fn(async (value: any) => ({ id: 'death-1', ...value })),
       update: jest.fn(async () => undefined),
       findOne: jest.fn(async () => ({
         id: 'death-1',
@@ -103,8 +104,8 @@ describe('CrvsService', () => {
 
   it('submitMdsr creates an MDSR notification', async () => {
     const repo = {
-      create: jest.fn((value) => value),
-      save: jest.fn(async (value) => ({ id: 'mdsr-1', ...value })),
+      create: jest.fn((value: any) => value),
+      save: jest.fn(async (value: any) => ({ id: 'mdsr-1', ...value })),
     };
     const db = { getRepository: jest.fn(() => repo) };
     const tenantService = { getTenantDatabase: jest.fn(async () => db) };
@@ -123,8 +124,7 @@ describe('CrvsService', () => {
 
   it('reviewMdsr persists committee review fields', async () => {
     const repo = {
-      findOne: jest
-        .fn()
+      findOne: (jest.fn() as any)
         .mockResolvedValueOnce({
           id: 'mdsr-2',
           committeeReviewDate: null,

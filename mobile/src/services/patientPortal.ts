@@ -90,6 +90,27 @@ export interface ApiPatientCompanionPayload {
   timeline: ApiPatientCompanionTimelineItem[];
 }
 
+export interface FamilyAccessGrant {
+  id: string;
+  proxyName: string;
+  proxyEmail: string;
+  proxyPhone?: string;
+  relationship?: string;
+  accessLevel: 'view_only' | 'full' | 'emergency_only';
+  expiresAt?: string;
+  createdAt: string;
+  isActive: boolean;
+}
+
+export interface GrantFamilyAccessDto {
+  proxyName: string;
+  proxyEmail: string;
+  proxyPhone?: string;
+  relationship?: string;
+  accessLevel: 'view_only' | 'full' | 'emergency_only';
+  expiresAt?: string;
+}
+
 export const PatientPortalService = {
   getNotifications: () =>
     api.get<ApiNotification[]>('/patient-portal/notifications').then(r => r.data ?? []),
@@ -114,4 +135,13 @@ export const PatientPortalService = {
 
   getImmunizationForecast: () =>
     api.get<ApiImmunizationForecast[]>('/patient-portal/immunization-forecast').then(r => r.data ?? []),
+
+  getFamilyAccess: () =>
+    api.get<FamilyAccessGrant[]>('/patient-portal/family-access').then(r => r.data),
+
+  grantFamilyAccess: (dto: GrantFamilyAccessDto) =>
+    api.post<FamilyAccessGrant>('/patient-portal/family-access', dto).then(r => r.data),
+
+  revokeFamilyAccess: (id: string) =>
+    api.delete<void>(`/patient-portal/family-access/${id}`).then(r => r.data),
 };

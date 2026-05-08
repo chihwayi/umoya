@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW, SEVERITY } from '../../design/tokens';
 import { Icon, Badge, Dot, SlaTimer, Sparkline, Card, ScreenHeader, SectionHeader, AiBadge } from '../ui';
 import { PatientsService, patientName, patientAge } from '../../services/patients';
@@ -690,6 +691,7 @@ const filterStyles = StyleSheet.create({
 
 export const DoctorRoundsScreen: React.FC = () => {
   const insets  = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const [patients,   setPatients]   = useState<Patient[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -819,8 +821,8 @@ export const DoctorRoundsScreen: React.FC = () => {
       )}
 
       <ScreenHeader
-        title="Ward Rounds"
-        subtitle={loading ? 'Loading…' : `${patients.length} patients`}
+        title={t('nav.rounds')}
+        subtitle={loading ? t('common.loading') : `${patients.length} ${t('nav.patients').toLowerCase()}`}
         accent={C.teal}
         rightSlot={
           <TouchableOpacity style={styles.filterBtn} activeOpacity={0.8}>

@@ -36,7 +36,16 @@ import { Server, Socket } from 'socket.io';
  *   gateway.broadcastToConsultation(id, 'tele:participant_joined', payload)
  *   gateway.broadcastToUser(userId, 'tele:consultation_ended', payload)
  */
-@WebSocketGateway({ namespace: '/telemedicine', cors: { origin: '*' } })
+@WebSocketGateway({
+  namespace: '/telemedicine',
+  cors: {
+    origin: (process.env.CORS_ORIGINS || 'http://localhost:3000')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean),
+    credentials: true,
+  },
+})
 export class TelemedicineGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {

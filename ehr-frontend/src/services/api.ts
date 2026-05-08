@@ -6083,6 +6083,29 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  updateProAlertStatus: async (alertId: string, status: string, token: string, tenantSlug: string) => {
+    return axios.put(
+      `${EHR_API_URL}/pro/alerts/${alertId}/status`,
+      { status },
+      { headers: { Authorization: `Bearer ${token}`, 'X-Tenant-ID': tenantSlug } },
+    );
+  },
+
+  addProClinicianFeedback: async (responseId: string, message: string, token: string, tenantSlug: string) => {
+    return axios.post(
+      `${EHR_API_URL}/pro/responses/${responseId}/feedback`,
+      { message },
+      { headers: { Authorization: `Bearer ${token}`, 'X-Tenant-ID': tenantSlug } },
+    );
+  },
+
+  getProClinicianFeedback: async (responseId: string, token: string, tenantSlug: string) => {
+    return axios.get(
+      `${EHR_API_URL}/pro/responses/${responseId}/feedback`,
+      { headers: { Authorization: `Bearer ${token}`, 'X-Tenant-ID': tenantSlug } },
+    );
+  },
+
   getPatientQuestionnaireHistory: async (patientId: string, token: string, tenantSlug: string, filters?: { limit?: number; category?: string }) => {
     const params: any = {};
     if (filters?.limit) params.limit = filters.limit;

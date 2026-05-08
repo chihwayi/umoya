@@ -1,0 +1,128 @@
+{
+  "common": {
+    "loading": "Kurodha…",
+    "error": "Pane nyaya yakaitika",
+    "retry": "Edza zvakare",
+    "save": "Chengetedza",
+    "cancel": "Kanzura",
+    "back": "Dzokera",
+    "submit": "Tumira",
+    "confirm": "Simbisa",
+    "logout": "Buda",
+    "search": "Tsvaga",
+    "noResults": "Hapana zvawana"
+  },
+  "nav": {
+    "home": "Kumba",
+    "appointments": "Zvisangano",
+    "health": "Utano Hwangu",
+    "meds": "Mishonga",
+    "bills": "Mabhiri",
+    "messages": "Meseji",
+    "education": "Dzidza",
+    "notifications": "Ziviso",
+    "shift": "Shift Yangu",
+    "vitals": "Zviratidzo Zvehupenyu",
+    "rounds": "Rounds",
+    "patients": "Varwere",
+    "ai": "Mubatsiri weAI"
+  },
+  "patient": {
+    "name": "Zita Rizere",
+    "dob": "Zuva Rokuzvarwa",
+    "sex": "Murume/Mukadzi",
+    "phone": "Nhamba yeFoni",
+    "id_number": "Nhamba yeID",
+    "blood_group": "Mhando yeRopa",
+    "age": "Makore",
+    "next_of_kin": "Hama Yepedyo"
+  },
+  "clinical": {
+    "vitals": "Zviratidzo Zvehupenyu",
+    "weight": "Uremu (kg)",
+    "height": "Kurebesa (cm)",
+    "bp": "Mhaka yeRopa",
+    "temp": "Tembiricha (°C)",
+    "pulse": "Kumhanyisa Moyo (bpm)",
+    "spo2": "SpO₂ (%)",
+    "diagnosis": "Chirwere",
+    "prescription": "Mishonga",
+    "chief_complaint": "Chikonzero Chikuru",
+    "plan": "Hurongwa hwekurapa",
+    "referral": "Kuendeswa"
+  },
+  "billing": {
+    "invoice": "Invoice",
+    "payment": "Kubhadhara",
+    "receipt": "Risiti",
+    "outstanding": "Chikwereti",
+    "paid": "Chakabhadharwa"
+  },
+  "auth": {
+    "login": "Pinda",
+    "email": "Email",
+    "password": "Passwords",
+    "biometric": "Shandisa Biometrics",
+    "sessionExpired": "Nguva yapera. Pindazve."
+  },
+  "postVisit": {
+    "visitSummary": "Pfupiso yeKushanya",
+    "status": "Mamiriro",
+    "subjective": "Zvawakataura",
+    "assessment": "Ongororo",
+    "plan": "Hurongwa Hwako hweKutarisirwa",
+    "notFound": "Pfupiso yekushanya haisati yawanikwa."
+  },
+  "meds": {
+    "requestRefill": "Kumbira Kuzadza Zvakare",
+    "refillPending": "Kuzadza Kwakamira",
+    "refillApproved": "Kuzadza Kwabvumirwa",
+    "refillCancelled": "Chikumbiro chakansanganurwa",
+    "refillRequested": "Chikumbiro chatumirwa",
+    "refillSoon": "Zadzai Munguva Pfupi",
+    "refillDays": "Zadzai mushure me",
+    "days": "mazuva"
+  },
+  "adherence": {
+    "markTaken": "Maka sezvakatorwa",
+    "taken": "Zvatatorwa",
+    "missed": "Zvakanganiswa",
+    "upcoming": "Zvinouya",
+    "thisWeek": "Vhiki rino",
+    "markFailed": "Hazvina kukwanisa kurekodha dozi. Edza zvakare.",
+    "summary": "Pfupiso yekutevera Mushonga"
+  },
+  "education": {
+    "title": "Dzidzo yeUtano",
+    "subtitle": "Dzidza nezve utano hwako",
+    "all": "Yese",
+    "minRead": "min yekuverenga",
+    "by": "Na"
+  },
+  "family": {
+    "title": "Kusvikirwa kweChikamu",
+    "subtitle": "Tarisira vane mvumo yekuona rekodhi dzako",
+    "addCaregiver": "Wedzera Mureri / Mutariri",
+    "activeGrants": "Mvumo dziri mushandi",
+    "noGrants": "Hapana mureri ane mvumo yekuona rekodhi dzako",
+    "infoText": "Vareri vawedzeredza apa vanogona kuona zvimwe zvekudhi yako yeutano. Unogona kubvisa mvumo chero nguva.",
+    "viewOnly": "Ona Chete",
+    "fullAccess": "Kusvikirwa Kwese",
+    "emergencyOnly": "Njodzi Chete",
+    "expires": "Inopera",
+    "noExpiry": "Hapana kupera",
+    "revoke": "Bvisa",
+    "revokeTitle": "Bvisa Mvumo",
+    "revokeConfirm": "Bvisa {{name}} kubva kuvari vareri vako?",
+    "grantAccess": "Ipa Mvumo",
+    "requiredFields": "Zita neyimero ye-email zviri zvichidiwa",
+    "fieldName": "Zita remureri",
+    "fieldNamePlaceholder": "Zita rizere",
+    "fieldEmail": "Kero ye-Email",
+    "fieldPhone": "Nhare (pasina basa)",
+    "fieldRelationship": "Ukama (pasina basa)",
+    "fieldRelationshipPlaceholder": "sekumbo. Murume/Mudzimai, Mubereki, Mwana",
+    "fieldAccessLevel": "Pamusoro peKusvikirwa",
+    "fieldExpiry": "Mvumo inopera zuva (pasina basa)"
+  }
+}

@@ -12,6 +12,7 @@ import {
   Max,
   IsDateString,
   IsIn,
+  Length,
 } from 'class-validator';
 import { SubscriptionTier } from '../entities/tenant.entity';
 
@@ -90,4 +91,13 @@ export class UpdateTenantDto {
   @Min(1)
   @Max(30)
   suspensionWarningDays?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 2)
+  countryCode?: string;
+
+  @IsOptional()
+  @IsIn(['clinic', 'hospital', 'ministry'])
+  deploymentMode?: 'clinic' | 'hospital' | 'ministry';
 }

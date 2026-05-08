@@ -14,6 +14,7 @@ export interface ApiPrescription {
   route?: string;
   duration?: string;
   quantity?: number;
+  daysSupplyRemaining?: number;
   refills?: number;
   instructions?: string;
   prescribedBy?: string;
@@ -22,6 +23,36 @@ export interface ApiPrescription {
   dispensedDate?: string;
   sideEffects?: string[];
   contraindications?: string[];
+}
+
+export interface RefillRequest {
+  id: string;
+  prescriptionId: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  requestedQuantity?: number;
+  reason?: string;
+  urgency?: 'routine' | 'urgent' | 'emergency';
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface AdherenceLogEntry {
+  id: string;
+  prescriptionId: string;
+  scheduledTime: string;
+  taken: boolean;
+  takenTime?: string;
+  missedReason?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface AdherenceSummary {
+  prescriptionId: string;
+  totalScheduled: number;
+  totalTaken: number;
+  adherenceRate: number; // 0-100 percentage
+  weeklyBreakdown?: { date: string; taken: boolean }[];
 }
 
 export const PrescriptionsService = {
@@ -41,6 +72,7 @@ export const PrescriptionsService = {
         route: item.route,
         duration: item.duration,
         quantity: item.quantity,
+        daysSupplyRemaining: item.daysSupplyRemaining,
         refills: item.refills,
         instructions: item.instructions,
         prescribedBy: item.prescribedBy
@@ -86,4 +118,50 @@ export const PrescriptionsService = {
   /** Send prescription PDF to patient's email via the backend mailer. */
   shareByEmail: (id: string, email: string) =>
     api.post<void>(`/patient-portal/prescriptions/${id}/share`, { email }).then(r => r.data),
+
+  requestRefill: (prescriptionId: string, body: { requestedQuantity?: number; reason?: string; urgency?: 'routine' | 'urgent' | 'emergency' }) =>
+    api.post<RefillRequest>(`/patient-portal/prescriptions/${prescriptionId}/refill-request`, body).then(r => r.data),
+
+  getRefillRequests: (status?: string) => {
+    const qs = status ? `?status=${status}` : '';
+    return api.get<RefillRequest[]>(`/patient-portal/prescriptions/refill-requests${qs}`).then(r => r.data);
+  },
+
+  cancelRefillRequest: (requestId: string) =>
+    api.delete<void>(`/patient-portal/prescriptions/refill-requests/${requestId}`).then(r => r.data),
+
+  logAdherence: (prescriptionId: string, body: {
+    scheduledTime: string;
+    taken: boolean;
+    takenTime?: string;
+    missedReason?: string;
+    notes?: string;
+  }) =>
+    api.post<AdherenceLogEntry>(
+      `/patient-portal/prescriptions/${prescriptionId}/adherence`,
+      body
+    ).then(r => r.data),
+
+  getAdherenceSummary: (params: {
+    prescriptionId?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const qs = new URLSearchParams(params as any).toString();
+    return api.get<AdherenceSummary[]>(
+      `/patient-portal/prescriptions/adherence/summary${qs ? '?' + qs : ''}`
+    ).then(r => r.data);
+  },
+
+  getAdherenceLogs: (params: {
+    prescriptionId?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }) => {
+    const qs = new URLSearchParams(params as any).toString();
+    return api.get<AdherenceLogEntry[]>(
+      `/patient-portal/prescriptions/adherence/logs${qs ? '?' + qs : ''}`
+    ).then(r => r.data);
+  },
 };

@@ -33,6 +33,7 @@ export interface Tenant {
   demoExpiresAt: string | null;
   graceEndsAt: string | null;
   autoDeleteAt: string | null;
+  deploymentMode: string;
   suspensionWarningDays: number;
   billingSummary: TenantBillingSummary;
   status: 'pending' | 'active' | 'suspended' | 'cancelled';
@@ -41,6 +42,7 @@ export interface Tenant {
   address: string | null;
   city: string | null;
   country: string;
+  countryCode: string | null;
   logoUrl?: string;
   featureFlags: Record<string, boolean>;
   createdAt: string;
@@ -65,6 +67,8 @@ export interface CreateTenantRequest {
   billingEndsAt?: string;
   gracePeriodDays?: number;
   suspensionWarningDays?: number;
+  countryCode?: string;
+  deploymentMode?: 'clinic' | 'hospital' | 'ministry';
 }
 
 export interface UpdateTenantRequest {
@@ -84,6 +88,75 @@ export interface UpdateTenantRequest {
   billingEndsAt?: string;
   gracePeriodDays?: number;
   suspensionWarningDays?: number;
+  countryCode?: string;
+  deploymentMode?: 'clinic' | 'hospital' | 'ministry';
+}
+
+export type ReadinessStatus = 'ready' | 'needs_attention' | 'blocked' | 'not_configured';
+
+export interface ReadinessCheck {
+  label: string;
+  status: ReadinessStatus;
+  detail?: string;
+}
+
+export interface RolloutReadiness {
+  tenantId: string;
+  clinicName: string;
+  deploymentMode: string;
+  countryCode: string | null;
+  overallStatus: ReadinessStatus;
+  checks: ReadinessCheck[];
+  lastUpdated: string;
+}
+
+export type MigrationJobStatus = 'uploaded' | 'dry_run_complete' | 'imported' | 'failed';
+export type MigrationSeverity = 'error' | 'warning';
+
+export interface PatientMigrationRow {
+  rowNumber: number;
+  patientNumber?: string;
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  nationalId?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface MigrationIssue {
+  rowNumber: number;
+  severity: MigrationSeverity;
+  field?: string;
+  message: string;
+}
+
+export interface MigrationDryRunResult {
+  totalRows: number;
+  validRows: number;
+  duplicateRows: number;
+  errorRows: number;
+  issues: MigrationIssue[];
+}
+
+export interface MigrationImportResult {
+  insertedRows: number;
+  skippedRows: number;
+  failedRows: number;
+  issues: MigrationIssue[];
+}
+
+export interface MigrationJob {
+  id: string;
+  fileName: string;
+  status: MigrationJobStatus;
+  uploadedAt: string;
+  importedAt?: string;
+  totalRows: number;
+  records: PatientMigrationRow[];
+  dryRun?: MigrationDryRunResult;
+  importResult?: MigrationImportResult;
 }
 
 export interface TenantUser {

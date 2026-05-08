@@ -1,0 +1,128 @@
+{
+  "common": {
+    "loading": "Inapakia…",
+    "error": "Hitilafu imetokea",
+    "retry": "Jaribu tena",
+    "save": "Hifadhi",
+    "cancel": "Ghairi",
+    "back": "Rudi",
+    "submit": "Wasilisha",
+    "confirm": "Thibitisha",
+    "logout": "Ondoka",
+    "search": "Tafuta",
+    "noResults": "Hakuna matokeo"
+  },
+  "nav": {
+    "home": "Nyumbani",
+    "appointments": "Miadi",
+    "health": "Afya Yangu",
+    "meds": "Dawa",
+    "bills": "Bili",
+    "messages": "Ujumbe",
+    "education": "Jifunze",
+    "notifications": "Arifa",
+    "shift": "Zamu Yangu",
+    "vitals": "Dalili Muhimu",
+    "rounds": "Ziara",
+    "patients": "Wagonjwa",
+    "ai": "Msaidizi wa AI"
+  },
+  "patient": {
+    "name": "Jina Kamili",
+    "dob": "Tarehe ya Kuzaliwa",
+    "sex": "Jinsia",
+    "phone": "Nambari ya Simu",
+    "id_number": "Nambari ya Kitambulisho",
+    "blood_group": "Kundi la Damu",
+    "age": "Umri",
+    "next_of_kin": "Ndugu wa Karibu"
+  },
+  "clinical": {
+    "vitals": "Dalili Muhimu",
+    "weight": "Uzito (kg)",
+    "height": "Urefu (cm)",
+    "bp": "Shinikizo la Damu",
+    "temp": "Joto (°C)",
+    "pulse": "Mapigo ya Moyo (bpm)",
+    "spo2": "SpO₂ (%)",
+    "diagnosis": "Utambuzi",
+    "prescription": "Dawa",
+    "chief_complaint": "Malalamiko Makuu",
+    "plan": "Mpango wa Matibabu",
+    "referral": "Rufaa"
+  },
+  "billing": {
+    "invoice": "Ankara",
+    "payment": "Malipo",
+    "receipt": "Risiti",
+    "outstanding": "Deni Linalobaki",
+    "paid": "Imelipwa"
+  },
+  "auth": {
+    "login": "Ingia",
+    "email": "Barua Pepe",
+    "password": "Nenosiri",
+    "biometric": "Tumia Biometriki",
+    "sessionExpired": "Kipindi kimeisha. Tafadhali ingia tena."
+  },
+  "postVisit": {
+    "visitSummary": "Muhtasari wa Ziara",
+    "status": "Hali",
+    "subjective": "Ulichoripoti",
+    "assessment": "Tathmini",
+    "plan": "Mpango Wako wa Huduma",
+    "notFound": "Muhtasari wa ziara haujapatikana bado."
+  },
+  "meds": {
+    "requestRefill": "Omba Kujaza Tena",
+    "refillPending": "Kujaza Kunasubiri",
+    "refillApproved": "Kujaza Kumeidhinishwa",
+    "refillCancelled": "Ombi limefutwa",
+    "refillRequested": "Ombi limewasilishwa",
+    "refillSoon": "Jaza Hivi Karibuni",
+    "refillDays": "Jaza baada ya",
+    "days": "siku"
+  },
+  "adherence": {
+    "markTaken": "Weka alama kama imechukuliwa",
+    "taken": "Imechukuliwa",
+    "missed": "Imekosekana",
+    "upcoming": "Ijayo",
+    "thisWeek": "Wiki hii",
+    "markFailed": "Imeshindwa kurekodi dozi. Tafadhali jaribu tena.",
+    "summary": "Muhtasari wa Kufuata Dawa"
+  },
+  "education": {
+    "title": "Elimu ya Afya",
+    "subtitle": "Jifunze kuhusu afya yako",
+    "all": "Yote",
+    "minRead": "dak kusoma",
+    "by": "Na"
+  },
+  "family": {
+    "title": "Ufikiaji wa Familia",
+    "subtitle": "Simamia wanaoweza kuona rekodi zako",
+    "addCaregiver": "Ongeza Mtunzaji / Mlezi",
+    "activeGrants": "Ruhusa Zinazotumika",
+    "noGrants": "Hakuna mtunzaji anayeweza kufikia rekodi zako",
+    "infoText": "Watunzaji uliowaoingiza hapa wanaweza kuona sehemu za rekodi yako ya afya. Unaweza kufuta ruhusa wakati wowote.",
+    "viewOnly": "Ona Tu",
+    "fullAccess": "Ufikiaji Kamili",
+    "emergencyOnly": "Dharura Tu",
+    "expires": "Inaisha",
+    "noExpiry": "Haina mwisho",
+    "revoke": "Futa",
+    "revokeTitle": "Futa Ruhusa",
+    "revokeConfirm": "Ondoa {{name}} kutoka kwa watunzaji wako?",
+    "grantAccess": "Toa Ruhusa",
+    "requiredFields": "Jina na barua pepe inahitajika",
+    "fieldName": "Jina la Mtunzaji",
+    "fieldNamePlaceholder": "Jina kamili",
+    "fieldEmail": "Anwani ya Barua Pepe",
+    "fieldPhone": "Simu (si lazima)",
+    "fieldRelationship": "Uhusiano (si lazima)",
+    "fieldRelationshipPlaceholder": "mfano. Mwenzi, Mzazi, Mtoto",
+    "fieldAccessLevel": "Kiwango cha Ufikiaji",
+    "fieldExpiry": "Ruhusa inaisha tarehe (si lazima)"
+  }
+}

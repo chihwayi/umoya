@@ -1,7 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AmbientSession } from '../entities/ambient-session.entity';
 import { CdssService } from './cdss.service';
+import { PostVisitSessionService } from './post-visit-session.service';
 
 export interface StartSessionDto {
   patientId: string;
@@ -27,11 +28,63 @@ export interface ProcessChunkResult {
   };
 }
 
+interface ChunkRetryItem {
+  sessionId: string;
+  audioBase64: string;
+  tenantDb: DataSource;
+  attempt: number;
+  nextRetryAt: number;
+}
+
 @Injectable()
 export class AmbientService {
   private readonly logger = new Logger(AmbientService.name);
+  private readonly chunkRetryQueue: ChunkRetryItem[] = [];
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private readonly cdssService: CdssService) {}
+  constructor(
+    private readonly cdssService: CdssService,
+    @Optional() private readonly postVisitSessionService?: PostVisitSessionService,
+  ) {}
+
+  private scheduleRetryFlush() {
+    if (this.retryTimer) return;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.flushRetryQueue();
+    }, 5_000);
+    this.retryTimer.unref?.();
+  }
+
+  private async flushRetryQueue(): Promise<void> {
+    const now = Date.now();
+    const due = this.chunkRetryQueue.filter(item => item.nextRetryAt <= now);
+    for (const item of due) {
+      const idx = this.chunkRetryQueue.indexOf(item);
+      if (idx !== -1) this.chunkRetryQueue.splice(idx, 1);
+
+      try {
+        await this.cdssService.ambientTranscriptionStream(
+          { sessionId: item.sessionId, audioBase64: item.audioBase64, context: {}, patientId: '', appointmentId: undefined },
+          undefined,
+          item.tenantDb,
+        );
+        this.logger.log(`[Ambient retry] chunk reprocessed for session ${item.sessionId}`);
+      } catch {
+        if (item.attempt < 3) {
+          this.chunkRetryQueue.push({
+            ...item,
+            attempt: item.attempt + 1,
+            nextRetryAt: Date.now() + (item.attempt + 1) * 10_000,
+          });
+          this.scheduleRetryFlush();
+        } else {
+          this.logger.warn(`[Ambient retry] chunk dropped after 3 attempts for session ${item.sessionId}`);
+        }
+      }
+    }
+    if (this.chunkRetryQueue.length > 0) this.scheduleRetryFlush();
+  }
 
   async startSession(dto: StartSessionDto, tenantDb: DataSource): Promise<AmbientSession> {
     const repo = tenantDb.getRepository(AmbientSession);
@@ -89,7 +142,15 @@ export class AmbientService {
         tenantDb,
       ) as ProcessChunkResult;
     } catch (err: any) {
-      this.logger.warn(`CDSS ambient transcription error: ${String(err?.message || err)}`);
+      this.logger.warn(`CDSS ambient transcription error (queuing retry): ${String(err?.message || err)}`);
+      this.chunkRetryQueue.push({
+        sessionId,
+        audioBase64,
+        tenantDb,
+        attempt: 1,
+        nextRetryAt: Date.now() + 10_000,
+      });
+      this.scheduleRetryFlush();
     }
 
     // Merge into session
@@ -142,12 +203,54 @@ export class AmbientService {
   async endSession(
     sessionId: string,
     tenantDb: DataSource,
-  ): Promise<AmbientSession> {
+    requestContext: { tenantId?: string; actorUserId?: string | null } = {},
+  ): Promise<AmbientSession & { postVisitSessionId?: string | null }> {
     await tenantDb.getRepository(AmbientSession).update(sessionId, {
       status:         'completed',
       sessionEndedAt: new Date(),
     });
-    return this.getSession(sessionId, tenantDb);
+
+    const session = await this.getSession(sessionId, tenantDb);
+
+    let postVisitSessionId: string | null = null;
+
+    if (this.postVisitSessionService) {
+      try {
+        // Create a captured post-visit session linked to this ambient session
+        const pvSession = await this.postVisitSessionService.createSession(
+          tenantDb,
+          {
+            patientId:     session.patientId,
+            doctorId:      session.providerId,
+            appointmentId: session.appointmentId ?? undefined,
+            sourceType:    'in_person',
+            language:      'en',
+            startedAt:     session.sessionStartedAt?.toISOString(),
+          },
+          requestContext,
+        );
+
+        // Link the ambient session to the post-visit session
+        await tenantDb.query(
+          `UPDATE post_visit_sessions
+           SET ambient_session_id = $1, updated_at = NOW()
+           WHERE id = $2`,
+          [sessionId, pvSession.id],
+        );
+
+        postVisitSessionId = pvSession.id;
+        this.logger.log(
+          `Post-visit session ${pvSession.id} created for ambient session ${sessionId}`,
+        );
+      } catch (err: any) {
+        // Post-visit session creation must never break the session end flow
+        this.logger.error(
+          `Failed to create post-visit session for ambient session ${sessionId}: ${err?.message}`,
+        );
+      }
+    }
+
+    return postVisitSessionId ? { ...session, postVisitSessionId } : { ...session };
   }
 
   async pauseSession(sessionId: string, tenantDb: DataSource): Promise<void> {

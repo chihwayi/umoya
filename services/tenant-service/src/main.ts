@@ -25,7 +25,7 @@ function validateCriticalSecurityEnv(): void {
 
 async function bootstrap() {
   validateCriticalSecurityEnv();
-  const app = await NestFactory.create(TenantModule);
+  const app = await NestFactory.create(TenantModule, { rawBody: true });
   
   app.use((req: Request, res: Response, next: NextFunction) => {
     const existing = req.header('x-request-id') || req.header('X-Request-ID');

@@ -2,6 +2,10 @@ import { BadRequestException, ServiceUnavailableException } from '@nestjs/common
 import * as childProcess from 'child_process';
 import { UploadSecurityService } from './upload-security.service';
 
+jest.mock('child_process', () => ({
+  spawnSync: jest.fn(),
+}));
+
 describe('UploadSecurityService', () => {
   const ENV_KEYS = [
     'EHR_MALWARE_SCAN_ENABLED',
@@ -40,7 +44,7 @@ describe('UploadSecurityService', () => {
   });
 
   it('skips scanner when disabled', async () => {
-    const spy = jest.spyOn(childProcess, 'spawnSync');
+    const spy = childProcess.spawnSync as jest.Mock;
     const service = new UploadSecurityService();
     await service.assertCleanUpload(sampleFile, 'audio');
     expect(spy).not.toHaveBeenCalled();
@@ -48,7 +52,7 @@ describe('UploadSecurityService', () => {
 
   it('blocks infected uploads', async () => {
     process.env.EHR_MALWARE_SCAN_ENABLED = 'true';
-    jest.spyOn(childProcess, 'spawnSync').mockReturnValue({
+    (childProcess.spawnSync as jest.Mock).mockReturnValue({
       status: 1,
       stderr: 'FOUND',
       error: undefined,
@@ -60,7 +64,7 @@ describe('UploadSecurityService', () => {
   it('blocks scanner failures when fail-closed', async () => {
     process.env.EHR_MALWARE_SCAN_ENABLED = 'true';
     process.env.EHR_MALWARE_SCAN_FAIL_CLOSED = 'true';
-    jest.spyOn(childProcess, 'spawnSync').mockReturnValue({
+    (childProcess.spawnSync as jest.Mock).mockReturnValue({
       status: 2,
       stderr: 'scanner down',
       error: undefined,
@@ -72,7 +76,7 @@ describe('UploadSecurityService', () => {
   it('allows scanner failures when fail-open is enabled', async () => {
     process.env.EHR_MALWARE_SCAN_ENABLED = 'true';
     process.env.EHR_MALWARE_SCAN_FAIL_CLOSED = 'false';
-    jest.spyOn(childProcess, 'spawnSync').mockReturnValue({
+    (childProcess.spawnSync as jest.Mock).mockReturnValue({
       status: 2,
       stderr: 'scanner down',
       error: undefined,

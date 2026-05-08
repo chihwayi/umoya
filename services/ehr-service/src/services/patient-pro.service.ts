@@ -2,6 +2,8 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { DataSource } from 'typeorm';
 import { NotificationsService } from './notifications.service';
 import { CdssService } from './cdss.service';
+import { SmsService } from './sms.service';
+import { ProInterpretationService } from './pro-interpretation.service';
 import { 
   getAllQuestionnaires, 
   getQuestionnairesByCategory, 
@@ -60,6 +62,8 @@ export class PatientProService {
   constructor(
     private readonly notificationsService?: NotificationsService,
     private readonly cdssService?: CdssService,
+    private readonly proInterpretationService?: ProInterpretationService,
+    private readonly smsService?: SmsService,
   ) {}
 
   private ensureTenantDb(tenantDb: DataSource) {
@@ -341,17 +345,23 @@ export class PatientProService {
       ],
     );
 
-    // Send notification to patient
+    // Send SMS notification to patient
     try {
-      const patient = await tenantDb.query(`SELECT first_name, last_name, email, phone FROM patients WHERE id = $1`, [
-        patientId,
-      ]);
-      if (patient && patient[0]) {
-        // TODO: Send notification via NotificationsService
-        this.logger.log(`Questionnaire ${template.code} assigned to patient ${patientId}`);
+      const patient = await tenantDb.query(
+        `SELECT first_name, phone FROM patients WHERE id = $1 LIMIT 1`,
+        [patientId],
+      );
+      const phone = patient?.[0]?.phone;
+      const name = patient?.[0]?.first_name ?? 'there';
+      if (phone && this.smsService) {
+        await this.smsService.send(
+          phone,
+          `MediCore: Hi ${name}, your care team has assigned you a health questionnaire: "${template.name ?? template.code}". Please open the MediCore Patient app to complete it.`,
+        );
       }
+      this.logger.log(`Questionnaire ${template.code} assigned to patient ${patientId}`);
     } catch (error) {
-      this.logger.warn(`Failed to send notification for questionnaire assignment: ${error.message}`);
+      this.logger.warn(`Failed to send SMS for questionnaire assignment: ${error.message}`);
     }
 
     return result;
@@ -520,11 +530,16 @@ export class PatientProService {
 
       await tenantDb.query(`COMMIT`);
 
+      const interpretation = this.proInterpretationService
+        ? this.proInterpretationService.interpret(template.code ?? template.name ?? '', finalScore)
+        : undefined;
+
       return {
         questionnaireId,
         finalScore,
         completionPercentage,
         questionScores,
+        interpretation,
       };
     } catch (error) {
       await tenantDb.query(`ROLLBACK`);
@@ -2516,4 +2531,3 @@ export class PatientProService {
     }));
   }
 }
-

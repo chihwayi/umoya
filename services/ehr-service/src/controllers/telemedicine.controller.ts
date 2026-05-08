@@ -10,8 +10,10 @@ import {
   Query,
   UseGuards,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { TelemedicineService } from '../services/telemedicine.service';
@@ -272,6 +274,45 @@ export class TelemedicineController {
     return this.consentService.grantConsent(req.tenantDb, dto, userId);
   }
 
+  @Post('consultations/:id/consent')
+  @UseGuards(JwtAuthGuard)
+  async grantConsultationConsent(
+    @Req() req: any,
+    @Param('id') consultationId: string,
+    @Body() body: { ipAddress?: string; userAgent?: string },
+  ) {
+    const tenantDb: DataSource = req.tenantDb;
+    const patientId: string = req.user?.sub ?? req.user?.userId;
+
+    // Verify this consultation belongs to the requesting patient
+    const consultation = await this.telemedicineService.getConsultation(tenantDb, consultationId);
+    if (consultation.patient_id !== patientId) {
+      throw new BadRequestException('Consultation does not belong to the requesting patient');
+    }
+
+    await this.consentService.grantConsent(tenantDb, {
+      patientId,
+      consentType: 'general_telehealth',
+      ipAddress: body.ipAddress,
+      userAgent: body.userAgent || req.headers?.['user-agent'],
+    });
+    await this.consentService.validateConsent(tenantDb, patientId, consultationId);
+
+    return { granted: true, consultationId, patientId };
+  }
+
+  @Get('consultations/:id/consent')
+  @UseGuards(JwtAuthGuard)
+  async getConsultationConsentStatus(
+    @Req() req: any,
+    @Param('id') consultationId: string,
+  ) {
+    const tenantDb: DataSource = req.tenantDb;
+    const consultation = await this.telemedicineService.getConsultation(tenantDb, consultationId);
+    const hasConsent = await this.consentService.checkConsent(tenantDb, consultation.patient_id);
+    return { hasConsent, patientId: consultation.patient_id, consultationId };
+  }
+
   @Get('consents')
   @ApiOperation({ summary: 'Get consent history' })
   @ApiQuery({ name: 'patientId', required: true })
@@ -373,4 +414,3 @@ export class TelemedicineController {
     return this.digitalPrescriptionService.sendPrescriptionToPharmacy(req.tenantDb, id, pharmacyId);
   }
 }
-

@@ -3,6 +3,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Bell, Heart, LogOut, Menu, Settings, User, Users, X, CheckCheck, ExternalLink, type LucideIcon } from 'lucide-react';
 import { tenantApi, cdssApi } from '../services/api';
 import LanguageSwitcher from './LanguageSwitcher';
+import { OnboardingChecklist } from './OnboardingChecklist';
+import { useOnboarding } from '../hooks/useOnboarding';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -27,6 +29,7 @@ interface NavigationItem {
   label: string;
   path: string;
   icon: LucideIcon;
+  moduleKey?: string;
   exact?: boolean;
   roles?: string[];
 }
@@ -37,6 +40,33 @@ interface EhrUser {
   lastName: string;
   role: string;
 }
+
+const ROUTE_MODULE_MATCHERS: Array<{ pathPart: string; moduleKey: string }> = [
+  { pathPart: 'radiology', moduleKey: 'radiology' },
+  { pathPart: 'radiologist', moduleKey: 'radiology' },
+  { pathPart: 'technologist/imaging', moduleKey: 'radiology' },
+  { pathPart: 'operating-room', moduleKey: 'operating_room' },
+  { pathPart: 'theatre', moduleKey: 'operating_room' },
+  { pathPart: 'blood-bank', moduleKey: 'blood_bank' },
+  { pathPart: 'oncology', moduleKey: 'oncology' },
+  { pathPart: 'cardiology', moduleKey: 'cardiology' },
+  { pathPart: 'ophthalmology', moduleKey: 'ophthalmology' },
+  { pathPart: 'emergency', moduleKey: 'emergency' },
+  { pathPart: 'infection-control', moduleKey: 'infection_control' },
+  { pathPart: 'hiv', moduleKey: 'hiv' },
+  { pathPart: 'maternity', moduleKey: 'maternity' },
+  { pathPart: 'diabetes', moduleKey: 'diabetes' },
+  { pathPart: 'telemedicine', moduleKey: 'telemedicine' },
+  { pathPart: 'population-health', moduleKey: 'population_health' },
+  { pathPart: 'patient-portal', moduleKey: 'patient_portal' },
+  { pathPart: 'post-visit', moduleKey: 'patient_portal' },
+];
+
+const getNavigationModuleKey = (item: NavigationItem): string | undefined => {
+  if (item.moduleKey) return item.moduleKey;
+  const normalizedPath = item.path.toLowerCase();
+  return ROUTE_MODULE_MATCHERS.find((matcher) => normalizedPath.includes(matcher.pathPart))?.moduleKey;
+};
 
 const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
   title,
@@ -54,6 +84,8 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<EhrUser | null>(null);
   const [tenantBranding, setTenantBranding] = useState<TenantBranding | null>(() => readCachedTenantBranding(tenantSlug));
+  const [enabledModules, setEnabledModules] = useState<string[]>([]);
+  const [deploymentMode, setDeploymentMode] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -92,6 +124,8 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
           logoUrl: data.logoUrl,
         };
         setTenantBranding(nextBranding);
+        setEnabledModules(Array.isArray(data.enabledModules) ? data.enabledModules : []);
+        setDeploymentMode(data.deploymentMode || null);
         cacheTenantBranding(tenantSlug, nextBranding);
       })
       .catch(() => {});
@@ -187,6 +221,7 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
 
   const role = user?.role || '';
   const workspaceLabel = portalLabel || `${(role || 'clinic').replace('_', ' ')} workspace`;
+  const { isVisible: onboardingVisible, reopen: reopenOnboarding } = useOnboarding(role || null);
   const headerToneClass = {
     default: 'from-blue-600 via-indigo-600 to-purple-600',
     pharmacy: 'from-teal-600 via-emerald-600 to-cyan-600',
@@ -224,12 +259,21 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
     ];
   }, [tenantSlug]);
 
-  const resolvedNavigationItems = useMemo(
+  const roleFilteredNavigationItems = useMemo(
     () =>
       (navigationItems && navigationItems.length ? navigationItems : defaultNavigationItems).filter((item) =>
         item.roles?.length ? item.roles.includes(role) : true,
       ),
     [defaultNavigationItems, navigationItems, role],
+  );
+
+  const visibleNavItems = useMemo(
+    () =>
+      roleFilteredNavigationItems.filter((item) => {
+        const moduleKey = getNavigationModuleKey(item);
+        return !moduleKey || enabledModules.includes(moduleKey);
+      }),
+    [enabledModules, roleFilteredNavigationItems],
   );
 
   const isNavItemActive = (item: NavigationItem) => {
@@ -297,8 +341,15 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
             </div>
           </div>
 
+          {deploymentMode && deploymentMode !== 'clinic' && (
+            <div className="mx-3 mb-3 rounded-xl border border-[#2B7FFF]/20 bg-[#2B7FFF]/[0.07] px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#4A7AAA]">Deployment Mode</p>
+              <p className="text-xs font-semibold text-[#C5D5EE] capitalize">{deploymentMode}</p>
+            </div>
+          )}
+
           <nav className="space-y-2">
-            {resolvedNavigationItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               return (
                 <button
@@ -311,6 +362,15 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
                 </button>
               );
             })}
+            {!onboardingVisible && (
+              <button
+                onClick={reopenOnboarding}
+                className="w-full flex items-center gap-3 px-3 py-2 text-slate-400 hover:bg-white/10 rounded-lg transition-colors text-sm"
+              >
+                <CheckCheck className="w-5 h-5" />
+                <span>Getting started</span>
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-3 px-3 py-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
@@ -435,7 +495,10 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
           </div>
         </header>
 
-        <main className={contentClassName}>{children}</main>
+        <main className={contentClassName}>
+          <OnboardingChecklist role={role} />
+          {children}
+        </main>
       </div>
     </div>
   );

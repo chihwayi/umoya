@@ -88,7 +88,7 @@ const RadiologistDashboard: React.FC = () => {
       headerTone="radiology"
       navigationItems={[
         { key: 'dashboard', label: 'Dashboard', path: `${tenantBasePath}/dashboard`, icon: LayoutDashboard, exact: true },
-        { key: 'radiology', label: 'Radiology', path: `${tenantBasePath}/radiologist`, icon: Camera, exact: true },
+        { key: 'radiology', label: 'Radiology', path: `${tenantBasePath}/radiologist`, icon: Camera, exact: true, moduleKey: 'radiology' },
         { key: 'settings', label: 'Profile Settings', path: `${tenantBasePath}/settings`, icon: Settings, exact: true },
       ]}
     >

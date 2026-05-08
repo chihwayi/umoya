@@ -132,6 +132,27 @@ export class FileStorageService {
     }
   }
 
+  async downloadBuffer(bucket: string, key: string): Promise<Buffer> {
+    if (!this.useS3 || !this.s3Client) {
+      throw new Error('S3 not configured; cannot download object');
+    }
+
+    const response = await this.s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const body = response.Body as any;
+    if (!body) return Buffer.alloc(0);
+
+    if (typeof body.transformToByteArray === 'function') {
+      return Buffer.from(await body.transformToByteArray());
+    }
+
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      body.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+      body.on('end', () => resolve(Buffer.concat(chunks)));
+      body.on('error', reject);
+    });
+  }
+
   /**
    * Get a presigned URL for a file
    */
@@ -199,4 +220,3 @@ export class FileStorageService {
     return this.uploadFile(fileBuffer, fileName, contentType, 'analytics-reports');
   }
 }
-

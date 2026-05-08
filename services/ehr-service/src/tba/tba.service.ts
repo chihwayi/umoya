@@ -22,6 +22,134 @@ export class TbaService {
     return dataSource.getRepository(entity);
   }
 
+  async notifyBirth(birthData: {
+    motherNationalId?: string;
+    babyFirstName: string;
+    babyLastName: string;
+    dateOfBirth: string;
+    facilityCode?: string;
+    attendantType?: string;
+    birthWeight?: number;
+    gestationalAge?: number;
+    tenantCountryCode?: string;
+  }): Promise<{ submitted: boolean; referenceNumber?: string; skipped?: boolean }> {
+    const crvsEnabled = process.env.CRVS_ENABLED === 'true';
+    const crvsEndpoint = process.env.CRVS_ENDPOINT;
+    const crvsApiKey = process.env.CRVS_API_KEY;
+
+    if (!crvsEnabled || !crvsEndpoint) {
+      this.logger.log('CRVS birth notification skipped - not configured');
+      return { submitted: false, skipped: true };
+    }
+
+    const payload = {
+      eventType: 'BIRTH',
+      eventDate: birthData.dateOfBirth,
+      child: {
+        firstName: birthData.babyFirstName,
+        lastName: birthData.babyLastName,
+        dateOfBirth: birthData.dateOfBirth,
+        birthWeight: birthData.birthWeight,
+        gestationalAge: birthData.gestationalAge,
+      },
+      mother: {
+        nationalId: birthData.motherNationalId,
+      },
+      facility: {
+        code: birthData.facilityCode,
+        attendantType: birthData.attendantType ?? 'SKILLED_BIRTH_ATTENDANT',
+      },
+      submittedAt: new Date().toISOString(),
+    };
+
+    try {
+      const response = await fetch(crvsEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': crvsApiKey ?? '',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        this.logger.error(`CRVS birth notification failed: ${response.status} ${text}`);
+        return { submitted: false };
+      }
+
+      const result = await response.json().catch(() => ({}));
+      this.logger.log(`CRVS birth submitted: ${result.referenceNumber ?? 'no-ref'}`);
+      return { submitted: true, referenceNumber: result.referenceNumber };
+    } catch (err: any) {
+      this.logger.error(`CRVS birth notification error: ${err.message}`);
+      return { submitted: false };
+    }
+  }
+
+  async notifyDeath(deathData: {
+    deceasedNationalId?: string;
+    deceasedFirstName: string;
+    deceasedLastName: string;
+    dateOfDeath: string;
+    causeOfDeath?: string;
+    icd10Code?: string;
+    facilityCode?: string;
+    tenantCountryCode?: string;
+  }): Promise<{ submitted: boolean; referenceNumber?: string; skipped?: boolean }> {
+    const crvsEnabled = process.env.CRVS_ENABLED === 'true';
+    const crvsEndpoint = process.env.CRVS_ENDPOINT;
+    const crvsApiKey = process.env.CRVS_API_KEY;
+
+    if (!crvsEnabled || !crvsEndpoint) {
+      this.logger.log('CRVS death notification skipped - not configured');
+      return { submitted: false, skipped: true };
+    }
+
+    const payload = {
+      eventType: 'DEATH',
+      eventDate: deathData.dateOfDeath,
+      deceased: {
+        firstName: deathData.deceasedFirstName,
+        lastName: deathData.deceasedLastName,
+        nationalId: deathData.deceasedNationalId,
+        dateOfDeath: deathData.dateOfDeath,
+      },
+      causeOfDeath: {
+        description: deathData.causeOfDeath,
+        icd10Code: deathData.icd10Code,
+      },
+      facility: {
+        code: deathData.facilityCode,
+      },
+      submittedAt: new Date().toISOString(),
+    };
+
+    try {
+      const response = await fetch(crvsEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': crvsApiKey ?? '',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        this.logger.error(`CRVS death notification failed: ${response.status} ${text}`);
+        return { submitted: false };
+      }
+
+      const result = await response.json().catch(() => ({}));
+      this.logger.log(`CRVS death submitted: ${result.referenceNumber ?? 'no-ref'}`);
+      return { submitted: true, referenceNumber: result.referenceNumber };
+    } catch (err: any) {
+      this.logger.error(`CRVS death notification error: ${err.message}`);
+      return { submitted: false };
+    }
+  }
+
   // ── TBA Register ───────────────────────────────────────────────────────────
 
   async registerTba(tenantId: string, data: Partial<TbaRegister>): Promise<TbaRegister> {

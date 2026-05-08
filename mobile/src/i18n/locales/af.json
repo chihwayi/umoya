@@ -1,0 +1,128 @@
+{
+  "common": {
+    "loading": "Laai…",
+    "error": "Iets het verkeerd gegaan",
+    "retry": "Probeer weer",
+    "save": "Stoor",
+    "cancel": "Kanselleer",
+    "back": "Terug",
+    "submit": "Dien in",
+    "confirm": "Bevestig",
+    "logout": "Teken uit",
+    "search": "Soek",
+    "noResults": "Geen resultate"
+  },
+  "nav": {
+    "home": "Tuis",
+    "appointments": "Afsprake",
+    "health": "My Gesondheid",
+    "meds": "Medisyne",
+    "bills": "Rekeninge",
+    "messages": "Boodskappe",
+    "education": "Leer",
+    "notifications": "Kennisgewings",
+    "shift": "My Skof",
+    "vitals": "Lewenstekens",
+    "rounds": "Rondtes",
+    "patients": "Pasiënte",
+    "ai": "AI-assistent"
+  },
+  "patient": {
+    "name": "Volle Naam",
+    "dob": "Geboortedatum",
+    "sex": "Geslag",
+    "phone": "Telefoonnommer",
+    "id_number": "ID-nommer",
+    "blood_group": "Bloedgroep",
+    "age": "Ouderdom",
+    "next_of_kin": "Naaste Familielid"
+  },
+  "clinical": {
+    "vitals": "Lewenstekens",
+    "weight": "Gewig (kg)",
+    "height": "Lengte (cm)",
+    "bp": "Bloeddruk",
+    "temp": "Temperatuur (°C)",
+    "pulse": "Pols (bpm)",
+    "spo2": "SpO₂ (%)",
+    "diagnosis": "Diagnose",
+    "prescription": "Voorskrif",
+    "chief_complaint": "Hoofklagte",
+    "plan": "Behandelingsplan",
+    "referral": "Verwysing"
+  },
+  "billing": {
+    "invoice": "Faktuur",
+    "payment": "Betaling",
+    "receipt": "Kwitansie",
+    "outstanding": "Uitstaande Saldo",
+    "paid": "Betaal"
+  },
+  "auth": {
+    "login": "Meld aan",
+    "email": "E-pos",
+    "password": "Wagwoord",
+    "biometric": "Gebruik Biometrie",
+    "sessionExpired": "Sessie verval. Meld asseblief weer aan."
+  },
+  "postVisit": {
+    "visitSummary": "Besoekopsomming",
+    "status": "Status",
+    "subjective": "Wat U Gerapporteer Het",
+    "assessment": "Assessering",
+    "plan": "U Sorgplan",
+    "notFound": "Besoekopsomming is nog nie beskikbaar nie."
+  },
+  "meds": {
+    "requestRefill": "Versoek Hervulling",
+    "refillPending": "Hervulling Hangende",
+    "refillApproved": "Hervulling Goedgekeur",
+    "refillCancelled": "Versoek gekanselleer",
+    "refillRequested": "Versoek ingedien",
+    "refillSoon": "Hervul Binnekort",
+    "refillDays": "Hervul oor",
+    "days": "dae"
+  },
+  "adherence": {
+    "markTaken": "Merk as geneem",
+    "taken": "Geneem",
+    "missed": "Gemis",
+    "upcoming": "Aanstaande",
+    "thisWeek": "Hierdie week",
+    "markFailed": "Kon nie dosis aanteken nie. Probeer asseblief weer.",
+    "summary": "Nakoming Opsomming"
+  },
+  "education": {
+    "title": "Gesondheidsopvoeding",
+    "subtitle": "Leer meer oor jou gesondheid",
+    "all": "Alles",
+    "minRead": "min om te lees",
+    "by": "Deur"
+  },
+  "family": {
+    "title": "Gesinstoegang",
+    "subtitle": "Bestuur wie u rekords kan sien",
+    "addCaregiver": "Voeg Versorger / Voog By",
+    "activeGrants": "Aktiewe Toegangstoekennings",
+    "noGrants": "Geen versorger het toegang tot u rekords nie",
+    "infoText": "Versorgers wat u hier byvoeg kan dele van u gesondheidsrekord sien. U kan toegang enige tyd herroep.",
+    "viewOnly": "Slegs Lees",
+    "fullAccess": "Volledige Toegang",
+    "emergencyOnly": "Slegs Noodgevalle",
+    "expires": "Verval",
+    "noExpiry": "Geen vervaldatum",
+    "revoke": "Herroep",
+    "revokeTitle": "Herroep Toegang",
+    "revokeConfirm": "Verwyder {{name}} van u versorgers?",
+    "grantAccess": "Verleen Toegang",
+    "requiredFields": "Naam en e-pos is verpligtend",
+    "fieldName": "Versorger se Naam",
+    "fieldNamePlaceholder": "Volle naam",
+    "fieldEmail": "E-posadres",
+    "fieldPhone": "Telefoon (opsioneel)",
+    "fieldRelationship": "Verhouding (opsioneel)",
+    "fieldRelationshipPlaceholder": "bv. Gade, Ouer, Kind",
+    "fieldAccessLevel": "Toegangsvlak",
+    "fieldExpiry": "Toegang verval op (opsioneel)"
+  }
+}

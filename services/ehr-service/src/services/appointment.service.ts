@@ -14,6 +14,7 @@ import { PatientProService } from './patient-pro.service';
 import { ClinicalWorkflowService } from './clinical-workflow.service';
 import { SchedulingIntelligenceService } from './scheduling-intelligence.service';
 import { MlFeedbackService } from './ml-feedback.service';
+import { SmsService } from './sms.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
@@ -31,6 +32,7 @@ export class AppointmentService {
     @Optional() private workflowService?: ClinicalWorkflowService,
     @Optional() private schedulingIntelligenceService?: SchedulingIntelligenceService,
     @Optional() private mlFeedbackService?: MlFeedbackService,
+    @Optional() private smsService?: SmsService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -121,6 +123,26 @@ export class AppointmentService {
     });
 
     const savedAppointment = await appointmentRepository.save(appointment);
+
+    try {
+      let patientPhone = (createAppointmentDto as any).patientPhone ?? (createAppointmentDto as any).phone_number;
+      if (!patientPhone) {
+        const [patient] = await connection.query(
+          `SELECT phone FROM patients WHERE id = $1 LIMIT 1`,
+          [createAppointmentDto.patientId],
+        );
+        patientPhone = patient?.phone;
+      }
+      if (patientPhone && this.smsService) {
+        const apptDate = new Date((createAppointmentDto as any).appointmentDate ?? (createAppointmentDto as any).start_time);
+        await this.smsService.send(
+          patientPhone,
+          `MediCore: Appointment confirmed at ${(createAppointmentDto as any).facilityName ?? 'your clinic'} on ${apptDate.toDateString()} at ${apptDate.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}. Reply STOP to opt out.`,
+        );
+      }
+    } catch {
+      // SMS failure must never break appointment creation
+    }
 
     if (financeTransactionId) {
       await connection.query(

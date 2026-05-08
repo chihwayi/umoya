@@ -20,6 +20,7 @@ export interface TenantBillingSummary {
 export interface TenantSubscriptionInfo {
   id?: string;
   enabledModules?: string[];
+  deploymentMode?: string;
   subscriptionMode?: 'demo' | 'paid';
   packagePreset?: 'full_ehr' | 'claims_only';
   subscriptionState?: 'demo' | 'active' | 'grace' | 'suspended' | 'expired';

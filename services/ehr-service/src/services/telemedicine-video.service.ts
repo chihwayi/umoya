@@ -66,7 +66,7 @@ export class TelemedicineVideoService {
         enable_recording: 'cloud',
         recording_type: 'cloud',
         enable_chat: true,
-        enable_screenshare: false,
+        enable_screenshare: true,
         enable_knocking: true,
         exp: expiresAt,
         nbf: notBeforeAt,

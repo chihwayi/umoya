@@ -8,6 +8,7 @@ import { MulterModule } from '@nestjs/platform-express';
 // Controllers
 import { AuthController } from './controllers/auth.controller';
 import { PatientController } from './controllers/patient.controller';
+import { MigrationController } from './controllers/migration.controller';
 import { PatientHistoryController } from './controllers/patient-history.controller';
 import { AppointmentController } from './controllers/appointment.controller';
 import { MedicalRecordController } from './controllers/medical-record.controller';
@@ -198,6 +199,8 @@ import { AuthService } from './services/auth.service';
 import { PatientService } from './services/patient.service';
 import { PatientHistoryService } from './services/patient-history.service';
 import { AppointmentService } from './services/appointment.service';
+import { SmsService } from './services/sms.service';
+import { ProInterpretationService } from './services/pro-interpretation.service';
 import { MedicalRecordService } from './services/medical-record.service';
 import { PrescriptionService } from './services/prescription.service';
 import { PrescriptionPdfService } from './services/prescription-pdf.service';
@@ -380,6 +383,7 @@ import { PostVisitBillingIntelligenceService } from './services/post-visit-billi
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
 import { PostVisitDraftService } from './services/post-visit-draft.service';
+import { PostVisitIngestionCronService } from './services/post-visit-ingestion-cron.service';
 import { PopulationHealthService } from './services/population-health.service';
 import { PracticeManagementService } from './services/practice-management.service';
 import { PriorAuthorizationService } from './services/prior-authorization.service';
@@ -468,6 +472,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
   controllers: [
     AuthController,
     PatientController,
+    MigrationController,
     PatientHistoryController,
     AppointmentController,
     MedicalRecordController,
@@ -648,6 +653,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PatientService,
     PatientHistoryService,
     AppointmentService,
+    SmsService,
+    ProInterpretationService,
     MedicalRecordService,
     PrescriptionService,
     PrescriptionPdfService,
@@ -792,6 +799,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PostVisitCompanionMemoryService,
     PostVisitSessionService,
     PostVisitDraftService,
+    PostVisitIngestionCronService,
     PopulationHealthService,
     PracticeManagementService,
     PriorAuthorizationService,
@@ -862,6 +870,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     JwtStrategy,
     RolesGuard,
   ],
+  exports: [SmsService],
 })
 export class EhrModule {
   configure(consumer: MiddlewareConsumer) {

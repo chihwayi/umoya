@@ -93,6 +93,12 @@ export class Tenant {
   @Column({ default: 'Zimbabwe' })
   country: string;
 
+  @Column({ nullable: true, length: 2 })
+  countryCode: string | null;
+
+  @Column({ default: 'clinic', length: 20 })
+  deploymentMode: string;
+
   @Column({ nullable: true })
   logoUrl: string;
 

@@ -5,7 +5,9 @@ import { AutoLogoutProvider } from './components/AutoLogoutProvider';
 import { BackgroundTaskProvider } from './contexts/BackgroundTaskContext';
 import { BackgroundTaskDock } from './components/BackgroundTaskDock';
 import { tenantApi } from './services/api';
-import { hasModuleAccess, TenantSubscriptionInfo } from './utils/tenantSubscription';
+import ModuleUnavailablePage from './pages/ModuleUnavailablePage';
+import { TenantModuleRoute } from './components/TenantModuleRoute';
+import { getEnabledModules, hasModuleAccess, TenantSubscriptionInfo } from './utils/tenantSubscription';
 const TenantDirectory = lazy(() => import('./pages/TenantDirectory'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const EHRLogin = lazy(() => import('./pages/EHRLogin'));
@@ -144,7 +146,7 @@ const writeTenantSubscriptionCache = (tenantSlug: string, tenantInfo: TenantSubs
   } catch {}
 };
 
-const TenantModuleRoute: React.FC<{ moduleKey: string; children: React.ReactElement }> = ({ moduleKey, children }) => {
+const TenantScopedModuleRoute: React.FC<{ moduleKey: string; children: React.ReactElement }> = ({ moduleKey, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [tenantInfo, setTenantInfo] = React.useState<TenantSubscriptionInfo | null>(() => readTenantSubscriptionCache(tenantSlug));
   const [checkingModuleAccess, setCheckingModuleAccess] = React.useState(Boolean(tenantSlug && !readTenantSubscriptionCache(tenantSlug)));
@@ -173,6 +175,7 @@ const TenantModuleRoute: React.FC<{ moduleKey: string; children: React.ReactElem
           ? {
               id: data.id,
               enabledModules: data.enabledModules,
+              deploymentMode: data.deploymentMode,
               subscriptionMode: data.subscriptionMode,
               packagePreset: data.packagePreset,
               subscriptionState: data.subscriptionState,
@@ -206,11 +209,11 @@ const TenantModuleRoute: React.FC<{ moduleKey: string; children: React.ReactElem
     return <RouteLoader />;
   }
 
-  if (!hasModuleAccess(tenantInfo, moduleKey)) {
-    return <Navigate to={`/ehr/${tenantSlug}`} replace />;
-  }
-
-  return children;
+  return (
+    <TenantModuleRoute moduleKey={moduleKey} enabledModules={Array.from(getEnabledModules(tenantInfo))}>
+      {children}
+    </TenantModuleRoute>
+  );
 };
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; moduleKey?: string; children: React.ReactElement }> = ({
@@ -256,6 +259,7 @@ const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; moduleKey?: string;
           ? {
               id: data.id,
               enabledModules: data.enabledModules,
+              deploymentMode: data.deploymentMode,
               subscriptionMode: data.subscriptionMode,
               packagePreset: data.packagePreset,
               subscriptionState: data.subscriptionState,
@@ -298,7 +302,7 @@ const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; moduleKey?: string;
       return <RouteLoader />;
     }
     if (!hasModuleAccess(tenantInfo, moduleKey)) {
-      return <Navigate to={`/ehr/${tenantSlug}/dashboard`} replace />;
+      return <Navigate to="/unavailable" replace />;
     }
   }
 
@@ -349,22 +353,23 @@ function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/tenants" element={<TenantDirectory />} />
+              <Route path="/unavailable" element={<ModuleUnavailablePage />} />
               <Route path="/:tenantSlug" element={<TenantRedirect />} />
               <Route path="/:tenantSlug/login" element={<TenantRedirect />} />
               <Route
                 path="/portal/:tenantSlug/login"
                 element={
-                  <TenantModuleRoute moduleKey="patient_portal">
+                  <TenantScopedModuleRoute moduleKey="patient_portal">
                     <PatientPortalLogin />
-                  </TenantModuleRoute>
+                  </TenantScopedModuleRoute>
                 }
               />
               <Route
                 path="/portal/:tenantSlug"
                 element={
-                  <TenantModuleRoute moduleKey="patient_portal">
+                  <TenantScopedModuleRoute moduleKey="patient_portal">
                     <PatientPortalDashboard />
-                  </TenantModuleRoute>
+                  </TenantScopedModuleRoute>
                 }
               />
               <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
@@ -697,7 +702,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/lab"
               element={
-                <RoleProtectedRoute allowedRoles={['lab_tech', 'lab_technician']} moduleKey="laboratory">
+                <RoleProtectedRoute allowedRoles={['lab_tech', 'lab_technician']}>
                   <LabDashboard />
                 </RoleProtectedRoute>
               }
@@ -884,7 +889,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/pharmacy"
               element={
-                <RoleProtectedRoute allowedRoles={['pharmacist', 'pharmacy_tech', 'pharmacy', 'doctor', 'nurse']} moduleKey="pharmacy">
+                <RoleProtectedRoute allowedRoles={['pharmacist', 'pharmacy_tech', 'pharmacy', 'doctor', 'nurse']}>
                   <PharmacyDashboard />
                 </RoleProtectedRoute>
               }
@@ -892,7 +897,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/billing"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'accounts']} moduleKey="finance">
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
                   <BillingDashboard />
                 </RoleProtectedRoute>
               }
@@ -924,17 +929,17 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/patient/post-visit"
               element={
-                <TenantModuleRoute moduleKey="patient_portal">
+                  <TenantScopedModuleRoute moduleKey="patient_portal">
                   <PostVisitCompanionPortal />
-                </TenantModuleRoute>
+                </TenantScopedModuleRoute>
               }
             />
             <Route
               path="/ehr/:tenantSlug/post-visit/companion"
               element={
-                <TenantModuleRoute moduleKey="patient_portal">
+                  <TenantScopedModuleRoute moduleKey="patient_portal">
                   <PostVisitCompanionPortal />
-                </TenantModuleRoute>
+                </TenantScopedModuleRoute>
               }
             />
             <Route

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, AiPulse, Dot } from '../ui';
 import { NurseWorklistService } from '../../services/nurseWorklist';
@@ -808,6 +809,7 @@ interface AiSheetPatient {
 
 export const NurseShiftScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { pendingCount: pendingSyncCount, isSyncing } = useOfflineSync();
   const [activeTab,  setActiveTab]  = useState<ShiftTab>('worklist');
   const [tasks,      setTasks]      = useState<ShiftTask[]>([]);
@@ -923,8 +925,8 @@ export const NurseShiftScreen: React.FC = () => {
       <LinearGradient colors={['#030B18', C.bg]} style={StyleSheet.absoluteFill} />
 
       <ScreenHeader
-        title={activeTab === 'worklist' ? 'Shift Worklist' : 'Triage'}
-        subtitle={`${pendingCount} tasks remaining`}
+        title={activeTab === 'worklist' ? t('nav.shift') : 'Triage'}
+        subtitle={loading ? t('common.loading') : `${pendingCount} tasks remaining`}
         accent={C.purple}
         rightSlot={
           pendingSyncCount > 0 ? (

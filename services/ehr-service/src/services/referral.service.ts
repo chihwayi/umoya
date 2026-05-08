@@ -20,12 +20,12 @@ export class ReferralService {
       `INSERT INTO referrals (
         patient_id, referring_provider_id, referring_facility_name,
         referred_to_provider_id, referred_to_facility_name, referred_to_facility_address,
-        referred_to_facility_phone, referred_to_facility_email, referral_type, specialty,
+        referred_to_facility_phone, referred_to_facility_email, referred_to_facility_webhook, referral_type, specialty,
         priority, urgency, reason, clinical_summary, relevant_history,
         current_medications, allergies, diagnostic_tests_ordered, requested_services,
         referral_date, requested_appointment_date, status, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW(), NOW())
       RETURNING *`,
       [
         patientId,
@@ -36,6 +36,7 @@ export class ReferralService {
         referralData.referredToFacilityAddress || null,
         referralData.referredToFacilityPhone || null,
         referralData.referredToFacilityEmail || null,
+        referralData.referredToFacilityWebhook || null,
         referralData.referralType,
         referralData.specialty || null,
         referralData.priority || 'normal',
@@ -57,6 +58,7 @@ export class ReferralService {
 
     // Create initial status history
     await this.addStatusHistory(referral.id, null, referral.status, userId, 'Referral created', tenantDb);
+    await this.deliverReferral(referral);
 
     return referral;
   }
@@ -79,6 +81,7 @@ export class ReferralService {
       referredToFacilityAddress: 'referred_to_facility_address',
       referredToFacilityPhone: 'referred_to_facility_phone',
       referredToFacilityEmail: 'referred_to_facility_email',
+      referredToFacilityWebhook: 'referred_to_facility_webhook',
       referralType: 'referral_type',
       clinicalSummary: 'clinical_summary',
       relevantHistory: 'relevant_history',
@@ -275,10 +278,100 @@ export class ReferralService {
       throw new BadRequestException('Only draft or pending referrals can be sent');
     }
 
-    // TODO: Implement actual sending logic (email/fax/API)
     this.logger.log(`Sending referral ${referralId} via ${method}`);
+    await this.deliverReferral(referral);
 
     return this.updateReferralStatus(referralId, 'sent', `Referral sent via ${method}`, userId, tenantDb);
+  }
+
+  private async deliverReferral(referral: any): Promise<void> {
+    const recipientEmail = referral.receivingFacilityEmail ?? referral.referred_to_facility_email;
+    const webhookUrl = referral.receivingFacilityWebhook ?? referral.referred_to_facility_webhook;
+
+    // Webhook delivery (preferred if configured)
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            referralId: referral.id,
+            patientName: referral.patientName ?? this.formatPatientName(referral),
+            diagnosis: referral.diagnosis ?? referral.reason,
+            urgency: referral.urgency,
+            referralDate: referral.referralDate ?? referral.referral_date,
+            referringFacility: referral.referringFacilityName ?? referral.referring_facility_name,
+            notes: referral.notes ?? referral.clinical_summary,
+            fhirBundle: referral.fhirBundle ?? referral.fhir_bundle ?? null,
+          }),
+        });
+        this.logger.log(`Referral ${referral.id} delivered via webhook to ${webhookUrl}`);
+      } catch (err: any) {
+        this.logger.error(`Referral webhook delivery failed: ${err.message}`);
+      }
+    }
+
+    // Email delivery fallback
+    if (recipientEmail) {
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpPort = Number(process.env.SMTP_PORT ?? 587);
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+      const fromAddress = process.env.SMTP_FROM ?? 'referrals@medicore.health';
+
+      if (!smtpHost || !smtpUser) {
+        this.logger.warn(`Referral ${referral.id} email skipped - SMTP not configured`);
+        return;
+      }
+
+      // Use nodemailer if available, otherwise log
+      try {
+        // Dynamic import to avoid hard dependency if nodemailer is not installed
+        const nodemailer = await import('nodemailer').catch(() => null);
+        if (!nodemailer) {
+          this.logger.warn('nodemailer not installed - referral email skipped');
+          return;
+        }
+
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: { user: smtpUser, pass: smtpPass },
+        });
+
+        const patientName = referral.patientName ?? this.formatPatientName(referral);
+
+        await transporter.sendMail({
+          from: fromAddress,
+          to: recipientEmail,
+          subject: `Referral from MediCore: ${patientName} - ${referral.urgency ?? 'Routine'}`,
+          html: `
+          <h2>Patient Referral</h2>
+          <p><strong>Patient:</strong> ${patientName}</p>
+          <p><strong>Diagnosis:</strong> ${referral.diagnosis ?? referral.reason ?? 'See clinical notes'}</p>
+          <p><strong>Urgency:</strong> ${referral.urgency ?? 'Routine'}</p>
+          <p><strong>Referred by:</strong> ${referral.referringFacilityName ?? referral.referring_facility_name ?? ''}</p>
+          <p><strong>Date:</strong> ${referral.referralDate ?? referral.referral_date}</p>
+          ${referral.notes || referral.clinical_summary ? `<p><strong>Notes:</strong> ${referral.notes ?? referral.clinical_summary}</p>` : ''}
+          <hr/>
+          <p style="color:#888;font-size:12px">This referral was generated by MediCore EHR. Reply to this email or contact the referring facility directly.</p>
+        `,
+        });
+
+        this.logger.log(`Referral ${referral.id} delivered via email to ${recipientEmail}`);
+      } catch (err: any) {
+        this.logger.error(`Referral email delivery failed: ${err.message}`);
+      }
+    }
+  }
+
+  private formatPatientName(referral: any): string {
+    const explicitName = referral.patientName ?? referral.patient_name;
+    if (explicitName) return explicitName;
+    const firstName = referral.patient_first_name ?? '';
+    const lastName = referral.patient_last_name ?? '';
+    return `${firstName} ${lastName}`.trim() || 'Patient';
   }
 
   async acknowledgeReferral(referralId: string, responseData: any, userId: string, tenantDb: DataSource) {
@@ -525,7 +618,6 @@ export class ReferralService {
     };
   }
 }
-
 
 
 

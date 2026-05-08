@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { PatientProService } from '../services/patient-pro.service';
+import { SmsService } from '../services/sms.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
@@ -9,7 +10,12 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 @Controller('pro')
 @UseGuards(JwtAuthGuard)
 export class PatientProController {
-  constructor(private readonly patientProService: PatientProService) {}
+  private readonly logger = new Logger(PatientProController.name);
+
+  constructor(
+    private readonly patientProService: PatientProService,
+    private readonly smsService: SmsService,
+  ) {}
 
   @Post('patients/:patientId/schedules')
   @ApiOperation({ summary: 'Create questionnaire schedule', description: 'Create a scheduled questionnaire assignment for a patient' })
@@ -283,5 +289,98 @@ export class PatientProController {
       : `SELECT * FROM questionnaire_templates WHERE is_active = true ORDER BY is_standard DESC, name ASC`;
     return req.tenantDb.query(query);
   }
-}
 
+  @Put('alerts/:alertId/status')
+  @ApiOperation({ summary: 'Update PRO alert status', description: 'Mark a PRO alert as acknowledged, resolved, or dismissed' })
+  @ApiParam({ name: 'alertId', description: 'PRO alert ID' })
+  async updateAlertStatus(
+    @Param('alertId') alertId: string,
+    @Body() body: { status: 'acknowledged' | 'resolved' | 'dismissed'; notes?: string },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const clinicianId = req.user?.id ?? req.user?.userId ?? 'unknown';
+    await req.tenantDb.query(
+      `UPDATE pro_alerts
+       SET status = $1,
+           acknowledged_by = $2,
+           acknowledged_at = NOW(),
+           notes = COALESCE($3, notes),
+           updated_at = NOW()
+       WHERE id = $4`,
+      [body.status, clinicianId, body.notes ?? null, alertId],
+    );
+    return { ok: true };
+  }
+
+  @Post('responses/:responseId/feedback')
+  @ApiOperation({ summary: 'Send clinician feedback to patient', description: 'Clinician writes a message to the patient about their PRO result' })
+  @ApiParam({ name: 'responseId', description: 'Patient questionnaire (response) ID' })
+  async addClinicianFeedback(
+    @Param('responseId') responseId: string,
+    @Body() body: { message: string },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    if (!body.message?.trim()) {
+      throw new Error('Message is required');
+    }
+    const clinicianId = req.user?.id ?? req.user?.userId ?? 'unknown';
+
+    const [row] = await req.tenantDb.query(
+      `INSERT INTO pro_clinician_feedback
+         (patient_questionnaire_id, clinician_id, message, created_at)
+       VALUES ($1, $2, $3, NOW())
+       RETURNING id, created_at`,
+      [responseId, clinicianId, body.message.trim()],
+    );
+
+    // Mark all active alerts for this questionnaire as acknowledged
+    await req.tenantDb.query(
+      `UPDATE pro_alerts
+       SET status = 'acknowledged', acknowledged_by = $1, acknowledged_at = NOW(), updated_at = NOW()
+       WHERE patient_questionnaire_id = $2 AND status = 'active'`,
+      [clinicianId, responseId],
+    );
+
+    // SMS the patient
+    try {
+      const patientRow = await req.tenantDb.query(
+        `SELECT p.phone, p.first_name
+         FROM patient_questionnaires pq
+         JOIN patients p ON p.id = pq.patient_id
+         WHERE pq.id = $1 LIMIT 1`,
+        [responseId],
+      );
+      const phone = patientRow?.[0]?.phone;
+      const firstName = patientRow?.[0]?.first_name ?? 'there';
+      if (phone) {
+        await this.smsService.send(
+          phone,
+          `MediCore: Hi ${firstName}, your care team has left you a message about your recent health questionnaire. Please open the MediCore Patient app to read it.`,
+        );
+      }
+    } catch {
+      // Never block feedback on SMS failure
+    }
+
+    return { ok: true, feedbackId: row?.id, createdAt: row?.created_at };
+  }
+
+  @Get('responses/:responseId/feedback')
+  @ApiOperation({ summary: 'Get clinician feedback for a response', description: 'Patient or clinician reads feedback messages for a questionnaire response' })
+  @ApiParam({ name: 'responseId', description: 'Patient questionnaire (response) ID' })
+  async getClinicianFeedback(
+    @Param('responseId') responseId: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const rows = await req.tenantDb.query(
+      `SELECT pcf.id, pcf.message, pcf.created_at,
+              u.first_name || ' ' || u.last_name AS clinician_name
+       FROM pro_clinician_feedback pcf
+       LEFT JOIN users u ON u.id = pcf.clinician_id
+       WHERE pcf.patient_questionnaire_id = $1
+       ORDER BY pcf.created_at ASC`,
+      [responseId],
+    );
+    return rows;
+  }
+}

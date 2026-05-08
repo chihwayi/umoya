@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader } from '../ui';
 import { AppointmentsService, ApiAppointment } from '../../services/appointments';
@@ -63,6 +64,7 @@ const canCancel = (status: string) => ['scheduled', 'confirmed'].includes(status
 
 export const PatientAppointmentsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const { user } = useAuthStore();
 
   const [appointments, setAppointments] = useState<ApiAppointment[]>([]);
@@ -158,7 +160,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
         )}
         {canCancel(item.status) && (
           <TouchableOpacity style={s.cancelBtn} onPress={() => handleCancel(item.id)} activeOpacity={0.7}>
-            <Text style={s.cancelText}>Cancel Appointment</Text>
+            <Text style={s.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         )}
       </Card>
@@ -167,7 +169,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <ScreenHeader title="Appointments" subtitle="Upcoming & scheduled" />
+      <ScreenHeader title={t('nav.appointments')} subtitle="Upcoming & scheduled" />
 
       {loading ? (
         <View style={s.center}>
@@ -184,7 +186,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
           ListEmptyComponent={
             <View style={s.empty}>
               <Icon name="calendar" size={44} color={C.border} />
-              <Text style={s.emptyTitle}>No upcoming appointments</Text>
+              <Text style={s.emptyTitle}>{t('common.noResults')}</Text>
               <Text style={s.emptyBody}>Tap the button below to request one.</Text>
             </View>
           }
@@ -241,7 +243,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
             <TouchableOpacity style={s.submitBtn} onPress={handleBook} activeOpacity={0.85} disabled={bookLoading}>
               {bookLoading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={s.submitText}>Submit Request</Text>
+                : <Text style={s.submitText}>{t('common.submit')}</Text>
               }
             </TouchableOpacity>
           </View>

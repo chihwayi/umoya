@@ -116,7 +116,8 @@
         }
       ],
       "expo-splash-screen",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-localization"
     ],
     "extra": {
       "eas": {

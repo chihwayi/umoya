@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import {
   Icon,
@@ -290,6 +291,7 @@ async function fetchDictateResult(patientContext: string): Promise<DictateResult
 // ─── CDSS Screen ──────────────────────────────────────────────────────────────
 
 const CDSSScreen: React.FC = () => {
+  const { t } = useTranslation();
   const [activeTool, setActiveTool] = useState<CdssTool | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -471,7 +473,7 @@ const CDSSScreen: React.FC = () => {
         {specialtyLoading ? (
           <View style={cdssStyles.specialtyLoading}>
             <ActivityIndicator color={C.teal} size="small" />
-            <Text style={cdssStyles.specialtyLoadingText}>Refreshing specialty priorities…</Text>
+            <Text style={cdssStyles.specialtyLoadingText}>{t('common.loading')}</Text>
           </View>
         ) : (
           <>
@@ -729,7 +731,7 @@ const CDSSScreen: React.FC = () => {
                 {pactrResult === 'loading' ? (
                   <View style={cdssStyles.pactrLoadingRow}>
                     <ActivityIndicator color={C.blue} size="small" />
-                    <Text style={cdssStyles.specialtyLoadingText}>Checking PACTR registry…</Text>
+                    <Text style={cdssStyles.specialtyLoadingText}>{t('common.loading')}</Text>
                   </View>
                 ) : pactrResult ? (
                   pactrResult.trials.map((trial) => {
@@ -1545,6 +1547,7 @@ type AITab = 'cdss' | 'dictate';
 
 export const DoctorAIScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<AITab>('cdss');
   const indicator = useRef(new Animated.Value(0)).current;
 
@@ -1563,8 +1566,8 @@ export const DoctorAIScreen: React.FC = () => {
       <LinearGradient colors={['#030B18', C.bg]} style={StyleSheet.absoluteFill} />
 
       <ScreenHeader
-        title={activeTab === 'cdss' ? 'CDSS' : 'Voice Dictation'}
-        subtitle="AI Tools"
+        title={t('nav.ai')}
+        subtitle={activeTab === 'cdss' ? 'CDSS' : 'Voice Dictation'}
         accent={activeTab === 'cdss' ? C.purple : C.teal}
       />
 

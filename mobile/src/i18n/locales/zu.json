@@ -1,0 +1,128 @@
+{
+  "common": {
+    "loading": "Iyalayisha…",
+    "error": "Kukhona iphutha",
+    "retry": "Zama futhi",
+    "save": "Gcina",
+    "cancel": "Khansela",
+    "back": "Emuva",
+    "submit": "Thumela",
+    "confirm": "Qinisekisa",
+    "logout": "Phuma",
+    "search": "Sesha",
+    "noResults": "Azikho iziphumo"
+  },
+  "nav": {
+    "home": "Ikhaya",
+    "appointments": "Izinhlelo",
+    "health": "Impilo Yami",
+    "meds": "Imithi",
+    "bills": "Izikweleti",
+    "messages": "Imiyalezo",
+    "education": "Funda",
+    "notifications": "Izaziso",
+    "shift": "Ishifti Lami",
+    "vitals": "Izibonakaliso Zempilo",
+    "rounds": "Iziyingqi",
+    "patients": "Iziguli",
+    "ai": "Umsizi we-AI"
+  },
+  "patient": {
+    "name": "Igama Eligcwele",
+    "dob": "Usuku Lokuzalwa",
+    "sex": "Ubulili",
+    "phone": "Inombolo Yefoni",
+    "id_number": "Inombolo ye-ID",
+    "blood_group": "Uhlobo Lwegazi",
+    "age": "Iminyaka",
+    "next_of_kin": "Isihlobo Esiseduze"
+  },
+  "clinical": {
+    "vitals": "Izibonakaliso Zempilo",
+    "weight": "Isisindo (kg)",
+    "height": "Ubude (cm)",
+    "bp": "Ingcindezi Yegazi",
+    "temp": "Imvula (°C)",
+    "pulse": "Ukushaya Kwenhliziyo (bpm)",
+    "spo2": "SpO₂ (%)",
+    "diagnosis": "Ukwesabiswa",
+    "prescription": "Umthetho",
+    "chief_complaint": "Isikhalo Esiyinhloko",
+    "plan": "Uhlelo Lwezokwelapha",
+    "referral": "Ukudluliselwa"
+  },
+  "billing": {
+    "invoice": "Inkokhelo",
+    "payment": "Inkokhelo",
+    "receipt": "Irisidi",
+    "outstanding": "Isikweletu",
+    "paid": "Ikhokhiwe"
+  },
+  "auth": {
+    "login": "Ngena",
+    "email": "I-imeyili",
+    "password": "Iphasiwedi",
+    "biometric": "Sebenzisa Izimpawu Zomzimba",
+    "sessionExpired": "Isikhathi siphelelwe. Sicela ungene futhi."
+  },
+  "postVisit": {
+    "visitSummary": "Isifinyezo Sokuvakasha",
+    "status": "Isimo",
+    "subjective": "Okubikile",
+    "assessment": "Ukuhlola",
+    "plan": "Uhlelo Lwakho Lokunakekelwa",
+    "notFound": "Isifinyezo sokuvakasha asikatholakali."
+  },
+  "meds": {
+    "requestRefill": "Cela Ukugcwaliswa Kabusha",
+    "refillPending": "Ukugcwaliswa Kulindile",
+    "refillApproved": "Ukugcwaliswa Kugunyaziwe",
+    "refillCancelled": "Isicelo sikhansellwe",
+    "refillRequested": "Isicelo sithunyelwe",
+    "refillSoon": "Gcwaliswa Maduze",
+    "refillDays": "Gcwaliswa emva kwe",
+    "days": "izinsuku"
+  },
+  "adherence": {
+    "markTaken": "Maka njengokuthathiwe",
+    "taken": "Kuthathe",
+    "missed": "Kwasilaphala",
+    "upcoming": "Okuzoqhubeka",
+    "thisWeek": "Leli Sonto",
+    "markFailed": "Yehlulekile ukurekhoda idozi. Zama futhi.",
+    "summary": "Isifinyezo Sokulandela Umuthi"
+  },
+  "education": {
+    "title": "Imfundo Yezempilo",
+    "subtitle": "Funda ngezempilo yakho",
+    "all": "Konke",
+    "minRead": "amaminithi okufunda",
+    "by": "Ngu"
+  },
+  "family": {
+    "title": "Ukufinyelela Komndeni",
+    "subtitle": "Phatha abakwazi ukubona amarekhodi akho",
+    "addCaregiver": "Engeza Umonakali / Umgcini",
+    "activeGrants": "Imvume Ezisebenzayo",
+    "noGrants": "Akekho umonakali onefikelo lamarekhodi akho",
+    "infoText": "Abamonakali owengezayo lapha bangabona izingxenye zerekhodi yakho yezempilo. Ungakhansela imvume nganoma yinini.",
+    "viewOnly": "Buka Kuphela",
+    "fullAccess": "Ukufinyelela Okugcwele",
+    "emergencyOnly": "Izimo Eziphuthumayo Kuphela",
+    "expires": "Iphelelwa",
+    "noExpiry": "Akupheli",
+    "revoke": "Khansela",
+    "revokeTitle": "Khansela Imvume",
+    "revokeConfirm": "Susa {{name}} kubamonakali bakho?",
+    "grantAccess": "Nika Imvume",
+    "requiredFields": "Igama ne-imeyili ziyadingeka",
+    "fieldName": "Igama Lomonakali",
+    "fieldNamePlaceholder": "Igama eligcwele",
+    "fieldEmail": "Ikheli le-imeyili",
+    "fieldPhone": "Ucingo (khetha)",
+    "fieldRelationship": "Ubudlelwane (khetha)",
+    "fieldRelationshipPlaceholder": "isb. Umshado, Umzali, Ingane",
+    "fieldAccessLevel": "Izinga Lokufinyelela",
+    "fieldExpiry": "Imvume iphela mhla (khetha)"
+  }
+}

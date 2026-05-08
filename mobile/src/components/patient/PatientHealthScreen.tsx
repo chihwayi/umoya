@@ -1,26 +1,27 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   FlatList, Animated, Modal, Pressable, ActivityIndicator,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
-import { Icon, Card, AiBadge, AiPulse, Badge, Sparkline } from '../ui';
-import { VitalsService, VitalTrend } from '../../services/vitals';
-import { LabOrdersService } from '../../services/labOrders';
-import { DocumentsService } from '../../services/documents';
-import { useAuthStore } from '../../stores/useAuthStore';
-import { PatientProfileService, ApiPatientProfile, ApiCondition, ApiAllergy } from '../../services/patientProfile';
-import { CdssService } from '../../services/cdss';
-import { api } from '../../services/api';
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
+import { C, FONT, RADIUS, SHADOW } from "../../design/tokens";
+import { Icon, Card, AiBadge, AiPulse, Badge, Sparkline } from "../ui";
+import { VitalsService, VitalTrend } from "../../services/vitals";
+import { LabOrdersService } from "../../services/labOrders";
+import { DocumentsService } from "../../services/documents";
+import { useAuthStore } from "../../stores/useAuthStore";
+import { PatientProfileService, ApiPatientProfile, ApiCondition, ApiAllergy } from "../../services/patientProfile";
+import { CdssService } from "../../services/cdss";
+import { api } from "../../services/api";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type SubTab = 'profile' | 'vitals' | 'labs' | 'services' | 'documents' | 'wellbeing';
+type SubTab = "profile" | "vitals" | "labs" | "services" | "documents" | "wellbeing";
 
 interface VitalEntry {
   label: string;
+  labelKey?: string;
   unit: string;
   values: number[];
   dates: string[];
@@ -40,7 +41,7 @@ interface LabResult {
   date: string;
   panel: string;
   trend: number[];
-  flag: 'normal' | 'high' | 'low' | 'critical';
+  flag: "normal" | "high" | "low" | "critical";
   aiNote?: string;
 }
 
@@ -57,7 +58,7 @@ interface WearableService {
 interface MedDocument {
   id: string;
   title: string;
-  type: 'discharge' | 'lab' | 'prescription' | 'referral' | 'imaging' | 'consent';
+  type: "discharge" | "lab" | "prescription" | "referral" | "imaging" | "consent";
   date: string;
   doctor: string;
   size: string;
@@ -67,48 +68,43 @@ interface Condition {
   name: string;
   icd: string;
   since: string;
-  severity: 'mild' | 'moderate' | 'severe';
+  severity: "mild" | "moderate" | "severe";
 }
 
 interface Allergy {
   substance: string;
   reaction: string;
-  severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
+  severity: "mild" | "moderate" | "severe" | "life-threatening";
 }
 
-// ─── (No mock data — all data comes from API) ─────────────────────────────────
-
 const WEARABLES: WearableService[] = [
-  { id: 'apple',   name: 'Apple Health',   icon: 'heart',   connected: true,  lastSync: '2 min ago', metrics: ['Steps','Heart Rate','Sleep','ECG','Blood Oxygen'],         accentColor: '#FF3B30' },
-  { id: 'fitbit',  name: 'Fitbit',         icon: 'pulse',   connected: true,  lastSync: '1 hr ago',  metrics: ['Steps','Calories','Sleep Score','HRV'],                   accentColor: '#00B0B9' },
-  { id: 'google',  name: 'Google Fit',     icon: 'heart',   connected: false, metrics: ['Steps','Heart Rate','Weight','Workouts'],                                          accentColor: '#4285F4' },
-  { id: 'samsung', name: 'Samsung Health', icon: 'pulse',   connected: false, metrics: ['Steps','Blood Pressure','Blood Oxygen','Stress'],                                  accentColor: '#1428A0' },
-  { id: 'garmin',  name: 'Garmin Connect', icon: 'heart',   connected: false, metrics: ['VO₂Max','HRV','Training Load','Sleep'],                                            accentColor: '#007DC5' },
-  { id: 'withings',name: 'Withings',       icon: 'pulse',   connected: false, metrics: ['BP','Weight','Sleep','ECG','SpO₂'],                                               accentColor: '#00A59B' },
+  { id: "apple",   name: "Apple Health",   icon: "heart",   connected: true,  lastSync: "2 min ago", metrics: ["Steps","Heart Rate","Sleep","ECG","Blood Oxygen"],         accentColor: "#FF3B30" },
+  { id: "fitbit",  name: "Fitbit",         icon: "pulse",   connected: true,  lastSync: "1 hr ago",  metrics: ["Steps","Calories","Sleep Score","HRV"],                   accentColor: "#00B0B9" },
+  { id: "google",  name: "Google Fit",     icon: "heart",   connected: false, metrics: ["Steps","Heart Rate","Weight","Workouts"],                                          accentColor: "#4285F4" },
+  { id: "samsung", name: "Samsung Health", icon: "pulse",   connected: false, metrics: ["Steps","Blood Pressure","Blood Oxygen","Stress"],                                  accentColor: "#1428A0" },
+  { id: "garmin",  name: "Garmin Connect", icon: "heart",   connected: false, metrics: ["VO₂Max","HRV","Training Load","Sleep"],                                            accentColor: "#007DC5" },
+  { id: "withings",name: "Withings",       icon: "pulse",   connected: false, metrics: ["BP","Weight","Sleep","ECG","SpO₂"],                                               accentColor: "#00A59B" },
 ];
-
-
-// ─── API Mappers ──────────────────────────────────────────────────────────────
 
 function mapApiConditions(raw: ApiCondition[]): Condition[] {
   if (!raw?.length) return [];
   return raw.map(c => ({
-    name:     c.name ?? c.diagnosisName ?? 'Unknown condition',
-    icd:      c.icdCode ?? c.icd10Code ?? '—',
+    name:     c.name ?? c.diagnosisName ?? "Unknown condition",
+    icd:      c.icdCode ?? c.icd10Code ?? "—",
     since:    c.onsetDate ?? c.diagnosisDate
-      ? new Date(c.onsetDate ?? c.diagnosisDate ?? '').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-      : '—',
-    severity: (['mild','moderate','severe'].includes(c.severity ?? '') ? c.severity : 'moderate') as Condition['severity'],
+      ? new Date(c.onsetDate ?? c.diagnosisDate ?? "").toLocaleDateString("en-GB", { month: "short", year: "numeric" })
+      : "—",
+    severity: (["mild","moderate","severe"].includes(c.severity ?? "") ? c.severity : "moderate") as Condition["severity"],
   }));
 }
 
 function mapApiAllergies(raw: ApiAllergy[]): Allergy[] {
   if (!raw?.length) return [];
   return raw.map(a => ({
-    substance: a.substance ?? a.allergen ?? 'Unknown',
-    reaction:  Array.isArray(a.reactions) ? a.reactions.join(', ') : (a.reaction ?? 'Unknown reaction'),
-    severity:  (['mild','moderate','severe','life-threatening'].includes(a.severity ?? '')
-      ? a.severity : 'moderate') as Allergy['severity'],
+    substance: a.substance ?? a.allergen ?? "Unknown",
+    reaction:  Array.isArray(a.reactions) ? a.reactions.join(", ") : (a.reaction ?? "Unknown reaction"),
+    severity:  (["mild","moderate","severe","life-threatening"].includes(a.severity ?? "")
+      ? a.severity : "moderate") as Allergy["severity"],
   }));
 }
 
@@ -120,16 +116,16 @@ function mapApiVitals(apiVitals: VitalTrend[]): VitalEntry[] {
     const readings = av.readings.slice(-7);
     const values = readings.map(r => r.value);
     const dates = readings.map(r =>
-      new Date(r.recordedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      new Date(r.recordedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
     );
     return {
       label: av.label,
       unit:  av.unit,
       values: values.length > 0 ? values : [0],
-      dates:  dates.length > 0 ? dates : ['—'],
+      dates:  dates.length > 0 ? dates : ["—"],
       normal: [av.normalLow ?? 0, av.normalHigh ?? 999] as [number, number],
       warn:   [av.warnLow   ?? 0, av.warnHigh   ?? 999] as [number, number],
-      icon:   'pulse',
+      icon:   "pulse",
       accent: VITAL_ACCENT_COLORS[idx % VITAL_ACCENT_COLORS.length],
     };
   });
@@ -141,6 +137,7 @@ function mapPortalVitals(rawVitals: any[]): VitalEntry[] {
   const definitions: Array<{
     key: string;
     label: string;
+    labelKey?: string;
     unit: string;
     icon: string;
     normal: [number, number];
@@ -148,81 +145,87 @@ function mapPortalVitals(rawVitals: any[]): VitalEntry[] {
     pick: (row: any) => number | null;
   }> = [
     {
-      key: 'sbp',
-      label: 'Systolic BP',
-      unit: 'mmHg',
-      icon: 'pulse',
+      key: "sbp",
+      label: "Systolic BP",
+      labelKey: "clinical.bp",
+      unit: "mmHg",
+      icon: "pulse",
       normal: [90, 120],
       warn: [80, 140],
       pick: (row) => {
-        const value = String(row?.bloodPressure || '').split('/')[0];
+        const value = String(row?.bloodPressure || "").split("/")[0];
         const parsed = Number(value);
         return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
       },
     },
     {
-      key: 'dbp',
-      label: 'Diastolic BP',
-      unit: 'mmHg',
-      icon: 'pulse',
+      key: "dbp",
+      label: "Diastolic BP",
+      labelKey: "clinical.bp",
+      unit: "mmHg",
+      icon: "pulse",
       normal: [60, 80],
       warn: [50, 90],
       pick: (row) => {
-        const value = String(row?.bloodPressure || '').split('/')[1];
+        const value = String(row?.bloodPressure || "").split("/")[1];
         const parsed = Number(value);
         return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
       },
     },
     {
-      key: 'hr',
-      label: 'Heart Rate',
-      unit: 'bpm',
-      icon: 'pulse',
+      key: "hr",
+      label: "Heart Rate",
+      labelKey: "clinical.pulse",
+      unit: "bpm",
+      icon: "pulse",
       normal: [60, 100],
       warn: [50, 120],
       pick: (row) => Number(row?.heartRate || 0) || null,
     },
     {
-      key: 'temp',
-      label: 'Temperature',
-      unit: 'C',
-      icon: 'pulse',
+      key: "temp",
+      label: "Temperature",
+      labelKey: "clinical.temp",
+      unit: "C",
+      icon: "pulse",
       normal: [36, 37.5],
       warn: [35.5, 38.5],
       pick: (row) => Number(row?.temperature || 0) || null,
     },
     {
-      key: 'spo2',
-      label: 'SpO2',
-      unit: '%',
-      icon: 'pulse',
+      key: "spo2",
+      label: "SpO2",
+      labelKey: "clinical.spo2",
+      unit: "%",
+      icon: "pulse",
       normal: [95, 100],
       warn: [92, 100],
       pick: (row) => Number(row?.oxygenSaturation || 0) || null,
     },
     {
-      key: 'rr',
-      label: 'Respiratory Rate',
-      unit: '/min',
-      icon: 'pulse',
+      key: "rr",
+      label: "Respiratory Rate",
+      unit: "/min",
+      icon: "pulse",
       normal: [12, 20],
       warn: [10, 24],
       pick: (row) => Number(row?.respiratoryRate || 0) || null,
     },
     {
-      key: 'weight',
-      label: 'Weight',
-      unit: 'kg',
-      icon: 'pulse',
+      key: "weight",
+      label: "Weight",
+      labelKey: "clinical.weight",
+      unit: "kg",
+      icon: "pulse",
       normal: [0, 300],
       warn: [0, 350],
       pick: (row) => Number(row?.weight || 0) || null,
     },
     {
-      key: 'bgl',
-      label: 'Blood Glucose',
-      unit: 'mg/dL',
-      icon: 'pulse',
+      key: "bgl",
+      label: "Blood Glucose",
+      unit: "mg/dL",
+      icon: "pulse",
       normal: [70, 140],
       warn: [60, 200],
       pick: (row) => Number(row?.bloodGlucose || 0) || null,
@@ -245,10 +248,11 @@ function mapPortalVitals(rawVitals: any[]): VitalEntry[] {
 
     return [{
       label: definition.label,
+      labelKey: definition.labelKey,
       unit: definition.unit,
       values: readings.map((reading) => Number(reading.value)),
       dates: readings.map((reading) =>
-        new Date(reading.recordedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        new Date(reading.recordedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
       ),
       normal: definition.normal,
       warn: definition.warn,
@@ -264,19 +268,19 @@ function mapApiLabs(orders: any[]): LabResult[] {
     (order.results ?? []).forEach((r: any) => {
       results.push({
         id: String(r.id ?? Math.random()),
-        name: r.testName ?? 'Unknown',
+        name: r.testName ?? "Unknown",
         value: Number(r.value ?? 0),
-        unit: r.unit ?? '',
+        unit: r.unit ?? "",
         refLow: Number(r.referenceRangeLow ?? r.refLow ?? 0),
         refHigh: Number(r.referenceRangeHigh ?? r.refHigh ?? 100),
         date: r.resultDate
-          ? new Date(r.resultDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-          : '—',
-        panel: r.panel ?? r.category ?? order.testName ?? 'General',
+          ? new Date(r.resultDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+          : "—",
+        panel: r.panel ?? r.category ?? order.testName ?? "General",
         trend: r.trend ?? [Number(r.value ?? 0)],
-        flag: (r.flag === 'critical_high' || r.flag === 'critical_low' ? 'critical'
-             : r.flag === 'high' ? 'high'
-             : r.flag === 'low' ? 'low' : 'normal') as LabResult['flag'],
+        flag: (r.flag === "critical_high" || r.flag === "critical_low" ? "critical"
+             : r.flag === "high" ? "high"
+             : r.flag === "low" ? "low" : "normal") as LabResult["flag"],
         aiNote: r.aiInterpretation ?? r.interpretation,
       });
     });
@@ -286,68 +290,65 @@ function mapApiLabs(orders: any[]): LabResult[] {
 
 function mapApiDocuments(docs: any[]): MedDocument[] {
   if (!docs?.length) return [];
-  const validTypes = ['discharge', 'lab', 'prescription', 'referral', 'imaging', 'consent'];
+  const validTypes = ["discharge", "lab", "prescription", "referral", "imaging", "consent"];
   return docs.map((d: any) => ({
     id: String(d.id ?? Math.random()),
-    title: d.documentName ?? d.title ?? 'Document',
-    type: (validTypes.includes(d.documentType ?? d.type ?? '') ? (d.documentType ?? d.type) : 'lab') as MedDocument['type'],
+    title: d.documentName ?? d.title ?? "Document",
+    type: (validTypes.includes(d.documentType ?? d.type ?? "") ? (d.documentType ?? d.type) : "lab") as MedDocument["type"],
     date: (d.uploadedAt ?? d.createdAt)
-      ? new Date(d.uploadedAt ?? d.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-      : '—',
-    doctor: d.uploadedBy ?? 'MediCore',
-    size: d.fileSize ? `${Math.round(d.fileSize / 1024)} KB` : '—',
+      ? new Date(d.uploadedAt ?? d.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+      : "—",
+    doctor: d.uploadedBy ?? "MediCore",
+    size: d.fileSize ? `${Math.round(d.fileSize / 1024)} KB` : "—",
   }));
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const flagColor = (flag: LabResult['flag']) => {
-  if (flag === 'critical') return C.red;
-  if (flag === 'high' || flag === 'low') return C.amber;
+const flagColor = (flag: LabResult["flag"]) => {
+  if (flag === "critical") return C.red;
+  if (flag === "high" || flag === "low") return C.amber;
   return C.green;
 };
 
 const severityColor = (s: string) => {
-  if (s === 'life-threatening' || s === 'severe')   return C.red;
-  if (s === 'moderate')                              return C.amber;
+  if (s === "life-threatening" || s === "severe")   return C.red;
+  if (s === "moderate")                              return C.amber;
   return C.green;
 };
 
-const docTypeIcon = (t: MedDocument['type']) => {
-  const map: Record<MedDocument['type'], string> = {
-    discharge: 'rounds', lab: 'pulse', prescription: 'pill',
-    referral: 'escalate', imaging: 'brain', consent: 'sparkle',
+const docTypeIcon = (t: MedDocument["type"]) => {
+  const map: Record<MedDocument["type"], string> = {
+    discharge: "rounds", lab: "pulse", prescription: "pill",
+    referral: "escalate", imaging: "brain", consent: "sparkle",
   };
   return map[t];
 };
 
-const docTypeColor = (t: MedDocument['type']) => {
-  const map: Record<MedDocument['type'], string> = {
+const docTypeColor = (t: MedDocument["type"]) => {
+  const map: Record<MedDocument["type"], string> = {
     discharge: C.teal, lab: C.blue, prescription: C.purple,
-    referral: C.amber, imaging: C.green, consent: '#888',
+    referral: C.amber, imaging: C.green, consent: "#888",
   };
   return map[t];
 };
 
-const vitalStatus = (v: VitalEntry, latest: number): 'normal' | 'warn' | 'critical' => {
-  if (latest >= v.normal[0] && latest <= v.normal[1]) return 'normal';
-  if (latest >= v.warn[0]   && latest <= v.warn[1])   return 'warn';
-  return 'critical';
+const vitalStatus = (v: VitalEntry, latest: number): "normal" | "warn" | "critical" => {
+  if (latest >= v.normal[0] && latest <= v.normal[1]) return "normal";
+  if (latest >= v.warn[0]   && latest <= v.warn[1])   return "warn";
+  return "critical";
 };
 
-const statusColor = (s: 'normal' | 'warn' | 'critical') =>
-  s === 'normal' ? C.green : s === 'warn' ? C.amber : C.red;
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const statusColor = (s: "normal" | "warn" | "critical") =>
+  s === "normal" ? C.green : s === "warn" ? C.amber : C.red;
 
 const SubTabBar: React.FC<{ active: SubTab; onChange: (t: SubTab) => void }> = ({ active, onChange }) => {
+  const { t } = useTranslation();
   const TABS: { key: SubTab; label: string }[] = [
-    { key: 'profile',   label: 'Profile'   },
-    { key: 'vitals',    label: 'Vitals'    },
-    { key: 'labs',      label: 'Labs'      },
-    { key: 'services',  label: 'Devices'   },
-    { key: 'documents', label: 'Documents' },
-    { key: 'wellbeing', label: 'Wellbeing' },
+    { key: "profile",   label: "Profile"   },
+    { key: "vitals",    label: t("nav.vitals") },
+    { key: "labs",      label: "Labs"      },
+    { key: "services",  label: "Devices"   },
+    { key: "documents", label: "Documents" },
+    { key: "wellbeing", label: "Wellbeing" },
   ];
   return (
     <ScrollView
@@ -371,8 +372,6 @@ const SubTabBar: React.FC<{ active: SubTab; onChange: (t: SubTab) => void }> = (
   );
 };
 
-// ── Profile Tab ───────────────────────────────────────────────────────────────
-
 const ProfileTab: React.FC<{
   conditions: Condition[];
   allergies: Allergy[];
@@ -380,28 +379,29 @@ const ProfileTab: React.FC<{
   userName: string;
   loading: boolean;
 }> = ({ conditions, allergies, profile, userName, loading }) => {
+  const { t } = useTranslation();
+  const navigation = useNavigation<any>();
   const initials = (profile?.firstName && profile?.lastName)
     ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase()
-    : userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+    : userName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
 
   const fullName = profile
-    ? [profile.firstName, profile.lastName].filter(Boolean).join(' ') || userName
+    ? [profile.firstName, profile.lastName].filter(Boolean).join(" ") || userName
     : userName;
 
   const dob = profile?.dateOfBirth ? new Date(profile.dateOfBirth) : null;
   const age = dob ? Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000)) : null;
   const dobLabel = dob
-    ? `${dob.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}${age ? `  ·  ${age} y/o` : ''}`
-    : '—';
+    ? `${dob.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}${age ? `  ·  ${age} y/o` : ""}`
+    : "—";
 
   const bmi = (profile?.height && profile?.weight)
     ? (profile.weight / Math.pow(profile.height / 100, 2)).toFixed(1)
-    : '—';
+    : "—";
 
   return (
   <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-    {/* Identity card */}
-    <LinearGradient colors={[C.teal + '30', C.blue + '18']} style={styles.profileCard}>
+    <LinearGradient colors={[C.teal + "30", C.blue + "18"]} style={styles.profileCard}>
       <View style={styles.profileAvatarRow}>
         <View style={styles.profileAvatar}>
           <Text style={styles.profileInitials}>{initials}</Text>
@@ -419,10 +419,10 @@ const ProfileTab: React.FC<{
       </View>
       <View style={styles.profileStatsRow}>
         {[
-          { label: 'Blood Type', value: profile?.bloodType ?? '—' },
-          { label: 'Height',     value: profile?.height ? `${profile.height} cm` : '—' },
-          { label: 'Weight',     value: profile?.weight ? `${profile.weight} kg` : '—' },
-          { label: 'BMI',        value: bmi },
+          { label: "Blood Type", value: profile?.bloodType ?? "—" },
+          { label: t("clinical.height"), value: profile?.height ? `${profile.height} cm` : "—" },
+          { label: t("clinical.weight"), value: profile?.weight ? `${profile.weight} kg` : "—" },
+          { label: "BMI",        value: bmi },
         ].map(s => (
           <View key={s.label} style={styles.profileStat}>
             <Text style={styles.profileStatVal}>{s.value}</Text>
@@ -432,7 +432,6 @@ const ProfileTab: React.FC<{
       </View>
     </LinearGradient>
 
-    {/* Conditions */}
     <Text style={styles.sectionTitle}>Active Conditions</Text>
     {loading && conditions.length === 0 ? <SkeletonRows /> : conditions.length === 0 ? <EmptyState /> : (
     <Card style={styles.listCard}>
@@ -443,34 +442,32 @@ const ProfileTab: React.FC<{
             <Text style={styles.listRowTitle}>{c.name}</Text>
             <Text style={styles.listRowSub}>{c.icd}  ·  Since {c.since}</Text>
           </View>
-          <Text style={[styles.severityBadge, { color: severityColor(c.severity), borderColor: severityColor(c.severity) + '55' }]}>
+          <Text style={[styles.severityBadge, { color: severityColor(c.severity), borderColor: severityColor(c.severity) + "55" }]}>
             {c.severity}
           </Text>
         </View>
       ))}
     </Card>)}
 
-    {/* Allergies */}
     <Text style={styles.sectionTitle}>Allergies & Reactions</Text>
     {loading && allergies.length === 0 ? <SkeletonRows /> : allergies.length === 0 ? <EmptyState /> : (
     <Card style={styles.listCard}>
       {allergies.map((a, i) => (
         <View key={a.substance} style={[styles.listRow, i < allergies.length - 1 && styles.listRowBorder]}>
-          <View style={[styles.allergyIcon, { backgroundColor: severityColor(a.severity) + '22' }]}>
+          <View style={[styles.allergyIcon, { backgroundColor: severityColor(a.severity) + "22" }]}>
             <Icon name="escalate" size={14} color={severityColor(a.severity)} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.listRowTitle}>{a.substance}</Text>
             <Text style={styles.listRowSub}>{a.reaction}</Text>
           </View>
-          <Text style={[styles.severityBadge, { color: severityColor(a.severity), borderColor: severityColor(a.severity) + '55' }]}>
-            {a.severity === 'life-threatening' ? 'CRITICAL' : a.severity}
+          <Text style={[styles.severityBadge, { color: severityColor(a.severity), borderColor: severityColor(a.severity) + "55" }]}>
+            {a.severity === "life-threatening" ? "CRITICAL" : a.severity}
           </Text>
         </View>
       ))}
     </Card>)}
 
-    {/* Emergency contact */}
     <Text style={styles.sectionTitle}>Emergency Contact</Text>
     <Card style={styles.emergencyCard}>
       <View style={styles.emergencyRow}>
@@ -480,23 +477,38 @@ const ProfileTab: React.FC<{
         <View style={{ flex: 1 }}>
           <Text style={styles.listRowTitle}>
             {profile?.emergencyContactName
-              ? `${profile.emergencyContactName}${profile.emergencyContactRelation ? ` (${profile.emergencyContactRelation})` : ''}`
-              : '—'}
+              ? `${profile.emergencyContactName}${profile.emergencyContactRelation ? ` (${profile.emergencyContactRelation})` : ""}`
+              : "—"}
           </Text>
-          <Text style={styles.listRowSub}>{profile?.emergencyContactPhone ?? '—'}</Text>
+          <Text style={styles.listRowSub}>{profile?.emergencyContactPhone ?? "—"}</Text>
         </View>
         <TouchableOpacity style={styles.callBtn}>
           <Text style={styles.callBtnText}>Call</Text>
         </TouchableOpacity>
       </View>
     </Card>
+
+    {/* Family Access link */}
+    <TouchableOpacity
+      style={profileLinkStyles.row}
+      onPress={() => navigation.navigate('PHFamilyAccess')}
+      activeOpacity={0.85}
+    >
+      <Icon name="users" size={16} color={C.purple} />
+      <Text style={profileLinkStyles.label}>{t('family.title')}</Text>
+      <Icon name="chevron-right" size={14} color={C.textMuted} />
+    </TouchableOpacity>
   </ScrollView>
   );
 };
 
-// ── Vitals Tab ────────────────────────────────────────────────────────────────
+const profileLinkStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: C.card, borderRadius: RADIUS.md, borderWidth: 1, borderColor: C.border },
+  label: { flex: 1, fontFamily: FONT.uiBd, fontSize: 14, color: C.textPrimary },
+});
 
 const VitalsTab: React.FC<{ vitals: VitalEntry[]; loading: boolean }> = ({ vitals, loading }) => {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState<string | null>(null);
   return (
     <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
@@ -515,7 +527,7 @@ const VitalsTab: React.FC<{ vitals: VitalEntry[]; loading: boolean }> = ({ vital
             <Card style={[styles.vitalCard, { borderLeftColor: v.accent, borderLeftWidth: 3 }]}>
               <View style={styles.vitalCardRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.vitalLabel}>{v.label}</Text>
+                  <Text style={styles.vitalLabel}>{v.labelKey ? t(v.labelKey) : v.label}</Text>
                   <View style={styles.vitalValueRow}>
                     <Text style={[styles.vitalValue, { color: statusColor(status) }]}>{latest}</Text>
                     <Text style={styles.vitalUnit}>{v.unit}</Text>
@@ -551,8 +563,6 @@ const VitalsTab: React.FC<{ vitals: VitalEntry[]; loading: boolean }> = ({ vital
     </ScrollView>
   );
 };
-
-// ── Labs Tab ──────────────────────────────────────────────────────────────────
 
 const LabsTab: React.FC<{
   labs: LabResult[];
@@ -615,7 +625,6 @@ const LabsTab: React.FC<{
         ))}
       </ScrollView>
 
-      {/* Lab detail sheet */}
       {selected && (
         <Modal transparent animationType="none" onRequestClose={closeSheet}>
           <Pressable style={styles.backdrop} onPress={closeSheet} />
@@ -626,7 +635,7 @@ const LabsTab: React.FC<{
                 <Text style={styles.sheetTitle}>{selected.name}</Text>
                 <Text style={styles.sheetSub}>{selected.panel}  ·  {selected.date}</Text>
               </View>
-              <View style={[styles.flagPill, { backgroundColor: flagColor(selected.flag) + '22', borderColor: flagColor(selected.flag) + '55' }]}>
+              <View style={[styles.flagPill, { backgroundColor: flagColor(selected.flag) + "22", borderColor: flagColor(selected.flag) + "55" }]}>
                 <Text style={[styles.flagText, { color: flagColor(selected.flag) }]}>{selected.flag.toUpperCase()}</Text>
               </View>
             </View>
@@ -642,7 +651,6 @@ const LabsTab: React.FC<{
               </View>
             </View>
 
-            {/* Trend sparkline */}
             <View style={styles.sheetTrendRow}>
               <Text style={styles.sheetSectionLabel}>TREND</Text>
               <View style={{ flex: 1, height: 48 }}>
@@ -651,7 +659,7 @@ const LabsTab: React.FC<{
             </View>
 
             {selected.aiNote && (
-              <LinearGradient colors={[C.teal + '18', C.blue + '12']} style={styles.sheetAiCard}>
+              <LinearGradient colors={[C.teal + "18", C.blue + "12"]} style={styles.sheetAiCard}>
                 <View style={styles.sheetAiHeader}>
                   <AiPulse size={22} active />
                   <Text style={styles.sheetAiTitle}>AI Interpretation</Text>
@@ -671,18 +679,17 @@ const LabsTab: React.FC<{
   );
 };
 
-// ── Connected Services Tab ────────────────────────────────────────────────────
-
 const ServicesTab: React.FC = () => {
+  const navigation = useNavigation<any>();
   const [services, setServices] = useState(WEARABLES);
 
   const toggle = (id: string) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, connected: !s.connected, lastSync: !s.connected ? 'Just now' : undefined } : s));
+    setServices(prev => prev.map(s => s.id === id ? { ...s, connected: !s.connected, lastSync: !s.connected ? "Just now" : undefined } : s));
   };
 
   return (
     <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={[C.purple + '25', C.blue + '18']} style={styles.servicesHeader}>
+      <LinearGradient colors={[C.purple + "25", C.blue + "18"]} style={styles.servicesHeader}>
         <AiPulse size={36} active />
         <View style={{ flex: 1 }}>
           <Text style={styles.servicesHeaderTitle}>Connected Health Devices</Text>
@@ -691,11 +698,30 @@ const ServicesTab: React.FC = () => {
           </Text>
         </View>
       </LinearGradient>
+      
+      {/* Questionnaire Card */}
+      <Card style={styles.serviceCard}>
+        <View style={styles.serviceCardRow}>
+          <View style={[styles.serviceIconBox, { backgroundColor: C.teal + "22" }]}>
+            <Icon name="sparkle" size={20} color={C.teal} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.serviceName}>Questionnaires</Text>
+            <Text style={styles.serviceSync}>Answer health surveys from your care team</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.connectBtn, { backgroundColor: C.teal + "22", borderColor: C.teal + "55" }]}
+            onPress={() => navigation.navigate("PHQuestionnaires")}
+          >
+            <Text style={[styles.connectBtnText, { color: C.teal }]}>Open</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
 
       {services.map(svc => (
         <Card key={svc.id} style={styles.serviceCard}>
           <View style={styles.serviceCardRow}>
-            <View style={[styles.serviceIconBox, { backgroundColor: svc.accentColor + '22' }]}>
+            <View style={[styles.serviceIconBox, { backgroundColor: svc.accentColor + "22" }]}>
               <Icon name={svc.icon as any} size={20} color={svc.accentColor} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
@@ -706,11 +732,11 @@ const ServicesTab: React.FC = () => {
               }
             </View>
             <TouchableOpacity
-              style={[styles.connectBtn, { backgroundColor: svc.connected ? C.red + '22' : svc.accentColor + '22', borderColor: svc.connected ? C.red + '55' : svc.accentColor + '55' }]}
+              style={[styles.connectBtn, { backgroundColor: svc.connected ? C.red + "22" : svc.accentColor + "22", borderColor: svc.connected ? C.red + "55" : svc.accentColor + "55" }]}
               onPress={() => toggle(svc.id)}
             >
               <Text style={[styles.connectBtnText, { color: svc.connected ? C.red : svc.accentColor }]}>
-                {svc.connected ? 'Disconnect' : 'Connect'}
+                {svc.connected ? "Disconnect" : "Connect"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -729,8 +755,6 @@ const ServicesTab: React.FC = () => {
   );
 };
 
-// ── Documents Tab ─────────────────────────────────────────────────────────────
-
 const DocumentsTab: React.FC<{ docs: MedDocument[]; loading: boolean }> = ({ docs, loading }) => (
   <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
     <View style={styles.vitalsHeader}>
@@ -743,7 +767,7 @@ const DocumentsTab: React.FC<{ docs: MedDocument[]; loading: boolean }> = ({ doc
       <TouchableOpacity key={doc.id} activeOpacity={0.85}>
         <Card style={styles.docCard}>
           <View style={styles.docCardRow}>
-            <View style={[styles.docIconBox, { backgroundColor: docTypeColor(doc.type) + '22' }]}>
+            <View style={[styles.docIconBox, { backgroundColor: docTypeColor(doc.type) + "22" }]}>
               <Icon name={docTypeIcon(doc.type) as any} size={18} color={docTypeColor(doc.type)} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
@@ -751,7 +775,7 @@ const DocumentsTab: React.FC<{ docs: MedDocument[]; loading: boolean }> = ({ doc
               <Text style={styles.docMeta}>{doc.doctor}  ·  {doc.date}</Text>
               <Text style={styles.docSize}>{doc.size}</Text>
             </View>
-            <View style={[styles.docTypePill, { borderColor: docTypeColor(doc.type) + '55' }]}>
+            <View style={[styles.docTypePill, { borderColor: docTypeColor(doc.type) + "55" }]}>
               <Text style={[styles.docTypeText, { color: docTypeColor(doc.type) }]}>
                 {doc.type.toUpperCase()}
               </Text>
@@ -777,36 +801,6 @@ const DocumentsTab: React.FC<{ docs: MedDocument[]; loading: boolean }> = ({ doc
   </ScrollView>
 );
 
-// ── Wellbeing Tab ─────────────────────────────────────────────────────────────
-
-interface SdohAssessment {
-  sdohRiskLevel: 'HIGH' | 'MODERATE' | 'LOW' | null;
-  sdohDomains: string[];
-  ubuntuScore: number | null;
-  ubuntuRiskLevel: 'HIGH' | 'MODERATE' | 'LOW' | null;
-  recommendations: string[];
-  abstained: boolean;
-}
-
-async function fetchWellbeingAssessment(patientId: string): Promise<SdohAssessment> {
-  try {
-    const res = await api.get<any>(`/cultural/social-determinants/${patientId}/latest`);
-    const d = res.data;
-    return {
-      sdohRiskLevel:  d?.sdohRiskLevel ?? null,
-      sdohDomains:    d?.riskDomains ?? [],
-      ubuntuScore:    d?.ubuntuScore ?? null,
-      ubuntuRiskLevel: d?.ubuntuRiskLevel ?? null,
-      recommendations: d?.recommendations ?? [],
-      abstained: false,
-    };
-  } catch {
-    return { sdohRiskLevel: null, sdohDomains: [], ubuntuScore: null, ubuntuRiskLevel: null, recommendations: [], abstained: true };
-  }
-}
-
-const WELLBEING_COLOR: Record<string, string> = { HIGH: C.red, MODERATE: C.amber, LOW: C.green };
-
 const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
   const [assessment, setAssessment] = React.useState<SdohAssessment | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -823,8 +817,7 @@ const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
 
   return (
     <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <LinearGradient colors={[C.purple + '30', C.teal + '18']} style={wbStyles.banner}>
+      <LinearGradient colors={[C.purple + "30", C.teal + "18"]} style={wbStyles.banner}>
         <AiBadge text="UBUNTU HEALTH" />
         <Text style={wbStyles.bannerTitle}>Holistic Wellbeing</Text>
         <Text style={wbStyles.bannerSub}>
@@ -833,20 +826,19 @@ const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
       </LinearGradient>
 
       {loading && (
-        <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+        <View style={{ alignItems: "center", paddingVertical: 32 }}>
           <ActivityIndicator color={C.purple} />
         </View>
       )}
 
       {!loading && assessment && !assessment.abstained && (
         <>
-          {/* SDOH Risk */}
           <Text style={styles.sectionTitle}>Social Determinants of Health</Text>
-          <Card style={[wbStyles.riskCard, { borderColor: sdohColor + '50' }]}>
+          <Card style={[wbStyles.riskCard, { borderColor: sdohColor + "50" }]}>
             <View style={wbStyles.riskHeader}>
-              <View style={[wbStyles.riskBadge, { backgroundColor: sdohColor + '18', borderColor: sdohColor + '40' }]}>
+              <View style={[wbStyles.riskBadge, { backgroundColor: sdohColor + "18", borderColor: sdohColor + "40" }]}>
                 <Text style={[wbStyles.riskLevel, { color: sdohColor }]}>
-                  {assessment.sdohRiskLevel ?? '—'} RISK
+                  {assessment.sdohRiskLevel ?? "—"} RISK
                 </Text>
               </View>
               <Text style={wbStyles.riskSub}>SDOH Assessment</Text>
@@ -854,7 +846,7 @@ const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
             {assessment.sdohDomains.length > 0 && (
               <View style={wbStyles.domainRow}>
                 {assessment.sdohDomains.map((d) => (
-                  <View key={d} style={[wbStyles.domainChip, { borderColor: sdohColor + '40' }]}>
+                  <View key={d} style={[wbStyles.domainChip, { borderColor: sdohColor + "40" }]}>
                     <Text style={[wbStyles.domainText, { color: sdohColor }]}>{d}</Text>
                   </View>
                 ))}
@@ -862,13 +854,12 @@ const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
             )}
           </Card>
 
-          {/* Ubuntu Psychosocial */}
           <Text style={styles.sectionTitle}>Ubuntu Psychosocial Wellbeing</Text>
-          <Card style={[wbStyles.riskCard, { borderColor: ubuntuColor + '50' }]}>
+          <Card style={[wbStyles.riskCard, { borderColor: ubuntuColor + "50" }]}>
             <View style={wbStyles.riskHeader}>
-              <View style={[wbStyles.riskBadge, { backgroundColor: ubuntuColor + '18', borderColor: ubuntuColor + '40' }]}>
+              <View style={[wbStyles.riskBadge, { backgroundColor: ubuntuColor + "18", borderColor: ubuntuColor + "40" }]}>
                 <Text style={[wbStyles.riskLevel, { color: ubuntuColor }]}>
-                  {assessment.ubuntuRiskLevel ?? '—'} RISK
+                  {assessment.ubuntuRiskLevel ?? "—"} RISK
                 </Text>
               </View>
               {assessment.ubuntuScore !== null && (
@@ -880,7 +871,6 @@ const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
             </Text>
           </Card>
 
-          {/* Recommendations */}
           {assessment.recommendations.length > 0 && (
             <>
               <Text style={styles.sectionTitle}>Recommendations</Text>
@@ -909,7 +899,6 @@ const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
         </Card>
       )}
 
-      {/* CTA */}
       <TouchableOpacity style={wbStyles.assessBtn} activeOpacity={0.85}>
         <Icon name="sparkle" size={16} color="#000" />
         <Text style={wbStyles.assessBtnText}>Request Wellbeing Assessment</Text>
@@ -918,44 +907,42 @@ const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
   );
 };
 
+const WELLBEING_COLOR: Record<string, string> = { HIGH: C.red, MODERATE: C.amber, LOW: C.green };
+
 const wbStyles = StyleSheet.create({
   banner:       { borderRadius: RADIUS.lg, padding: 16, gap: 8, borderWidth: 1, borderColor: C.border, marginBottom: 4 },
   bannerTitle:  { fontFamily: FONT.uiBk, fontSize: 17, color: C.text, letterSpacing: -0.2 },
   bannerSub:    { fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, lineHeight: 18 },
   riskCard:     { borderWidth: 1.5, gap: 10 },
-  riskHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  riskHeader:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   riskBadge:    { borderRadius: RADIUS.pill, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 5 },
   riskLevel:    { fontFamily: FONT.uiBk, fontSize: 14, letterSpacing: 0.5 },
   riskSub:      { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
-  domainRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  domainRow:    { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   domainChip:   { borderRadius: RADIUS.pill, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
   domainText:   { fontFamily: FONT.uiBd, fontSize: 11 },
   ubuntuScore:  { fontFamily: FONT.mono, fontSize: 14, color: C.textPrimary },
   ubuntuSub:    { fontFamily: FONT.ui, fontSize: 12, color: C.textSecondary, lineHeight: 18 },
-  recRow:       { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, paddingHorizontal: 4 },
+  recRow:       { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10, paddingHorizontal: 4 },
   recBullet:    { marginTop: 2 },
   recText:      { flex: 1, fontFamily: FONT.ui, fontSize: 13, color: C.text, lineHeight: 19 },
-  noDataCard:   { alignItems: 'center', gap: 10, paddingVertical: 20 },
+  noDataCard:   { alignItems: "center", gap: 10, paddingVertical: 20 },
   noDataTitle:  { fontFamily: FONT.uiBd, fontSize: 15, color: C.textPrimary },
-  noDataSub:    { fontFamily: FONT.ui, fontSize: 12, color: C.textMuted, textAlign: 'center', lineHeight: 18 },
+  noDataSub:    { fontFamily: FONT.ui, fontSize: 12, color: C.textMuted, textAlign: "center", lineHeight: 18 },
   assessBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 8, paddingVertical: 13, borderRadius: RADIUS.pill,
     backgroundColor: C.teal, marginTop: 4,
   },
-  assessBtnText: { fontFamily: FONT.uiBd, fontSize: 14, color: '#000' },
+  assessBtnText: { fontFamily: FONT.uiBd, fontSize: 14, color: "#000" },
 });
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
-// ─── Loading skeleton row ──────────────────────────────────────────────────────
 
 const SkeletonRows: React.FC = () => (
   <View style={{ gap: 8, opacity: 0.4 }}>
     {[1, 2, 3].map(i => (
       <View
         key={i}
-        style={{ height: 56, backgroundColor: C.card, borderRadius: RADIUS.card, borderWidth: 1, borderColor: C.border, justifyContent: 'center', paddingHorizontal: 14 }}
+        style={{ height: 56, backgroundColor: C.card, borderRadius: RADIUS.card, borderWidth: 1, borderColor: C.border, justifyContent: "center", paddingHorizontal: 14 }}
       >
         <Text style={{ fontFamily: FONT.ui, fontSize: 12, color: C.textMuted }}>Loading...</Text>
       </View>
@@ -963,21 +950,43 @@ const SkeletonRows: React.FC = () => (
   </View>
 );
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-const EmptyState: React.FC<{ message?: string }> = ({ message = 'No data available' }) => (
-  <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+const EmptyState: React.FC<{ message?: string }> = ({ message = "No data available" }) => (
+  <View style={{ alignItems: "center", paddingVertical: 32 }}>
     <Text style={{ fontFamily: FONT.uiMd, fontSize: 13, color: C.textMuted }}>{message}</Text>
   </View>
 );
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+interface SdohAssessment {
+  sdohRiskLevel: "HIGH" | "MODERATE" | "LOW" | null;
+  sdohDomains: string[];
+  ubuntuScore: number | null;
+  ubuntuRiskLevel: "HIGH" | "MODERATE" | "LOW" | null;
+  recommendations: string[];
+  abstained: boolean;
+}
+
+async function fetchWellbeingAssessment(patientId: string): Promise<SdohAssessment> {
+  try {
+    const res = await api.get<any>(`/cultural/social-determinants/\${patientId}/latest`);
+    const d = res.data;
+    return {
+      sdohRiskLevel:  d?.sdohRiskLevel ?? null,
+      sdohDomains:    d?.riskDomains ?? [],
+      ubuntuScore:    d?.ubuntuScore ?? null,
+      ubuntuRiskLevel: d?.ubuntuRiskLevel ?? null,
+      recommendations: d?.recommendations ?? [],
+      abstained: false,
+    };
+  } catch {
+    return { sdohRiskLevel: null, sdohDomains: [], ubuntuScore: null, ubuntuRiskLevel: null, recommendations: [], abstained: true };
+  }
+}
 
 export const PatientHealthScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<SubTab>('profile');
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<SubTab>("profile");
   const { user } = useAuthStore();
-
   const [profile,           setProfile]           = useState<ApiPatientProfile | null>(null);
   const [vitals,            setVitals]            = useState<VitalEntry[]>([]);
   const [labs,              setLabs]              = useState<LabResult[]>([]);
@@ -1012,9 +1021,8 @@ export const PatientHealthScreen: React.FC = () => {
         const mapped = mapApiLabs(orders ?? []);
         setLabs(mapped);
         setLoading(false);
-        // For each flagged lab without an AI note, fetch CDSS interpretation
         mapped.forEach(lab => {
-          if (lab.flag !== 'normal' && !lab.aiNote) {
+          if (lab.flag !== "normal" && !lab.aiNote) {
             CdssService.interpretLab(lab.name, String(lab.value), lab.unit)
               .then(res => {
                 if (!res.abstained && res.interpretation) {
@@ -1033,11 +1041,10 @@ export const PatientHealthScreen: React.FC = () => {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <LinearGradient colors={['#030B18', C.bg]} style={styles.header}>
+      <LinearGradient colors={["#030B18", C.bg]} style={styles.header}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerTitle}>My Health</Text>
+            <Text style={styles.headerTitle}>{t("nav.health")}</Text>
             <Text style={styles.headerSub}>Complete health overview</Text>
           </View>
           <AiBadge text="S115" />
@@ -1045,20 +1052,17 @@ export const PatientHealthScreen: React.FC = () => {
         <SubTabBar active={tab} onChange={setTab} />
       </LinearGradient>
 
-      {/* Content */}
       <View style={styles.body}>
-        {tab === 'profile'   && <ProfileTab conditions={conditions} allergies={allergies} profile={profile} userName={user?.name ?? ''} loading={loading} />}
-        {tab === 'vitals'    && <VitalsTab vitals={vitals} loading={loading} />}
-        {tab === 'labs'      && <LabsTab labs={labs} loading={loading} labInterpretations={labInterpretations} />}
-        {tab === 'services'  && <ServicesTab />}
-        {tab === 'documents' && <DocumentsTab docs={docs} loading={loading} />}
-        {tab === 'wellbeing' && <WellbeingTab patientId={user?.patientMrn ?? user?.id ?? ''} />}
+        {tab === "profile"   && <ProfileTab conditions={conditions} allergies={allergies} profile={profile} userName={user?.name ?? ""} loading={loading} />}
+        {tab === "vitals"    && <VitalsTab vitals={vitals} loading={loading} />}
+        {tab === "labs"      && <LabsTab labs={labs} loading={loading} labInterpretations={labInterpretations} />}
+        {tab === "services"  && <ServicesTab />}
+        {tab === "documents" && <DocumentsTab docs={docs} loading={loading} />}
+        {tab === "wellbeing" && <WellbeingTab patientId={user?.patientMrn ?? user?.id ?? ""} />}
       </View>
     </View>
   );
 };
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   root:        { flex: 1, backgroundColor: C.bg },
@@ -1068,7 +1072,6 @@ const styles = StyleSheet.create({
   headerSub:   { fontFamily: FONT.ui, fontSize: 12, color: C.textMuted, marginTop: 1 },
   body:        { flex: 1 },
 
-  // Sub-tab bar
   tabBar:        { maxHeight: 44, borderBottomWidth: 1, borderBottomColor: C.border },
   tabBarContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 6, flexDirection: 'row' },
   tab:           { paddingHorizontal: 14, paddingVertical: 5, borderRadius: RADIUS.pill, backgroundColor: 'transparent' },
@@ -1076,13 +1079,10 @@ const styles = StyleSheet.create({
   tabText:       { fontFamily: FONT.uiBd, fontSize: 12, color: C.textMuted, letterSpacing: 0.2 },
   tabTextActive: { color: C.teal },
 
-  // Tab content wrapper
   tabContent: { padding: 16, paddingBottom: 32, gap: 12 },
 
-  // Section title
   sectionTitle: { fontFamily: FONT.uiBd, fontSize: 11, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
 
-  // Profile tab
   profileCard:       { borderRadius: RADIUS.lg, padding: 16, gap: 14, borderWidth: 1, borderColor: C.border },
   profileAvatarRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
   profileAvatar:     { width: 52, height: 52, borderRadius: 26, backgroundColor: C.teal + '33', alignItems: 'center', justifyContent: 'center' },
@@ -1111,7 +1111,6 @@ const styles = StyleSheet.create({
   callBtn:          { backgroundColor: C.green + '22', borderRadius: RADIUS.pill, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: C.green + '44' },
   callBtnText:      { fontFamily: FONT.uiBd, fontSize: 12, color: C.green },
 
-  // Vitals tab
   vitalsHeader:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
   vitalsSubtitle:   { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
   vitalCard:        { gap: 0 },
@@ -1128,7 +1127,6 @@ const styles = StyleSheet.create({
   vitalHistoryVal:  { fontFamily: FONT.mono, fontSize: 14 },
   vitalHistoryDate: { fontFamily: FONT.ui, fontSize: 9, color: C.textMuted },
 
-  // Labs tab
   panelTitle:   { fontFamily: FONT.uiBd, fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4, marginTop: 8 },
   labCard:      { gap: 6 },
   labCardRow:   { flexDirection: 'row', alignItems: 'center' },
@@ -1141,7 +1139,6 @@ const styles = StyleSheet.create({
   labAiRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   labAiText:    { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, flex: 1 },
 
-  // Lab sheet
   backdrop:         { ...StyleSheet.absoluteFillObject, backgroundColor: '#000A' },
   sheet:            { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: 20, paddingBottom: 40, gap: 14, ...SHADOW.lg },
   sheetHandle:      { width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 4 },
@@ -1166,7 +1163,6 @@ const styles = StyleSheet.create({
   askAiBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: C.teal, borderRadius: RADIUS.pill, paddingVertical: 13 },
   askAiBtnText:     { fontFamily: FONT.uiBd, fontSize: 14, color: C.bg },
 
-  // Services tab
   servicesHeader:       { borderRadius: RADIUS.lg, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.border },
   servicesHeaderTitle:  { fontFamily: FONT.uiBk, fontSize: 15, color: C.text },
   servicesHeaderSub:    { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, marginTop: 2 },
@@ -1181,7 +1177,6 @@ const styles = StyleSheet.create({
   metricChip:           { backgroundColor: C.surface2, borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 3 },
   metricChipText:       { fontFamily: FONT.ui, fontSize: 10, color: C.textMuted },
 
-  // Documents tab
   docCard:      { gap: 10 },
   docCardRow:   { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   docIconBox:   { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

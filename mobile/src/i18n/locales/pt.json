@@ -1,0 +1,128 @@
+{
+  "common": {
+    "loading": "A carregar…",
+    "error": "Ocorreu um erro",
+    "retry": "Tentar novamente",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "back": "Voltar",
+    "submit": "Submeter",
+    "confirm": "Confirmar",
+    "logout": "Sair",
+    "search": "Pesquisar",
+    "noResults": "Sem resultados"
+  },
+  "nav": {
+    "home": "Início",
+    "appointments": "Consultas",
+    "health": "Minha Saúde",
+    "meds": "Medicamentos",
+    "bills": "Faturas",
+    "messages": "Mensagens",
+    "education": "Aprender",
+    "notifications": "Notificações",
+    "shift": "Meu Turno",
+    "vitals": "Sinais Vitais",
+    "rounds": "Rondas",
+    "patients": "Pacientes",
+    "ai": "Assistente IA"
+  },
+  "patient": {
+    "name": "Nome Completo",
+    "dob": "Data de Nascimento",
+    "sex": "Sexo",
+    "phone": "Número de Telefone",
+    "id_number": "Número de Identidade",
+    "blood_group": "Grupo Sanguíneo",
+    "age": "Idade",
+    "next_of_kin": "Parente Mais Próximo"
+  },
+  "clinical": {
+    "vitals": "Sinais Vitais",
+    "weight": "Peso (kg)",
+    "height": "Altura (cm)",
+    "bp": "Pressão Arterial",
+    "temp": "Temperatura (°C)",
+    "pulse": "Pulso (bpm)",
+    "spo2": "SpO₂ (%)",
+    "diagnosis": "Diagnóstico",
+    "prescription": "Receita",
+    "chief_complaint": "Queixa Principal",
+    "plan": "Plano de Tratamento",
+    "referral": "Referência"
+  },
+  "billing": {
+    "invoice": "Fatura",
+    "payment": "Pagamento",
+    "receipt": "Recibo",
+    "outstanding": "Saldo Pendente",
+    "paid": "Pago"
+  },
+  "auth": {
+    "login": "Entrar",
+    "email": "E-mail",
+    "password": "Senha",
+    "biometric": "Usar Biometria",
+    "sessionExpired": "Sessão expirada. Por favor, entre novamente."
+  },
+  "postVisit": {
+    "visitSummary": "Resumo da Visita",
+    "status": "Estado",
+    "subjective": "O Que Você Relatou",
+    "assessment": "Avaliação",
+    "plan": "Seu Plano de Cuidados",
+    "notFound": "Resumo da visita ainda não disponível."
+  },
+  "meds": {
+    "requestRefill": "Solicitar Recarga",
+    "refillPending": "Recarga Pendente",
+    "refillApproved": "Recarga Aprovada",
+    "refillCancelled": "Pedido cancelado",
+    "refillRequested": "Pedido submetido",
+    "refillSoon": "Recarga em Breve",
+    "refillDays": "Recarga em",
+    "days": "dias"
+  },
+  "adherence": {
+    "markTaken": "Marcar como Tomado",
+    "taken": "Tomado",
+    "missed": "Perdido",
+    "upcoming": "Próximo",
+    "thisWeek": "Esta Semana",
+    "markFailed": "Não foi possível registar a dose. Tente novamente.",
+    "summary": "Resumo de Adesão"
+  },
+  "education": {
+    "title": "Educação em Saúde",
+    "subtitle": "Aprenda sobre a sua saúde",
+    "all": "Todos",
+    "minRead": "min de leitura",
+    "by": "Por"
+  },
+  "family": {
+    "title": "Acesso Familiar",
+    "subtitle": "Gerencie quem pode ver seus registos",
+    "addCaregiver": "Adicionar Cuidador / Tutor",
+    "activeGrants": "Concessões de Acesso Ativas",
+    "noGrants": "Nenhum cuidador tem acesso aos seus registos",
+    "infoText": "Os cuidadores que adicionar aqui podem ver partes do seu registo de saúde. Pode revogar o acesso a qualquer momento.",
+    "viewOnly": "Só Leitura",
+    "fullAccess": "Acesso Completo",
+    "emergencyOnly": "Apenas Emergências",
+    "expires": "Expira",
+    "noExpiry": "Sem expiração",
+    "revoke": "Revogar",
+    "revokeTitle": "Revogar Acesso",
+    "revokeConfirm": "Remover {{name}} dos seus cuidadores?",
+    "grantAccess": "Conceder Acesso",
+    "requiredFields": "Nome e email são obrigatórios",
+    "fieldName": "Nome do Cuidador",
+    "fieldNamePlaceholder": "Nome completo",
+    "fieldEmail": "Endereço de Email",
+    "fieldPhone": "Telefone (opcional)",
+    "fieldRelationship": "Relação (opcional)",
+    "fieldRelationshipPlaceholder": "ex. Cônjuge, Pai/Mãe, Filho/a",
+    "fieldAccessLevel": "Nível de Acesso",
+    "fieldExpiry": "Acesso expira em (opcional)"
+  }
+}

@@ -1221,7 +1221,9 @@ export class TenantService implements OnModuleInit {
       ADD COLUMN IF NOT EXISTS "demoExpiresAt" TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS "graceEndsAt" TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS "autoDeleteAt" TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS "suspensionWarningDays" INTEGER NOT NULL DEFAULT 5
+      ADD COLUMN IF NOT EXISTS "suspensionWarningDays" INTEGER NOT NULL DEFAULT 5,
+      ADD COLUMN IF NOT EXISTS "countryCode" VARCHAR(2) DEFAULT NULL,
+      ADD COLUMN IF NOT EXISTS "deploymentMode" VARCHAR(20) NOT NULL DEFAULT 'clinic'
     `);
 
     await this.tenantRepository.query(`
@@ -1358,5 +1360,26 @@ export class TenantService implements OnModuleInit {
       CREATE INDEX IF NOT EXISTS idx_tenant_subscription_payments_status
       ON tenant_subscription_payments (status)
     `);
+
+    await this.tenantRepository.query(`
+      CREATE TABLE IF NOT EXISTS payment_transactions (
+        id SERIAL PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        provider VARCHAR(30) NOT NULL,
+        reference VARCHAR(120) NOT NULL UNIQUE,
+        amount_usd NUMERIC(10,2),
+        months_to_extend INTEGER NOT NULL DEFAULT 1,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        raw_payload JSONB,
+        initiated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ
+      )
+    `);
+    await this.tenantRepository.query(
+      `CREATE INDEX IF NOT EXISTS idx_payment_transactions_tenant ON payment_transactions(tenant_id)`,
+    );
+    await this.tenantRepository.query(
+      `CREATE INDEX IF NOT EXISTS idx_payment_transactions_reference ON payment_transactions(reference)`,
+    );
   }
 }

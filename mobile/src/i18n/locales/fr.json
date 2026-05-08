@@ -1,0 +1,128 @@
+{
+  "common": {
+    "loading": "Chargement…",
+    "error": "Une erreur s'est produite",
+    "retry": "Réessayer",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "back": "Retour",
+    "submit": "Soumettre",
+    "confirm": "Confirmer",
+    "logout": "Se déconnecter",
+    "search": "Rechercher",
+    "noResults": "Aucun résultat"
+  },
+  "nav": {
+    "home": "Accueil",
+    "appointments": "Rendez-vous",
+    "health": "Ma Santé",
+    "meds": "Médicaments",
+    "bills": "Factures",
+    "messages": "Messages",
+    "education": "Apprendre",
+    "notifications": "Notifications",
+    "shift": "Mon Quart",
+    "vitals": "Signes Vitaux",
+    "rounds": "Tournées",
+    "patients": "Patients",
+    "ai": "Assistant IA"
+  },
+  "patient": {
+    "name": "Nom Complet",
+    "dob": "Date de Naissance",
+    "sex": "Sexe",
+    "phone": "Numéro de Téléphone",
+    "id_number": "Numéro d'Identité",
+    "blood_group": "Groupe Sanguin",
+    "age": "Âge",
+    "next_of_kin": "Proche Parent"
+  },
+  "clinical": {
+    "vitals": "Signes Vitaux",
+    "weight": "Poids (kg)",
+    "height": "Taille (cm)",
+    "bp": "Tension Artérielle",
+    "temp": "Température (°C)",
+    "pulse": "Pouls (bpm)",
+    "spo2": "SpO₂ (%)",
+    "diagnosis": "Diagnostic",
+    "prescription": "Ordonnance",
+    "chief_complaint": "Motif de Consultation",
+    "plan": "Plan de Traitement",
+    "referral": "Référence"
+  },
+  "billing": {
+    "invoice": "Facture",
+    "payment": "Paiement",
+    "receipt": "Reçu",
+    "outstanding": "Solde Impayé",
+    "paid": "Payé"
+  },
+  "auth": {
+    "login": "Se Connecter",
+    "email": "E-mail",
+    "password": "Mot de Passe",
+    "biometric": "Utiliser la Biométrie",
+    "sessionExpired": "Session expirée. Veuillez vous reconnecter."
+  },
+  "postVisit": {
+    "visitSummary": "Résumé de Visite",
+    "status": "Statut",
+    "subjective": "Ce Que Vous Avez Signalé",
+    "assessment": "Évaluation",
+    "plan": "Votre Plan de Soins",
+    "notFound": "Le résumé de visite n'est pas encore disponible."
+  },
+  "meds": {
+    "requestRefill": "Demander un renouvellement",
+    "refillPending": "Renouvellement en attente",
+    "refillApproved": "Renouvellement approuvé",
+    "refillCancelled": "Demande annulée",
+    "refillRequested": "Demande soumise",
+    "refillSoon": "Renouvellement bientôt",
+    "refillDays": "Renouvellement dans",
+    "days": "jours"
+  },
+  "adherence": {
+    "markTaken": "Marquer comme pris",
+    "taken": "Pris",
+    "missed": "Manqué",
+    "upcoming": "À venir",
+    "thisWeek": "Cette semaine",
+    "markFailed": "Impossible d'enregistrer la dose. Veuillez réessayer.",
+    "summary": "Résumé de l'observance"
+  },
+  "education": {
+    "title": "Éducation Sanitaire",
+    "subtitle": "En savoir plus sur votre santé",
+    "all": "Tout",
+    "minRead": "min de lecture",
+    "by": "Par"
+  },
+  "family": {
+    "title": "Accès Famille",
+    "subtitle": "Gérez qui peut voir vos dossiers",
+    "addCaregiver": "Ajouter Aidant / Tuteur",
+    "activeGrants": "Accès actifs accordés",
+    "noGrants": "Aucun aidant n'a accès à vos dossiers",
+    "infoText": "Les aidants ajoutés ici peuvent consulter des parties de votre dossier de santé. Vous pouvez révoquer l'accès à tout moment.",
+    "viewOnly": "Lecture seule",
+    "fullAccess": "Accès complet",
+    "emergencyOnly": "Urgences uniquement",
+    "expires": "Expire le",
+    "noExpiry": "Sans expiration",
+    "revoke": "Révoquer",
+    "revokeTitle": "Révoquer l'accès",
+    "revokeConfirm": "Supprimer {{name}} de vos aidants ?",
+    "grantAccess": "Accorder l'accès",
+    "requiredFields": "Le nom et l'email sont requis",
+    "fieldName": "Nom de l'aidant",
+    "fieldNamePlaceholder": "Nom complet",
+    "fieldEmail": "Adresse email",
+    "fieldPhone": "Téléphone (optionnel)",
+    "fieldRelationship": "Relation (optionnel)",
+    "fieldRelationshipPlaceholder": "ex. Conjoint, Parent, Enfant",
+    "fieldAccessLevel": "Niveau d'accès",
+    "fieldExpiry": "Expiration de l'accès (optionnel)"
+  }
+}
