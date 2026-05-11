@@ -1,19 +1,7 @@
 # MediCore Architecture Reference
 
 Last updated: 2026-05-11
-Last verified: 2026-05-08 (S17–S20 implementation confirmed across all 21 deliverables)
-
-## Pending Patient Portal Sprints (PP-S21–PP-S25)
-
-Sprints PP-S21 through PP-S25 are written and ready for Codex implementation. See `docs/SPRINT_PP_S21_*.md` through `docs/SPRINT_PP_S25_*.md`.
-
-| Sprint | What to build |
-|---|---|
-| PP-S21 | Patient portal — Notifications Centre page (`/notifications`), filter tabs, mark-read/delete, bell "See all" link |
-| PP-S22 | Patient portal — Health Education Content browser (`/education`), locale picker, category tabs, article detail modal |
-| PP-S23 | Patient portal — Whisper AI voice input component (`VoiceInputButton`), patient voice proxy endpoint, wired to SymptomChecker + Messages + Vitals |
-| PP-S24 | Patient portal — Caregiver portal login (`/caregiver/login`), set-password flow, scoped read-only dashboard; DB: `password_hash` column on `patient_family_access` → run `repair-all` |
-| PP-S25 | Patient portal — Real reset-password page (Mode A: request link, Mode B: set password); remove all `/demo-clinic/` hardcoded fallback routes; wire live unread message count on dashboard |
+Last verified: 2026-05-11 (PP-S21–PP-S25 verified 67/67 criteria, committed 2f68ade7)
 
 This document contains the architecture rules, DB provisioning patterns, and agent constraints that apply to all work on this codebase. Read it before editing any file.
 
@@ -45,6 +33,11 @@ Sprints S01–S20 are fully implemented and tested.
 | S18 | Medication adherence check-in (real API) — `logAdherence`/`getAdherenceSummary`/`getAdherenceLogs` in `prescriptions.ts`; `handleMark` wired to `POST /prescriptions/:id/adherence` with optimistic update and rollback; real 7-day adherence dot array from logs; real `adherencePct` from summary; `takenToday` checked against today's logs on mount. i18n `adherence.*` in 8 locales. |
 | S19 | Localized health education screen — new `EducationService` (`education.ts`); new `PatientEducationScreen` with category tab strip, article FlatList, and HTML body in a WebView modal; registered as `PHEducation` in `PatientStackNavigator`; Education tile in `PatientHomeScreen` (6th item); locale passed as query param. i18n `education.*` + `nav.education` in 8 locales. |
 | S20 | Caregiver / guardian access — new `PatientFamilyAccessScreen` with grant list, add-caregiver bottom-sheet form (name, email, phone, relationship, access level, expiry), and revoke confirmation; `getFamilyAccess`/`grantFamilyAccess`/`revokeFamilyAccess` in `patientPortal.ts`; registered as `PHFamilyAccess`; entry point added to `PatientHealthScreen` profile sub-tab. i18n `family.*` in 8 locales. |
+| PP-S21 | Patient portal — Notifications Centre (`/notifications`): filter tabs (All/Unread/type), per-type icon gradients, mark-read/delete, load-more, bell "See all" link from dashboard, dashboard tile. |
+| PP-S22 | Patient portal — Health Education browser (`/education`): 8-locale selector, 9 category tabs, article grid, detail modal with HTML body, deep-link `/education/:articleId`, `getEducationContent` + `getEducationArticle` in `api.ts`. |
+| PP-S23 | Patient portal — Whisper AI voice input: `VoiceInputButton` component (MediaRecorder, idle/recording/processing/error states, 60s auto-stop); `POST /patient-portal/voice-transcribe` endpoint; wired into SymptomChecker, Messages, Vitals. |
+| PP-S24 | Patient portal — Caregiver portal login: `password_hash` column provisioned on `patient_family_access` (repair-all applied); `POST caregiver/login` + `set-password` + `GET patient-summary` endpoints; `CaregiverAuthContext`, `CaregiverLoginPage` (pink/rose palette), `CaregiverDashboard` (read-only), invitation code sharing in `FamilyAccessPage`. |
+| PP-S25 | Patient portal — Real `ResetPasswordPage` (Mode A: email request, Mode B: token + strength meter); all `/demo-clinic/` hardcoded fallback routes replaced with `/select-tenant` catch-all; dashboard `unreadMessages` wired to live API; "Forgot password?" link on LoginPage. JWT expiry enforcement in `PatientAuthContext` (decode exp on mount, 60s interval, 401 event dispatch). |
 
 ---
 
