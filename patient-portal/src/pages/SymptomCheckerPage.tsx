@@ -4,6 +4,7 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
+import VoiceInputButton from '../components/VoiceInputButton';
 import { ArrowLeft, Search, AlertCircle, CheckCircle, Activity, Heart, Thermometer, Brain, Package, Wind, Eye, X, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -138,19 +139,28 @@ const SymptomCheckerPage: React.FC = () => {
               <h2 className="text-xl font-bold text-gray-900 mb-4">Enter Your Symptoms</h2>
               
               <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={currentSymptom}
-                  onChange={(e) => handleSearchSymptom(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && currentSymptom.trim()) {
-                      handleAddSymptom(currentSymptom);
-                    }
-                  }}
-                  placeholder="Type a symptom (e.g., headache, fever)..."
-                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                />
+                <div className="flex items-start gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={currentSymptom}
+                      onChange={(e) => handleSearchSymptom(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && currentSymptom.trim()) {
+                          handleAddSymptom(currentSymptom);
+                        }
+                      }}
+                      placeholder="Type a symptom (e.g., headache, fever)..."
+                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                  <VoiceInputButton
+                    onTranscript={(text) => setCurrentSymptom((prev) => prev ? `${prev} ${text}` : text)}
+                    context="Patient describing their symptoms for clinical triage."
+                    className="ml-2 flex-shrink-0"
+                  />
+                </div>
                 
                 {suggestedSymptoms.length > 0 && (
                   <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
@@ -359,4 +369,3 @@ const SymptomCheckerPage: React.FC = () => {
 };
 
 export default SymptomCheckerPage;
-

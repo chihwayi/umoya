@@ -24,7 +24,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       tenantId: payload.tenantId,
       firstName: payload.firstName,
       lastName: payload.lastName,
-      temporary: payload.temporary || false
+      temporary: payload.temporary || false,
+      sub: payload.sub,
+      type: payload.type,
+      patientId: payload.patientId,
+      accessLevel: payload.accessLevel,
     };
   }
 }

@@ -33,7 +33,15 @@ export class PatientFamilyAccess {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  @Column({ name: 'password_hash', length: 255, nullable: true })
+  passwordHash: string | null;
+
+  @Column({ name: 'password_set_at', type: 'timestamp with time zone', nullable: true })
+  passwordSetAt: Date | null;
+
+  @Column({ name: 'last_login_at', type: 'timestamp with time zone', nullable: true })
+  lastLoginAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
-

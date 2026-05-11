@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
+import VoiceInputButton from '../components/VoiceInputButton';
 import { Activity, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, AlertCircle, Calendar, User, ArrowLeft, Plus, X, Save, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
@@ -76,7 +77,11 @@ const VitalsPage: React.FC = () => {
       const vitalsData: any = {};
       Object.keys(formData).forEach(key => {
         const value = formData[key as keyof typeof formData];
-        vitalsData[key] = value === '' ? null : (key === 'painLevel' || key === 'heartRate' || key === 'oxygenSaturation' || key === 'respiratoryRate' ? parseInt(value) || null : parseFloat(value) || null);
+        if (key === 'notes' || key === 'bloodPressure') {
+          vitalsData[key] = value.trim() === '' ? null : value.trim();
+        } else {
+          vitalsData[key] = value === '' ? null : (key === 'painLevel' || key === 'heartRate' || key === 'oxygenSaturation' || key === 'respiratoryRate' ? parseInt(value) || null : parseFloat(value) || null);
+        }
       });
 
       await patientPortalApi.submitVitals(vitalsData, token!, tenantSlug);
@@ -486,13 +491,20 @@ const VitalsPage: React.FC = () => {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Notes <span className="text-gray-500">(optional)</span>
                 </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => handleInputChange('notes', e.target.value)}
-                  placeholder="Any additional notes about your vitals..."
-                  rows={3}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all resize-none"
-                />
+                <div className="flex items-start gap-2">
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => handleInputChange('notes', e.target.value)}
+                    placeholder="Any additional notes about your vitals..."
+                    rows={3}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all resize-none"
+                  />
+                  <VoiceInputButton
+                    onTranscript={(text) => handleInputChange('notes', formData.notes ? `${formData.notes} ${text}` : text)}
+                    context="Patient describing health observations with their vitals."
+                    className="ml-2"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-4 pt-4">

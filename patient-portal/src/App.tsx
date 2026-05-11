@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { PatientAuthProvider } from './contexts/PatientAuthContext';
+import { CaregiverAuthProvider } from './contexts/CaregiverAuthContext';
 import { NotificationProvider } from './components/GlobalNotification';
 import TenantSelectorPage from './pages/TenantSelectorPage';
 import RegisterPage from './pages/RegisterPage';
@@ -26,6 +27,7 @@ import AchievementsPage from './pages/AchievementsPage';
 import MessagesPage from './pages/MessagesPage';
 import RequestAppointmentPage from './pages/RequestAppointmentPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import TelemedicinePage from './pages/TelemedicinePage';
 import DiabetesManagementPage from './pages/DiabetesManagementPage';
 import CardiologyManagementPage from './pages/CardiologyManagementPage';
@@ -34,6 +36,11 @@ import PatientAiFollowupsPage from './pages/PatientAiFollowupsPage';
 import PostVisitCompanionPage from './pages/PostVisitCompanionPage';
 import FamilyAccessPage from './pages/FamilyAccessPage';
 import FitnessIntegrationPage from './pages/FitnessIntegrationPage';
+import NotificationsPage from './pages/NotificationsPage';
+import HealthEducationPage from './pages/HealthEducationPage';
+import CaregiverLoginPage from './pages/CaregiverLoginPage';
+import CaregiverSetPasswordPage from './pages/CaregiverSetPasswordPage';
+import CaregiverDashboard from './pages/CaregiverDashboard';
 // Tier 1 Features
 import PatientConsentsPage from './pages/PatientConsentsPage';
 import MyPathwaysPage from './pages/MyPathwaysPage';
@@ -41,24 +48,36 @@ import ImmunizationsPage from './pages/ImmunizationsPage';
 import AdmissionStatusPage from './pages/AdmissionStatusPage';
 import EDVisitsPage from './pages/EDVisitsPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import CaregiverProtectedRoute from './components/CaregiverProtectedRoute';
 import './App.css';
 
 function App() {
   return (
     <PatientAuthProvider>
+      <CaregiverAuthProvider>
       <NotificationProvider>
         <Router>
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
           <Routes>
             {/* Tenant selector - root page */}
             <Route path="/select-tenant" element={<TenantSelectorPage />} />
-            <Route path="/" element={<Navigate to="/demo-clinic/dashboard" replace />} />
+            <Route path="/" element={<Navigate to="/select-tenant" replace />} />
             
             {/* Tenant-specific routes */}
             <Route path="/:tenantSlug/register" element={<RegisterPage />} />
             <Route path="/:tenantSlug/login" element={<LoginPage />} />
             <Route path="/:tenantSlug/verify-email" element={<VerifyEmailPage />} />
-            <Route path="/:tenantSlug/reset-password" element={<div>Reset Password</div>} />
+            <Route path="/:tenantSlug/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/:tenantSlug/caregiver/login" element={<CaregiverLoginPage />} />
+            <Route path="/:tenantSlug/caregiver/set-password" element={<CaregiverSetPasswordPage />} />
+            <Route
+              path="/:tenantSlug/caregiver/dashboard"
+              element={
+                <CaregiverProtectedRoute>
+                  <CaregiverDashboard />
+                </CaregiverProtectedRoute>
+              }
+            />
             <Route
               path="/:tenantSlug/link-account"
               element={
@@ -72,6 +91,30 @@ function App() {
               element={
                 <ProtectedRoute requireLinked>
                   <PatientDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/notifications"
+              element={
+                <ProtectedRoute requireLinked>
+                  <NotificationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/education"
+              element={
+                <ProtectedRoute requireLinked>
+                  <HealthEducationPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/education/:articleId"
+              element={
+                <ProtectedRoute requireLinked>
+                  <HealthEducationPage />
                 </ProtectedRoute>
               }
             />
@@ -341,24 +384,12 @@ function App() {
               }
             />
             
-            {/* Legacy routes - redirect to default tenant */}
-            <Route path="/register" element={<Navigate to="/demo-clinic/register" replace />} />
-            <Route path="/login" element={<Navigate to="/demo-clinic/login" replace />} />
-            <Route path="/verify-email" element={<Navigate to="/demo-clinic/verify-email" replace />} />
-            <Route path="/reset-password" element={<Navigate to="/demo-clinic/reset-password" replace />} />
-            <Route path="/link-account" element={<Navigate to="/demo-clinic/link-account" replace />} />
-            <Route path="/dashboard" element={<Navigate to="/demo-clinic/dashboard" replace />} />
-            <Route path="/appointments" element={<Navigate to="/demo-clinic/appointments" replace />} />
-            <Route path="/records" element={<Navigate to="/demo-clinic/records" replace />} />
-            <Route path="/lab-results" element={<Navigate to="/demo-clinic/lab-results" replace />} />
-            <Route path="/prescriptions" element={<Navigate to="/demo-clinic/prescriptions" replace />} />
-            <Route path="/bills" element={<Navigate to="/demo-clinic/bills" replace />} />
-            <Route path="/vitals" element={<Navigate to="/demo-clinic/vitals" replace />} />
-            <Route path="/messages" element={<Navigate to="/demo-clinic/messages" replace />} />
+            <Route path="*" element={<Navigate to="/select-tenant" replace />} />
           </Routes>
         </div>
       </Router>
       </NotificationProvider>
+      </CaregiverAuthProvider>
     </PatientAuthProvider>
   );
 }

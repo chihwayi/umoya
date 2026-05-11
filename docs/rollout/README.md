@@ -1,7 +1,19 @@
 # MediCore Architecture Reference
 
-Last updated: 2026-05-08
+Last updated: 2026-05-11
 Last verified: 2026-05-08 (S17–S20 implementation confirmed across all 21 deliverables)
+
+## Pending Patient Portal Sprints (PP-S21–PP-S25)
+
+Sprints PP-S21 through PP-S25 are written and ready for Codex implementation. See `docs/SPRINT_PP_S21_*.md` through `docs/SPRINT_PP_S25_*.md`.
+
+| Sprint | What to build |
+|---|---|
+| PP-S21 | Patient portal — Notifications Centre page (`/notifications`), filter tabs, mark-read/delete, bell "See all" link |
+| PP-S22 | Patient portal — Health Education Content browser (`/education`), locale picker, category tabs, article detail modal |
+| PP-S23 | Patient portal — Whisper AI voice input component (`VoiceInputButton`), patient voice proxy endpoint, wired to SymptomChecker + Messages + Vitals |
+| PP-S24 | Patient portal — Caregiver portal login (`/caregiver/login`), set-password flow, scoped read-only dashboard; DB: `password_hash` column on `patient_family_access` → run `repair-all` |
+| PP-S25 | Patient portal — Real reset-password page (Mode A: request link, Mode B: set password); remove all `/demo-clinic/` hardcoded fallback routes; wire live unread message count on dashboard |
 
 This document contains the architecture rules, DB provisioning patterns, and agent constraints that apply to all work on this codebase. Read it before editing any file.
 

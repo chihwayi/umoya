@@ -1,5 +1,7 @@
-import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger, NotFoundException, BadRequestException, UploadedFile, UseInterceptors, UnauthorizedException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { JwtService } from '@nestjs/jwt';
 import { Response } from 'express';
 import { DataSource } from 'typeorm';
 import * as fs from 'fs';
@@ -32,6 +34,7 @@ import { EmailService } from '../services/email.service';
 import { PatientHistoryService } from '../services/patient-history.service';
 import { AllergyService } from '../services/allergy.service';
 import { DocumentService } from '../services/document.service';
+import { TranscriptionService } from '../services/transcription.service';
 
 import { SignerRole, SignatureType } from '../dto/consent.dto';
 
@@ -66,6 +69,8 @@ export class PatientPortalController {
     private readonly patientHistoryService: PatientHistoryService,
     private readonly allergyService: AllergyService,
     private readonly documentService: DocumentService,
+    private readonly transcriptionService: TranscriptionService,
+    private readonly jwtService: JwtService,
   ) {}
 
   @Post('register')
@@ -2600,5 +2605,154 @@ export class PatientPortalController {
       [dto.outcome, followupId, patientId],
     );
     return { status: 'updated', followupId, outcome: dto.outcome };
+  }
+
+  @Post('voice-transcribe')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Transcribe audio to text for patient portal voice input' })
+  @UseInterceptors(FileInterceptor('audio'))
+  async voiceTranscribe(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('context') context: string,
+    @Req() req: any,
+  ): Promise<{ text: string; confidence?: number }> {
+    if (!file) throw new BadRequestException('No audio file provided');
+    const result = await this.transcriptionService.transcribe(file, {
+      language: req.query?.language,
+      prompt: context || 'Patient describing symptoms or health information.',
+    }, { tenantId: req.tenantId });
+    return {
+      text: this.transcriptionService.formatTranscription(result.text),
+      confidence: result.confidence,
+    };
+  }
+
+  @Post('caregiver/set-password')
+  @ApiOperation({ summary: 'Set caregiver portal password using invitation token (family access ID)' })
+  async setCaregiverPassword(
+    @Body() body: { invitationToken: string; proxyEmail: string; newPassword: string },
+    @Req() req: any,
+  ): Promise<{ message: string }> {
+    if (!body.invitationToken || !body.proxyEmail || !body.newPassword) {
+      throw new BadRequestException('invitationToken, proxyEmail, and newPassword are required');
+    }
+    if (body.newPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+
+    const proxyEmail = body.proxyEmail.trim().toLowerCase();
+    const grants = await req.tenantDb.query(
+      `SELECT id, proxy_email FROM patient_family_access
+       WHERE id = $1 AND LOWER(proxy_email) = $2 AND is_active = true
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+      [body.invitationToken, proxyEmail],
+    );
+    if (!grants.length) throw new NotFoundException('Invitation not found or expired');
+
+    const bcrypt = require('bcrypt');
+    const hash = await bcrypt.hash(body.newPassword, 12);
+    await req.tenantDb.query(
+      `UPDATE patient_family_access SET password_hash = $1, password_set_at = NOW() WHERE id = $2`,
+      [hash, body.invitationToken],
+    );
+    return { message: 'Password set successfully. You can now log in.' };
+  }
+
+  @Post('caregiver/login')
+  @ApiOperation({ summary: 'Caregiver portal login using family access credentials' })
+  async caregiverLogin(
+    @Body() body: { email: string; password: string },
+    @Req() req: any,
+  ): Promise<{ token: string; caregiver: object; patient: object }> {
+    if (!body.email || !body.password) {
+      throw new BadRequestException('email and password are required');
+    }
+
+    const grants = await req.tenantDb.query(
+      `SELECT fa.id, fa.proxy_name, fa.proxy_email, fa.relationship, fa.access_level,
+              fa.password_hash, fa.expires_at, fa.is_active,
+              p.id as patient_id, p.patient_number, p.first_name, p.last_name
+       FROM patient_family_access fa
+       JOIN patients p ON p.id = fa.patient_id
+       WHERE LOWER(fa.proxy_email) = $1
+         AND fa.is_active = true
+         AND (fa.expires_at IS NULL OR fa.expires_at > NOW())
+         AND fa.password_hash IS NOT NULL`,
+      [body.email.trim().toLowerCase()],
+    );
+    if (!grants.length) throw new UnauthorizedException('Invalid credentials or access expired');
+
+    const grant = grants[0];
+    const bcrypt = require('bcrypt');
+    const valid = await bcrypt.compare(body.password, grant.password_hash);
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
+
+    const token = this.jwtService.sign({
+      sub: grant.id,
+      type: 'caregiver',
+      patientId: grant.patient_id,
+      tenantId: req.tenantId,
+      accessLevel: grant.access_level,
+    }, { expiresIn: '8h' });
+
+    await req.tenantDb.query(
+      `UPDATE patient_family_access SET last_login_at = NOW() WHERE id = $1`,
+      [grant.id],
+    );
+    return {
+      token,
+      caregiver: {
+        id: grant.id,
+        name: grant.proxy_name,
+        email: grant.proxy_email,
+        relationship: grant.relationship,
+        accessLevel: grant.access_level,
+      },
+      patient: {
+        id: grant.patient_id,
+        patientNumber: grant.patient_number,
+        firstName: grant.first_name,
+        lastName: grant.last_name,
+      },
+    };
+  }
+
+  @Get('caregiver/patient-summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get patient summary for caregiver view' })
+  async caregiverPatientSummary(@Req() req: any): Promise<any> {
+    const payload = req.user;
+    if (payload.type !== 'caregiver') throw new UnauthorizedException('Caregiver token required');
+
+    const [appointments, recentVitals, activePrescriptions] = await Promise.all([
+      req.tenantDb.query(
+        `SELECT id, appointment_date as "appointmentDate", reason, status
+         FROM appointments
+         WHERE patient_id = $1 AND appointment_date >= NOW()
+         ORDER BY appointment_date ASC
+         LIMIT 5`,
+        [payload.patientId],
+      ),
+      req.tenantDb.query(
+        `SELECT id, recorded_at as "recordedAt", blood_pressure as "bloodPressure",
+                heart_rate as "heartRate", temperature, oxygen_saturation as "oxygenSaturation"
+         FROM vitals
+         WHERE patient_id = $1
+         ORDER BY recorded_at DESC
+         LIMIT 3`,
+        [payload.patientId],
+      ),
+      req.tenantDb.query(
+        `SELECT id, medication_name as "medicationName", dosage, frequency,
+                CASE WHEN is_active THEN 'active' ELSE 'inactive' END as status
+         FROM prescriptions
+         WHERE patient_id = $1 AND is_active = true
+         ORDER BY prescribed_at DESC
+         LIMIT 10`,
+        [payload.patientId],
+      ),
+    ]);
+
+    return { appointments, recentVitals, activePrescriptions };
   }
 }

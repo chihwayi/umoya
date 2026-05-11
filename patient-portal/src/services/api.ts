@@ -24,7 +24,10 @@ const _errMsg = (r: Response, base: string) => {
   return rid ? `${base} (requestId: ${rid})` : base;
 };
 const _ensureOk = (r: Response, base: string) => {
-  if (!r.ok) throw new Error(_errMsg(r, base));
+  if (!r.ok) {
+    if (r.status === 401) window.dispatchEvent(new Event('patient-auth-expired'));
+    throw new Error(_errMsg(r, base));
+  }
 };
 
 export const patientPortalApi = {
@@ -1031,6 +1034,118 @@ export const patientPortalApi = {
       body: JSON.stringify({ recipientEmail }),
     });
     _ensureOk(response, 'Failed to share prescription');
+    return response.json();
+  },
+
+  // Health Education
+  getEducationContent: async (
+    token: string,
+    tenantSlug: string,
+    filters?: { category?: string; language?: string; limit?: number; offset?: number; search?: string }
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.category) params.append('category', filters.category);
+    if (filters?.language) params.append('language', filters.language);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+    if (filters?.search) params.append('search', filters.search);
+    const response = await fetch(`${API_BASE_URL}/patient-portal/education?${params.toString()}`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch education content');
+    return response.json();
+  },
+
+  getEducationArticle: async (id: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/education/${id}`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch education article');
+    return response.json();
+  },
+
+  voiceTranscribe: async (
+    audioBlob: Blob,
+    token: string,
+    tenantSlug: string,
+    context?: string,
+    language?: string,
+  ): Promise<{ text: string; confidence?: number }> => {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'voice-input.webm');
+    if (context) formData.append('context', context);
+    const url = `${API_BASE_URL}/patient-portal/voice-transcribe${language ? `?language=${language}` : ''}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: formData,
+    });
+    _ensureOk(response, 'Voice transcription failed');
+    return response.json();
+  },
+
+  caregiverLogin: async (email: string, password: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/caregiver/login`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug }),
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ message: 'Login failed' }));
+      throw new Error(err.message || 'Caregiver login failed');
+    }
+    return response.json();
+  },
+
+  setCaregiverPassword: async (
+    invitationToken: string,
+    proxyEmail: string,
+    newPassword: string,
+    tenantSlug: string,
+  ) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/caregiver/set-password`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug }),
+      body: JSON.stringify({ invitationToken, proxyEmail, newPassword }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ message: 'Failed to set password' }));
+      throw new Error(err.message || 'Failed to set password');
+    }
+    return response.json();
+  },
+
+  getCaregiverPatientSummary: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/caregiver/patient-summary`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch caregiver patient summary');
+    return response.json();
+  },
+
+  forgotPassword: async (email: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/forgot-password`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug }),
+      body: JSON.stringify({ email }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to send reset email');
+    }
+    return response.json();
+  },
+
+  resetPassword: async (token: string, newPassword: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/reset-password`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug }),
+      body: JSON.stringify({ token, newPassword }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to reset password');
+    }
     return response.json();
   },
 };

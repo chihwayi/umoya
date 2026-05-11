@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, Bell, X, Droplet, Heart, AlarmClock, CheckCircle2, Download, ClipboardList, Users, Shield, Route, Syringe, AlertCircle, Bot } from 'lucide-react';
+import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, Bell, X, Droplet, Heart, AlarmClock, CheckCircle2, Download, ClipboardList, Users, Shield, Route, Syringe, AlertCircle, Bot, BookOpen } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
 import { useNotifications } from '../hooks/useNotifications';
@@ -31,6 +31,13 @@ const PatientDashboard: React.FC = () => {
 
   const loadStats = async () => {
     try {
+      const unreadMessages = await patientPortalApi.getMessages(token!, tenantSlug, { read: false, limit: 1 })
+        .then((data: any) => {
+          const arr = Array.isArray(data) ? data : (data.messages || data.data || []);
+          return data.total ?? arr.length;
+        })
+        .catch(() => 0);
+
       // Use dashboard summary endpoint for better performance
       const summary = await patientPortalApi.getDashboardSummary(token!, tenantSlug).catch(() => null);
       
@@ -41,7 +48,7 @@ const PatientDashboard: React.FC = () => {
         setStats({
           upcomingAppointments: summary.summary?.appointments || summary.appointmentCount || 0,
           pendingBills: summary.summary?.pendingBills || summary.pendingBillCount || 0,
-          unreadMessages: 0, // TODO: Implement messaging
+          unreadMessages,
           activePrescriptions: summary.summary?.activePrescriptions || summary.activePrescriptionCount || 0,
           medicalRecords: summary.summary?.medicalRecords || summary.medicalRecordCount || 0,
           vitalsRecords: summary.summary?.vitalsRecords || summary.vitalsCount || 0,
@@ -57,7 +64,7 @@ const PatientDashboard: React.FC = () => {
         setStats({
           upcomingAppointments: appointments.length || 0,
           pendingBills: bills.length || 0,
-          unreadMessages: 0,
+          unreadMessages,
           activePrescriptions: prescriptions.length || 0,
           medicalRecords: 0,
           vitalsRecords: 0,
@@ -82,10 +89,12 @@ const PatientDashboard: React.FC = () => {
     { icon: Route, label: 'My Care Pathways', path: '/pathways', color: 'from-cyan-500 to-cyan-600', bgColor: 'bg-cyan-50', textColor: 'text-cyan-600' },
     { icon: MessageSquare, label: 'Post-Visit Companion', path: '/post-visit', color: 'from-violet-500 to-fuchsia-600', bgColor: 'bg-violet-50', textColor: 'text-violet-600' },
     { icon: Pill, label: 'Prescriptions', path: '/prescriptions', color: 'from-purple-500 to-purple-600', bgColor: 'bg-purple-50', textColor: 'text-purple-600' },
+    { icon: Bell, label: 'Notifications', path: '/notifications', color: 'from-violet-500 to-violet-600', bgColor: 'bg-violet-50', textColor: 'text-violet-600' },
     { icon: Syringe, label: 'Immunizations', path: '/immunizations', color: 'from-emerald-500 to-emerald-600', bgColor: 'bg-emerald-50', textColor: 'text-emerald-600' },
     { icon: AlarmClock, label: 'Medication Reminders', path: '/medication-reminders', color: 'from-orange-500 to-orange-600', bgColor: 'bg-orange-50', textColor: 'text-orange-600' },
     { icon: CheckCircle2, label: 'Adherence Tracking', path: '/medication-adherence', color: 'from-teal-500 to-teal-600', bgColor: 'bg-teal-50', textColor: 'text-teal-600' },
     { icon: Bot, label: 'AI Follow-Ups', path: '/ai-followups', color: 'from-sky-500 to-indigo-600', bgColor: 'bg-sky-50', textColor: 'text-sky-600' },
+    { icon: BookOpen, label: 'Health Education', path: '/education', color: 'from-emerald-500 to-teal-600', bgColor: 'bg-emerald-50', textColor: 'text-emerald-600' },
     { icon: CreditCard, label: 'Bills & Payments', path: '/bills', color: 'from-yellow-500 to-yellow-600', bgColor: 'bg-yellow-50', textColor: 'text-yellow-600' },
     { icon: MessageSquare, label: 'Messages', path: '/messages', color: 'from-indigo-500 to-indigo-600', bgColor: 'bg-indigo-50', textColor: 'text-indigo-600' },
     { icon: Activity, label: 'Vitals Monitoring', path: '/vitals', color: 'from-red-500 to-red-600', bgColor: 'bg-red-50', textColor: 'text-red-600' },
@@ -102,6 +111,7 @@ const PatientDashboard: React.FC = () => {
   const advancedFeatures = [
     { icon: Activity, label: 'Symptom Checker', path: '/symptom-checker', color: 'from-orange-500 to-red-500', bgColor: 'bg-orange-50', textColor: 'text-orange-600' },
     { icon: Users, label: 'Family Access', path: '/family-access', color: 'from-pink-500 to-rose-500', bgColor: 'bg-pink-50', textColor: 'text-pink-600' },
+    { icon: Users, label: 'Caregiver Portal', path: '/caregiver/login', color: 'from-pink-500 to-rose-600', bgColor: 'bg-pink-50', textColor: 'text-pink-600' },
     { icon: Activity, label: 'Fitness Apps', path: '/fitness-integration', color: 'from-green-500 to-emerald-500', bgColor: 'bg-green-50', textColor: 'text-green-600' },
   ];
 
@@ -227,6 +237,13 @@ const PatientDashboard: React.FC = () => {
                         ))
                       )}
                     </div>
+                    <Link
+                      to={`/${tenantSlug}/notifications`}
+                      className="block text-center py-3 text-sm font-semibold text-indigo-600 hover:text-indigo-700 border-t border-gray-100"
+                      onClick={() => setShowNotifications(false)}
+                    >
+                      See all notifications
+                    </Link>
                   </div>
                 )}
               </div>
@@ -298,6 +315,20 @@ const PatientDashboard: React.FC = () => {
             <p className="text-indigo-100 text-xs mb-1">Notifications</p>
             <p className="text-2xl font-bold">{unreadCount}</p>
           </div>
+
+          <Link
+            to={`/${tenantSlug}/messages`}
+            className="bg-gradient-to-br from-fuchsia-500 to-pink-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer relative"
+          >
+            <MessageSquare className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-fuchsia-100 text-xs mb-1">Messages</p>
+            <p className="text-2xl font-bold">{stats.unreadMessages}</p>
+            {stats.unreadMessages > 0 && (
+              <span className="absolute right-3 top-3 rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">
+                New
+              </span>
+            )}
+          </Link>
 
           <Link
             to={`/${tenantSlug}/ai-followups`}

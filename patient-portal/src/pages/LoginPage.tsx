@@ -153,7 +153,7 @@ const LoginPage: React.FC = () => {
                 />
                 <span>Remember me</span>
               </label>
-              <Link to="/reset-password" className="text-sm font-medium text-[#7DE8CA] transition hover:text-white">
+              <Link to={`/${effectiveTenantSlug}/reset-password`} className="text-sm font-medium text-[#7DE8CA] transition hover:text-white">
                 Forgot password?
               </Link>
             </div>
@@ -180,7 +180,7 @@ const LoginPage: React.FC = () => {
           <div className="mt-8 text-center">
             <p className="text-sm text-[#9FB3D3]">
               Don&apos;t have an account?{' '}
-              <Link to="/register" className="font-semibold text-[#7DE8CA] transition hover:text-white">
+              <Link to={`/${effectiveTenantSlug}/register`} className="font-semibold text-[#7DE8CA] transition hover:text-white">
                 Create one
               </Link>
             </p>

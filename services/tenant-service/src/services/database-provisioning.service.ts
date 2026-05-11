@@ -821,6 +821,20 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintH3PatientPortalStatements(),
       },
       {
+        id: 'patientFamilyAccessPasswordColumn',
+        label: 'Patient family access password column',
+        version: '2026.05.11.1',
+        description: 'Adds password_hash column to patient_family_access for caregiver portal login',
+        statements: () => [
+          `ALTER TABLE patient_family_access
+           ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NULL,
+           ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMPTZ NULL,
+           ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ NULL`,
+          `CREATE INDEX IF NOT EXISTS idx_family_access_proxy_email
+           ON patient_family_access(proxy_email) WHERE is_active = true`,
+        ],
+      },
+      {
         id: 'sprint111_financial_intelligence',
         label: 'Sprint 111 Financial Intelligence',
         version: '2026.03.25.5',

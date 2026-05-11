@@ -3,7 +3,7 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
 import { patientPortalApi } from '../services/api';
-import { ArrowLeft, Users, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Copy, Users, UserPlus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const FamilyAccessPage: React.FC = () => {
@@ -80,6 +80,15 @@ const FamilyAccessPage: React.FC = () => {
     }
   };
 
+  const handleShareLoginLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/${tenantSlug}/caregiver/login`);
+      showSuccess('Caregiver login link copied', 'Share it with the caregiver along with their invitation code.');
+    } catch {
+      showError('Could not copy login link', 'Please copy the caregiver login URL from your browser.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200/50 sticky top-0 z-10">
@@ -130,7 +139,7 @@ const FamilyAccessPage: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {familyMembers.map((member) => (
-                <div key={member.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
+                <div key={member.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
                       {(member.proxyName || '?').charAt(0).toUpperCase()}
@@ -141,14 +150,25 @@ const FamilyAccessPage: React.FC = () => {
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full mt-1 inline-block">
                         {member.accessLevel === 'view_only' ? 'View Only' : member.accessLevel === 'full' ? 'Full Access' : member.accessLevel}
                       </span>
+                      <p className="text-xs text-gray-500 mt-2">Invitation code: {member.id}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleRemoveMember(member.id)}
-                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    Remove
-                  </button>
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    <button
+                      onClick={handleShareLoginLink}
+                      title={`Invitation code: ${member.id}`}
+                      className="px-4 py-2 text-pink-600 hover:bg-pink-50 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Share login link
+                    </button>
+                    <button
+                      onClick={() => handleRemoveMember(member.id)}
+                      className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -251,4 +271,3 @@ const FamilyAccessPage: React.FC = () => {
 };
 
 export default FamilyAccessPage;
-

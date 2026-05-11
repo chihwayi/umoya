@@ -77,6 +77,21 @@ const PatientAuthContext = createContext<PatientAuthContextType | undefined>(und
 
 const API_BASE_URL = runtimeUrls.ehrApi;
 
+const _decodeJwtExp = (token: string): number | null => {
+  try {
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof decoded.exp === 'number' ? decoded.exp : null;
+  } catch {
+    return null;
+  }
+};
+
+const _buildLoginUrl = (): string => {
+  const slug = localStorage.getItem('patient_tenant');
+  return `/${slug || 'login'}/login`;
+};
+
 if (!API_BASE_URL) {
   console.warn('Patient Portal API URL is not defined');
 }
@@ -87,15 +102,61 @@ export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored auth
     const storedToken = localStorage.getItem('patient_token');
     const storedPatient = localStorage.getItem('patient_data');
 
     if (storedToken && storedPatient) {
+      const exp = _decodeJwtExp(storedToken);
+      if (exp !== null && Date.now() / 1000 >= exp) {
+        localStorage.removeItem('patient_token');
+        localStorage.removeItem('patient_data');
+        const loginUrl = _buildLoginUrl();
+        localStorage.removeItem('patient_tenant');
+        setLoading(false);
+        window.location.href = loginUrl;
+        return;
+      }
       setToken(storedToken);
       setPatient(JSON.parse(storedPatient));
     }
     setLoading(false);
+  }, []);
+
+  // Periodic JWT expiry check every 60 seconds
+  useEffect(() => {
+    if (!token) return;
+    const exp = _decodeJwtExp(token);
+    if (exp === null) return;
+
+    const id = setInterval(() => {
+      if (Date.now() / 1000 >= exp) {
+        setPatient(null);
+        setToken(null);
+        localStorage.removeItem('patient_token');
+        localStorage.removeItem('patient_data');
+        const loginUrl = _buildLoginUrl();
+        localStorage.removeItem('patient_tenant');
+        window.location.href = loginUrl;
+      }
+    }, 60_000);
+
+    return () => clearInterval(id);
+  }, [token]);
+
+  // Handle 401 responses dispatched by the API layer
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setPatient(null);
+      setToken(null);
+      localStorage.removeItem('patient_token');
+      localStorage.removeItem('patient_data');
+      const loginUrl = _buildLoginUrl();
+      localStorage.removeItem('patient_tenant');
+      window.location.href = loginUrl;
+    };
+
+    window.addEventListener('patient-auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('patient-auth-expired', handleAuthExpired);
   }, []);
 
   const login = async (email: string, password: string, tenantSlug: string) => {
@@ -220,9 +281,9 @@ export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ childre
     setToken(null);
     localStorage.removeItem('patient_token');
     localStorage.removeItem('patient_data');
+    const loginUrl = _buildLoginUrl();
     localStorage.removeItem('patient_tenant');
-    // Redirect to default tenant login on logout
-    window.location.href = '/demo-clinic/login';
+    window.location.href = loginUrl;
   };
 
   return (

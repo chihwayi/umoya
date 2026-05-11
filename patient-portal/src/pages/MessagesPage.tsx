@@ -3,6 +3,7 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { useNotification } from '../components/GlobalNotification';
+import VoiceInputButton from '../components/VoiceInputButton';
 import { MessageSquare, ArrowLeft, Send, Paperclip, AlertCircle, User, Plus, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -274,28 +275,38 @@ const MessagesPage: React.FC = () => {
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white/50 backdrop-blur-sm resize-none"
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <button className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-2 border border-gray-200">
                     <Paperclip className="w-4 h-4" />
                     <span>Attach</span>
                   </button>
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={sending || !newMessage.message.trim()}
-                    className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {sending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4" />
-                        Send Message
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <VoiceInputButton
+                      onTranscript={(text) => setNewMessage((prev) => ({
+                        ...prev,
+                        message: prev.message ? `${prev.message} ${text}` : text,
+                      }))}
+                      context="Patient dictating a message to their healthcare provider."
+                      className="ml-2"
+                    />
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={sending || !newMessage.message.trim()}
+                      className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {sending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Send Message
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
