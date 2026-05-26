@@ -202,6 +202,7 @@ import { NcdComplicationController } from './controllers/ncd-complication.contro
 import { AtMessagingController } from './controllers/at-messaging.controller';
 import { PushTokensController } from './controllers/push-tokens.controller';
 import { CdpaController } from './controllers/cdpa.controller';
+import { BreachDetectionController } from './controllers/breach-detection.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -468,6 +469,9 @@ import { RegistrationAiService } from './services/registration-ai.service';
 import { ProactiveAiService } from './services/proactive-ai.service';
 import { AtMessagingService } from './services/at-messaging.service';
 import { TotpService } from './services/totp.service';
+import { BreachDetectionService } from './services/breach-detection.service';
+import { BackupService } from './services/backup.service';
+import { PotrazNotificationService } from './services/potraz-notification.service';
 import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
 import { TelemedicineGateway } from './gateways/telemedicine.gateway';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
@@ -696,6 +700,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AtMessagingController,
     PushTokensController,
     CdpaController,
+    BreachDetectionController,
   ],
   providers: [
     AuthService,
@@ -942,6 +947,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RolesGuard,
     HealthEducatorGuard,
     TotpService,
+    BreachDetectionService,
+    BackupService,
+    PotrazNotificationService,
     MfaGuard,
     {
       provide: APP_GUARD,

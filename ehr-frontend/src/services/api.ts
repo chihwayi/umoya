@@ -4108,6 +4108,86 @@ export const ehrApi = {
     return response.data;
   },
 
+  // NC-S12 — Breach Detection + Disaster Recovery
+  getOpenAnomalies: async (page: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/security/anomalies?page=${page}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getAnomalyStats: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/security/anomalies/stats', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  acknowledgeAnomaly: async (id: string, isFalsePositive: boolean, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/security/anomalies/${id}/acknowledge`, { isFalsePositive }, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  verifyAuditChain: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/security/audit-chain/verify', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  runBackup: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/security/backup/run', {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listBackupJobs: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/security/backup/jobs', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  verifyBackupIntegrity: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/security/backup/${id}/verify`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listBreachIncidents: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/security/incidents', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  createBreachIncident: async (body: { breachType: string; severity: string; description: string; affectedRecordsCount?: number }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/security/incidents', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  notifyPotraz: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/security/incidents/${id}/notify-potraz`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  remediateIncident: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/security/incidents/${id}/remediate`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  closeIncident: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/security/incidents/${id}/close`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  recordDrTest: async (body: { rtoMinutes: number; rpoHours: number; result: string; notes: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/security/dr-test', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
   getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {
       headers: { 

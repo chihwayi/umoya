@@ -1191,6 +1191,46 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'nc_breach_detection',
+        label: 'Breach Detection + DR Log — Anomaly Events + Audit Chain',
+        version: '2026.05.26.1',
+        description: 'Per-tenant anomaly_events, dr_test_log; chain_hash column on hipaa_audit_logs',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS anomaly_events (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID,
+            user_email VARCHAR(255),
+            rule_name VARCHAR(64) NOT NULL,
+            severity VARCHAR(16) NOT NULL DEFAULT 'medium',
+            details JSONB NOT NULL DEFAULT '{}',
+            ip_address VARCHAR(45),
+            detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            acknowledged_at TIMESTAMPTZ,
+            acknowledged_by UUID,
+            is_false_positive BOOLEAN NOT NULL DEFAULT false,
+            incident_id UUID
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_anomaly_events_user ON anomaly_events(user_id, detected_at)`,
+          `CREATE INDEX IF NOT EXISTS idx_anomaly_events_rule ON anomaly_events(rule_name, detected_at)`,
+          `CREATE INDEX IF NOT EXISTS idx_anomaly_unacked ON anomaly_events(detected_at) WHERE acknowledged_at IS NULL`,
+          `DO $$ BEGIN
+             ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS chain_hash VARCHAR(64);
+             ALTER TABLE hipaa_audit_logs ADD COLUMN IF NOT EXISTS sequence_number BIGINT;
+           EXCEPTION WHEN undefined_table THEN NULL;
+           END $$`,
+          `CREATE INDEX IF NOT EXISTS idx_hipaa_audit_seq ON hipaa_audit_logs(sequence_number)`,
+          `CREATE TABLE IF NOT EXISTS dr_test_log (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            backup_job_id UUID,
+            rto_minutes INTEGER,
+            rpo_hours INTEGER,
+            result VARCHAR(32) NOT NULL,
+            notes TEXT
+          )`,
+        ],
+      },
+      {
         id: 'hiv_testing',
         label: 'HIV Testing Enhancements',
         version: '2025.03.01',
@@ -19311,5 +19351,51 @@ RECOMMENDATIONS:
       `ALTER TABLE patient_risk_scores ADD COLUMN IF NOT EXISTS input_data JSONB`,
       `ALTER TABLE patient_risk_scores ADD COLUMN IF NOT EXISTS snapshot_id UUID`,
     ];
+  }
+
+  async ensureSystemSecuritySchema(): Promise<void> {
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS breach_incidents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(64) NOT NULL,
+        detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        breach_type VARCHAR(64) NOT NULL,
+        severity VARCHAR(16) NOT NULL DEFAULT 'medium',
+        description TEXT NOT NULL,
+        affected_records_count INTEGER,
+        affected_patients JSONB,
+        detected_by VARCHAR(64) NOT NULL DEFAULT 'system',
+        status VARCHAR(32) NOT NULL DEFAULT 'open',
+        potraz_notified_at TIMESTAMPTZ,
+        potraz_reference VARCHAR(128),
+        potraz_notified_within_72h BOOLEAN,
+        remediated_at TIMESTAMPTZ,
+        closed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_breach_incidents_tenant ON breach_incidents(tenant_id)`);
+    await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_breach_incidents_status ON breach_incidents(status)`);
+    await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_breach_incidents_detected ON breach_incidents(detected_at)`);
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS backup_jobs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(64) NOT NULL,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ,
+        status VARCHAR(32) NOT NULL DEFAULT 'running',
+        file_path TEXT,
+        file_size_bytes BIGINT,
+        checksum_sha256 VARCHAR(64),
+        storage_location TEXT,
+        error_message TEXT,
+        verified_at TIMESTAMPTZ,
+        verification_status VARCHAR(32)
+      )
+    `);
+    await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_backup_jobs_tenant ON backup_jobs(tenant_id)`);
+    await this.dataSource.query(`CREATE INDEX IF NOT EXISTS idx_backup_jobs_status ON backup_jobs(status)`);
   }
 }
