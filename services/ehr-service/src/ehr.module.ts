@@ -190,6 +190,11 @@ import { ClinicalSpecialtiesController } from './controllers/clinical-specialtie
 import { ConflictResolverService } from './services/conflict-resolver.service';
 import { DentalService } from './services/dental.service';
 import { AncService } from './services/anc.service';
+import { WebAuthnService } from './services/webauthn.service';
+import { ConsentRecordsService } from './services/consent-records.service';
+import { TeleconsultBridgeService } from './services/teleconsult-bridge.service';
+import { WebAuthnController } from './controllers/webauthn.controller';
+import { ConsentRecordsController } from './controllers/consent-records.controller';
 import { GrowthChartService } from './services/growth-chart.service';
 import { PaediatricDosingService } from './services/paediatric-dosing.service';
 import { IotController } from './controllers/iot.controller';
@@ -689,6 +694,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PatientPortalHealthEducationController,
     OfflineSyncController,
     ClinicalSpecialtiesController,
+    WebAuthnController,
+    ConsentRecordsController,
     IotController,
     RadiologyAiController,
     AlertDeliveryController,
@@ -914,6 +921,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PatientHealthEducationService,
     OfflineSyncService,
     ConflictResolverService,
+    WebAuthnService,
+    ConsentRecordsService,
+    TeleconsultBridgeService,
     DentalService,
     AncService,
     PmtctService,
