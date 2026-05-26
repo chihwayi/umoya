@@ -1227,6 +1227,10 @@ export class TenantService implements OnModuleInit {
     `);
 
     await this.tenantRepository.query(`
+      ALTER TABLE staff ADD COLUMN IF NOT EXISTS is_health_educator BOOLEAN DEFAULT false;
+    `);
+
+    await this.tenantRepository.query(`
       DO $$
       BEGIN
         IF EXISTS (

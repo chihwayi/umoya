@@ -324,6 +324,119 @@ export class DatabaseProvisioningService {
         tasks: [(db) => this.applySnomedUpgrades(db)],
       },
       {
+        id: 'patient_health_education',
+        label: 'Patient Health Education',
+        version: '2026.05.17.1',
+        description: 'Tenant-scoped clinician-authored education courses with multilingual content, quizzes, and patient progress tracking.',
+        statements: () => [
+          // ── Course catalogue ────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS education_courses (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            category VARCHAR(100),           -- e.g. 'HIV', 'Maternal', 'Nutrition', 'Medication'
+            target_audience VARCHAR(100),    -- e.g. 'all', 'hiv_positive', 'anc', 'paediatric'
+            default_language_code VARCHAR(5) DEFAULT 'en',
+            published BOOLEAN DEFAULT false,
+            published_at TIMESTAMPTZ,
+            created_by UUID NOT NULL,        -- staff.id
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_modules (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            course_id UUID NOT NULL REFERENCES education_courses(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_lessons (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            module_id UUID NOT NULL REFERENCES education_modules(id) ON DELETE CASCADE,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            content_type VARCHAR(20) NOT NULL DEFAULT 'text', -- 'text' | 'video_url' | 'pdf_url'
+            duration_minutes INTEGER,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )`,
+
+          // Multilingual content stored separately so each lesson can have
+          // EN + SN + ND (or any subset) without nullable columns on the lesson row
+          `CREATE TABLE IF NOT EXISTS education_lesson_translations (
+            lesson_id UUID NOT NULL REFERENCES education_lessons(id) ON DELETE CASCADE,
+            language_code VARCHAR(5) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            content_body TEXT NOT NULL,      -- Markdown for 'text'; URL for video/pdf types
+            PRIMARY KEY (lesson_id, language_code)
+          )`,
+
+          // ── Quiz layer (optional per lesson) ───────────────────────────
+          `CREATE TABLE IF NOT EXISTS education_quizzes (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            lesson_id UUID NOT NULL REFERENCES education_lessons(id) ON DELETE CASCADE,
+            pass_threshold INTEGER NOT NULL DEFAULT 70,  -- percentage
+            max_attempts INTEGER NOT NULL DEFAULT 3,
+            UNIQUE (lesson_id)
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_quiz_questions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            quiz_id UUID NOT NULL REFERENCES education_quizzes(id) ON DELETE CASCADE,
+            question_text TEXT NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_quiz_options (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            question_id UUID NOT NULL REFERENCES education_quiz_questions(id) ON DELETE CASCADE,
+            option_text TEXT NOT NULL,
+            is_correct BOOLEAN NOT NULL DEFAULT false,
+            order_index INTEGER NOT NULL DEFAULT 0
+          )`,
+
+          // ── Patient progress ───────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS education_enrollments (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            course_id UUID NOT NULL REFERENCES education_courses(id) ON DELETE CASCADE,
+            enrolled_at TIMESTAMPTZ DEFAULT NOW(),
+            completed_at TIMESTAMPTZ,
+            assigned_by UUID,                -- staff.id if staff-assigned; NULL if self-enrolled
+            UNIQUE (patient_id, course_id)
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_lesson_progress (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            enrollment_id UUID NOT NULL REFERENCES education_enrollments(id) ON DELETE CASCADE,
+            lesson_id UUID NOT NULL REFERENCES education_lessons(id) ON DELETE CASCADE,
+            started_at TIMESTAMPTZ DEFAULT NOW(),
+            completed_at TIMESTAMPTZ,
+            UNIQUE (enrollment_id, lesson_id)
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_quiz_attempts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            enrollment_id UUID NOT NULL REFERENCES education_enrollments(id) ON DELETE CASCADE,
+            quiz_id UUID NOT NULL REFERENCES education_quizzes(id) ON DELETE CASCADE,
+            score INTEGER NOT NULL,          -- percentage 0-100
+            passed BOOLEAN NOT NULL,
+            answers JSONB NOT NULL,          -- [{questionId, selectedOptionId}]
+            attempted_at TIMESTAMPTZ DEFAULT NOW()
+          )`,
+
+          // ── Indexes ────────────────────────────────────────────────────
+          `CREATE INDEX IF NOT EXISTS idx_edu_modules_course ON education_modules(course_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_lessons_module ON education_lessons(module_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_translations_lesson ON education_lesson_translations(lesson_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_enrollments_patient ON education_enrollments(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_enrollments_course ON education_enrollments(course_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_progress_enrollment ON education_lesson_progress(enrollment_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_attempts_enrollment ON education_quiz_attempts(enrollment_id)`,
+        ],
+      },
+      {
         id: 'hiv_testing',
         label: 'HIV Testing Enhancements',
         version: '2025.03.01',
