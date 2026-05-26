@@ -4,6 +4,8 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CascadeMetricsService } from '../services/cascade-metrics.service';
 import { RetentionService } from '../services/retention.service';
 import { CohortBuilderService } from '../services/cohort-builder.service';
+import { KaplanMeierService } from '../services/kaplan-meier.service';
+import { DeidExportService } from '../services/deid-export.service';
 
 @ApiTags('Research')
 @Controller('research')
@@ -14,6 +16,8 @@ export class ResearchController {
     private readonly cascadeSvc: CascadeMetricsService,
     private readonly retentionSvc: RetentionService,
     private readonly cohortSvc: CohortBuilderService,
+    private readonly kmSvc: KaplanMeierService,
+    private readonly deidSvc: DeidExportService,
   ) {}
 
   @Get('cascade/current')
@@ -76,5 +80,72 @@ export class ResearchController {
   @ApiOperation({ summary: 'Run saved cohort definition' })
   runSavedCohort(@Param('id') id: string, @Req() req: any) {
     return this.cohortSvc.runSavedCohort(id, req.tenantDb);
+  }
+
+  @Get('kaplan-meier')
+  @ApiOperation({ summary: 'Kaplan-Meier survival analysis (LTFU or treatment failure)' })
+  async getKaplanMeier(
+    @Query('eventType') eventType: string,
+    @Query('cohortStart') cohortStart: string,
+    @Req() req: any,
+  ) {
+    if (!['ltfu', 'treatment_failure'].includes(eventType)) {
+      throw new BadRequestException('eventType must be ltfu or treatment_failure');
+    }
+    return this.kmSvc.computeFromDb({
+      eventType: eventType as 'ltfu' | 'treatment_failure',
+      cohortStart,
+      db: req.tenantDb,
+    });
+  }
+
+  @Post('adverse-events')
+  @ApiOperation({ summary: 'Report an ART adverse event' })
+  async reportAdverseEvent(@Body() body: any, @Req() req: any) {
+    const [row] = await req.tenantDb.query(
+      `INSERT INTO art_adverse_events
+         (patient_id, suspect_drug, event_description, event_severity, event_outcome,
+          causality, reported_by, report_date, vigibase_exported)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,CURRENT_DATE,false) RETURNING *`,
+      [body.patientId, body.suspectDrug, body.eventDescription, body.eventSeverity,
+       body.eventOutcome, body.causality, req.user.sub],
+    );
+    return row;
+  }
+
+  @Get('adverse-events/unreported')
+  @ApiOperation({ summary: 'List adverse events not yet exported to VigiBase' })
+  getUnreportedEvents(@Req() req: any) {
+    return req.tenantDb.query(
+      `SELECT * FROM art_adverse_events WHERE vigibase_exported = false ORDER BY report_date DESC`,
+    );
+  }
+
+  @Get('adverse-events/export-vigibase')
+  @ApiOperation({ summary: 'Export pending adverse events in VigiBase E2B format and mark as exported' })
+  async exportVigibase(@Req() req: any) {
+    const rows = await req.tenantDb.query(
+      `SELECT * FROM art_adverse_events WHERE vigibase_exported = false`,
+    );
+    if (rows.length === 0) return { exported: 0, records: [] };
+    const ids = rows.map((r: any) => r.id);
+    await req.tenantDb.query(
+      `UPDATE art_adverse_events SET vigibase_exported = true WHERE id = ANY($1)`,
+      [ids],
+    );
+    return { exported: rows.length, records: rows };
+  }
+
+  @Post('export/deid')
+  @ApiOperation({ summary: 'Export de-identified cohort data (HIPAA Safe Harbor)' })
+  async exportDeid(
+    @Body() body: { cohortId: string; requestedBy: string },
+    @Req() req: any,
+  ) {
+    return this.deidSvc.exportCohortDeidentified({
+      cohortId: body.cohortId,
+      requestedBy: body.requestedBy ?? req.user.sub,
+      db: req.tenantDb,
+    });
   }
 }

@@ -1013,6 +1013,50 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'nc_publication_research_day',
+        label: 'Publication Analytics, De-identified Export & Research Day Portal',
+        version: '2026.05.26.1',
+        description: 'De-identified export log, research day token-gated sessions, ART adverse events (VigiBase)',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS deid_export_log (
+            id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            cohort_id       UUID,
+            requested_by    UUID        NOT NULL,
+            row_count       INTEGER     NOT NULL DEFAULT 0,
+            download_token  VARCHAR(64) NOT NULL UNIQUE,
+            exported_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_deid_export_requester ON deid_export_log (requested_by)`,
+          `CREATE TABLE IF NOT EXISTS research_day_sessions (
+            id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_name    VARCHAR(200) NOT NULL,
+            access_token    VARCHAR(64)  NOT NULL UNIQUE,
+            created_by      UUID         NOT NULL,
+            valid_from      TIMESTAMPTZ  NOT NULL,
+            valid_until     TIMESTAMPTZ  NOT NULL,
+            allowed_views   TEXT[]       NOT NULL DEFAULT '{}',
+            access_count    INTEGER      NOT NULL DEFAULT 0,
+            created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_research_day_token ON research_day_sessions (access_token)`,
+          `CREATE TABLE IF NOT EXISTS art_adverse_events (
+            id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id          UUID        NOT NULL,
+            suspect_drug        VARCHAR(200),
+            event_description   TEXT,
+            event_severity      VARCHAR(50),
+            event_outcome       VARCHAR(100),
+            causality           VARCHAR(100),
+            reported_by         UUID        NOT NULL,
+            report_date         DATE        NOT NULL DEFAULT CURRENT_DATE,
+            vigibase_exported   BOOLEAN     NOT NULL DEFAULT false,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_adverse_events_patient ON art_adverse_events (patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_adverse_events_exported ON art_adverse_events (vigibase_exported)`,
+        ],
+      },
+      {
         id: 'nc_session_management',
         label: 'Staff Session Management + Emergency Access Log',
         version: '2026.05.17.1',

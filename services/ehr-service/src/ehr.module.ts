@@ -93,6 +93,7 @@ import { PsychosocialController } from './controllers/psychosocial.controller';
 import { EmpowermentController } from './controllers/empowerment.controller';
 import { TrainingController } from './controllers/training.controller';
 import { ResearchController } from './controllers/research.controller';
+import { ResearchDayController } from './controllers/research-day.controller';
 import { ImagingController } from './controllers/imaging.controller';
 import { MaternityController } from './controllers/maternity.controller';
 import { OncologyController } from './controllers/oncology.controller';
@@ -305,6 +306,8 @@ import { TrainingService } from './services/training.service';
 import { CascadeMetricsService } from './services/cascade-metrics.service';
 import { RetentionService } from './services/retention.service';
 import { CohortBuilderService } from './services/cohort-builder.service';
+import { KaplanMeierService } from './services/kaplan-meier.service';
+import { DeidExportService } from './services/deid-export.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
 import { StorageService } from './services/storage.service';
@@ -579,6 +582,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EmpowermentController,
     TrainingController,
     ResearchController,
+    ResearchDayController,
     ImagingController,
     MaternityController,
     OncologyController,
@@ -747,6 +751,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CascadeMetricsService,
     RetentionService,
     CohortBuilderService,
+    KaplanMeierService,
+    DeidExportService,
     HivMonthlyReturnService,
     ImagingService,
     StorageService,

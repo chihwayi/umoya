@@ -4023,6 +4023,54 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+  getKaplanMeier: async (eventType: string, cohortStart: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/research/kaplan-meier?eventType=${eventType}&cohortStart=${cohortStart}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  reportAdverseEvent: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/research/adverse-events', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getUnreportedAdverseEvents: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/research/adverse-events/unreported', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  exportVigibase: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/research/adverse-events/export-vigibase', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  exportDeid: async (body: { cohortId: string; requestedBy: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/research/export/deid', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  createResearchDaySession: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/research-day/sessions', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listResearchDaySessions: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/research-day/sessions', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  viewResearchDayDashboard: async (rdToken: string, view: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/research-day/view?token=${rdToken}&view=${view}`, {
+      headers: { 'X-Tenant-ID': tenantSlug },
+    });
+    return response.data;
+  },
 
   getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {
