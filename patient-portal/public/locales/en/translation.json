@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "appointments": "Appointments",
+    "results": "My Results",
+    "medications": "Medications",
+    "messages": "Messages",
+    "profile": "My Profile",
+    "logout": "Log Out"
+  },
+  "dashboard": {
+    "welcome": "Welcome, {{name}}",
+    "nextAppointment": "Next Appointment",
+    "noAppointments": "No upcoming appointments",
+    "recentResults": "Recent Results",
+    "noResults": "No recent results",
+    "medicationsDue": "Medications Due"
+  },
+  "appointments": {
+    "upcoming": "Upcoming Appointments",
+    "past": "Past Appointments",
+    "confirm": "Confirm Attendance",
+    "cancel": "Request Reschedule",
+    "date": "Date",
+    "time": "Time",
+    "provider": "Provider",
+    "status": "Status",
+    "confirmed": "Confirmed",
+    "pending": "Pending"
+  },
+  "results": {
+    "testType": "Test",
+    "value": "Result",
+    "date": "Date",
+    "noResults": "No results available",
+    "vl": "Viral Load",
+    "cd4": "CD4 Count",
+    "hb": "Haemoglobin"
+  },
+  "medications": {
+    "currentRegimen": "Current Regimen",
+    "nextPickup": "Next Pickup Date",
+    "requestRefill": "Request Refill",
+    "refillRequested": "Refill Requested",
+    "mmdInfo": "You are on multi-month dispensing"
+  },
+  "profile": {
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "dateOfBirth": "Date of Birth",
+    "phone": "Phone Number",
+    "language": "Preferred Language",
+    "save": "Save Changes",
+    "saved": "Changes saved"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong. Please try again.",
+    "back": "Back",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "auth": {
+    "login": "Log In",
+    "logout": "Log Out",
+    "username": "Username",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "loginError": "Invalid username or password"
+  }
+}

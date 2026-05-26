@@ -1143,6 +1143,15 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'nc_localisation',
+        label: 'Shona / Ndebele Localisation — Language Preference Columns',
+        version: '2026.05.26.1',
+        description: 'Add preferred_language to staff; patients already has it from Sprint 60',
+        statements: () => [
+          `ALTER TABLE staff ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) NOT NULL DEFAULT 'en'`,
+        ],
+      },
+      {
         id: 'nc_session_management',
         label: 'Staff Session Management + Emergency Access Log',
         version: '2026.05.17.1',

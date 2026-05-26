@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "dashboard": "Ikhasi Elikhulu",
+    "appointments": "Izikhathi Zokubonana",
+    "results": "Imiphumela Yami",
+    "medications": "Imithi",
+    "messages": "Imiyalezo",
+    "profile": "Imininingwane Yami",
+    "logout": "Phuma"
+  },
+  "dashboard": {
+    "welcome": "Wamukelekile, {{name}}",
+    "nextAppointment": "Isikhathi Esilandelayo",
+    "noAppointments": "Akulazikhathi ezizayo",
+    "recentResults": "Imiphumela Yakamuva",
+    "noResults": "Akulamiphumela yakamuva",
+    "medicationsDue": "Imithi Efanele Ukuthathwa"
+  },
+  "appointments": {
+    "upcoming": "Izikhathi Ezizayo",
+    "past": "Izikhathi Eziyadlulayo",
+    "confirm": "Qinisekisa Ukuza",
+    "cancel": "Cela Ukushintsha Usuku",
+    "date": "Usuku",
+    "time": "Isikhathi",
+    "provider": "Udokotela",
+    "status": "Isimo",
+    "confirmed": "Kuqinisekisiwe",
+    "pending": "Kulindile"
+  },
+  "results": {
+    "testType": "Uhlolo",
+    "value": "Umphumela",
+    "date": "Usuku",
+    "noResults": "Akulamiphumela",
+    "vl": "Viral Load",
+    "cd4": "CD4",
+    "hb": "Haemoglobin"
+  },
+  "medications": {
+    "currentRegimen": "Umthetho Wamanje Wemithi",
+    "nextPickup": "Usuku Lokuthatha Imithi",
+    "requestRefill": "Cela Ukugcwaliswa Kwemithi",
+    "refillRequested": "Isicelo Sithunyiwe",
+    "mmdInfo": "Usemaphaketheni amaningi wemithi"
+  },
+  "profile": {
+    "firstName": "Ibizo Lokuqala",
+    "lastName": "Isibongo",
+    "dateOfBirth": "Usuku Lokuzalwa",
+    "phone": "Inombolo Yethelevishini",
+    "language": "Ulimi Olukhethwayo",
+    "save": "Gcina Izinguquko",
+    "saved": "Izinguquko Zigcinwe"
+  },
+  "common": {
+    "loading": "Kulindile...",
+    "error": "Kukhona okungahambanga kahle. Zama futhi.",
+    "back": "Buyela",
+    "cancel": "Khansela",
+    "confirm": "Qinisekisa",
+    "yes": "Yebo",
+    "no": "Cha"
+  },
+  "auth": {
+    "login": "Ngena",
+    "logout": "Phuma",
+    "username": "Igama Lomsebenzisi",
+    "password": "Iphasiwedi",
+    "forgotPassword": "Ukhohlwe iphasiwedi?",
+    "loginError": "Igama noma iphasiwedi ayilungile"
+  }
+}

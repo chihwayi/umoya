@@ -4095,6 +4095,18 @@ export const ehrApi = {
     });
     return response.data;
   },
+  setLanguagePreference: async (body: { language: string; entityType: 'patient' | 'staff'; entityId: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put('/preferences/language', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getLanguagePreference: async (entityType: string, entityId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/preferences/language/${entityType}/${entityId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
 
   getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {

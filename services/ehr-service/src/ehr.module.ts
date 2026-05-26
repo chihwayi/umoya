@@ -95,6 +95,7 @@ import { TrainingController } from './controllers/training.controller';
 import { ResearchController } from './controllers/research.controller';
 import { ResearchDayController } from './controllers/research-day.controller';
 import { UssdController, SmsCampaignController } from './controllers/ussd.controller';
+import { PreferencesController } from './controllers/preferences.controller';
 import { ImagingController } from './controllers/imaging.controller';
 import { MaternityController } from './controllers/maternity.controller';
 import { OncologyController } from './controllers/oncology.controller';
@@ -475,6 +476,7 @@ import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gatewa
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { TenantMiddleware } from './middleware/tenant.middleware';
 import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
+import { LanguageMiddleware } from './middleware/language.middleware';
 import { RolesGuard } from './guards/roles.guard';
 import { MfaGuard } from './guards/mfa.guard';
 import { HealthEducatorGuard } from './guards/health-educator.guard';
@@ -589,6 +591,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ResearchDayController,
     UssdController,
     SmsCampaignController,
+    PreferencesController,
     ImagingController,
     MaternityController,
     OncologyController,
@@ -950,11 +953,12 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
 export class EhrModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
+    consumer.apply(LanguageMiddleware).forRoutes('*');
     consumer
       .apply(TenantMiddleware)
       .exclude(
-        { path: 'tenants/active', method: RequestMethod.ALL }, // Public endpoint - all methods
-        { path: 'terminology/import/(.*)', method: RequestMethod.ALL }, // Terminology import endpoints
+        { path: 'tenants/active', method: RequestMethod.ALL },
+        { path: 'terminology/import/(.*)', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }
