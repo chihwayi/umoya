@@ -3910,6 +3910,64 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+
+  // Training Platform
+  listTrainingCourses: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/training/courses', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getTrainingCourse: async (courseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/training/courses/${courseId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  searchTrainees: async (q: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/training/trainees?q=${encodeURIComponent(q)}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  registerTrainee: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/training/trainees', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  enrolTrainee: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/training/enrolments', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  submitTrainingAssessment: async (enrolmentId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/training/enrolments/${enrolmentId}/assessments`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  completeTrainingCourse: async (enrolmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/training/enrolments/${enrolmentId}/complete`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getCohortReport: async (courseId: string, cohortLabel: string, token: string, tenantSlug: string) => {
+    const params = cohortLabel ? `?cohort=${encodeURIComponent(cohortLabel)}` : '';
+    const response = await ehrAxios.get(`/training/courses/${courseId}/cohort-report${params}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getAlumniByFacility: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/training/alumni/by-facility', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {
       headers: { 

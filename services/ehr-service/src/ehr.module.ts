@@ -91,6 +91,7 @@ import { DrugController } from './controllers/drug.controller';
 import { HivController } from './controllers/hiv.controller';
 import { PsychosocialController } from './controllers/psychosocial.controller';
 import { EmpowermentController } from './controllers/empowerment.controller';
+import { TrainingController } from './controllers/training.controller';
 import { ImagingController } from './controllers/imaging.controller';
 import { MaternityController } from './controllers/maternity.controller';
 import { OncologyController } from './controllers/oncology.controller';
@@ -299,6 +300,7 @@ import { GbvService } from './services/gbv.service';
 import { CounsellorSessionsService } from './services/counsellor-sessions.service';
 import { EmpowermentService } from './services/empowerment.service';
 import { SupportGroupsService } from './services/support-groups.service';
+import { TrainingService } from './services/training.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
 import { StorageService } from './services/storage.service';
@@ -571,6 +573,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HivController,
     PsychosocialController,
     EmpowermentController,
+    TrainingController,
     ImagingController,
     MaternityController,
     OncologyController,
@@ -735,6 +738,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CounsellorSessionsService,
     EmpowermentService,
     SupportGroupsService,
+    TrainingService,
     HivMonthlyReturnService,
     ImagingService,
     StorageService,
