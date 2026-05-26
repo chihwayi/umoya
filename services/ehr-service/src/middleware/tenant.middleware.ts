@@ -6,6 +6,13 @@ import { DataSource } from 'typeorm';
 // Properly extend Express Request - TypeScript will inherit all Request properties automatically
 export interface RequestWithTenant extends Request {
   tenantId?: string;
+  tenant?: {
+    id: string;
+    subdomain: string;
+    mfaRequired: boolean;
+    sessionTimeoutMinutes: number;
+    allowEmergencyBypass: boolean;
+  };
   tenantDb?: DataSource;
   user?: any;
 }
@@ -49,6 +56,7 @@ export class TenantMiddleware implements NestMiddleware {
 
     req.tenantId = tenantId;
     req.tenantDb = tenantDb;
+    req.tenant = await this.tenantService.getTenantSecurityPolicy(tenantId) || undefined;
     
     next();
   }

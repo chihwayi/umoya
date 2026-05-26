@@ -97,7 +97,17 @@
     "subtitle": "Leer meer oor jou gesondheid",
     "all": "Alles",
     "minRead": "min om te lees",
-    "by": "Deur"
+    "by": "Deur",
+    "enroll": "Begin Kursus",
+    "quiz": "Kennistoets",
+    "quizPassed": "Geslaag",
+    "markComplete": "Merk as Voltooi",
+    "progress": "Vordering",
+    "openPdf": "Maak PDF Oop",
+    "openVideo": "Kyk Video",
+    "back": "Terug",
+    "myCourses": "My Kursusse",
+    "explore": "Verken"
   },
   "family": {
     "title": "Gesinstoegang",

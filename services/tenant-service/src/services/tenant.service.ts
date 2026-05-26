@@ -1223,7 +1223,14 @@ export class TenantService implements OnModuleInit {
       ADD COLUMN IF NOT EXISTS "autoDeleteAt" TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS "suspensionWarningDays" INTEGER NOT NULL DEFAULT 5,
       ADD COLUMN IF NOT EXISTS "countryCode" VARCHAR(2) DEFAULT NULL,
-      ADD COLUMN IF NOT EXISTS "deploymentMode" VARCHAR(20) NOT NULL DEFAULT 'clinic'
+      ADD COLUMN IF NOT EXISTS "deploymentMode" VARCHAR(20) NOT NULL DEFAULT 'clinic',
+      ADD COLUMN IF NOT EXISTS "mfaRequired" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "sessionTimeoutMinutes" INTEGER NOT NULL DEFAULT 60,
+      ADD COLUMN IF NOT EXISTS "allowEmergencyBypass" BOOLEAN NOT NULL DEFAULT false
+    `);
+
+    await this.tenantRepository.query(`
+      ALTER TABLE staff ADD COLUMN IF NOT EXISTS is_health_educator BOOLEAN DEFAULT false;
     `);
 
     await this.tenantRepository.query(`
@@ -1359,6 +1366,43 @@ export class TenantService implements OnModuleInit {
     await this.tenantRepository.query(`
       CREATE INDEX IF NOT EXISTS idx_tenant_subscription_payments_status
       ON tenant_subscription_payments (status)
+    `);
+
+    await this.tenantRepository.query(`
+      CREATE TABLE IF NOT EXISTS baa_registry (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        vendor_name VARCHAR(200) NOT NULL,
+        vendor_type VARCHAR(60) NOT NULL,
+        service_url VARCHAR(500),
+        contact_email VARCHAR(200),
+        contact_phone VARCHAR(50),
+        baa_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+        baa_signed_date DATE,
+        baa_expiry_date DATE,
+        baa_document_url VARCHAR(1000),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_baa_registry_vendor_type ON baa_registry (vendor_type);
+      CREATE INDEX IF NOT EXISTS idx_baa_registry_status ON baa_registry (baa_status);
+    `);
+
+    await this.tenantRepository.query(`
+      INSERT INTO baa_registry (vendor_name, vendor_type, service_url, baa_status)
+      SELECT * FROM (VALUES
+        ('Africa''s Talking', 'sms_provider', 'https://africastalking.com', 'pending'),
+        ('Daily.co', 'video_provider', 'https://daily.co', 'pending'),
+        ('Stripe', 'payment_gateway', 'https://stripe.com', 'pending'),
+        ('Flutterwave', 'payment_gateway', 'https://flutterwave.com', 'pending'),
+        ('ZimSwitch', 'payment_gateway', 'https://zimswitch.co.zw', 'pending'),
+        ('MinIO', 'cloud_storage', NULL, 'pending'),
+        ('OpenAI / Whisper', 'ai_provider', 'https://openai.com', 'pending'),
+        ('NHLS Zimbabwe', 'lab_integration', NULL, 'pending')
+      ) AS v(vendor_name, vendor_type, service_url, baa_status)
+      WHERE NOT EXISTS (SELECT 1 FROM baa_registry LIMIT 1)
+      ON CONFLICT DO NOTHING
     `);
 
     await this.tenantRepository.query(`

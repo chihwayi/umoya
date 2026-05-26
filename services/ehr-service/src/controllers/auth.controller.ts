@@ -1,9 +1,10 @@
-import { Controller, Post, Body, UseGuards, Request, Get, Put } from '@nestjs/common';
+import { BadRequestException, Controller, Post, Body, UseGuards, Request, Get, Put, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { AuthService } from '../services/auth.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { LoginDto, ChangePasswordDto } from '../dto/auth.dto';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { SkipMfa } from '../decorators/skip-mfa.decorator';
 
 @ApiTags('EHR Authentication')
 @ApiSecurity('tenant-key')
@@ -20,7 +21,7 @@ export class AuthController {
     const ipAddress = (req as any).ip || (req as any).connection?.remoteAddress;
     const userAgent = (req as any).get('User-Agent');
     
-    return this.authService.login(loginDto, req.tenantDb, req.tenantId, ipAddress, userAgent);
+    return this.authService.login(loginDto, req.tenantDb, req.tenantId, ipAddress, userAgent, req.tenant);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -30,6 +31,25 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User profile retrieved' })
   getProfile(@Request() req) {
     return req.user;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List current staff user sessions' })
+  async listSessions(@Request() req: RequestWithTenant) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id ?? (req.user as any)?.sub;
+    return this.authService.listActiveSessions(userId, req.tenantDb);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('sessions/:jti/revoke')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke one staff user session' })
+  async revokeSession(@Request() req: RequestWithTenant, @Param('jti') jti: string, @Body() body: { reason?: string }) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id ?? (req.user as any)?.sub;
+    await this.authService.revokeSession(userId, jti, req.tenantDb, body?.reason);
+    return { message: 'Session revoked' };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -70,6 +90,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @SkipMfa()
   @Post('2fa/setup')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Generate TOTP secret and QR code URL for 2FA setup' })
@@ -79,6 +100,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @SkipMfa()
   @Post('2fa/verify')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Verify TOTP code and enable 2FA' })
@@ -101,6 +123,49 @@ export class AuthController {
   @Post('2fa/complete-login')
   @ApiOperation({ summary: 'Complete login with TOTP code after requiresTwoFactor' })
   async complete2FALogin(@Request() req: RequestWithTenant, @Body() body: { tempToken: string; code: string }) {
-    return this.authService.complete2FALogin(body.tempToken, body.code, req.tenantDb, req.tenantId);
+    return this.authService.complete2FALogin(body.tempToken, body.code, req.tenantDb, req.tenantId, req.tenant || {});
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @SkipMfa()
+  @Post('mfa/setup')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate TOTP secret and QR code URL for MFA setup' })
+  async setupMfa(@Request() req: RequestWithTenant) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id ?? (req.user as any)?.sub;
+    return this.authService.setup2FA(userId, req.tenantDb);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @SkipMfa()
+  @Post('mfa/enable')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Enable MFA after successful TOTP verification' })
+  async enableMfa(@Request() req: RequestWithTenant, @Body() body: { totpCode?: string; code?: string }) {
+    const code = body.totpCode || body.code;
+    if (!code) throw new BadRequestException('totpCode is required');
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id ?? (req.user as any)?.sub;
+    await this.authService.verify2FA(userId, code, req.tenantDb);
+    const ipAddress = (req as any).ip || (req as any).connection?.remoteAddress;
+    const userAgent = (req as any).get('User-Agent');
+    const token = await this.authService.reissueMfaVerifiedToken(userId, req.tenantDb, req.tenantId, req.tenant || {}, ipAddress, userAgent);
+    return { message: 'MFA enabled successfully', token, accessToken: token };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @SkipMfa()
+  @Post('mfa/verify')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify MFA and re-issue a verified JWT' })
+  async verifyMfa(@Request() req: RequestWithTenant, @Body() body: { totpCode?: string; code?: string }) {
+    const code = body.totpCode || body.code;
+    if (!code) throw new BadRequestException('totpCode is required');
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id ?? (req.user as any)?.sub;
+    await this.authService.verifyMfaLogin(userId, code, req.tenantDb);
+    await this.authService.markSessionMfaVerified(req.tenantDb, (req.user as any)?.jti);
+    const ipAddress = (req as any).ip || (req as any).connection?.remoteAddress;
+    const userAgent = (req as any).get('User-Agent');
+    const token = await this.authService.reissueMfaVerifiedToken(userId, req.tenantDb, req.tenantId, req.tenant || {}, ipAddress, userAgent);
+    return { token, accessToken: token };
   }
 }

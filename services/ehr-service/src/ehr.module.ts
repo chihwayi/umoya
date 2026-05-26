@@ -1,4 +1,5 @@
 import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -175,6 +176,8 @@ import { FederatedLearningController } from './controllers/federated-learning.co
 import { HimisReportingController } from './controllers/himis-reporting.controller';
 import { FhirInboundController } from './controllers/fhir-inbound.controller';
 import { MultilingualEducationController } from './controllers/multilingual-education.controller';
+import { HealthEducationController } from './controllers/health-education.controller';
+import { PatientPortalHealthEducationController } from './controllers/patient-portal-health-education.controller';
 import { OfflineSyncController } from './controllers/offline-sync.controller';
 import { IotController } from './controllers/iot.controller';
 import { RadiologyAiController } from './controllers/radiology-ai.controller';
@@ -191,6 +194,7 @@ import { MaternalMortalityController } from './controllers/maternal-mortality.co
 import { NcdComplicationController } from './controllers/ncd-complication.controller';
 import { AtMessagingController } from './controllers/at-messaging.controller';
 import { PushTokensController } from './controllers/push-tokens.controller';
+import { CdpaController } from './controllers/cdpa.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -413,6 +417,8 @@ import { FederatedLearningService } from './services/federated-learning.service'
 import { HimisReportingService } from './services/himis-reporting.service';
 import { FhirInboundService } from './services/fhir-inbound.service';
 import { MultilingualEducationService } from './services/multilingual-education.service';
+import { HealthEducationService } from './services/health-education.service';
+import { PatientHealthEducationService } from './services/patient-health-education.service';
 import { OfflineSyncService } from './services/offline-sync.service';
 import { IotService } from './services/iot.service';
 import { RadiologyAiService } from './services/radiology-ai.service';
@@ -434,6 +440,7 @@ import { OutcomeCollectionService } from './services/outcome-collection.service'
 import { RegistrationAiService } from './services/registration-ai.service';
 import { ProactiveAiService } from './services/proactive-ai.service';
 import { AtMessagingService } from './services/at-messaging.service';
+import { TotpService } from './services/totp.service';
 import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
 import { TelemedicineGateway } from './gateways/telemedicine.gateway';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
@@ -441,7 +448,10 @@ import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gatewa
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { TenantMiddleware } from './middleware/tenant.middleware';
+import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
 import { RolesGuard } from './guards/roles.guard';
+import { MfaGuard } from './guards/mfa.guard';
+import { HealthEducatorGuard } from './guards/health-educator.guard';
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret || jwtSecret.trim().length === 0) {
@@ -629,6 +639,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HimisReportingController,
     FhirInboundController,
     MultilingualEducationController,
+    HealthEducationController,
+    PatientPortalHealthEducationController,
     OfflineSyncController,
     IotController,
     RadiologyAiController,
@@ -647,6 +659,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClaimsAiController,
     AtMessagingController,
     PushTokensController,
+    CdpaController,
   ],
   providers: [
     AuthService,
@@ -829,6 +842,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HimisReportingService,
     FhirInboundService,
     MultilingualEducationService,
+    HealthEducationService,
+    PatientHealthEducationService,
     OfflineSyncService,
     IotService,
     RadiologyAiService,
@@ -869,11 +884,19 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NhifService,
     JwtStrategy,
     RolesGuard,
+    HealthEducatorGuard,
+    TotpService,
+    MfaGuard,
+    {
+      provide: APP_GUARD,
+      useClass: MfaGuard,
+    },
   ],
   exports: [SmsService],
 })
 export class EhrModule {
   configure(consumer: MiddlewareConsumer) {
+    consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
     consumer
       .apply(TenantMiddleware)
       .exclude(

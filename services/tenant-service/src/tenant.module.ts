@@ -34,6 +34,7 @@ import { StorageService } from './services/storage.service';
 import { AuthController } from './controllers/auth.controller';
 import { BackupController } from './controllers/backup.controller';
 import { DemoAccessRequestController } from './controllers/demo-access-request.controller';
+import { BaaRegistryController } from './controllers/baa-registry.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { Tenant } from './entities/tenant.entity';
 import { TenantUser } from './entities/tenant-user.entity';
@@ -41,7 +42,9 @@ import { TenantAnalytics } from './entities/tenant-analytics.entity';
 import { AdminUser } from './entities/admin-user.entity';
 import { AuditLog } from './entities/audit-log.entity';
 import { DemoAccessRequest } from './entities/demo-access-request.entity';
+import { BaaRegistryEntry } from './entities/baa-registry.entity';
 import { DemoAccessRequestService } from './services/demo-access-request.service';
+import { BaaRegistryService } from './services/baa-registry.service';
 
 function resolveJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -67,12 +70,12 @@ function resolveJwtSecret(): string {
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest],
+      entities: [Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest, BaaRegistryEntry],
       synchronize: false,
     }),
-    TypeOrmModule.forFeature([Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest]),
+    TypeOrmModule.forFeature([Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest, BaaRegistryEntry]),
   ],
-  controllers: [TenantController, TenantUserController, TenantAnalyticsController, RolloutController, PaymentWebhookController, AuthController, AdminMaintenanceController, BackupController, DemoAccessRequestController],
+  controllers: [TenantController, TenantUserController, TenantAnalyticsController, RolloutController, PaymentWebhookController, AuthController, AdminMaintenanceController, BackupController, DemoAccessRequestController, BaaRegistryController],
   providers: [
     TenantService, 
     BillingEnforcerService,
@@ -96,6 +99,7 @@ function resolveJwtSecret(): string {
     BackupScheduleService,
     StorageService,
     DemoAccessRequestService,
+    BaaRegistryService,
     TenantDriftService,
     JwtStrategy
   ],

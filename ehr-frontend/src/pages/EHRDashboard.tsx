@@ -9,7 +9,7 @@ import {
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2, Scan, Droplet,
   CheckCircle, Camera, FlaskConical, HeartPulse, Package, Video,
-  AlertCircle, Bed, Baby, DollarSign, Fingerprint
+  AlertCircle, Bed, Baby, DollarSign, Fingerprint, GraduationCap
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, tenantApi, cdssApi } from '../services/api';
@@ -236,6 +236,8 @@ const EHRDashboard: React.FC = () => {
           { icon: Baby, label: 'TBA Birth Registration', desc: 'Traditional birth attendant register, home births & CRVS escalation', color: 'from-fuchsia-500 to-pink-500', route: 'tba' },
           { icon: Globe, label: 'DISA + SmartCare', desc: 'Mozambique DISA VL pull, Zambia SmartCare sync, and cross-border continuity', color: 'from-cyan-500 to-blue-500', route: 'interop' },
           { icon: Shield, label: 'HIPAA Compliance', desc: 'Audit logs, breach detection & compliance', color: 'from-indigo-500 to-blue-500', route: 'hipaa-compliance' },
+          { icon: Shield, label: 'CDPA Compliance', desc: 'Zimbabwe CDPA controls, evidence & review dates', color: 'from-emerald-500 to-teal-500', route: 'cdpa-compliance' },
+          { icon: Shield, label: 'Active Sessions', desc: 'Review and revoke staff sessions', color: 'from-slate-500 to-gray-500', route: 'sessions' },
           { icon: Eye, label: 'Audit Logs', desc: 'System activity & access logs', color: 'from-purple-500 to-violet-500', route: 'hipaa-compliance' },
           { icon: Database, label: 'Data Management', desc: 'Backup, restore & data migration', color: 'from-blue-500 to-cyan-500', route: 'data' },
           { icon: Server, label: 'System Health', desc: 'Performance monitoring & diagnostics', color: 'from-orange-500 to-amber-500', route: 'health' },
@@ -552,7 +554,10 @@ const EHRDashboard: React.FC = () => {
   const billingTone = getBillingToneClasses(billingSummary);
   const tenantDisplayName = formatTenantDisplayName(tenantSlug, tenantInfo?.clinicName);
   const tenantInitials = getBrandInitials(tenantDisplayName);
-  const visibleRoleActions = getRoleActions(user.role).filter((action: any) =>
+  const educationTile = user.is_health_educator
+    ? [{ icon: GraduationCap, label: 'Health Education', desc: 'Manage patient courses, modules & quizzes', color: 'from-teal-500 to-emerald-500', route: 'health-education' }]
+    : [];
+  const visibleRoleActions = [...getRoleActions(user.role), ...educationTile].filter((action: any) =>
     isTenantRouteAvailable(tenantInfo, action.route),
   );
 

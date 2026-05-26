@@ -2,6 +2,7 @@ import {
   Entity, PrimaryGeneratedColumn, Column,
   CreateDateColumn, UpdateDateColumn, BeforeInsert, ManyToOne, JoinColumn,
 } from 'typeorm';
+import { encryptionTransformer } from '../transformers/encryption.transformer';
 
 @Entity('patients')
 export class Patient {
@@ -24,14 +25,14 @@ export class Patient {
   @Column()
   gender: string;
 
-  @Column({ name: 'id_number', unique: true, nullable: true })
+  @Column({ name: 'id_number', unique: true, nullable: true, transformer: encryptionTransformer })
   nationalId: string;
 
   // ── Contact ───────────────────────────────────────────────────────────────
-  @Column({ nullable: true })
+  @Column({ nullable: true, transformer: encryptionTransformer })
   phone: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, transformer: encryptionTransformer })
   email: string;
 
   @Column({ nullable: true })

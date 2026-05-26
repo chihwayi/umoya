@@ -100,6 +100,19 @@ export function getApiClient(): AxiosInstance {
   return _apiInstance;
 }
 
+export const educationApi = {
+  getMyCourses: (lang: string) =>
+    getApiClient().get(`/patient-portal/education/courses?lang=${lang}`),
+  getCourse: (courseId: string, lang: string) =>
+    getApiClient().get(`/patient-portal/education/courses/${courseId}?lang=${lang}`),
+  enroll: (courseId: string) =>
+    getApiClient().post(`/patient-portal/education/courses/${courseId}/enroll`),
+  markLessonComplete: (lessonId: string) =>
+    getApiClient().post(`/patient-portal/education/lessons/${lessonId}/complete`),
+  submitQuizAttempt: (quizId: string, answers: { questionId: string; selectedOptionId: string }[]) =>
+    getApiClient().post(`/patient-portal/education/quizzes/${quizId}/attempt`, { answers }),
+};
+
 // Convenience typed caller
 export const api = {
   get:    <T>(path: string, config?: object) => getApiClient().get<T>(path, config),

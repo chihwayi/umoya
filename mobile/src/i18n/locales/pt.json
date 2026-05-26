@@ -97,7 +97,17 @@
     "subtitle": "Aprenda sobre a sua saúde",
     "all": "Todos",
     "minRead": "min de leitura",
-    "by": "Por"
+    "by": "Por",
+    "enroll": "Iniciar Curso",
+    "quiz": "Verificação de Conhecimento",
+    "quizPassed": "Aprovado",
+    "markComplete": "Marcar como Concluído",
+    "progress": "Progresso",
+    "openPdf": "Abrir PDF",
+    "openVideo": "Assistir Vídeo",
+    "back": "Voltar",
+    "myCourses": "Meus Cursos",
+    "explore": "Explorar"
   },
   "family": {
     "title": "Acesso Familiar",

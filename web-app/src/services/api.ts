@@ -302,6 +302,39 @@ export const tenantAPI = {
   },
 };
 
+export type BaaRegistryEntry = {
+  id: string;
+  vendorName: string;
+  vendorType: string;
+  serviceUrl?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  baaStatus: 'pending' | 'signed' | 'expired' | 'not_required';
+  baaSignedDate?: string | null;
+  baaExpiryDate?: string | null;
+  baaDocumentUrl?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export const baaRegistryAPI = {
+  getAll: async (): Promise<BaaRegistryEntry[]> => {
+    const response = await api.get('/admin/baa-registry');
+    return response.data;
+  },
+
+  getSummary: async (): Promise<{ total: number; signed: number; pending: number; expired: number; notRequired: number }> => {
+    const response = await api.get('/admin/baa-registry/summary');
+    return response.data;
+  },
+
+  update: async (id: string, payload: Partial<BaaRegistryEntry>): Promise<BaaRegistryEntry> => {
+    const response = await api.patch(`/admin/baa-registry/${id}`, payload);
+    return response.data;
+  },
+};
+
 export const migrationAPI = {
   uploadMigrationFile: async (tenantId: string, file: File): Promise<MigrationJob> => {
     const formData = new FormData();

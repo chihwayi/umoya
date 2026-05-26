@@ -29,6 +29,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       type: payload.type,
       patientId: payload.patientId,
       accessLevel: payload.accessLevel,
+      mfaVerified: payload.mfaVerified === true,
+      mfaRequired: payload.mfaRequired === true,
+      sessionTimeoutMinutes: payload.sessionTimeoutMinutes,
+      jti: payload.jti,
     };
   }
 }

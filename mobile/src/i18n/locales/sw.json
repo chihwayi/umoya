@@ -97,7 +97,17 @@
     "subtitle": "Jifunze kuhusu afya yako",
     "all": "Yote",
     "minRead": "dak kusoma",
-    "by": "Na"
+    "by": "Na",
+    "enroll": "Anza Kozi",
+    "quiz": "Ukaguzi wa Maarifa",
+    "quizPassed": "Umefaulu",
+    "markComplete": "Weka Alama ya Kukamilika",
+    "progress": "Maendeleo",
+    "openPdf": "Fungua PDF",
+    "openVideo": "Tazama Video",
+    "back": "Rudi",
+    "myCourses": "Kozi Zangu",
+    "explore": "Chunguza"
   },
   "family": {
     "title": "Ufikiaji wa Familia",

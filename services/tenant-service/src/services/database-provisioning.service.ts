@@ -324,6 +324,207 @@ export class DatabaseProvisioningService {
         tasks: [(db) => this.applySnomedUpgrades(db)],
       },
       {
+        id: 'nc_cdpa_compliance',
+        label: 'Zimbabwe CDPA 2021 Compliance Controls',
+        version: '2026.05.17.1',
+        description: 'Per-tenant CDPA 2021 control tracking table with evidence links and review dates',
+        statements: () => [
+          `
+          CREATE TABLE IF NOT EXISTS cdpa_controls (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            control_id VARCHAR(20) NOT NULL UNIQUE,
+            category VARCHAR(80) NOT NULL,
+            control_name VARCHAR(300) NOT NULL,
+            requirement TEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'not_assessed',
+            evidence_url VARCHAR(1000),
+            evidence_notes TEXT,
+            owner VARCHAR(200),
+            last_reviewed DATE,
+            next_review DATE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+          `,
+          `CREATE INDEX IF NOT EXISTS idx_cdpa_controls_category ON cdpa_controls (category)`,
+          `CREATE INDEX IF NOT EXISTS idx_cdpa_controls_status ON cdpa_controls (status)`,
+          `
+          INSERT INTO cdpa_controls (control_id, category, control_name, requirement, status) VALUES
+            ('CDPA-01', 'Lawful Processing', 'Lawful basis for processing', 'Personal data must be processed on one of the grounds listed in s.14 CDPA 2021', 'not_assessed'),
+            ('CDPA-02', 'Consent', 'Freely given, specific informed consent', 'Consent must be freely given, specific, informed and unambiguous - s.14(1)(a)', 'not_assessed'),
+            ('CDPA-03', 'Purpose Limitation', 'Data collected for specified purposes', 'Data must be collected for explicit, specified and legitimate purposes - s.15', 'not_assessed'),
+            ('CDPA-04', 'Data Minimisation', 'Minimum necessary data collection', 'Only data adequate, relevant and limited to the purpose - s.15(b)', 'not_assessed'),
+            ('CDPA-05', 'Accuracy', 'Data accuracy and correction', 'Data must be accurate and kept up to date - s.15(c)', 'not_assessed'),
+            ('CDPA-06', 'Storage Limitation', 'Retention policy and deletion', 'Data must not be kept longer than necessary - s.15(d)', 'not_assessed'),
+            ('CDPA-07', 'Security', 'Appropriate technical security measures', 'Controller must implement appropriate security - s.18', 'not_assessed'),
+            ('CDPA-08', 'Data Subject Rights', 'Right to access personal data', 'Data subjects may request access to their data - s.26', 'not_assessed'),
+            ('CDPA-09', 'Data Subject Rights', 'Right to rectification', 'Data subjects may request correction - s.27', 'not_assessed'),
+            ('CDPA-10', 'Data Subject Rights', 'Right to erasure (right to be forgotten)', 'Data subjects may request deletion where no legal basis - s.28', 'not_assessed'),
+            ('CDPA-11', 'Data Subject Rights', 'Right to data portability', 'Data must be provided in machine-readable format on request - s.29', 'not_assessed'),
+            ('CDPA-12', 'Data Transfers', 'Cross-border data transfer restrictions', 'Data may only be transferred to countries with adequate protection - s.30', 'not_assessed'),
+            ('CDPA-13', 'Breach Notification', 'Breach notification to POTRAZ', 'Data breaches must be notified to POTRAZ within 72 hours - s.21', 'not_assessed'),
+            ('CDPA-14', 'Data Protection Officer', 'DPO appointment', 'Controllers processing sensitive personal data must appoint a DPO - s.33', 'not_assessed'),
+            ('CDPA-15', 'Special Categories', 'Sensitive personal data (health data)', 'Health data is a special category requiring explicit consent - s.10', 'not_assessed'),
+            ('CDPA-16', 'Children''s Data', 'Protection of children''s data', 'Enhanced protection for data of persons under 18 - s.12', 'not_assessed'),
+            ('CDPA-17', 'Accountability', 'Records of processing activities', 'Controllers must maintain records of processing activities - s.16', 'not_assessed'),
+            ('CDPA-18', 'Third Parties', 'Processor agreements (BAA equivalent)', 'Written agreements required with all data processors - s.19', 'not_assessed')
+          ON CONFLICT (control_id) DO NOTHING
+          `,
+        ],
+      },
+      {
+        id: 'patient_health_education',
+        label: 'Patient Health Education',
+        version: '2026.05.17.1',
+        description: 'Tenant-scoped clinician-authored education courses with multilingual content, quizzes, and patient progress tracking.',
+        statements: () => [
+          // ── Course catalogue ────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS education_courses (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            category VARCHAR(100),           -- e.g. 'HIV', 'Maternal', 'Nutrition', 'Medication'
+            target_audience VARCHAR(100),    -- e.g. 'all', 'hiv_positive', 'anc', 'paediatric'
+            default_language_code VARCHAR(5) DEFAULT 'en',
+            published BOOLEAN DEFAULT false,
+            published_at TIMESTAMPTZ,
+            created_by UUID NOT NULL,        -- staff.id
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_modules (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            course_id UUID NOT NULL REFERENCES education_courses(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_lessons (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            module_id UUID NOT NULL REFERENCES education_modules(id) ON DELETE CASCADE,
+            order_index INTEGER NOT NULL DEFAULT 0,
+            content_type VARCHAR(20) NOT NULL DEFAULT 'text', -- 'text' | 'video_url' | 'pdf_url'
+            duration_minutes INTEGER,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )`,
+
+          // Multilingual content stored separately so each lesson can have
+          // EN + SN + ND (or any subset) without nullable columns on the lesson row
+          `CREATE TABLE IF NOT EXISTS education_lesson_translations (
+            lesson_id UUID NOT NULL REFERENCES education_lessons(id) ON DELETE CASCADE,
+            language_code VARCHAR(5) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            content_body TEXT NOT NULL,      -- Markdown for 'text'; URL for video/pdf types
+            PRIMARY KEY (lesson_id, language_code)
+          )`,
+
+          // ── Quiz layer (optional per lesson) ───────────────────────────
+          `CREATE TABLE IF NOT EXISTS education_quizzes (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            lesson_id UUID NOT NULL REFERENCES education_lessons(id) ON DELETE CASCADE,
+            pass_threshold INTEGER NOT NULL DEFAULT 70,  -- percentage
+            max_attempts INTEGER NOT NULL DEFAULT 3,
+            UNIQUE (lesson_id)
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_quiz_questions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            quiz_id UUID NOT NULL REFERENCES education_quizzes(id) ON DELETE CASCADE,
+            question_text TEXT NOT NULL,
+            order_index INTEGER NOT NULL DEFAULT 0
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_quiz_options (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            question_id UUID NOT NULL REFERENCES education_quiz_questions(id) ON DELETE CASCADE,
+            option_text TEXT NOT NULL,
+            is_correct BOOLEAN NOT NULL DEFAULT false,
+            order_index INTEGER NOT NULL DEFAULT 0
+          )`,
+
+          // ── Patient progress ───────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS education_enrollments (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            course_id UUID NOT NULL REFERENCES education_courses(id) ON DELETE CASCADE,
+            enrolled_at TIMESTAMPTZ DEFAULT NOW(),
+            completed_at TIMESTAMPTZ,
+            assigned_by UUID,                -- staff.id if staff-assigned; NULL if self-enrolled
+            UNIQUE (patient_id, course_id)
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_lesson_progress (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            enrollment_id UUID NOT NULL REFERENCES education_enrollments(id) ON DELETE CASCADE,
+            lesson_id UUID NOT NULL REFERENCES education_lessons(id) ON DELETE CASCADE,
+            started_at TIMESTAMPTZ DEFAULT NOW(),
+            completed_at TIMESTAMPTZ,
+            UNIQUE (enrollment_id, lesson_id)
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS education_quiz_attempts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            enrollment_id UUID NOT NULL REFERENCES education_enrollments(id) ON DELETE CASCADE,
+            quiz_id UUID NOT NULL REFERENCES education_quizzes(id) ON DELETE CASCADE,
+            score INTEGER NOT NULL,          -- percentage 0-100
+            passed BOOLEAN NOT NULL,
+            answers JSONB NOT NULL,          -- [{questionId, selectedOptionId}]
+            attempted_at TIMESTAMPTZ DEFAULT NOW()
+          )`,
+
+          // ── Indexes ────────────────────────────────────────────────────
+          `CREATE INDEX IF NOT EXISTS idx_edu_modules_course ON education_modules(course_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_lessons_module ON education_lessons(module_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_translations_lesson ON education_lesson_translations(lesson_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_enrollments_patient ON education_enrollments(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_enrollments_course ON education_enrollments(course_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_progress_enrollment ON education_lesson_progress(enrollment_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_edu_attempts_enrollment ON education_quiz_attempts(enrollment_id)`,
+        ],
+      },
+      {
+        id: 'nc_session_management',
+        label: 'Staff Session Management + Emergency Access Log',
+        version: '2026.05.17.1',
+        description: 'Active session registry and emergency MFA bypass audit log',
+        statements: () => [
+          `
+          CREATE TABLE IF NOT EXISTS active_staff_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL,
+            jwt_jti VARCHAR(64) NOT NULL UNIQUE,
+            ip_address VARCHAR(45),
+            user_agent TEXT,
+            mfa_verified BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_activity TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ NOT NULL,
+            revoked BOOLEAN NOT NULL DEFAULT false,
+            revoked_at TIMESTAMPTZ,
+            revoked_reason VARCHAR(200)
+          )
+          `,
+          `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON active_staff_sessions (user_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_sessions_jti ON active_staff_sessions (jwt_jti)`,
+          `CREATE INDEX IF NOT EXISTS idx_sessions_active ON active_staff_sessions (user_id) WHERE NOT revoked`,
+          `
+          CREATE TABLE IF NOT EXISTS emergency_access_log (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL,
+            reason TEXT NOT NULL,
+            approved_by UUID,
+            accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            audit_reviewed BOOLEAN NOT NULL DEFAULT false,
+            audit_notes TEXT
+          )
+          `,
+          `CREATE INDEX IF NOT EXISTS idx_emergency_log_user ON emergency_access_log (user_id)`,
+        ],
+      },
+      {
         id: 'hiv_testing',
         label: 'HIV Testing Enhancements',
         version: '2025.03.01',

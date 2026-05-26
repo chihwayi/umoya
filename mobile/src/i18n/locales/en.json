@@ -97,7 +97,17 @@
     "subtitle": "Learn about your health",
     "all": "All",
     "minRead": "min read",
-    "by": "By"
+    "by": "By",
+    "enroll": "Start Course",
+    "quiz": "Knowledge Check",
+    "quizPassed": "Passed",
+    "markComplete": "Mark Complete",
+    "progress": "Progress",
+    "openPdf": "Open PDF",
+    "openVideo": "Watch Video",
+    "back": "Back",
+    "myCourses": "My Courses",
+    "explore": "Explore"
   },
   "family": {
     "title": "Family Access",

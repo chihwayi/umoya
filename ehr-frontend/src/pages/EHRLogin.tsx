@@ -97,11 +97,24 @@ const EHRLogin: React.FC = () => {
         localStorage.setItem('ehr_tenant_slug', tenantSlug);
         showInfo('Password Change Required', 'Please set a new password to continue');
         navigate(`/ehr/${tenantSlug}/change-password`);
+      } else if (response.data.requiresTwoFactor) {
+        localStorage.setItem('ehr_temp_token', response.data.tempToken);
+        localStorage.setItem('ehr_tenant', tenantSlug);
+        localStorage.setItem('ehr_tenant_slug', tenantSlug);
+        navigate(`/ehr/${tenantSlug}/mfa`);
+      } else if (response.data.mfaRequired && !response.data.mfaVerified) {
+        localStorage.setItem('ehr_token', response.data.token);
+        localStorage.setItem('ehr_user', JSON.stringify(response.data.user));
+        localStorage.setItem('ehr_tenant', tenantSlug);
+        localStorage.setItem('ehr_tenant_slug', tenantSlug);
+        localStorage.setItem('ehr_session_timeout_minutes', String(response.data.user?.sessionTimeoutMinutes || response.data.sessionTimeoutMinutes || 60));
+        navigate(`/ehr/${tenantSlug}/mfa`);
       } else {
         localStorage.setItem('ehr_token', response.data.token);
         localStorage.setItem('ehr_user', JSON.stringify(response.data.user));
         localStorage.setItem('ehr_tenant', tenantSlug);
         localStorage.setItem('ehr_tenant_slug', tenantSlug);
+        localStorage.setItem('ehr_session_timeout_minutes', String(response.data.user?.sessionTimeoutMinutes || response.data.sessionTimeoutMinutes || 60));
         
         // Generate and store session ID for audit logging
         const sessionId = uuidv4();
