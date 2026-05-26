@@ -92,6 +92,7 @@ import { HivController } from './controllers/hiv.controller';
 import { PsychosocialController } from './controllers/psychosocial.controller';
 import { EmpowermentController } from './controllers/empowerment.controller';
 import { TrainingController } from './controllers/training.controller';
+import { ResearchController } from './controllers/research.controller';
 import { ImagingController } from './controllers/imaging.controller';
 import { MaternityController } from './controllers/maternity.controller';
 import { OncologyController } from './controllers/oncology.controller';
@@ -301,6 +302,9 @@ import { CounsellorSessionsService } from './services/counsellor-sessions.servic
 import { EmpowermentService } from './services/empowerment.service';
 import { SupportGroupsService } from './services/support-groups.service';
 import { TrainingService } from './services/training.service';
+import { CascadeMetricsService } from './services/cascade-metrics.service';
+import { RetentionService } from './services/retention.service';
+import { CohortBuilderService } from './services/cohort-builder.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
 import { StorageService } from './services/storage.service';
@@ -574,6 +578,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PsychosocialController,
     EmpowermentController,
     TrainingController,
+    ResearchController,
     ImagingController,
     MaternityController,
     OncologyController,
@@ -739,6 +744,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EmpowermentService,
     SupportGroupsService,
     TrainingService,
+    CascadeMetricsService,
+    RetentionService,
+    CohortBuilderService,
     HivMonthlyReturnService,
     ImagingService,
     StorageService,

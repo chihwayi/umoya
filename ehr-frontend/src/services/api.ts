@@ -3968,6 +3968,62 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  // Research (95-95-95, Retention, Cohort Builder)
+  getCurrentCascade: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/research/cascade/current', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getCascadeSnapshots: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/research/cascade/snapshots', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  saveCascadeSnapshot: async (body: { periodLabel: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/research/cascade/snapshot', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getRetention: async (cohortStart: string, months: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/research/retention?cohortStart=${cohortStart}&months=${months}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  recordReengagement: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/research/patients/${patientId}/reengagement`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  runCohort: async (body: { conditions: any[]; logic: 'AND' | 'OR' }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/research/cohorts/run', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  saveCohort: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/research/cohorts', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  listCohorts: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/research/cohorts', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  runSavedCohort: async (cohortId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/research/cohorts/${cohortId}/run`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {
       headers: { 
