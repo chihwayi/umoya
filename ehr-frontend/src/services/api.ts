@@ -4071,6 +4071,30 @@ export const ehrApi = {
     });
     return response.data;
   },
+  listSmsCampaigns: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/sms/campaigns', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  createSmsCampaign: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/sms/campaigns', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getSmsCampaignStats: async (campaignId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/sms/campaigns/${campaignId}/stats`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  enrolNudge: async (patientId: string, body: { nudgeType: string; language: 'en' | 'sn' | 'nd' }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/sms/nudges/enrol/${patientId}`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
 
   getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {

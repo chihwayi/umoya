@@ -8,6 +8,34 @@ export class SmsService {
   private readonly username = process.env.AT_USERNAME ?? 'sandbox';
   private readonly senderId = process.env.AT_SENDER_ID ?? '';
 
+  async sendSms(to: string, message: string): Promise<{ messageId: string }> {
+    await this.send(to, message);
+    return { messageId: `at-${Date.now()}` };
+  }
+
+  async sendSmsFallback(to: string, message: string): Promise<void> {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const from = process.env.TWILIO_FROM_NUMBER;
+    if (!accountSid || !authToken || !from) {
+      this.logger.warn('[SMS-FALLBACK] Twilio credentials not configured');
+      return;
+    }
+    const body = new URLSearchParams({ To: to, From: from, Body: message });
+    const res = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+      },
+    );
+    if (!res.ok) throw new Error(`Twilio error ${res.status}: ${await res.text()}`);
+  }
+
   async send(to: string | string[], message: string): Promise<void> {
     if (!this.enabled || !this.apiKey) {
       this.logger.log(`[SMS-SKIP] ${message.slice(0, 80)}`);
