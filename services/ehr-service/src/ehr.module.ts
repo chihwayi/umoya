@@ -186,6 +186,7 @@ import { MultilingualEducationController } from './controllers/multilingual-educ
 import { HealthEducationController } from './controllers/health-education.controller';
 import { PatientPortalHealthEducationController } from './controllers/patient-portal-health-education.controller';
 import { OfflineSyncController } from './controllers/offline-sync.controller';
+import { ConflictResolverService } from './services/conflict-resolver.service';
 import { IotController } from './controllers/iot.controller';
 import { RadiologyAiController } from './controllers/radiology-ai.controller';
 import { AlertDeliveryController } from './controllers/alert-delivery.controller';
@@ -906,6 +907,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HealthEducationService,
     PatientHealthEducationService,
     OfflineSyncService,
+    ConflictResolverService,
     IotService,
     RadiologyAiService,
     AlertDeliveryService,

@@ -1,0 +1,110 @@
+{
+  "title": "Security Anomalies",
+  "uid": "nc-security-001",
+  "tags": ["security", "anomaly", "breach", "newlands"],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Unacknowledged Anomalies",
+      "type": "stat",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT COUNT(*) AS unacked FROM anomaly_events WHERE acknowledged_at IS NULL AND is_false_positive = false",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 3},
+              {"color": "red", "value": 10}
+            ]
+          }
+        }
+      },
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "id": 2,
+      "title": "Critical Anomalies (24h)",
+      "type": "stat",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT COUNT(*) AS critical FROM anomaly_events WHERE severity = 'critical' AND detected_at > NOW() - INTERVAL '24 hours'",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "red", "value": 1}
+            ]
+          }
+        }
+      },
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "id": 3,
+      "title": "Open Breach Incidents",
+      "type": "stat",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT COUNT(*) AS open_incidents FROM breach_incidents WHERE status NOT IN ('closed','remediated')",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "red", "value": 1}
+            ]
+          }
+        }
+      },
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "id": 4,
+      "title": "Overdue POTRAZ Notifications",
+      "type": "stat",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT COUNT(*) AS overdue FROM breach_incidents WHERE potraz_notified_at IS NULL AND detected_at < NOW() - INTERVAL '72 hours'",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "red", "value": 1}
+            ]
+          }
+        }
+      },
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "id": 5,
+      "title": "Anomaly Events Per Day (30 days)",
+      "type": "timeseries",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT DATE_TRUNC('day', detected_at) AS time, severity, COUNT(*) AS events FROM anomaly_events WHERE detected_at > NOW() - INTERVAL '30 days' GROUP BY 1, 2 ORDER BY 1",
+        "format": "table",
+        "timeColumns": ["time"]
+      }],
+      "gridPos": {"x": 0, "y": 6, "w": 24, "h": 10}
+    }
+  ]
+}

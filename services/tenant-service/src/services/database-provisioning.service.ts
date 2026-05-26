@@ -1231,6 +1231,34 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'nc_offline_hardening',
+        label: 'Offline-First Hardening — updated_at columns + sync_conflicts',
+        version: '2026.05.26.1',
+        description: 'Adds updated_at to all synced clinical entities and creates sync_conflicts audit table',
+        statements: () => [
+          `DO $$ BEGIN
+             ALTER TABLE hiv_clinical_visits ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+             ALTER TABLE hiv_counselling_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+             ALTER TABLE gbv_assessments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+             ALTER TABLE hiv_disclosure_records ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+             ALTER TABLE alhiv_transition_assessments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+             ALTER TABLE counsellor_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+           EXCEPTION WHEN undefined_table THEN NULL;
+           END $$`,
+          `CREATE TABLE IF NOT EXISTS sync_conflicts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            entity_type VARCHAR(64) NOT NULL,
+            entity_id UUID NOT NULL,
+            client_version JSONB NOT NULL,
+            server_version JSONB NOT NULL,
+            resolution VARCHAR(32) NOT NULL,
+            resolved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            resolved_by VARCHAR(64) NOT NULL DEFAULT 'system'
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_sync_conflicts_entity ON sync_conflicts(entity_type, entity_id)`,
+        ],
+      },
+      {
         id: 'hiv_testing',
         label: 'HIV Testing Enhancements',
         version: '2025.03.01',
