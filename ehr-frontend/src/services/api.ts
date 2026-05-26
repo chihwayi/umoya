@@ -3784,6 +3784,102 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+
+  // Empowerment (WEEP/MEEP)
+  listProgrammes: async (type: string | null, token: string, tenantSlug: string) => {
+    const params = type ? `?type=${type}` : '';
+    const response = await ehrAxios.get(`/empowerment/programmes${params}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createProgramme: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/empowerment/programmes', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getProgrammeStats: async (programmeId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/empowerment/programmes/${programmeId}/stats`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  enrolPatient: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/empowerment/patients/${patientId}/enrol`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getPatientEnrolments: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/empowerment/patients/${patientId}/enrolments`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  addEnrolmentMilestone: async (enrolmentId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/empowerment/enrolments/${enrolmentId}/milestones`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updateEnrolment: async (enrolmentId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/empowerment/enrolments/${enrolmentId}`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Support Groups
+  listSupportGroups: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/empowerment/support-groups', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createSupportGroup: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/empowerment/support-groups', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  addGroupMember: async (groupId: string, patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/empowerment/support-groups/${groupId}/members/${patientId}`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  removeGroupMember: async (groupId: string, patientId: string, reason: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/empowerment/support-groups/${groupId}/members/${patientId}/remove`, { reason }, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createGroupSession: async (groupId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/empowerment/support-groups/${groupId}/sessions`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  recordSessionAttendance: async (sessionId: string, attendees: any[], token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/empowerment/support-groups/sessions/${sessionId}/attendance`, { attendees }, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getGroupAttendanceStats: async (groupId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/empowerment/support-groups/${groupId}/attendance-stats`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getPatientGroupMemberships: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/empowerment/patients/${patientId}/groups`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   assessResistance: async (patientId: string, body: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/hiv/patients/${patientId}/assess-resistance`, body, {
       headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
