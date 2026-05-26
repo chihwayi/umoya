@@ -89,6 +89,7 @@ import { LabCriticalAlertController } from './controllers/lab-critical-alert.con
 import { CriticalAlertController } from './controllers/critical-alert.controller';
 import { DrugController } from './controllers/drug.controller';
 import { HivController } from './controllers/hiv.controller';
+import { PsychosocialController } from './controllers/psychosocial.controller';
 import { ImagingController } from './controllers/imaging.controller';
 import { MaternityController } from './controllers/maternity.controller';
 import { OncologyController } from './controllers/oncology.controller';
@@ -291,6 +292,10 @@ import { VacsIndexService } from './services/vacs-index.service';
 import { HivFastTrackService } from './services/hiv-fast-track.service';
 import { HivResistanceService } from './services/hiv-resistance.service';
 import { HivMmdService } from './services/hiv-mmd.service';
+import { HivDisclosureService } from './services/hiv-disclosure.service';
+import { AlhivTransitionService } from './services/alhiv-transition.service';
+import { GbvService } from './services/gbv.service';
+import { CounsellorSessionsService } from './services/counsellor-sessions.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
 import { StorageService } from './services/storage.service';
@@ -561,6 +566,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CriticalAlertController,
     DrugController,
     HivController,
+    PsychosocialController,
     ImagingController,
     MaternityController,
     OncologyController,
@@ -719,6 +725,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HivFastTrackService,
     HivResistanceService,
     HivMmdService,
+    HivDisclosureService,
+    AlhivTransitionService,
+    GbvService,
+    CounsellorSessionsService,
     HivMonthlyReturnService,
     ImagingService,
     StorageService,

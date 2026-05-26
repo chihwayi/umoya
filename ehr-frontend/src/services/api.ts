@@ -3736,6 +3736,54 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+  getDisclosureHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/psychosocial/patients/${patientId}/disclosure`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createDisclosureRecord: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/psychosocial/patients/${patientId}/disclosure`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getTransitionHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/psychosocial/patients/${patientId}/transition`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createTransitionAssessment: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/psychosocial/patients/${patientId}/transition`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getGbvHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/psychosocial/patients/${patientId}/gbv`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createGbvAssessment: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/psychosocial/patients/${patientId}/gbv`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getCounsellorSessions: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/psychosocial/patients/${patientId}/sessions`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  createCounsellorSession: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/psychosocial/patients/${patientId}/sessions`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
   assessResistance: async (patientId: string, body: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/hiv/patients/${patientId}/assess-resistance`, body, {
       headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
