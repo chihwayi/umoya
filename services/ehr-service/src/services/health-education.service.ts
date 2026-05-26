@@ -40,6 +40,27 @@ export class HealthEducationService {
     `);
   }
 
+  async getCourse(courseId: string, tenantDb: DataSource) {
+    const rows = await tenantDb.query(
+      `SELECT * FROM education_courses WHERE id=$1`,
+      [courseId],
+    );
+    if (!rows[0]) throw new NotFoundException('Course not found');
+    return rows[0];
+  }
+
+  async getModules(courseId: string, tenantDb: DataSource) {
+    return tenantDb.query(
+      `SELECT m.*, COUNT(l.id)::int AS lesson_count
+       FROM education_modules m
+       LEFT JOIN education_lessons l ON l.module_id = m.id
+       WHERE m.course_id=$1
+       GROUP BY m.id
+       ORDER BY m.order_index`,
+      [courseId],
+    );
+  }
+
   async createCourse(dto: CreateCourseDto, staffId: string, tenantDb: DataSource) {
     const rows = await tenantDb.query(
       `INSERT INTO education_courses

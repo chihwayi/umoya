@@ -13,6 +13,21 @@ export class HealthEducationController {
     return this.edu.listCourses(req.tenantDb);
   }
 
+  @Get('courses/:id')
+  getCourse(@Param('id') id: string, @Req() req) {
+    return this.edu.getCourse(id, req.tenantDb);
+  }
+
+  @Get('courses/:courseId/modules')
+  getModules(@Param('courseId') courseId: string, @Req() req) {
+    return this.edu.getModules(courseId, req.tenantDb);
+  }
+
+  @Post('modules/:moduleId/reorder')
+  reorderModule(@Param('moduleId') moduleId: string, @Body() body, @Req() req) {
+    return this.edu.reorderModule(moduleId, body.direction, req.tenantDb);
+  }
+
   @Post('courses')
   createCourse(@Body() dto, @Req() req) {
     return this.edu.createCourse(dto, req.user.sub, req.tenantDb);

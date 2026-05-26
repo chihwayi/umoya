@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PatientJwtAuthGuard } from '../guards/patient-jwt-auth.guard';
 import { PatientHealthEducationService } from '../services/patient-health-education.service';
 
 @Controller('patient-portal/education')
-@UseGuards(JwtAuthGuard)
+@UseGuards(PatientJwtAuthGuard)
 export class PatientPortalHealthEducationController {
   constructor(private readonly edu: PatientHealthEducationService) {}
 

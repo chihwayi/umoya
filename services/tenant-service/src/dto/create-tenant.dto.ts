@@ -13,6 +13,7 @@ import {
   IsDateString,
   IsIn,
   Length,
+  IsBoolean,
 } from 'class-validator';
 import { SubscriptionTier } from '../entities/tenant.entity';
 
@@ -102,4 +103,18 @@ export class CreateTenantDto {
   @IsOptional()
   @IsIn(['clinic', 'hospital', 'ministry'])
   deploymentMode?: 'clinic' | 'hospital' | 'ministry';
+
+  @IsOptional()
+  @IsBoolean()
+  mfaRequired?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(1440)
+  sessionTimeoutMinutes?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  allowEmergencyBypass?: boolean;
 }

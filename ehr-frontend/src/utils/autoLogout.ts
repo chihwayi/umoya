@@ -1,6 +1,6 @@
 // Auto-logout utility for handling token expiration and inactivity timeout
 
-const DEFAULT_SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const DEFAULT_SESSION_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 const WARNING_BEFORE_LOGOUT_MS = 60 * 1000; // show warning 60 seconds before logout
 
 export interface AutoLogoutOptions {
@@ -15,6 +15,12 @@ let inactivityTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let warningTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function getSessionTimeoutMs(): number {
+  const storedMinutes = localStorage.getItem('ehr_session_timeout_minutes');
+  if (storedMinutes) {
+    const n = parseInt(storedMinutes, 10);
+    if (!Number.isNaN(n) && n >= 5) return n * 60 * 1000;
+  }
+
   const env = process.env.REACT_APP_SESSION_TIMEOUT_MS;
   if (env != null && env !== '') {
     const n = parseInt(env, 10);
@@ -38,7 +44,7 @@ function scheduleWarningAndLogout() {
   const timeoutMs = getSessionTimeoutMs();
   const warningAt = timeoutMs - WARNING_BEFORE_LOGOUT_MS;
   if (warningAt <= 0) {
-    inactivityTimeoutId = setTimeout(() => handleAutoLogout(), timeoutMs);
+    inactivityTimeoutId = setTimeout(() => handleAutoLogout('idle_timeout'), timeoutMs);
     return;
   }
   inactivityTimeoutId = setTimeout(() => {
@@ -52,7 +58,7 @@ function scheduleWarningAndLogout() {
     }
     warningTimeoutId = setTimeout(() => {
       warningTimeoutId = null;
-      handleAutoLogout();
+      handleAutoLogout('idle_timeout');
     }, WARNING_BEFORE_LOGOUT_MS);
   }, warningAt);
 }
@@ -89,7 +95,7 @@ export const initializeAutoLogout = (options: AutoLogoutOptions) => {
 };
 
 // Handle automatic logout when token expires
-export const handleAutoLogout = () => {
+export const handleAutoLogout = (reason: 'expired' | 'idle_timeout' = 'expired') => {
   console.log('🔐 Auto-logout: Token expired, clearing session');
 
   // Notify BackgroundTaskContext (and any other listeners) to clear session state
@@ -100,10 +106,11 @@ export const handleAutoLogout = () => {
   localStorage.removeItem('ehr_temp_token');
   localStorage.removeItem('ehr_user');
   localStorage.removeItem('ehr_tenant');
+  localStorage.removeItem('ehr_session_timeout_minutes');
   
   // Get current tenant slug from URL or localStorage
   const currentPath = window.location.pathname;
-  const tenantMatch = currentPath.match(/\/ehr\/([^\/]+)/);
+  const tenantMatch = currentPath.match(/\/ehr\/([^/]+)/);
   const tenantSlug = tenantMatch ? tenantMatch[1] : localStorage.getItem('ehr_tenant');
   
   // Show notification if callback is available
@@ -124,11 +131,11 @@ export const handleAutoLogout = () => {
   setTimeout(() => {
     if (tenantSlug) {
       if (window.location.pathname !== `/ehr/${tenantSlug}`) {
-        window.location.href = `/ehr/${tenantSlug}`;
+        window.location.href = `/ehr/${tenantSlug}?reason=${reason}`;
       }
     } else {
       if (window.location.pathname !== '/') {
-        window.location.href = '/';
+        window.location.href = `/?reason=${reason}`;
       }
     }
   }, 1500); // 1.5 second delay to show notification
@@ -143,6 +150,6 @@ export const isOnProtectedRoute = (): boolean => {
 // Get current tenant slug from URL
 export const getCurrentTenantSlug = (): string | null => {
   const currentPath = window.location.pathname;
-  const tenantMatch = currentPath.match(/\/ehr\/([^\/]+)/);
+  const tenantMatch = currentPath.match(/\/ehr\/([^/]+)/);
   return tenantMatch ? tenantMatch[1] : null;
 };

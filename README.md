@@ -60,21 +60,48 @@ MediCore is a production-grade, AI-first, multi-tenant electronic health record 
 - **Ubuntu Cultural Health** — SDOH risk assessment, Ubuntu psychosocial wellbeing, family council consent, traditional medicine disclosure
 - **UHC and SDG Analytics** — UHC service coverage index, SDG 3 progress tracking, catastrophic health expenditure, health equity index
 - **NCID Deduplication** — National client identifier resolution, probabilistic deduplication scoring, NCID federation
-- **Low-Bandwidth and Offline Support** — SMS appointment reminders, Africa's Talking SMS/USSD gateway, offline-capable point-of-care sync
+- **Low-Bandwidth and Offline Support** — SMS appointment reminders, Africa's Talking SMS/USSD stateful menus (appointment confirmation, refill requests, lab results, opt-out), offline-capable point-of-care sync with field-level conflict resolution
 - **Cross-Border Continuity** — IHR and WHO international patient record portability, SADC cross-border continuity AI
 - **Multilingual AI** — All LLM-powered CDSS endpoints support a `locale` parameter for output in English, Swahili, Shona, Zulu, Ndebele, Afrikaans, French, and Portuguese
+
+### HIV Centre of Excellence
+
+Advanced HIV programme management purpose-built for high-volume clinics operating under Zimbabwe CDPA 2021 and MOHCC protocols.
+
+- **CDPA 2021 Compliance** — 18-control per-tenant compliance register; BAA vendor registry with seeded vendors; POTRAZ 72-hour breach notification workflow with overdue tracking; per-patient consent records (grant, withdraw, expiry) covering HIV testing, data sharing, SMS communication, treatment, and photography
+- **MFA and Session Security** — TOTP 2FA via `speakeasy`; WebAuthn / FIDO2 hardware security key support (YubiKey, TouchID, FaceID) via `@simplewebauthn/server`; idle session timeout; AES-256-GCM column-level encryption on national ID, phone, and email fields; emergency bypass audit log
+- **OI Early Warning and Geriatric HIV** — 6 opportunistic infection alert rules (PCP, Cryptococcal, MAC, CMV, Toxoplasmosis, TB) triggered by CD4 thresholds; VACS Index 2.0 comorbidity/mortality score for PLHIV ≥ 50; stable-patient fast-track classification; auto-geriatric flag on age ≥ 50
+- **Drug Resistance and Multi-Month Dispensing** — Zimbabwe national ART formulary regimen-switch engine (NNRTI → PI second-line, LPV/r for pregnant, NATC approval for third-line); VL trend classification (suppressed/rising/failing/rebounding); MMD scheduling with eligibility criteria (3-month: VL suppressed ≥ 6 months; 6-month: VL suppressed ≥ 12 months); NHLS HL7 lab import with range validation
+- **Adolescent HIV, Disclosure, and GBV** — Structured HIV disclosure status records; TRAQ 6-domain adolescent transition readiness assessment; HITS GBV screening tool (score ≥ 11 positive, ≥ 16 + weapon = imminent danger flag); role-restricted counsellor session notes (own notes only for counsellors; senior staff see redacted view)
+- **Empowerment and Support Groups** — WEEP/MEEP economic empowerment programmes with enrolment, baseline/outcome economic indicators, and milestone tracking; peer support groups with session management and attendance recording
+- **Clinical Training Platform** — Configurable CPD-accredited courses with MCQ assessment engine, per-question feedback, certificate generation, CPD ledger, and a searchable alumni deployment directory with facility map and CSV export
+- **95-95-95 Cascade and Research** — HIV treatment cascade computation (diagnosed → on ART → suppressed) with sex and age-band disaggregation; LTFU definition (> 90 days past expected visit); 6/12/24-month retention cohorts; re-engagement recording; SQL-injection-safe JSONB cohort builder with field whitelist; Kaplan-Meier survival curves with Greenwood 95% CI
+- **De-identification and Research Access** — 18 PHI identifier removal (HIPAA Safe Harbor); 5-year age banding; YYYY-MM date generalisation; age ≥ 90 → '90+'; time-limited public research portal access tokens shareable with external collaborators without requiring EHR accounts; VigiBase-compatible pharmacovigilance adverse event reporting with sequential case IDs
+- **USSD Workflows and Adherence Nudges** — Stateful USSD session machine via Africa's Talking webhook (appointment confirm, refill request, lab result view, SMS opt-out menus); scheduled adherence nudge campaigns in English, ChiShona, and IsiNdebele; Bull queue bulk SMS dispatch with Twilio provider failover; opt-out registry
+- **Full Shona and Ndebele Localisation** — `react-i18next` in patient portal, EHR frontend, and Expo mobile (offline-embedded bundle); complete English/ChiShona/IsiNdebele translation files; language selector component; preference persisted to patient and staff records; PDF appointment letters and discharge summaries in the patient's preferred language
+- **Breach Detection and Disaster Recovery** — 5-rule real-time anomaly engine (bulk download, brute-force login, after-hours sensitive access, audit log sequence gaps, unauthorised bulk export); SHA-256 hash-chained audit log with chain integrity verification endpoint; nightly encrypted `pg_dump` with AES-256-GCM, S3 upload, checksum verification, and `pg_restore` integrity check; security dashboard with anomaly acknowledgement, breach incident lifecycle, and DR test log
+- **Clinical Monitoring Dashboards** — 5 provisioned Grafana dashboards (95-95-95 cascade gauges with 12-month trend, LTFU/retention rates, OI alert operations, MMD adherence, security anomalies); real-time OI/anomaly/MMD alert badge counts in EHR sidebar
+- **Offline-First Hardening** — Field-level Last-Write-Wins conflict resolution (immutable: lab results; server wins: appointments; field merge: all clinical forms); offline coverage spanning HIV clinical visits, counselling sessions, GBV assessments, disclosure records, adolescent transition assessments, and counsellor sessions; conflict log for audit
+- **Dental Module** — FDI 32-tooth notation chart with per-tooth condition coding (healthy, caries, filled, missing, crown, RCT, bridge, implant, extraction needed, watch); 6-point periodontal probing per tooth with bleeding-on-probing recording; treatment plan management with procedure codes and costs; colour-coded interactive chart UI
+- **ANC HIV+ Pathway (PMTCT)** — ANC registration with EDD calculation (Naegele's rule); PMTCT visit schedule with gestational VL monitoring; maternal transmission risk flag when VL > 1,000 copies/mL at ≥ 36 weeks; NVP prophylaxis tracking (6-week standard, 12-week high-risk); Early Infant Diagnosis schedule generator (6w/4m/12m/18m due dates) with result recording and immediate ART flag on positive
+- **Paediatric Growth Charts** — WHO 2006/2007 LMS z-score computation for WAZ, HAZ, WHZ, and BAZ; malnutrition categorisation (severe underweight WAZ < −3, stunting HAZ < −2, wasting WHZ < −2); nutrition referral auto-trigger when WAZ < −2; growth chart with WHO reference lines plotted against patient measurements
+- **Paediatric ART Dosing** — MOHCC weight-band dosing table (3–5.9 kg through ≥ 25 kg) for ABC/3TC FDC, EFV, LPV/r liquid and tablet formulations; weight-band change detection with alert when a patient crosses to the next band; inline dose recommendation on ART initiation form
+- **Role-Based Access Control** — 9-tier role matrix (`super_admin`, `admin`, `doctor`, `nurse`, `counsellor`, `lab`, `reception`, `pharmacist`, `researcher`) enforced globally; researcher role restricted to de-identified exports only
 
 ### Patient-Facing Features
 - Secure login with tenant resolution
 - Appointments, health records, lab results, prescriptions, and bills
 - Medication reminders, adherence tracking, and refill requests
-- Telemedicine video consultations
+- Telemedicine video consultations with pre-consultation form auto-linked to EHR clinical visit draft
 - Secure messaging with providers
 - Symptom checker and post-visit AI follow-ups
 - Questionnaires, patient-reported outcome schedules, and health goals
 - Health education content with locale-aware delivery
 - Caregiver and guardian access management
 - Family access, immunizations, and consent management
+- CDPA consent dashboard — grant, view, and withdraw consent per processing purpose with expiry tracking
+- Language selector (English, ChiShona, IsiNdebele) with preference persisted to patient record
+- USSD self-service via Africa's Talking (`*123#`) — appointment confirmation, medication refill requests, recent lab result view, and SMS opt-out; no smartphone required
 
 ---
 
@@ -127,14 +154,18 @@ All AI calls go through a governed pathway that enforces consent checks, PHI red
 
 ## Security and Compliance
 
-- JWT authentication with 2FA and cross-tenant validation — `tenantId` embedded in JWT payload; `JwtAuthGuard` cross-checks against `X-Tenant-ID` header to prevent token replay across facilities
+- JWT authentication with 2FA (TOTP via `speakeasy` and WebAuthn/FIDO2 hardware tokens) and cross-tenant validation — `tenantId` embedded in JWT payload; `JwtAuthGuard` cross-checks against `X-Tenant-ID` header to prevent token replay across facilities
 - Tenant-scoped data isolation — every request requires `X-Tenant-ID`; database-per-tenant architecture
-- HIPAA audit interception on all PHI access with append-only `hipaa_audit_logs`
-- Consent guard middleware before every CDSS PHI call
-- AES-256-GCM encryption at rest for sensitive clinical columns
+- HIPAA audit interception on all PHI access with append-only `hipaa_audit_logs`; SHA-256 hash-chained audit records with chain integrity verification to detect deletion or tampering
+- Consent guard middleware before every CDSS PHI call; per-patient CDPA consent records with withdrawal tracking and expiry alerts
+- AES-256-GCM encryption at rest for sensitive clinical columns (national ID, phone, email)
 - CDSS PHI redaction, egress allowlisting, and encryption key rotation
+- Real-time breach detection — 5 anomaly rules (bulk download, brute-force login, after-hours sensitive access, audit log gaps, unauthorised export); anomaly events escalate to breach incidents with POTRAZ 72-hour notification workflow
+- Nightly encrypted database backups with SHA-256 checksum and off-site S3 storage; on-demand integrity verification via `pg_restore`
+- 9-tier role-based access control enforced globally (`super_admin` → `researcher`)
 - Mobile: biometric login gate (Face ID and fingerprint), session auto-lock on background and 5-minute inactivity, offline read cache cleared on logout
 - SOC2 and HIPAA evidence report: `npm run report:soc2-hipaa`
+- Zimbabwe CDPA 2021 compliance: 18-control register per tenant, BAA vendor registry, POTRAZ breach notification within 72 hours
 
 ---
 
@@ -214,5 +245,5 @@ npm run report:soc2-hipaa
 
 | Document | Contents |
 |---|---|
-| [docs/rollout/README.md](./docs/rollout/README.md) | Architecture rules, DB provisioning patterns, agent constraints, and completed sprint index |
+| [docs/rollout/README.md](./docs/rollout/README.md) | Architecture rules, DB provisioning patterns, and agent constraints |
 | [.env.example](./.env.example) | All required environment variables |

@@ -1148,4 +1148,50 @@ export const patientPortalApi = {
     }
     return response.json();
   },
+
+  // ==================== HEALTH EDUCATION (HE-S01) ====================
+
+  getMyEducationCourses: async (token: string, tenantSlug: string, lang: string = 'en') => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/education/courses?lang=${lang}`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch education courses');
+    return response.json();
+  },
+
+  getEducationCourse: async (courseId: string, token: string, tenantSlug: string, lang: string = 'en') => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/education/courses/${courseId}?lang=${lang}`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch education course');
+    return response.json();
+  },
+
+  enrollInCourse: async (courseId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/education/courses/${courseId}/enroll`, {
+      method: 'POST',
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to enroll in course');
+    return response.json();
+  },
+
+  markLessonComplete: async (lessonId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/education/lessons/${lessonId}/complete`, {
+      method: 'POST',
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to mark lesson complete');
+    return response.json();
+  },
+
+  submitQuizAttempt: async (quizId: string, answers: Array<{ questionId: string; selectedOptionId: string }>, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/education/quizzes/${quizId}/attempt`, {
+      method: 'POST',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: JSON.stringify({ answers }),
+    });
+    _ensureOk(response, 'Failed to submit quiz attempt');
+    return response.json();
+  },
 };

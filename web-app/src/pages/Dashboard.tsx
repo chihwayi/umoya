@@ -15,6 +15,7 @@ import { DemoAccessRequestsPanel } from '../components/DemoAccessRequestsPanel';
 import { DatabaseDriftPanel } from '../components/DatabaseDriftPanel';
 import { RolloutDashboard } from '../components/RolloutDashboard';
 import { DataMigrationPanel } from '../components/DataMigrationPanel';
+import { BaaRegistryPage } from './BaaRegistryPage';
 import { useNotification } from '../contexts/NotificationContext';
 
 interface DashboardProps {
@@ -130,6 +131,16 @@ const NAV_ITEMS = [
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
           d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+      </svg>
+    ),
+    accent: '#00C896',
+  },
+  {
+    id: 'baa-registry',
+    label: 'BAA Registry',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M12 3l7 4v5c0 5-3 8-7 9-4-1-7-4-7-9V7l7-4z" />
       </svg>
     ),
     accent: '#00C896',
@@ -408,6 +419,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             {currentView === 'requests' && <DemoAccessRequestsPanel />}
             {currentView === 'db-drift' && <DatabaseDriftPanel />}
             {currentView === 'rollout' && <RolloutDashboard />}
+            {currentView === 'baa-registry' && <BaaRegistryPage />}
             {currentView === 'data-migration' && <DataMigrationPanel tenants={tenants} />}
 
             {currentView === 'tenants' && (

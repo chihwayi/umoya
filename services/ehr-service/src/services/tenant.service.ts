@@ -440,6 +440,46 @@ export class TenantService {
     }
   }
 
+  async getTenantSecurityPolicy(tenantIdentifier: string): Promise<{
+    id: string;
+    subdomain: string;
+    mfaRequired: boolean;
+    sessionTimeoutMinutes: number;
+    allowEmergencyBypass: boolean;
+  } | null> {
+    try {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantIdentifier);
+      const tenantFilter = isUUID ? 'id = $1' : 'subdomain = $1';
+      const rows = await this.masterDb.query(
+        `
+          SELECT
+            id,
+            subdomain,
+            COALESCE("mfaRequired", false) AS "mfaRequired",
+            COALESCE("sessionTimeoutMinutes", 60) AS "sessionTimeoutMinutes",
+            COALESCE("allowEmergencyBypass", false) AS "allowEmergencyBypass"
+          FROM tenants
+          WHERE ${tenantFilter}
+            AND status = 'active'
+          LIMIT 1
+        `,
+        [tenantIdentifier],
+      );
+      const row = rows?.[0];
+      if (!row) return null;
+      return {
+        id: row.id,
+        subdomain: row.subdomain,
+        mfaRequired: Boolean(row.mfaRequired),
+        sessionTimeoutMinutes: Number(row.sessionTimeoutMinutes || 60),
+        allowEmergencyBypass: Boolean(row.allowEmergencyBypass),
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to load tenant security policy for ${tenantIdentifier}: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  }
+
   async closeTenantConnection(tenantId: string): Promise<void> {
     const connection = this.tenantConnections.get(tenantId);
     if (connection) {

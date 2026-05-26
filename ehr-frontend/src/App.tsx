@@ -12,6 +12,8 @@ const TenantDirectory = lazy(() => import('./pages/TenantDirectory'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const EHRLogin = lazy(() => import('./pages/EHRLogin'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
+const MfaSetupPage = lazy(() => import('./pages/MfaSetupPage'));
+const StaffSessionsPage = lazy(() => import('./pages/StaffSessionsPage'));
 const EHRDashboard = lazy(() => import('./pages/EHRDashboard'));
 const UserManagement = lazy(() => import('./pages/UserManagement'));
 const ProfileSettings = lazy(() => import('./pages/ProfileSettings'));
@@ -41,6 +43,9 @@ const UhcSdgDashboard = lazy(() => import('./pages/UhcSdgDashboard'));
 const NcidDeduplicationPage = lazy(() => import('./pages/NcidDeduplicationPage'));
 const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then(m => ({ default: m.KnowledgeBasePage })));
 const AiOpsDashboard = lazy(() => import('./pages/AiOpsDashboard').then(m => ({ default: m.AiOpsDashboard })));
+const HealthEducationPage = lazy(() => import('./pages/HealthEducationPage'));
+const CourseEditorPage = lazy(() => import('./pages/CourseEditorPage'));
+const CourseProgressPage = lazy(() => import('./pages/CourseProgressPage'));
 const EDDashboard = lazy(() => import('./pages/EDDashboard'));
 const BedManagementDashboard = lazy(() => import('./pages/BedManagementDashboard'));
 const AdmittedPatientPage = lazy(() => import('./pages/AdmittedPatientPage'));
@@ -54,6 +59,7 @@ const CdiDashboard = lazy(() => import('./pages/CdiDashboard'));
 const CaseManagementDashboard = lazy(() => import('./pages/CaseManagementDashboard'));
 const SepsisDashboard = lazy(() => import('./pages/SepsisDashboard'));
 const HIPAAComplianceDashboard = lazy(() => import('./pages/HIPAAComplianceDashboard'));
+const CdpaCompliancePage = lazy(() => import('./pages/CdpaCompliancePage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const PopulationHealthDashboard = lazy(() => import('./pages/PopulationHealthDashboard'));
 const PracticeManagementDashboard = lazy(() => import('./pages/PracticeManagementDashboard'));
@@ -374,13 +380,23 @@ function App() {
               />
               <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
               <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
+              <Route path="/ehr/:tenantSlug/mfa" element={<MfaSetupPage />} />
               <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />
+              <Route path="/ehr/:tenantSlug/sessions" element={<StaffSessionsPage />} />
               <Route path="/ehr/:tenantSlug/users" element={<UserManagement />} />
             <Route
               path="/ehr/:tenantSlug/hipaa-compliance"
               element={
                 <RoleProtectedRoute allowedRoles={['admin']}>
                   <HIPAAComplianceDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/cdpa-compliance"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <CdpaCompliancePage />
                 </RoleProtectedRoute>
               }
             />
@@ -1110,6 +1126,30 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <TenantScopedMessagingDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/health-education"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <HealthEducationPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/health-education/:courseId"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <CourseEditorPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/health-education/:courseId/progress"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <CourseProgressPage />
                 </RoleProtectedRoute>
               }
             />

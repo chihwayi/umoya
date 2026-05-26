@@ -38,6 +38,7 @@ import FamilyAccessPage from './pages/FamilyAccessPage';
 import FitnessIntegrationPage from './pages/FitnessIntegrationPage';
 import NotificationsPage from './pages/NotificationsPage';
 import HealthEducationPage from './pages/HealthEducationPage';
+import CourseReaderPage from './pages/CourseReaderPage';
 import CaregiverLoginPage from './pages/CaregiverLoginPage';
 import CaregiverSetPasswordPage from './pages/CaregiverSetPasswordPage';
 import CaregiverDashboard from './pages/CaregiverDashboard';
@@ -111,10 +112,10 @@ function App() {
               }
             />
             <Route
-              path="/:tenantSlug/education/:articleId"
+              path="/:tenantSlug/education/:courseId"
               element={
                 <ProtectedRoute requireLinked>
-                  <HealthEducationPage />
+                  <CourseReaderPage />
                 </ProtectedRoute>
               }
             />

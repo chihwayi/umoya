@@ -372,6 +372,36 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getCdpaControls: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/cdpa/controls', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getCdpaSummary: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/cdpa/controls/summary', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateCdpaControl: async (token: string, tenantSlug: string, id: string, payload: any) => {
+    const response = await ehrAxios.patch(`/cdpa/controls/${id}`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   getNurseCopilotKpis: async (token: string, tenantSlug: string) => {
     const response = await ehrAxios.get('/metrics/nurse-copilot/kpis', {
       headers: {
@@ -490,6 +520,34 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  setupMfa: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/auth/mfa/setup', {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  enableMfa: async (token: string, tenantSlug: string, totpCode: string) => {
+    const response = await ehrAxios.post('/auth/mfa/enable', { totpCode }, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  verifyMfa: async (token: string, tenantSlug: string, totpCode: string) => {
+    const response = await ehrAxios.post('/auth/mfa/verify', { totpCode }, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  complete2FALogin: async (tenantSlug: string, tempToken: string, code: string) => {
+    const response = await ehrAxios.post('/auth/2fa/complete-login', { tempToken, code }, {
+      headers: { 'X-Tenant-ID': tenantSlug },
+    });
+    return { data: response.data };
+  },
+
   changePassword: async (currentPassword: string, newPassword: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.put('/auth/change-password', {
       oldPassword: currentPassword,
@@ -509,6 +567,26 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+
+  getStaffSessions: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/auth/sessions', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  revokeStaffSession: async (token: string, tenantSlug: string, jti: string, reason = 'user_revoked') => {
+    const response = await ehrAxios.post(`/auth/sessions/${jti}/revoke`, { reason }, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
     });
     return { data: response.data };
   },
@@ -12864,5 +12942,125 @@ export const liteApi = {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;
+  },
+};
+
+// ── Health Education (HE-S01) ──────────────────────────────────────────────────
+export const healthEducationApi = {
+  // Course management (staff authoring)
+  listCourses: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/health-education/courses', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getCourse: async (courseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/health-education/courses/${courseId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  createCourse: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/health-education/courses', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateCourse: async (courseId: string, payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/health-education/courses/${courseId}`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  publishCourse: async (courseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/courses/${courseId}/publish`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  unpublishCourse: async (courseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/courses/${courseId}/unpublish`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Modules
+  getModules: async (courseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/health-education/courses/${courseId}/modules`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  addModule: async (courseId: string, payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/courses/${courseId}/modules`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  reorderModule: async (moduleId: string, payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/modules/${moduleId}/reorder`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Lessons
+  addLesson: async (moduleId: string, payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/modules/${moduleId}/lessons`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  upsertTranslation: async (lessonId: string, payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/lessons/${lessonId}/translations`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Quiz
+  createQuiz: async (lessonId: string, payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/lessons/${lessonId}/quiz`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  addQuizQuestion: async (quizId: string, payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/quizzes/${quizId}/questions`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Assignment and progress
+  assignCourseToPatient: async (courseId: string, patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/courses/${courseId}/assign/${patientId}`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  assignCourseToAll: async (courseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/health-education/courses/${courseId}/assign-all`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getCourseProgress: async (courseId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/health-education/courses/${courseId}/progress`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
   },
 };

@@ -9,7 +9,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext) {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -19,7 +19,41 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true;
     }
 
-    return super.canActivate(context);
+    const activated = (await super.canActivate(context)) as boolean;
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+
+    if (activated && user?.jti && request.tenantDb) {
+      try {
+        const [session] = await request.tenantDb.query(
+          `
+            SELECT revoked, expires_at
+            FROM active_staff_sessions
+            WHERE jwt_jti = $1
+              AND user_id = $2
+            LIMIT 1
+          `,
+          [user.jti, user.id || user.sub],
+        );
+
+        if (session?.revoked) {
+          throw new UnauthorizedException('Session revoked');
+        }
+
+        if (session?.expires_at && new Date(session.expires_at).getTime() <= Date.now()) {
+          throw new UnauthorizedException('Session expired');
+        }
+
+        await request.tenantDb.query(
+          `UPDATE active_staff_sessions SET last_activity = NOW() WHERE jwt_jti = $1`,
+          [user.jti],
+        );
+      } catch (error) {
+        if (error instanceof UnauthorizedException) throw error;
+      }
+    }
+
+    return activated;
   }
 
   handleRequest(err, user, info, context) {

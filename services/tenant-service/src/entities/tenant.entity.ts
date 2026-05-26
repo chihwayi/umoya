@@ -99,6 +99,15 @@ export class Tenant {
   @Column({ default: 'clinic', length: 20 })
   deploymentMode: string;
 
+  @Column({ default: false })
+  mfaRequired: boolean;
+
+  @Column({ type: 'int', default: 60 })
+  sessionTimeoutMinutes: number;
+
+  @Column({ default: false })
+  allowEmergencyBypass: boolean;
+
   @Column({ nullable: true })
   logoUrl: string;
 
