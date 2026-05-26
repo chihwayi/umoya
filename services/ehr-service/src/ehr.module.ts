@@ -286,6 +286,9 @@ import { HivQualityMetricsService } from './services/hiv-quality-metrics.service
 import { HivVisitTemplatesService } from './services/hiv-visit-templates.service';
 import { HivTptTrackerService } from './services/hiv-tpt-tracker.service';
 import { HivPediatricDosingService } from './services/hiv-pediatric-dosing.service';
+import { OiEarlyWarningService } from './services/oi-early-warning.service';
+import { VacsIndexService } from './services/vacs-index.service';
+import { HivFastTrackService } from './services/hiv-fast-track.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
 import { StorageService } from './services/storage.service';
@@ -709,6 +712,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HivVisitTemplatesService,
     HivTptTrackerService,
     HivPediatricDosingService,
+    OiEarlyWarningService,
+    VacsIndexService,
+    HivFastTrackService,
     HivMonthlyReturnService,
     ImagingService,
     StorageService,

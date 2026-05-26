@@ -22,6 +22,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showVisitModal, setShowVisitModal] = useState(false);
   const [eacStatusMap, setEacStatusMap] = useState<{ [key: string]: any }>({});
+  const [stabilityMap, setStabilityMap] = useState<{ [key: string]: any }>({});
   const [selectedEnrollments, setSelectedEnrollments] = useState<Set<string>>(new Set());
   const [bulkActionMode, setBulkActionMode] = useState(false);
 
@@ -41,6 +42,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
 
       // Check EAC eligibility for each enrollment
       const eacMap: { [key: string]: any } = {};
+      const stableMap: { [key: string]: any } = {};
       for (const enrollment of enrollmentsList) {
         try {
           const eacResponse = await ehrApi.checkEacEligibility(enrollment.id, token, tenantSlug);
@@ -49,8 +51,18 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
           console.error(`Failed to check EAC for ${enrollment.id}:`, error);
           eacMap[enrollment.id] = {};
         }
+        try {
+          const patientId = enrollment.patient_id || enrollment.patientId;
+          if (patientId) {
+            const stableResponse = await ehrApi.getHivStabilityStatus(patientId, token, tenantSlug);
+            stableMap[enrollment.id] = stableResponse.data || {};
+          }
+        } catch (error) {
+          stableMap[enrollment.id] = {};
+        }
       }
       setEacStatusMap(eacMap);
+      setStabilityMap(stableMap);
     } catch (error) {
       console.error('Failed to load enrollments:', error);
       showError('Error', 'Failed to load HIV patients');
@@ -200,6 +212,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
               const eacStatus = eacStatusMap[enrollment.id] || {};
               const needsEac = eacStatus.needsEac || false;
               const activeEac = eacStatus.activeEac || false;
+              const stabilityStatus = stabilityMap[enrollment.id] || {};
               const isSelected = selectedEnrollments.has(enrollment.id);
               return (
               <div 
@@ -268,6 +281,11 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                     {activeEac && !needsEac && (
                       <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded-full">
                         ACTIVE EAC
+                      </span>
+                    )}
+                    {stabilityStatus.is_active && (
+                      <span className="px-2 py-0.5 bg-emerald-600 text-white text-xs font-bold rounded-full">
+                        Fast-Track Stable
                       </span>
                     )}
                   </div>

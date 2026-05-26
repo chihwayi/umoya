@@ -159,6 +159,7 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
   });
   const [eacPrograms, setEacPrograms] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [geriatricFlags, setGeriatricFlags] = useState<any[]>([]);
   const [expandedEacProgram, setExpandedEacProgram] = useState<string | null>(null);
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
@@ -311,6 +312,20 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
       }
       
       setEnrollments(enrollmentsList);
+
+      const geriatricFlagResults = await Promise.all(
+        enrollmentsList.slice(0, 25).map(async (enrollment: any) => {
+          const patientId = enrollment.patient_id || enrollment.patientId;
+          if (!patientId) return null;
+          try {
+            const flagResponse = await ehrApi.getHivGeriatricFlag(patientId, token, tenantSlug!);
+            return flagResponse.data ? { ...flagResponse.data, patientName: `${enrollment.first_name} ${enrollment.last_name}` } : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      setGeriatricFlags(geriatricFlagResults.filter(Boolean));
 
       // Load ARV change requests - approved changes awaiting visit recording
       const changeRequestsRes = await ehrApi.getArvChangeRequests('approved', token, tenantSlug!);
@@ -744,6 +759,28 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
           </div>
         </div>
       </div>
+      )}
+
+      {/* Guideline Search Panel */}
+      {geriatricFlags.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 pt-4">
+          <div className="bg-white border border-amber-200 rounded-xl shadow-sm p-4">
+            <div className="flex items-center gap-2 text-amber-800 font-semibold mb-2">
+              <Heart className="w-5 h-5" />
+              HIV-Geriatric Integration Flags
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {geriatricFlags.slice(0, 4).map((flag) => (
+                <div key={flag.id} className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-sm">
+                  <div className="font-semibold text-slate-800">{flag.patientName}</div>
+                  <div className="text-slate-600">
+                    VACS {flag.vacs_index_score ?? 'n/a'} - {flag.frailty_status ?? 'review'} - next review {formatDateToDDMMYYYY(flag.next_review)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Guideline Search Panel */}

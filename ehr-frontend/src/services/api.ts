@@ -3700,6 +3700,42 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+  getHivOiAlerts: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/patients/${patientId}/oi-alerts`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+  acknowledgeHivOiAlert: async (alertId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/hiv/oi-alerts/${alertId}/acknowledge`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+  getHivStabilityStatus: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/patients/${patientId}/stability`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+  getHivGeriatricFlag: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/patients/${patientId}/geriatric-flag`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
   getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {
       headers: { 

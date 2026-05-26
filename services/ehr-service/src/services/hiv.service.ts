@@ -10,6 +10,8 @@ import { AppointmentService } from './appointment.service';
 import { TenantService } from './tenant.service';
 import { TerminologyService } from './terminology.service';
 import { CdssService } from './cdss.service';
+import { OiEarlyWarningService } from './oi-early-warning.service';
+import { VacsIndexService } from './vacs-index.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -34,6 +36,8 @@ export class HivService {
     private tenantService: TenantService,
     private readonly terminologyService: TerminologyService,
     private readonly cdssService: CdssService,
+    private readonly oiEarlyWarningService: OiEarlyWarningService,
+    private readonly vacsIndexService: VacsIndexService,
   ) {}
 
   private extractConceptId(candidate: any): string | null {
@@ -1753,6 +1757,70 @@ export class HivService {
         .catch(() => []);
       const patientId: string | undefined = patientRows[0]?.patient_id;
       if (patientId) {
+        const oiInput = {
+          cd4Count: cd4Count ?? null,
+          symptoms: [
+            opportunisticInfections,
+            visitNotes,
+            ...(Array.isArray(adverseEventsStatus) ? adverseEventsStatus : []),
+          ]
+            .filter(Boolean)
+            .flatMap((value: any) => String(value).split(',').map((part) => part.trim()).filter(Boolean)),
+          tbScreenPositive: Boolean(tbScreening || tbDiagnosed),
+          currentRegimen: arvRegimenName ?? arvRegimenCode ?? '',
+          vl: normalizedViralLoad ?? null,
+        };
+        const oiAlerts = this.oiEarlyWarningService.evaluateOiRisks(oiInput);
+        if (oiAlerts.length > 0) {
+          await this.oiEarlyWarningService.saveAlerts(patientId, oiAlerts, tenantDb);
+        }
+
+        const patientInfoRows = await tenantDb
+          .query(
+            `SELECT date_of_birth
+             FROM patients
+             WHERE id = $1
+             LIMIT 1`,
+            [patientId],
+          )
+          .catch(() => []);
+        const patient = patientInfoRows[0];
+        if (patient?.date_of_birth) {
+          const birthDate = new Date(patient.date_of_birth);
+          const age = Math.floor((Date.now() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+          if (age >= 50) {
+            const vacsResult = this.vacsIndexService.calculateVacsScore({
+              age,
+              cd4Count: Number(cd4Count ?? 350),
+              viralLoad: Number(normalizedViralLoad ?? 0),
+              hemoglobinGdL: Number(body?.hemoglobinGdL ?? body?.hemoglobin ?? 12),
+              creatinine: Number(creatinineResult ?? 1.0),
+              alanineAminotransferase: Number(altResult ?? 20),
+              hepatitisCPositive: Boolean(body?.hepatitisCPositive ?? body?.hepatitisC),
+              fbsBmi: Number(calculatedBmi ?? 22),
+              drugProblemEverDiagnosed: false,
+            });
+            await tenantDb.query(
+              `INSERT INTO hiv_geriatric_flags
+                 (patient_id, age_at_flag, vacs_index_score, vacs_10yr_mortality, frailty_status, next_review)
+               VALUES ($1, $2, $3, $4, $5, CURRENT_DATE + INTERVAL '6 months')
+               ON CONFLICT (patient_id) DO UPDATE SET
+                 vacs_index_score = EXCLUDED.vacs_index_score,
+                 vacs_10yr_mortality = EXCLUDED.vacs_10yr_mortality,
+                 frailty_status = EXCLUDED.frailty_status,
+                 last_assessed = now(),
+                 next_review = EXCLUDED.next_review`,
+              [
+                patientId,
+                age,
+                vacsResult.score,
+                vacsResult.tenYearMortality,
+                this.vacsIndexService.classifyFrailty(vacsResult.score),
+              ],
+            );
+          }
+        }
+
         const activePrescRows = await tenantDb
           .query(
             `SELECT medication_name FROM prescriptions WHERE patient_id = $1 AND status IN ('active', 'pending') LIMIT 20`,

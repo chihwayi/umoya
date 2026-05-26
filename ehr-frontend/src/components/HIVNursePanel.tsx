@@ -36,6 +36,7 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
   const [form, setForm] = useState(createInitialFormState);
   const [submitting, setSubmitting] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(false);
+  const [oiAlerts, setOiAlerts] = useState<any[]>([]);
   const cdssInputs = useMemo(() => ({
     diagnoses: ['HIV'],
     medications: [form.regimen],
@@ -83,6 +84,26 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
       cancelled = true;
     };
   }, [appointmentId, patientId, tenantSlug, token]);
+
+  useEffect(() => {
+    if (!patientId || !tenantSlug || !token) return;
+    let cancelled = false;
+    ehrApi.getHivOiAlerts(patientId, token, tenantSlug)
+      .then((response) => {
+        if (!cancelled) setOiAlerts(Array.isArray(response.data) ? response.data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setOiAlerts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patientId, tenantSlug, token]);
+
+  const acknowledgeOiAlert = async (alertId: string) => {
+    await ehrApi.acknowledgeHivOiAlert(alertId, token, tenantSlug);
+    setOiAlerts((alerts) => alerts.filter((alert) => alert.id !== alertId));
+  };
 
   const save = async () => {
     if (!tenantSlug || !token) {
@@ -248,6 +269,36 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
 
         {/* CDSS Insights & Guidelines */}
         <div className="mt-4 space-y-3">
+          {oiAlerts.length > 0 && (
+            <div className="p-3 rounded-lg border border-red-300 bg-red-50 text-red-900 text-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="font-semibold">
+                  {oiAlerts.length} Opportunistic Infection Risks Detected
+                </span>
+              </div>
+              <div className="space-y-2">
+                {oiAlerts.map((alert) => (
+                  <div key={alert.id} className="rounded-md bg-white border border-red-100 p-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-xs uppercase tracking-wide">{alert.alert_type}</div>
+                        <div className="text-xs">{alert.recommended_action}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => acknowledgeOiAlert(alert.id)}
+                        className="px-2 py-1 rounded bg-red-600 text-white text-xs hover:bg-red-700"
+                      >
+                        Acknowledge
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Search Section */}
           <GuidelineSearchPanel
             searchFn={(q) => cdssApi.searchGuidelines(q, token, tenantSlug)}
