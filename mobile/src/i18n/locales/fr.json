@@ -97,7 +97,17 @@
     "subtitle": "En savoir plus sur votre santé",
     "all": "Tout",
     "minRead": "min de lecture",
-    "by": "Par"
+    "by": "Par",
+    "enroll": "Commencer le cours",
+    "quiz": "Vérification des connaissances",
+    "quizPassed": "Réussi",
+    "markComplete": "Marquer comme terminé",
+    "progress": "Progression",
+    "openPdf": "Ouvrir le PDF",
+    "openVideo": "Regarder la vidéo",
+    "back": "Retour",
+    "myCourses": "Mes cours",
+    "explore": "Explorer"
   },
   "family": {
     "title": "Accès Famille",

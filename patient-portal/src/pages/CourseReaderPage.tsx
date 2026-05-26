@@ -5,8 +5,8 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { patientPortalApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
-import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
+
+const LOCALE_STORAGE_KEY = 'patient_education_locale';
 
 interface Module {
   id: string;
@@ -53,8 +53,8 @@ const CourseReaderPage: React.FC = () => {
   const { token } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const { courseId } = useParams<{ courseId: string }>();
-  const { t, i18n } = useTranslation();
   const { showSuccess, showError } = useNotification();
+  const lang = localStorage.getItem(LOCALE_STORAGE_KEY) || 'en';
 
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,13 +71,13 @@ const CourseReaderPage: React.FC = () => {
       loadCourse();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, tenantSlug, token, i18n.language]);
+  }, [courseId, tenantSlug, token]);
 
   const loadCourse = async () => {
     if (!courseId || !tenantSlug || !token) return;
     setLoading(true);
     try {
-      const res = await patientPortalApi.getEducationCourse(courseId, token, tenantSlug, i18n.language);
+      const res = await patientPortalApi.getEducationCourse(courseId, token, tenantSlug, lang);
       setCourse(res);
       // Expand first module by default
       if (res?.modules?.[0]) {
@@ -180,7 +180,7 @@ const CourseReaderPage: React.FC = () => {
             onClick={() => navigate(`/${tenantSlug}/education`)}
             className="text-blue-600 hover:text-blue-700 text-sm font-medium mb-2 flex items-center gap-1"
           >
-            <ChevronLeft size={16} /> {t('education.back', 'Back to Education')}
+            <ChevronLeft size={16} /> Back to Education
           </button>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
@@ -190,7 +190,7 @@ const CourseReaderPage: React.FC = () => {
             {course.completed_at && (
               <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg border border-green-200">
                 <CheckCircle size={20} className="text-green-600" />
-                <span className="text-sm font-semibold text-green-700">{t('education.complete', 'Complete')}</span>
+                <span className="text-sm font-semibold text-green-700">Complete</span>
               </div>
             )}
           </div>
@@ -219,8 +219,8 @@ const CourseReaderPage: React.FC = () => {
 
                 <div className="p-6">
                   {selectedLesson.content_type === 'text' && (
-                    <div className="prose prose-sm max-w-none text-slate-700">
-                      <ReactMarkdown>{selectedLesson.translation?.content_body || ''}</ReactMarkdown>
+                    <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                      {selectedLesson.translation?.content_body || ''}
                     </div>
                   )}
                   {selectedLesson.content_type === 'video_url' && (
@@ -247,7 +247,7 @@ const CourseReaderPage: React.FC = () => {
                         rel="noopener noreferrer"
                         className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                       >
-                        {t('education.openPdf', 'Open PDF document')}
+                        Open PDF
                       </a>
                     </div>
                   )}
@@ -255,15 +255,15 @@ const CourseReaderPage: React.FC = () => {
                   {/* Quiz Section */}
                   {selectedLesson.quiz_id && !selectedLesson.quiz_passed && (
                     <div className="mt-8 p-6 bg-amber-50 rounded-lg border border-amber-200">
-                      <h3 className="font-semibold text-slate-900 mb-2">{t('education.quiz', 'Knowledge Check')}</h3>
+                      <h3 className="font-semibold text-slate-900 mb-2">Knowledge Check</h3>
                       <p className="text-sm text-slate-600 mb-4">
-                        {t('education.passThreshold', 'Pass mark: {{pct}}%', { pct: 70 })}
+                        {'Pass mark: 70%'}
                       </p>
                       <button
                         onClick={() => setQuizModalOpen(true)}
                         className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium text-sm"
                       >
-                        {t('education.quiz', 'Take Quiz')}
+                        Take Quiz
                       </button>
                     </div>
                   )}
@@ -272,9 +272,9 @@ const CourseReaderPage: React.FC = () => {
                     <div className="mt-8 p-6 bg-green-50 rounded-lg border border-green-200">
                       <div className="flex items-center gap-2 mb-2">
                         <CheckCircle size={20} className="text-green-600" />
-                        <h3 className="font-semibold text-green-700">{t('education.quizPassed', 'Passed')}</h3>
+                        <h3 className="font-semibold text-green-700">Passed</h3>
                       </div>
-                      <p className="text-sm text-green-600">{t('education.complete', 'You have passed this quiz')}</p>
+                      <p className="text-sm text-green-600">You have passed this quiz</p>
                     </div>
                   )}
 
@@ -287,13 +287,13 @@ const CourseReaderPage: React.FC = () => {
                         className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium flex items-center justify-center gap-2"
                       >
                         {completingLesson && <Loader size={16} className="animate-spin" />}
-                        {t('education.markComplete', 'Mark as Complete')}
+                        Mark as Complete
                       </button>
                     )}
                     {selectedLesson.completed_at && (
                       <div className="flex-1 px-4 py-3 bg-green-100 text-green-700 rounded-lg font-medium flex items-center justify-center gap-2">
                         <CheckCircle size={16} />
-                        {t('education.complete', 'Complete')}
+                        Complete
                       </div>
                     )}
                   </div>
@@ -345,7 +345,7 @@ const CourseReaderPage: React.FC = () => {
           {/* Sidebar - Course Progress */}
           <div>
             <div className="bg-white rounded-lg border border-slate-200 p-6 sticky top-24">
-              <h3 className="font-bold text-slate-900 mb-4">{t('education.progress', 'Progress')}</h3>
+              <h3 className="font-bold text-slate-900 mb-4">Progress</h3>
               {/* Calculate progress */}
               {course.modules && (
                 <div className="space-y-4">
@@ -379,9 +379,9 @@ const CourseReaderPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200 sticky top-0 bg-white">
-              <h2 className="text-xl font-bold text-slate-900">{t('education.quiz', 'Knowledge Check')}</h2>
+              <h2 className="text-xl font-bold text-slate-900">Knowledge Check</h2>
               <p className="text-sm text-slate-600 mt-1">
-                {t('education.passThreshold', 'Pass mark: {{pct}}%', { pct: quiz.pass_threshold })}
+                {`Pass mark: ${quiz.pass_threshold}%`}
               </p>
             </div>
 
@@ -416,7 +416,7 @@ const CourseReaderPage: React.FC = () => {
                 disabled={quizSubmitting}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
               >
-                {quizSubmitting ? 'Submitting...' : t('education.submitQuiz', 'Submit Answers')}
+                {quizSubmitting ? 'Submitting...' : 'Submit Answers'}
               </button>
               <button
                 onClick={() => {

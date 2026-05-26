@@ -97,7 +97,17 @@
     "subtitle": "Funda ngezempilo yakho",
     "all": "Konke",
     "minRead": "amaminithi okufunda",
-    "by": "Ngu"
+    "by": "Ngu",
+    "enroll": "Qala Isifundo",
+    "quiz": "Ukuhlolwa Kolwazi",
+    "quizPassed": "Udlulile",
+    "markComplete": "Maka Njengokuqediwe",
+    "progress": "Inqubekela Phambili",
+    "openPdf": "Vula i-PDF",
+    "openVideo": "Buka Ividiyo",
+    "back": "Emuva",
+    "myCourses": "Izifundo Zami",
+    "explore": "Hlola"
   },
   "family": {
     "title": "Ukufinyelela Komndeni",

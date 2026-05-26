@@ -35,6 +35,7 @@ import { PatientAiCompanionScreen }      from "../components/patient/PatientAiCo
 import { PatientQuestionnairesScreen } from "../components/patient/PatientQuestionnairesScreen";
 import { PatientQuestionnaireDetailScreen } from "../components/patient/PatientQuestionnaireDetailScreen";
 import { PatientEducationScreen } from "../components/patient/PatientEducationScreen";
+import { EducationCourseScreen } from "../components/patient/EducationCourseScreen";
 import { PatientFamilyAccessScreen } from "../components/patient/PatientFamilyAccessScreen";
 
 const Stack  = createNativeStackNavigator();
@@ -118,6 +119,7 @@ const PatientStackNavigator = () => (
     <PatientStack.Screen name="PHQuestionnaires"      component={PatientQuestionnairesScreen}       />
     <PatientStack.Screen name="PHQuestionnaireDetail" component={PatientQuestionnaireDetailScreen as any}  />
     <PatientStack.Screen name="PHEducation" component={PatientEducationScreen} />
+    <PatientStack.Screen name="PHEducationCourse" component={EducationCourseScreen} options={{ headerShown: false }} />
     <PatientStack.Screen name="PHFamilyAccess" component={PatientFamilyAccessScreen} />
   </PatientStack.Navigator>
 );

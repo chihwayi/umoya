@@ -97,7 +97,17 @@
     "subtitle": "Dzidza nezve utano hwako",
     "all": "Yese",
     "minRead": "min yekuverenga",
-    "by": "Na"
+    "by": "Na",
+    "enroll": "Tanga Kosi",
+    "quiz": "Bvunzo Yezivo",
+    "quizPassed": "Wapfuura",
+    "markComplete": "Maka Kupera",
+    "progress": "Budiriro",
+    "openPdf": "Vhura PDF",
+    "openVideo": "Tarisa Vhidhiyo",
+    "back": "Dzokera",
+    "myCourses": "Makosi Angu",
+    "explore": "Tsvaga"
   },
   "family": {
     "title": "Kusvikirwa kweChikamu",

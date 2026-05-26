@@ -9,7 +9,7 @@ import {
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2, Scan, Droplet,
   CheckCircle, Camera, FlaskConical, HeartPulse, Package, Video,
-  AlertCircle, Bed, Baby, DollarSign, Fingerprint
+  AlertCircle, Bed, Baby, DollarSign, Fingerprint, GraduationCap
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, tenantApi, cdssApi } from '../services/api';
@@ -554,7 +554,10 @@ const EHRDashboard: React.FC = () => {
   const billingTone = getBillingToneClasses(billingSummary);
   const tenantDisplayName = formatTenantDisplayName(tenantSlug, tenantInfo?.clinicName);
   const tenantInitials = getBrandInitials(tenantDisplayName);
-  const visibleRoleActions = getRoleActions(user.role).filter((action: any) =>
+  const educationTile = user.is_health_educator
+    ? [{ icon: GraduationCap, label: 'Health Education', desc: 'Manage patient courses, modules & quizzes', color: 'from-teal-500 to-emerald-500', route: 'health-education' }]
+    : [];
+  const visibleRoleActions = [...getRoleActions(user.role), ...educationTile].filter((action: any) =>
     isTenantRouteAvailable(tenantInfo, action.route),
   );
 
