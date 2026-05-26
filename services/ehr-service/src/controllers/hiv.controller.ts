@@ -5,6 +5,8 @@ import { HivService } from '../services/hiv.service';
 import { HivMonthlyReturnService } from '../services/hiv-monthly-return.service';
 import { OiEarlyWarningService } from '../services/oi-early-warning.service';
 import { HivFastTrackService } from '../services/hiv-fast-track.service';
+import { HivResistanceService } from '../services/hiv-resistance.service';
+import { HivMmdService } from '../services/hiv-mmd.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @ApiTags('HIV/AIDS/TB')
@@ -17,6 +19,8 @@ export class HivController {
     private readonly hivMonthlyReturnService: HivMonthlyReturnService,
     private readonly oiEarlyWarningService: OiEarlyWarningService,
     private readonly hivFastTrackService: HivFastTrackService,
+    private readonly hivResistanceService: HivResistanceService,
+    private readonly hivMmdService: HivMmdService,
   ) {}
 
   @Post('tests')
@@ -528,5 +532,83 @@ export class HivController {
   @ApiResponse({ status: 200, description: 'Comparison report retrieved' })
   async getComparisonReport(@Query() query: any, @Request() req: RequestWithTenant) {
     return this.hivService.getComparisonReport(query, req.tenantDb);
+  }
+
+  // NC-S04 — Drug Resistance + Regimen Intelligence
+  @Post('patients/:id/assess-resistance')
+  @ApiOperation({ summary: 'Assess HIV drug resistance risk' })
+  async assessResistance(
+    @Param('id') id: string,
+    @Body() body: { currentRegimen: string; regimenDurationMonths: number; recentVl: number; previousVl?: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    const assessment = this.hivResistanceService.assessResistance({
+      currentRegimen: body.currentRegimen,
+      regimenDurationMonths: body.regimenDurationMonths,
+      recentVl: body.recentVl,
+      previousVl: body.previousVl ?? null,
+    });
+    await (req as any).tenantDb.query(
+      `INSERT INTO hiv_resistance_assessments
+         (patient_id, current_regimen, regimen_duration_months, recent_vl, previous_vl,
+          vl_trend, nnrti_risk, nrti_risk, pi_risk, insti_risk, overall_resistance_risk,
+          resistance_test_recommended, notes, assessed_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [
+        id, body.currentRegimen, body.regimenDurationMonths, body.recentVl,
+        body.previousVl ?? null,
+        assessment.overallRisk === 'low' ? 'suppressed' : 'failing',
+        assessment.nnrtiRisk, assessment.nrtiRisk, assessment.piRisk, assessment.instiRisk,
+        assessment.overallRisk, assessment.resistanceTestRecommended,
+        assessment.notes.join('; '), (req as any).user.sub,
+      ],
+    );
+    return assessment;
+  }
+
+  @Post('patients/:id/recommend-regimen')
+  @ApiOperation({ summary: 'Recommend regimen switch based on resistance assessment' })
+  async recommendRegimen(
+    @Param('id') _id: string,
+    @Body() body: { currentRegimen: string; isPregnant?: boolean; creatinine?: number; isThirdLine?: boolean; resistanceAssessment: any },
+  ) {
+    return this.hivResistanceService.recommendRegimenSwitch({
+      currentRegimen: body.currentRegimen,
+      resistanceAssessment: body.resistanceAssessment,
+      isPregnant: body.isPregnant ?? false,
+      creatinine: body.creatinine ?? 1.0,
+      isThirdLine: body.isThirdLine ?? false,
+    });
+  }
+
+  // NC-S04 — MMD Tracking
+  @Get('mmd/overdue')
+  @ApiOperation({ summary: 'Get overdue MMD patients' })
+  async getOverdueMmd(@Request() req: RequestWithTenant) {
+    return this.hivMmdService.getOverdueMmdPatients((req as any).tenantDb);
+  }
+
+  @Post('patients/:id/mmd/schedule')
+  @ApiOperation({ summary: 'Record MMD dispensing and schedule next pickup' })
+  async scheduleMmd(
+    @Param('id') id: string,
+    @Body() body: { mmdMonths: 3 | 6; drugs: string[]; daysDispensed: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    await this.hivMmdService.scheduleMmd({
+      patientId: id,
+      mmdMonths: body.mmdMonths,
+      drugs: body.drugs,
+      daysDispensed: body.daysDispensed,
+      dispensedBy: (req as any).user.sub,
+      db: (req as any).tenantDb,
+    });
+    return { scheduled: true };
+  }
+
+  @Get('patients/:id/mmd/history')
+  @ApiOperation({ summary: 'Get patient MMD dispensing history' })
+  async getMmdHistory(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.hivMmdService.getPatientMmdHistory(id, (req as any).tenantDb);
   }
 }

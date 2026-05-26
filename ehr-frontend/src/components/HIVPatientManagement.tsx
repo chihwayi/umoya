@@ -25,10 +25,27 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
   const [stabilityMap, setStabilityMap] = useState<{ [key: string]: any }>({});
   const [selectedEnrollments, setSelectedEnrollments] = useState<Set<string>>(new Set());
   const [bulkActionMode, setBulkActionMode] = useState(false);
+  const [overdueMmd, setOverdueMmd] = useState<any[]>([]);
+  const [showMmdDispenseModal, setShowMmdDispenseModal] = useState(false);
+  const [mmdDispenseTarget, setMmdDispenseTarget] = useState<any>(null);
+  const [mmdDispenseForm, setMmdDispenseForm] = useState({ mmdMonths: 3 as 3 | 6, drugs: [] as string[], daysDispensed: 90 });
+  const [mmdDispenseLoading, setMmdDispenseLoading] = useState(false);
 
   useEffect(() => {
     loadEnrollments();
-  }, [filterStatus]);
+    loadOverdueMmd(); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadOverdueMmd = async () => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token) return;
+    try {
+      const res = await ehrApi.getOverdueMmd(token, tenantSlug);
+      setOverdueMmd(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      // non-critical
+    }
+  };
 
   const loadEnrollments = async () => {
     try {
@@ -131,6 +148,35 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
           </div>
         </div>
       </div>
+
+      {/* MMD Overdue Alert */}
+      {overdueMmd.length > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4">
+          <div className="flex items-center gap-2 text-amber-800 font-semibold mb-2">
+            <AlertTriangle className="w-5 h-5" />
+            {overdueMmd.length} Patient{overdueMmd.length !== 1 ? 's' : ''} with Overdue MMD Pickup
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {overdueMmd.slice(0, 4).map((patient: any) => (
+              <div key={patient.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-200">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">{patient.first_name} {patient.last_name}</div>
+                  <div className="text-xs text-slate-500">Due: {patient.next_due}</div>
+                </div>
+                <button
+                  onClick={() => {
+                    setMmdDispenseTarget(patient);
+                    setShowMmdDispenseModal(true);
+                  }}
+                  className="px-3 py-1 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700"
+                >
+                  Record MMD
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
@@ -412,6 +458,79 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
           }}
           tenantSlug={tenantSlug}
         />
+      )}
+
+      {/* MMD Dispense Modal */}
+      {showMmdDispenseModal && mmdDispenseTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Record MMD Dispensing</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Patient: <span className="font-semibold">{mmdDispenseTarget.first_name} {mmdDispenseTarget.last_name}</span>
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">MMD Months</label>
+                <select
+                  value={mmdDispenseForm.mmdMonths}
+                  onChange={(e) => setMmdDispenseForm(f => ({ ...f, mmdMonths: Number(e.target.value) as 3 | 6 }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                >
+                  <option value={3}>3 months</option>
+                  <option value={6}>6 months</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Days Dispensed</label>
+                <input
+                  type="number"
+                  value={mmdDispenseForm.daysDispensed}
+                  onChange={(e) => setMmdDispenseForm(f => ({ ...f, daysDispensed: Number(e.target.value) }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Drugs Dispensed (comma-separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. TDF, 3TC, DTG"
+                  onChange={(e) => setMmdDispenseForm(f => ({ ...f, drugs: e.target.value.split(',').map(d => d.trim()).filter(Boolean) }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => { setShowMmdDispenseModal(false); setMmdDispenseTarget(null); }}
+                className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const token = localStorage.getItem('ehr_token');
+                  if (!token) return;
+                  setMmdDispenseLoading(true);
+                  try {
+                    await ehrApi.scheduleMmd(mmdDispenseTarget.patient_id, mmdDispenseForm, token, tenantSlug);
+                    showSuccess('Success', 'MMD dispensing recorded');
+                    setShowMmdDispenseModal(false);
+                    setMmdDispenseTarget(null);
+                    loadOverdueMmd();
+                  } catch {
+                    showError('Error', 'Failed to record MMD');
+                  } finally {
+                    setMmdDispenseLoading(false);
+                  }
+                }}
+                disabled={mmdDispenseLoading}
+                className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
+              >
+                {mmdDispenseLoading ? 'Saving...' : 'Record Dispensing'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Clinical Visit Modal */}

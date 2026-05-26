@@ -289,6 +289,8 @@ import { HivPediatricDosingService } from './services/hiv-pediatric-dosing.servi
 import { OiEarlyWarningService } from './services/oi-early-warning.service';
 import { VacsIndexService } from './services/vacs-index.service';
 import { HivFastTrackService } from './services/hiv-fast-track.service';
+import { HivResistanceService } from './services/hiv-resistance.service';
+import { HivMmdService } from './services/hiv-mmd.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
 import { StorageService } from './services/storage.service';
@@ -715,6 +717,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OiEarlyWarningService,
     VacsIndexService,
     HivFastTrackService,
+    HivResistanceService,
+    HivMmdService,
     HivMonthlyReturnService,
     ImagingService,
     StorageService,

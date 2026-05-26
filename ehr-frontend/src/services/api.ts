@@ -3736,6 +3736,36 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+  assessResistance: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/hiv/patients/${patientId}/assess-resistance`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  recommendRegimen: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/hiv/patients/${patientId}/recommend-regimen`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getOverdueMmd: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/mmd/overdue', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  scheduleMmd: async (patientId: string, body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/hiv/patients/${patientId}/mmd/schedule`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getMmdHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/patients/${patientId}/mmd/history`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
   getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {
       headers: { 
