@@ -186,7 +186,12 @@ import { MultilingualEducationController } from './controllers/multilingual-educ
 import { HealthEducationController } from './controllers/health-education.controller';
 import { PatientPortalHealthEducationController } from './controllers/patient-portal-health-education.controller';
 import { OfflineSyncController } from './controllers/offline-sync.controller';
+import { ClinicalSpecialtiesController } from './controllers/clinical-specialties.controller';
 import { ConflictResolverService } from './services/conflict-resolver.service';
+import { DentalService } from './services/dental.service';
+import { AncService } from './services/anc.service';
+import { GrowthChartService } from './services/growth-chart.service';
+import { PaediatricDosingService } from './services/paediatric-dosing.service';
 import { IotController } from './controllers/iot.controller';
 import { RadiologyAiController } from './controllers/radiology-ai.controller';
 import { AlertDeliveryController } from './controllers/alert-delivery.controller';
@@ -683,6 +688,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HealthEducationController,
     PatientPortalHealthEducationController,
     OfflineSyncController,
+    ClinicalSpecialtiesController,
     IotController,
     RadiologyAiController,
     AlertDeliveryController,
@@ -908,6 +914,11 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PatientHealthEducationService,
     OfflineSyncService,
     ConflictResolverService,
+    DentalService,
+    AncService,
+    PmtctService,
+    GrowthChartService,
+    PaediatricDosingService,
     IotService,
     RadiologyAiService,
     AlertDeliveryService,
