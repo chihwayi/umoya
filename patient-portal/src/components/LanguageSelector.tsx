@@ -5,6 +5,11 @@ const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'sn', label: 'ChiShona' },
   { code: 'nd', label: 'IsiNdebele' },
+  { code: 'pt', label: 'Português' },
+  { code: 'fr', label: 'Français' },
+  { code: 'sw', label: 'Kiswahili' },
+  { code: 'zu', label: 'isiZulu' },
+  { code: 'af', label: 'Afrikaans' },
 ];
 
 interface Props {

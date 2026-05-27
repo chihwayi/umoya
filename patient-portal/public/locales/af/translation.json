@@ -1,0 +1,147 @@
+{
+  "nav": {
+    "dashboard": "Kontroleskerm",
+    "appointments": "Afsprake",
+    "results": "My Resultate",
+    "medications": "Medikasie",
+    "messages": "Boodskappe",
+    "profile": "My Profiel",
+    "logout": "Afmeld",
+    "supportGroups": "Ondersteuningsgroepe",
+    "commPreferences": "Kommunikasie",
+    "ancEid": "ANC / EID",
+    "growth": "Groeigrafiek",
+    "dental": "Tandheelkundig"
+  },
+  "dashboard": {
+    "welcome": "Welkom, {{name}}",
+    "nextAppointment": "Volgende Afspraak",
+    "noAppointments": "Geen aanstaande afsprake nie",
+    "recentResults": "Onlangse Resultate",
+    "noResults": "Geen onlangse resultate nie",
+    "medicationsDue": "Medikasie Verskuldig"
+  },
+  "appointments": {
+    "upcoming": "Aanstaande Afsprake",
+    "past": "Vorige Afsprake",
+    "confirm": "Bevestig Bywoning",
+    "cancel": "Versoek Herskedulering",
+    "date": "Datum",
+    "time": "Tyd",
+    "provider": "Verskaffer",
+    "status": "Status",
+    "confirmed": "Bevestig",
+    "pending": "Hangende"
+  },
+  "results": {
+    "testType": "Toets",
+    "value": "Resultaat",
+    "date": "Datum",
+    "noResults": "Geen resultate beskikbaar nie",
+    "vl": "Virale Las",
+    "cd4": "CD4-telling",
+    "hb": "Hemoglobien"
+  },
+  "medications": {
+    "currentRegimen": "Huidige Behandelingsregime",
+    "nextPickup": "Volgende Afhaaldatum",
+    "requestRefill": "Versoek Herlaai",
+    "refillRequested": "Herlaai Versoek",
+    "mmdInfo": "U is op veelmaandelikse uitreiking",
+    "mmdTitle": "Veelmaandelikse Uitreiking",
+    "scheduleType": "Skedule Tipe",
+    "pickupDueSoon": "Afhaal gou verskuldig",
+    "pickupOverdue": "Afhaal agterstallig"
+  },
+  "profile": {
+    "firstName": "Voornaam",
+    "lastName": "Van",
+    "dateOfBirth": "Geboortedatum",
+    "phone": "Telefoonnommer",
+    "language": "Voorkeurstaal",
+    "save": "Stoor Wysigings",
+    "saved": "Wysigings gestoor"
+  },
+  "common": {
+    "loading": "Laai...",
+    "error": "Iets het verkeerd gegaan. Probeer asseblief weer.",
+    "back": "Terug",
+    "cancel": "Kanselleer",
+    "confirm": "Bevestig",
+    "yes": "Ja",
+    "no": "Nee"
+  },
+  "auth": {
+    "login": "Aanmeld",
+    "logout": "Afmeld",
+    "username": "Gebruikersnaam",
+    "password": "Wagwoord",
+    "forgotPassword": "Wagwoord vergeet?",
+    "loginError": "Ongeldige gebruikersnaam of wagwoord"
+  },
+  "supportGroups": {
+    "title": "Ondersteuningsgroepe",
+    "notEnrolled": "U is tans nie in enige ondersteuningsgroep ingeskryf nie.",
+    "facilitator": "Fasiliteerder",
+    "location": "Ligging",
+    "sessionsAttended": "Sessies Bygewoon",
+    "nextSession": "Volgende Sessie",
+    "viewSessions": "Sien Sessiegeskiedenis",
+    "hideSessions": "Verberg Sessiegeskiedenis",
+    "date": "Datum",
+    "topic": "Onderwerp",
+    "attended": "Bygewoon"
+  },
+  "comms": {
+    "title": "Kommunikasievoorkeure",
+    "sendingTo": "Stuur SMS aan",
+    "nudgeSettings": "Herinnering Instellings",
+    "stopAllSms": "Stop Alle SMS-boodskappe",
+    "optOutDescription": "Dit sal alle SMS-herinneringe en -kennisgewings van hierdie kliniek stop.",
+    "optOutButton": "Weier SMS",
+    "optOutConfirm": "Is u seker dat u alle SMS-boodskappe van hierdie kliniek wil stop?",
+    "optedOutBanner": "U het SMS-boodskappe geweier.",
+    "optedOutOn": "Geweier op {{date}}",
+    "optBackIn": "Heractiveer SMS"
+  },
+  "anc": {
+    "title": "ANC en EID Opvolging",
+    "notRegistered": "U is tans nie by die ANC-program geregistreer nie.",
+    "pregnancyDetails": "Swangerskapbesonderhede",
+    "lmp": "Laaste Menstruasie",
+    "edd": "Verwagte Geboortedatum",
+    "currentRegimen": "Huidige Regime",
+    "notRecorded": "Nie aangeteken nie",
+    "highMtr": "Hoë risiko van moederlike oordrag",
+    "bornOn": "Gebore op",
+    "weeks": "weke NVP",
+    "due": "Vervaldatum",
+    "finalStatus": "Finale MIV-status"
+  },
+  "growth": {
+    "title": "Groeigrafiek",
+    "weightStatus": "Gewigstatus",
+    "lastMeasured": "Laas Gemeet",
+    "nutritionReferral": "Voedingsverwysing aanbeveel",
+    "wazChart": "Gewig-vir-Ouderdom Z-Tellinggrafiek",
+    "history": "Meetgeskiedenis",
+    "date": "Datum",
+    "age": "Ouderdom",
+    "weight": "Gewig",
+    "height": "Lengte",
+    "status": "Status"
+  },
+  "dental": {
+    "title": "Tandheelkundige Behandelingsplan",
+    "noTreatmentPlan": "Geen tandheelkundige behandelingsplan aangeteken nie.",
+    "totalProcedures": "Totale Prosedures",
+    "completed": "Voltooi",
+    "pending": "Hangende",
+    "outstandingCost": "Uitstaande Koste",
+    "procedure": "Prosedure",
+    "tooth": "Tand",
+    "plannedDate": "Beplande Datum",
+    "cost": "Koste",
+    "status": "Status"
+  }
+}

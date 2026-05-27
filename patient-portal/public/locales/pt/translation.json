@@ -1,0 +1,147 @@
+{
+  "nav": {
+    "dashboard": "Painel",
+    "appointments": "Consultas",
+    "results": "Meus Resultados",
+    "medications": "Medicamentos",
+    "messages": "Mensagens",
+    "profile": "Meu Perfil",
+    "logout": "Sair",
+    "supportGroups": "Grupos de Apoio",
+    "commPreferences": "Comunicação",
+    "ancEid": "ANC / EID",
+    "growth": "Curva de Crescimento",
+    "dental": "Dentário"
+  },
+  "dashboard": {
+    "welcome": "Bem-vindo(a), {{name}}",
+    "nextAppointment": "Próxima Consulta",
+    "noAppointments": "Sem consultas futuras",
+    "recentResults": "Resultados Recentes",
+    "noResults": "Sem resultados recentes",
+    "medicationsDue": "Medicamentos a Tomar"
+  },
+  "appointments": {
+    "upcoming": "Consultas Futuras",
+    "past": "Consultas Passadas",
+    "confirm": "Confirmar Presença",
+    "cancel": "Pedir Reagendamento",
+    "date": "Data",
+    "time": "Hora",
+    "provider": "Prestador",
+    "status": "Estado",
+    "confirmed": "Confirmado",
+    "pending": "Pendente"
+  },
+  "results": {
+    "testType": "Teste",
+    "value": "Resultado",
+    "date": "Data",
+    "noResults": "Sem resultados disponíveis",
+    "vl": "Carga Viral",
+    "cd4": "Contagem CD4",
+    "hb": "Hemoglobina"
+  },
+  "medications": {
+    "currentRegimen": "Regime Atual",
+    "nextPickup": "Próxima Data de Levantamento",
+    "requestRefill": "Pedir Reabastecimento",
+    "refillRequested": "Reabastecimento Solicitado",
+    "mmdInfo": "Está no dispensamento multi-mensal",
+    "mmdTitle": "Dispensamento Multi-Mensal",
+    "scheduleType": "Tipo de Programa",
+    "pickupDueSoon": "Levantamento próximo",
+    "pickupOverdue": "Levantamento em atraso"
+  },
+  "profile": {
+    "firstName": "Primeiro Nome",
+    "lastName": "Apelido",
+    "dateOfBirth": "Data de Nascimento",
+    "phone": "Número de Telefone",
+    "language": "Língua Preferida",
+    "save": "Guardar Alterações",
+    "saved": "Alterações guardadas"
+  },
+  "common": {
+    "loading": "A carregar...",
+    "error": "Ocorreu um erro. Tente novamente.",
+    "back": "Voltar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "yes": "Sim",
+    "no": "Não"
+  },
+  "auth": {
+    "login": "Entrar",
+    "logout": "Sair",
+    "username": "Utilizador",
+    "password": "Palavra-passe",
+    "forgotPassword": "Esqueceu a palavra-passe?",
+    "loginError": "Utilizador ou palavra-passe inválidos"
+  },
+  "supportGroups": {
+    "title": "Grupos de Apoio",
+    "notEnrolled": "Não está inscrito em nenhum grupo de apoio.",
+    "facilitator": "Facilitador",
+    "location": "Local",
+    "sessionsAttended": "Sessões Assistidas",
+    "nextSession": "Próxima Sessão",
+    "viewSessions": "Ver Historial de Sessões",
+    "hideSessions": "Ocultar Historial de Sessões",
+    "date": "Data",
+    "topic": "Tópico",
+    "attended": "Assistiu"
+  },
+  "comms": {
+    "title": "Preferências de Comunicação",
+    "sendingTo": "A enviar SMS para",
+    "nudgeSettings": "Definições de Lembretes",
+    "stopAllSms": "Parar Todas as SMS",
+    "optOutDescription": "Isto irá parar todos os lembretes e notificações por SMS desta clínica.",
+    "optOutButton": "Recusar SMS",
+    "optOutConfirm": "Tem a certeza de que deseja parar todas as SMS desta clínica?",
+    "optedOutBanner": "Recusou receber SMS.",
+    "optedOutOn": "Recusado em {{date}}",
+    "optBackIn": "Reativar SMS"
+  },
+  "anc": {
+    "title": "Seguimento ANC e EID",
+    "notRegistered": "Não está registado no programa ANC.",
+    "pregnancyDetails": "Detalhes da Gravidez",
+    "lmp": "Última Menstruação",
+    "edd": "Data Prevista de Parto",
+    "currentRegimen": "Regime Atual",
+    "notRecorded": "Não registado",
+    "highMtr": "Alto risco de transmissão materna",
+    "bornOn": "Nascido em",
+    "weeks": "sem. NVP",
+    "due": "Data",
+    "finalStatus": "Estado Final VIH"
+  },
+  "growth": {
+    "title": "Curva de Crescimento",
+    "weightStatus": "Estado Ponderal",
+    "lastMeasured": "Última Medição",
+    "nutritionReferral": "Referência nutricional recomendada",
+    "wazChart": "Gráfico Z-Score Peso-por-Idade",
+    "history": "Historial de Medições",
+    "date": "Data",
+    "age": "Idade",
+    "weight": "Peso",
+    "height": "Altura",
+    "status": "Estado"
+  },
+  "dental": {
+    "title": "Plano de Tratamento Dentário",
+    "noTreatmentPlan": "Sem plano de tratamento dentário registado.",
+    "totalProcedures": "Total de Procedimentos",
+    "completed": "Concluídos",
+    "pending": "Pendentes",
+    "outstandingCost": "Custo Pendente",
+    "procedure": "Procedimento",
+    "tooth": "Dente",
+    "plannedDate": "Data Prevista",
+    "cost": "Custo",
+    "status": "Estado"
+  }
+}
