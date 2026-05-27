@@ -21,6 +21,8 @@ import { NurseShiftScreen }  from "../components/nurse/NurseShiftScreen";
 import { NurseVitalsScreen } from "../components/nurse/NurseVitalsScreen";
 import { NurseMessagesScreen } from "../components/nurse/NurseMessagesScreen";
 import { NurseNcdCrisisScreen } from "../components/nurse/NurseNcdCrisisScreen";
+import { GrowthMeasurementScreen } from "../components/nurse/GrowthMeasurementScreen";
+import { MmdScheduleScreen } from "../components/nurse/MmdScheduleScreen";
 
 import { PatientHomeScreen }      from "../components/patient/PatientHomeScreen";
 import { PatientPostVisitScreen } from "../components/patient/PatientPostVisitScreen";
@@ -121,6 +123,8 @@ const PatientStackNavigator = () => (
     <PatientStack.Screen name="PHEducation" component={PatientEducationScreen} />
     <PatientStack.Screen name="PHEducationCourse" component={EducationCourseScreen} options={{ headerShown: false }} />
     <PatientStack.Screen name="PHFamilyAccess" component={PatientFamilyAccessScreen} />
+    <PatientStack.Screen name="GrowthMeasurement" component={GrowthMeasurementScreen as any} options={{ title: 'Growth Measurement' }} />
+    <PatientStack.Screen name="MmdSchedule" component={MmdScheduleScreen as any} options={{ title: 'MMD Schedule' }} />
   </PatientStack.Navigator>
 );
 

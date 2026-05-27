@@ -159,6 +159,13 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
   });
   const [eacPrograms, setEacPrograms] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [geriatricFlags, setGeriatricFlags] = useState<any[]>([]);
+  const [resistanceAssessment, setResistanceAssessment] = useState<any>(null);
+  const [resistancePatientId, setResistancePatientId] = useState<string>('');
+  const [resistanceForm, setResistanceForm] = useState({ currentRegimen: '', regimenDurationMonths: 12, recentVl: 0, previousVl: undefined as number | undefined });
+  const [regimenRecommendation, setRegimenRecommendation] = useState<any>(null);
+  const [showResistancePanel, setShowResistancePanel] = useState(false);
+  const [resistanceLoading, setResistanceLoading] = useState(false);
   const [expandedEacProgram, setExpandedEacProgram] = useState<string | null>(null);
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
@@ -311,6 +318,20 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
       }
       
       setEnrollments(enrollmentsList);
+
+      const geriatricFlagResults = await Promise.all(
+        enrollmentsList.slice(0, 25).map(async (enrollment: any) => {
+          const patientId = enrollment.patient_id || enrollment.patientId;
+          if (!patientId) return null;
+          try {
+            const flagResponse = await ehrApi.getHivGeriatricFlag(patientId, token, tenantSlug!);
+            return flagResponse.data ? { ...flagResponse.data, patientName: `${enrollment.first_name} ${enrollment.last_name}` } : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      setGeriatricFlags(geriatricFlagResults.filter(Boolean));
 
       // Load ARV change requests - approved changes awaiting visit recording
       const changeRequestsRes = await ehrApi.getArvChangeRequests('approved', token, tenantSlug!);
@@ -745,6 +766,156 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
         </div>
       </div>
       )}
+
+      {/* Guideline Search Panel */}
+      {geriatricFlags.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 pt-4">
+          <div className="bg-white border border-amber-200 rounded-xl shadow-sm p-4">
+            <div className="flex items-center gap-2 text-amber-800 font-semibold mb-2">
+              <Heart className="w-5 h-5" />
+              HIV-Geriatric Integration Flags
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {geriatricFlags.slice(0, 4).map((flag) => (
+                <div key={flag.id} className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-sm">
+                  <div className="font-semibold text-slate-800">{flag.patientName}</div>
+                  <div className="text-slate-600">
+                    VACS {flag.vacs_index_score ?? 'n/a'} - {flag.frailty_status ?? 'review'} - next review {formatDateToDDMMYYYY(flag.next_review)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Drug Resistance Risk Panel */}
+      <div className="max-w-7xl mx-auto px-4 pt-4">
+        <div className="bg-white border border-rose-200 rounded-xl shadow-sm p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-rose-800 font-semibold">
+              <Activity className="w-5 h-5" />
+              Drug Resistance Assessment
+            </div>
+            <button
+              onClick={() => setShowResistancePanel(!showResistancePanel)}
+              className="text-sm text-rose-600 hover:text-rose-800 font-medium"
+            >
+              {showResistancePanel ? 'Collapse' : 'Assess Patient'}
+            </button>
+          </div>
+
+          {showResistancePanel && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Patient ID</label>
+                  <input
+                    type="text"
+                    value={resistancePatientId}
+                    onChange={(e) => setResistancePatientId(e.target.value)}
+                    placeholder="Patient UUID"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Current Regimen</label>
+                  <input
+                    type="text"
+                    value={resistanceForm.currentRegimen}
+                    onChange={(e) => setResistanceForm(f => ({ ...f, currentRegimen: e.target.value }))}
+                    placeholder="e.g. TDF+3TC+EFV"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Regimen Duration (months)</label>
+                  <input
+                    type="number"
+                    value={resistanceForm.regimenDurationMonths}
+                    onChange={(e) => setResistanceForm(f => ({ ...f, regimenDurationMonths: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Recent VL (copies/mL)</label>
+                  <input
+                    type="number"
+                    value={resistanceForm.recentVl}
+                    onChange={(e) => setResistanceForm(f => ({ ...f, recentVl: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!resistancePatientId || !resistanceForm.currentRegimen) return;
+                  const token = localStorage.getItem('ehr_token');
+                  if (!token) return;
+                  setResistanceLoading(true);
+                  try {
+                    const res = await ehrApi.assessResistance(resistancePatientId, resistanceForm, token, tenantSlug!);
+                    setResistanceAssessment(res.data);
+                    const recRes = await ehrApi.recommendRegimen(resistancePatientId, {
+                      currentRegimen: resistanceForm.currentRegimen,
+                      resistanceAssessment: res.data,
+                      isPregnant: false,
+                      creatinine: 1.0,
+                      isThirdLine: false,
+                    }, token, tenantSlug!);
+                    setRegimenRecommendation(recRes.data);
+                  } catch {
+                    // error already shown by api interceptor
+                  } finally {
+                    setResistanceLoading(false);
+                  }
+                }}
+                disabled={resistanceLoading}
+                className="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {resistanceLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
+                Assess Resistance
+              </button>
+
+              {resistanceAssessment && (
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {(['nnrtiRisk', 'nrtiRisk', 'piRisk', 'instiRisk'] as const).map((key) => {
+                      const labels: Record<string, string> = { nnrtiRisk: 'NNRTI', nrtiRisk: 'NRTI', piRisk: 'PI', instiRisk: 'INSTI' };
+                      const risk = resistanceAssessment[key] as string;
+                      return (
+                        <div key={key} className={`px-3 py-2 rounded-lg text-center text-sm font-semibold border ${
+                          risk === 'high'     ? 'bg-red-100 border-red-400 text-red-800' :
+                          risk === 'moderate' ? 'bg-orange-100 border-orange-400 text-orange-800' :
+                                               'bg-green-100 border-green-400 text-green-800'
+                        }`}>
+                          <div className="text-xs font-normal mb-0.5">{labels[key]}</div>
+                          {risk}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {resistanceAssessment.resistanceTestRecommended && (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      Resistance test recommended
+                    </div>
+                  )}
+                  {regimenRecommendation && (
+                    <div className={`p-3 rounded-lg border text-sm ${regimenRecommendation.requiresSpecialistApproval ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
+                      <div className="font-semibold text-slate-800 mb-1">Recommended: {regimenRecommendation.recommendation}</div>
+                      <div className="text-slate-600 text-xs">{regimenRecommendation.rationale}</div>
+                      {regimenRecommendation.requiresSpecialistApproval && (
+                        <div className="mt-2 text-xs font-bold text-amber-800">⚠ Requires specialist approval</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Guideline Search Panel */}
       {showGuidelineSearch && (

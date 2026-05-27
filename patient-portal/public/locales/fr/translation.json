@@ -1,0 +1,162 @@
+{
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "appointments": "Rendez-vous",
+    "results": "Mes Résultats",
+    "medications": "Médicaments",
+    "messages": "Messages",
+    "profile": "Mon Profil",
+    "logout": "Déconnexion",
+    "supportGroups": "Groupes de Soutien",
+    "commPreferences": "Communication",
+    "ancEid": "ANC / EID",
+    "growth": "Courbe de Croissance",
+    "dental": "Dentaire"
+  },
+  "dashboard": {
+    "welcome": "Bienvenue, {{name}}",
+    "nextAppointment": "Prochain Rendez-vous",
+    "noAppointments": "Aucun rendez-vous à venir",
+    "recentResults": "Résultats Récents",
+    "noResults": "Aucun résultat récent",
+    "medicationsDue": "Médicaments à Prendre"
+  },
+  "appointments": {
+    "upcoming": "Rendez-vous à Venir",
+    "past": "Rendez-vous Passés",
+    "confirm": "Confirmer la Présence",
+    "cancel": "Demander un Report",
+    "date": "Date",
+    "time": "Heure",
+    "provider": "Prestataire",
+    "status": "Statut",
+    "confirmed": "Confirmé",
+    "pending": "En attente"
+  },
+  "results": {
+    "testType": "Analyse",
+    "value": "Résultat",
+    "date": "Date",
+    "noResults": "Aucun résultat disponible",
+    "vl": "Charge Virale",
+    "cd4": "Numération CD4",
+    "hb": "Hémoglobine"
+  },
+  "medications": {
+    "currentRegimen": "Schéma Thérapeutique Actuel",
+    "nextPickup": "Prochaine Date de Retrait",
+    "requestRefill": "Demander un Renouvellement",
+    "refillRequested": "Renouvellement Demandé",
+    "mmdInfo": "Vous êtes sous dispensation multi-mensuelle",
+    "mmdTitle": "Dispensation Multi-Mensuelle",
+    "scheduleType": "Type de Programme",
+    "pickupDueSoon": "Retrait bientôt dû",
+    "pickupOverdue": "Retrait en retard"
+  },
+  "profile": {
+    "firstName": "Prénom",
+    "lastName": "Nom de Famille",
+    "dateOfBirth": "Date de Naissance",
+    "phone": "Numéro de Téléphone",
+    "language": "Langue Préférée",
+    "save": "Enregistrer les Modifications",
+    "saved": "Modifications enregistrées"
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur s'est produite. Veuillez réessayer.",
+    "back": "Retour",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "auth": {
+    "login": "Se connecter",
+    "logout": "Déconnexion",
+    "username": "Identifiant",
+    "password": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "loginError": "Identifiant ou mot de passe invalide"
+  },
+  "supportGroups": {
+    "title": "Groupes de Soutien",
+    "notEnrolled": "Vous n'êtes inscrit dans aucun groupe de soutien.",
+    "facilitator": "Animateur",
+    "location": "Lieu",
+    "sessionsAttended": "Séances Assistées",
+    "nextSession": "Prochaine Séance",
+    "viewSessions": "Voir l'Historique des Séances",
+    "hideSessions": "Masquer l'Historique des Séances",
+    "date": "Date",
+    "topic": "Thème",
+    "attended": "Présent(e)"
+  },
+  "comms": {
+    "title": "Préférences de Communication",
+    "sendingTo": "Envoi de SMS à",
+    "nudgeSettings": "Paramètres des Rappels",
+    "stopAllSms": "Arrêter Tous les SMS",
+    "optOutDescription": "Ceci arrêtera tous les rappels et notifications SMS de cette clinique.",
+    "optOutButton": "Refuser les SMS",
+    "optOutConfirm": "Êtes-vous sûr(e) de vouloir arrêter tous les SMS de cette clinique ?",
+    "optedOutBanner": "Vous avez refusé de recevoir des SMS.",
+    "optedOutOn": "Refusé le {{date}}",
+    "optBackIn": "Réactiver les SMS"
+  },
+  "anc": {
+    "title": "Suivi ANC et EID",
+    "notRegistered": "Vous n'êtes pas inscrit(e) dans le programme ANC.",
+    "pregnancyDetails": "Détails de la Grossesse",
+    "lmp": "Dernières Règles",
+    "edd": "Date Prévue d'Accouchement",
+    "currentRegimen": "Schéma Actuel",
+    "notRecorded": "Non enregistré",
+    "highMtr": "Risque élevé de transmission maternelle",
+    "bornOn": "Né(e) le",
+    "weeks": "sem. NVP",
+    "due": "Date prévue",
+    "finalStatus": "Statut VIH Final"
+  },
+  "growth": {
+    "title": "Courbe de Croissance",
+    "weightStatus": "Statut Pondéral",
+    "lastMeasured": "Dernière Mesure",
+    "nutritionReferral": "Référence nutritionnelle recommandée",
+    "wazChart": "Graphique Z-Score Poids-pour-Âge",
+    "history": "Historique des Mesures",
+    "date": "Date",
+    "age": "Âge",
+    "weight": "Poids",
+    "height": "Taille",
+    "status": "Statut"
+  },
+  "dental": {
+    "title": "Plan de Traitement Dentaire",
+    "noTreatmentPlan": "Aucun plan de traitement dentaire enregistré.",
+    "totalProcedures": "Total des Actes",
+    "completed": "Terminés",
+    "pending": "En attente",
+    "outstandingCost": "Coût Restant",
+    "procedure": "Acte",
+    "tooth": "Dent",
+    "plannedDate": "Date Prévue",
+    "cost": "Coût",
+    "status": "Statut"
+  },
+  "education": {
+    "back": "Retour à l'Éducation",
+    "openPdf": "Ouvrir le document PDF",
+    "quiz": "Test de Connaissances",
+    "passThreshold": "Note de passage : {{pct}}%",
+    "quizPassed": "Réussi",
+    "quizFailed": "Réessayer",
+    "submitQuiz": "Soumettre les Réponses",
+    "markComplete": "Marquer comme Terminé",
+    "enrolled": "Mes Cours",
+    "browse": "Explorer les Cours",
+    "enroll": "Commencer le Cours",
+    "progress": "Progression",
+    "complete": "Terminé"
+  }
+}

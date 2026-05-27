@@ -3,6 +3,10 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { HivService } from '../services/hiv.service';
 import { HivMonthlyReturnService } from '../services/hiv-monthly-return.service';
+import { OiEarlyWarningService } from '../services/oi-early-warning.service';
+import { HivFastTrackService } from '../services/hiv-fast-track.service';
+import { HivResistanceService } from '../services/hiv-resistance.service';
+import { HivMmdService } from '../services/hiv-mmd.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @ApiTags('HIV/AIDS/TB')
@@ -13,6 +17,10 @@ export class HivController {
   constructor(
     private readonly hivService: HivService,
     private readonly hivMonthlyReturnService: HivMonthlyReturnService,
+    private readonly oiEarlyWarningService: OiEarlyWarningService,
+    private readonly hivFastTrackService: HivFastTrackService,
+    private readonly hivResistanceService: HivResistanceService,
+    private readonly hivMmdService: HivMmdService,
   ) {}
 
   @Post('tests')
@@ -78,6 +86,45 @@ export class HivController {
   @ApiResponse({ status: 200, description: 'Enrollment retrieved' })
   async getPatientEnrollment(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
     return this.hivService.getPatientEnrollment(patientId, req.tenantDb);
+  }
+
+  @Get('patients/:id/oi-alerts')
+  @ApiOperation({ summary: 'Get active OI early warning alerts for a patient' })
+  async getOiAlerts(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.oiEarlyWarningService.getActiveAlerts(id, req.tenantDb);
+  }
+
+  @Patch('oi-alerts/:alertId/acknowledge')
+  @ApiOperation({ summary: 'Acknowledge an OI early warning alert' })
+  async acknowledgeOiAlert(@Param('alertId') alertId: string, @Request() req: RequestWithTenant) {
+    await this.oiEarlyWarningService.acknowledgeAlert(alertId, (req as any).user?.sub, req.tenantDb);
+    return { acknowledged: true };
+  }
+
+  @Get('patients/:id/stability')
+  @ApiOperation({ summary: 'Get HIV stable patient fast-track status' })
+  async getStabilityStatus(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    const rows = await req.tenantDb.query(
+      `SELECT * FROM hiv_stable_patient_flags WHERE patient_id = $1 AND is_active = true`,
+      [id],
+    );
+    return rows[0] ?? { eligible: false };
+  }
+
+  @Post('patients/:id/classify-stability')
+  @ApiOperation({ summary: 'Classify patient for HIV fast-track stable pathway' })
+  async classifyStability(@Param('id') id: string, @Body() body: any, @Request() req: RequestWithTenant) {
+    return this.hivFastTrackService.classifyAndSave(id, body, (req as any).user?.sub, req.tenantDb);
+  }
+
+  @Get('patients/:id/geriatric-flag')
+  @ApiOperation({ summary: 'Get HIV geriatric integration flag for a patient' })
+  async getGeriatricFlag(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    const rows = await req.tenantDb.query(
+      `SELECT * FROM hiv_geriatric_flags WHERE patient_id = $1`,
+      [id],
+    );
+    return rows[0] ?? null;
   }
 
   @Get('enrollments/:enrollmentId')
@@ -485,5 +532,83 @@ export class HivController {
   @ApiResponse({ status: 200, description: 'Comparison report retrieved' })
   async getComparisonReport(@Query() query: any, @Request() req: RequestWithTenant) {
     return this.hivService.getComparisonReport(query, req.tenantDb);
+  }
+
+  // NC-S04 — Drug Resistance + Regimen Intelligence
+  @Post('patients/:id/assess-resistance')
+  @ApiOperation({ summary: 'Assess HIV drug resistance risk' })
+  async assessResistance(
+    @Param('id') id: string,
+    @Body() body: { currentRegimen: string; regimenDurationMonths: number; recentVl: number; previousVl?: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    const assessment = this.hivResistanceService.assessResistance({
+      currentRegimen: body.currentRegimen,
+      regimenDurationMonths: body.regimenDurationMonths,
+      recentVl: body.recentVl,
+      previousVl: body.previousVl ?? null,
+    });
+    await (req as any).tenantDb.query(
+      `INSERT INTO hiv_resistance_assessments
+         (patient_id, current_regimen, regimen_duration_months, recent_vl, previous_vl,
+          vl_trend, nnrti_risk, nrti_risk, pi_risk, insti_risk, overall_resistance_risk,
+          resistance_test_recommended, notes, assessed_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [
+        id, body.currentRegimen, body.regimenDurationMonths, body.recentVl,
+        body.previousVl ?? null,
+        assessment.overallRisk === 'low' ? 'suppressed' : 'failing',
+        assessment.nnrtiRisk, assessment.nrtiRisk, assessment.piRisk, assessment.instiRisk,
+        assessment.overallRisk, assessment.resistanceTestRecommended,
+        assessment.notes.join('; '), (req as any).user.sub,
+      ],
+    );
+    return assessment;
+  }
+
+  @Post('patients/:id/recommend-regimen')
+  @ApiOperation({ summary: 'Recommend regimen switch based on resistance assessment' })
+  async recommendRegimen(
+    @Param('id') _id: string,
+    @Body() body: { currentRegimen: string; isPregnant?: boolean; creatinine?: number; isThirdLine?: boolean; resistanceAssessment: any },
+  ) {
+    return this.hivResistanceService.recommendRegimenSwitch({
+      currentRegimen: body.currentRegimen,
+      resistanceAssessment: body.resistanceAssessment,
+      isPregnant: body.isPregnant ?? false,
+      creatinine: body.creatinine ?? 1.0,
+      isThirdLine: body.isThirdLine ?? false,
+    });
+  }
+
+  // NC-S04 — MMD Tracking
+  @Get('mmd/overdue')
+  @ApiOperation({ summary: 'Get overdue MMD patients' })
+  async getOverdueMmd(@Request() req: RequestWithTenant) {
+    return this.hivMmdService.getOverdueMmdPatients((req as any).tenantDb);
+  }
+
+  @Post('patients/:id/mmd/schedule')
+  @ApiOperation({ summary: 'Record MMD dispensing and schedule next pickup' })
+  async scheduleMmd(
+    @Param('id') id: string,
+    @Body() body: { mmdMonths: 3 | 6; drugs: string[]; daysDispensed: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    await this.hivMmdService.scheduleMmd({
+      patientId: id,
+      mmdMonths: body.mmdMonths,
+      drugs: body.drugs,
+      daysDispensed: body.daysDispensed,
+      dispensedBy: (req as any).user.sub,
+      db: (req as any).tenantDb,
+    });
+    return { scheduled: true };
+  }
+
+  @Get('patients/:id/mmd/history')
+  @ApiOperation({ summary: 'Get patient MMD dispensing history' })
+  async getMmdHistory(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.hivMmdService.getPatientMmdHistory(id, (req as any).tenantDb);
   }
 }

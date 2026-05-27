@@ -1,0 +1,162 @@
+{
+  "nav": {
+    "dashboard": "Dashibodi",
+    "appointments": "Miadi",
+    "results": "Matokeo Yangu",
+    "medications": "Dawa",
+    "messages": "Ujumbe",
+    "profile": "Wasifu Wangu",
+    "logout": "Toka",
+    "supportGroups": "Vikundi vya Usaidizi",
+    "commPreferences": "Mawasiliano",
+    "ancEid": "ANC / EID",
+    "growth": "Chati ya Ukuaji",
+    "dental": "Meno"
+  },
+  "dashboard": {
+    "welcome": "Karibu, {{name}}",
+    "nextAppointment": "Miadi Inayofuata",
+    "noAppointments": "Hakuna miadi inayokuja",
+    "recentResults": "Matokeo ya Hivi Karibuni",
+    "noResults": "Hakuna matokeo ya hivi karibuni",
+    "medicationsDue": "Dawa Zinazostahili"
+  },
+  "appointments": {
+    "upcoming": "Miadi Inayokuja",
+    "past": "Miadi Iliyopita",
+    "confirm": "Thibitisha Uhudhuri",
+    "cancel": "Omba Kubadilisha Tarehe",
+    "date": "Tarehe",
+    "time": "Wakati",
+    "provider": "Daktari",
+    "status": "Hali",
+    "confirmed": "Imethibitishwa",
+    "pending": "Inasubiri"
+  },
+  "results": {
+    "testType": "Kipimo",
+    "value": "Matokeo",
+    "date": "Tarehe",
+    "noResults": "Hakuna matokeo",
+    "vl": "Mzigo wa Virusi",
+    "cd4": "Hesabu ya CD4",
+    "hb": "Haemoglobin"
+  },
+  "medications": {
+    "currentRegimen": "Mpango wa Dawa wa Sasa",
+    "nextPickup": "Tarehe Inayofuata ya Kuchukua Dawa",
+    "requestRefill": "Omba Kujaza Dawa",
+    "refillRequested": "Ombi Limetumwa",
+    "mmdInfo": "Uko katika usambazaji wa miezi mingi",
+    "mmdTitle": "Usambazaji wa Miezi Mingi",
+    "scheduleType": "Aina ya Ratiba",
+    "pickupDueSoon": "Kuchukua dawa kunakaribia",
+    "pickupOverdue": "Kuchukua dawa kumechelewa"
+  },
+  "profile": {
+    "firstName": "Jina la Kwanza",
+    "lastName": "Jina la Ukoo",
+    "dateOfBirth": "Tarehe ya Kuzaliwa",
+    "phone": "Nambari ya Simu",
+    "language": "Lugha Unayopendelea",
+    "save": "Hifadhi Mabadiliko",
+    "saved": "Mabadiliko yamehifadhiwa"
+  },
+  "common": {
+    "loading": "Inapakia...",
+    "error": "Kuna hitilafu. Tafadhali jaribu tena.",
+    "back": "Rudi",
+    "cancel": "Ghairi",
+    "confirm": "Thibitisha",
+    "yes": "Ndiyo",
+    "no": "Hapana"
+  },
+  "auth": {
+    "login": "Ingia",
+    "logout": "Toka",
+    "username": "Jina la Mtumiaji",
+    "password": "Neno la Siri",
+    "forgotPassword": "Umesahau neno la siri?",
+    "loginError": "Jina au neno la siri si sahihi"
+  },
+  "supportGroups": {
+    "title": "Vikundi vya Usaidizi",
+    "notEnrolled": "Hujajisajili katika kikundi chochote cha usaidizi.",
+    "facilitator": "Mratibu",
+    "location": "Mahali",
+    "sessionsAttended": "Vikao Vilivyohudhuriwa",
+    "nextSession": "Kikao Kinachofuata",
+    "viewSessions": "Ona Historia ya Vikao",
+    "hideSessions": "Ficha Historia ya Vikao",
+    "date": "Tarehe",
+    "topic": "Mada",
+    "attended": "Alihudhuria"
+  },
+  "comms": {
+    "title": "Mapendeleo ya Mawasiliano",
+    "sendingTo": "Kutuma SMS kwa",
+    "nudgeSettings": "Mipangilio ya Vikumbuzi",
+    "stopAllSms": "Simamisha SMS Zote",
+    "optOutDescription": "Hii itasimamisha vikumbuzi na arifa zote za SMS kutoka kliniki hii.",
+    "optOutButton": "Kataa SMS",
+    "optOutConfirm": "Una uhakika unataka kusimamisha SMS zote kutoka kliniki hii?",
+    "optedOutBanner": "Umekataa kupokea SMS.",
+    "optedOutOn": "Ulikataa tarehe {{date}}",
+    "optBackIn": "Washa Tena SMS"
+  },
+  "anc": {
+    "title": "Ufuatiliaji wa ANC na EID",
+    "notRegistered": "Hujasajiliwa katika programu ya ANC.",
+    "pregnancyDetails": "Maelezo ya Ujauzito",
+    "lmp": "Mwisho wa Hedhi",
+    "edd": "Tarehe Inayotarajiwa ya Kujifungua",
+    "currentRegimen": "Mpango wa Dawa wa Sasa",
+    "notRecorded": "Haijarekodiwa",
+    "highMtr": "Hatari kubwa ya maambukizi ya mama",
+    "bornOn": "Alizaliwa",
+    "weeks": "wiki NVP",
+    "due": "Tarehe",
+    "finalStatus": "Hali ya Mwisho ya VVU"
+  },
+  "growth": {
+    "title": "Chati ya Ukuaji",
+    "weightStatus": "Hali ya Uzito",
+    "lastMeasured": "Ilipimwa Mara ya Mwisho",
+    "nutritionReferral": "Rufaa ya lishe inapendekezwa",
+    "wazChart": "Chati ya Z-Score ya Uzito-kwa-Umri",
+    "history": "Historia ya Vipimo",
+    "date": "Tarehe",
+    "age": "Umri",
+    "weight": "Uzito",
+    "height": "Urefu",
+    "status": "Hali"
+  },
+  "dental": {
+    "title": "Mpango wa Matibabu ya Meno",
+    "noTreatmentPlan": "Hakuna mpango wa matibabu ya meno uliorekodiwa.",
+    "totalProcedures": "Jumla ya Taratibu",
+    "completed": "Zilizokamilika",
+    "pending": "Zinazosubiri",
+    "outstandingCost": "Gharama Inayobaki",
+    "procedure": "Taratibu",
+    "tooth": "Jino",
+    "plannedDate": "Tarehe Iliyopangwa",
+    "cost": "Gharama",
+    "status": "Hali"
+  },
+  "education": {
+    "back": "Rudi kwa Elimu",
+    "openPdf": "Fungua hati ya PDF",
+    "quiz": "Ukaguzi wa Maarifa",
+    "passThreshold": "Alama ya kufaulu: {{pct}}%",
+    "quizPassed": "Umefaulu",
+    "quizFailed": "Jaribu tena",
+    "submitQuiz": "Wasilisha Majibu",
+    "markComplete": "Weka Alama ya Kukamilisha",
+    "enrolled": "Kozi Zangu",
+    "browse": "Gundua Kozi",
+    "enroll": "Anza Kozi",
+    "progress": "Maendeleo",
+    "complete": "Imekamilika"
+  }
+}

@@ -1194,4 +1194,95 @@ export const patientPortalApi = {
     _ensureOk(response, 'Failed to submit quiz attempt');
     return response.json();
   },
+
+  getMmdSchedule: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/mmd/schedule`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch MMD schedule');
+    return response.json();
+  },
+
+  requestMmdRefill: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/mmd/request-refill`, {
+      method: 'POST',
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to request MMD refill');
+    return response.json();
+  },
+
+  getPatientSupportGroups: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/support-groups`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch support groups');
+    return response.json();
+  },
+
+  getSupportGroupSessions: async (groupId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/support-groups/${groupId}/sessions`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch group sessions');
+    return response.json();
+  },
+
+  getCommunicationPreferences: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/communication-preferences`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch communication preferences');
+    return response.json();
+  },
+
+  updateCommunicationPreferences: async (payload: Record<string, unknown>, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/communication-preferences`, {
+      method: 'PUT',
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+      body: JSON.stringify(payload),
+    });
+    _ensureOk(response, 'Failed to update communication preferences');
+    return response.json();
+  },
+
+  getAncRegistration: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/anc/registration`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch ANC registration');
+    return response.json();
+  },
+
+  getEidSchedule: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/anc/eid-schedule`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch EID schedule');
+    return response.json();
+  },
+
+  getGrowthHistory: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/growth/history`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch growth history');
+    return response.json();
+  },
+
+  getDentalTreatmentPlan: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/dental/treatment-plan`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch dental treatment plan');
+    return response.json();
+  },
+
+  getMyFlags: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/my-flags`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch patient flags');
+    return response.json();
+  },
 };

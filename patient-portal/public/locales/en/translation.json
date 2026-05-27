@@ -1,0 +1,162 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "appointments": "Appointments",
+    "results": "My Results",
+    "medications": "Medications",
+    "messages": "Messages",
+    "profile": "My Profile",
+    "logout": "Log Out",
+    "supportGroups": "Support Groups",
+    "commPreferences": "Communication",
+    "ancEid": "ANC / EID",
+    "growth": "Growth Chart",
+    "dental": "Dental"
+  },
+  "dashboard": {
+    "welcome": "Welcome, {{name}}",
+    "nextAppointment": "Next Appointment",
+    "noAppointments": "No upcoming appointments",
+    "recentResults": "Recent Results",
+    "noResults": "No recent results",
+    "medicationsDue": "Medications Due"
+  },
+  "appointments": {
+    "upcoming": "Upcoming Appointments",
+    "past": "Past Appointments",
+    "confirm": "Confirm Attendance",
+    "cancel": "Request Reschedule",
+    "date": "Date",
+    "time": "Time",
+    "provider": "Provider",
+    "status": "Status",
+    "confirmed": "Confirmed",
+    "pending": "Pending"
+  },
+  "results": {
+    "testType": "Test",
+    "value": "Result",
+    "date": "Date",
+    "noResults": "No results available",
+    "vl": "Viral Load",
+    "cd4": "CD4 Count",
+    "hb": "Haemoglobin"
+  },
+  "medications": {
+    "currentRegimen": "Current Regimen",
+    "nextPickup": "Next Pickup Date",
+    "requestRefill": "Request Refill",
+    "refillRequested": "Refill Requested",
+    "mmdInfo": "You are on multi-month dispensing",
+    "mmdTitle": "Multi-Month Dispensing",
+    "scheduleType": "Schedule Type",
+    "pickupDueSoon": "Pickup due soon",
+    "pickupOverdue": "Pickup overdue"
+  },
+  "profile": {
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "dateOfBirth": "Date of Birth",
+    "phone": "Phone Number",
+    "language": "Preferred Language",
+    "save": "Save Changes",
+    "saved": "Changes saved"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong. Please try again.",
+    "back": "Back",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "auth": {
+    "login": "Log In",
+    "logout": "Log Out",
+    "username": "Username",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "loginError": "Invalid username or password"
+  },
+  "supportGroups": {
+    "title": "Support Groups",
+    "notEnrolled": "You are not currently enrolled in any support groups.",
+    "facilitator": "Facilitator",
+    "location": "Location",
+    "sessionsAttended": "Sessions Attended",
+    "nextSession": "Next Session",
+    "viewSessions": "View Session History",
+    "hideSessions": "Hide Session History",
+    "date": "Date",
+    "topic": "Topic",
+    "attended": "Attended"
+  },
+  "comms": {
+    "title": "Communication Preferences",
+    "sendingTo": "Sending SMS to",
+    "nudgeSettings": "Reminder Settings",
+    "stopAllSms": "Stop All SMS Messages",
+    "optOutDescription": "This will stop all SMS reminders and notifications from this clinic.",
+    "optOutButton": "Opt Out of SMS",
+    "optOutConfirm": "Are you sure you want to stop all SMS messages from this clinic?",
+    "optedOutBanner": "You have opted out of SMS messages.",
+    "optedOutOn": "Opted out on {{date}}",
+    "optBackIn": "Re-enable SMS Messages"
+  },
+  "anc": {
+    "title": "ANC & EID Tracker",
+    "notRegistered": "You are not currently registered in the ANC programme.",
+    "pregnancyDetails": "Pregnancy Details",
+    "lmp": "Last Menstrual Period",
+    "edd": "Expected Delivery Date",
+    "currentRegimen": "Current Regimen",
+    "notRecorded": "Not recorded",
+    "highMtr": "High maternal transmission risk",
+    "bornOn": "Born",
+    "weeks": "wks NVP",
+    "due": "Due",
+    "finalStatus": "Final HIV Status"
+  },
+  "growth": {
+    "title": "Growth Chart",
+    "weightStatus": "Weight Status",
+    "lastMeasured": "Last Measured",
+    "nutritionReferral": "Nutrition referral recommended",
+    "wazChart": "Weight-for-Age Z-Score Chart",
+    "history": "Measurement History",
+    "date": "Date",
+    "age": "Age",
+    "weight": "Weight",
+    "height": "Height",
+    "status": "Status"
+  },
+  "dental": {
+    "title": "Dental Treatment Plan",
+    "noTreatmentPlan": "No dental treatment plan on record.",
+    "totalProcedures": "Total Procedures",
+    "completed": "Completed",
+    "pending": "Pending",
+    "outstandingCost": "Outstanding Cost",
+    "procedure": "Procedure",
+    "tooth": "Tooth",
+    "plannedDate": "Planned Date",
+    "cost": "Cost",
+    "status": "Status"
+  },
+  "education": {
+    "back": "Back to Education",
+    "openPdf": "Open PDF document",
+    "quiz": "Knowledge Check",
+    "passThreshold": "Pass mark: {{pct}}%",
+    "quizPassed": "Passed",
+    "quizFailed": "Try again",
+    "submitQuiz": "Submit Answers",
+    "markComplete": "Mark as Complete",
+    "enrolled": "My Courses",
+    "browse": "Explore Courses",
+    "enroll": "Start Course",
+    "progress": "Progress",
+    "complete": "Complete"
+  }
+}

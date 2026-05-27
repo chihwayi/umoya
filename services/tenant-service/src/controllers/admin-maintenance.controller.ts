@@ -75,6 +75,7 @@ export class AdminMaintenanceController {
   // @UseGuards(JwtAuthGuard)
   @Post('tenants/repair-all')
   async repairAllTenants() {
+    await this.provisioning.ensureSystemSecuritySchema();
     const tenants = await this.tenantService.findAll();
     for (const tenant of tenants) {
       const connection = this.buildTenantConnection(tenant.databaseName, tenant.connectionString);

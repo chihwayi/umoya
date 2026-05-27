@@ -60,7 +60,37 @@ export class NhlsHl7Service {
         processed: Boolean(linkedPatient?.id),
       });
 
-      savedRows.push(await resultRepo.save(entity) as unknown as NhlsLabResult);
+      const saved = await resultRepo.save(entity) as unknown as NhlsLabResult;
+      savedRows.push(saved);
+
+      // Audit log
+      const parsedNum = parseFloat(this.cleanValue(obx.getField(5)) || '');
+      const VALID_RANGES: Record<string, [number, number]> = {
+        cd4: [0, 3000], viral_load: [0, 10_000_000],
+        hb: [1, 25], creatinine: [0.1, 30], alt: [0, 5000],
+      };
+      const labType = testIdentifier.toLowerCase().replace(/\s+/g, '_');
+      const range = VALID_RANGES[labType];
+      const outOfRange = range && !isNaN(parsedNum) && (parsedNum < range[0] || parsedNum > range[1]);
+      try {
+        await db.query(
+          `INSERT INTO lab_import_audit
+             (import_source, patient_id, lab_test_type, raw_value, parsed_value, unit, import_status, error_message)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [
+            'nhls_hl7',
+            linkedPatient?.id ?? null,
+            labType || null,
+            this.cleanValue(obx.getField(5)),
+            isNaN(parsedNum) ? null : parsedNum,
+            this.cleanValue(obx.getField(6)) || null,
+            outOfRange ? 'out_of_range' : 'success',
+            outOfRange ? `Value ${parsedNum} outside expected range [${range![0]}, ${range![1]}]` : null,
+          ],
+        );
+      } catch {
+        // audit log failure must not block result ingestion
+      }
     }
 
     return savedRows;

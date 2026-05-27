@@ -1,0 +1,77 @@
+{
+  "title": "MMD Adherence",
+  "uid": "nc-mmd-001",
+  "tags": ["mmd", "adherence", "hiv", "newlands"],
+  "refresh": "5m",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Patients on 3-Month MMD",
+      "type": "stat",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT COUNT(*) AS count FROM hiv_mmd_assignments WHERE mmd_months = 3 AND is_active = true",
+        "format": "table"
+      }],
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "id": 2,
+      "title": "Patients on 6-Month MMD",
+      "type": "stat",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT COUNT(*) AS count FROM hiv_mmd_assignments WHERE mmd_months = 6 AND is_active = true",
+        "format": "table"
+      }],
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "id": 3,
+      "title": "Overdue MMD Pickup",
+      "type": "stat",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT COUNT(*) AS overdue FROM hiv_mmd_assignments WHERE next_pickup_date < CURRENT_DATE AND is_active = true",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": 0},
+              {"color": "yellow", "value": 5},
+              {"color": "red", "value": 20}
+            ]
+          }
+        }
+      },
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "id": 4,
+      "title": "MMD Pickups This Month",
+      "type": "stat",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT COUNT(*) AS pickups FROM hiv_mmd_dispenses WHERE dispensed_at >= DATE_TRUNC('month', CURRENT_DATE)",
+        "format": "table"
+      }],
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 6}
+    },
+    {
+      "id": 5,
+      "title": "MMD Overdue Trend (90 days)",
+      "type": "timeseries",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT DATE_TRUNC('week', next_pickup_date) AS time, COUNT(*) AS overdue FROM hiv_mmd_assignments WHERE next_pickup_date BETWEEN NOW() - INTERVAL '90 days' AND NOW() AND is_active = true GROUP BY 1 ORDER BY 1",
+        "format": "table",
+        "timeColumns": ["time"]
+      }],
+      "gridPos": {"x": 0, "y": 6, "w": 24, "h": 10}
+    }
+  ]
+}

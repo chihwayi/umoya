@@ -488,6 +488,10 @@ export class TenantService {
     }
   }
 
+  getSystemDb(): DataSource {
+    return this.masterDb;
+  }
+
   async getAllActiveTenants(): Promise<Array<{ id: string; subdomain: string; databaseName: string }>> {
     try {
       const result = await this.masterDb.query(

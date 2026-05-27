@@ -89,6 +89,13 @@ import { LabCriticalAlertController } from './controllers/lab-critical-alert.con
 import { CriticalAlertController } from './controllers/critical-alert.controller';
 import { DrugController } from './controllers/drug.controller';
 import { HivController } from './controllers/hiv.controller';
+import { PsychosocialController } from './controllers/psychosocial.controller';
+import { EmpowermentController } from './controllers/empowerment.controller';
+import { TrainingController } from './controllers/training.controller';
+import { ResearchController } from './controllers/research.controller';
+import { ResearchDayController } from './controllers/research-day.controller';
+import { UssdController, SmsCampaignController } from './controllers/ussd.controller';
+import { PreferencesController } from './controllers/preferences.controller';
 import { ImagingController } from './controllers/imaging.controller';
 import { MaternityController } from './controllers/maternity.controller';
 import { OncologyController } from './controllers/oncology.controller';
@@ -179,6 +186,17 @@ import { MultilingualEducationController } from './controllers/multilingual-educ
 import { HealthEducationController } from './controllers/health-education.controller';
 import { PatientPortalHealthEducationController } from './controllers/patient-portal-health-education.controller';
 import { OfflineSyncController } from './controllers/offline-sync.controller';
+import { ClinicalSpecialtiesController } from './controllers/clinical-specialties.controller';
+import { ConflictResolverService } from './services/conflict-resolver.service';
+import { DentalService } from './services/dental.service';
+import { AncService } from './services/anc.service';
+import { WebAuthnService } from './services/webauthn.service';
+import { ConsentRecordsService } from './services/consent-records.service';
+import { TeleconsultBridgeService } from './services/teleconsult-bridge.service';
+import { WebAuthnController } from './controllers/webauthn.controller';
+import { ConsentRecordsController } from './controllers/consent-records.controller';
+import { GrowthChartService } from './services/growth-chart.service';
+import { PaediatricDosingService } from './services/paediatric-dosing.service';
 import { IotController } from './controllers/iot.controller';
 import { RadiologyAiController } from './controllers/radiology-ai.controller';
 import { AlertDeliveryController } from './controllers/alert-delivery.controller';
@@ -195,6 +213,8 @@ import { NcdComplicationController } from './controllers/ncd-complication.contro
 import { AtMessagingController } from './controllers/at-messaging.controller';
 import { PushTokensController } from './controllers/push-tokens.controller';
 import { CdpaController } from './controllers/cdpa.controller';
+import { BreachDetectionController } from './controllers/breach-detection.controller';
+import { PatientPortalHivController } from './controllers/patient-portal-hiv.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -286,6 +306,26 @@ import { HivQualityMetricsService } from './services/hiv-quality-metrics.service
 import { HivVisitTemplatesService } from './services/hiv-visit-templates.service';
 import { HivTptTrackerService } from './services/hiv-tpt-tracker.service';
 import { HivPediatricDosingService } from './services/hiv-pediatric-dosing.service';
+import { OiEarlyWarningService } from './services/oi-early-warning.service';
+import { VacsIndexService } from './services/vacs-index.service';
+import { HivFastTrackService } from './services/hiv-fast-track.service';
+import { HivResistanceService } from './services/hiv-resistance.service';
+import { HivMmdService } from './services/hiv-mmd.service';
+import { HivDisclosureService } from './services/hiv-disclosure.service';
+import { AlhivTransitionService } from './services/alhiv-transition.service';
+import { GbvService } from './services/gbv.service';
+import { CounsellorSessionsService } from './services/counsellor-sessions.service';
+import { EmpowermentService } from './services/empowerment.service';
+import { SupportGroupsService } from './services/support-groups.service';
+import { TrainingService } from './services/training.service';
+import { CascadeMetricsService } from './services/cascade-metrics.service';
+import { RetentionService } from './services/retention.service';
+import { CohortBuilderService } from './services/cohort-builder.service';
+import { KaplanMeierService } from './services/kaplan-meier.service';
+import { DeidExportService } from './services/deid-export.service';
+import { UssdSessionService } from './services/ussd-session.service';
+import { SmsCampaignService } from './services/sms-campaign.service';
+import { AdherenceNudgeService } from './services/adherence-nudge.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
 import { StorageService } from './services/storage.service';
@@ -441,6 +481,9 @@ import { RegistrationAiService } from './services/registration-ai.service';
 import { ProactiveAiService } from './services/proactive-ai.service';
 import { AtMessagingService } from './services/at-messaging.service';
 import { TotpService } from './services/totp.service';
+import { BreachDetectionService } from './services/breach-detection.service';
+import { BackupService } from './services/backup.service';
+import { PotrazNotificationService } from './services/potraz-notification.service';
 import { CriticalAlertGateway } from './gateways/critical-alert.gateway';
 import { TelemedicineGateway } from './gateways/telemedicine.gateway';
 import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gateway';
@@ -449,6 +492,7 @@ import { VoiceTranscriptionGateway } from './gateways/voice-transcription.gatewa
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { TenantMiddleware } from './middleware/tenant.middleware';
 import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
+import { LanguageMiddleware } from './middleware/language.middleware';
 import { RolesGuard } from './guards/roles.guard';
 import { MfaGuard } from './guards/mfa.guard';
 import { HealthEducatorGuard } from './guards/health-educator.guard';
@@ -556,6 +600,14 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CriticalAlertController,
     DrugController,
     HivController,
+    PsychosocialController,
+    EmpowermentController,
+    TrainingController,
+    ResearchController,
+    ResearchDayController,
+    UssdController,
+    SmsCampaignController,
+    PreferencesController,
     ImagingController,
     MaternityController,
     OncologyController,
@@ -642,6 +694,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HealthEducationController,
     PatientPortalHealthEducationController,
     OfflineSyncController,
+    ClinicalSpecialtiesController,
+    WebAuthnController,
+    ConsentRecordsController,
     IotController,
     RadiologyAiController,
     AlertDeliveryController,
@@ -660,6 +715,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AtMessagingController,
     PushTokensController,
     CdpaController,
+    BreachDetectionController,
+    PatientPortalHivController,
   ],
   providers: [
     AuthService,
@@ -709,6 +766,26 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HivVisitTemplatesService,
     HivTptTrackerService,
     HivPediatricDosingService,
+    OiEarlyWarningService,
+    VacsIndexService,
+    HivFastTrackService,
+    HivResistanceService,
+    HivMmdService,
+    HivDisclosureService,
+    AlhivTransitionService,
+    GbvService,
+    CounsellorSessionsService,
+    EmpowermentService,
+    SupportGroupsService,
+    TrainingService,
+    CascadeMetricsService,
+    RetentionService,
+    CohortBuilderService,
+    KaplanMeierService,
+    DeidExportService,
+    UssdSessionService,
+    SmsCampaignService,
+    AdherenceNudgeService,
     HivMonthlyReturnService,
     ImagingService,
     StorageService,
@@ -845,6 +922,15 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HealthEducationService,
     PatientHealthEducationService,
     OfflineSyncService,
+    ConflictResolverService,
+    WebAuthnService,
+    ConsentRecordsService,
+    TeleconsultBridgeService,
+    DentalService,
+    AncService,
+    PmtctService,
+    GrowthChartService,
+    PaediatricDosingService,
     IotService,
     RadiologyAiService,
     AlertDeliveryService,
@@ -886,6 +972,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RolesGuard,
     HealthEducatorGuard,
     TotpService,
+    BreachDetectionService,
+    BackupService,
+    PotrazNotificationService,
     MfaGuard,
     {
       provide: APP_GUARD,
@@ -897,11 +986,12 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
 export class EhrModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
+    consumer.apply(LanguageMiddleware).forRoutes('*');
     consumer
       .apply(TenantMiddleware)
       .exclude(
-        { path: 'tenants/active', method: RequestMethod.ALL }, // Public endpoint - all methods
-        { path: 'terminology/import/(.*)', method: RequestMethod.ALL }, // Terminology import endpoints
+        { path: 'tenants/active', method: RequestMethod.ALL },
+        { path: 'terminology/import/(.*)', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }

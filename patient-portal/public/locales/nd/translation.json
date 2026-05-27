@@ -1,0 +1,162 @@
+{
+  "nav": {
+    "dashboard": "Ikhasi Elikhulu",
+    "appointments": "Izikhathi Zokubonana",
+    "results": "Imiphumela Yami",
+    "medications": "Imithi",
+    "messages": "Imiyalezo",
+    "profile": "Imininingwane Yami",
+    "logout": "Phuma",
+    "supportGroups": "Amaqoqo Okusekelana",
+    "commPreferences": "Ukuxhumana",
+    "ancEid": "ANC / EID",
+    "growth": "Igrafu Yokukhula",
+    "dental": "Amazinyo"
+  },
+  "dashboard": {
+    "welcome": "Wamukelekile, {{name}}",
+    "nextAppointment": "Isikhathi Esilandelayo",
+    "noAppointments": "Akulazikhathi ezizayo",
+    "recentResults": "Imiphumela Yakamuva",
+    "noResults": "Akulamiphumela yakamuva",
+    "medicationsDue": "Imithi Efanele Ukuthathwa"
+  },
+  "appointments": {
+    "upcoming": "Izikhathi Ezizayo",
+    "past": "Izikhathi Eziyadlulayo",
+    "confirm": "Qinisekisa Ukuza",
+    "cancel": "Cela Ukushintsha Usuku",
+    "date": "Usuku",
+    "time": "Isikhathi",
+    "provider": "Udokotela",
+    "status": "Isimo",
+    "confirmed": "Kuqinisekisiwe",
+    "pending": "Kulindile"
+  },
+  "results": {
+    "testType": "Uhlolo",
+    "value": "Umphumela",
+    "date": "Usuku",
+    "noResults": "Akulamiphumela",
+    "vl": "Viral Load",
+    "cd4": "CD4",
+    "hb": "Haemoglobin"
+  },
+  "medications": {
+    "currentRegimen": "Umthetho Wamanje Wemithi",
+    "nextPickup": "Usuku Lokuthatha Imithi",
+    "requestRefill": "Cela Ukugcwaliswa Kwemithi",
+    "refillRequested": "Isicelo Sithunyiwe",
+    "mmdInfo": "Usemaphaketheni amaningi wemithi",
+    "mmdTitle": "Ukuhlawulwa Kwemithi Inyanga Eziningi",
+    "scheduleType": "Uhlobo Lohlelo",
+    "pickupDueSoon": "Ukuthatha kuyasondela",
+    "pickupOverdue": "Ukuthatha kudlulile isikhathi"
+  },
+  "profile": {
+    "firstName": "Ibizo Lokuqala",
+    "lastName": "Isibongo",
+    "dateOfBirth": "Usuku Lokuzalwa",
+    "phone": "Inombolo Yethelevishini",
+    "language": "Ulimi Olukhethwayo",
+    "save": "Gcina Izinguquko",
+    "saved": "Izinguquko Zigcinwe"
+  },
+  "common": {
+    "loading": "Kulindile...",
+    "error": "Kukhona okungahambanga kahle. Zama futhi.",
+    "back": "Buyela",
+    "cancel": "Khansela",
+    "confirm": "Qinisekisa",
+    "yes": "Yebo",
+    "no": "Cha"
+  },
+  "auth": {
+    "login": "Ngena",
+    "logout": "Phuma",
+    "username": "Igama Lomsebenzisi",
+    "password": "Iphasiwedi",
+    "forgotPassword": "Ukhohlwe iphasiwedi?",
+    "loginError": "Igama noma iphasiwedi ayilungile"
+  },
+  "supportGroups": {
+    "title": "Amaqoqo Okusekelana",
+    "notEnrolled": "Awukhona emaqoqweni okusekelana.",
+    "facilitator": "Umholi",
+    "location": "Indawo",
+    "sessionsAttended": "Izihlangano Ezihanjiwe",
+    "nextSession": "Ihlangano Elilandelayo",
+    "viewSessions": "Bona Umlando Wezihlangano",
+    "hideSessions": "Fihla Umlando Wezihlangano",
+    "date": "Usuku",
+    "topic": "Isihloko",
+    "attended": "Wahlangana"
+  },
+  "comms": {
+    "title": "Izintando Zokuxhumana",
+    "sendingTo": "Ithumela i-SMS ku",
+    "nudgeSettings": "Izilungiselelo Zezikhumbuzi",
+    "stopAllSms": "Misa Yonke Imithumelo ye-SMS",
+    "optOutDescription": "Lokhu kuzamisa zonke izikhumbuzi nezaziso ezivela kuleli kliniki.",
+    "optOutButton": "Phuma ku-SMS",
+    "optOutConfirm": "Uqinisekile ukuthi ufuna ukumisa yonke imithumelo ye-SMS evela kuleli kliniki?",
+    "optedOutBanner": "Uphume ekwamukeleni imithumelo ye-SMS.",
+    "optedOutOn": "Waphuma mhla {{date}}",
+    "optBackIn": "Buyisela i-SMS"
+  },
+  "anc": {
+    "title": "Ukulandela i-ANC & i-EID",
+    "notRegistered": "Awukhona ohlelweni lwe-ANC.",
+    "pregnancyDetails": "Imininingwane Yokukhulelwa",
+    "lmp": "Isikhathi Sokugcina Senyanga",
+    "edd": "Usuku Olulindelekile Lokubeletha",
+    "currentRegimen": "Uhlelo Lwamanje Lwemithi",
+    "notRecorded": "Akubhalwanga",
+    "highMtr": "Ingozi enkulu yokudlulisela kwezifo emsaneni",
+    "bornOn": "Wazalwa",
+    "weeks": "amaviki e-NVP",
+    "due": "Usuku",
+    "finalStatus": "Isimo Sokugcina se-HIV"
+  },
+  "growth": {
+    "title": "Igrafu Yokukhula",
+    "weightStatus": "Isimo Sobukhulu",
+    "lastMeasured": "Kwakalwa Okwakamuva",
+    "nutritionReferral": "Ukudluliselwa kudokotela wokondla kuphakanyisiwe",
+    "wazChart": "Igrafu ye-Z-Score Yobukhulu Ngeminyaka",
+    "history": "Umlando Wokukalwa",
+    "date": "Usuku",
+    "age": "Iminyaka",
+    "weight": "Isisindo",
+    "height": "Ubude",
+    "status": "Isimo"
+  },
+  "dental": {
+    "title": "Uhlelo Lokwelapha Amazinyo",
+    "noTreatmentPlan": "Akulalo uhlelo lokwelapha amazinyo olubhalwe phansi.",
+    "totalProcedures": "Yonke Imikhuba Yokwelapha",
+    "completed": "Kuqediwe",
+    "pending": "Kulindile",
+    "outstandingCost": "Imali Engakabhalelwa",
+    "procedure": "Imikhuba Yokwelapha",
+    "tooth": "Izinyo",
+    "plannedDate": "Usuku Oluhlelelwe",
+    "cost": "Imali",
+    "status": "Isimo"
+  },
+  "education": {
+    "back": "Buyela Emfundweni",
+    "openPdf": "Vula Idokhumenti ye-PDF",
+    "quiz": "Ukuhlola Ulwazi",
+    "passThreshold": "Imaka yokudlula: {{pct}}%",
+    "quizPassed": "Kudlulile",
+    "quizFailed": "Zama futhi",
+    "submitQuiz": "Thumela Izimpendulo",
+    "markComplete": "Phawula Njengokuqedilwe",
+    "enrolled": "Izifundo Zami",
+    "browse": "Hlola Izifundo",
+    "enroll": "Qala Isifundo",
+    "progress": "Inqubekelaphambili",
+    "complete": "Kuqedilwe"
+  }
+}

@@ -78,7 +78,7 @@ Advanced HIV programme management purpose-built for high-volume clinics operatin
 - **95-95-95 Cascade and Research** — HIV treatment cascade computation (diagnosed → on ART → suppressed) with sex and age-band disaggregation; LTFU definition (> 90 days past expected visit); 6/12/24-month retention cohorts; re-engagement recording; SQL-injection-safe JSONB cohort builder with field whitelist; Kaplan-Meier survival curves with Greenwood 95% CI
 - **De-identification and Research Access** — 18 PHI identifier removal (HIPAA Safe Harbor); 5-year age banding; YYYY-MM date generalisation; age ≥ 90 → '90+'; time-limited public research portal access tokens shareable with external collaborators without requiring EHR accounts; VigiBase-compatible pharmacovigilance adverse event reporting with sequential case IDs
 - **USSD Workflows and Adherence Nudges** — Stateful USSD session machine via Africa's Talking webhook (appointment confirm, refill request, lab result view, SMS opt-out menus); scheduled adherence nudge campaigns in English, ChiShona, and IsiNdebele; Bull queue bulk SMS dispatch with Twilio provider failover; opt-out registry
-- **Full Shona and Ndebele Localisation** — `react-i18next` in patient portal, EHR frontend, and Expo mobile (offline-embedded bundle); complete English/ChiShona/IsiNdebele translation files; language selector component; preference persisted to patient and staff records; PDF appointment letters and discharge summaries in the patient's preferred language
+- **8-Language Localisation** — `react-i18next` in patient portal, EHR frontend, and Expo mobile (offline-embedded bundle); complete translation files in English, ChiShona, IsiNdebele, Kiswahili, isiZulu, Afrikaans, Français, and Português; language selector component; preference persisted to patient and staff records; PDF appointment letters and discharge summaries in the patient's preferred language
 - **Breach Detection and Disaster Recovery** — 5-rule real-time anomaly engine (bulk download, brute-force login, after-hours sensitive access, audit log sequence gaps, unauthorised bulk export); SHA-256 hash-chained audit log with chain integrity verification endpoint; nightly encrypted `pg_dump` with AES-256-GCM, S3 upload, checksum verification, and `pg_restore` integrity check; security dashboard with anomaly acknowledgement, breach incident lifecycle, and DR test log
 - **Clinical Monitoring Dashboards** — 5 provisioned Grafana dashboards (95-95-95 cascade gauges with 12-month trend, LTFU/retention rates, OI alert operations, MMD adherence, security anomalies); real-time OI/anomaly/MMD alert badge counts in EHR sidebar
 - **Offline-First Hardening** — Field-level Last-Write-Wins conflict resolution (immutable: lab results; server wins: appointments; field merge: all clinical forms); offline coverage spanning HIV clinical visits, counselling sessions, GBV assessments, disclosure records, adolescent transition assessments, and counsellor sessions; conflict log for audit
@@ -88,20 +88,16 @@ Advanced HIV programme management purpose-built for high-volume clinics operatin
 - **Paediatric ART Dosing** — MOHCC weight-band dosing table (3–5.9 kg through ≥ 25 kg) for ABC/3TC FDC, EFV, LPV/r liquid and tablet formulations; weight-band change detection with alert when a patient crosses to the next band; inline dose recommendation on ART initiation form
 - **Role-Based Access Control** — 9-tier role matrix (`super_admin`, `admin`, `doctor`, `nurse`, `counsellor`, `lab`, `reception`, `pharmacist`, `researcher`) enforced globally; researcher role restricted to de-identified exports only
 
-### Patient-Facing Features
-- Secure login with tenant resolution
-- Appointments, health records, lab results, prescriptions, and bills
-- Medication reminders, adherence tracking, and refill requests
-- Telemedicine video consultations with pre-consultation form auto-linked to EHR clinical visit draft
-- Secure messaging with providers
-- Symptom checker and post-visit AI follow-ups
-- Questionnaires, patient-reported outcome schedules, and health goals
-- Health education content with locale-aware delivery
-- Caregiver and guardian access management
-- Family access, immunizations, and consent management
-- CDPA consent dashboard — grant, view, and withdraw consent per processing purpose with expiry tracking
-- Language selector (English, ChiShona, IsiNdebele) with preference persisted to patient record
-- USSD self-service via Africa's Talking (`*123#`) — appointment confirmation, medication refill requests, recent lab result view, and SMS opt-out; no smartphone required
+### Patient Health Education
+
+Tenant-managed health education content with patient self-service enrollment, lesson progress tracking, and knowledge assessment.
+
+- Staff with the health educator role author courses organised into modules and lessons; each lesson supports text, video URL, and PDF content types
+- Full translation management — lesson content stored per language code; patients receive content in their preferred language with automatic English fallback
+- Knowledge quizzes attached to lessons with configurable pass thresholds and maximum attempt limits; automatic scoring with pass/fail result
+- Patients browse a tenant-specific course library, self-enroll, track lesson completion with progress bars, and receive course-complete status when all lessons are done
+- Progress dashboard visible to staff showing per-patient completion percentage and best quiz score across all enrolled courses
+- Available in all 8 supported languages; course reader accessible in patient portal and mobile app
 
 ---
 
@@ -166,6 +162,44 @@ All AI calls go through a governed pathway that enforces consent checks, PHI red
 - Mobile: biometric login gate (Face ID and fingerprint), session auto-lock on background and 5-minute inactivity, offline read cache cleared on logout
 - SOC2 and HIPAA evidence report: `npm run report:soc2-hipaa`
 - Zimbabwe CDPA 2021 compliance: 18-control register per tenant, BAA vendor registry, POTRAZ breach notification within 72 hours
+
+---
+
+## Patient-Facing Features
+
+### Self-Service Portal and Mobile App
+- Secure login with tenant resolution; caregiver and guardian login with invitation code
+- Appointments view with upcoming and past visits; attendance confirmation
+- Health records, lab results, prescriptions, and bills
+- Medication reminders, adherence check-in, and refill requests
+- Multi-Month Dispensing schedule view with next pickup countdown and dispensing history
+- Telemedicine video consultations with pre-consultation form auto-linked to EHR clinical visit draft
+- Secure messaging with providers; Whisper AI voice input for symptom and message composition
+- Symptom checker and post-visit AI follow-ups
+- Questionnaires, patient-reported outcome schedules, and health goals
+- CDPA consent dashboard — grant, view, and withdraw consent per processing purpose with expiry tracking
+- Caregiver and guardian access management — grant access with relationship, access level, and expiry
+- Family access, immunizations, and consent management
+
+### HIV-Specific Patient Views
+- ANC/EID tracker — pregnancy details, EDD, gestational VL monitoring, NVP prophylaxis status, EID timepoint schedule (6w/4m/12m/18m) with result recording
+- Growth chart — WAZ/HAZ z-score history with WHO reference lines and malnutrition status
+- Dental treatment plan summary — procedure list, costs, and completion status
+- Support groups — enrolled groups, session history, attendance records, and next session date
+- Communication preferences — per-nudge SMS toggle and global SMS opt-out with opt-back-in
+
+### Health Education
+- Browse and enroll in tenant-authored health education courses
+- Module-by-module lesson reader with text, video, and PDF content types
+- Progress bars showing lessons completed per course
+- Knowledge quizzes with immediate scored feedback; course marked complete when all lessons done
+- Language selector with 8 options — content delivered in the patient's preferred language
+
+### Language and Accessibility
+- Language selector with 8 options: English, ChiShona, IsiNdebele, Kiswahili, isiZulu, Afrikaans, Français, Português
+- Language preference persisted to patient record across all sessions
+- USSD self-service via Africa's Talking (`*123#`) — appointment confirmation, medication refill requests, recent lab result view, and SMS opt-out; no smartphone required
+- PDF appointment letters and discharge summaries generated in the patient's preferred language
 
 ---
 

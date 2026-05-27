@@ -1,0 +1,102 @@
+{
+  "title": "95-95-95 HIV Cascade",
+  "uid": "nc-cascade-001",
+  "tags": ["hiv", "cascade", "newlands"],
+  "refresh": "5m",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Second 95 (Diagnosed → On ART)",
+      "type": "gauge",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT second_95 FROM cascade_snapshots WHERE period_end = (SELECT MAX(period_end) FROM cascade_snapshots) LIMIT 1",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "yellow", "value": 85},
+              {"color": "green", "value": 95}
+            ]
+          }
+        }
+      },
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8}
+    },
+    {
+      "id": 2,
+      "title": "Third 95 (On ART → Suppressed)",
+      "type": "gauge",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT third_95 FROM cascade_snapshots WHERE period_end = (SELECT MAX(period_end) FROM cascade_snapshots) LIMIT 1",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "yellow", "value": 85},
+              {"color": "green", "value": 95}
+            ]
+          }
+        }
+      },
+      "gridPos": {"x": 8, "y": 0, "w": 8, "h": 8}
+    },
+    {
+      "id": 3,
+      "title": "First 95 (PLHIV → Diagnosed)",
+      "type": "gauge",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT first_95 FROM cascade_snapshots WHERE period_end = (SELECT MAX(period_end) FROM cascade_snapshots) LIMIT 1",
+        "format": "table"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": 0},
+              {"color": "yellow", "value": 85},
+              {"color": "green", "value": 95}
+            ]
+          }
+        }
+      },
+      "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8}
+    },
+    {
+      "id": 4,
+      "title": "Cascade Trend (12 months)",
+      "type": "timeseries",
+      "datasource": "PostgreSQL-MediCore",
+      "targets": [{
+        "rawSql": "SELECT period_end AS time, first_95, second_95, third_95 FROM cascade_snapshots WHERE period_end > NOW() - INTERVAL '12 months' ORDER BY period_end",
+        "format": "table",
+        "timeColumns": ["time"]
+      }],
+      "fieldConfig": {
+        "defaults": {"unit": "percent", "min": 0, "max": 100}
+      },
+      "gridPos": {"x": 0, "y": 8, "w": 24, "h": 10}
+    }
+  ]
+}

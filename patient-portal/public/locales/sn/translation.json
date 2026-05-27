@@ -1,0 +1,162 @@
+{
+  "nav": {
+    "dashboard": "Dhashbhodhi",
+    "appointments": "Misangano",
+    "results": "Mhedzisiro Yangu",
+    "medications": "Mishonga",
+    "messages": "Meseji",
+    "profile": "Pfupiso Yangu",
+    "logout": "Buda",
+    "supportGroups": "Mapoka Ekutsigirana",
+    "commPreferences": "Zvekutaurirana",
+    "ancEid": "ANC / EID",
+    "growth": "Chati Yekukura",
+    "dental": "Mazino"
+  },
+  "dashboard": {
+    "welcome": "Mauya, {{name}}",
+    "nextAppointment": "Musangano Unotevera",
+    "noAppointments": "Hapana misangano inouya",
+    "recentResults": "Mhedzisiro Yezvino",
+    "noResults": "Hapana mhedzisiro yezvino",
+    "medicationsDue": "Mishonga Yakokwa"
+  },
+  "appointments": {
+    "upcoming": "Misangano Inouya",
+    "past": "Misangano Yapfuura",
+    "confirm": "Simbisa Kuuya",
+    "cancel": "Kumbira Kushandura Zuva",
+    "date": "Zuva",
+    "time": "Nguva",
+    "provider": "Chiremba",
+    "status": "Mamiriro",
+    "confirmed": "Yakasimbiswa",
+    "pending": "Inomirirwa"
+  },
+  "results": {
+    "testType": "Bvunzo",
+    "value": "Mhedzisiro",
+    "date": "Zuva",
+    "noResults": "Hapana mhedzisiro",
+    "vl": "Viral Load",
+    "cd4": "CD4",
+    "hb": "Hemoglobini"
+  },
+  "medications": {
+    "currentRegimen": "Regimen Yanhasi",
+    "nextPickup": "Zuva Rokutora Mushonga",
+    "requestRefill": "Kumbira Mishonga",
+    "refillRequested": "Kukumbira Kwatumirwa",
+    "mmdInfo": "Uri pa multi-month dispensing",
+    "mmdTitle": "Kubata Mishonga Kwemwedzi Yakawanda",
+    "scheduleType": "Mhando Yechirongwa",
+    "pickupDueSoon": "Kutora kwakaswedera",
+    "pickupOverdue": "Kutora kwapfuura nguva"
+  },
+  "profile": {
+    "firstName": "Zita Rokutanga",
+    "lastName": "Zita Romhuri",
+    "dateOfBirth": "Zuva Rokuzvarwa",
+    "phone": "Nhamba Yefoni",
+    "language": "Mutauro Unodiwa",
+    "save": "Chengetedza Shanduko",
+    "saved": "Shanduko Dzachengetedzwa"
+  },
+  "common": {
+    "loading": "Kumirira...",
+    "error": "Pane chakaipa. Ndokumbirawo uedze zvakare.",
+    "back": "Dzoka",
+    "cancel": "Kanzura",
+    "confirm": "Simbisa",
+    "yes": "Hongu",
+    "no": "Kwete"
+  },
+  "auth": {
+    "login": "Pinda",
+    "logout": "Buda",
+    "username": "Zita Remushandisi",
+    "password": "Pasiwaadhi",
+    "forgotPassword": "Wakanganwa pasiwaadhi?",
+    "loginError": "Zita kana pasiwaadhi hazvibvumirwe"
+  },
+  "supportGroups": {
+    "title": "Mapoka Ekutsigirana",
+    "notEnrolled": "Hapana mapoka ekutsigirana auriwo.",
+    "facilitator": "Murongi",
+    "location": "Nzvimbo",
+    "sessionsAttended": "Misangano Yakapindwa",
+    "nextSession": "Musangano Unotevera",
+    "viewSessions": "Ona Nhoroondo Yemisangano",
+    "hideSessions": "Viga Nhoroondo Yemisangano",
+    "date": "Zuva",
+    "topic": "Musoro",
+    "attended": "Akapinda"
+  },
+  "comms": {
+    "title": "Zvaunodiwa Pakutaurirana",
+    "sendingTo": "Kutumira SMS ku",
+    "nudgeSettings": "Zvekuyeuchidza",
+    "stopAllSms": "Misa Meseji Ese eSMS",
+    "optOutDescription": "Izvi zvichaimisa yese yeyeuchidzo nenhungamiro kubva kiriniki ino.",
+    "optOutButton": "Ramba SMS",
+    "optOutConfirm": "Unokwiziva here kuti unoda kumisa meseji ese eSMS kubva kiriniki ino?",
+    "optedOutBanner": "Waramba kupiwa meseji eSMS.",
+    "optedOutOn": "Waramba pa {{date}}",
+    "optBackIn": "Dzosera SMS"
+  },
+  "anc": {
+    "title": "Muongorori weANC & EID",
+    "notRegistered": "Hausi kunyoreswa muchirongwa cheANC.",
+    "pregnancyDetails": "Ruzivo Rwemimba",
+    "lmp": "Nguva Yekupedzisira Yechimwari",
+    "edd": "Zuva Rekuberekera",
+    "currentRegimen": "Regimen Yanhasi",
+    "notRecorded": "Haisati yanyorwa",
+    "highMtr": "Njodzi huru yekupfuudza kurwara kumwana",
+    "bornOn": "Akazvarwa",
+    "weeks": "mavhiki eNVP",
+    "due": "Zuva",
+    "finalStatus": "Mamiriro Ekupedzisira eHIV"
+  },
+  "growth": {
+    "title": "Chati Yekukura",
+    "weightStatus": "Mamiriro EMuromo",
+    "lastMeasured": "Yakayerwa Kekupedzisira",
+    "nutritionReferral": "Kuendeswa kudokotera wekudya kunodiwa",
+    "wazChart": "Chati yeZ-Score yeUremu-neUmri",
+    "history": "Nhoroondo Yemayero",
+    "date": "Zuva",
+    "age": "Makore",
+    "weight": "Uremu",
+    "height": "Kureba",
+    "status": "Mamiriro"
+  },
+  "dental": {
+    "title": "Chirongwa Chekurapa Mazino",
+    "noTreatmentPlan": "Hapana chirongwa chekurapa mazino chakanyorwa.",
+    "totalProcedures": "Zvese Zvekurapwa",
+    "completed": "Zvapedzwa",
+    "pending": "Zvinomirirwa",
+    "outstandingCost": "Mari Isati Yabhadharwa",
+    "procedure": "Kurapwa",
+    "tooth": "Zino",
+    "plannedDate": "Zuva Rakarongwa",
+    "cost": "Mari",
+    "status": "Mamiriro"
+  },
+  "education": {
+    "back": "Dzokera Kudzidziso",
+    "openPdf": "Vhura Dhokhumendi ye-PDF",
+    "quiz": "Tariro Yezivo",
+    "passThreshold": "Mupimo wekupfuura: {{pct}}%",
+    "quizPassed": "Wapfuura",
+    "quizFailed": "Edza zvakare",
+    "submitQuiz": "Tumira Mhinduro",
+    "markComplete": "Maka sePakazara",
+    "enrolled": "Makosi Angu",
+    "browse": "Tsvaga Makosi",
+    "enroll": "Tanga Kosi",
+    "progress": "Kufambira Mberi",
+    "complete": "Yapera"
+  }
+}
