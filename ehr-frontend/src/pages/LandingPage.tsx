@@ -57,6 +57,14 @@ const interestOptions = [
   'Deployment mode gating (clinic / hospital / ministry)',
   'CRVS civil registration & birth/death reporting',
   'Multi-language mobile (8 African languages)',
+  'Proactive risk scoring & nurse alerts',
+  'AI mortality risk prediction',
+  'AI-generated clinical documents',
+  'Drug substitution AI engine',
+  'AI follow-up scheduling & care continuity',
+  'Predictive medication adherence engine',
+  'AI clinical timeline & pattern detection',
+  'Treatment gap & care opportunity engine',
 ];
 
 const STANDARDS = [
@@ -75,8 +83,8 @@ const STANDARDS = [
 ];
 
 const stats = [
-  { value: '50+', label: 'Clinical modules', sub: 'From maternity to traditional medicine' },
-  { value: 'FHIR R4', label: 'Native data model', sub: 'Structured, exportable, referrable' },
+  { value: '60+', label: 'Clinical modules', sub: 'From maternity to AI follow-up scheduling' },
+  { value: '20+', label: 'AI capabilities', sub: 'Risk, documents, timeline, adherence, voice' },
   { value: '8 langs', label: 'Mobile languages', sub: 'Auto-detected from device locale' },
   { value: 'DHIS2', label: 'Program reporting', sub: 'HIV, maternal, vaccine cohorts' },
 ];
@@ -92,6 +100,9 @@ const audiences = [
       'PostVisit AI summaries with patient-safe publishing',
       'Specialty-specific workflows: HIV, oncology, maternity, cardiology',
       'Real-time doctor-nurse coordination and alert loops',
+      'Composite mortality risk badge and proactive daily risk score on every patient card',
+      'One-click AI documents — referral letters, discharge summaries, pre-auth, sick notes',
+      'AI follow-up scheduler — optimal timing and modality after every encounter',
       'Offline-first mobile — ward rounds work without Wi-Fi; vitals queue and sync automatically',
     ],
   },
@@ -209,6 +220,42 @@ const aiFeatures = [
     description: 'Herb-drug interaction alerts for traditional medicine disclosures, sickle cell crisis triage, PACTR clinical trial matching, Ubuntu psychosocial SDOH scoring, and IHR Annex 2 outbreak notification — built for the African clinical context.',
     color: '#00C896',
   },
+  {
+    icon: TrendingUp,
+    title: 'Proactive Risk Scoring Engine',
+    description: 'Nightly composite risk scores across every active patient — NEWS2, vitals, labs, adherence, and missed appointments combined. High and critical patients trigger automatic nurse alerts before deterioration occurs.',
+    color: '#FF7A40',
+  },
+  {
+    icon: HeartPulse,
+    title: 'Mortality Risk Prediction',
+    description: 'Composite 30-day mortality risk badge on every patient card — age, comorbidities, NEWS2, ICU status, and critical labs into a single defensible score with factor breakdown. Critical alerts deduplicated to once per 6 hours.',
+    color: '#FF7A40',
+  },
+  {
+    icon: Sparkles,
+    title: 'AI Clinical Summary & Timeline',
+    description: '5-sentence AI summary auto-generated on every patient record open. Longitudinal pattern detection identifies recurring infections, drug failures, and chronic progression across the full care history.',
+    color: '#00C896',
+  },
+  {
+    icon: FileText,
+    title: 'AI-Generated Clinical Documents',
+    description: 'One-click referral letters, discharge summaries, pre-authorisation requests, and sick notes. AI drafts from structured clinical data; the clinician reviews, edits, and signs. Patient portal shows only signed documents.',
+    color: '#2B7FFF',
+  },
+  {
+    icon: Activity,
+    title: 'Drug Substitution Engine',
+    description: 'When a medication is out of stock, AI suggests ranked therapeutic equivalents with confidence scores, rationale, and caveats — sourced from CDSS, LLM grounding, and protocol rules. Selection logged for audit.',
+    color: '#00C896',
+  },
+  {
+    icon: Workflow,
+    title: 'AI Follow-up Scheduler',
+    description: 'After every encounter, AI recommends optimal follow-up interval and modality — in-person, telemedicine, or phone — based on risk band, diagnoses, and open care gaps. Overdue follow-ups alert the care team nightly.',
+    color: '#2B7FFF',
+  },
 ];
 
 const standardsGrid = [
@@ -302,6 +349,20 @@ const modules = [
   { label: 'Deployment Mode Gating', icon: Lock, color: '#2B7FFF' },
   { label: 'CRVS Civil Registration', icon: FileText, color: '#FF7A40' },
   { label: 'Multilingual Mobile (8 langs)', icon: Globe, color: '#00C896' },
+  { label: 'Proactive Risk Engine', icon: TrendingUp, color: '#FF7A40' },
+  { label: 'Mortality Risk Score', icon: HeartPulse, color: '#FF7A40' },
+  { label: 'AI Clinical Summary', icon: Sparkles, color: '#00C896' },
+  { label: 'Care Gap Engine', icon: CheckCircle2, color: '#2B7FFF' },
+  { label: 'AI Clinical Documents', icon: FileText, color: '#00C896' },
+  { label: 'Drug Substitution AI', icon: Activity, color: '#2B7FFF' },
+  { label: 'AI Follow-up Scheduler', icon: Workflow, color: '#FF7A40' },
+  { label: 'AI Lab Narratives', icon: FlaskConical, color: '#00C896' },
+  { label: 'Appointment AI Brief', icon: Brain, color: '#2B7FFF' },
+  { label: 'Ambient Voice AI', icon: MessageSquare, color: '#FF7A40' },
+  { label: 'Adherence Engine', icon: Activity, color: '#00C896' },
+  { label: 'AI Timeline & Patterns', icon: TrendingUp, color: '#2B7FFF' },
+  { label: 'CDSS Status Badges', icon: ShieldCheck, color: '#00C896' },
+  { label: 'Telemedicine AI Bridge', icon: Zap, color: '#2B7FFF' },
 ];
 
 const liveActivityItems = [
@@ -318,6 +379,14 @@ const liveActivityItems = [
   { type: 'gating', text: 'Module gating: OR and Blood Bank routes hidden for clinic-mode tenant (Lusaka Primary)', color: '#2B7FFF' },
   { type: 'crvs', text: 'CRVS: Birth notification sent to Zimbabwe Civil Registry for patient ID NR-2026-00441', color: '#00C896' },
   { type: 'i18n', text: 'Mobile i18n: Device locale "sw-TZ" detected → app language switched to Swahili', color: '#2B7FFF' },
+  { type: 'risk', text: 'Risk engine: Patient #4471 scored 87/100 (CRITICAL) — proactive alert dispatched to on-call nurse', color: '#FF7A40' },
+  { type: 'mortality', text: 'Mortality AI: 30-day risk 78% (HIGH) on post-op patient — ICU, age 71, NEWS2 score 8 — care team notified', color: '#FF7A40' },
+  { type: 'gap', text: 'Care gap engine: Diabetic patient overdue HbA1c by 94 days — lab order recommended', color: '#2B7FFF' },
+  { type: 'doc', text: 'AI Documents: Nephrology referral letter drafted in 1.2s — awaiting clinician sign-off', color: '#00C896' },
+  { type: 'drug', text: 'Drug substitution: Amoxicillin out of stock → Ampicillin 500mg suggested (CDSS confidence 80%)', color: '#00C896' },
+  { type: 'followup', text: 'Follow-up AI: Post-discharge critical patient → 2-day in-person recall (urgent) recommended', color: '#FF7A40' },
+  { type: 'adherence', text: 'Adherence engine: Patient missed 4 of last 7 Metformin doses → personalised nudge sent via portal', color: '#2B7FFF' },
+  { type: 'timeline', text: 'AI Timeline: Recurring respiratory infection pattern detected — 4 episodes in 14 months', color: '#00C896' },
 ];
 
 export default function LandingPage() {
@@ -531,7 +600,7 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="mt-6 max-w-2xl text-[1.05rem] leading-[1.85] text-[#8FAACA]">
-                  MediCore is an AI-first clinical platform built for SADC, Africa, and beyond. Real-time CDSS, PostVisit AI, FHIR R4 interoperability, DHIS2 program reporting, SaaS billing enforcement, deployment mode gating (clinic / hospital / ministry), CRVS civil registration, and a multilingual mobile app in 8 African languages — designed for clinicians across Johannesburg, Nairobi, Lusaka, Gaborone, Maputo, and wherever care happens.
+                  MediCore is an AI-first clinical platform built for SADC, Africa, and beyond. Real-time CDSS, PostVisit AI, proactive risk scoring, mortality prediction, AI-generated clinical documents, drug substitution engine, follow-up scheduler, predictive adherence, and 20+ more AI capabilities — all wired end-to-end. FHIR R4, DHIS2, 60+ clinical modules, and a multilingual mobile app in 8 African languages. Designed for clinicians across Johannesburg, Nairobi, Lusaka, Gaborone, Maputo, and wherever care happens.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -553,7 +622,7 @@ export default function LandingPage() {
 
                 {/* Compliance badges */}
                 <div className="mt-8 flex flex-wrap gap-2">
-                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7', '50+ modules', '8 languages', 'SaaS billing', 'CRVS'].map((tag) => (
+                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7', '60+ modules', '20+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS'].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8FA8CC]"
@@ -907,11 +976,11 @@ export default function LandingPage() {
                 style={{ fontFamily: '"Fraunces", serif' }}
                 className="text-4xl font-black text-white md:text-5xl"
               >
-                50+ modules.{' '}
+                60+ modules.{' '}
                 <span className="gradient-text-teal">Zero gaps in care.</span>
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-sm text-[#7A9CC0]">
-                From emergency triage to post-visit AI, from sickle cell disease to PACTR clinical trial matching — every clinical service line in Southern and Eastern Africa is covered.
+                From emergency triage to AI follow-up scheduling, from sickle cell disease to PACTR clinical trial matching — every clinical service line in Southern and Eastern Africa is covered, with 20+ AI capabilities wired into every surface.
               </p>
             </div>
 
@@ -974,7 +1043,7 @@ export default function LandingPage() {
                       icon: Database,
                       color: '#FF7A40',
                       title: 'Test any module end-to-end',
-                      body: 'CDSS, PostVisit AI, maternity, diabetes, sickle cell, epilepsy, traditional medicine herb-drug, PACTR trials, Ubuntu SDOH, NHIF/CBHI, lab, radiology, HIV, oncology, DHIS2, claims, and more.',
+                      body: 'CDSS, PostVisit AI, proactive risk scoring, mortality prediction, AI documents, drug substitution, follow-up scheduler, adherence engine, maternity, sickle cell, epilepsy, traditional medicine herb-drug, PACTR trials, Ubuntu SDOH, NHIF/CBHI, lab, radiology, HIV, oncology, DHIS2, claims, and more.',
                     },
                     {
                       icon: ShieldCheck,
@@ -1167,7 +1236,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[#5A7A9A]">
-                  SADC-first clinical AI platform — multilingual mobile in 8 African languages, real-time CDSS, PostVisit AI, SaaS billing enforcement, deployment mode gating (clinic / hospital / ministry), CRVS civil registration, FHIR R4 interoperability, DHIS2 national reporting, 50+ specialty workflows including sickle cell, epilepsy, traditional medicine herb-drug alerts, PACTR trial matching, Ubuntu SDOH, and NHIF/CBHI insurance. Serving clinics across Southern, Eastern, and Western Africa.
+                  SADC-first clinical AI platform — 60+ clinical modules, 20+ AI capabilities. Proactive risk scoring, mortality prediction, AI clinical summaries, care gap detection, AI-generated documents, drug substitution engine, follow-up scheduler, predictive adherence, ambient voice AI, FHIR R4, DHIS2, SNOMED CT, SaaS billing enforcement, deployment mode gating (clinic / hospital / ministry), CRVS civil registration, 8 African languages. Serving clinics across Southern, Eastern, and Western Africa.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC', 'SADC'].map((s) => (
@@ -1185,7 +1254,7 @@ export default function LandingPage() {
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#4A6A8A]">Platform</p>
                 <div className="mt-3 space-y-2 text-xs text-[#6A8AAA]">
-                  {['CDSS + AI guidance', 'PostVisit AI', 'SaaS billing enforcer', 'Deployment mode gating', 'CRVS civil registration', 'Multilingual mobile (8 langs)', 'FHIR R4 data model', 'DHIS2 integration', 'SNOMED CT charting', 'Real-time alerts', 'Telemedicine + video', 'Patient portal'].map((item) => (
+                  {['CDSS + AI guidance', 'PostVisit AI', 'Proactive risk scoring', 'Mortality risk prediction', 'AI clinical summary panel', 'AI-generated documents', 'Drug substitution engine', 'AI follow-up scheduler', 'AI lab interpretation', 'Predictive adherence engine', 'AI clinical timeline', 'Treatment gap engine', 'Appointment AI brief', 'Ambient voice AI', 'AI communication hub', 'SaaS billing enforcer', 'Deployment mode gating', 'CRVS civil registration', 'Multilingual mobile (8 langs)', 'FHIR R4 data model', 'DHIS2 integration', 'SNOMED CT charting', 'Real-time alert delivery', 'Telemedicine AI bridge', 'Patient portal'].map((item) => (
                     <p key={item}>{item}</p>
                   ))}
                 </div>
@@ -1195,7 +1264,7 @@ export default function LandingPage() {
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#4A6A8A]">Clinical Focus</p>
                 <div className="mt-3 space-y-2 text-xs text-[#6A8AAA]">
-                  {['Maternity + newborn', 'Diabetes + chronic care', 'Lab + radiology', 'HIV program workflow', 'Cancer + oncology', 'Emergency department', 'Sickle cell + haemoglobinopathy', 'Epilepsy + NCD register', 'Traditional medicine CDSS', 'Maternal mortality audit', 'Ubuntu SDOH wellbeing', 'NHIF / CBHI insurance', 'Claims + billing'].map((item) => (
+                  {['Maternity + newborn', 'Diabetes + chronic care', 'Lab + radiology', 'HIV program workflow', 'Cancer + oncology', 'Emergency department', 'Sickle cell + haemoglobinopathy', 'Epilepsy + NCD register', 'Traditional medicine CDSS', 'Maternal mortality audit', 'Ubuntu SDOH wellbeing', 'NHIF / CBHI insurance', 'Claims + billing', 'Care gap detection', 'Radiology AI findings', 'Drug substitution AI'].map((item) => (
                     <p key={item}>{item}</p>
                   ))}
                 </div>
@@ -1236,7 +1305,7 @@ export default function LandingPage() {
           <div className="border-t border-white/[0.05] px-5 py-4 lg:px-8">
             <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[11px] text-[#3A5A7A]">
-                © {currentYear} MediCore EHR. SADC-first · Built for Africa · Used globally — serving clinicians, NGOs, and MOH programs across 16 SADC nations. 50+ clinical modules.
+                © {currentYear} MediCore EHR. SADC-first · Built for Africa · Used globally — serving clinicians, NGOs, and MOH programs across 16 SADC nations. 60+ clinical modules · 20+ AI capabilities.
               </p>
               <p className="text-[11px] text-[#2A4060]">
                 FHIR R4 · SNOMED CT · ICD-10 · DHIS2 · LOINC · RxNorm · HIPAA-aware · HL7 · PACTR · 40+ languages

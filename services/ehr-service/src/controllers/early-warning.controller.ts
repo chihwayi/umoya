@@ -19,7 +19,7 @@ export class EarlyWarningController {
   @ApiOperation({ summary: 'Calculate and store NEWS2 score from vitals payload' })
   async createScore(@Body() body: News2Input, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.earlyWarningService.recordNews2Score(tenantDb, body);
+    return await this.earlyWarningService.recordNews2Score(tenantDb, body, req.tenantId);
   }
 
   @Get('patient/:patientId')

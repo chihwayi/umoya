@@ -109,6 +109,33 @@
     "myCourses": "My Kursusse",
     "explore": "Verken"
   },
+  "alerts": {
+    "clinical_alert": "Kliniese Waarskuwing",
+    "oi_warning": "OI Vroeë Waarskuwing",
+    "news2_high": "Pasiënt Agteruitgang — NEWS2 Hoog",
+    "tap_to_view": "Tik om pasiënt te sien",
+    "acknowledged": "Bevestig",
+    "unacknowledged": "Nie bevestig nie"
+  },
+  "escalation": {
+    "queue_title": "Na-Besoek Eskalasies",
+    "acknowledge": "Bevestig",
+    "resolve": "Oplos",
+    "level_critical": "KRITIES",
+    "level_high": "HOOG",
+    "level_moderate": "MATIG",
+    "no_escalations": "Geen oop eskalasies"
+  },
+  "ai_orders": {
+    "panel_title": "KI Voorgestelde Bestellings",
+    "pending_count": "{{count}} hangende",
+    "approve": "Goedkeur",
+    "reject": "Verwerp",
+    "approved": "Bestelling geskep",
+    "rejected": "Voorstel verwerp",
+    "confidence": "{{pct}}% vertroue",
+    "expires_soon": "Verval oor {{hours}}h"
+  },
   "family": {
     "title": "Gesinstoegang",
     "subtitle": "Bestuur wie u rekords kan sien",

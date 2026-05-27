@@ -24,12 +24,15 @@ MediCore is a production-grade, AI-first, multi-tenant electronic health record 
 
 ### Core Workflows
 - Patient registration with AI-assisted duplicate detection (phonetic matching), insurance card OCR pre-fill, and SDOH structured intake
-- Appointments, scheduling intelligence, waitlists, and provider availability management
-- Multi-role clinical documentation — SOAP notes, nursing notes, clinical templates, and ambient voice transcription
-- Orders, problems, allergies, vitals, care plans, referrals, consents, and document management
-- Prescriptions with drug-drug interaction hard-stops, PDMP controlled substance monitoring, and formulary optimization
-- Laboratory orders, catalogs, order sets, critical result alerts, and AI-assisted interpretation
-- Imaging workflows with DICOM viewer, AI attention heatmap overlays, and incidental finding SLA tracking
+- Appointments, scheduling intelligence, waitlists, and provider availability management — with AI no-show risk prediction and auto-generated pre-appointment briefs
+- Multi-role clinical documentation — SOAP notes, nursing notes, clinical templates, ambient voice transcription (mobile), and AI-generated referral letters, discharge summaries, and pre-authorisations
+- Orders, problems, allergies, vitals, care plans, referrals, consents, and document management — with AI-suggested orders routed through clinician approval
+- Prescriptions with drug-drug interaction hard-stops, PDMP controlled substance monitoring, formulary optimization, and AI drug substitution for out-of-stock medications
+- Laboratory orders, catalogs, order sets, critical result alerts, and dual AI interpretation narratives (clinical and patient-safe plain language)
+- Imaging workflows with DICOM viewer, AI attention heatmap overlays, incidental finding SLA tracking, and structured AI findings review panel with confidence scores
+- Proactive patient risk scoring (nightly composite across all active patients) with heat map, automatic nurse alerts, and 30-day mortality risk badge on every patient card
+- Care gap detection — overdue HbA1c, HIV testing, cervical screening, flu vaccination, lapsed follow-up — with AI-recommended actions surfaced in EHR and mobile
+- Post-encounter AI follow-up scheduler — recommends interval and modality (in-person / telemedicine / phone); nightly cron flags overdue follow-ups to the care team
 
 ### Hospital and Specialty Modules
 - Bed management and ADT (admission, discharge, transfer)
@@ -97,6 +100,7 @@ Tenant-managed health education content with patient self-service enrollment, le
 - Knowledge quizzes attached to lessons with configurable pass thresholds and maximum attempt limits; automatic scoring with pass/fail result
 - Patients browse a tenant-specific course library, self-enroll, track lesson completion with progress bars, and receive course-complete status when all lessons are done
 - Progress dashboard visible to staff showing per-patient completion percentage and best quiz score across all enrolled courses
+- **AI-powered course personalization** — active diagnoses mapped to ranked course recommendations; mobile app surfaces matched courses in a horizontal chip scroll; clinicians can manually recommend specific courses per patient
 - Available in all 8 supported languages; course reader accessible in patient portal and mobile app
 
 ---
@@ -124,6 +128,25 @@ MediCore is AI-first — every major clinical surface has an integrated AI layer
 | Multilingual AI | All LLM endpoints accept a `locale` parameter; output adapts to the patient's language |
 | SADC epidemic AI | Zoonotic risk scoring, maternal mortality preventability AI, SCD crisis prediction, NCD complication risk |
 | Cross-border continuity AI | IHR-aligned AI summary for SADC patient record portability across borders |
+| Proactive risk scoring | Nightly composite patient risk score (NEWS2, vitals, labs, adherence, missed appointments) with automatic nurse alerts for high/critical patients |
+| Mortality risk prediction | 30-day composite mortality risk badge on every patient card — age, comorbidities, NEWS2, ICU status, and critical labs combined into a single defensible score with factor breakdown popover |
+| AI clinical summary panel | Auto-generated 5-sentence patient summary on every record open — condition, medications, recent labs, mortality risk, and longitudinal pattern — with thumbs up/down feedback loop and regenerate |
+| Treatment gap detection | Rule-based care gap engine detects overdue cervical screening, HbA1c, HIV testing, flu vaccination, and lapsed follow-up with AI-recommended actions, dismiss (30-day), and resolve workflows |
+| AI-generated documents | One-click referral letters, discharge summaries, pre-authorisation requests, and sick notes — AI drafts from structured clinical data, clinician reviews and signs; patient portal shows only signed documents |
+| Drug substitution engine | Out-of-stock medication → ranked therapeutic equivalents with confidence scores, rationale, and caveats sourced from CDSS, LLM grounding, and protocol rules; selection persisted for audit |
+| AI follow-up scheduler | Post-encounter AI recommendation for optimal follow-up interval and modality (in-person / telemedicine / phone) based on risk band and diagnoses; nightly cron flags overdue follow-ups and alerts the care team |
+| AI lab interpretation | Dual narrative per lab result — technical clinician narrative and patient-safe plain language; critical flags trigger real-time alerts; patients see "What does this mean?" expandable section |
+| Appointment no-show prediction | Pre-encounter no-show risk score + auto-generated AI pre-appointment brief (diagnoses, recent labs, meds, tasks) delivered to the clinician 30 minutes before each visit |
+| AI clinical timeline | Longitudinal patient narrative with pattern detection — recurring infections, drug failures, deteriorating vitals, missed appointments, chronic progression — using hash-based cache invalidation |
+| Predictive adherence engine | Daily adherence risk scoring with personalised patient nudges (portal + SMS) containing medication names; nightly cron with 24-hour deduplication at both application and database level |
+| AI communication hub | Urgency classification, AI draft replies, and auto-translation on every patient message; clinician approval required — AI never sends autonomously; inbox sorted by urgency |
+| Radiology AI findings panel | Structured AI findings with confidence bars and reviewer workflow (confirmed / rejected / needs review); CDSS abstention logged transparently; critical/high urgency findings trigger alerts |
+| Ambient voice AI | Mobile voice capture → Whisper transcription → structured clinical data extraction (vitals, chief complaint, plan) via CDSS or regex fallback; pre-fills encounter form fields |
+| CDSS abstention transparency | Every AI surface shows real-time status (active / unavailable / abstained / low-confidence); silent abstentions logged to `ai_abstention_log` with reason codes; `GET /cdss/health` endpoint |
+| Education personalization | Active diagnoses → ranked health education course recommendations; clinician can manually recommend specific courses per patient; mobile horizontal scroll of matched courses |
+| Telemedicine post-call bridge | Daily.co webhook auto-triggers post-visit AI pipeline (summary, escalation check, follow-up tasks) on call end; idempotent with per-session deduplication and retry endpoint |
+| Alert delivery wiring | OI early warning and NEWS2 alerts wired end-to-end to `AlertDeliveryService.broadcastCriticalAlert`; every clinical threshold breach reaches on-call staff via push notification |
+| Post-visit escalation routing | Escalation classifier output wired to nurse task creation and push alert; `URGENT` escalations create tasks with 2-hour SLA; fallback to `pending_review` if CDSS unavailable |
 
 All AI calls go through a governed pathway that enforces consent checks, PHI redaction, prompt auditing, and circuit-breaking. Every AI output in the UI includes a confidence score, abstention state, AI-disclosure label, and citation drawer.
 
@@ -176,6 +199,8 @@ All AI calls go through a governed pathway that enforces consent checks, PHI red
 - Telemedicine video consultations with pre-consultation form auto-linked to EHR clinical visit draft
 - Secure messaging with providers; Whisper AI voice input for symptom and message composition
 - Symptom checker and post-visit AI follow-ups
+- AI lab interpretation — "What does this mean?" expandable plain-language narrative on every lab result
+- Upcoming follow-up recommendations — accepted AI follow-up schedules visible in the patient's appointment view
 - Questionnaires, patient-reported outcome schedules, and health goals
 - CDPA consent dashboard — grant, view, and withdraw consent per processing purpose with expiry tracking
 - Caregiver and guardian access management — grant access with relationship, access level, and expiry

@@ -1772,7 +1772,7 @@ export class HivService {
         };
         const oiAlerts = this.oiEarlyWarningService.evaluateOiRisks(oiInput);
         if (oiAlerts.length > 0) {
-          await this.oiEarlyWarningService.saveAlerts(patientId, oiAlerts, tenantDb);
+          await this.oiEarlyWarningService.saveAlerts(patientId, oiAlerts, tenantId || 'default', tenantDb);
         }
 
         const patientInfoRows = await tenantDb

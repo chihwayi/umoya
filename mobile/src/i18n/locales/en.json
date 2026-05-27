@@ -109,6 +109,33 @@
     "myCourses": "My Courses",
     "explore": "Explore"
   },
+  "alerts": {
+    "clinical_alert": "Clinical Alert",
+    "oi_warning": "OI Early Warning",
+    "news2_high": "Patient Deterioration — NEWS2 High",
+    "tap_to_view": "Tap to view patient",
+    "acknowledged": "Acknowledged",
+    "unacknowledged": "Unacknowledged"
+  },
+  "escalation": {
+    "queue_title": "Post-Visit Escalations",
+    "acknowledge": "Acknowledge",
+    "resolve": "Resolve",
+    "level_critical": "CRITICAL",
+    "level_high": "HIGH",
+    "level_moderate": "MODERATE",
+    "no_escalations": "No open escalations"
+  },
+  "ai_orders": {
+    "panel_title": "AI Suggested Orders",
+    "pending_count": "{{count}} pending",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approved": "Order created",
+    "rejected": "Suggestion dismissed",
+    "confidence": "{{pct}}% confidence",
+    "expires_soon": "Expires in {{hours}}h"
+  },
   "family": {
     "title": "Family Access",
     "subtitle": "Manage who can view your records",

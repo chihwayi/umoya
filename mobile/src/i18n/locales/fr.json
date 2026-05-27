@@ -109,6 +109,33 @@
     "myCourses": "Mes cours",
     "explore": "Explorer"
   },
+  "alerts": {
+    "clinical_alert": "Alerte Clinique",
+    "oi_warning": "Alerte IO Précoce",
+    "news2_high": "Détérioration du Patient — NEWS2 Élevé",
+    "tap_to_view": "Appuyer pour voir le patient",
+    "acknowledged": "Reconnu",
+    "unacknowledged": "Non reconnu"
+  },
+  "escalation": {
+    "queue_title": "Escalades Post-Visite",
+    "acknowledge": "Reconnaître",
+    "resolve": "Résoudre",
+    "level_critical": "CRITIQUE",
+    "level_high": "ÉLEVÉ",
+    "level_moderate": "MODÉRÉ",
+    "no_escalations": "Aucune escalade ouverte"
+  },
+  "ai_orders": {
+    "panel_title": "Ordonnances IA Suggérées",
+    "pending_count": "{{count}} en attente",
+    "approve": "Approuver",
+    "reject": "Rejeter",
+    "approved": "Ordonnance créée",
+    "rejected": "Suggestion rejetée",
+    "confidence": "{{pct}}% de confiance",
+    "expires_soon": "Expire dans {{hours}}h"
+  },
   "family": {
     "title": "Accès Famille",
     "subtitle": "Gérez qui peut voir vos dossiers",

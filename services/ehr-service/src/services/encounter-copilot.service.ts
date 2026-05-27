@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { ClinicalPathway } from '../entities/clinical-pathway.entity';
@@ -12,6 +13,8 @@ import { ResultFollowupTask } from '../entities/result-followup-task.entity';
 import { TreatmentPathwayInstance } from '../entities/treatment-pathway-instance.entity';
 import { SmartDefaultsService } from './smart-defaults.service';
 import { AiSurfaceContractService } from './ai-surface-contract.service';
+import { AiOrderPipelineService } from './ai-order-pipeline.service';
+import { OrderType, OrderPriority } from '../entities/order.entity';
 
 interface EncounterCopilotRequest {
   patientId: string;
@@ -30,6 +33,7 @@ export class EncounterCopilotService {
   constructor(
     private readonly smartDefaultsService: SmartDefaultsService,
     private readonly aiSurfaceContractService: AiSurfaceContractService,
+    @Optional() private readonly aiOrderPipeline?: AiOrderPipelineService,
   ) {}
 
   private buildAiMetadata() {
@@ -183,6 +187,34 @@ export class EncounterCopilotService {
       session.appointmentId,
       pathwayRecommendations,
     );
+
+    if (this.aiOrderPipeline && suggestedOrders.length > 0) {
+      const typeMap: Record<string, OrderType> = {
+        lab_test: OrderType.LAB_TEST,
+        consultation: OrderType.CONSULTATION,
+        procedure: OrderType.PROCEDURE,
+      };
+      const priorityMap: Record<string, OrderPriority> = {
+        urgent: OrderPriority.URGENT,
+        high: OrderPriority.HIGH,
+        normal: OrderPriority.NORMAL,
+        low: OrderPriority.LOW,
+      };
+      const mappedSuggestions = suggestedOrders
+        .filter((o: any) => typeMap[o.type])
+        .map((o: any) => ({
+          orderType: typeMap[o.type] ?? OrderType.PROCEDURE,
+          instructions: o.name ?? 'AI-suggested order',
+          priority: priorityMap[o.priority] ?? OrderPriority.NORMAL,
+          aiReason: o.rationale ?? 'Suggested by encounter copilot',
+          suggestedByModel: 'encounter_copilot',
+        }));
+      if (mappedSuggestions.length > 0) {
+        await this.aiOrderPipeline
+          .saveSuggestions(payload.patientId, 'encounter_copilot', session.id, mappedSuggestions, tenantDb)
+          .catch((e: any) => this.logger.warn(`AI order pipeline save failed: ${e?.message}`));
+      }
+    }
 
     this.logger.log(`Encounter copilot session ${session.id} generated for patient ${payload.patientId}`);
     return this.getSessionById(tenantDb, session.id);

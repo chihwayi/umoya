@@ -3389,7 +3389,14 @@ const NurseDashboard: React.FC = () => {
                  >
                    <item.icon className={`w-5 h-5 ${isSectionActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
                    <div className="text-left flex-1">
-                     <p className="font-medium">{item.label}</p>
+                     <div className="flex items-center justify-between">
+                       <p className="font-medium">{item.label}</p>
+                       {item.section === 'main' && alertCounts.active > 0 && (
+                         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-1 ring-white/20">
+                           {alertCounts.active}
+                         </span>
+                       )}
+                     </div>
                      <p className={`text-xs ${isSectionActive ? 'text-white/80' : 'text-slate-500 group-hover:text-slate-400'}`}>{item.desc}</p>
                    </div>
                    {isSectionActive ? <ChevronDown className="w-4 h-4 text-white/80" /> : <ChevronDown className="w-4 h-4 text-slate-600 -rotate-90" />}
@@ -3414,7 +3421,12 @@ const NurseDashboard: React.FC = () => {
                            }`}
                          >
                            <child.icon className={`w-4 h-4 ${isTabActive ? 'text-emerald-400' : 'text-slate-500'}`} />
-                           <span>{child.label}</span>
+                           <span className="flex-1 text-left">{child.label}</span>
+                           {child.tab === 'alerts' && alertCounts.active > 0 && (
+                             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                               {alertCounts.active}
+                             </span>
+                           )}
                          </button>
                        );
                      })}

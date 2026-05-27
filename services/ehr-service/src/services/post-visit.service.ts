@@ -39,6 +39,7 @@ import {
   type SpecialtySoapValidationSummary,
 } from './soap-template-registry';
 import { PostVisitEscalationService } from './post-visit-escalation.service';
+import { PostVisitEscalationRoutingService, EscalationSignal } from './post-visit-escalation-routing.service';
 import { PostVisitBillingIntelligenceService } from './post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './post-visit-companion-memory.service';
 import { PostVisitSessionService } from './post-visit-session.service';
@@ -332,6 +333,7 @@ export class PostVisitService {
     @Optional() private readonly companionMemoryService?: PostVisitCompanionMemoryService,
     @Optional() private readonly sessionService?: PostVisitSessionService,
     @Optional() private readonly draftService?: PostVisitDraftService,
+    @Optional() private readonly escalationRouter?: PostVisitEscalationRoutingService,
   ) {}
 
   private isTrialMatcherEnabled(): boolean {
@@ -6884,6 +6886,16 @@ export class PostVisitService {
       );
       patientMessage.escalation_detected = true;
       patientMessage.escalation_event_id = escalation.id;
+    }
+
+    if (this.escalationRouter && detection.severity && detection.severity !== 'low') {
+      const signal: EscalationSignal = {
+        escalationLevel: detection.severity as EscalationSignal['escalationLevel'],
+        summary: detection.rationale ?? 'Escalation signal detected in post-visit message',
+        findings: Array.isArray(detection.triggerTerms) ? detection.triggerTerms : [],
+        recommendedAction: detection.recommendedAction,
+      };
+      await this.escalationRouter.routeEscalation(sessionId, patientId, signal, tenantDb).catch(() => {});
     }
 
     const assistantAnswer = await this.buildGroundedCompanionAnswer({

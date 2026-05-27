@@ -256,7 +256,7 @@ export class VitalsService {
           systolicBp: saved.systolicBp ?? null,
           heartRate: saved.heartRate ?? null,
           consciousness: saved.glasgowComaScale != null && saved.glasgowComaScale < 15 ? 'confused' : 'alert',
-        });
+        }, tenantId);
       } catch (error) {
         this.logger.warn(`Early warning scoring failed for vitals: ${error instanceof Error ? error.message : error}`);
       }

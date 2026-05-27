@@ -215,6 +215,8 @@ import { PushTokensController } from './controllers/push-tokens.controller';
 import { CdpaController } from './controllers/cdpa.controller';
 import { BreachDetectionController } from './controllers/breach-detection.controller';
 import { PatientPortalHivController } from './controllers/patient-portal-hiv.controller';
+import { PostVisitEscalationController } from './controllers/post-visit-escalation.controller';
+import { AiOrderSuggestionsController } from './controllers/ai-order-suggestions.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -423,6 +425,8 @@ import { NurseWorklistService } from './services/nurse-worklist.service';
 import { PostVisitService } from './services/post-visit.service';
 import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.service';
 import { PostVisitEscalationService } from './services/post-visit-escalation.service';
+import { PostVisitEscalationRoutingService } from './services/post-visit-escalation-routing.service';
+import { AiOrderPipelineService } from './services/ai-order-pipeline.service';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -717,6 +721,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CdpaController,
     BreachDetectionController,
     PatientPortalHivController,
+    PostVisitEscalationController,
+    AiOrderSuggestionsController,
   ],
   providers: [
     AuthService,
@@ -885,6 +891,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PostVisitGroundedLlmService,
     PostVisitService,
     PostVisitEscalationService,
+    PostVisitEscalationRoutingService,
+    AiOrderPipelineService,
     PostVisitBillingIntelligenceService,
     PostVisitCompanionMemoryService,
     PostVisitSessionService,

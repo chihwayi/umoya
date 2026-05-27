@@ -486,6 +486,68 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'ai_order_suggestions',
+        label: 'AI Order Suggestions — Pending Approval Queue',
+        version: '2026.05.27.1',
+        description: 'Tracks AI-suggested orders from encounter copilot and maternity guidelines — pending doctor approval before creation',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS ai_order_suggestions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            source VARCHAR(64) NOT NULL,
+            source_entity_id UUID,
+            order_type VARCHAR(32) NOT NULL,
+            medication_name VARCHAR(255),
+            instructions TEXT NOT NULL,
+            priority VARCHAR(16) NOT NULL DEFAULT 'normal',
+            ai_reason TEXT NOT NULL,
+            confidence_score NUMERIC(4,3),
+            suggested_by_model VARCHAR(64),
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            reviewed_by UUID,
+            reviewed_at TIMESTAMPTZ,
+            rejection_reason TEXT,
+            created_order_id UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '24 hours')
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_orders_patient ON ai_order_suggestions (patient_id, status)`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_orders_pending ON ai_order_suggestions (status, created_at) WHERE status = 'pending'`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_orders_source ON ai_order_suggestions (source, source_entity_id)`,
+        ],
+      },
+      {
+        id: 'post_visit_escalations',
+        label: 'Post-Visit AI Escalation Routing',
+        version: '2026.05.27.1',
+        description: 'Tracks escalation signals from AI post-visit classification — routed to nurse tasks and alerts',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS post_visit_escalations (
+            id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            post_visit_session_id UUID      NOT NULL,
+            patient_id          UUID        NOT NULL,
+            escalation_level    VARCHAR(16) NOT NULL DEFAULT 'moderate',
+            signal_summary      TEXT        NOT NULL,
+            detected_findings   JSONB       NOT NULL DEFAULT '[]',
+            routed_to_user_id   UUID,
+            routed_to_role      VARCHAR(32),
+            nurse_task_id       UUID,
+            alert_delivery_id   UUID,
+            status              VARCHAR(16) NOT NULL DEFAULT 'detected',
+            acknowledged_at     TIMESTAMPTZ,
+            acknowledged_by     UUID,
+            resolved_at         TIMESTAMPTZ,
+            resolved_by         UUID,
+            resolution_note     TEXT,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_pve_patient ON post_visit_escalations (patient_id, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_pve_status ON post_visit_escalations (status) WHERE status IN ('detected','routed')`,
+          `CREATE INDEX IF NOT EXISTS idx_pve_session ON post_visit_escalations (post_visit_session_id)`,
+        ],
+      },
+      {
         id: 'nc_oi_geriatric_fasttrack',
         label: 'OI Early Warning + HIV Geriatric + Fast-Track',
         version: '2026.05.26.1',
@@ -2835,6 +2897,26 @@ export class DatabaseProvisioningService {
              ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ`,
           `ALTER TABLE pro_alerts
              ADD COLUMN IF NOT EXISTS notes TEXT`,
+        ],
+      },
+      {
+        id: 'ai_alert_delivery_log',
+        label: 'Sprint 166 — AI Alert Delivery Log',
+        version: '2026.05.27.1',
+        description: 'Critical alert delivery log for OI and NEWS2 deterioration events',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS ai_alert_delivery_log (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            alert_type VARCHAR(50) NOT NULL, -- 'OI_DETERIORATION' | 'NEWS2_CRITICAL'
+            severity VARCHAR(20) NOT NULL,
+            delivery_channel VARCHAR(20) NOT NULL, -- 'PUSH' | 'IN_APP'
+            recipient_user_id UUID NOT NULL,
+            delivered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            metadata JSONB DEFAULT '{}'
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_alert_log_patient ON ai_alert_delivery_log(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_alert_log_recipient ON ai_alert_delivery_log(recipient_user_id)`,
         ],
       },
     ];

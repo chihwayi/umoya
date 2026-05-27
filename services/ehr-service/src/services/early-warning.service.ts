@@ -1,10 +1,12 @@
-import { Injectable, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PatientEarlyWarningScore } from '../entities/patient-early-warning-score.entity';
 import { PatientVitalBaseline } from '../entities/patient-vital-baseline.entity';
 import { ClinicalEscalationTask } from '../entities/clinical-escalation-task.entity';
 import { NurseTask } from '../entities/nurse-task.entity';
 import { NurseTaskService } from './nurse-task.service';
+import { AlertDeliveryService } from './alert-delivery.service';
+import { TenantService } from './tenant.service';
 
 export interface News2Input {
   patientId: string;
@@ -39,7 +41,13 @@ interface BaselineComparison {
 
 @Injectable()
 export class EarlyWarningService {
-  constructor(@Optional() private readonly nurseTaskService?: NurseTaskService) {}
+  private readonly logger = new Logger(EarlyWarningService.name);
+
+  constructor(
+    private readonly alertDeliveryService: AlertDeliveryService,
+    private readonly tenantService: TenantService,
+    @Optional() private readonly nurseTaskService?: NurseTaskService,
+  ) {}
 
   private readonly baselineMetricMap: Array<{ metric: string; payloadKey: keyof News2Input }> = [
     { metric: 'respiratoryRate', payloadKey: 'respiratoryRate' },
@@ -367,7 +375,7 @@ export class EarlyWarningService {
     return savedEscalationTask.id;
   }
 
-  async recordNews2Score(tenantDb: DataSource, payload: News2Input) {
+  async recordNews2Score(tenantDb: DataSource, payload: News2Input, subdomain: string) {
     if (!payload.patientId) throw new BadRequestException('patientId is required');
     const calc = this.calculateNews2(payload);
     const baselineComparisons = await this.getBaselineComparisons(tenantDb, payload);
@@ -397,12 +405,50 @@ export class EarlyWarningService {
 
     const saved = await repo.save(row);
     const escalationTaskId = await this.createEscalationTask(tenantDb, saved, explanation);
+
+    // Deliver critical alert if NEWS2 >= 5
+    if (saved.totalScore >= 5) {
+      await this.deliverNews2Alert(subdomain, saved, explanation, tenantDb);
+    }
+
     return {
       ...saved,
       escalationTaskId,
       explanationSummary: explanation.summary,
       recommendedActions: explanation.recommendedActions,
     };
+  }
+
+  async deliverNews2Alert(
+    subdomain: string,
+    score: PatientEarlyWarningScore,
+    explanation: any,
+    db: DataSource,
+  ): Promise<void> {
+    const severity = this.deriveEscalationSeverity(score.riskLevel || 'medium');
+
+    await this.alertDeliveryService.broadcastCriticalAlert(subdomain, {
+      alertType: 'NEWS2_CRITICAL',
+      sourceEntityId: score.id,
+      patientId: score.patientId,
+      severity,
+      message: explanation.summary,
+      payload: {
+        news2_score: score.totalScore,
+        risk_level: score.riskLevel,
+        recommended_actions: explanation.recommendedActions,
+      },
+    });
+
+    // Log to delivery log
+    await db.query(
+      `INSERT INTO ai_alert_delivery_log
+       (patient_id, alert_type, severity, delivery_channel, recipient_user_id, metadata)
+       SELECT $1, 'NEWS2_CRITICAL', $2, 'PUSH', u.id, $3
+       FROM users u
+       WHERE u.role = 'nurse' AND u.on_call = TRUE`,
+      [score.patientId, severity, JSON.stringify({ news2_score: score.totalScore })],
+    );
   }
 
   async listScoresForPatient(tenantDb: DataSource, patientId: string, limit = 50) {

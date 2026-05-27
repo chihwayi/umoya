@@ -2,6 +2,7 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
 import { useAuthStore } from "../stores/useAuthStore";
 import { registerPushToken, setupNotificationListeners } from "../services/pushNotifications";
 import { C } from "../design/tokens";
@@ -136,14 +137,26 @@ const RoleRouter = () => {
 };
 
 export const RootNavigator = () => {
-  const { jwt, tenant, isUnlocked, unlock, logout, clearTenant } = useAuthStore();
+  const { jwt, tenant, isUnlocked, unlock, logout, clearTenant, role } = useAuthStore();
+  const navigation = useNavigation<any>();
 
   React.useEffect(() => {
     if (!jwt || !isUnlocked) return;
     registerPushToken();
-    const cleanup = setupNotificationListeners((_notification) => {});
+    const cleanup = setupNotificationListeners((notification) => {
+      const data = notification.request.content.data;
+      const type = data?.type;
+      const patientId = data?.patientId;
+
+      if (role === "nurse" && (type === "OI_DETERIORATION" || type === "NEWS2_CRITICAL")) {
+        // Use timeout to ensure navigation is ready after app foregrounding
+        setTimeout(() => {
+          navigation.navigate("NNcdCrisis", { patientId, autoOpenAlert: true });
+        }, 500);
+      }
+    });
     return cleanup;
-  }, [jwt, isUnlocked]);
+  }, [jwt, isUnlocked, role, navigation]);
 
   if (!tenant) {
     return <TenantSelectScreen onSelected={() => {}} />;

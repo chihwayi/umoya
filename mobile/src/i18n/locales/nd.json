@@ -109,6 +109,33 @@
     "myCourses": "Izifundo Zami",
     "explore": "Hlola"
   },
+  "alerts": {
+    "clinical_alert": "Isexwayiso Sezemvelo",
+    "oi_warning": "Isexwayiso se-OI",
+    "news2_high": "Umkhulelwa Uyashintsha — NEWS2 Iphezulu",
+    "tap_to_view": "Thepha ukubona umguli",
+    "acknowledged": "Kwamukelwa",
+    "unacknowledged": "Akwamukelwanga"
+  },
+  "escalation": {
+    "queue_title": "Uluhlu lweziNhlonhlo",
+    "acknowledge": "Amukela",
+    "resolve": "Zungeza",
+    "level_critical": "ENGOZI",
+    "level_high": "IPHEZULU",
+    "level_moderate": "PHAKATHI",
+    "no_escalations": "Akula zikhalazo ezivulekileyo"
+  },
+  "ai_orders": {
+    "panel_title": "Imiyalo ye-AI Ehlongoziwe",
+    "pending_count": "{{count}} elindile",
+    "approve": "Vumela",
+    "reject": "Phika",
+    "approved": "Umyalo udalwe",
+    "rejected": "Ihlongoza lilahlwe",
+    "confidence": "{{pct}}% ukuqiniseka",
+    "expires_soon": "Iphela ngezelo le {{hours}}h"
+  },
   "family": {
     "title": "Ukufinyelela Komndeni",
     "subtitle": "Phatha abakwazi ukubona amarekhodi akho",

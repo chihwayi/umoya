@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { getGuidelineForRule } from '../config/maternity-guideline-registry';
 import { TerminologyService } from './terminology.service';
@@ -8,6 +8,7 @@ import { ReferralService } from './referral.service';
 import { CdssService } from './cdss.service';
 import { OrderPriority, OrderType } from '../entities/order.entity';
 import { Priority as LabPriority } from '../entities/lab-order.entity';
+import { AiOrderPipelineService } from './ai-order-pipeline.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -135,6 +136,7 @@ export class MaternityService {
     private readonly labOrderService: LabOrderService,
     private readonly referralService: ReferralService,
     private readonly cdssService: CdssService,
+    @Optional() private readonly aiOrderPipeline?: AiOrderPipelineService,
   ) {}
 
   private parseDate(raw: any): Date | null {
@@ -3624,6 +3626,25 @@ export class MaternityService {
           applied_by: actorId || null,
           created_order_id: createdOrder.id,
         });
+        if (item.auto_authorize && this.aiOrderPipeline) {
+          await tenantDb.query(
+            `INSERT INTO ai_order_suggestions
+               (patient_id, source, source_entity_id, order_type, instructions, priority,
+                ai_reason, suggested_by_model, status, reviewed_by, reviewed_at, created_order_id)
+             VALUES ($1,'maternity_guideline',$2,$3,$4,$5,$6,'maternity_guideline_registry',
+                     'approved',$7,now(),$8)`,
+            [
+              item.order_payload.patientId ?? task.patient_id,
+              taskId,
+              item.order_payload.orderType ?? OrderType.PROCEDURE,
+              item.order_payload.instructions ?? item.title,
+              item.order_payload.priority ?? OrderPriority.NORMAL,
+              `Maternity guideline: ${item.title}`,
+              actorId || null,
+              createdOrder.id,
+            ],
+          ).catch((e: any) => this.logger.warn(`AI order audit insert failed: ${e?.message}`));
+        }
       }
 
       if (item.type === 'lab_order' && item.lab_order_payload) {

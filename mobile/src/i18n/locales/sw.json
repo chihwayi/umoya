@@ -109,6 +109,33 @@
     "myCourses": "Kozi Zangu",
     "explore": "Chunguza"
   },
+  "alerts": {
+    "clinical_alert": "Tahadhari ya Kliniki",
+    "oi_warning": "Onyo la OI la Mapema",
+    "news2_high": "Mgonjwa Anazorota — NEWS2 Juu",
+    "tap_to_view": "Gusa kuona mgonjwa",
+    "acknowledged": "Imethibitishwa",
+    "unacknowledged": "Haijathibitishwa"
+  },
+  "escalation": {
+    "queue_title": "Matatizo ya Baada ya Ziara",
+    "acknowledge": "Thibitisha",
+    "resolve": "Suluhisha",
+    "level_critical": "HATARI",
+    "level_high": "JUU",
+    "level_moderate": "WASTANI",
+    "no_escalations": "Hakuna matatizo wazi"
+  },
+  "ai_orders": {
+    "panel_title": "Maagizo ya AI Yaliyopendekezwa",
+    "pending_count": "{{count}} zinasubiri",
+    "approve": "Idhinisha",
+    "reject": "Kataa",
+    "approved": "Agizo limeundwa",
+    "rejected": "Pendekezo limeachwa",
+    "confidence": "{{pct}}% ya uhakika",
+    "expires_soon": "Inaisha baada ya {{hours}}h"
+  },
   "family": {
     "title": "Ufikiaji wa Familia",
     "subtitle": "Simamia wanaoweza kuona rekodi zako",

@@ -109,6 +109,33 @@
     "myCourses": "Makosi Angu",
     "explore": "Tsvaga"
   },
+  "alerts": {
+    "clinical_alert": "Yambiro yeMutiriri",
+    "oi_warning": "Yambiro ye-OI",
+    "news2_high": "Murwere Ari Kusiyana — NEWS2 Yakakwira",
+    "tap_to_view": "Dzvanya kuona murwere",
+    "acknowledged": "Zvinzwika",
+    "unacknowledged": "Zvisina kunzwika"
+  },
+  "escalation": {
+    "queue_title": "Kumusoro kweNhevedzano",
+    "acknowledge": "Zvinzwika",
+    "resolve": "Gadzirisa",
+    "level_critical": "INOTYISA",
+    "level_high": "YAKAKWIRA",
+    "level_moderate": "PAKATI",
+    "no_escalations": "Hapana nhevedzano dzakavhurika"
+  },
+  "ai_orders": {
+    "panel_title": "Maoda eAI Akarongwa",
+    "pending_count": "{{count}} akamirira",
+    "approve": "Bvumidza",
+    "reject": "Ramba",
+    "approved": "Maoda akagadzirwa",
+    "rejected": "Kurongwa kwakurashwa",
+    "confidence": "{{pct}}% yechivimbo",
+    "expires_soon": "Inopera mukati me {{hours}}h"
+  },
   "family": {
     "title": "Kusvikirwa kweChikamu",
     "subtitle": "Tarisira vane mvumo yekuona rekodhi dzako",

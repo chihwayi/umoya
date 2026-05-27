@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { AlertDeliveryService } from './alert-delivery.service';
+import { TenantService } from './tenant.service';
 
 interface OiInput {
   cd4Count: number | null;
@@ -20,6 +22,13 @@ export interface OiAlert {
 
 @Injectable()
 export class OiEarlyWarningService {
+  private readonly logger = new Logger(OiEarlyWarningService.name);
+
+  constructor(
+    private readonly alertDeliveryService: AlertDeliveryService,
+    private readonly tenantService: TenantService,
+  ) {}
+
   private static readonly RULES: Array<{
     alertType: string;
     severity: 'high' | 'urgent' | 'critical';
@@ -97,16 +106,17 @@ export class OiEarlyWarningService {
       }));
   }
 
-  async saveAlerts(patientId: string, alerts: OiAlert[], db: any): Promise<void> {
+  async saveAlerts(patientId: string, alerts: OiAlert[], subdomain: string, db: any): Promise<void> {
     for (const alert of alerts) {
-      await db.query(
+      const result = await db.query(
         `INSERT INTO oi_early_warning_alerts
            (patient_id, alert_type, severity, trigger_cd4, alert_message, recommended_action, guideline_ref)
          SELECT $1, $2, $3, $4, $5, $6, $7
          WHERE NOT EXISTS (
            SELECT 1 FROM oi_early_warning_alerts
            WHERE patient_id = $1 AND alert_type = $2 AND status = 'active'
-         )`,
+         )
+         RETURNING id`,
         [
           patientId,
           alert.alertType,
@@ -117,6 +127,33 @@ export class OiEarlyWarningService {
           alert.guidelineRef,
         ],
       );
+
+      if (result && result.length > 0) {
+        const insertedId = result[0].id;
+
+        // Broadcast to on-call staff
+        await this.alertDeliveryService.broadcastCriticalAlert(subdomain, {
+          alertType: 'OI_DETERIORATION',
+          sourceEntityId: insertedId,
+          patientId,
+          severity: alert.severity,
+          message: alert.alertMessage,
+          payload: {
+            oi_type: alert.alertType,
+            guideline_ref: alert.guidelineRef,
+          },
+        });
+
+        // Log delivery attempts
+        await db.query(
+          `INSERT INTO ai_alert_delivery_log
+           (patient_id, alert_type, severity, delivery_channel, recipient_user_id, metadata)
+           SELECT $1, 'OI_DETERIORATION', $2, 'PUSH', u.id, $3
+           FROM users u
+           WHERE u.role = 'nurse' AND u.on_call = TRUE`,
+          [patientId, alert.severity, JSON.stringify({ oi_type: alert.alertType })],
+        );
+      }
     }
   }
 

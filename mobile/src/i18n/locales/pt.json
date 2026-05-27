@@ -109,6 +109,33 @@
     "myCourses": "Meus Cursos",
     "explore": "Explorar"
   },
+  "alerts": {
+    "clinical_alert": "Alerta Clínico",
+    "oi_warning": "Aviso de IO Precoce",
+    "news2_high": "Deterioração do Paciente — NEWS2 Alto",
+    "tap_to_view": "Toque para ver o paciente",
+    "acknowledged": "Confirmado",
+    "unacknowledged": "Não confirmado"
+  },
+  "escalation": {
+    "queue_title": "Escalonamentos Pós-Visita",
+    "acknowledge": "Confirmar",
+    "resolve": "Resolver",
+    "level_critical": "CRÍTICO",
+    "level_high": "ALTO",
+    "level_moderate": "MODERADO",
+    "no_escalations": "Sem escalonamentos abertos"
+  },
+  "ai_orders": {
+    "panel_title": "Pedidos de IA Sugeridos",
+    "pending_count": "{{count}} pendentes",
+    "approve": "Aprovar",
+    "reject": "Rejeitar",
+    "approved": "Pedido criado",
+    "rejected": "Sugestão descartada",
+    "confidence": "{{pct}}% de confiança",
+    "expires_soon": "Expira em {{hours}}h"
+  },
   "family": {
     "title": "Acesso Familiar",
     "subtitle": "Gerencie quem pode ver seus registos",
