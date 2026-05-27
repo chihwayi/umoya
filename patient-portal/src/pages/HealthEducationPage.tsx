@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, BookOpen, ChevronLeft, Search } from 'lucide-react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { useTenantSlug } from '../hooks/useTenantSlug';
@@ -74,17 +74,23 @@ const HealthEducationPage: React.FC = () => {
     loadCourses();
   }, [loadCourses, language]);
 
-  const filterCourses = (courses: Course[]) => {
+  const filteredEnrolled = useMemo(() => {
     const q = search.toLowerCase();
-    return courses.filter((c) => {
+    return enrolled.filter((c) => {
       const matchSearch = !q || c.title.toLowerCase().includes(q);
       const matchCat = !activeCategory || c.category?.toLowerCase() === activeCategory;
       return matchSearch && matchCat;
     });
-  };
+  }, [enrolled, search, activeCategory]);
 
-  const filteredEnrolled = useMemo(() => filterCourses(enrolled), [enrolled, search, activeCategory]);
-  const filteredBrowsable = useMemo(() => filterCourses(browsable), [browsable, search, activeCategory]);
+  const filteredBrowsable = useMemo(() => {
+    const q = search.toLowerCase();
+    return browsable.filter((c) => {
+      const matchSearch = !q || c.title.toLowerCase().includes(q);
+      const matchCat = !activeCategory || c.category?.toLowerCase() === activeCategory;
+      return matchSearch && matchCat;
+    });
+  }, [browsable, search, activeCategory]);
 
   const openCourse = (courseId: string) => {
     navigate(`/${tenantSlug}/education/${courseId}`);
