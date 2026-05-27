@@ -63,9 +63,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {[
-              { title: 'Tenant control', body: 'Provision demo and paid clinics with module-aware subscriptions.', icon: Workflow },
-              { title: 'Platform signals', body: 'Review requests, lifecycle warnings, and deployment posture.', icon: Sparkles },
-              { title: 'Protected access', body: 'Restricted super-admin entry for sensitive platform operations.', icon: Shield },
+              { title: 'Tenant control', body: 'Provision demo and paid clinics with module-aware subscriptions and per-tenant database isolation.', icon: Workflow },
+              { title: 'Platform intelligence', body: 'Review demo requests, monitor subscription lifecycle, track billing posture and deployment health.', icon: Sparkles },
+              { title: 'Protected access', body: 'Restricted super-admin entry with JWT cross-tenant validation and full HIPAA-audited access logs.', icon: Shield },
             ].map((item) => {
               const IconComponent = item.icon;
               return (
@@ -93,7 +93,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            {['Tenant provisioning', 'Demo requests', 'Subscription lifecycle', 'DHIS2-ready'].map((tag) => (
+            {['Tenant provisioning', 'Demo requests', 'Subscription lifecycle', 'DHIS2-ready', 'CDPA 2021', '8 languages', 'AI-first'].map((tag) => (
               <span
                 key={tag}
                 className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#B6C9E6]"
