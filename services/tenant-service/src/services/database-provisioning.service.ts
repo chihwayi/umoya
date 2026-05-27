@@ -1075,6 +1075,9 @@ export class DatabaseProvisioningService {
             updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
             expires_at      TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '5 minutes')
           )`,
+          `ALTER TABLE ussd_sessions ADD COLUMN IF NOT EXISTS current_state VARCHAR(64) NOT NULL DEFAULT 'MAIN_MENU'`,
+          `ALTER TABLE ussd_sessions ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true`,
+          `ALTER TABLE ussd_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '5 minutes')`,
           `CREATE INDEX IF NOT EXISTS idx_ussd_sessions_session_id ON ussd_sessions (session_id)`,
           `CREATE INDEX IF NOT EXISTS idx_ussd_sessions_phone ON ussd_sessions (phone_number)`,
           `CREATE INDEX IF NOT EXISTS idx_ussd_sessions_active ON ussd_sessions (is_active, expires_at)`,
@@ -1139,7 +1142,7 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_nudge_schedules_next ON adherence_nudge_schedules (next_send_at) WHERE is_active = true`,
           `ALTER TABLE patients ADD COLUMN IF NOT EXISTS phone_hash VARCHAR(64)`,
           `CREATE INDEX IF NOT EXISTS idx_patients_phone_hash ON patients (phone_hash)`,
-          `UPDATE patients SET phone_hash = encode(sha256(phone_number::bytea), 'hex') WHERE phone_hash IS NULL AND phone_number IS NOT NULL`,
+          `UPDATE patients SET phone_hash = encode(sha256(phone::bytea), 'hex') WHERE phone_hash IS NULL AND phone IS NOT NULL`,
         ],
       },
       {
@@ -1148,7 +1151,7 @@ export class DatabaseProvisioningService {
         version: '2026.05.26.1',
         description: 'Add preferred_language to staff; patients already has it from Sprint 60',
         statements: () => [
-          `ALTER TABLE staff ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) NOT NULL DEFAULT 'en'`,
+          `DO $$ BEGIN ALTER TABLE staff ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) NOT NULL DEFAULT 'en'; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
         ],
       },
       {
@@ -1365,6 +1368,7 @@ export class DatabaseProvisioningService {
             recorded_by UUID,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
           )`,
+          `ALTER TABLE growth_measurements ADD COLUMN IF NOT EXISTS nutrition_referral_needed BOOLEAN NOT NULL DEFAULT false`,
           `CREATE INDEX IF NOT EXISTS idx_growth_patient ON growth_measurements(patient_id, measurement_date)`,
           `CREATE INDEX IF NOT EXISTS idx_growth_referral ON growth_measurements(nutrition_referral_needed) WHERE nutrition_referral_needed = true`,
         ],
