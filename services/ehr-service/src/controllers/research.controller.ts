@@ -139,12 +139,24 @@ export class ResearchController {
   @Post('export/deid')
   @ApiOperation({ summary: 'Export de-identified cohort data (HIPAA Safe Harbor)' })
   async exportDeid(
-    @Body() body: { cohortId: string; requestedBy: string },
+    @Body() body: {
+      cohortPatients: any[];
+      fields: string[];
+      cohortName: string;
+      cohortCriteria: any;
+      purpose: string;
+      approvedBy?: string;
+    },
     @Req() req: any,
   ) {
     return this.deidSvc.exportCohortDeidentified({
-      cohortId: body.cohortId,
-      requestedBy: body.requestedBy ?? req.user.sub,
+      cohortPatients: body.cohortPatients,
+      fields: body.fields,
+      exportedBy: req.user.sub,
+      cohortName: body.cohortName,
+      cohortCriteria: body.cohortCriteria,
+      purpose: body.purpose,
+      approvedBy: body.approvedBy,
       db: req.tenantDb,
     });
   }

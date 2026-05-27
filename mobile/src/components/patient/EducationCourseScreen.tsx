@@ -134,7 +134,7 @@ export const EducationCourseScreen: React.FC<{ route: any; navigation: any }> = 
           ) : null}
           {enrollment?.completed_at ? (
             <View style={styles.completeBadge}>
-              <Icon name="check-circle" size={14} color="#fff" />
+              <Icon name="check" size={14} color="#fff" />
               <Text style={styles.completeBadgeText}>Completed</Text>
             </View>
           ) : null}
@@ -177,9 +177,9 @@ export const EducationCourseScreen: React.FC<{ route: any; navigation: any }> = 
             >
               <Text style={styles.moduleTitle}>{mi + 1}. {mod.title}</Text>
               <Icon
-                name={expanded.has(mod.id) ? 'chevron-up' : 'chevron-down'}
+                name={expanded.has(mod.id) ? 'chevron' : 'chevron-right'}
                 size={18}
-                color={C.slate}
+                color={C.textMuted}
               />
             </TouchableOpacity>
 
@@ -205,7 +205,7 @@ export const EducationCourseScreen: React.FC<{ route: any; navigation: any }> = 
                     onPress={() => openExternal(lesson.content_body)}
                   >
                     <Icon
-                      name={lesson.content_type === 'video_url' ? 'play-circle' : 'file-text'}
+                      name={lesson.content_type === 'video_url' ? 'arrow' : 'book'}
                       size={14}
                       color={C.blue}
                     />
@@ -220,7 +220,7 @@ export const EducationCourseScreen: React.FC<{ route: any; navigation: any }> = 
                 {/* Quiz indicator */}
                 {lesson.quiz_id && lesson.quiz_passed && (
                   <View style={styles.quizPassed}>
-                    <Icon name="check-circle" size={13} color={C.green} />
+                    <Icon name="check" size={13} color={C.green} />
                     <Text style={styles.quizPassedText}>{t('education.quizPassed', 'Passed')}</Text>
                   </View>
                 )}
@@ -245,7 +245,7 @@ export const EducationCourseScreen: React.FC<{ route: any; navigation: any }> = 
                 )}
                 {lesson.completed_at && (
                   <View style={styles.doneRow}>
-                    <Icon name="check-circle" size={14} color={C.green} />
+                    <Icon name="check" size={14} color={C.green} />
                     <Text style={styles.doneText}>Done</Text>
                   </View>
                 )}
@@ -263,39 +263,39 @@ const styles = StyleSheet.create({
   center:         { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll:         { padding: 16, paddingBottom: 40 },
   heroCard:       { borderRadius: RADIUS.lg, padding: 20, marginBottom: 12 },
-  heroDesc:       { fontSize: FONT.sm, color: '#fff', opacity: 0.9, marginBottom: 8, lineHeight: 20 },
+  heroDesc:       { fontSize: 13, color: '#fff', opacity: 0.9, marginBottom: 8, lineHeight: 20 },
   categoryBadge:  { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 },
-  categoryText:   { fontSize: FONT.xs, color: '#fff', fontWeight: '600' },
+  categoryText:   { fontSize: 11, color: '#fff', fontWeight: '600' },
   completeBadge:  { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  completeBadgeText: { fontSize: FONT.xs, color: '#fff', fontWeight: '700' },
+  completeBadgeText: { fontSize: 11, color: '#fff', fontWeight: '700' },
   progressCard:   { backgroundColor: '#fff', borderRadius: RADIUS.md, padding: 16, marginBottom: 12, ...SHADOW.sm },
   progressRow:    { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressLabel:  { fontSize: FONT.sm, color: '#374151', fontWeight: '600' },
-  progressPct:    { fontSize: FONT.sm, color: C.blue, fontWeight: '700' },
+  progressLabel:  { fontSize: 13, color: '#374151', fontWeight: '600' },
+  progressPct:    { fontSize: 13, color: C.blue, fontWeight: '700' },
   progressTrack:  { height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, marginBottom: 4 },
   progressFill:   { height: 6, backgroundColor: C.blue, borderRadius: 3 },
-  progressSub:    { fontSize: FONT.xs, color: '#9CA3AF' },
+  progressSub:    { fontSize: 11, color: '#9CA3AF' },
   enrollBtn:      { backgroundColor: C.blue, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
-  enrollBtnText:  { color: '#fff', fontSize: FONT.md, fontWeight: '700' },
+  enrollBtnText:  { color: '#fff', fontSize: 15, fontWeight: '700' },
   moduleCard:     { backgroundColor: '#fff', borderRadius: RADIUS.md, marginBottom: 10, ...SHADOW.sm, overflow: 'hidden' },
   moduleHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-  moduleTitle:    { fontSize: FONT.md, fontWeight: '600', color: '#111827', flex: 1 },
+  moduleTitle:    { fontSize: 15, fontWeight: '600', color: '#111827', flex: 1 },
   lessonBlock:    { borderTopWidth: 1, borderTopColor: '#F3F4F6', padding: 14 },
   lessonRow:      { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
   lessonDot:      { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: '#D1D5DB', marginTop: 4 },
   lessonDotDone:  { backgroundColor: C.green, borderColor: C.green },
   lessonInfo:     { flex: 1 },
-  lessonTitle:    { fontSize: FONT.sm, fontWeight: '600', color: '#374151' },
-  lessonMeta:     { fontSize: FONT.xs, color: '#9CA3AF', marginTop: 2 },
-  lessonBody:     { fontSize: FONT.sm, color: '#4B5563', lineHeight: 20, marginBottom: 10 },
+  lessonTitle:    { fontSize: 13, fontWeight: '600', color: '#374151' },
+  lessonMeta:     { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+  lessonBody:     { fontSize: 13, color: '#4B5563', lineHeight: 20, marginBottom: 10 },
   externalBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: C.blue, alignSelf: 'flex-start', marginBottom: 10 },
-  externalBtnText:{ fontSize: FONT.xs, color: C.blue, fontWeight: '600' },
+  externalBtnText:{ fontSize: 11, color: C.blue, fontWeight: '600' },
   quizBadge:      { backgroundColor: '#EDE9FE', borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start', marginBottom: 8 },
-  quizBadgeText:  { fontSize: FONT.xs, color: '#7C3AED', fontWeight: '600' },
+  quizBadgeText:  { fontSize: 11, color: '#7C3AED', fontWeight: '600' },
   quizPassed:     { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
-  quizPassedText: { fontSize: FONT.xs, color: C.green, fontWeight: '600' },
+  quizPassedText: { fontSize: 11, color: C.green, fontWeight: '600' },
   completeBtn:    { borderWidth: 1, borderColor: C.blue, borderRadius: RADIUS.sm, paddingVertical: 8, alignItems: 'center', marginTop: 4 },
-  completeBtnText:{ fontSize: FONT.sm, color: C.blue, fontWeight: '600' },
+  completeBtnText:{ fontSize: 13, color: C.blue, fontWeight: '600' },
   doneRow:        { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  doneText:       { fontSize: FONT.xs, color: C.green, fontWeight: '600' },
+  doneText:       { fontSize: 11, color: C.green, fontWeight: '600' },
 });

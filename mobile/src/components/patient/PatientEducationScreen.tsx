@@ -40,7 +40,7 @@ export const PatientEducationScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await educationApi.getCourses(i18n.language || 'en');
+      const res = await educationApi.getMyCourses(i18n.language || 'en');
       setEnrolled(res.data?.enrolled ?? []);
       setBrowsable(res.data?.browsable ?? []);
     } catch {

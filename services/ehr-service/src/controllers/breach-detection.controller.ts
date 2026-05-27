@@ -61,7 +61,7 @@ export class BreachDetectionController {
   }
 
   @Get('incidents')
-  listIncidents(@Req() req: Request) {
+  listIncidents(@Req() req: Request): Promise<any[]> {
     const tenantId = req.headers['x-tenant-id'] as string;
     return this.potraz.listIncidents(tenantId);
   }

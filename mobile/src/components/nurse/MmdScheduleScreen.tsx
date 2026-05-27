@@ -109,7 +109,7 @@ export const MmdScheduleScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.background },
+  container: { flex: 1, backgroundColor: C.bg },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     paddingHorizontal: 16,
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { marginBottom: 8 },
   backTxt: { color: '#fff', fontSize: 16 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '700', fontFamily: FONT.bold },
+  title: { color: '#fff', fontSize: 22, fontWeight: '700', fontFamily: FONT.uiBd },
   card: {
     margin: 16,
     marginBottom: 0,
