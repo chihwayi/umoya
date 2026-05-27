@@ -30,7 +30,9 @@ const makeService = () => {
       { create: jest.fn() } as any,
       {} as any,
       { validateConcept: jest.fn() } as any,
-      {} as any,
+      {} as any, // cdssService
+      {} as any, // oiEarlyWarningService
+      {} as any, // vacsIndexService
     ),
     monitoringService,
   };

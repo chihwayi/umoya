@@ -23,6 +23,8 @@ const makeService = () => {
     {} as any, // tenantService
     { validateConcept: jest.fn() } as any, // terminologyService
     { checkDrugInteractions: jest.fn().mockResolvedValue(null) } as any, // cdssService
+    {} as any, // oiEarlyWarningService
+    {} as any, // vacsIndexService
   );
 };
 
