@@ -48,6 +48,12 @@ import MyPathwaysPage from './pages/MyPathwaysPage';
 import ImmunizationsPage from './pages/ImmunizationsPage';
 import AdmissionStatusPage from './pages/AdmissionStatusPage';
 import EDVisitsPage from './pages/EDVisitsPage';
+// NC-S16 Features
+import SupportGroupsPage from './pages/SupportGroupsPage';
+import CommunicationPreferencesPage from './pages/CommunicationPreferencesPage';
+import AncEidTrackerPage from './pages/AncEidTrackerPage';
+import GrowthChartPage from './pages/GrowthChartPage';
+import DentalSummaryPage from './pages/DentalSummaryPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import CaregiverProtectedRoute from './components/CaregiverProtectedRoute';
 import './App.css';
@@ -385,6 +391,47 @@ function App() {
               }
             />
             
+            <Route
+              path="/:tenantSlug/support-groups"
+              element={
+                <ProtectedRoute requireLinked>
+                  <SupportGroupsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/communication-preferences"
+              element={
+                <ProtectedRoute requireLinked>
+                  <CommunicationPreferencesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/anc-eid"
+              element={
+                <ProtectedRoute requireLinked>
+                  <AncEidTrackerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/growth"
+              element={
+                <ProtectedRoute requireLinked>
+                  <GrowthChartPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/dental"
+              element={
+                <ProtectedRoute requireLinked>
+                  <DentalSummaryPage />
+                </ProtectedRoute>
+              }
+            />
+
             <Route path="*" element={<Navigate to="/select-tenant" replace />} />
           </Routes>
         </div>

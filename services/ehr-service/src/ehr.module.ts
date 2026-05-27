@@ -214,6 +214,7 @@ import { AtMessagingController } from './controllers/at-messaging.controller';
 import { PushTokensController } from './controllers/push-tokens.controller';
 import { CdpaController } from './controllers/cdpa.controller';
 import { BreachDetectionController } from './controllers/breach-detection.controller';
+import { PatientPortalHivController } from './controllers/patient-portal-hiv.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -715,6 +716,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PushTokensController,
     CdpaController,
     BreachDetectionController,
+    PatientPortalHivController,
   ],
   providers: [
     AuthService,

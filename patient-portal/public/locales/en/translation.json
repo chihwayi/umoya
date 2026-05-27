@@ -6,7 +6,12 @@
     "medications": "Medications",
     "messages": "Messages",
     "profile": "My Profile",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "supportGroups": "Support Groups",
+    "commPreferences": "Communication",
+    "ancEid": "ANC / EID",
+    "growth": "Growth Chart",
+    "dental": "Dental"
   },
   "dashboard": {
     "welcome": "Welcome, {{name}}",
@@ -42,7 +47,11 @@
     "nextPickup": "Next Pickup Date",
     "requestRefill": "Request Refill",
     "refillRequested": "Refill Requested",
-    "mmdInfo": "You are on multi-month dispensing"
+    "mmdInfo": "You are on multi-month dispensing",
+    "mmdTitle": "Multi-Month Dispensing",
+    "scheduleType": "Schedule Type",
+    "pickupDueSoon": "Pickup due soon",
+    "pickupOverdue": "Pickup overdue"
   },
   "profile": {
     "firstName": "First Name",
@@ -69,5 +78,70 @@
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "loginError": "Invalid username or password"
+  },
+  "supportGroups": {
+    "title": "Support Groups",
+    "notEnrolled": "You are not currently enrolled in any support groups.",
+    "facilitator": "Facilitator",
+    "location": "Location",
+    "sessionsAttended": "Sessions Attended",
+    "nextSession": "Next Session",
+    "viewSessions": "View Session History",
+    "hideSessions": "Hide Session History",
+    "date": "Date",
+    "topic": "Topic",
+    "attended": "Attended"
+  },
+  "comms": {
+    "title": "Communication Preferences",
+    "sendingTo": "Sending SMS to",
+    "nudgeSettings": "Reminder Settings",
+    "stopAllSms": "Stop All SMS Messages",
+    "optOutDescription": "This will stop all SMS reminders and notifications from this clinic.",
+    "optOutButton": "Opt Out of SMS",
+    "optOutConfirm": "Are you sure you want to stop all SMS messages from this clinic?",
+    "optedOutBanner": "You have opted out of SMS messages.",
+    "optedOutOn": "Opted out on {{date}}",
+    "optBackIn": "Re-enable SMS Messages"
+  },
+  "anc": {
+    "title": "ANC & EID Tracker",
+    "notRegistered": "You are not currently registered in the ANC programme.",
+    "pregnancyDetails": "Pregnancy Details",
+    "lmp": "Last Menstrual Period",
+    "edd": "Expected Delivery Date",
+    "currentRegimen": "Current Regimen",
+    "notRecorded": "Not recorded",
+    "highMtr": "High maternal transmission risk",
+    "bornOn": "Born",
+    "weeks": "wks NVP",
+    "due": "Due",
+    "finalStatus": "Final HIV Status"
+  },
+  "growth": {
+    "title": "Growth Chart",
+    "weightStatus": "Weight Status",
+    "lastMeasured": "Last Measured",
+    "nutritionReferral": "Nutrition referral recommended",
+    "wazChart": "Weight-for-Age Z-Score Chart",
+    "history": "Measurement History",
+    "date": "Date",
+    "age": "Age",
+    "weight": "Weight",
+    "height": "Height",
+    "status": "Status"
+  },
+  "dental": {
+    "title": "Dental Treatment Plan",
+    "noTreatmentPlan": "No dental treatment plan on record.",
+    "totalProcedures": "Total Procedures",
+    "completed": "Completed",
+    "pending": "Pending",
+    "outstandingCost": "Outstanding Cost",
+    "procedure": "Procedure",
+    "tooth": "Tooth",
+    "plannedDate": "Planned Date",
+    "cost": "Cost",
+    "status": "Status"
   }
 }

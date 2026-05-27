@@ -1465,6 +1465,26 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'nc_patient_portal_visibility',
+        label: 'NC-S16 — Patient Portal Visibility Columns',
+        version: '2026.05.27.1',
+        description: 'Adds patient_portal_visible flag to anc_registrations and eid_schedules; adds requested_via_portal to hiv_mmd_schedules',
+        statements: () => [
+          `DO $$ BEGIN
+             ALTER TABLE anc_registrations ADD COLUMN IF NOT EXISTS patient_portal_visible BOOLEAN NOT NULL DEFAULT true;
+           EXCEPTION WHEN undefined_table THEN NULL;
+           END $$`,
+          `DO $$ BEGIN
+             ALTER TABLE eid_schedules ADD COLUMN IF NOT EXISTS patient_portal_visible BOOLEAN NOT NULL DEFAULT true;
+           EXCEPTION WHEN undefined_table THEN NULL;
+           END $$`,
+          `DO $$ BEGIN
+             ALTER TABLE hiv_mmd_schedules ADD COLUMN IF NOT EXISTS requested_via_portal BOOLEAN DEFAULT false;
+           EXCEPTION WHEN undefined_table THEN NULL;
+           END $$`,
+        ],
+      },
+      {
         id: 'hiv_testing',
         label: 'HIV Testing Enhancements',
         version: '2025.03.01',
