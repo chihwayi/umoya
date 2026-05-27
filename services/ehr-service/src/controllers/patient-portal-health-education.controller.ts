@@ -9,7 +9,7 @@ export class PatientPortalHealthEducationController {
 
   @Get('courses')
   async getCourses(@Req() req, @Query('lang') lang: string) {
-    const patientId = req.user.sub;
+    const patientId = req.patientId;
     const language = lang ?? 'en';
     const [enrolled, browsable] = await Promise.all([
       this.edu.getMyCourses(patientId, language, req.tenantDb),
@@ -20,21 +20,21 @@ export class PatientPortalHealthEducationController {
 
   @Get('courses/:courseId')
   getCourseContent(@Param('courseId') courseId: string, @Query('lang') lang: string, @Req() req) {
-    return this.edu.getCourseContent(req.user.sub, courseId, lang ?? 'en', req.tenantDb);
+    return this.edu.getCourseContent(req.patientId, courseId, lang ?? 'en', req.tenantDb);
   }
 
   @Post('courses/:courseId/enroll')
   selfEnroll(@Param('courseId') courseId: string, @Req() req) {
-    return this.edu.selfEnroll(req.user.sub, courseId, req.tenantDb);
+    return this.edu.selfEnroll(req.patientId, courseId, req.tenantDb);
   }
 
   @Post('lessons/:lessonId/complete')
   markComplete(@Param('lessonId') lessonId: string, @Req() req) {
-    return this.edu.markLessonComplete(req.user.sub, lessonId, req.tenantDb);
+    return this.edu.markLessonComplete(req.patientId, lessonId, req.tenantDb);
   }
 
   @Post('quizzes/:quizId/attempt')
   submitAttempt(@Param('quizId') quizId: string, @Body() body, @Req() req) {
-    return this.edu.submitQuizAttempt(req.user.sub, quizId, body.answers, req.tenantDb);
+    return this.edu.submitQuizAttempt(req.patientId, quizId, body.answers, req.tenantDb);
   }
 }

@@ -143,5 +143,20 @@
     "plannedDate": "Date Prévue",
     "cost": "Coût",
     "status": "Statut"
+  },
+  "education": {
+    "back": "Retour à l'Éducation",
+    "openPdf": "Ouvrir le document PDF",
+    "quiz": "Test de Connaissances",
+    "passThreshold": "Note de passage : {{pct}}%",
+    "quizPassed": "Réussi",
+    "quizFailed": "Réessayer",
+    "submitQuiz": "Soumettre les Réponses",
+    "markComplete": "Marquer comme Terminé",
+    "enrolled": "Mes Cours",
+    "browse": "Explorer les Cours",
+    "enroll": "Commencer le Cours",
+    "progress": "Progression",
+    "complete": "Terminé"
   }
 }

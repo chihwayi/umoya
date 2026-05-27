@@ -143,5 +143,20 @@
     "plannedDate": "Zuva Rakarongwa",
     "cost": "Mari",
     "status": "Mamiriro"
+  },
+  "education": {
+    "back": "Dzokera Kudzidziso",
+    "openPdf": "Vhura Dhokhumendi ye-PDF",
+    "quiz": "Tariro Yezivo",
+    "passThreshold": "Mupimo wekupfuura: {{pct}}%",
+    "quizPassed": "Wapfuura",
+    "quizFailed": "Edza zvakare",
+    "submitQuiz": "Tumira Mhinduro",
+    "markComplete": "Maka sePakazara",
+    "enrolled": "Makosi Angu",
+    "browse": "Tsvaga Makosi",
+    "enroll": "Tanga Kosi",
+    "progress": "Kufambira Mberi",
+    "complete": "Yapera"
   }
 }

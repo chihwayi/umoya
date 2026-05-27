@@ -143,5 +143,20 @@
     "plannedDate": "Tarehe Iliyopangwa",
     "cost": "Gharama",
     "status": "Hali"
+  },
+  "education": {
+    "back": "Rudi kwa Elimu",
+    "openPdf": "Fungua hati ya PDF",
+    "quiz": "Ukaguzi wa Maarifa",
+    "passThreshold": "Alama ya kufaulu: {{pct}}%",
+    "quizPassed": "Umefaulu",
+    "quizFailed": "Jaribu tena",
+    "submitQuiz": "Wasilisha Majibu",
+    "markComplete": "Weka Alama ya Kukamilisha",
+    "enrolled": "Kozi Zangu",
+    "browse": "Gundua Kozi",
+    "enroll": "Anza Kozi",
+    "progress": "Maendeleo",
+    "complete": "Imekamilika"
   }
 }

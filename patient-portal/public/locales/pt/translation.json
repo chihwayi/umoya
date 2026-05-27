@@ -143,5 +143,20 @@
     "plannedDate": "Data Prevista",
     "cost": "Custo",
     "status": "Estado"
+  },
+  "education": {
+    "back": "Voltar à Educação",
+    "openPdf": "Abrir documento PDF",
+    "quiz": "Verificação de Conhecimento",
+    "passThreshold": "Nota mínima: {{pct}}%",
+    "quizPassed": "Aprovado",
+    "quizFailed": "Tente novamente",
+    "submitQuiz": "Enviar Respostas",
+    "markComplete": "Marcar como Concluído",
+    "enrolled": "Meus Cursos",
+    "browse": "Explorar Cursos",
+    "enroll": "Iniciar Curso",
+    "progress": "Progresso",
+    "complete": "Concluído"
   }
 }

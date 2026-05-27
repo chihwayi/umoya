@@ -143,5 +143,20 @@
     "plannedDate": "Usuku Oluhlelelwe",
     "cost": "Imali",
     "status": "Isimo"
+  },
+  "education": {
+    "back": "Buyela Emfundweni",
+    "openPdf": "Vula Idokhumenti ye-PDF",
+    "quiz": "Ukuhlola Ulwazi",
+    "passThreshold": "Imaka yokudlula: {{pct}}%",
+    "quizPassed": "Kudlulile",
+    "quizFailed": "Zama futhi",
+    "submitQuiz": "Thumela Izimpendulo",
+    "markComplete": "Phawula Njengokuqedilwe",
+    "enrolled": "Izifundo Zami",
+    "browse": "Hlola Izifundo",
+    "enroll": "Qala Isifundo",
+    "progress": "Inqubekelaphambili",
+    "complete": "Kuqedilwe"
   }
 }

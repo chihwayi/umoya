@@ -143,5 +143,20 @@
     "plannedDate": "Planned Date",
     "cost": "Cost",
     "status": "Status"
+  },
+  "education": {
+    "back": "Back to Education",
+    "openPdf": "Open PDF document",
+    "quiz": "Knowledge Check",
+    "passThreshold": "Pass mark: {{pct}}%",
+    "quizPassed": "Passed",
+    "quizFailed": "Try again",
+    "submitQuiz": "Submit Answers",
+    "markComplete": "Mark as Complete",
+    "enrolled": "My Courses",
+    "browse": "Explore Courses",
+    "enroll": "Start Course",
+    "progress": "Progress",
+    "complete": "Complete"
   }
 }

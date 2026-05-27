@@ -143,5 +143,20 @@
     "plannedDate": "Beplande Datum",
     "cost": "Koste",
     "status": "Status"
+  },
+  "education": {
+    "back": "Terug na Gesondheidsopvoeding",
+    "openPdf": "Maak PDF-dokument oop",
+    "quiz": "Kennistoets",
+    "passThreshold": "Slaagmerk: {{pct}}%",
+    "quizPassed": "Geslaag",
+    "quizFailed": "Probeer weer",
+    "submitQuiz": "Dien Antwoorde In",
+    "markComplete": "Merk as Voltooi",
+    "enrolled": "My Kursusse",
+    "browse": "Verken Kursusse",
+    "enroll": "Begin Kursus",
+    "progress": "Vordering",
+    "complete": "Voltooi"
   }
 }
