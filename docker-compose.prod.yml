@@ -345,6 +345,8 @@ services:
       - MEDICAL_AID_DEMO_BASE_URL=${MEDICAL_AID_DEMO_BASE_URL:-http://medical-aid-demo-service:3004}
       - MEDICAL_AID_DEMO_API_KEY=${MEDICAL_AID_DEMO_API_KEY}
     command: npm start
+    volumes:
+      - ${HOME}/.aws:/root/.aws:ro
     depends_on:
       postgres-master:
         condition: service_healthy
