@@ -3020,6 +3020,27 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'patient_clinical_summaries',
+        label: 'Sprint 181 — AI Clinical Summary Panel',
+        version: '2026.05.28.1',
+        description: '5-sentence AI clinical summary per patient with feedback tracking',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS patient_clinical_summaries (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            summary_text TEXT NOT NULL,
+            sentences JSONB NOT NULL DEFAULT '[]',
+            data_hash VARCHAR(64),
+            feedback_positive INTEGER NOT NULL DEFAULT 0,
+            feedback_negative INTEGER NOT NULL DEFAULT 0,
+            generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(patient_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_pcs_patient ON patient_clinical_summaries(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_pcs_generated ON patient_clinical_summaries(generated_at DESC)`,
+        ],
+      },
+      {
         id: 'medication_adherence',
         label: 'Sprint 178 — Predictive Medication Adherence Engine',
         version: '2026.05.28.1',

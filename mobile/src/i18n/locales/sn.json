@@ -255,6 +255,15 @@
     "regenerate": "Gadzira Nhoroondo Zvakare",
     "last_updated": "Yakagadziridzwa Pamugumo"
   },
+  "clinical_summary": {
+    "title": "Pfupiso yeAI yekurapa",
+    "loading": "Kugadzira pfupiso...",
+    "unavailable": "Pfupiso haikwanisi",
+    "regenerate": "Gadzira Zvakare",
+    "feedback_helpful": "Inobatsira",
+    "feedback_not": "Haibatsiri",
+    "generated_at": "Yakagadzirwa"
+  },
   "mortality": {
     "risk_score": "Njodzi yekufa mumavhiki 4",
     "low": "Pasi",

@@ -255,6 +255,15 @@
     "regenerate": "Khiqiza Kabusha Umlando",
     "last_updated": "Kubuyekeziwe Okwamuva"
   },
+  "clinical_summary": {
+    "title": "Isifinyezo se-AI Sezempilo",
+    "loading": "Iyakhiqiza isifinyezo...",
+    "unavailable": "Isifinyezo asitholakali",
+    "regenerate": "Khiqiza Kabusha",
+    "feedback_helpful": "Iyasiza",
+    "feedback_not": "Ayisizi",
+    "generated_at": "Ikhiqiziwe"
+  },
   "mortality": {
     "risk_score": "Ingozi Yokufa Ezinsukwini Ezingama-30",
     "low": "Phansi",

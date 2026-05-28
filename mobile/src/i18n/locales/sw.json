@@ -255,6 +255,15 @@
     "regenerate": "Zaliisha Upya Mstari",
     "last_updated": "Ilisasishwa mara ya mwisho"
   },
+  "clinical_summary": {
+    "title": "Muhtasari wa AI wa Kliniki",
+    "loading": "Kutengeneza muhtasari...",
+    "unavailable": "Muhtasari haupatikani",
+    "regenerate": "Tengeneza Upya",
+    "feedback_helpful": "Inasaidia",
+    "feedback_not": "Haikusaidia",
+    "generated_at": "Imezalishwa"
+  },
   "mortality": {
     "risk_score": "Hatari ya Kifo kwa Siku 30",
     "low": "Chini",

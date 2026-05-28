@@ -255,6 +255,15 @@
     "regenerate": "Régénérer la Chronologie",
     "last_updated": "Dernière mise à jour"
   },
+  "clinical_summary": {
+    "title": "Résumé Clinique IA",
+    "loading": "Génération du résumé...",
+    "unavailable": "Résumé indisponible",
+    "regenerate": "Régénérer",
+    "feedback_helpful": "Utile",
+    "feedback_not": "Pas utile",
+    "generated_at": "Généré"
+  },
   "mortality": {
     "risk_score": "Risque de Mortalité à 30 Jours",
     "low": "Faible",

@@ -255,6 +255,15 @@
     "regenerate": "Regenerate Timeline",
     "last_updated": "Last updated"
   },
+  "clinical_summary": {
+    "title": "AI Clinical Summary",
+    "loading": "Generating summary...",
+    "unavailable": "Summary unavailable",
+    "regenerate": "Regenerate",
+    "feedback_helpful": "Helpful",
+    "feedback_not": "Not helpful",
+    "generated_at": "Generated"
+  },
   "mortality": {
     "risk_score": "30-Day Mortality Risk",
     "low": "Low",

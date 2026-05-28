@@ -255,6 +255,15 @@
     "regenerate": "Hergenereer Tydlyn",
     "last_updated": "Laas opgedateer"
   },
+  "clinical_summary": {
+    "title": "KI Kliniese Opsomming",
+    "loading": "Opsomming word gegenereer...",
+    "unavailable": "Opsomming nie beskikbaar nie",
+    "regenerate": "Hergenereer",
+    "feedback_helpful": "Nuttig",
+    "feedback_not": "Nie nuttig nie",
+    "generated_at": "Gegenereer"
+  },
   "mortality": {
     "risk_score": "30-Dag Sterftrisiko",
     "low": "Laag",

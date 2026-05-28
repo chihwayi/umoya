@@ -453,6 +453,8 @@ import { ClinicalTimelineController } from './controllers/clinical-timeline.cont
 import { MortalityRiskService } from './services/mortality-risk.service';
 import { CronMortalityService } from './services/cron-mortality.service';
 import { MortalityRiskController } from './controllers/mortality-risk.controller';
+import { ClinicalSummaryService } from './services/clinical-summary.service';
+import { ClinicalSummaryController } from './controllers/clinical-summary.controller';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -761,6 +763,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AdherenceController,
     ClinicalTimelineController,
     MortalityRiskController,
+    ClinicalSummaryController,
   ],
   providers: [
     AuthService,
@@ -942,6 +945,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalTimelineService,
     MortalityRiskService,
     CronMortalityService,
+    ClinicalSummaryService,
     EducationPersonalizationService,
     PatientRiskScoringService,
     CronRiskSweepService,

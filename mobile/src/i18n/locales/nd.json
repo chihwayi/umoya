@@ -255,6 +255,15 @@
     "regenerate": "Akhela Umlando Futhi",
     "last_updated": "Kubuyekeziwe Okwokugcina"
   },
+  "clinical_summary": {
+    "title": "Isifinyezo se-AI Sezokwelapha",
+    "loading": "Yakhela isifinyezo...",
+    "unavailable": "Isifinyezo asitholakali",
+    "regenerate": "Akhela Futhi",
+    "feedback_helpful": "Siyasiza",
+    "feedback_not": "Asizi",
+    "generated_at": "Yakhiwa"
+  },
   "mortality": {
     "risk_score": "Ingozi Yokufa Ezinsukwini Ezingama-30",
     "low": "Phansi",
