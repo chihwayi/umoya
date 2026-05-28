@@ -181,7 +181,8 @@ export class ClinicalLlmService {
     const modelId =
       process.env.BEDROCK_MODEL_ID ??
       'anthropic.claude-3-5-sonnet-20241022-v2:0';
-    const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(modelId)}/invoke`;
+    const bedrockBase = (process.env.BEDROCK_ENDPOINT_URL ?? `https://bedrock-runtime.${region}.amazonaws.com`).replace(/\/$/, '');
+    const url = `${bedrockBase}/model/${encodeURIComponent(modelId)}/invoke`;
     const body = JSON.stringify({
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: opts.maxTokens ?? 512,
@@ -212,7 +213,8 @@ export class ClinicalLlmService {
   ): Promise<LlmGenerateResult> {
     const apiKey = process.env.ANTHROPIC_API_KEY!;
     const model = process.env.ANTHROPIC_MODEL ?? 'claude-3-5-sonnet-20241022';
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const baseUrl = (process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com').replace(/\/$/, '');
+    const res = await fetch(`${baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
