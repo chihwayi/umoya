@@ -350,8 +350,31 @@ const PharmacyInventory: React.FC = () => {
             Refresh
           </button>
           <button
+            onClick={() => {
+              const headers = ['Name', 'Generic Name', 'SKU', 'Batch', 'Expiry Date', 'Qty On Hand', 'Reorder Level', 'Unit Cost', 'Unit Price', 'Status'];
+              const rows = inventory.map((item) => [
+                item.name || item.drug_name || '',
+                item.generic_name || item.drug_generic_name || '',
+                item.sku || '',
+                item.batch_number || '',
+                item.expiry_date || '',
+                item.quantity_on_hand ?? '',
+                item.reorder_level ?? '',
+                item.cost_per_unit ?? '',
+                item.selling_price ?? '',
+                item.status || '',
+              ]);
+              const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `pharmacy-inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
             className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            title="Export to CSV (coming soon)"
+            title="Export to CSV"
           >
             <Download className="w-4 h-4" />
             Export
