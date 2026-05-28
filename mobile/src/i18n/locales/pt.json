@@ -162,6 +162,19 @@
     "fieldAccessLevel": "Nível de Acesso",
     "fieldExpiry": "Acesso expira em (opcional)"
   },
+  "radiology_ai": {
+    "panel_title": "Achados de IA em Radiologia",
+    "urgency_critical": "Crítico",
+    "urgency_high": "Alto",
+    "urgency_routine": "Rotina",
+    "no_findings": "Nenhum achado significativo detectado.",
+    "ai_unavailable": "IA Indisponível",
+    "confidence": "Confiança",
+    "review_confirm": "confirmar",
+    "review_reject": "rejeitar",
+    "review_needs": "necessita revisão",
+    "analysing": "Analisando o estudo de imagem..."
+  },
   "telemedicine": {
     "summary_preparing": "O resumo da sua consulta está sendo preparado...",
     "summary_ready": "O resumo da sua consulta está pronto. Toque para ver.",

@@ -218,6 +218,7 @@ import { PatientPortalHivController } from './controllers/patient-portal-hiv.con
 import { PostVisitEscalationController } from './controllers/post-visit-escalation.controller';
 import { AiOrderSuggestionsController } from './controllers/ai-order-suggestions.controller';
 import { TelemedicineWebhookController } from './controllers/telemedicine-webhook.controller';
+import { RadiologyReviewController } from './controllers/radiology-review.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -726,6 +727,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PostVisitEscalationController,
     AiOrderSuggestionsController,
     TelemedicineWebhookController,
+    RadiologyReviewController,
   ],
   providers: [
     AuthService,

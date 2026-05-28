@@ -168,5 +168,18 @@
     "postcall_soap_label": "AI-Generated SOAP Note",
     "postcall_duration": "Duration",
     "postcall_escalation": "Escalation Level"
+  },
+  "radiology_ai": {
+    "panel_title": "AI Radiology Findings",
+    "urgency_critical": "Critical",
+    "urgency_high": "High",
+    "urgency_routine": "Routine",
+    "no_findings": "No significant findings detected.",
+    "ai_unavailable": "AI Unavailable",
+    "confidence": "Confidence",
+    "review_confirm": "confirm",
+    "review_reject": "reject",
+    "review_needs": "needs review",
+    "analysing": "Analysing imaging study..."
   }
 }

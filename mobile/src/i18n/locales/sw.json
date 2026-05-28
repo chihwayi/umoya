@@ -162,6 +162,19 @@
     "fieldAccessLevel": "Kiwango cha Ufikiaji",
     "fieldExpiry": "Ruhusa inaisha tarehe (si lazima)"
   },
+  "radiology_ai": {
+    "panel_title": "Matokeo ya AI ya Radiolojia",
+    "urgency_critical": "Muhimu sana",
+    "urgency_high": "Juu",
+    "urgency_routine": "Kawaida",
+    "no_findings": "Hakuna matokeo muhimu yaliyogunduliwa.",
+    "ai_unavailable": "AI Haipatikani",
+    "confidence": "Imani",
+    "review_confirm": "thibitisha",
+    "review_reject": "kataa",
+    "review_needs": "inahitaji ukaguzi",
+    "analysing": "Inachambua uchunguzi wa picha..."
+  },
   "telemedicine": {
     "summary_preparing": "Muhtasari wa mashauriano yako unatengenezwa...",
     "summary_ready": "Muhtasari wa mashauriano yako uko tayari. Gusa kuona.",

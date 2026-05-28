@@ -162,6 +162,19 @@
     "fieldAccessLevel": "Toegangsvlak",
     "fieldExpiry": "Toegang verval op (opsioneel)"
   },
+  "radiology_ai": {
+    "panel_title": "KI Radiologie-bevindinge",
+    "urgency_critical": "Krities",
+    "urgency_high": "Hoog",
+    "urgency_routine": "Roetine",
+    "no_findings": "Geen beduidende bevindinge opgespoor nie.",
+    "ai_unavailable": "KI Nie Beskikbaar",
+    "confidence": "Vertroue",
+    "review_confirm": "bevestig",
+    "review_reject": "verwerp",
+    "review_needs": "benodig hersiening",
+    "analysing": "Beeldstudie word geanaliseer..."
+  },
   "telemedicine": {
     "summary_preparing": "Jou konsultasie-opsomming word voorberei...",
     "summary_ready": "Jou konsultasie-opsomming is gereed. Tik om te sien.",

@@ -162,6 +162,19 @@
     "fieldAccessLevel": "Pamusoro peKusvikirwa",
     "fieldExpiry": "Mvumo inopera zuva (pasina basa)"
   },
+  "radiology_ai": {
+    "panel_title": "Zvinotariswa neAI muRadiology",
+    "urgency_critical": "Kudiwa Kwakanyanya",
+    "urgency_high": "Kukwirira",
+    "urgency_routine": "Pakutanga",
+    "no_findings": "Hapana zvinotariswa zvakawanwa.",
+    "ai_unavailable": "AI Haikwanisi",
+    "confidence": "Chivimbo",
+    "review_confirm": "simbisa",
+    "review_reject": "ramba",
+    "review_needs": "inoda kuonekwa",
+    "analysing": "Kuyera mufananidzo..."
+  },
   "telemedicine": {
     "summary_preparing": "Nhevedzano yako iri kugadzirwa...",
     "summary_ready": "Nhevedzano yako yakagadzirwa. Bedera kuti uone.",

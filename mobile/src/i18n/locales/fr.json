@@ -162,6 +162,19 @@
     "fieldAccessLevel": "Niveau d'accès",
     "fieldExpiry": "Expiration de l'accès (optionnel)"
   },
+  "radiology_ai": {
+    "panel_title": "Résultats IA en Radiologie",
+    "urgency_critical": "Critique",
+    "urgency_high": "Élevé",
+    "urgency_routine": "Routine",
+    "no_findings": "Aucun résultat significatif détecté.",
+    "ai_unavailable": "IA Indisponible",
+    "confidence": "Confiance",
+    "review_confirm": "confirmer",
+    "review_reject": "rejeter",
+    "review_needs": "nécessite un examen",
+    "analysing": "Analyse de l'étude d'imagerie..."
+  },
   "telemedicine": {
     "summary_preparing": "Votre résumé de consultation est en cours de préparation...",
     "summary_ready": "Votre résumé de consultation est prêt. Appuyez pour voir.",

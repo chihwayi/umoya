@@ -162,6 +162,19 @@
     "fieldAccessLevel": "Izinga Lokufinyelela",
     "fieldExpiry": "Imvume iphela mhla (khetha)"
   },
+  "radiology_ai": {
+    "panel_title": "Imiphumela ye-AI ye-Radioloji",
+    "urgency_critical": "Ebalulekile kakhulu",
+    "urgency_high": "Ephezulu",
+    "urgency_routine": "Okujwayelekile",
+    "no_findings": "Awekho amatholakalo abalulekile atholakele.",
+    "ai_unavailable": "I-AI ayitholakali",
+    "confidence": "Ukuqiniseka",
+    "review_confirm": "qinisekisa",
+    "review_reject": "nqaba",
+    "review_needs": "idinga ukuhlolwa",
+    "analysing": "Kuhlahlwa ucwaningo lwezithombe..."
+  },
   "telemedicine": {
     "summary_preparing": "Isifinyezo sakho somhlangano silungiswa...",
     "summary_ready": "Isifinyezo sakho somhlangano silungile. Thepha ukubona.",
