@@ -246,6 +246,15 @@
     "hide_translation": "Viga shanduro",
     "ai_never_sends": "AI inobuditsa — iwe unotumira"
   },
+  "timeline": {
+    "ai_summary": "Pfupiso yeAI",
+    "view_full": "Ona Nhoroondo Yose",
+    "hide_full": "Viga Nhoroondo",
+    "detected_patterns": "Maitiro Akawanwa",
+    "no_timeline": "Nhoroondo isati yagadzirwa",
+    "regenerate": "Gadzira Nhoroondo Zvakare",
+    "last_updated": "Yakagadziridzwa Pamugumo"
+  },
   "ai_status": {
     "active": "AI Inoshanda",
     "unavailable": "AI Haikwanisi",

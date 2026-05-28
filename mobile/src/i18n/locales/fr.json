@@ -246,6 +246,15 @@
     "hide_translation": "Masquer la traduction",
     "ai_never_sends": "L'IA suggère — vous envoyez"
   },
+  "timeline": {
+    "ai_summary": "Résumé IA",
+    "view_full": "Voir la Chronologie Complète",
+    "hide_full": "Masquer la Chronologie",
+    "detected_patterns": "Modèles Détectés",
+    "no_timeline": "Chronologie pas encore générée",
+    "regenerate": "Régénérer la Chronologie",
+    "last_updated": "Dernière mise à jour"
+  },
   "ai_status": {
     "active": "IA Active",
     "unavailable": "IA Indisponible",

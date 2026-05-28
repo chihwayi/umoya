@@ -246,6 +246,15 @@
     "hide_translation": "Fihla ukuhumusha",
     "ai_never_sends": "I-AI iphakamisa — wena uthumela"
   },
+  "timeline": {
+    "ai_summary": "Isifinyezo se-AI",
+    "view_full": "Bona Umlando Wonke",
+    "hide_full": "Fihla Umlando",
+    "detected_patterns": "Izimo Ezinotholakaliyo",
+    "no_timeline": "Umlando awukagenasiwe",
+    "regenerate": "Akhela Umlando Futhi",
+    "last_updated": "Kubuyekeziwe Okwokugcina"
+  },
   "ai_status": {
     "active": "I-AI Iyasebenza",
     "unavailable": "I-AI Ayitholakali",

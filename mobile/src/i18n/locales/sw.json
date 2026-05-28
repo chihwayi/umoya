@@ -246,6 +246,15 @@
     "hide_translation": "Ficha tafsiri",
     "ai_never_sends": "AI inapendekeza — wewe unatuma"
   },
+  "timeline": {
+    "ai_summary": "Muhtasari wa AI",
+    "view_full": "Angalia Mstari Kamili",
+    "hide_full": "Ficha Mstari",
+    "detected_patterns": "Mifumo Iliyogunduliwa",
+    "no_timeline": "Mstari bado haujazalishwa",
+    "regenerate": "Zaliisha Upya Mstari",
+    "last_updated": "Ilisasishwa mara ya mwisho"
+  },
   "ai_status": {
     "active": "AI Inafanya kazi",
     "unavailable": "AI Haipatikani",

@@ -246,6 +246,15 @@
     "hide_translation": "Hide translation",
     "ai_never_sends": "AI suggests — you send"
   },
+  "timeline": {
+    "ai_summary": "AI Summary",
+    "view_full": "View Full Timeline",
+    "hide_full": "Hide Timeline",
+    "detected_patterns": "Detected Patterns",
+    "no_timeline": "Timeline not yet generated",
+    "regenerate": "Regenerate Timeline",
+    "last_updated": "Last updated"
+  },
   "ai_status": {
     "active": "AI Active",
     "unavailable": "AI Unavailable",

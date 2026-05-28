@@ -246,6 +246,15 @@
     "hide_translation": "Verberg vertaling",
     "ai_never_sends": "KI stel voor — jy stuur"
   },
+  "timeline": {
+    "ai_summary": "KI Opsomming",
+    "view_full": "Sien Volle Tydlyn",
+    "hide_full": "Verberg Tydlyn",
+    "detected_patterns": "Gedetekteerde Patrone",
+    "no_timeline": "Tydlyn nog nie gegenereer nie",
+    "regenerate": "Hergenereer Tydlyn",
+    "last_updated": "Laas opgedateer"
+  },
   "ai_status": {
     "active": "KI Aktief",
     "unavailable": "KI Nie Beskikbaar",

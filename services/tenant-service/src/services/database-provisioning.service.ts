@@ -2978,6 +2978,26 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'patient_ai_timeline',
+        label: 'Sprint 179 — AI Clinical Timeline & Pattern Detection',
+        version: '2026.05.28.1',
+        description: 'Longitudinal AI narrative and detected clinical patterns per patient',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS patient_ai_timeline (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            one_line_summary TEXT NOT NULL DEFAULT '',
+            full_narrative TEXT NOT NULL DEFAULT '',
+            detected_patterns JSONB NOT NULL DEFAULT '[]',
+            data_hash VARCHAR(64),
+            generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(patient_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_pat_patient ON patient_ai_timeline(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_pat_generated ON patient_ai_timeline(generated_at DESC)`,
+        ],
+      },
+      {
         id: 'medication_adherence',
         label: 'Sprint 178 — Predictive Medication Adherence Engine',
         version: '2026.05.28.1',
