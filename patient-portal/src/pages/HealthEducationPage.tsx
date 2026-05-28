@@ -54,6 +54,7 @@ const HealthEducationPage: React.FC = () => {
   const [language, setLanguage] = useState(() => localStorage.getItem(LOCALE_STORAGE_KEY) || 'en');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [personalized, setPersonalized] = useState<any[]>([]);
 
   const loadCourses = useCallback(async () => {
     if (!token) return;
@@ -69,10 +70,22 @@ const HealthEducationPage: React.FC = () => {
     }
   }, [token, tenantSlug, language, showError]);
 
+  const loadPersonalized = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await patientPortalApi.getPersonalizedEducation(token, tenantSlug, 6);
+      setPersonalized(data ?? []);
+    } catch {
+      setPersonalized([]);
+    }
+  }, [token, tenantSlug]);
+
   useEffect(() => {
     localStorage.setItem(LOCALE_STORAGE_KEY, language);
     loadCourses();
   }, [loadCourses, language]);
+
+  useEffect(() => { loadPersonalized(); }, [loadPersonalized]);
 
   const filteredEnrolled = useMemo(() => {
     const q = search.toLowerCase();
@@ -164,6 +177,34 @@ const HealthEducationPage: React.FC = () => {
           </div>
         ) : (
           <>
+            {/* Personalized recommendations */}
+            {personalized.length > 0 && (
+              <section>
+                <h2 className="text-lg font-bold text-gray-900 mb-3">Recommended for You</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {personalized.map((course: any) => (
+                    <button
+                      key={course.courseId}
+                      onClick={() => openCourse(course.courseId)}
+                      className="text-left border border-gray-200 rounded-xl p-3 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors relative"
+                    >
+                      {course.clinicianRecommended && (
+                        <span className="absolute top-2 right-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
+                          Clinician Pick
+                        </span>
+                      )}
+                      <p className="text-sm font-bold text-gray-900 pr-20" style={{ wordBreak: 'break-word' }}>
+                        {course.title}
+                      </p>
+                      {course.completionStatus === 'in_progress' && (
+                        <p className="text-xs text-blue-600 mt-1">In Progress</p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Enrolled courses */}
             {filteredEnrolled.length > 0 && (
               <section>

@@ -111,6 +111,8 @@ export const educationApi = {
     getApiClient().post(`/patient-portal/education/lessons/${lessonId}/complete`),
   submitQuizAttempt: (quizId: string, answers: { questionId: string; selectedOptionId: string }[]) =>
     getApiClient().post(`/patient-portal/education/quizzes/${quizId}/attempt`, { answers }),
+  getPersonalized: (limit = 6) =>
+    getApiClient().get<any[]>(`/education/patient/personalized?limit=${limit}`),
 };
 
 // Convenience typed caller

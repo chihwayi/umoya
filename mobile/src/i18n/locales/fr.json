@@ -107,7 +107,13 @@
     "openVideo": "Regarder la vidéo",
     "back": "Retour",
     "myCourses": "Mes cours",
-    "explore": "Explorer"
+    "explore": "Explorer",
+    "recommended_for_you": "Recommandé pour Vous",
+    "clinician_pick": "Choix du Clinicien",
+    "start": "Commencer",
+    "continue": "Continuer",
+    "in_progress": "En cours",
+    "completed": "Terminé"
   },
   "alerts": {
     "clinical_alert": "Alerte Clinique",

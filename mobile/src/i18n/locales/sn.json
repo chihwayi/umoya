@@ -107,7 +107,13 @@
     "openVideo": "Tarisa Vhidhiyo",
     "back": "Dzokera",
     "myCourses": "Makosi Angu",
-    "explore": "Tsvaga"
+    "explore": "Tsvaga",
+    "recommended_for_you": "Yakakurongererwa Iwe",
+    "clinician_pick": "Sarudzo yeGurukota",
+    "start": "Tanga",
+    "continue": "Enderera",
+    "in_progress": "Iri Kufamba",
+    "completed": "Yapedzwa"
   },
   "alerts": {
     "clinical_alert": "Yambiro yeMutiriri",

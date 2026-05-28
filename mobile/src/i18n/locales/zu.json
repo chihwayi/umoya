@@ -107,7 +107,13 @@
     "openVideo": "Buka Ividiyo",
     "back": "Emuva",
     "myCourses": "Izifundo Zami",
-    "explore": "Hlola"
+    "explore": "Hlola",
+    "recommended_for_you": "Ikhethwe Ngokukhethela Wena",
+    "clinician_pick": "Ukukhetha Kwezempilo",
+    "start": "Qala",
+    "continue": "Qhubeka",
+    "in_progress": "Kuyaqhubeka",
+    "completed": "Kuphelile"
   },
   "alerts": {
     "clinical_alert": "Isexwayiso Sezokwelapha",

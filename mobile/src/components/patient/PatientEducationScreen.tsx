@@ -35,6 +35,7 @@ export const PatientEducationScreen: React.FC = () => {
   const [browsable, setBrowsable] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recommended, setRecommended] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +53,12 @@ export const PatientEducationScreen: React.FC = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    educationApi.getPersonalized(6)
+      .then((res) => setRecommended(res.data ?? []))
+      .catch(() => setRecommended([]));
+  }, []);
+
   const courses = tab === 'enrolled' ? enrolled : browsable;
 
   return (
@@ -62,6 +69,31 @@ export const PatientEducationScreen: React.FC = () => {
         subtitle={t('education.subtitle', 'Learn at your own pace')}
         accent={C.teal}
       />
+
+      {/* Personalized recommendations */}
+      {recommended.length > 0 && (
+        <View style={styles.recSection}>
+          <Text style={styles.recTitle}>{t('education.recommended_for_you', 'Recommended for You')}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {recommended.map((course: any) => (
+              <TouchableOpacity
+                key={course.courseId}
+                style={styles.recChip}
+                onPress={() => navigation.navigate('PHEducationCourse', {
+                  courseId: course.courseId,
+                  courseTitle: course.title,
+                })}
+                activeOpacity={0.8}
+              >
+                {course.clinicianRecommended && (
+                  <Text style={styles.clinicianPick}>{t('education.clinician_pick', 'Clinician Pick')}</Text>
+                )}
+                <Text style={styles.recChipTitle} numberOfLines={2}>{course.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Tab strip */}
       <View style={styles.tabStrip}>
@@ -170,4 +202,17 @@ const styles = StyleSheet.create({
   progressTrack: { height: 4, backgroundColor: C.border, borderRadius: 2 },
   progressFill: { height: 4, backgroundColor: C.teal, borderRadius: 2 },
   emptyText: { fontFamily: FONT.ui, fontSize: 13, color: C.textMuted, textAlign: 'center', marginTop: 32 },
+  recSection: { paddingHorizontal: 16, paddingBottom: 8 },
+  recTitle: { fontFamily: FONT.uiBd, fontSize: 14, color: C.textPrimary, marginBottom: 8 },
+  recChip: {
+    width: 148, marginRight: 10, backgroundColor: C.bg,
+    borderRadius: RADIUS.md, padding: 10, ...SHADOW.sm,
+    borderWidth: 1, borderColor: C.border,
+  },
+  recChipTitle: { fontFamily: FONT.uiBk, fontSize: 12, color: C.textPrimary },
+  clinicianPick: {
+    fontFamily: FONT.uiBd, fontSize: 9, color: C.blue,
+    backgroundColor: C.blue + '20', paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: RADIUS.xs, alignSelf: 'flex-start', marginBottom: 4,
+  },
 });

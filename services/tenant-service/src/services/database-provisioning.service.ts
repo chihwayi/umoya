@@ -2920,6 +2920,39 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'education_personalization',
+        label: 'Sprint 172 — Education Personalization',
+        version: '2026.05.28.1',
+        description: 'Diagnosis-to-course mapping and clinician course recommendations',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS education_course_diagnosis_map (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            course_id UUID NOT NULL,
+            icd10_code VARCHAR(16),
+            snomed_code VARCHAR(32),
+            relevance_weight NUMERIC(4,3) NOT NULL DEFAULT 1.0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ecdm_course
+            ON education_course_diagnosis_map(course_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_ecdm_icd10
+            ON education_course_diagnosis_map(icd10_code)`,
+          `CREATE TABLE IF NOT EXISTS education_clinician_recommendations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            course_id UUID NOT NULL,
+            recommended_by UUID NOT NULL,
+            note TEXT,
+            status VARCHAR(32) NOT NULL DEFAULT 'pending'
+              CHECK (status IN ('pending','accepted','completed','dismissed')),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(patient_id, course_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ecr_patient
+            ON education_clinician_recommendations(patient_id)`,
+        ],
+      },
+      {
         id: 'ai_abstention_log',
         label: 'Sprint 171 — AI Abstention Log',
         version: '2026.05.28.1',

@@ -1159,6 +1159,14 @@ export const patientPortalApi = {
     return response.json();
   },
 
+  getPersonalizedEducation: async (token: string, tenantSlug: string, limit = 6): Promise<any[]> => {
+    const response = await fetch(`${API_BASE_URL}/education/patient/personalized?limit=${limit}`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    if (!response.ok) return [];
+    return response.json();
+  },
+
   getEducationCourse: async (courseId: string, token: string, tenantSlug: string, lang: string = 'en') => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/education/courses/${courseId}?lang=${lang}`, {
       headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),

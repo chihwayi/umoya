@@ -107,7 +107,13 @@
     "openVideo": "Tazama Video",
     "back": "Rudi",
     "myCourses": "Kozi Zangu",
-    "explore": "Chunguza"
+    "explore": "Chunguza",
+    "recommended_for_you": "Iliyopendekezwa Kwako",
+    "clinician_pick": "Uchaguzi wa Klinisheni",
+    "start": "Anza",
+    "continue": "Endelea",
+    "in_progress": "Inaendelea",
+    "completed": "Imekamilika"
   },
   "alerts": {
     "clinical_alert": "Tahadhari ya Kliniki",

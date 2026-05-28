@@ -220,6 +220,7 @@ import { AiOrderSuggestionsController } from './controllers/ai-order-suggestions
 import { TelemedicineWebhookController } from './controllers/telemedicine-webhook.controller';
 import { RadiologyReviewController } from './controllers/radiology-review.controller';
 import { CdssHealthController } from './controllers/cdss-health.controller';
+import { EducationPersonalizationController } from './controllers/education-personalization.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -432,6 +433,7 @@ import { PostVisitEscalationRoutingService } from './services/post-visit-escalat
 import { AiOrderPipelineService } from './services/ai-order-pipeline.service';
 import { TelemedicinePostcallService } from './services/telemedicine-postcall.service';
 import { AbstentionLogService } from './services/abstention-log.service';
+import { EducationPersonalizationService } from './services/education-personalization.service';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -731,6 +733,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TelemedicineWebhookController,
     RadiologyReviewController,
     CdssHealthController,
+    EducationPersonalizationController,
   ],
   providers: [
     AuthService,
@@ -903,6 +906,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AiOrderPipelineService,
     TelemedicinePostcallService,
     AbstentionLogService,
+    EducationPersonalizationService,
     PostVisitBillingIntelligenceService,
     PostVisitCompanionMemoryService,
     PostVisitSessionService,

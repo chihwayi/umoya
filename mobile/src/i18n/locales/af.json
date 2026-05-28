@@ -107,7 +107,13 @@
     "openVideo": "Kyk Video",
     "back": "Terug",
     "myCourses": "My Kursusse",
-    "explore": "Verken"
+    "explore": "Verken",
+    "recommended_for_you": "Aanbeveel vir Jou",
+    "clinician_pick": "Klinikus se Keuse",
+    "start": "Begin",
+    "continue": "Gaan voort",
+    "in_progress": "In Vordering",
+    "completed": "Voltooi"
   },
   "alerts": {
     "clinical_alert": "Kliniese Waarskuwing",
