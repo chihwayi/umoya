@@ -1,14 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Not, In } from 'typeorm';
 import { EDVisit } from '../entities/ed-visit.entity';
 import { CdssService } from './cdss.service';
+import { BedManagementService } from './bed-management.service';
 
 @Injectable()
 export class EDService {
   private readonly logger = new Logger(EDService.name);
 
-  constructor(private readonly cdssService: CdssService) {}
+  constructor(
+    private readonly cdssService: CdssService,
+    @Optional() private readonly bedManagement?: BedManagementService,
+  ) {}
 
   private async hasTable(tenantDb: DataSource, tableName: string): Promise<boolean> {
     const [row] = await tenantDb.query(`SELECT to_regclass($1) as table_name`, [`public.${tableName}`]);
@@ -321,12 +325,57 @@ export class EDService {
     const saved = await repository.save(visit);
 
     if (edStatus === 'admitted') {
-      // TODO: trigger bed management admission when service exists
-      this.logger.log(`ED visit ${visit.edVisitNumber} admitted; bed assignment TBD`);
+      this.triggerBedRequest(visit, tenantDb).catch(err =>
+        this.logger.warn(`Bed request failed for ED visit ${visit.edVisitNumber}: ${err?.message}`),
+      );
     }
 
     this.logger.log(`ED disposition completed: ${visit.edVisitNumber} -> ${edStatus}`);
     return saved;
+  }
+
+  private async triggerBedRequest(visit: EDVisit, tenantDb: DataSource): Promise<void> {
+    // Map ESI triage level to preferred ward type
+    const wardPreference = visit.triageLevel <= 2 ? 'ICU' : visit.triageLevel === 3 ? 'HDU' : 'General';
+
+    if (this.bedManagement) {
+      const available = await this.bedManagement.getAvailableBeds(undefined, wardPreference, tenantDb);
+      if (available.length > 0) {
+        await this.bedManagement.assignBed(
+          available[0].id,
+          visit.patientId,
+          visit.id,
+          'system',
+          tenantDb,
+        );
+        this.logger.log(`Auto-assigned bed ${available[0].id} (${wardPreference}) for ED admission ${visit.edVisitNumber}`);
+        return;
+      }
+    }
+
+    // Log pending bed request for manual assignment
+    await tenantDb.query(
+      `INSERT INTO bed_request_log (patient_id, source_id, source_type, ward_preference, triage_level, requested_at, status)
+       VALUES ($1, $2, 'ed_visit', $3, $4, NOW(), 'pending')
+       ON CONFLICT DO NOTHING`,
+      [visit.patientId, visit.id, wardPreference, visit.triageLevel ?? null],
+    ).catch(async () => {
+      await tenantDb.query(
+        `CREATE TABLE IF NOT EXISTS bed_request_log (
+           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+           patient_id UUID,
+           source_id UUID NOT NULL,
+           source_type VARCHAR(50) NOT NULL DEFAULT 'ed_visit',
+           ward_preference VARCHAR(100),
+           triage_level INT,
+           assigned_bed_id UUID,
+           requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           resolved_at TIMESTAMPTZ,
+           status VARCHAR(30) NOT NULL DEFAULT 'pending'
+         )`,
+      );
+    });
+    this.logger.log(`Bed request logged for ED visit ${visit.edVisitNumber} (${wardPreference}, no bed available)`);
   }
 
   async getEDMetrics(date: Date, tenantDb: DataSource): Promise<any> {

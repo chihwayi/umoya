@@ -148,11 +148,56 @@ export class RevenueCycleService {
 
     const total = charges.reduce((sum, c) => sum + parseFloat(c.totalCharge as any), 0);
 
+    const missedCharges = await this.detectMissedCharges(admissionId, tenantDb);
+
     return {
       charges: charges as unknown as PatientCharge[],
       total,
-      missedCharges: [], // TODO: Implement missed charge detection
+      missedCharges,
     };
+  }
+
+  private async detectMissedCharges(admissionId: string, tenantDb: DataSource): Promise<any[]> {
+    // Find lab orders, prescriptions, and procedures for this admission that have no matching charge line
+    const [labRows, rxRows, procRows] = await Promise.all([
+      tenantDb.query(
+        `SELECT lo.id AS source_id, 'lab_order' AS source_type,
+                lo.test_name AS description, lo.created_at AS service_date,
+                COALESCE(cm.unit_price, 0) AS estimated_amount
+         FROM lab_orders lo
+         LEFT JOIN patient_charges pc ON pc.source_id = lo.id::text AND pc.admission_id = $1
+         LEFT JOIN charge_master cm ON LOWER(cm.description) = LOWER(lo.test_name)
+         WHERE lo.admission_id = $1 AND pc.id IS NULL`,
+        [admissionId],
+      ).catch(() => []),
+      tenantDb.query(
+        `SELECT p.id AS source_id, 'prescription' AS source_type,
+                p.medication_name AS description, p.created_at AS service_date,
+                COALESCE(cm.unit_price, 0) AS estimated_amount
+         FROM prescriptions p
+         LEFT JOIN patient_charges pc ON pc.source_id = p.id::text AND pc.admission_id = $1
+         LEFT JOIN charge_master cm ON LOWER(cm.description) = LOWER(p.medication_name)
+         WHERE p.admission_id = $1 AND pc.id IS NULL`,
+        [admissionId],
+      ).catch(() => []),
+      tenantDb.query(
+        `SELECT mr.id AS source_id, 'procedure' AS source_type,
+                mr.chief_complaint AS description, mr.created_at AS service_date,
+                0::numeric AS estimated_amount
+         FROM medical_records mr
+         LEFT JOIN patient_charges pc ON pc.source_id = mr.id::text AND pc.admission_id = $1
+         WHERE mr.admission_id = $1 AND pc.id IS NULL`,
+        [admissionId],
+      ).catch(() => []),
+    ]);
+
+    return [...labRows, ...rxRows, ...procRows].map((r: any) => ({
+      sourceId: r.source_id,
+      sourceType: r.source_type,
+      description: r.description ?? 'Unknown',
+      serviceDate: r.service_date,
+      estimatedAmount: parseFloat(r.estimated_amount ?? '0'),
+    }));
   }
 
   // ==================== APPROVAL WORKFLOW ====================

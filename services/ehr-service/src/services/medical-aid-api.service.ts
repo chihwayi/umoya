@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 export interface MedicalAidApiConfig {
   id?: string;
@@ -726,8 +727,30 @@ export class MedicalAidApiService {
 
     // Verify webhook signature if configured
     if (config.webhookSecret) {
-      // TODO: Implement signature verification based on provider
-      // This would typically use HMAC or similar
+      if (!signature) {
+        this.logger.warn(`Webhook from ${medicalAidName} rejected: missing signature`);
+        return { processed: false, error: 'Missing webhook signature' };
+      }
+      const body = typeof webhookData === 'string' ? webhookData : JSON.stringify(webhookData);
+      const expected = createHmac('sha256', config.webhookSecret).update(body).digest('hex');
+      // Accept both raw hex and "sha256=<hex>" prefixed formats (GitHub/Stripe style)
+      const receivedHex = signature.startsWith('sha256=') ? signature.slice(7) : signature;
+      let valid = false;
+      try {
+        valid = timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(receivedHex, 'hex'));
+      } catch {
+        valid = false;
+      }
+      if (!valid) {
+        this.logger.warn(`Webhook from ${medicalAidName} rejected: invalid HMAC signature`);
+        return { processed: false, error: 'Invalid webhook signature' };
+      }
+      // Replay protection: require a timestamp field within 5 minutes
+      const ts = webhookData?.timestamp ?? webhookData?.ts;
+      if (ts && Math.abs(Date.now() - Number(ts)) > 300_000) {
+        this.logger.warn(`Webhook from ${medicalAidName} rejected: replay (age ${Date.now() - Number(ts)}ms)`);
+        return { processed: false, error: 'Webhook timestamp too old (replay protection)' };
+      }
     }
 
     // Extract claim information from webhook

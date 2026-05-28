@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { AlertDeliveryService } from './alert-delivery.service';
 
 export interface WorkflowStepConfig {
   assignRole?: { role: string; entityId: string; entityType: string };
@@ -17,7 +18,7 @@ export interface WorkflowStepConfig {
 export class ClinicalWorkflowService {
   private readonly logger = new Logger(ClinicalWorkflowService.name);
 
-  constructor() {}
+  constructor(@Optional() private readonly alertDelivery?: AlertDeliveryService) {}
 
   private ensureTenantDb(tenantDb: DataSource) {
     if (!tenantDb) {
@@ -537,17 +538,36 @@ export class ClinicalWorkflowService {
         break;
 
       case 'send_notification':
-        // Send notifications to users (would need user notifications service)
         if (config.userIds && Array.isArray(config.userIds)) {
+          const message = config.message ?? 'Workflow step executed';
           for (const userId of config.userIds) {
-            this.logger.log(
-              `Workflow notification for user ${userId}: ${config.message || 'Workflow step executed'}`,
-            );
-            // TODO: Implement user notifications table/service
-            // For now, we log the notification. In production, this would:
-            // 1. Insert into user_notifications table, or
-            // 2. Send via email/SMS, or
-            // 3. Use a messaging service
+            // Persist to user_workflow_notifications
+            await tenantDb.query(
+              `INSERT INTO user_workflow_notifications
+                 (user_id, message, priority, workflow_step_execution_id, created_at, is_read)
+               VALUES ($1, $2, $3, $4, NOW(), false)`,
+              [userId, message, config.priority ?? 'normal', stepExecutionId ?? null],
+            ).catch(async () => {
+              // Lazy-create table if missing
+              await tenantDb.query(
+                `CREATE TABLE IF NOT EXISTS user_workflow_notifications (
+                   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                   user_id UUID NOT NULL,
+                   message TEXT NOT NULL,
+                   priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+                   workflow_step_execution_id UUID,
+                   is_read BOOLEAN NOT NULL DEFAULT false,
+                   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                 )`,
+              );
+              await tenantDb.query(
+                `INSERT INTO user_workflow_notifications
+                   (user_id, message, priority, workflow_step_execution_id, created_at, is_read)
+                 VALUES ($1, $2, $3, $4, NOW(), false)`,
+                [userId, message, config.priority ?? 'normal', stepExecutionId ?? null],
+              );
+            });
+            this.logger.log(`Workflow notification stored for user ${userId}: ${message}`);
           }
         }
         break;

@@ -130,5 +130,13 @@ export class ImmunizationController {
     await this.immunizationService.recordAdverseEvent(id, eventData, req.user.userId, tenantDb);
     return { message: 'Adverse event recorded successfully' };
   }
+
+  @Get(':id/hl7-vxu')
+  @ApiOperation({ summary: 'Generate HL7 v2.5.1 VXU^V04 message for immunization registry submission' })
+  async getHl7Vxu(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const vxu = await this.immunizationService.buildVxuMessage(id, tenantDb);
+    return { immunizationId: id, messageType: 'VXU^V04', hl7: vxu };
+  }
 }
 

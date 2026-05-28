@@ -1,15 +1,19 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { config as envConfig } from '@medicore/config';
+import PDFDocument from 'pdfkit';
 import {
   CreateDigitalPrescriptionDto,
   SignPrescriptionDto,
 } from '../dto/telemedicine.dto';
+import { MinioService } from './minio.service';
 
 @Injectable()
 export class DigitalPrescriptionService {
   private readonly logger = new Logger(DigitalPrescriptionService.name);
   private readonly frontendUrl = String(process.env.FRONTEND_URL || envConfig.publicUrls.staffApp || '').replace(/\/+$/, '');
+
+  constructor(@Optional() private readonly minioService?: MinioService) {}
 
   private ensureTenantDb(tenantDb: DataSource) {
     if (!tenantDb) {
@@ -181,19 +185,21 @@ export class DigitalPrescriptionService {
       throw new NotFoundException(`Digital prescription ${prescriptionId} not found`);
     }
 
-    // TODO: Generate PDF using pdfkit or similar
-    // For now, return a placeholder URL
-    if (!this.frontendUrl) {
-      throw new Error('FRONTEND_URL is not configured. Set FRONTEND_URL or PUBLIC_APP_BASE_URL.');
+    const pdfBuffer = await this.buildPrescriptionPdf(prescription);
+
+    let pdfUrl: string;
+    if (this.minioService) {
+      const bucket = process.env.STORAGE_S3_BUCKET ?? 'medicore-documents';
+      const key = `prescriptions/${prescriptionId}.pdf`;
+      await this.minioService.uploadBuffer(bucket, key, pdfBuffer, 'application/pdf');
+      pdfUrl = `${process.env.MINIO_PUBLIC_URL ?? ''}/${bucket}/${key}`;
+    } else {
+      // Fallback: base64 data URI (single-node, no object store)
+      pdfUrl = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
     }
 
-    const pdfUrl = `${this.frontendUrl}/prescriptions/${prescriptionId}/pdf`;
-
-    // Update prescription with PDF URL
     await tenantDb.query(
-      `UPDATE telemedicine_prescriptions
-       SET pdf_url = $1, updated_at = NOW()
-       WHERE id = $2`,
+      `UPDATE telemedicine_prescriptions SET pdf_url = $1, updated_at = NOW() WHERE id = $2`,
       [pdfUrl, prescriptionId],
     );
 
@@ -223,13 +229,77 @@ export class DigitalPrescriptionService {
       throw new BadRequestException('Prescription must be signed by both patient and doctor before sending to pharmacy');
     }
 
-    // TODO: Integrate with pharmacy service to send prescription
-    // For now, just return success
+    // Create a dispensing queue entry so the pharmacy sees this prescription
+    await tenantDb.query(
+      `INSERT INTO pharmacy_dispensing_queue
+         (prescription_id, patient_id, pharmacy_id, queued_at, status, source)
+       VALUES ($1, $2, $3, NOW(), 'pending', 'telemedicine')
+       ON CONFLICT (prescription_id) DO UPDATE
+         SET pharmacy_id = EXCLUDED.pharmacy_id, queued_at = NOW(), status = 'pending'`,
+      [prescription.prescription_id, prescription.patient_id, pharmacyId ?? null],
+    ).catch(async () => {
+      // Table may not exist in older tenants — provision it inline
+      await tenantDb.query(
+        `CREATE TABLE IF NOT EXISTS pharmacy_dispensing_queue (
+           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+           prescription_id UUID NOT NULL,
+           patient_id UUID,
+           pharmacy_id UUID,
+           queued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           status VARCHAR(30) NOT NULL DEFAULT 'pending',
+           source VARCHAR(50),
+           UNIQUE (prescription_id)
+         )`,
+      );
+      await tenantDb.query(
+        `INSERT INTO pharmacy_dispensing_queue
+           (prescription_id, patient_id, pharmacy_id, queued_at, status, source)
+         VALUES ($1, $2, $3, NOW(), 'pending', 'telemedicine')
+         ON CONFLICT (prescription_id) DO NOTHING`,
+        [prescription.prescription_id, prescription.patient_id, pharmacyId ?? null],
+      );
+    });
+
     return {
       prescriptionId,
       pharmacyId: pharmacyId ?? 'default',
       sent: true,
-      message: 'Prescription sent to pharmacy',
+      message: 'Prescription queued for pharmacy dispensing',
     };
+  }
+
+  private buildPrescriptionPdf(rx: any): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      doc.fontSize(18).font('Helvetica-Bold').text('MediCore — Digital Prescription', { align: 'center' });
+      doc.moveDown(0.5);
+      doc.fontSize(10).font('Helvetica').text(`Date: ${new Date().toLocaleDateString()}`, { align: 'right' });
+      doc.moveDown();
+      doc.fontSize(12).font('Helvetica-Bold').text('Patient Information');
+      doc.fontSize(11).font('Helvetica').text(`Name: ${rx.patient_name ?? 'N/A'}`);
+      doc.moveDown();
+      doc.fontSize(12).font('Helvetica-Bold').text('Prescribing Physician');
+      doc.fontSize(11).font('Helvetica').text(`Dr. ${rx.doctor_name ?? 'N/A'}`);
+      doc.moveDown();
+      doc.fontSize(12).font('Helvetica-Bold').text('Medication');
+      doc.fontSize(11).font('Helvetica')
+        .text(`Medication: ${rx.medication_name ?? 'See attached'}`)
+        .text(`Dosage:     ${rx.dosage ?? 'N/A'}`)
+        .text(`Frequency:  ${rx.frequency ?? 'N/A'}`)
+        .text(`Duration:   ${rx.duration ?? 'N/A'}`);
+      if (rx.instructions) {
+        doc.moveDown(0.3).text(`Instructions: ${rx.instructions}`);
+      }
+      doc.moveDown(2);
+      if (rx.e_signature_doctor) {
+        doc.fontSize(10).text('Physician signature on file (digital)', { align: 'right' });
+      }
+      doc.end();
+    });
   }
 }

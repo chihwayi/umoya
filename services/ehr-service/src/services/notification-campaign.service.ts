@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { NotificationsService } from './notifications.service';
+import { EmailService } from './email.service';
 import { NotificationCampaign } from '../entities/notification-campaign.entity';
 import { NotificationCampaignRecipient } from '../entities/notification-campaign-recipient.entity';
 
@@ -10,7 +11,10 @@ type TargetType = 'manual' | 'recall_list' | 'query';
 
 @Injectable()
 export class NotificationCampaignService {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    @Optional() private readonly emailService?: EmailService,
+  ) {}
 
   async listCampaigns(tenantDb: DataSource): Promise<NotificationCampaign[]> {
     return tenantDb.getRepository(NotificationCampaign).find({ order: { createdAt: 'DESC' } });
@@ -208,10 +212,27 @@ export class NotificationCampaignService {
           r.sentAt = new Date();
           await recipRepo.save(r);
           sent++;
+        } else if ((campaign.channel as CampaignChannel) === 'email') {
+          if (!this.emailService) {
+            r.status = 'failed';
+            r.error = 'Email service not configured';
+            await recipRepo.save(r);
+            failed++;
+          } else {
+            await this.emailService.sendEmail({
+              to: r.destination,
+              subject: campaign.name,
+              html: `<p>${campaign.messageTemplate}</p>`,
+              text: campaign.messageTemplate,
+            });
+            r.status = 'sent';
+            r.sentAt = new Date();
+            await recipRepo.save(r);
+            sent++;
+          }
         } else {
-          // Email not implemented in NotificationsService; mark failed for now
           r.status = 'failed';
-          r.error = 'Email channel not implemented';
+          r.error = `Unsupported channel: ${campaign.channel}`;
           await recipRepo.save(r);
           failed++;
         }

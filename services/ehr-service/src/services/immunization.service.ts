@@ -264,9 +264,59 @@ export class ImmunizationService {
   }
 
   private async scheduleRegistrySubmission(immunizationId: string, tenantDb: DataSource): Promise<void> {
-    // TODO: Implement HL7 v2.5.1 VXU message generation
-    // This would integrate with state/national immunization registry
-    this.logger.log(`Registry submission scheduled for immunization: ${immunizationId}`);
+    try {
+      const vxu = await this.buildVxuMessage(immunizationId, tenantDb);
+      await tenantDb.query(
+        `INSERT INTO immunization_registry_submissions
+           (immunization_id, message_type, hl7_message, submitted_at, status)
+         VALUES ($1, 'VXU_V04', $2, NOW(), 'queued')
+         ON CONFLICT (immunization_id) DO UPDATE
+           SET hl7_message = EXCLUDED.hl7_message, submitted_at = NOW(), status = 'queued'`,
+        [immunizationId, vxu],
+      ).catch(async () => {
+        await tenantDb.query(
+          `CREATE TABLE IF NOT EXISTS immunization_registry_submissions (
+             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             immunization_id UUID NOT NULL,
+             message_type VARCHAR(20) NOT NULL DEFAULT 'VXU_V04',
+             hl7_message TEXT NOT NULL,
+             submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+             status VARCHAR(30) NOT NULL DEFAULT 'queued',
+             UNIQUE (immunization_id)
+           )`,
+        );
+      });
+      this.logger.log(`VXU message queued for immunization ${immunizationId}`);
+    } catch (err: any) {
+      this.logger.warn(`Registry submission failed for ${immunizationId}: ${err?.message}`);
+    }
+  }
+
+  async buildVxuMessage(immunizationId: string, tenantDb: DataSource): Promise<string> {
+    const rows = await tenantDb.query(
+      `SELECT i.*, p.first_name, p.last_name, p.date_of_birth, p.phone,
+              p.id_number, p.sex
+       FROM immunizations i
+       JOIN patients p ON p.id = i.patient_id
+       WHERE i.id = $1`,
+      [immunizationId],
+    );
+    const imm = rows?.[0];
+    if (!imm) throw new NotFoundException(`Immunization ${immunizationId} not found`);
+
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    const fmtDate = (d: string | Date | null) => d ? new Date(d).toISOString().slice(0, 10).replace(/-/g, '') : '';
+    const msgId = `MEDICORE${Date.now()}`;
+    const sendingFacility = process.env.SYSTEM_DOMAIN ?? 'medicore.local';
+
+    return [
+      `MSH|^~\\&|MEDICORE|${sendingFacility}|IIS|NATIONAL|${fmt(now)}||VXU^V04^VXU_V04|${msgId}|P|2.5.1|||NE|AL|||||Z22^CDCPHINVS`,
+      `PID|1||${imm.patient_id}^^^MEDICORE^MR||${(imm.last_name ?? '').toUpperCase()}^${(imm.first_name ?? '').toUpperCase()}||${fmtDate(imm.date_of_birth)}|${(imm.sex ?? 'U').charAt(0).toUpperCase()}|||||||${imm.phone ?? ''}`,
+      `ORC|RE|||||||||||${imm.administered_by ?? ''}`,
+      `RXA|0|1|${fmtDate(imm.administered_date)}|${fmtDate(imm.administered_date)}|${imm.vaccine_code ?? ''}^${imm.vaccine_name ?? ''}^CVX|${imm.dose_number ?? 1}|mL||01^Historical^NIP001|||${imm.lot_number ?? ''}||${fmtDate(imm.expiration_date)}|${imm.manufacturer ?? ''}^${imm.manufacturer ?? ''}^MVX|||CP`,
+      `RXR|${imm.route ?? 'IM'}^${imm.route ?? 'Intramuscular'}^CDCPHINVS|${imm.site ?? 'LA'}^${imm.site ?? 'Left Arm'}^CDCPHINVS`,
+    ].join('\r');
   }
 
   async recordAdverseEvent(
