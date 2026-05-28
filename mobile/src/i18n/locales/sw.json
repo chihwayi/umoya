@@ -255,6 +255,27 @@
     "regenerate": "Zaliisha Upya Mstari",
     "last_updated": "Ilisasishwa mara ya mwisho"
   },
+  "followup": {
+    "title": "Ushauri wa Ufuatiliaji wa AI",
+    "recommended_in": "Inashauriwa katika",
+    "modality": "Njia",
+    "source": "Chanzo cha AI",
+    "urgency_urgent": "Haraka",
+    "urgency_soon": "Hivi karibuni",
+    "urgency_routine": "Kawaida",
+    "modality_in_person": "Binafsi",
+    "modality_telemedicine": "Telemedicine",
+    "modality_phone": "Simu",
+    "accept": "Kubali na Ratiba",
+    "dismiss": "Kataa",
+    "accepted": "Imekubaliwa — ufuatiliaji umepangwa",
+    "dismissed": "Ushauri umekataliwa",
+    "override_days": "Badilisha siku",
+    "override_modality": "Badilisha njia",
+    "overdue_title": "Ufuatiliaji Uliochelewa",
+    "no_overdue": "Hakuna ufuatiliaji uliochelewa leo.",
+    "generating": "Kutengeneza ushauri wa ufuatiliaji…"
+  },
   "drug_sub": {
     "title": "Ubadilishaji wa Dawa na AI",
     "original_drug": "Jina la dawa ya awali",

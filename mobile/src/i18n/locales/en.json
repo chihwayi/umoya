@@ -255,6 +255,27 @@
     "regenerate": "Regenerate Timeline",
     "last_updated": "Last updated"
   },
+  "followup": {
+    "title": "AI Follow-up Recommendation",
+    "recommended_in": "Recommended in",
+    "modality": "Modality",
+    "source": "AI Source",
+    "urgency_urgent": "Urgent",
+    "urgency_soon": "Soon",
+    "urgency_routine": "Routine",
+    "modality_in_person": "In-Person",
+    "modality_telemedicine": "Telemedicine",
+    "modality_phone": "Phone",
+    "accept": "Accept & Schedule",
+    "dismiss": "Dismiss",
+    "accepted": "Accepted — follow-up scheduled",
+    "dismissed": "Recommendation dismissed",
+    "override_days": "Override days",
+    "override_modality": "Override modality",
+    "overdue_title": "Overdue Follow-Ups",
+    "no_overdue": "No overdue follow-ups today.",
+    "generating": "Generating follow-up recommendation…"
+  },
   "drug_sub": {
     "title": "AI Drug Substitution",
     "original_drug": "Original drug name",

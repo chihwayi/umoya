@@ -255,6 +255,27 @@
     "regenerate": "Gadzira Nhoroondo Zvakare",
     "last_updated": "Yakagadziridzwa Pamugumo"
   },
+  "followup": {
+    "title": "AI Kudzoka Chiremba",
+    "recommended_in": "Inokurudzirwa muma",
+    "modality": "Nzira",
+    "source": "Sosi ye-AI",
+    "urgency_urgent": "Kukurumidza",
+    "urgency_soon": "Munguva pfupi",
+    "urgency_routine": "Kazhinji",
+    "modality_in_person": "Muchinyimo",
+    "modality_telemedicine": "Telemedicine",
+    "modality_phone": "Runhare",
+    "accept": "Samukira & Rongesa",
+    "dismiss": "Dzima",
+    "accepted": "Yakagamuchirwa — kudzoka kwakasainwa",
+    "dismissed": "Zano rakadzimwa",
+    "override_days": "Shandura mazuva",
+    "override_modality": "Shandura nzira",
+    "overdue_title": "Mafuatirwo Akudonhedza",
+    "no_overdue": "Hapana mafuatirwo akudonhedza nhasi.",
+    "generating": "Kugadzira zano rekudzoka…"
+  },
   "drug_sub": {
     "title": "Kuchinja Mushonga neAI",
     "original_drug": "Zita remushonga wepakutanga",

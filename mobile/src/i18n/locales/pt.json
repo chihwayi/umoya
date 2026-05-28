@@ -255,6 +255,27 @@
     "regenerate": "Regenerar Cronologia",
     "last_updated": "Última actualização"
   },
+  "followup": {
+    "title": "Recomendação de Acompanhamento IA",
+    "recommended_in": "Recomendado em",
+    "modality": "Modalidade",
+    "source": "Fonte IA",
+    "urgency_urgent": "Urgente",
+    "urgency_soon": "Em breve",
+    "urgency_routine": "Rotina",
+    "modality_in_person": "Presencial",
+    "modality_telemedicine": "Telemedicina",
+    "modality_phone": "Telefone",
+    "accept": "Aceitar e Agendar",
+    "dismiss": "Dispensar",
+    "accepted": "Aceite — acompanhamento agendado",
+    "dismissed": "Recomendação dispensada",
+    "override_days": "Substituir dias",
+    "override_modality": "Substituir modalidade",
+    "overdue_title": "Acompanhamentos em Atraso",
+    "no_overdue": "Sem acompanhamentos atrasados hoje.",
+    "generating": "A gerar recomendação de acompanhamento…"
+  },
   "drug_sub": {
     "title": "Substituição de Medicamento IA",
     "original_drug": "Nome do medicamento original",

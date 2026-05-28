@@ -255,6 +255,27 @@
     "regenerate": "Akhela Umlando Futhi",
     "last_updated": "Kubuyekeziwe Okwokugcina"
   },
+  "followup": {
+    "title": "AI Ukubuya Kodokotela",
+    "recommended_in": "Kunconyiwe ku",
+    "modality": "Indlela",
+    "source": "Umthombo we-AI",
+    "urgency_urgent": "Ukuphuthuma",
+    "urgency_soon": "Maduze",
+    "urgency_routine": "Njalo",
+    "modality_in_person": "Ngomuntu",
+    "modality_telemedicine": "Telemedicine",
+    "modality_phone": "Ucingo",
+    "accept": "Yamukela & Beka",
+    "dismiss": "Khipha",
+    "accepted": "Yamukelwe — ukubuya kuhlelelwe",
+    "dismissed": "Icebo lichithiwe",
+    "override_days": "Shintsha izinsuku",
+    "override_modality": "Shintsha indlela",
+    "overdue_title": "Ukukubuya Okulate",
+    "no_overdue": "Akukho ukubuya okulate namhlanje.",
+    "generating": "Ukulungisa iseluleko sokubuyela…"
+  },
   "drug_sub": {
     "title": "Ukushintsha Umuthi nge-AI",
     "original_drug": "Ibizo lomuthi wokuqala",

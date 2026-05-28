@@ -255,6 +255,27 @@
     "regenerate": "Hergenereer Tydlyn",
     "last_updated": "Laas opgedateer"
   },
+  "followup": {
+    "title": "AI Opvolgaanbeveling",
+    "recommended_in": "Aanbeveel binne",
+    "modality": "Modaliteit",
+    "source": "AI-bron",
+    "urgency_urgent": "Dringend",
+    "urgency_soon": "Binnekort",
+    "urgency_routine": "Roetine",
+    "modality_in_person": "Persoonlik",
+    "modality_telemedicine": "Telemedicine",
+    "modality_phone": "Telefoon",
+    "accept": "Aanvaar en Skeduleer",
+    "dismiss": "Verwerp",
+    "accepted": "Aanvaar — opvolg geskeduleer",
+    "dismissed": "Aanbeveling verwerp",
+    "override_days": "Prioriteerdae",
+    "override_modality": "Prioriteer modaliteit",
+    "overdue_title": "Agterstallige Opvolging",
+    "no_overdue": "Geen agterstallige opvolging vandag nie.",
+    "generating": "Genereer opvolgaanbeveling…"
+  },
   "drug_sub": {
     "title": "AI Dwelvervanging",
     "original_drug": "Oorspronklike dwelnaam",

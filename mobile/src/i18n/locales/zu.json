@@ -255,6 +255,27 @@
     "regenerate": "Khiqiza Kabusha Umlando",
     "last_updated": "Kubuyekeziwe Okwamuva"
   },
+  "followup": {
+    "title": "Isiluleko Sokulandela se-AI",
+    "recommended_in": "Kunconyiwe ku",
+    "modality": "Indlela",
+    "source": "Umthombo we-AI",
+    "urgency_urgent": "Phuthuma",
+    "urgency_soon": "Maduze",
+    "urgency_routine": "Njalo",
+    "modality_in_person": "Ngomuntu",
+    "modality_telemedicine": "Telemedicine",
+    "modality_phone": "Ucingo",
+    "accept": "Amukela Uhlele",
+    "dismiss": "Khipha",
+    "accepted": "Yamukelwe — ukubuya kuhlelelwe",
+    "dismissed": "Isiluleko sichithiwe",
+    "override_days": "Shintsha izinsuku",
+    "override_modality": "Shintsha indlela",
+    "overdue_title": "Ukubuya Okuphelelwe Yisikhathi",
+    "no_overdue": "Akukho ukubuya okuphelelwe yisikhathi namhlanje.",
+    "generating": "Ukulungisa isiluleko sokubuya…"
+  },
   "drug_sub": {
     "title": "Ukuguqulwa Kwemithi ne-AI",
     "original_drug": "Igama lomuthi wokuqala",
