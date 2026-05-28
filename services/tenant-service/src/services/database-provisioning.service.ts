@@ -2978,6 +2978,30 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'voice_transcriptions',
+        label: 'Sprint 176 — Ambient Voice AI Transcriptions',
+        version: '2026.05.28.1',
+        description: 'Stores ambient voice recordings, transcriptions, and extracted clinical structured data',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS voice_transcriptions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID,
+            encounter_id UUID,
+            recorded_by UUID NOT NULL,
+            transcript_text TEXT NOT NULL DEFAULT '',
+            structured_data JSONB NOT NULL DEFAULT '{}',
+            duration_seconds NUMERIC(8,2),
+            language VARCHAR(16) NOT NULL DEFAULT 'en',
+            confidence NUMERIC(4,3) NOT NULL DEFAULT 0,
+            abstained BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_vt_patient ON voice_transcriptions(patient_id, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_vt_encounter ON voice_transcriptions(encounter_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_vt_recorded_by ON voice_transcriptions(recorded_by, created_at DESC)`,
+        ],
+      },
+      {
         id: 'appointment_ai',
         label: 'Sprint 175 — Intelligent Appointment AI',
         version: '2026.05.28.1',

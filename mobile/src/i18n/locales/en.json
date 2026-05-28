@@ -215,6 +215,16 @@
     "ai_interpretation": "AI Interpretation",
     "hide_interpretation": "Hide interpretation"
   },
+  "voice": {
+    "tap_to_dictate": "Tap to dictate",
+    "tap_to_stop": "Tap to stop",
+    "transcribing": "Transcribing...",
+    "parsing": "Parsing clinical data...",
+    "service_unavailable": "Voice AI unavailable",
+    "error_mic": "Microphone permission denied",
+    "error_generic": "Voice capture failed. Please try again.",
+    "review_notice": "Review extracted data before saving"
+  },
   "ai_status": {
     "active": "AI Active",
     "unavailable": "AI Unavailable",

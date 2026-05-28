@@ -215,6 +215,16 @@
     "ai_interpretation": "Tsananguro yeAI",
     "hide_interpretation": "Viga tsananguro"
   },
+  "voice": {
+    "tap_to_dictate": "Tinya kuti uimbirire",
+    "tap_to_stop": "Tinya kuti umise",
+    "transcribing": "Kunyora...",
+    "parsing": "Kutsanangura data yekiriniki...",
+    "service_unavailable": "AI yezwi haikwanisi",
+    "error_mic": "Mvumo yemikirofomu yakambwa",
+    "error_generic": "Kubata kwezwi kwakundikana. Ndokumbira muyedze zvakare.",
+    "review_notice": "Onai data yakabudiswa musati machengeta"
+  },
   "ai_status": {
     "active": "AI Inoshanda",
     "unavailable": "AI Haikwanisi",

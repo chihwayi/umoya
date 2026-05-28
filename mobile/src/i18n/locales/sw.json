@@ -215,6 +215,16 @@
     "ai_interpretation": "Tafsiri ya AI",
     "hide_interpretation": "Ficha tafsiri"
   },
+  "voice": {
+    "tap_to_dictate": "Gusa kuamrisha kwa sauti",
+    "tap_to_stop": "Gusa kuacha",
+    "transcribing": "Inaandika...",
+    "parsing": "Inachambua data ya kliniki...",
+    "service_unavailable": "AI ya sauti haipatikani",
+    "error_mic": "Ruhusa ya kipaza sauti imekataliwa",
+    "error_generic": "Kunasa sauti kumeshindwa. Tafadhali jaribu tena.",
+    "review_notice": "Kagua data iliyotolewa kabla ya kuhifadhi"
+  },
   "ai_status": {
     "active": "AI Inafanya kazi",
     "unavailable": "AI Haipatikani",

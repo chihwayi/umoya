@@ -122,6 +122,17 @@ export const riskApi = {
     getApiClient().post<any>(`/risk/patients/${patientId}/rescore`),
 };
 
+export const voiceApi = {
+  transcribe: (audioBase64: string, language: string, options?: { patientId?: string; encounterId?: string }) =>
+    getApiClient().post<{ transcriptId: string; text: string; confidence: number }>('/voice/transcribe', {
+      audioBase64,
+      language,
+      ...options,
+    }),
+  parseClinical: (transcriptId: string, transcriptText: string) =>
+    getApiClient().post<any>('/voice/parse-clinical', { transcriptId, transcriptText }),
+};
+
 // Convenience typed caller
 export const api = {
   get:    <T>(path: string, config?: object) => getApiClient().get<T>(path, config),

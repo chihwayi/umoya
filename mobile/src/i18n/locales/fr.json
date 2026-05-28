@@ -215,6 +215,16 @@
     "ai_interpretation": "Interprétation IA",
     "hide_interpretation": "Masquer l'interprétation"
   },
+  "voice": {
+    "tap_to_dictate": "Appuyez pour dicter",
+    "tap_to_stop": "Appuyez pour arrêter",
+    "transcribing": "Transcription en cours...",
+    "parsing": "Analyse des données cliniques...",
+    "service_unavailable": "IA vocale indisponible",
+    "error_mic": "Permission du microphone refusée",
+    "error_generic": "Échec de la capture vocale. Veuillez réessayer.",
+    "review_notice": "Vérifiez les données extraites avant d'enregistrer"
+  },
   "ai_status": {
     "active": "IA Active",
     "unavailable": "IA Indisponible",

@@ -215,6 +215,16 @@
     "ai_interpretation": "Incazelo ye-AI",
     "hide_interpretation": "Fihla incazelo"
   },
+  "voice": {
+    "tap_to_dictate": "Thepha ukuphimisa",
+    "tap_to_stop": "Thepha ukumisa",
+    "transcribing": "Ibhala...",
+    "parsing": "Ihlaziya idatha yezempilo...",
+    "service_unavailable": "I-AI yezwi ayitholakali",
+    "error_mic": "Imvume yemicrophone inqatshelwe",
+    "error_generic": "Ukubamba izwi kuhlulekile. Zama futhi.",
+    "review_notice": "Hlola idatha ekhishiwe ngaphambi kokulondoloza"
+  },
   "ai_status": {
     "active": "I-AI Iyasebenza",
     "unavailable": "I-AI Ayitholakali",

@@ -215,6 +215,16 @@
     "ai_interpretation": "KI-Interpretasie",
     "hide_interpretation": "Verberg interpretasie"
   },
+  "voice": {
+    "tap_to_dictate": "Tik om te dikteer",
+    "tap_to_stop": "Tik om te stop",
+    "transcribing": "Transkribeer...",
+    "parsing": "Kliniese data word verwerk...",
+    "service_unavailable": "Stem KI nie beskikbaar nie",
+    "error_mic": "Mikrofoon toestemming geweier",
+    "error_generic": "Stemopname het misluk. Probeer asseblief weer.",
+    "review_notice": "Hersien uitgehaalde data voordat jy stoor"
+  },
   "ai_status": {
     "active": "KI Aktief",
     "unavailable": "KI Nie Beskikbaar",
