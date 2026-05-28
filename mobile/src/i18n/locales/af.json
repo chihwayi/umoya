@@ -188,6 +188,17 @@
     "postcall_duration": "Duur",
     "postcall_escalation": "Eskalasiepeil"
   },
+  "risk": {
+    "high_risk_patients": "Hoërisiko Pasiënte",
+    "risk_score": "Risikotelling",
+    "critical": "Krities",
+    "high": "Hoog",
+    "medium": "Medium",
+    "low": "Laag",
+    "last_scored": "Laas Beoordeel",
+    "rescore": "Herbeoordeel Pasiënt",
+    "no_high_risk": "Geen hoërisiko pasiënte vandag nie"
+  },
   "ai_status": {
     "active": "KI Aktief",
     "unavailable": "KI Nie Beskikbaar",

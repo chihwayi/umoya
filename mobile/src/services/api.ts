@@ -115,6 +115,13 @@ export const educationApi = {
     getApiClient().get<any[]>(`/education/patient/personalized?limit=${limit}`),
 };
 
+export const riskApi = {
+  getHighRiskPatients: (limit = 20) =>
+    getApiClient().get<any[]>(`/risk/high-risk-patients?limit=${limit}`),
+  rescorePatient: (patientId: string) =>
+    getApiClient().post<any>(`/risk/patients/${patientId}/rescore`),
+};
+
 // Convenience typed caller
 export const api = {
   get:    <T>(path: string, config?: object) => getApiClient().get<T>(path, config),

@@ -22,9 +22,21 @@ import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, AiPulse, Dot }
 import { NurseWorklistService } from '../../services/nurseWorklist';
 import { CdssService, SbarResult, FallRiskResult } from '../../services/cdss';
 import { MessagesService } from '../../services/messages';
+import { riskApi } from '../../services/api';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface HighRiskPatient {
+  patientId: string;
+  patientName: string;
+  mrn: string;
+  ward: string;
+  bed: string;
+  score: number;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  scoredAt: string;
+}
 
 type TaskPriority  = 'URGENT' | 'HIGH' | 'MED' | 'LOW';
 type ESILevel      = 1 | 2 | 3 | 4 | 5;
@@ -496,14 +508,22 @@ const taskStyles = StyleSheet.create({
 
 // ─── Worklist sub-tab ─────────────────────────────────────────────────────────
 
+const RISK_LEVEL_COLOR: Record<string, string> = {
+  critical: C.red,
+  high:     C.amber,
+  medium:   C.blue,
+  low:      C.green,
+};
+
 interface WorklistProps {
   tasks: ShiftTask[];
   onToggle: (id: string) => void;
   onEscalate: (task: ShiftTask) => void;
   aiSummary: string;
+  highRiskPatients: HighRiskPatient[];
 }
 
-const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate, aiSummary }) => {
+const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate, aiSummary, highRiskPatients }) => {
   const pending = tasks.filter((t) => !t.done);
   const done    = tasks.filter((t) => t.done);
   const urgent  = tasks.filter((t) => t.priority === 'URGENT' && !t.done).length;
@@ -536,6 +556,37 @@ const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate, aiSumm
           </Text>
         </View>
       </Card>
+
+      {/* High-risk patients */}
+      {highRiskPatients.length > 0 && (
+        <View>
+          <SectionHeader action={`${highRiskPatients.length} patients`}>
+            {t('risk.high_risk_patients')}
+          </SectionHeader>
+          {highRiskPatients.map((p) => {
+            const color = RISK_LEVEL_COLOR[p.riskLevel] ?? C.textMuted;
+            return (
+              <View key={p.patientId} style={[hrStyles.row, { borderLeftColor: color, borderLeftWidth: 3 }]}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={hrStyles.name}>{p.patientName}</Text>
+                  <Text style={hrStyles.meta}>{p.mrn} · {p.ward}{p.bed ? ` · Bed ${p.bed}` : ''}</Text>
+                </View>
+                <View style={[hrStyles.scorePill, { backgroundColor: color + '20', borderColor: color + '60' }]}>
+                  <Text style={[hrStyles.scoreNum, { color }]}>{p.score}</Text>
+                  <Text style={[hrStyles.scoreLabel, { color }]}>{p.riskLevel.toUpperCase()}</Text>
+                </View>
+                <TouchableOpacity
+                  style={hrStyles.escalateBtn}
+                  onPress={() => onEscalate({ id: p.patientId, patientName: p.patientName, bed: p.bed, ward: p.ward, priority: 'HIGH', task: 'High risk review', dueTime: '—', done: false, escalated: false, escalatable: true })}
+                  activeOpacity={0.8}
+                >
+                  <Icon name="escalate" size={14} color={C.red} />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       {/* Pending tasks */}
       {pending.length > 0 ? (
@@ -577,6 +628,29 @@ const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate, aiSumm
     </ScrollView>
   );
 };
+
+const hrStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: C.card, borderRadius: RADIUS.card,
+    borderWidth: 1, borderColor: C.border,
+    padding: 12, marginBottom: 6,
+    ...SHADOW.card,
+  },
+  name: { fontFamily: FONT.uiBd, fontSize: 13, color: C.textPrimary },
+  meta: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
+  scorePill: {
+    alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: RADIUS.md, borderWidth: 1, minWidth: 56,
+  },
+  scoreNum: { fontFamily: FONT.uiBk, fontSize: 18, letterSpacing: -0.5 },
+  scoreLabel: { fontFamily: FONT.uiBd, fontSize: 9, letterSpacing: 0.5, marginTop: -2 },
+  escalateBtn: {
+    width: 34, height: 34, borderRadius: RADIUS.md,
+    backgroundColor: C.red + '18', borderWidth: 1, borderColor: C.red + '40',
+    alignItems: 'center', justifyContent: 'center',
+  },
+});
 
 const wlStyles = StyleSheet.create({
   content: { padding: 16, gap: 16, paddingBottom: 40 },
@@ -817,6 +891,7 @@ export const NurseShiftScreen: React.FC = () => {
   const [doctors,    setDoctors]    = useState<Doctor[]>([]);
   const [aiSummary,  setAiSummary]  = useState<string>('');
   const [loading,    setLoading]    = useState(true);
+  const [highRisk,   setHighRisk]   = useState<HighRiskPatient[]>([]);
   const [escalating, setEscalating] = useState<{ name: string } | null>(null);
 
   // SBAR sheet
@@ -857,7 +932,11 @@ export const NurseShiftScreen: React.FC = () => {
       })
       .catch(() => {});
 
-    Promise.allSettled([loadWorklist, loadDoctors, loadSummary]);
+    const loadHighRisk = riskApi.getHighRiskPatients(10)
+      .then(res => setHighRisk(res.data ?? []))
+      .catch(() => {});
+
+    Promise.allSettled([loadWorklist, loadDoctors, loadSummary, loadHighRisk]);
   }, []);
 
   const toggleTask = useCallback((id: string) => {
@@ -961,7 +1040,7 @@ export const NurseShiftScreen: React.FC = () => {
       </View>
 
       {activeTab === 'worklist'
-        ? <Worklist tasks={tasks} onToggle={toggleTask} onEscalate={openEscalate} aiSummary={aiSummary} />
+        ? <Worklist tasks={tasks} onToggle={toggleTask} onEscalate={openEscalate} aiSummary={aiSummary} highRiskPatients={highRisk} />
         : <TriageTab onEscalate={(name) => openEscalate(name)} patients={triage} onSbar={openSbar} onFallRisk={openFallRisk} />
       }
 

@@ -188,6 +188,17 @@
     "review_needs": "needs review",
     "analysing": "Analysing imaging study..."
   },
+  "risk": {
+    "high_risk_patients": "High Risk Patients",
+    "risk_score": "Risk Score",
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "last_scored": "Last Scored",
+    "rescore": "Re-Score Patient",
+    "no_high_risk": "No high-risk patients today"
+  },
   "ai_status": {
     "active": "AI Active",
     "unavailable": "AI Unavailable",

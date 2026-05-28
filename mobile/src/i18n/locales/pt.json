@@ -188,6 +188,17 @@
     "postcall_duration": "Duração",
     "postcall_escalation": "Nível de Escalada"
   },
+  "risk": {
+    "high_risk_patients": "Pacientes de Alto Risco",
+    "risk_score": "Pontuação de Risco",
+    "critical": "Crítico",
+    "high": "Alto",
+    "medium": "Médio",
+    "low": "Baixo",
+    "last_scored": "Última Avaliação",
+    "rescore": "Re-avaliar Paciente",
+    "no_high_risk": "Nenhum paciente de alto risco hoje"
+  },
   "ai_status": {
     "active": "IA Ativa",
     "unavailable": "IA Indisponível",

@@ -221,6 +221,7 @@ import { TelemedicineWebhookController } from './controllers/telemedicine-webhoo
 import { RadiologyReviewController } from './controllers/radiology-review.controller';
 import { CdssHealthController } from './controllers/cdss-health.controller';
 import { EducationPersonalizationController } from './controllers/education-personalization.controller';
+import { ProactiveRiskController } from './controllers/proactive-risk.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -434,6 +435,8 @@ import { AiOrderPipelineService } from './services/ai-order-pipeline.service';
 import { TelemedicinePostcallService } from './services/telemedicine-postcall.service';
 import { AbstentionLogService } from './services/abstention-log.service';
 import { EducationPersonalizationService } from './services/education-personalization.service';
+import { PatientRiskScoringService } from './services/patient-risk-scoring.service';
+import { CronRiskSweepService } from './services/cron-risk-sweep.service';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -734,6 +737,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RadiologyReviewController,
     CdssHealthController,
     EducationPersonalizationController,
+    ProactiveRiskController,
   ],
   providers: [
     AuthService,
@@ -907,6 +911,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TelemedicinePostcallService,
     AbstentionLogService,
     EducationPersonalizationService,
+    PatientRiskScoringService,
+    CronRiskSweepService,
     PostVisitBillingIntelligenceService,
     PostVisitCompanionMemoryService,
     PostVisitSessionService,

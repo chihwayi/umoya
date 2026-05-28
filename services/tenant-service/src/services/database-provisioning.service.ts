@@ -2920,6 +2920,31 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'patient_risk_scores',
+        label: 'Sprint 173 — Patient Risk Scores',
+        version: '2026.05.28.1',
+        description: 'Stores nightly composite risk scores per patient with component breakdown',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS patient_risk_scores (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            score INTEGER NOT NULL CHECK (score >= 0 AND score <= 100),
+            risk_level VARCHAR(16) NOT NULL
+              CHECK (risk_level IN ('low','medium','high','critical')),
+            components JSONB NOT NULL DEFAULT '{}',
+            alert_sent BOOLEAN NOT NULL DEFAULT false,
+            scored_by VARCHAR(64) NOT NULL DEFAULT 'cron',
+            scored_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_prs_patient
+            ON patient_risk_scores(patient_id, scored_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_prs_level
+            ON patient_risk_scores(risk_level, scored_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_prs_recent
+            ON patient_risk_scores(scored_at DESC)`,
+        ],
+      },
+      {
         id: 'education_personalization',
         label: 'Sprint 172 — Education Personalization',
         version: '2026.05.28.1',

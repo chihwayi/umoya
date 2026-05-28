@@ -188,6 +188,17 @@
     "postcall_duration": "Isikhathi",
     "postcall_escalation": "Izinga lokuphuthuma"
   },
+  "risk": {
+    "high_risk_patients": "Iziguli Ezinengozi Ephezulu",
+    "risk_score": "Inombolo Yengozi",
+    "critical": "Esikhulu Kakhulu",
+    "high": "Ephezulu",
+    "medium": "Phakathi",
+    "low": "Phansi",
+    "last_scored": "Idingiwe Okwokugcina",
+    "rescore": "Bheka Futhi Isiguli",
+    "no_high_risk": "Azikho iziguli ezinengozi ephezulu namuhla"
+  },
   "ai_status": {
     "active": "I-AI Iyasebenza",
     "unavailable": "I-AI Ayitholakali",

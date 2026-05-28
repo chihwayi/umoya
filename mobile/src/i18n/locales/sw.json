@@ -188,6 +188,17 @@
     "postcall_duration": "Muda",
     "postcall_escalation": "Kiwango cha Kupanda"
   },
+  "risk": {
+    "high_risk_patients": "Wagonjwa wa Hatari Kubwa",
+    "risk_score": "Alama ya Hatari",
+    "critical": "Muhimu Sana",
+    "high": "Juu",
+    "medium": "Kati",
+    "low": "Chini",
+    "last_scored": "Alipimwa Mara ya Mwisho",
+    "rescore": "Pima Tena Mgonjwa",
+    "no_high_risk": "Hakuna wagonjwa wa hatari kubwa leo"
+  },
   "ai_status": {
     "active": "AI Inafanya kazi",
     "unavailable": "AI Haipatikani",

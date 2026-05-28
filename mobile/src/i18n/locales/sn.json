@@ -188,6 +188,17 @@
     "postcall_duration": "Nguva",
     "postcall_escalation": "Zvinokwira"
   },
+  "risk": {
+    "high_risk_patients": "Varwere Vane Njodzi Yakakura",
+    "risk_score": "Nhamba yeNjodzi",
+    "critical": "Kukurwa Kwakanyanya",
+    "high": "Kukwirira",
+    "medium": "Pakati",
+    "low": "Pasi",
+    "last_scored": "Yakaverengwa Pamugumo",
+    "rescore": "Verengazve Murwere",
+    "no_high_risk": "Hapana varwere vane njodzi yakakura nhasi"
+  },
   "ai_status": {
     "active": "AI Inoshanda",
     "unavailable": "AI Haikwanisi",
