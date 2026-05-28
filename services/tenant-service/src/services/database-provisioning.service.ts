@@ -3069,6 +3069,33 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'clinical_documents',
+        label: 'Sprint 183 — AI-Generated Clinical Documents',
+        version: '2026.05.28.1',
+        description: 'Structured clinical documents (referral letters, discharge summaries, pre-auth, sick notes)',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS clinical_documents (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            encounter_id UUID,
+            document_type VARCHAR(32) NOT NULL
+              CHECK (document_type IN ('referral_letter','discharge_summary','pre_auth','sick_note','other')),
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft'
+              CHECK (status IN ('draft','signed','archived')),
+            generated_by UUID,
+            recipient TEXT,
+            signed_by UUID,
+            signed_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cd_patient ON clinical_documents(patient_id, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_cd_status ON clinical_documents(status, document_type)`,
+        ],
+      },
+      {
         id: 'medication_adherence',
         label: 'Sprint 178 — Predictive Medication Adherence Engine',
         version: '2026.05.28.1',
