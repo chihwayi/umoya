@@ -255,6 +255,15 @@
     "regenerate": "Hergenereer Tydlyn",
     "last_updated": "Laas opgedateer"
   },
+  "care_gaps": {
+    "title": "Sorggapings",
+    "no_gaps": "Geen sorggapings opgespoor nie",
+    "order": "Bestel",
+    "dismiss": "Verwerp (30 dae)",
+    "high": "Hoog",
+    "medium": "Medium",
+    "guideline": "Riglyn"
+  },
   "clinical_summary": {
     "title": "KI Kliniese Opsomming",
     "loading": "Opsomming word gegenereer...",

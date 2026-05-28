@@ -255,6 +255,15 @@
     "regenerate": "Gadzira Nhoroondo Zvakare",
     "last_updated": "Yakagadziridzwa Pamugumo"
   },
+  "care_gaps": {
+    "title": "Mikana yeUreri",
+    "no_gaps": "Hapana mikana yakawanwa",
+    "order": "Raira",
+    "dismiss": "Siya (mazuva 30)",
+    "high": "Kukwirira",
+    "medium": "Pakati",
+    "guideline": "Murayiridzo"
+  },
   "clinical_summary": {
     "title": "Pfupiso yeAI yekurapa",
     "loading": "Kugadzira pfupiso...",

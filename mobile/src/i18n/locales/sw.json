@@ -255,6 +255,15 @@
     "regenerate": "Zaliisha Upya Mstari",
     "last_updated": "Ilisasishwa mara ya mwisho"
   },
+  "care_gaps": {
+    "title": "Mapungufu ya Huduma",
+    "no_gaps": "Mapungufu hayakugunduliwa",
+    "order": "Agiza",
+    "dismiss": "Kataa (siku 30)",
+    "high": "Juu",
+    "medium": "Kati",
+    "guideline": "Mwongozo"
+  },
   "clinical_summary": {
     "title": "Muhtasari wa AI wa Kliniki",
     "loading": "Kutengeneza muhtasari...",

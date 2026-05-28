@@ -455,6 +455,8 @@ import { CronMortalityService } from './services/cron-mortality.service';
 import { MortalityRiskController } from './controllers/mortality-risk.controller';
 import { ClinicalSummaryService } from './services/clinical-summary.service';
 import { ClinicalSummaryController } from './controllers/clinical-summary.controller';
+import { CareGapEngineService } from './services/care-gap-engine.service';
+import { CareGapController } from './controllers/care-gap.controller';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -764,6 +766,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalTimelineController,
     MortalityRiskController,
     ClinicalSummaryController,
+    CareGapController,
   ],
   providers: [
     AuthService,
@@ -946,6 +949,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MortalityRiskService,
     CronMortalityService,
     ClinicalSummaryService,
+    CareGapEngineService,
     EducationPersonalizationService,
     PatientRiskScoringService,
     CronRiskSweepService,

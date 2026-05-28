@@ -3041,6 +3041,34 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'care_gaps',
+        label: 'Sprint 182 — AI Treatment Gap & Care Opportunity Engine',
+        version: '2026.05.28.1',
+        description: 'Detected care gaps per patient with dismiss/resolve lifecycle',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS care_gaps (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            gap_type VARCHAR(64) NOT NULL,
+            description TEXT NOT NULL,
+            priority VARCHAR(16) NOT NULL DEFAULT 'medium'
+              CHECK (priority IN ('low','medium','high','critical')),
+            recommended_action TEXT NOT NULL,
+            guideline_reference VARCHAR(128),
+            status VARCHAR(16) NOT NULL DEFAULT 'open'
+              CHECK (status IN ('open','dismissed','resolved','ordered')),
+            dismissed_at TIMESTAMPTZ,
+            dismissed_by UUID,
+            dismissed_until TIMESTAMPTZ,
+            resolved_at TIMESTAMPTZ,
+            detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(patient_id, gap_type)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cg_patient ON care_gaps(patient_id, status)`,
+          `CREATE INDEX IF NOT EXISTS idx_cg_open ON care_gaps(status, detected_at DESC) WHERE status = 'open'`,
+        ],
+      },
+      {
         id: 'medication_adherence',
         label: 'Sprint 178 — Predictive Medication Adherence Engine',
         version: '2026.05.28.1',

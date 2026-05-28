@@ -255,6 +255,15 @@
     "regenerate": "Akhela Umlando Futhi",
     "last_updated": "Kubuyekeziwe Okwokugcina"
   },
+  "care_gaps": {
+    "title": "Izikhala Zokunakekela",
+    "no_gaps": "Azikho izikhala ezinotholakaliyo",
+    "order": "Lawula",
+    "dismiss": "Yeka (izinsuku ezingama-30)",
+    "high": "Ephezulu",
+    "medium": "Ephakathi",
+    "guideline": "Umhlahlandlela"
+  },
   "clinical_summary": {
     "title": "Isifinyezo se-AI Sezokwelapha",
     "loading": "Yakhela isifinyezo...",

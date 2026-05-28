@@ -255,6 +255,15 @@
     "regenerate": "Régénérer la Chronologie",
     "last_updated": "Dernière mise à jour"
   },
+  "care_gaps": {
+    "title": "Lacunes de Soins",
+    "no_gaps": "Aucune lacune détectée",
+    "order": "Commander",
+    "dismiss": "Ignorer (30 jours)",
+    "high": "Élevé",
+    "medium": "Moyen",
+    "guideline": "Directive"
+  },
   "clinical_summary": {
     "title": "Résumé Clinique IA",
     "loading": "Génération du résumé...",

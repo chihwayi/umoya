@@ -255,6 +255,15 @@
     "regenerate": "Regenerate Timeline",
     "last_updated": "Last updated"
   },
+  "care_gaps": {
+    "title": "Care Gaps",
+    "no_gaps": "No care gaps detected",
+    "order": "Order",
+    "dismiss": "Dismiss (30d)",
+    "high": "High",
+    "medium": "Medium",
+    "guideline": "Guideline"
+  },
   "clinical_summary": {
     "title": "AI Clinical Summary",
     "loading": "Generating summary...",

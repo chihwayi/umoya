@@ -255,6 +255,15 @@
     "regenerate": "Khiqiza Kabusha Umlando",
     "last_updated": "Kubuyekeziwe Okwamuva"
   },
+  "care_gaps": {
+    "title": "Izikhala Zokunakekela",
+    "no_gaps": "Azikho izikhala ezinotholakaliyo",
+    "order": "Layela",
+    "dismiss": "Yeka (izinsuku ezingama-30)",
+    "high": "Ephezulu",
+    "medium": "Ephakathi",
+    "guideline": "Umhlahlandlela"
+  },
   "clinical_summary": {
     "title": "Isifinyezo se-AI Sezempilo",
     "loading": "Iyakhiqiza isifinyezo...",
