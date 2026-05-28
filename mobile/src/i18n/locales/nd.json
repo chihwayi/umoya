@@ -344,6 +344,25 @@
       "activeDiagnosisSeverity": "Izifo Ezibalulekile"
     }
   },
+  "clinical_nlp": {
+    "title": "AI Ukukhipha Izinto",
+    "extracting": "Ikhipha izinto zezobuchwepheshe…",
+    "diagnoses": "Izifo",
+    "medications": "Imithi",
+    "allergies": "Ama-allergy",
+    "symptoms": "Izimpawu",
+    "procedures": "Izinyathelo",
+    "no_entities": "Azikho izinto eziitholakele",
+    "review_notice": "Hlola izinto ezikhishwe yi-AI ngaphambi kokuzisebenzisa"
+  },
+  "ai_source": {
+    "rule": "Imithetho",
+    "llm_onprem": "AI Yendawo",
+    "llm_azure": "Azure AI",
+    "llm_aws": "AWS AI",
+    "llm_anthropic": "Anthropic AI",
+    "llm_other": "Yenziwe yi-AI"
+  },
   "ai_status": {
     "active": "I-AI Iyasebenza",
     "unavailable": "I-AI Ayitholakali",

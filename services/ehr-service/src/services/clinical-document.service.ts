@@ -1,10 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ClinicalLlmService } from './clinical-llm.service';
+import { AbstentionLogService } from './abstention-log.service';
 
 type DocumentType = 'referral_letter' | 'discharge_summary' | 'pre_auth' | 'sick_note' | 'other';
 
 @Injectable()
 export class ClinicalDocumentService {
   private readonly logger = new Logger(ClinicalDocumentService.name);
+
+  constructor(
+    @Optional() private readonly llm?: ClinicalLlmService,
+    @Optional() private readonly abstentionLog?: AbstentionLogService,
+  ) {}
 
   async generateDocument(
     patientId: string,
@@ -54,15 +61,44 @@ export class ClinicalDocumentService {
     const pt = patient[0] ?? {};
     const vit = vitals[0] ?? {};
 
-    const content = this.buildRawDocument(
+    let content = this.buildRawDocument(
       documentType, pt, diagnoses, meds, labs, notes, vit, options,
     );
     const title = this.documentTitle(documentType, pt);
+    let aiSource = 'rule';
+
+    if (this.llm) {
+      const docLabel = documentType.replace(/_/g, ' ');
+      const prompt =
+        `You are a clinical documentation specialist. Rewrite this ${docLabel} to be ` +
+        `professionally worded and clinically precise. Keep all factual data (patient name, ` +
+        `DOB, MRN, diagnoses, medications, labs) intact — improve only the clinical language ` +
+        `and professional tone. Do not add information that is not present in the original.\n\n` +
+        `---\n${content}\n---\n\nReturn the full rewritten document only, no preamble.`;
+
+      try {
+        const result = await this.llm.generate(
+          prompt,
+          { context: 'clinical_document', maxTokens: 800, temperature: 0.2 },
+          db,
+        );
+        if (result && result.text.length > 100) {
+          content = result.text;
+          aiSource = `llm:${result.backend}`;
+        } else {
+          await this.abstentionLog?.log(db, 'clinical_document', 'low_confidence', {
+            errorDetail: documentType,
+          });
+        }
+      } catch {
+        // Raw template already set
+      }
+    }
 
     const rows = await db.query(
       `INSERT INTO clinical_documents
-         (patient_id, encounter_id, document_type, title, content, generated_by, recipient)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+         (patient_id, encounter_id, document_type, title, content, generated_by, recipient, ai_source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
       [
         patientId,
@@ -72,6 +108,7 @@ export class ClinicalDocumentService {
         content,
         generatedBy,
         options?.recipient ?? null,
+        aiSource,
       ],
     );
     return rows[0];

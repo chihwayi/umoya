@@ -327,12 +327,25 @@ services:
       - MEDICAL_AID_DEMO_BASE_URL=${MEDICAL_AID_DEMO_BASE_URL}
       - MEDICAL_AID_DEMO_API_KEY=${MEDICAL_AID_DEMO_API_KEY}
       - MEDICAL_AID_DEMO_PROVIDER_NAMES=${MEDICAL_AID_DEMO_PROVIDER_NAMES}
+      - CLINICAL_LLM_BACKEND=${CLINICAL_LLM_BACKEND}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_PROFILE=${AWS_PROFILE}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
     command: npm run dev
     volumes:
       - ./services/ehr-service/src:/app/services/ehr-service/src
       - ./services/ehr-service/package.json:/app/services/ehr-service/package.json
       - ./services/ehr-service/who-smart-guidelines:/app/services/ehr-service/who-smart-guidelines
       - ./database/schemas:/app/database/schemas
+      - ${HOME}/.aws:/root/.aws:ro
     depends_on:
       - postgres-master
       - cdss-service

@@ -344,6 +344,25 @@
       "activeDiagnosisSeverity": "Magonjwa Makali"
     }
   },
+  "clinical_nlp": {
+    "title": "Utambuzi wa Vipengele vya AI",
+    "extracting": "Inatoa vipengele vya kliniki…",
+    "diagnoses": "Magonjwa",
+    "medications": "Dawa",
+    "allergies": "Mzio",
+    "symptoms": "Dalili",
+    "procedures": "Taratibu",
+    "no_entities": "Hakuna vipengele vilivyopatikana",
+    "review_notice": "Vipengele vya AI vinahitaji ukaguzi wa daktari kabla ya kutumia"
+  },
+  "ai_source": {
+    "rule": "Kulingana na Kanuni",
+    "llm_onprem": "AI ya Ndani",
+    "llm_azure": "Azure AI",
+    "llm_aws": "AWS AI",
+    "llm_anthropic": "Anthropic AI",
+    "llm_other": "Imetolewa na AI"
+  },
   "ai_status": {
     "active": "AI Inafanya kazi",
     "unavailable": "AI Haipatikani",

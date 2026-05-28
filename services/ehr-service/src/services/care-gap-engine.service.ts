@@ -1,4 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ClinicalLlmService } from './clinical-llm.service';
+import { AbstentionLogService } from './abstention-log.service';
+import { ClinicalNlpService } from './clinical-nlp.service';
 
 interface CareGap {
   gapType: string;
@@ -6,11 +9,18 @@ interface CareGap {
   priority: 'low' | 'medium' | 'high' | 'critical';
   recommendedAction: string;
   guidelineReference?: string;
+  aiSource?: string;
 }
 
 @Injectable()
 export class CareGapEngineService {
   private readonly logger = new Logger(CareGapEngineService.name);
+
+  constructor(
+    @Optional() private readonly llm?: ClinicalLlmService,
+    @Optional() private readonly abstentionLog?: AbstentionLogService,
+    @Optional() private readonly nlp?: ClinicalNlpService,
+  ) {}
 
   async detectGaps(patientId: string, db: any): Promise<CareGap[]> {
     const gaps: CareGap[] = [];
@@ -45,6 +55,33 @@ export class CareGapEngineService {
         )
       : 0;
     const sex = pt.sex?.toUpperCase() ?? '';
+
+    // Enrich structured diagnoses with NLP-extracted diagnoses from recent notes
+    if (this.nlp) {
+      const recentNotes = await db.query(
+        `SELECT content FROM clinical_notes
+          WHERE patient_id = $1 AND note_type IN ('soap','progress','discharge')
+          ORDER BY created_at DESC LIMIT 3`,
+        [patientId],
+      );
+      if (recentNotes.length > 0) {
+        const noteText = recentNotes.map((n: any) => n.content).join('\n---\n');
+        const extracted = await this.nlp.extractEntities(
+          noteText,
+          { context: 'care_gap_nlp', patientId: Number(patientId) },
+          db,
+        );
+        for (const d of extracted.diagnoses) {
+          if (!diagnoses.find((x: any) => x.description?.toLowerCase() === d.text.toLowerCase())) {
+            diagnoses.push({
+              icd10_code: d.icd10Hint ?? '',
+              description: d.text,
+              status: 'active',
+            });
+          }
+        }
+      }
+    }
 
     // Cervical cancer screening (women 25–65, no pap smear in last 3 years)
     if (sex === 'F' && age >= 25 && age <= 65) {
@@ -133,19 +170,21 @@ export class CareGapEngineService {
       }
     }
 
-    return gaps;
+    return this.enrichGapsWithLlm(gaps, { age, sex, diagnoses }, db);
   }
 
   async upsertGaps(patientId: string, gaps: CareGap[], db: any): Promise<void> {
     for (const gap of gaps) {
       await db.query(
         `INSERT INTO care_gaps
-           (patient_id, gap_type, description, priority, recommended_action, guideline_reference)
-         VALUES ($1,$2,$3,$4,$5,$6)
+           (patient_id, gap_type, description, priority, recommended_action,
+            guideline_reference, ai_source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
          ON CONFLICT (patient_id, gap_type) DO UPDATE SET
            description = EXCLUDED.description,
            priority = EXCLUDED.priority,
            recommended_action = EXCLUDED.recommended_action,
+           ai_source = EXCLUDED.ai_source,
            detected_at = now()
          WHERE care_gaps.status = 'open'`,
         [
@@ -155,6 +194,7 @@ export class CareGapEngineService {
           gap.priority,
           gap.recommendedAction,
           gap.guidelineReference ?? null,
+          gap.aiSource ?? 'rule',
         ],
       );
     }
@@ -193,5 +233,68 @@ export class CareGapEngineService {
   async refreshPatient(patientId: string, db: any): Promise<void> {
     const gaps = await this.detectGaps(patientId, db);
     await this.upsertGaps(patientId, gaps, db);
+  }
+
+  private async enrichGapsWithLlm(
+    gaps: CareGap[],
+    context: { age: number; sex: string; diagnoses: any[] },
+    db?: any,
+  ): Promise<CareGap[]> {
+    if (!this.llm || gaps.length === 0) {
+      return gaps.map(g => ({ ...g, aiSource: 'rule' }));
+    }
+
+    const dxList =
+      context.diagnoses
+        .map((d: any) => d.description)
+        .slice(0, 5)
+        .join(', ') || 'none';
+
+    const genderLabel =
+      context.sex === 'F' ? 'female' : context.sex === 'M' ? 'male' : 'patient';
+
+    const gapSummary = gaps
+      .map(
+        (g, i) =>
+          `${i + 1}. [${g.gapType}] ${g.description} — current action: ${g.recommendedAction}`,
+      )
+      .join('\n');
+
+    const prompt =
+      `You are a clinical care management assistant. A ${context.age}-year-old ${genderLabel} ` +
+      `with active diagnoses (${dxList}) has ${gaps.length} care gap(s):\n${gapSummary}\n\n` +
+      `Return a JSON array of ${gaps.length} strings — one enhanced recommended action per gap, ` +
+      `same order. Each action must be 1 sentence, patient-specific, and clinically precise. ` +
+      `JSON only, no other text. Example: ["Action 1","Action 2"]`;
+
+    try {
+      const result = await this.llm.generate(
+        prompt,
+        { context: 'care_gap', maxTokens: 400, temperature: 0.2 },
+        db,
+      );
+
+      if (result && result.text.length > 10) {
+        const raw = result.text.trim();
+        const start = raw.indexOf('[');
+        const end = raw.lastIndexOf(']');
+        if (start !== -1 && end !== -1) {
+          const actions: string[] = JSON.parse(raw.slice(start, end + 1));
+          if (Array.isArray(actions) && actions.length === gaps.length) {
+            return gaps.map((g, i) => ({
+              ...g,
+              recommendedAction: actions[i] ?? g.recommendedAction,
+              aiSource: `llm:${result.backend}`,
+            }));
+          }
+        }
+      }
+
+      await this.abstentionLog?.log(db, 'care_gap', 'low_confidence', {});
+    } catch {
+      // Fall through to rule
+    }
+
+    return gaps.map(g => ({ ...g, aiSource: 'rule' }));
   }
 }

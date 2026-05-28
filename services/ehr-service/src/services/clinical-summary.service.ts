@@ -1,9 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
+import { ClinicalLlmService } from './clinical-llm.service';
+import { AbstentionLogService } from './abstention-log.service';
 
 @Injectable()
 export class ClinicalSummaryService {
   private readonly logger = new Logger(ClinicalSummaryService.name);
+
+  constructor(
+    @Optional() private readonly llm?: ClinicalLlmService,
+    @Optional() private readonly abstentionLog?: AbstentionLogService,
+  ) {}
 
   async getSummary(patientId: string, db: any): Promise<unknown | null> {
     const rows = await db.query(
@@ -69,6 +76,7 @@ export class ClinicalSummaryService {
       return existing[0];
     }
 
+    // Rule-based sentences (always computed as fallback)
     const s1 = `${pt.first_name ?? 'Patient'} is a ${age}-year-old ${pt.sex ?? 'patient'} with ${
       diagnoses
         .map((d: any) => d.description)
@@ -95,19 +103,57 @@ export class ClinicalSummaryService {
     const s5 = timeline[0]?.one_line_summary ?? 'No AI timeline summary available.';
 
     const sentences = [s1, s2, s3, s4, s5];
-    const summaryText = sentences.join(' ');
+    let summaryText = sentences.join(' ');
+    let aiSource = 'rule';
+
+    // LLM enrichment — replace rule text with model-generated prose
+    if (this.llm) {
+      const prompt =
+        `You are a clinical documentation assistant. Write a concise 2–3 sentence clinical ` +
+        `summary for a ${age}-year-old ${pt.sex ?? 'patient'} with the following data:\n` +
+        `Diagnoses: ${diagnoses.map((d: any) => d.description).slice(0, 5).join(', ') || 'none'}\n` +
+        `Medications: ${meds.map((m: any) => `${m.drug_name} ${m.dose}`).join(', ') || 'none'}\n` +
+        `Recent labs: ${
+          labs.map((l: any) =>
+            `${l.test_name} ${l.value}${l.unit ?? ''}${l.flag ? ` [${l.flag}]` : ''}`,
+          ).join('; ') || 'none'
+        }\n` +
+        `30-day mortality risk: ${risk ? `${risk.score}/100 (${risk.band})` : 'not assessed'}\n` +
+        `AI timeline: ${timeline[0]?.one_line_summary ?? 'none'}\n` +
+        `Focus on clinically actionable findings. Do not start with "Patient".`;
+
+      try {
+        const result = await this.llm.generate(prompt, {
+          context: 'clinical_summary',
+          maxTokens: 300,
+          temperature: 0.25,
+        }, db);
+
+        if (result && result.text.length > 30) {
+          summaryText = result.text;
+          aiSource = `llm:${result.backend}`;
+        } else {
+          await this.abstentionLog?.log(db, 'clinical_summary', 'low_confidence', {
+            patientId: String(patientId),
+          });
+        }
+      } catch {
+        // Rule text already set; abstention logged by ClinicalLlmService
+      }
+    }
 
     const rows = await db.query(
       `INSERT INTO patient_clinical_summaries
-         (patient_id, summary_text, sentences, data_hash)
-       VALUES ($1,$2,$3,$4)
+         (patient_id, summary_text, sentences, data_hash, ai_source)
+       VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (patient_id) DO UPDATE SET
          summary_text = EXCLUDED.summary_text,
-         sentences = EXCLUDED.sentences,
-         data_hash = EXCLUDED.data_hash,
+         sentences    = EXCLUDED.sentences,
+         data_hash    = EXCLUDED.data_hash,
+         ai_source    = EXCLUDED.ai_source,
          generated_at = now()
        RETURNING *`,
-      [patientId, summaryText, JSON.stringify(sentences), dataHash],
+      [patientId, summaryText, JSON.stringify(sentences), dataHash, aiSource],
     );
     return rows[0];
   }

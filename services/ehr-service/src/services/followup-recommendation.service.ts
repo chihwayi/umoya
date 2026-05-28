@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { AbstentionLogService } from './abstention-log.service';
 import { AlertDeliveryService } from './alert-delivery.service';
 import { TenantService } from './tenant.service';
+import { ClinicalLlmService } from './clinical-llm.service';
 
 export type Modality = 'in_person' | 'telemedicine' | 'phone';
 export type Urgency = 'urgent' | 'soon' | 'routine';
@@ -20,9 +21,10 @@ export interface FollowUpRecommendation {
 @Injectable()
 export class FollowUpRecommendationService {
   constructor(
-    @Optional() private readonly abstentionLog: AbstentionLogService,
-    @Optional() private readonly alertDelivery: AlertDeliveryService,
-    @Optional() @Inject(TenantService) private readonly tenantService: TenantService,
+    @Optional() private readonly abstentionLog?: AbstentionLogService,
+    @Optional() private readonly alertDelivery?: AlertDeliveryService,
+    @Optional() @Inject(TenantService) private readonly tenantService?: TenantService,
+    @Optional() private readonly llm?: ClinicalLlmService,
   ) {}
 
   async generateRecommendation(
@@ -42,9 +44,38 @@ export class FollowUpRecommendationService {
       openCareGapsCount, medicationsChanged } = params;
 
     const { days, modality } = this.computeInterval(riskBand, encounterType, diagnoses);
-    const reasoning = this.buildBaseReasoning(riskBand, encounterType, diagnoses, medicationsChanged, openCareGapsCount);
+    let reasoning = this.buildBaseReasoning(riskBand, encounterType, diagnoses, medicationsChanged, openCareGapsCount);
     const urgency = this.computeUrgency(riskBand, days);
     const dueBy = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    let aiSource = 'rule';
+
+    if (this.llm) {
+      const prompt =
+        `You are a clinical decision support assistant. Write a concise 2-sentence follow-up ` +
+        `plan for a clinician.\nPatient risk: ${riskBand}\nEncounter type: ${encounterType}\n` +
+        `Active diagnoses: ${diagnoses.slice(0, 3).join(', ') || 'not provided'}\n` +
+        `Medications changed: ${medicationsChanged ? 'yes' : 'no'}\n` +
+        `Open care gaps: ${openCareGapsCount}\n` +
+        `Recommended: ${days} days (${modality}), urgency: ${urgency}\n` +
+        `Write an actionable clinical rationale. State what to monitor and why. ` +
+        `Do not start with "The patient" or "Patient".`;
+
+      try {
+        const result = await this.llm.generate(
+          prompt,
+          { context: 'followup_recommendation', maxTokens: 200, temperature: 0.3 },
+          db,
+        );
+        if (result && result.text.length > 30) {
+          reasoning = result.text;
+          aiSource = `llm:${result.backend}`;
+        } else {
+          await this.abstentionLog?.log(db, 'followup_recommendation', 'low_confidence', {});
+        }
+      } catch {
+        // Rule reasoning already set
+      }
+    }
 
     const rows = await db.query(
       `INSERT INTO followup_recommendations
@@ -53,7 +84,7 @@ export class FollowUpRecommendationService {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING id`,
       [patientId, encounterId ?? null, encounterType, days, modality,
-       urgency, reasoning, 'rule', dueBy],
+       urgency, reasoning, aiSource, dueBy],
     );
 
     return {
@@ -63,7 +94,7 @@ export class FollowUpRecommendationService {
       recommendedModality: modality,
       urgency,
       reasoning,
-      aiSource: 'rule',
+      aiSource,
     };
   }
 
@@ -135,10 +166,10 @@ export class FollowUpRecommendationService {
   @Cron('0 7 * * *')
   async sweepOverdueFollowUps(): Promise<void> {
     if (!this.tenantService) return;
-    const tenants = await this.tenantService.getAllActiveTenants();
+    const tenants = await this.tenantService!.getAllActiveTenants();
     for (const tenant of tenants) {
       try {
-        const db = await this.tenantService.getTenantDatabase(tenant.subdomain);
+        const db = await this.tenantService!.getTenantDatabase(tenant.subdomain);
         if (!db) continue;
         const overdue = await this.getOverdueFollowUps(db);
         for (const row of overdue) {

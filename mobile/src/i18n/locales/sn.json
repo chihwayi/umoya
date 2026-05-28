@@ -344,6 +344,25 @@
       "activeDiagnosisSeverity": "Zvirwere Zvakakura"
     }
   },
+  "clinical_nlp": {
+    "title": "AI Kubvisa Zvinhu",
+    "extracting": "Kubvisa zvinhu zvekiriniki…",
+    "diagnoses": "Zvirwere",
+    "medications": "Mishonga",
+    "allergies": "Allergy",
+    "symptoms": "Zviratidzo",
+    "procedures": "Mabasa",
+    "no_entities": "Hapana zvinhu zvakawanwa",
+    "review_notice": "Simbisa zvinhu zvakatanhwa ne-AI usati washandisa"
+  },
+  "ai_source": {
+    "rule": "Mitemo",
+    "llm_onprem": "AI Yezviri Pasi",
+    "llm_azure": "Azure AI",
+    "llm_aws": "AWS AI",
+    "llm_anthropic": "Anthropic AI",
+    "llm_other": "Yakagadzirwa ne-AI"
+  },
   "ai_status": {
     "active": "AI Inoshanda",
     "unavailable": "AI Haikwanisi",

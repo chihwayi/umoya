@@ -344,6 +344,25 @@
       "activeDiagnosisSeverity": "Severe Diagnoses"
     }
   },
+  "clinical_nlp": {
+    "title": "AI Entity Extraction",
+    "extracting": "Extracting clinical entities…",
+    "diagnoses": "Diagnoses",
+    "medications": "Medications",
+    "allergies": "Allergies",
+    "symptoms": "Symptoms",
+    "procedures": "Procedures",
+    "no_entities": "No entities detected",
+    "review_notice": "AI-extracted entities require clinician review before use"
+  },
+  "ai_source": {
+    "rule": "Rule-based",
+    "llm_onprem": "On-prem AI",
+    "llm_azure": "Azure AI",
+    "llm_aws": "AWS AI",
+    "llm_anthropic": "Anthropic AI",
+    "llm_other": "AI-generated"
+  },
   "ai_status": {
     "active": "AI Active",
     "unavailable": "AI Unavailable",

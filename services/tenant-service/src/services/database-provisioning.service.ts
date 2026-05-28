@@ -3155,6 +3155,72 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'clinical_llm_audit',
+        label: 'Sprint 186 — Clinical LLM Audit Log',
+        version: '2026.05.28.1',
+        description: 'Immutable audit trail for every ClinicalLlmService generation call',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS clinical_llm_audit (
+            id          BIGSERIAL   PRIMARY KEY,
+            context     TEXT        NOT NULL,
+            backend     TEXT        NOT NULL,
+            model       TEXT        NOT NULL,
+            prompt_hash TEXT        NOT NULL,
+            output_len  INTEGER,
+            latency_ms  INTEGER,
+            success     BOOLEAN     NOT NULL DEFAULT TRUE,
+            error_msg   TEXT,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_llm_audit_context
+             ON clinical_llm_audit(context, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_llm_audit_success
+             ON clinical_llm_audit(success, created_at DESC)`,
+        ],
+      },
+      {
+        id: 'clinical_nlp_extractions',
+        label: 'Sprint 188 — Clinical NLP Extraction Audit',
+        version: '2026.05.28.3',
+        description: 'Audit log for every ClinicalNlpService entity extraction call',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS clinical_nlp_extractions (
+            id            BIGSERIAL   PRIMARY KEY,
+            patient_id    INTEGER,
+            encounter_id  INTEGER,
+            context       TEXT        NOT NULL,
+            input_hash    TEXT        NOT NULL,
+            entities      JSONB       NOT NULL DEFAULT '{}',
+            backend       TEXT        NOT NULL,
+            model         TEXT        NOT NULL,
+            latency_ms    INTEGER,
+            success       BOOLEAN     NOT NULL DEFAULT TRUE,
+            error_msg     TEXT,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nlp_patient
+             ON clinical_nlp_extractions(patient_id, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_nlp_context
+             ON clinical_nlp_extractions(context, created_at DESC)`,
+        ],
+      },
+      {
+        id: 'ai_source_columns_s187',
+        label: 'Sprint 187 — AI Source Columns on AI-generating Tables',
+        version: '2026.05.28.1',
+        description: 'Tracks whether each AI output came from rule or LLM backend',
+        statements: () => [
+          `ALTER TABLE patient_clinical_summaries
+             ADD COLUMN IF NOT EXISTS ai_source TEXT NOT NULL DEFAULT 'rule'`,
+          `ALTER TABLE care_gaps
+             ADD COLUMN IF NOT EXISTS ai_source TEXT NOT NULL DEFAULT 'rule'`,
+          `ALTER TABLE drug_substitution_suggestions
+             ADD COLUMN IF NOT EXISTS ai_source TEXT NOT NULL DEFAULT 'rule'`,
+          `ALTER TABLE clinical_documents
+             ADD COLUMN IF NOT EXISTS ai_source TEXT NOT NULL DEFAULT 'rule'`,
+        ],
+      },
+      {
         id: 'medication_adherence',
         label: 'Sprint 178 — Predictive Medication Adherence Engine',
         version: '2026.05.28.1',

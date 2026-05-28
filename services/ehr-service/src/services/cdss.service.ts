@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
+import { ClinicalNlpService, ClinicalEntities } from './clinical-nlp.service';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
@@ -235,6 +236,7 @@ export class CdssService {
     private readonly hipaaAuditService?: HipaaAuditService,
     @Optional() @Inject(PatientConsentService)
     private readonly patientConsentService?: PatientConsentService,
+    @Optional() private readonly clinicalNlp?: ClinicalNlpService,
   ) {
     this.cdssServiceUrl = String(process.env.CDSS_SERVICE_URL || envConfig.urls.cdssService || '').trim();
     this.cdssServiceToken = process.env.CDSS_SERVICE_TOKEN;
@@ -5114,5 +5116,20 @@ export class CdssService {
       15000,
       tenantId,
     );
+  }
+
+  async parseClinicalNarrative(
+    text: string,
+    db?: any,
+    opts?: { patientId?: number; encounterId?: number },
+  ): Promise<Partial<ClinicalEntities>> {
+    if (this.clinicalNlp) {
+      return this.clinicalNlp.extractEntities(
+        text,
+        { context: 'cdss_narrative', patientId: opts?.patientId, encounterId: opts?.encounterId },
+        db,
+      );
+    }
+    return {};
   }
 }

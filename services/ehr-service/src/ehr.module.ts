@@ -463,6 +463,10 @@ import { DrugSubstitutionService } from './services/drug-substitution.service';
 import { DrugSubstitutionController } from './controllers/drug-substitution.controller';
 import { FollowUpRecommendationService } from './services/followup-recommendation.service';
 import { FollowUpController } from './controllers/followup.controller';
+import { ClinicalLlmService } from './services/clinical-llm.service';
+import { ClinicalLlmController } from './controllers/clinical-llm.controller';
+import { ClinicalNlpService } from './services/clinical-nlp.service';
+import { CdssNlpController } from './controllers/cdss-nlp.controller';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -776,6 +780,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalDocumentController,
     DrugSubstitutionController,
     FollowUpController,
+    ClinicalLlmController,
+    CdssNlpController,
   ],
   providers: [
     AuthService,
@@ -957,6 +963,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalTimelineService,
     MortalityRiskService,
     CronMortalityService,
+    ClinicalLlmService,
+    ClinicalNlpService,
     ClinicalSummaryService,
     CareGapEngineService,
     ClinicalDocumentService,

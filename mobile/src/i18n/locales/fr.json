@@ -344,6 +344,25 @@
       "activeDiagnosisSeverity": "Diagnostics Sévères"
     }
   },
+  "clinical_nlp": {
+    "title": "Extraction d'Entités IA",
+    "extracting": "Extraction des entités cliniques…",
+    "diagnoses": "Diagnostics",
+    "medications": "Médicaments",
+    "allergies": "Allergies",
+    "symptoms": "Symptômes",
+    "procedures": "Procédures",
+    "no_entities": "Aucune entité détectée",
+    "review_notice": "Les entités IA nécessitent une vérification clinique avant utilisation"
+  },
+  "ai_source": {
+    "rule": "Basé sur des règles",
+    "llm_onprem": "IA locale",
+    "llm_azure": "IA Azure",
+    "llm_aws": "IA AWS",
+    "llm_anthropic": "IA Anthropic",
+    "llm_other": "Généré par IA"
+  },
   "ai_status": {
     "active": "IA Active",
     "unavailable": "IA Indisponible",

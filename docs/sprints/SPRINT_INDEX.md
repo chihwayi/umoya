@@ -1,7 +1,7 @@
 # MediCore — "AI First, Human Last" Sprint Series
-## Sprint Index S166–S185
+## Sprint Index S166–S188
 
-**Goal:** Close all wiring gaps identified in the May 2026 system audit and add intelligent AI layers across every clinical touchpoint. Upon completion of S185, every patient card shows risk, every encounter is AI-briefed, every alert is delivered, and every document can be AI-generated.
+**Goal:** Close all wiring gaps identified in the May 2026 system audit and add intelligent AI layers across every clinical touchpoint. S186–S188 achieve **true 100% AI-first**: every text surface is backed by a real LLM (not rules), with graceful rule-based fallback when the model is unavailable.
 
 **Reviewer:** Claude (Sonnet 4.6). Each sprint must pass the REVIEWER_CHECKLIST.md before being marked DONE.
 
@@ -48,6 +48,16 @@ Makes the system *feel* AI-first on every screen.
 | [S184](./S184_drug_substitution_engine.md) | AI Drug Substitution Engine | Out-of-stock → AI equivalent suggestion with confidence | S |
 | [S185](./S185_ai_followup_scheduler.md) | AI Follow-up Scheduler & Care Continuity | Post-encounter AI suggests optimal follow-up timing + modality | M |
 
+## Phase 4 — True AI-First Foundation (S186–S188)
+
+Replaces all rule-based text generation with `ClinicalLlmService` backed by a HIPAA-compliant model. After S188, `ai_source = 'rule'` in production means an LLM outage — not a missing feature.
+
+| Sprint | Title | New Capability | Effort |
+|--------|-------|----------------|--------|
+| [S186](./S186_clinical_llm_service.md) | ClinicalLlmService: HIPAA-Compliant General-Purpose LLM | Stateless LLM service — Ollama / Azure OpenAI / AWS Bedrock / Anthropic | L |
+| [S187](./S187_ai_wiring_sprint.md) | AI Wiring Sprint: Replace Rule Fallbacks | All S181–S185 services route through ClinicalLlmService; `ai_source = 'llm:<backend>'` | L |
+| [S188](./S188_clinical_nlp_cdss.md) | Clinical NLP & True CDSS: Entity Extraction | `ClinicalNlpService` extracts diagnoses/meds/allergies from free-text; CDSS NLP endpoint | L |
+
 ---
 
 ## Development Rules (apply to every sprint)
@@ -76,8 +86,8 @@ S166 → S167 → S168 → S169 → S170 → S171 → S172
             S173 → S174 → S175 → S178 → S180
                     ↓
                   S179 → S181 → S182 → S183 → S184 → S185
-                          ↓
-                        S176 → S177
+                          ↓                               ↓
+                        S176 → S177               S186 → S187 → S188
 ```
 
 ---

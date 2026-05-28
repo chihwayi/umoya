@@ -344,6 +344,25 @@
       "activeDiagnosisSeverity": "Ernstige Diagnoses"
     }
   },
+  "clinical_nlp": {
+    "title": "KI Entiteitsekstraksie",
+    "extracting": "Onttrek kliniese entiteite…",
+    "diagnoses": "Diagnoses",
+    "medications": "Medikasie",
+    "allergies": "Allergieë",
+    "symptoms": "Simptome",
+    "procedures": "Prosedures",
+    "no_entities": "Geen entiteite opgespoor",
+    "review_notice": "KI-entiteite vereis kliniese hersiening voor gebruik"
+  },
+  "ai_source": {
+    "rule": "Reëlgebaseerd",
+    "llm_onprem": "Plaaslike KI",
+    "llm_azure": "Azure KI",
+    "llm_aws": "AWS KI",
+    "llm_anthropic": "Anthropic KI",
+    "llm_other": "KI-gegenereer"
+  },
   "ai_status": {
     "active": "KI Aktief",
     "unavailable": "KI Nie Beskikbaar",
