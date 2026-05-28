@@ -2978,6 +2978,31 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'lab_ai_narratives',
+        label: 'Sprint 174 — AI Lab Interpretation Narratives',
+        version: '2026.05.28.1',
+        description: 'Stores AI-generated clinician and patient narratives for each lab result',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS lab_ai_narratives (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            result_id UUID NOT NULL,
+            patient_id UUID NOT NULL,
+            clinician_narrative TEXT NOT NULL DEFAULT '',
+            patient_narrative TEXT NOT NULL DEFAULT '',
+            key_findings JSONB NOT NULL DEFAULT '[]',
+            has_critical_value BOOLEAN NOT NULL DEFAULT false,
+            alert_sent BOOLEAN NOT NULL DEFAULT false,
+            model_version VARCHAR(64),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(result_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_lan_result ON lab_ai_narratives(result_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_lan_patient ON lab_ai_narratives(patient_id, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_lan_critical ON lab_ai_narratives(has_critical_value) WHERE has_critical_value = true`,
+        ],
+      },
+      {
         id: 'ai_abstention_log',
         label: 'Sprint 171 — AI Abstention Log',
         version: '2026.05.28.1',

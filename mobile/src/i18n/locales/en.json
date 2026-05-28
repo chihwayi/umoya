@@ -199,6 +199,14 @@
     "rescore": "Re-Score Patient",
     "no_high_risk": "No high-risk patients today"
   },
+  "labs": {
+    "what_does_this_mean": "What does this mean?",
+    "interpretation_pending": "Interpretation pending — please consult your clinician.",
+    "critical_value_notice": "Critical value — immediate attention required",
+    "loading": "Loading interpretation...",
+    "ai_interpretation": "AI Interpretation",
+    "hide_interpretation": "Hide interpretation"
+  },
   "ai_status": {
     "active": "AI Active",
     "unavailable": "AI Unavailable",

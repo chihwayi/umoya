@@ -199,6 +199,14 @@
     "rescore": "Herbeoordeel Pasiënt",
     "no_high_risk": "Geen hoërisiko pasiënte vandag nie"
   },
+  "labs": {
+    "what_does_this_mean": "Wat beteken dit?",
+    "interpretation_pending": "Interpretasie hangende — raadpleeg u klinikus.",
+    "critical_value_notice": "Kritiese waarde — onmiddellike aandag nodig",
+    "loading": "Laai interpretasie...",
+    "ai_interpretation": "KI-Interpretasie",
+    "hide_interpretation": "Verberg interpretasie"
+  },
   "ai_status": {
     "active": "KI Aktief",
     "unavailable": "KI Nie Beskikbaar",

@@ -199,6 +199,14 @@
     "rescore": "Bala Kabusha Isiguli",
     "no_high_risk": "Azikho iziguli ezinobungozi obuphezulu namuhla"
   },
+  "labs": {
+    "what_does_this_mean": "Lokhu kusho ukuthini?",
+    "interpretation_pending": "Incazelo ilindile — xoxisana nodokotela wakho.",
+    "critical_value_notice": "Inani elibalulekile — ukunakekela okusheshayo kuyadingeka",
+    "loading": "Kulayisha incazelo...",
+    "ai_interpretation": "Incazelo ye-AI",
+    "hide_interpretation": "Fihla incazelo"
+  },
   "ai_status": {
     "active": "I-AI Iyasebenza",
     "unavailable": "I-AI Ayitholakali",

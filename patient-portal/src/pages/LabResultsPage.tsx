@@ -12,6 +12,20 @@ const LabResultsPage: React.FC = () => {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [narratives, setNarratives] = useState<Record<string, string>>({});
+
+  const loadNarrative = async (resultId: string) => {
+    if (narratives[resultId]) return;
+    try {
+      const res = await patientPortalApi.getLabNarrative(token, tenantSlug, resultId);
+      setNarratives((prev) => ({ ...prev, [resultId]: res.patientNarrative }));
+    } catch {
+      setNarratives((prev) => ({
+        ...prev,
+        [resultId]: 'Interpretation pending — please consult your clinician.',
+      }));
+    }
+  };
 
   useEffect(() => {
     loadResults();
@@ -170,6 +184,16 @@ const LabResultsPage: React.FC = () => {
                             Result Date: {format(new Date(result.resultDate), 'MMM d, yyyy')}
                             {result.performedBy && ` • Performed by: ${result.performedBy}`}
                           </p>
+                        )}
+                        {result.id && (
+                          <details className="mt-2" onToggle={() => loadNarrative(result.id)}>
+                            <summary className="cursor-pointer text-blue-600 text-sm font-medium">
+                              What does this mean?
+                            </summary>
+                            <p className="mt-2 text-sm text-gray-700 leading-relaxed">
+                              {narratives[result.id] ?? 'Loading interpretation…'}
+                            </p>
+                          </details>
                         )}
                       </div>
                     ))}

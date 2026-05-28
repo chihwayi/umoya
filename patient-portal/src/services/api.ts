@@ -1159,6 +1159,14 @@ export const patientPortalApi = {
     return response.json();
   },
 
+  getLabNarrative: async (token: string, tenantSlug: string, resultId: string): Promise<{ patientNarrative: string; hasCriticalValue: boolean }> => {
+    const response = await fetch(`${API_BASE_URL}/labs/patient/results/${resultId}/narrative`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    if (!response.ok) return { patientNarrative: 'Interpretation pending.', hasCriticalValue: false };
+    return response.json();
+  },
+
   getPersonalizedEducation: async (token: string, tenantSlug: string, limit = 6): Promise<any[]> => {
     const response = await fetch(`${API_BASE_URL}/education/patient/personalized?limit=${limit}`, {
       headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),

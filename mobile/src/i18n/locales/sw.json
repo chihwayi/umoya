@@ -199,6 +199,14 @@
     "rescore": "Pima Tena Mgonjwa",
     "no_high_risk": "Hakuna wagonjwa wa hatari kubwa leo"
   },
+  "labs": {
+    "what_does_this_mean": "Hii inamaanisha nini?",
+    "interpretation_pending": "Tafsiri inasubiri — wasiliana na daktari wako.",
+    "critical_value_notice": "Thamani muhimu — umakini wa haraka unahitajika",
+    "loading": "Inapakia tafsiri...",
+    "ai_interpretation": "Tafsiri ya AI",
+    "hide_interpretation": "Ficha tafsiri"
+  },
   "ai_status": {
     "active": "AI Inafanya kazi",
     "unavailable": "AI Haipatikani",

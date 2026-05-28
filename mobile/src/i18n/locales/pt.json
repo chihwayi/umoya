@@ -199,6 +199,14 @@
     "rescore": "Re-avaliar Paciente",
     "no_high_risk": "Nenhum paciente de alto risco hoje"
   },
+  "labs": {
+    "what_does_this_mean": "O que isso significa?",
+    "interpretation_pending": "Interpretação pendente — consulte o seu clínico.",
+    "critical_value_notice": "Valor crítico — atenção imediata necessária",
+    "loading": "A carregar interpretação...",
+    "ai_interpretation": "Interpretação IA",
+    "hide_interpretation": "Ocultar interpretação"
+  },
   "ai_status": {
     "active": "IA Ativa",
     "unavailable": "IA Indisponível",

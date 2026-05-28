@@ -199,6 +199,14 @@
     "rescore": "Verengazve Murwere",
     "no_high_risk": "Hapana varwere vane njodzi yakakura nhasi"
   },
+  "labs": {
+    "what_does_this_mean": "Izvi zvinoreva chii?",
+    "interpretation_pending": "Tsananguro ichiri kumirirwa — taura negurukota rako.",
+    "critical_value_notice": "Kukosha kukuru — kutarisira kwakukurumidza kunodiwa",
+    "loading": "Kugadzirira tsananguro...",
+    "ai_interpretation": "Tsananguro yeAI",
+    "hide_interpretation": "Viga tsananguro"
+  },
   "ai_status": {
     "active": "AI Inoshanda",
     "unavailable": "AI Haikwanisi",
