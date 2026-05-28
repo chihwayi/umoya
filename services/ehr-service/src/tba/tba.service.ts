@@ -254,31 +254,27 @@ export class TbaService {
 
     const savedRecord = await repository.save(birthRecord);
 
-        // TODO: Investigate CRVS integration. 'notifyBirth' method not found on CrvsService.
-        // if (savedRecord.birthOutcome === 'live_birth' && !savedRecord.crvsNotified) {
-        //   try {
-        //     // Call CRVS service to notify
-        //     await this.crvsService.notifyBirth(tenantId, savedRecord.id, {
-        //       motherName: savedRecord.motherName,
-        //       birthDate: savedRecord.birthDate,
-        //       babySex: savedRecord.babySex,
-        //       babyAlive: savedRecord.babyAlive,
-        //       motherAlive: savedRecord.maternalAlive,
-        //       village: savedRecord.motherVillage,
-        //       tbaId: savedRecord.tbaId,
-        //       attendedByType: savedRecord.attendedByType,
-        //     });
-
-        //     // Update record to mark as notified
-        //     await repository.update(savedRecord.id, { crvsNotified: true, crvsNotificationDate: new Date().toISOString().split('T')[0] });
-        //     // logger.log was used instead of logger.info
-        //     this.logger.log(`CRVS notification triggered for home birth ID: ${savedRecord.id}`);
-
-        //   } catch (error) {
-        //     this.logger.error(`Failed to notify CRVS for home birth ID ${savedRecord.id}`, error);
-        //     // Optionally, implement retry logic or alert mechanism here
-        //   }
-        // }
+    if (savedRecord.birthOutcome === 'live_birth' && !savedRecord.crvsNotified) {
+      try {
+        await this.crvsService.notifyHomeBirth(tenantId, {
+          motherName: savedRecord.motherName,
+          birthDate: savedRecord.birthDate,
+          babySex: savedRecord.babySex,
+          babyAlive: savedRecord.babyAlive,
+          motherAlive: savedRecord.maternalAlive,
+          village: savedRecord.motherVillage,
+          tbaId: savedRecord.tbaId,
+          attendedByType: savedRecord.attendedByType,
+        });
+        await repository.update(savedRecord.id, {
+          crvsNotified: true,
+          crvsNotificationDate: new Date().toISOString().split('T')[0],
+        });
+        this.logger.log(`CRVS notified for home birth ${savedRecord.id}`);
+      } catch (error: any) {
+        this.logger.error(`CRVS notification failed for home birth ${savedRecord.id}: ${error?.message}`);
+      }
+    }
 
     // CDSS risk assessment after saving (as it might use referral status)
     if (savedRecord.attendedByType === 'tba' && savedRecord.tbaId) {

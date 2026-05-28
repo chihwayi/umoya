@@ -1,9 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ChronicDiseaseRegistry } from '../entities/chronic-disease-registry.entity';
 import { PreventiveCareReminder } from '../entities/preventive-care-reminder.entity';
 import { RecallList } from '../entities/recall-list.entity';
 import { CdssService } from './cdss.service';
+import { NotificationsService } from './notifications.service';
+import { EmailService } from './email.service';
 
 const CONDITION_TYPES = ['hypertension', 'diabetes', 'asthma', 'copd', 'ckd', 'heart_failure', 'obesity', 'depression', 'other'] as const;
 const RISK_LEVELS = ['low', 'moderate', 'high', 'critical'] as const;
@@ -15,7 +17,11 @@ const WORKLIST_FOCUS = ['all', 'high-risk', 'uncontrolled', 'overdue-review', 'c
 export class PopulationHealthService {
   private readonly logger = new Logger(PopulationHealthService.name);
 
-  constructor(private readonly cdssService: CdssService) {}
+  constructor(
+    private readonly cdssService: CdssService,
+    @Optional() private readonly notificationsService?: NotificationsService,
+    @Optional() private readonly emailService?: EmailService,
+  ) {}
 
   async enrollInRegistry(
     tenantDb: DataSource,
@@ -750,10 +756,48 @@ export class PopulationHealthService {
   async notifyRecallList(
     tenantDb: DataSource,
     listId: string,
-    _channel: 'sms' | 'email',
-  ): Promise<{ sent: number; patientIds: string[] }> {
+    channel: 'sms' | 'email',
+  ): Promise<{ sent: number; failed: number; patientIds: string[] }> {
+    const [list] = await tenantDb.query(`SELECT * FROM recall_lists WHERE id = $1`, [listId]);
+    if (!list) throw new NotFoundException('Recall list not found');
+
     const { patientIds } = await this.generateRecallListPatients(tenantDb, listId);
-    return { sent: 0, patientIds };
+    if (!patientIds.length) return { sent: 0, failed: 0, patientIds };
+
+    const patients = await tenantDb.query(
+      `SELECT id, phone, email, first_name FROM patients WHERE id = ANY($1::uuid[])`,
+      [patientIds],
+    ).catch(() => []);
+
+    const message = list.description
+      ? `Recall: ${list.name} — ${list.description}`
+      : `Recall reminder: ${list.name}. Please contact your clinic.`;
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const p of patients) {
+      try {
+        if (channel === 'sms' && p.phone && this.notificationsService) {
+          await this.notificationsService.sendSms({ phone: p.phone, message }, tenantDb);
+          sent++;
+        } else if (channel === 'email' && p.email && this.emailService) {
+          await this.emailService.sendEmail({
+            to: p.email,
+            subject: `Recall: ${list.name}`,
+            text: message,
+            html: `<p>${message}</p>`,
+          });
+          sent++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    return { sent, failed, patientIds };
   }
 
   private normalizeWorklistFocus(focus?: string): (typeof WORKLIST_FOCUS)[number] {
