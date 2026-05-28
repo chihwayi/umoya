@@ -225,6 +225,20 @@
     "error_generic": "Ukubamba izwi kuhlulekile. Zama futhi.",
     "review_notice": "Hlola idatha ekhishiwe ngaphambi kokulondoloza"
   },
+  "messaging": {
+    "inbox": "Ibhokisi Lokufika",
+    "urgent": "Okuphuthumayo",
+    "routine": "Okujwayelekile",
+    "administrative": "Ezikhungwini",
+    "follow_up": "Ukulandela",
+    "ai_draft": "Impendulo ye-AI",
+    "send_reply": "Thumela Impendulo",
+    "discard": "Lahla",
+    "reply_sent": "Impendulo ithunyelwe",
+    "show_translation": "Bonisa ukuhumusha",
+    "hide_translation": "Fihla ukuhumusha",
+    "ai_never_sends": "I-AI iphakamisa — wena uthumela"
+  },
   "ai_status": {
     "active": "I-AI Iyasebenza",
     "unavailable": "I-AI Ayitholakali",

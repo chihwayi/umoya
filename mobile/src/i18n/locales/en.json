@@ -225,6 +225,20 @@
     "error_generic": "Voice capture failed. Please try again.",
     "review_notice": "Review extracted data before saving"
   },
+  "messaging": {
+    "inbox": "Inbox",
+    "urgent": "Urgent",
+    "routine": "Routine",
+    "administrative": "Administrative",
+    "follow_up": "Follow-up",
+    "ai_draft": "AI Draft Reply",
+    "send_reply": "Send Reply",
+    "discard": "Discard",
+    "reply_sent": "Reply sent",
+    "show_translation": "Show translation",
+    "hide_translation": "Hide translation",
+    "ai_never_sends": "AI suggests — you send"
+  },
   "ai_status": {
     "active": "AI Active",
     "unavailable": "AI Unavailable",

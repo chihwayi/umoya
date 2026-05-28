@@ -225,6 +225,20 @@
     "error_generic": "Échec de la capture vocale. Veuillez réessayer.",
     "review_notice": "Vérifiez les données extraites avant d'enregistrer"
   },
+  "messaging": {
+    "inbox": "Boîte de Réception",
+    "urgent": "Urgent",
+    "routine": "Routine",
+    "administrative": "Administratif",
+    "follow_up": "Suivi",
+    "ai_draft": "Brouillon IA",
+    "send_reply": "Envoyer la Réponse",
+    "discard": "Ignorer",
+    "reply_sent": "Réponse envoyée",
+    "show_translation": "Afficher la traduction",
+    "hide_translation": "Masquer la traduction",
+    "ai_never_sends": "L'IA suggère — vous envoyez"
+  },
   "ai_status": {
     "active": "IA Active",
     "unavailable": "IA Indisponible",

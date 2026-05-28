@@ -2978,6 +2978,32 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'ai_message_enrichment',
+        label: 'Sprint 177 — AI Patient Communication Hub',
+        version: '2026.05.28.1',
+        description: 'Stores AI urgency classification, reply drafts, and translations for patient messages',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS message_ai_enrichment (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            message_id UUID NOT NULL,
+            urgency VARCHAR(32) NOT NULL DEFAULT 'routine'
+              CHECK (urgency IN ('urgent','routine','administrative','follow_up')),
+            urgency_confidence NUMERIC(4,3),
+            reply_draft TEXT,
+            translated_content TEXT,
+            detected_language VARCHAR(8),
+            translation_language VARCHAR(8),
+            draft_approved_by UUID,
+            draft_approved_at TIMESTAMPTZ,
+            draft_sent BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(message_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_mae_message ON message_ai_enrichment(message_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_mae_urgency ON message_ai_enrichment(urgency, created_at DESC)`,
+        ],
+      },
+      {
         id: 'voice_transcriptions',
         label: 'Sprint 176 — Ambient Voice AI Transcriptions',
         version: '2026.05.28.1',

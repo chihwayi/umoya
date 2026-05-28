@@ -225,6 +225,20 @@
     "error_generic": "Kubata kwezwi kwakundikana. Ndokumbira muyedze zvakare.",
     "review_notice": "Onai data yakabudiswa musati machengeta"
   },
+  "messaging": {
+    "inbox": "Inbox",
+    "urgent": "Kukurumidza",
+    "routine": "Pakutanga",
+    "administrative": "ZveAdministration",
+    "follow_up": "Kutevedzera",
+    "ai_draft": "Mhinduro yeAI",
+    "send_reply": "Tumira Mhinduro",
+    "discard": "Rega",
+    "reply_sent": "Mhinduro yatumirwa",
+    "show_translation": "Ratidza shanduro",
+    "hide_translation": "Viga shanduro",
+    "ai_never_sends": "AI inobuditsa — iwe unotumira"
+  },
   "ai_status": {
     "active": "AI Inoshanda",
     "unavailable": "AI Haikwanisi",

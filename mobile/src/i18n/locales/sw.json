@@ -225,6 +225,20 @@
     "error_generic": "Kunasa sauti kumeshindwa. Tafadhali jaribu tena.",
     "review_notice": "Kagua data iliyotolewa kabla ya kuhifadhi"
   },
+  "messaging": {
+    "inbox": "Kisanduku Cha Barua",
+    "urgent": "Ya Haraka",
+    "routine": "Ya Kawaida",
+    "administrative": "Ya Utawala",
+    "follow_up": "Ufuatiliaji",
+    "ai_draft": "Rasimu ya AI",
+    "send_reply": "Tuma Jibu",
+    "discard": "Tupa",
+    "reply_sent": "Jibu limetumwa",
+    "show_translation": "Onyesha tafsiri",
+    "hide_translation": "Ficha tafsiri",
+    "ai_never_sends": "AI inapendekeza — wewe unatuma"
+  },
   "ai_status": {
     "active": "AI Inafanya kazi",
     "unavailable": "AI Haipatikani",

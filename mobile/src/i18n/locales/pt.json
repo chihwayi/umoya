@@ -225,6 +225,20 @@
     "error_generic": "Falha na captura de voz. Tente novamente.",
     "review_notice": "Reveja os dados extraídos antes de guardar"
   },
+  "messaging": {
+    "inbox": "Caixa de Entrada",
+    "urgent": "Urgente",
+    "routine": "Rotina",
+    "administrative": "Administrativo",
+    "follow_up": "Acompanhamento",
+    "ai_draft": "Rascunho IA",
+    "send_reply": "Enviar Resposta",
+    "discard": "Descartar",
+    "reply_sent": "Resposta enviada",
+    "show_translation": "Mostrar tradução",
+    "hide_translation": "Ocultar tradução",
+    "ai_never_sends": "IA sugere — você envia"
+  },
   "ai_status": {
     "active": "IA Ativa",
     "unavailable": "IA Indisponível",

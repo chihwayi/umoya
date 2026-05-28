@@ -443,6 +443,8 @@ import { AppointmentAiService } from './services/appointment-ai.service';
 import { AppointmentAiController } from './controllers/appointment-ai.controller';
 import { VoiceTranscriptionService } from './services/voice-transcription.service';
 import { VoiceController } from './controllers/voice.controller';
+import { MessageAiService } from './services/message-ai.service';
+import { MessageAiController } from './controllers/message-ai.controller';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -747,6 +749,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     LabNarrativeController,
     AppointmentAiController,
     VoiceController,
+    MessageAiController,
   ],
   providers: [
     AuthService,
@@ -922,6 +925,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     LabAiNarrativeService,
     AppointmentAiService,
     VoiceTranscriptionService,
+    MessageAiService,
     EducationPersonalizationService,
     PatientRiskScoringService,
     CronRiskSweepService,

@@ -225,6 +225,20 @@
     "error_generic": "Stemopname het misluk. Probeer asseblief weer.",
     "review_notice": "Hersien uitgehaalde data voordat jy stoor"
   },
+  "messaging": {
+    "inbox": "Inkassie",
+    "urgent": "Dringend",
+    "routine": "Roetine",
+    "administrative": "Administratief",
+    "follow_up": "Opvolgings",
+    "ai_draft": "KI Konsep Antwoord",
+    "send_reply": "Stuur Antwoord",
+    "discard": "Gooi weg",
+    "reply_sent": "Antwoord gestuur",
+    "show_translation": "Wys vertaling",
+    "hide_translation": "Verberg vertaling",
+    "ai_never_sends": "KI stel voor — jy stuur"
+  },
   "ai_status": {
     "active": "KI Aktief",
     "unavailable": "KI Nie Beskikbaar",
