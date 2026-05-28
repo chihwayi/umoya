@@ -255,6 +255,22 @@
     "regenerate": "Régénérer la Chronologie",
     "last_updated": "Dernière mise à jour"
   },
+  "mortality": {
+    "risk_score": "Risque de Mortalité à 30 Jours",
+    "low": "Faible",
+    "moderate": "Modéré",
+    "high": "Élevé",
+    "critical": "Critique",
+    "breakdown": "Analyse du Risque",
+    "factors": {
+      "age": "Âge",
+      "news2Score": "Score NEWS2",
+      "comorbidityCount": "Comorbidités",
+      "criticalLabFlags": "Valeurs Lab Critiques",
+      "icuStatus": "USI/HDU",
+      "activeDiagnosisSeverity": "Diagnostics Sévères"
+    }
+  },
   "ai_status": {
     "active": "IA Active",
     "unavailable": "IA Indisponible",

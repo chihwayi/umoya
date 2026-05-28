@@ -255,6 +255,22 @@
     "regenerate": "Zaliisha Upya Mstari",
     "last_updated": "Ilisasishwa mara ya mwisho"
   },
+  "mortality": {
+    "risk_score": "Hatari ya Kifo kwa Siku 30",
+    "low": "Chini",
+    "moderate": "Wastani",
+    "high": "Juu",
+    "critical": "Muhimu Sana",
+    "breakdown": "Uchambuzi wa Hatari",
+    "factors": {
+      "age": "Umri",
+      "news2Score": "Alama ya NEWS2",
+      "comorbidityCount": "Magonjwa Mengi",
+      "criticalLabFlags": "Alama Muhimu za Lab",
+      "icuStatus": "ICU/HDU",
+      "activeDiagnosisSeverity": "Magonjwa Makali"
+    }
+  },
   "ai_status": {
     "active": "AI Inafanya kazi",
     "unavailable": "AI Haipatikani",

@@ -255,6 +255,22 @@
     "regenerate": "Hergenereer Tydlyn",
     "last_updated": "Laas opgedateer"
   },
+  "mortality": {
+    "risk_score": "30-Dag Sterftrisiko",
+    "low": "Laag",
+    "moderate": "Matig",
+    "high": "Hoog",
+    "critical": "Krities",
+    "breakdown": "Risikoontleding",
+    "factors": {
+      "age": "Ouderdom",
+      "news2Score": "NEWS2 Telling",
+      "comorbidityCount": "Komorbiditeite",
+      "criticalLabFlags": "Kritiese Lab Waardes",
+      "icuStatus": "IKE/HDU",
+      "activeDiagnosisSeverity": "Ernstige Diagnoses"
+    }
+  },
   "ai_status": {
     "active": "KI Aktief",
     "unavailable": "KI Nie Beskikbaar",

@@ -255,6 +255,22 @@
     "regenerate": "Khiqiza Kabusha Umlando",
     "last_updated": "Kubuyekeziwe Okwamuva"
   },
+  "mortality": {
+    "risk_score": "Ingozi Yokufa Ezinsukwini Ezingama-30",
+    "low": "Phansi",
+    "moderate": "Phakathi",
+    "high": "Ephezulu",
+    "critical": "Ebalulekile Kakhulu",
+    "breakdown": "Ukuhlaziywa Kwengozi",
+    "factors": {
+      "age": "Ubudala",
+      "news2Score": "Isikalo se-NEWS2",
+      "comorbidityCount": "Izifo Ezahlukene",
+      "criticalLabFlags": "Amafulegi Abalulekile",
+      "icuStatus": "ICU/HDU",
+      "activeDiagnosisSeverity": "Izifo Ezibalulekile"
+    }
+  },
   "ai_status": {
     "active": "I-AI Iyasebenza",
     "unavailable": "I-AI Ayitholakali",

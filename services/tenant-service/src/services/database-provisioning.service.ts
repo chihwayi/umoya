@@ -2998,6 +2998,28 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'mortality_risk_scores',
+        label: 'Sprint 180 — AI Mortality Risk Score',
+        version: '2026.05.28.1',
+        description: '30-day composite mortality risk scores per patient',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS mortality_risk_scores (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            score INTEGER NOT NULL CHECK (score >= 0 AND score <= 100),
+            band VARCHAR(16) NOT NULL
+              CHECK (band IN ('low','moderate','high','critical')),
+            factors JSONB NOT NULL DEFAULT '{}',
+            alert_sent BOOLEAN NOT NULL DEFAULT false,
+            scored_by VARCHAR(64) NOT NULL DEFAULT 'cron',
+            scored_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_mrs_patient ON mortality_risk_scores(patient_id, scored_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_mrs_band ON mortality_risk_scores(band, scored_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_mrs_recent ON mortality_risk_scores(scored_at DESC)`,
+        ],
+      },
+      {
         id: 'medication_adherence',
         label: 'Sprint 178 — Predictive Medication Adherence Engine',
         version: '2026.05.28.1',

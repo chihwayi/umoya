@@ -255,6 +255,22 @@
     "regenerate": "Akhela Umlando Futhi",
     "last_updated": "Kubuyekeziwe Okwokugcina"
   },
+  "mortality": {
+    "risk_score": "Ingozi Yokufa Ezinsukwini Ezingama-30",
+    "low": "Phansi",
+    "moderate": "Phakathi",
+    "high": "Ephezulu",
+    "critical": "Esikhulu Kakhulu",
+    "breakdown": "Ukuhlaziywa Kwengozi",
+    "factors": {
+      "age": "Ubudala",
+      "news2Score": "Isikalo se-NEWS2",
+      "comorbidityCount": "Izifo Ezimaningi",
+      "criticalLabFlags": "Amafulegi Esikhulwini",
+      "icuStatus": "ICU/HDU",
+      "activeDiagnosisSeverity": "Izifo Ezibalulekile"
+    }
+  },
   "ai_status": {
     "active": "I-AI Iyasebenza",
     "unavailable": "I-AI Ayitholakali",

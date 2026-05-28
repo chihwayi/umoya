@@ -255,6 +255,22 @@
     "regenerate": "Gadzira Nhoroondo Zvakare",
     "last_updated": "Yakagadziridzwa Pamugumo"
   },
+  "mortality": {
+    "risk_score": "Njodzi yekufa mumavhiki 4",
+    "low": "Pasi",
+    "moderate": "Pakati",
+    "high": "Kukwirira",
+    "critical": "Kudiwa Kwakanyanya",
+    "breakdown": "Kuonekwa kweNjodzi",
+    "factors": {
+      "age": "Zera",
+      "news2Score": "Nhamba yeNEWS2",
+      "comorbidityCount": "Zvirwere Zvakawanda",
+      "criticalLabFlags": "Mafulegi eLaboratory",
+      "icuStatus": "ICU/HDU",
+      "activeDiagnosisSeverity": "Zvirwere Zvakakura"
+    }
+  },
   "ai_status": {
     "active": "AI Inoshanda",
     "unavailable": "AI Haikwanisi",
