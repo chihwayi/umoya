@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import { AiStatusBadge } from './AiStatusBadge';
 
 interface Finding {
   description?: string;
@@ -72,11 +73,8 @@ export const RadiologyAiFindingsPanel: React.FC<Props> = ({ studyId, patientId }
 
   if (!data) {
     return (
-      <div style={{
-        padding: 16, backgroundColor: '#f3f4f6', borderRadius: 8,
-        color: '#6b7280', fontSize: 13, textAlign: 'center',
-      }}>
-        AI Unavailable
+      <div style={{ padding: 16, backgroundColor: '#f3f4f6', borderRadius: 8 }}>
+        <AiStatusBadge status="unavailable" reason="CDSS service unreachable or no findings returned" />
       </div>
     );
   }
@@ -88,6 +86,7 @@ export const RadiologyAiFindingsPanel: React.FC<Props> = ({ studyId, patientId }
     <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
         <span style={{ fontWeight: 700, fontSize: 15 }}>AI Radiology Findings</span>
+        <AiStatusBadge status="active" compact />
         <span style={{
           fontWeight: 700, fontSize: 12, padding: '2px 10px', borderRadius: 12,
           backgroundColor: urgencyColor + '20',

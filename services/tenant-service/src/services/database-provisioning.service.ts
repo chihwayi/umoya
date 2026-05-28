@@ -2920,6 +2920,28 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'ai_abstention_log',
+        label: 'Sprint 171 — AI Abstention Log',
+        version: '2026.05.28.1',
+        description: 'Records every CDSS/AI abstention event with context, reason, and patient reference',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS ai_abstention_log (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID,
+            context VARCHAR(128) NOT NULL,
+            reason VARCHAR(64) NOT NULL
+              CHECK (reason IN ('cdss_error','low_confidence','no_data','out_of_scope','timeout','not_configured')),
+            error_detail TEXT,
+            requested_by UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_aal_patient
+            ON ai_abstention_log(patient_id, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_aal_context
+            ON ai_abstention_log(context, created_at DESC)`,
+        ],
+      },
+      {
         id: 'radiology_ai_findings_s170_upgrade',
         label: 'Sprint 170 — Radiology AI Findings Column Upgrade',
         version: '2026.05.28.1',

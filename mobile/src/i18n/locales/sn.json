@@ -181,5 +181,13 @@
     "postcall_soap_label": "Chiziviso cheAI (SOAP)",
     "postcall_duration": "Nguva",
     "postcall_escalation": "Zvinokwira"
+  },
+  "ai_status": {
+    "active": "AI Inoshanda",
+    "unavailable": "AI Haikwanisi",
+    "abstained": "AI Yarega",
+    "low_confidence": "Chivimbo Chishoma",
+    "loading": "Kuyera...",
+    "patient_notice": "Ongororo haikwanisi — timu yako yokurera yakuziviswa."
   }
 }

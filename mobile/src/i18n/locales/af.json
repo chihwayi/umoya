@@ -181,5 +181,13 @@
     "postcall_soap_label": "KI-gegenereerde SOAP-nota",
     "postcall_duration": "Duur",
     "postcall_escalation": "Eskalasiepeil"
+  },
+  "ai_status": {
+    "active": "KI Aktief",
+    "unavailable": "KI Nie Beskikbaar",
+    "abstained": "KI Onthoud",
+    "low_confidence": "Lae Vertroue",
+    "loading": "Ontleed...",
+    "patient_notice": "Ontleding onbeskikbaar — u sorgspan is ingelig."
   }
 }

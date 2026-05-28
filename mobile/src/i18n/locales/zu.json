@@ -181,5 +181,13 @@
     "postcall_soap_label": "Inothi le-AI (SOAP)",
     "postcall_duration": "Ubude besikhathi",
     "postcall_escalation": "Izinga lokuphuthuma"
+  },
+  "ai_status": {
+    "active": "I-AI Iyasebenza",
+    "unavailable": "I-AI Ayitholakali",
+    "abstained": "I-AI Yazibamba",
+    "low_confidence": "Ukuqiniseka Okuphansi",
+    "loading": "Kuhlahlwa...",
+    "patient_notice": "Ukuhlaziywa akutholakali — ithimba lakho lokunakekelwa liyaziwe."
   }
 }

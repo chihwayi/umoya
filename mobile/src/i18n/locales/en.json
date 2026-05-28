@@ -181,5 +181,13 @@
     "review_reject": "reject",
     "review_needs": "needs review",
     "analysing": "Analysing imaging study..."
+  },
+  "ai_status": {
+    "active": "AI Active",
+    "unavailable": "AI Unavailable",
+    "abstained": "AI Abstained",
+    "low_confidence": "Low Confidence",
+    "loading": "Analysing...",
+    "patient_notice": "Analysis unavailable — your care team has been notified."
   }
 }

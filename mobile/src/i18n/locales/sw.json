@@ -181,5 +181,13 @@
     "postcall_soap_label": "Noti ya SOAP iliyoundwa na AI",
     "postcall_duration": "Muda",
     "postcall_escalation": "Kiwango cha Kupanda"
+  },
+  "ai_status": {
+    "active": "AI Inafanya kazi",
+    "unavailable": "AI Haipatikani",
+    "abstained": "AI Ilijiepusha",
+    "low_confidence": "Imani ya Chini",
+    "loading": "Inachambua...",
+    "patient_notice": "Uchambuzi haupatikani — timu yako ya huduma imearifiwa."
   }
 }

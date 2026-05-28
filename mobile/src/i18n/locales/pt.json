@@ -181,5 +181,13 @@
     "postcall_soap_label": "Nota SOAP gerada por IA",
     "postcall_duration": "Duração",
     "postcall_escalation": "Nível de Escalada"
+  },
+  "ai_status": {
+    "active": "IA Ativa",
+    "unavailable": "IA Indisponível",
+    "abstained": "IA Absteve-se",
+    "low_confidence": "Baixa Confiança",
+    "loading": "A analisar...",
+    "patient_notice": "Análise indisponível — a sua equipa de cuidados foi notificada."
   }
 }
