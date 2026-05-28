@@ -90,7 +90,14 @@
     "upcoming": "Ijayo",
     "thisWeek": "Wiki hii",
     "markFailed": "Imeshindwa kurekodi dozi. Tafadhali jaribu tena.",
-    "summary": "Muhtasari wa Kufuata Dawa"
+    "summary": "Muhtasari wa Kufuata Dawa",
+    "at_risk_title": "Wagonjwa Walio Hatarini ya Kukosa Dawa",
+    "high_risk": "Hatari Kubwa",
+    "at_risk": "Katika Hatari",
+    "low": "Anafuata",
+    "nudge_sent": "Ukumbusho wa dawa umetumwa",
+    "score": "Alama ya Kufuata",
+    "history": "Historia ya Kufuata"
   },
   "education": {
     "title": "Elimu ya Afya",

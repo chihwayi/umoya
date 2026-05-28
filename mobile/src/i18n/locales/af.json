@@ -90,7 +90,14 @@
     "upcoming": "Aanstaande",
     "thisWeek": "Hierdie week",
     "markFailed": "Kon nie dosis aanteken nie. Probeer asseblief weer.",
-    "summary": "Nakoming Opsomming"
+    "summary": "Nakoming Opsomming",
+    "at_risk_title": "Pasiënte met Nakoming Risiko",
+    "high_risk": "Hoë Risiko",
+    "at_risk": "Onder Risiko",
+    "low": "Voldoet",
+    "nudge_sent": "Medikasie herinnering gestuur",
+    "score": "Nakomingspelling",
+    "history": "Nakomingsgeskiedenis"
   },
   "education": {
     "title": "Gesondheidsopvoeding",

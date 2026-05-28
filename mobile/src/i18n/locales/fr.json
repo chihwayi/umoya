@@ -90,7 +90,14 @@
     "upcoming": "À venir",
     "thisWeek": "Cette semaine",
     "markFailed": "Impossible d'enregistrer la dose. Veuillez réessayer.",
-    "summary": "Résumé de l'observance"
+    "summary": "Résumé de l'observance",
+    "at_risk_title": "Patients à Risque de Non-Observance",
+    "high_risk": "Haut Risque",
+    "at_risk": "À Risque",
+    "low": "Observant",
+    "nudge_sent": "Rappel médicament envoyé",
+    "score": "Score d'Observance",
+    "history": "Historique d'Observance"
   },
   "education": {
     "title": "Éducation Sanitaire",

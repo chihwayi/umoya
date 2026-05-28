@@ -90,7 +90,14 @@
     "upcoming": "Zvinouya",
     "thisWeek": "Vhiki rino",
     "markFailed": "Hazvina kukwanisa kurekodha dozi. Edza zvakare.",
-    "summary": "Pfupiso yekutevera Mushonga"
+    "summary": "Pfupiso yekutevera Mushonga",
+    "at_risk_title": "Varwere Vane Njodzi yokurega Mishonga",
+    "high_risk": "Njodzi Yakakura",
+    "at_risk": "Ari Munhamo",
+    "low": "Anotevedzera",
+    "nudge_sent": "Cherechedzo chemishonga chatumirwa",
+    "score": "Nhamba yokuTevedzera",
+    "history": "Nhoroondo yokuTevedzera"
   },
   "education": {
     "title": "Dzidzo yeUtano",

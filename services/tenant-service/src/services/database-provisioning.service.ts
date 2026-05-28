@@ -2978,6 +2978,37 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'medication_adherence',
+        label: 'Sprint 178 — Predictive Medication Adherence Engine',
+        version: '2026.05.28.1',
+        description: 'Adherence risk scores and nudge delivery history',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS adherence_risk_scores (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            score INTEGER NOT NULL CHECK (score >= 0 AND score <= 100),
+            risk_level VARCHAR(16) NOT NULL
+              CHECK (risk_level IN ('low','at_risk','high_risk')),
+            factors JSONB NOT NULL DEFAULT '{}',
+            scored_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ars_patient ON adherence_risk_scores(patient_id, scored_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_ars_level ON adherence_risk_scores(risk_level, scored_at DESC)`,
+          `CREATE TABLE IF NOT EXISTS adherence_nudges (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            prescription_id UUID,
+            channel VARCHAR(16) NOT NULL
+              CHECK (channel IN ('sms','push','both')),
+            message_text TEXT NOT NULL,
+            sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            delivery_status VARCHAR(32) DEFAULT 'sent',
+            risk_level VARCHAR(16)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_an_patient ON adherence_nudges(patient_id, sent_at DESC)`,
+        ],
+      },
+      {
         id: 'ai_message_enrichment',
         label: 'Sprint 177 — AI Patient Communication Hub',
         version: '2026.05.28.1',

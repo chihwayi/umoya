@@ -90,7 +90,14 @@
     "upcoming": "Okuzoqhubeka",
     "thisWeek": "Leli Sonto",
     "markFailed": "Yehlulekile ukurekhoda idozi. Zama futhi.",
-    "summary": "Isifinyezo Sokulandela Umuthi"
+    "summary": "Isifinyezo Sokulandela Umuthi",
+    "at_risk_title": "Iziguli Ezisengozini Yokushiya Umuthi",
+    "high_risk": "Ingozi Ephezulu",
+    "at_risk": "Esengozini",
+    "low": "Iyalandela",
+    "nudge_sent": "Isikhumbuzo somuthi sithunyiwe",
+    "score": "Inombolo Yokulandela",
+    "history": "Umlando Wokulandela"
   },
   "education": {
     "title": "Imfundo Yezempilo",

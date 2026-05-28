@@ -90,7 +90,14 @@
     "upcoming": "Próximo",
     "thisWeek": "Esta Semana",
     "markFailed": "Não foi possível registar a dose. Tente novamente.",
-    "summary": "Resumo de Adesão"
+    "summary": "Resumo de Adesão",
+    "at_risk_title": "Pacientes em Risco de Não Adesão",
+    "high_risk": "Alto Risco",
+    "at_risk": "Em Risco",
+    "low": "Aderente",
+    "nudge_sent": "Lembrete de medicação enviado",
+    "score": "Pontuação de Adesão",
+    "history": "Histórico de Adesão"
   },
   "education": {
     "title": "Educação em Saúde",

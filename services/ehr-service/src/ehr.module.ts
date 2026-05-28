@@ -445,6 +445,9 @@ import { VoiceTranscriptionService } from './services/voice-transcription.servic
 import { VoiceController } from './controllers/voice.controller';
 import { MessageAiService } from './services/message-ai.service';
 import { MessageAiController } from './controllers/message-ai.controller';
+import { AdherenceEngineService } from './services/adherence-engine.service';
+import { CronAdherenceService } from './services/cron-adherence.service';
+import { AdherenceController } from './controllers/adherence.controller';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -750,6 +753,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AppointmentAiController,
     VoiceController,
     MessageAiController,
+    AdherenceController,
   ],
   providers: [
     AuthService,
@@ -926,6 +930,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AppointmentAiService,
     VoiceTranscriptionService,
     MessageAiService,
+    AdherenceEngineService,
+    CronAdherenceService,
     EducationPersonalizationService,
     PatientRiskScoringService,
     CronRiskSweepService,

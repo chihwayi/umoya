@@ -90,7 +90,14 @@
     "upcoming": "Upcoming",
     "thisWeek": "This Week",
     "markFailed": "Could not log dose. Please try again.",
-    "summary": "Adherence Summary"
+    "summary": "Adherence Summary",
+    "at_risk_title": "Adherence At-Risk Patients",
+    "high_risk": "High Risk",
+    "at_risk": "At Risk",
+    "low": "Adherent",
+    "nudge_sent": "Medication reminder sent",
+    "score": "Adherence Score",
+    "history": "Adherence History"
   },
   "education": {
     "title": "Health Education",
