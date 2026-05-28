@@ -459,6 +459,8 @@ import { CareGapEngineService } from './services/care-gap-engine.service';
 import { CareGapController } from './controllers/care-gap.controller';
 import { ClinicalDocumentService } from './services/clinical-document.service';
 import { ClinicalDocumentController } from './controllers/clinical-document.controller';
+import { DrugSubstitutionService } from './services/drug-substitution.service';
+import { DrugSubstitutionController } from './controllers/drug-substitution.controller';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -770,6 +772,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalSummaryController,
     CareGapController,
     ClinicalDocumentController,
+    DrugSubstitutionController,
   ],
   providers: [
     AuthService,
@@ -954,6 +957,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalSummaryService,
     CareGapEngineService,
     ClinicalDocumentService,
+    DrugSubstitutionService,
     EducationPersonalizationService,
     PatientRiskScoringService,
     CronRiskSweepService,

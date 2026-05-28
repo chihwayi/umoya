@@ -255,6 +255,17 @@
     "regenerate": "Khiqiza Kabusha Umlando",
     "last_updated": "Kubuyekeziwe Okwamuva"
   },
+  "drug_sub": {
+    "title": "Ukuguqulwa Kwemithi ne-AI",
+    "original_drug": "Igama lomuthi wokuqala",
+    "dose": "Isango (esikhethekile)",
+    "find": "Thola Izinye",
+    "confirm": "Qinisekisa Ukuguquliwe",
+    "cancel": "Khansela",
+    "none_found": "Akukho okufanelekayo. Xhumana nomkhebi.",
+    "confirmed": "Ukuguquliwa kubhaliwe phansi",
+    "caveat": "Isixwayiso"
+  },
   "documents": {
     "title": "Amadokhumenti Ezobuhlengane",
     "generate": "Yenza Idokhumenti",

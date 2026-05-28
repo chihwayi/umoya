@@ -3096,6 +3096,32 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'drug_substitution_suggestions',
+        label: 'Sprint 184 — AI Drug Substitution Engine',
+        version: '2026.05.28.1',
+        description: 'Therapeutic drug substitution suggestions with audit trail',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS drug_substitution_suggestions (
+            id               SERIAL PRIMARY KEY,
+            original_drug    TEXT        NOT NULL,
+            original_dose    TEXT,
+            patient_id       INTEGER,
+            requested_by     INTEGER,
+            suggestions      JSONB       NOT NULL DEFAULT '[]',
+            selected_drug    TEXT,
+            selected_at      TIMESTAMPTZ,
+            selected_by      INTEGER,
+            cdss_available   BOOLEAN     NOT NULL DEFAULT TRUE,
+            abstention_reason TEXT,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_drug_sub_patient ON drug_substitution_suggestions(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_drug_sub_drug ON drug_substitution_suggestions(original_drug)`,
+          `CREATE INDEX IF NOT EXISTS idx_drug_sub_created ON drug_substitution_suggestions(created_at DESC)`,
+        ],
+      },
+      {
         id: 'medication_adherence',
         label: 'Sprint 178 — Predictive Medication Adherence Engine',
         version: '2026.05.28.1',

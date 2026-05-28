@@ -255,6 +255,17 @@
     "regenerate": "Regenerate Timeline",
     "last_updated": "Last updated"
   },
+  "drug_sub": {
+    "title": "AI Drug Substitution",
+    "original_drug": "Original drug name",
+    "dose": "Dose (optional)",
+    "find": "Find Substitutes",
+    "confirm": "Confirm Substitution",
+    "cancel": "Cancel",
+    "none_found": "No substitutes found. Please consult your pharmacist.",
+    "confirmed": "Substitution recorded",
+    "caveat": "Caveat"
+  },
   "documents": {
     "title": "Clinical Documents",
     "generate": "Generate Document",

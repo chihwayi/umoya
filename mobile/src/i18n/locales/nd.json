@@ -255,6 +255,17 @@
     "regenerate": "Akhela Umlando Futhi",
     "last_updated": "Kubuyekeziwe Okwokugcina"
   },
+  "drug_sub": {
+    "title": "Ukushintsha Umuthi nge-AI",
+    "original_drug": "Ibizo lomuthi wokuqala",
+    "dose": "Isango (esikhethekile)",
+    "find": "Thola Izindlela",
+    "confirm": "Qinisekisa Ukushintsha",
+    "cancel": "Khansela",
+    "none_found": "Akutholakali. Xoxa nomthi weziyobisi.",
+    "confirmed": "Ukushintsha kubhalwe phansi",
+    "caveat": "Isixwayiso"
+  },
   "documents": {
     "title": "Amaphepha Ezibopha",
     "generate": "Yenza Iphepha",

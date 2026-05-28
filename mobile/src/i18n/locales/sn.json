@@ -255,6 +255,17 @@
     "regenerate": "Gadzira Nhoroondo Zvakare",
     "last_updated": "Yakagadziridzwa Pamugumo"
   },
+  "drug_sub": {
+    "title": "Kuchinja Mushonga neAI",
+    "original_drug": "Zita remushonga wepakutanga",
+    "dose": "Dosi (isiyo yemhaka)",
+    "find": "Tsvaga Zvichinjira",
+    "confirm": "Simbisa Kuchinja",
+    "cancel": "Kansela",
+    "none_found": "Hazvisangani. Taura nemutiriri wemishonga.",
+    "confirmed": "Kuchinja kwakanyorwa",
+    "caveat": "Chenjezo"
+  },
   "documents": {
     "title": "Zvinyorwa zveKiriniki",
     "generate": "Gadzira Chinyorwa",

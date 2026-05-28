@@ -255,6 +255,17 @@
     "regenerate": "Regenerar Cronologia",
     "last_updated": "Última actualização"
   },
+  "drug_sub": {
+    "title": "Substituição de Medicamento IA",
+    "original_drug": "Nome do medicamento original",
+    "dose": "Dose (opcional)",
+    "find": "Encontrar Substitutos",
+    "confirm": "Confirmar Substituição",
+    "cancel": "Cancelar",
+    "none_found": "Nenhum substituto. Consulte o farmacêutico.",
+    "confirmed": "Substituição registada",
+    "caveat": "Advertência"
+  },
   "documents": {
     "title": "Documentos Clínicos",
     "generate": "Gerar Documento",

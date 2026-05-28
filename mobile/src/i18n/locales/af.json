@@ -255,6 +255,17 @@
     "regenerate": "Hergenereer Tydlyn",
     "last_updated": "Laas opgedateer"
   },
+  "drug_sub": {
+    "title": "AI Dwelvervanging",
+    "original_drug": "Oorspronklike dwelnaam",
+    "dose": "Dosis (opsioneel)",
+    "find": "Vind Vervangings",
+    "confirm": "Bevestig Vervanging",
+    "cancel": "Kanselleer",
+    "none_found": "Geen vervangings. Raadpleeg die apteker.",
+    "confirmed": "Vervanging aangeteken",
+    "caveat": "Waarskuwing"
+  },
   "documents": {
     "title": "Kliniese Dokumente",
     "generate": "Genereer Dokument",
