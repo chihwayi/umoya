@@ -161,5 +161,12 @@
     "fieldRelationshipPlaceholder": "e.g. Spouse, Parent, Child",
     "fieldAccessLevel": "Access Level",
     "fieldExpiry": "Access Expires On (optional)"
+  },
+  "telemedicine": {
+    "summary_preparing": "Your consultation summary is being prepared...",
+    "summary_ready": "Your consultation summary is ready. Tap to view.",
+    "postcall_soap_label": "AI-Generated SOAP Note",
+    "postcall_duration": "Duration",
+    "postcall_escalation": "Escalation Level"
   }
 }

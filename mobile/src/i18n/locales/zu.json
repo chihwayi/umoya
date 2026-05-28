@@ -161,5 +161,12 @@
     "fieldRelationshipPlaceholder": "isb. Umshado, Umzali, Ingane",
     "fieldAccessLevel": "Izinga Lokufinyelela",
     "fieldExpiry": "Imvume iphela mhla (khetha)"
+  },
+  "telemedicine": {
+    "summary_preparing": "Isifinyezo sakho somhlangano silungiswa...",
+    "summary_ready": "Isifinyezo sakho somhlangano silungile. Thepha ukubona.",
+    "postcall_soap_label": "Inothi le-AI (SOAP)",
+    "postcall_duration": "Ubude besikhathi",
+    "postcall_escalation": "Izinga lokuphuthuma"
   }
 }

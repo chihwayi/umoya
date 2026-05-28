@@ -161,5 +161,12 @@
     "fieldRelationshipPlaceholder": "bv. Gade, Ouer, Kind",
     "fieldAccessLevel": "Toegangsvlak",
     "fieldExpiry": "Toegang verval op (opsioneel)"
+  },
+  "telemedicine": {
+    "summary_preparing": "Jou konsultasie-opsomming word voorberei...",
+    "summary_ready": "Jou konsultasie-opsomming is gereed. Tik om te sien.",
+    "postcall_soap_label": "KI-gegenereerde SOAP-nota",
+    "postcall_duration": "Duur",
+    "postcall_escalation": "Eskalasiepeil"
   }
 }

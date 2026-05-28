@@ -161,5 +161,12 @@
     "fieldRelationshipPlaceholder": "mfano. Mwenzi, Mzazi, Mtoto",
     "fieldAccessLevel": "Kiwango cha Ufikiaji",
     "fieldExpiry": "Ruhusa inaisha tarehe (si lazima)"
+  },
+  "telemedicine": {
+    "summary_preparing": "Muhtasari wa mashauriano yako unatengenezwa...",
+    "summary_ready": "Muhtasari wa mashauriano yako uko tayari. Gusa kuona.",
+    "postcall_soap_label": "Noti ya SOAP iliyoundwa na AI",
+    "postcall_duration": "Muda",
+    "postcall_escalation": "Kiwango cha Kupanda"
   }
 }

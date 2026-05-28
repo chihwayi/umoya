@@ -161,5 +161,12 @@
     "fieldRelationshipPlaceholder": "sekumbo. Murume/Mudzimai, Mubereki, Mwana",
     "fieldAccessLevel": "Pamusoro peKusvikirwa",
     "fieldExpiry": "Mvumo inopera zuva (pasina basa)"
+  },
+  "telemedicine": {
+    "summary_preparing": "Nhevedzano yako iri kugadzirwa...",
+    "summary_ready": "Nhevedzano yako yakagadzirwa. Bedera kuti uone.",
+    "postcall_soap_label": "Chiziviso cheAI (SOAP)",
+    "postcall_duration": "Nguva",
+    "postcall_escalation": "Zvinokwira"
   }
 }

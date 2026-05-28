@@ -217,6 +217,7 @@ import { BreachDetectionController } from './controllers/breach-detection.contro
 import { PatientPortalHivController } from './controllers/patient-portal-hiv.controller';
 import { PostVisitEscalationController } from './controllers/post-visit-escalation.controller';
 import { AiOrderSuggestionsController } from './controllers/ai-order-suggestions.controller';
+import { TelemedicineWebhookController } from './controllers/telemedicine-webhook.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -427,6 +428,7 @@ import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.
 import { PostVisitEscalationService } from './services/post-visit-escalation.service';
 import { PostVisitEscalationRoutingService } from './services/post-visit-escalation-routing.service';
 import { AiOrderPipelineService } from './services/ai-order-pipeline.service';
+import { TelemedicinePostcallService } from './services/telemedicine-postcall.service';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -723,6 +725,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PatientPortalHivController,
     PostVisitEscalationController,
     AiOrderSuggestionsController,
+    TelemedicineWebhookController,
   ],
   providers: [
     AuthService,
@@ -893,6 +896,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PostVisitEscalationService,
     PostVisitEscalationRoutingService,
     AiOrderPipelineService,
+    TelemedicinePostcallService,
     PostVisitBillingIntelligenceService,
     PostVisitCompanionMemoryService,
     PostVisitSessionService,

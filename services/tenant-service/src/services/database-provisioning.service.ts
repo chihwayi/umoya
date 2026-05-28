@@ -2908,15 +2908,47 @@ export class DatabaseProvisioningService {
           `CREATE TABLE IF NOT EXISTS ai_alert_delivery_log (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             patient_id UUID NOT NULL,
-            alert_type VARCHAR(50) NOT NULL, -- 'OI_DETERIORATION' | 'NEWS2_CRITICAL'
+            alert_type VARCHAR(50) NOT NULL,
             severity VARCHAR(20) NOT NULL,
-            delivery_channel VARCHAR(20) NOT NULL, -- 'PUSH' | 'IN_APP'
+            delivery_channel VARCHAR(20) NOT NULL,
             recipient_user_id UUID NOT NULL,
             delivered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             metadata JSONB DEFAULT '{}'
           )`,
           `CREATE INDEX IF NOT EXISTS idx_ai_alert_log_patient ON ai_alert_delivery_log(patient_id)`,
           `CREATE INDEX IF NOT EXISTS idx_ai_alert_log_recipient ON ai_alert_delivery_log(recipient_user_id)`,
+        ],
+      },
+      {
+        id: 'telemedicine_postcall_events',
+        label: 'Sprint 169 — Telemedicine Post-Call AI Events',
+        version: '2026.05.28.1',
+        description: 'Tracks Daily.co webhook events and post-call AI pipeline execution per session',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS telemedicine_postcall_events (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id VARCHAR(255) NOT NULL,
+            patient_id UUID NOT NULL,
+            doctor_id UUID NOT NULL,
+            encounter_id UUID,
+            call_started_at TIMESTAMPTZ,
+            call_ended_at TIMESTAMPTZ NOT NULL,
+            duration_seconds INTEGER,
+            daily_room_name VARCHAR(255),
+            daily_meeting_id VARCHAR(255),
+            status VARCHAR(32) NOT NULL DEFAULT 'processing'
+              CHECK (status IN ('processing','completed','failed','skipped')),
+            pipeline_triggered_at TIMESTAMPTZ DEFAULT now(),
+            pipeline_completed_at TIMESTAMPTZ,
+            soap_note TEXT,
+            escalation_level VARCHAR(32),
+            error_message TEXT,
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_tpc_session ON telemedicine_postcall_events(session_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_tpc_patient ON telemedicine_postcall_events(patient_id, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_tpc_status ON telemedicine_postcall_events(status) WHERE status = 'failed'`,
         ],
       },
     ];

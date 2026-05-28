@@ -260,6 +260,8 @@ export const PatientTelemedicineScreen: React.FC<PatientTelemedicineScreenProps>
   const [meetingAccess, setMeetingAccess] = useState<MeetingAccess | null>(null);
   const [activeConsultation, setActiveConsultation] = useState<ApiConsultation | null>(null);
   const [showRating, setShowRating]       = useState(false);
+  const [summaryPreparing, setSummaryPreparing] = useState(false);
+  const [summaryReady, setSummaryReady]         = useState(false);
 
   const loadConsultations = useCallback(() => {
     setLoading(true);
@@ -310,7 +312,28 @@ export const PatientTelemedicineScreen: React.FC<PatientTelemedicineScreenProps>
     setCallState('ended');
     setMeetingAccess(null);
     setShowRating(true);
+    setSummaryPreparing(true);
+    setSummaryReady(false);
     loadConsultations();
+
+    // Poll for telemedicine_summary notification (max 2 min / 12 attempts)
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const { api } = await import('../../services/api');
+        const res = await api.get('/patient-portal/notifications?type=telemedicine_summary&limit=1');
+        if ((res.data ?? []).length > 0) {
+          clearInterval(poll);
+          setSummaryPreparing(false);
+          setSummaryReady(true);
+        }
+      } catch { /* silent */ }
+      if (attempts >= 12) {
+        clearInterval(poll);
+        setSummaryPreparing(false);
+      }
+    }, 10000);
   };
 
   const handleRatingDone = () => {
@@ -370,6 +393,22 @@ export const PatientTelemedicineScreen: React.FC<PatientTelemedicineScreenProps>
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
+          {/* Post-call summary banners */}
+          {summaryPreparing && (
+            <View style={{ backgroundColor: C.blue + '20', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+              <Text style={{ fontFamily: FONT.uiBd, color: C.blue, fontSize: 13 }}>
+                Your consultation summary is being prepared...
+              </Text>
+            </View>
+          )}
+          {summaryReady && (
+            <View style={{ backgroundColor: C.green + '20', padding: 12, borderRadius: 8, marginBottom: 12 }}>
+              <Text style={{ fontFamily: FONT.uiBd, color: C.green, fontSize: 13 }}>
+                Your consultation summary is ready. Tap to view.
+              </Text>
+            </View>
+          )}
+
           {/* Hero banner */}
           <LinearGradient
             colors={[C.teal + 'CC', C.blue + 'AA']}
