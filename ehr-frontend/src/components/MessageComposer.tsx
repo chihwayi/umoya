@@ -9,6 +9,7 @@ interface MessageComposerProps {
   token: string;
   tenantSlug: string;
   replyTo?: any;
+  forwardOf?: any;
   patientId?: string;
   appointmentId?: string;
 }
@@ -19,19 +20,27 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   token,
   tenantSlug,
   replyTo,
+  forwardOf,
   patientId,
   appointmentId,
 }) => {
   const { showSuccess, showError } = useNotification();
+  const quoteMessage = (msg: any) =>
+    `\n\n--- Original Message ---\nFrom: ${msg.sender_name || ''}\n${msg.message_text || ''}`;
+
   const [formData, setFormData] = useState({
-    recipient_id: '',
+    recipient_id: replyTo ? (replyTo.sender_id || '') : '',
     recipient_role: '',
     recipient_team: '',
-    subject: replyTo ? `Re: ${replyTo.subject}` : '',
-    message_text: '',
+    subject: replyTo
+      ? `Re: ${replyTo.subject}`
+      : forwardOf
+        ? `Fwd: ${forwardOf.subject}`
+        : '',
+    message_text: forwardOf ? quoteMessage(forwardOf) : '',
     message_type: 'message',
     priority: 'normal',
-    patient_id: patientId || '',
+    patient_id: patientId || replyTo?.patient_id || forwardOf?.patient_id || '',
     appointment_id: appointmentId || '',
     requires_response: false,
   });
@@ -40,10 +49,28 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   const [users, setUsers] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [resolvedPatientName, setResolvedPatientName] = useState('');
+  const [resolvedDoctorName, setResolvedDoctorName] = useState('');
 
   useEffect(() => {
     loadUsers();
     loadTemplates();
+    if (patientId) {
+      ehrApi.getPatientById(patientId, token, tenantSlug)
+        .then((res) => {
+          const p = res.data;
+          const name = [p.first_name, p.last_name].filter(Boolean).join(' ');
+          if (name) setResolvedPatientName(name);
+        })
+        .catch(() => {});
+    }
+    ehrApi.getProfile(token, tenantSlug)
+      .then((res) => {
+        const u = res.data;
+        const name = [u.first_name, u.last_name].filter(Boolean).join(' ');
+        if (name) setResolvedDoctorName(name.startsWith('Dr') ? name : `Dr. ${name}`);
+      })
+      .catch(() => {});
   }, []);
 
   const loadUsers = async () => {
@@ -67,8 +94,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   const handleApplyTemplate = async (templateId: string) => {
     try {
       const variables = {
-        patient_name: 'Patient Name', // TODO: Get from context
-        doctor_name: 'Dr. Name', // TODO: Get from context
+        patient_name: resolvedPatientName || 'Patient',
+        doctor_name: resolvedDoctorName || 'Doctor',
       };
       const response = await ehrApi.applyMessageTemplate(templateId, variables, token, tenantSlug);
       setFormData({

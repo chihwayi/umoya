@@ -102,15 +102,21 @@ const ReferralList: React.FC<ReferralListProps> = ({ patientId, tenantSlug, toke
     return new Date(dateString).toLocaleDateString();
   };
 
-  const handleNewReferral = () => {
-    if (patientId) {
-      // Load patient details
-      setSelectedPatient({ id: patientId, name: 'Patient' }); // TODO: Load actual patient name
-      setSelectedReferral(null);
-      setShowForm(true);
-    } else {
+  const handleNewReferral = async () => {
+    if (!patientId) {
       showError('Error', 'Please select a patient first');
+      return;
     }
+    try {
+      const res = await ehrApi.getPatientById(patientId, token, tenantSlug);
+      const p = res.data;
+      const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Patient';
+      setSelectedPatient({ id: patientId, name });
+    } catch {
+      setSelectedPatient({ id: patientId, name: 'Patient' });
+    }
+    setSelectedReferral(null);
+    setShowForm(true);
   };
 
   const handleEdit = (referral: any) => {

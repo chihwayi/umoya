@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, Search, Inbox as InboxIcon, Send, Archive, Trash2, Reply, Forward, MessageSquare, AlertCircle, Clock, User, Users, Filter, X, Paperclip, CheckCircle } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { MessageComposer } from './MessageComposer';
 
 interface InboxProps {
   onClose: () => void;
@@ -24,6 +25,7 @@ export const Inbox: React.FC<InboxProps> = ({ onClose, onCompose, token, tenantS
   });
   const [unreadCount, setUnreadCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+  const [composerMode, setComposerMode] = useState<{ mode: 'reply' | 'forward'; message: any } | null>(null);
 
   useEffect(() => {
     loadMessages();
@@ -87,15 +89,13 @@ export const Inbox: React.FC<InboxProps> = ({ onClose, onCompose, token, tenantS
 
   const handleReply = () => {
     if (selectedMessage) {
-      // TODO: Open compose modal with reply context
-      showSuccess('Reply', 'Reply functionality coming soon');
+      setComposerMode({ mode: 'reply', message: selectedMessage });
     }
   };
 
   const handleForward = () => {
     if (selectedMessage) {
-      // TODO: Open compose modal with forward context
-      showSuccess('Forward', 'Forward functionality coming soon');
+      setComposerMode({ mode: 'forward', message: selectedMessage });
     }
   };
 
@@ -514,6 +514,17 @@ export const Inbox: React.FC<InboxProps> = ({ onClose, onCompose, token, tenantS
           </div>
         </div>
       </div>
+
+      {composerMode && (
+        <MessageComposer
+          token={token}
+          tenantSlug={tenantSlug}
+          replyTo={composerMode.mode === 'reply' ? composerMode.message : undefined}
+          forwardOf={composerMode.mode === 'forward' ? composerMode.message : undefined}
+          onClose={() => setComposerMode(null)}
+          onSent={() => { setComposerMode(null); loadMessages(); loadUnreadCount(); }}
+        />
+      )}
     </div>
   );
 };

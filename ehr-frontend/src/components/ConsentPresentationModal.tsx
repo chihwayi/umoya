@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, User, Calendar, CheckCircle, XCircle, X, Shield } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import SignaturePad from './SignaturePad';
 import ICD10Picker from './ICD10Picker';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
-import { ehrAxios } from '../services/api';
+import { ehrAxios, ehrApi } from '../services/api';
 
 interface ConsentPresentationModalProps {
   template: any;
@@ -27,6 +27,7 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
 }) => {
   const { showError, showSuccess } = useNotification();
   const [step, setStep] = useState<'review' | 'sign'>('review');
+  const [patientName, setPatientName] = useState('Patient');
   const [patientSignature, setPatientSignature] = useState('');
   const [witnessName, setWitnessName] = useState('');
   const [witnessSignature, setWitnessSignature] = useState('');
@@ -38,6 +39,17 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
   const [procedureCPT, setProcedureCPT] = useState('');
   const [diagnosisICD10, setDiagnosisICD10] = useState('');
   const [diagnosisSNOMED, setDiagnosisSNOMED] = useState('');
+
+  useEffect(() => {
+    if (!patientId) return;
+    ehrApi.getPatientById(patientId, token, tenantSlug)
+      .then((res) => {
+        const p = res.data;
+        const name = [p.first_name, p.last_name].filter(Boolean).join(' ');
+        if (name) setPatientName(name);
+      })
+      .catch(() => {});
+  }, [patientId]);
 
   const handlePresentConsent = async () => {
     try {
@@ -87,7 +99,7 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
       // Step 1: Submit patient signature
       const patientSignaturePayload = {
         signerRole: 'patient',
-        signerName: 'Patient', // TODO: Get actual patient name from patient data
+        signerName: patientName,
         signatureType: 'electronic',
         signatureData: patientSignature,
         signatureMethod: 'touch_screen',
@@ -277,7 +289,7 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
                   onSave={(signature) => setPatientSignature(signature)}
                   onClear={() => setPatientSignature('')}
                   onCancel={() => {}}
-                  signerName="Patient"
+                  signerName={patientName}
                   signerRole="Patient"
                 />
               </div>
