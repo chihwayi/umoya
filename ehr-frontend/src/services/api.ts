@@ -8786,6 +8786,12 @@ export const pharmacyApi = {
     });
     return { data: response.data };
   },
+  deleteInventory: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/pharmacy/inventory/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
   getLowStockItems: async (token: string, tenantSlug: string) => {
     const response = await ehrAxios.get('/pharmacy/inventory/low-stock/items', {
       headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },

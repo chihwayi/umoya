@@ -368,6 +368,18 @@ export class PharmacyService {
     return result[0];
   }
 
+  async deleteInventory(tenantDb: DataSource, id: string) {
+    this.ensureTenantDb(tenantDb);
+    const result = await tenantDb.query(
+      'DELETE FROM pharmacy_inventory WHERE id = $1 RETURNING id',
+      [id],
+    );
+    if (!result.length) {
+      throw new NotFoundException(`Inventory item ${id} not found`);
+    }
+    return { id: result[0].id };
+  }
+
   async getLowStockItems(tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
     return await tenantDb.query(

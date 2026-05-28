@@ -160,7 +160,8 @@ export class ClaimsController {
     @Query('method') method: 'api' | 'edi' | 'manual',
     @Request() req: RequestWithTenant,
   ) {
-    return this.claimsService.submitClaimEnhanced(id, method || 'api', req.tenantDb);
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id ?? (req.user as any)?.sub;
+    return this.claimsService.submitClaimEnhanced(id, method || 'api', req.tenantDb, userId);
   }
 
   @Get(':id/status-enhanced')

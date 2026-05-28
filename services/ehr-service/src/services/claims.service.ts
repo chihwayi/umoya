@@ -1631,7 +1631,7 @@ export class ClaimsService {
   /**
    * Enhanced submit claim with API integration
    */
-  async submitClaimEnhanced(id: string, submissionMethod: 'api' | 'edi' | 'manual' = 'api', tenantDb: DataSource) {
+  async submitClaimEnhanced(id: string, submissionMethod: 'api' | 'edi' | 'manual' = 'api', tenantDb: DataSource, userId?: string) {
     const claimRepository = tenantDb.getRepository(MedicalAidClaim);
     const claim = await claimRepository.findOne({ where: { id } });
     
@@ -1708,7 +1708,7 @@ export class ClaimsService {
           'success',
           1,
           new Date(),
-          null, // TODO: Get from context
+          userId ?? null,
           Date.now() - startTime,
         ]
       );

@@ -104,6 +104,12 @@ export class PharmacyController {
     return this.pharmacyService.updateInventory(req.tenantDb, id, dto);
   }
 
+  @Delete('inventory/:id')
+  @ApiOperation({ summary: 'Delete inventory item' })
+  async deleteInventory(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.pharmacyService.deleteInventory(req.tenantDb, id);
+  }
+
   @Get('inventory/low-stock/items')
   @ApiOperation({ summary: 'Get low stock items' })
   async getLowStockItems(@Request() req: RequestWithTenant) {

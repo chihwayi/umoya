@@ -234,8 +234,9 @@ const PharmacyInventory: React.FC = () => {
     });
     if (!shouldProceed) return;
     try {
-      // Note: Delete endpoint may not exist yet, handle gracefully
-      showError('Delete not implemented', 'Please contact support');
+      await pharmacyApi.deleteInventory(id, token!, tenantSlug!);
+      showSuccess('Deleted', 'Inventory item has been deleted');
+      loadInventory();
     } catch (error: any) {
       showError('Failed to delete', error.response?.data?.message || 'Please try again');
     }

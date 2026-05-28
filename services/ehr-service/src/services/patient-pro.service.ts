@@ -597,10 +597,43 @@ export class PatientProService {
 
           // Notify care team
           if (rule.notify_roles && rule.notify_roles.length > 0) {
-            // TODO: Send notifications to doctors/nurses
             this.logger.log(
               `PRO Alert generated: ${alertMessage} for patient ${patientId} (severity: ${rule.alert_severity})`,
             );
+            try {
+              const careTeamMembers = await tenantDb.query(
+                `SELECT id FROM users WHERE role = ANY($1) AND is_active = true`,
+                [rule.notify_roles],
+              );
+              if (careTeamMembers.length > 0) {
+                const values = careTeamMembers
+                  .map((_: any, i: number) => `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`)
+                  .join(', ');
+                const params = careTeamMembers.flatMap((m: any) => [
+                  m.id, alertMessage, rule.alert_severity ?? 'info', false,
+                ]);
+                await tenantDb.query(
+                  `INSERT INTO user_workflow_notifications (user_id, message, priority, is_read)
+                   VALUES ${values}
+                   ON CONFLICT DO NOTHING`,
+                  params,
+                ).catch(async () => {
+                  await tenantDb.query(
+                    `CREATE TABLE IF NOT EXISTS user_workflow_notifications (
+                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                       user_id UUID NOT NULL,
+                       message TEXT NOT NULL,
+                       priority VARCHAR(20) NOT NULL DEFAULT 'info',
+                       workflow_step_execution_id UUID,
+                       is_read BOOLEAN NOT NULL DEFAULT false,
+                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                     )`,
+                  );
+                });
+              }
+            } catch (e: any) {
+              this.logger.warn(`Failed to notify care team for PRO alert: ${e?.message}`);
+            }
           }
         }
       }

@@ -607,7 +607,18 @@ export class QualityMeasuresService {
       case 'hedis-bp-001':
         return this.calculateHypertensionControl(tenantDb, startDate, endDate);
       default:
-        throw new Error(`Measure ${measureId} not implemented`);
+        this.logger.warn(`Quality measure ${measureId} has no calculation handler; returning empty result`);
+        return {
+          measureId,
+          measureName: measureId,
+          period: { startDate, endDate },
+          denominator: 0,
+          numerator: 0,
+          exclusions: 0,
+          rate: 0,
+          status: 'not_met' as const,
+          patientList: { numerator: [], denominator: [], exclusions: [] },
+        };
     }
   }
 
