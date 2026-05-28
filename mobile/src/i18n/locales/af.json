@@ -199,6 +199,14 @@
     "rescore": "Herbeoordeel Pasiënt",
     "no_high_risk": "Geen hoërisiko pasiënte vandag nie"
   },
+  "appointments": {
+    "next_brief": "KI Pre-Konsultasie Opsomming",
+    "brief_unavailable": "Opsomming nie beskikbaar nie",
+    "noshow_risk_high": "Nie-Verskyning Risiko: HOOG",
+    "noshow_risk_medium": "Nie-Verskyning Risiko: MEDIUM",
+    "preparing_brief": "KI-opsomming word voorberei...",
+    "regenerate_brief": "Hergenereer Opsomming"
+  },
   "labs": {
     "what_does_this_mean": "Wat beteken dit?",
     "interpretation_pending": "Interpretasie hangende — raadpleeg u klinikus.",

@@ -199,6 +199,14 @@
     "rescore": "Ré-évaluer le Patient",
     "no_high_risk": "Aucun patient à haut risque aujourd'hui"
   },
+  "appointments": {
+    "next_brief": "Résumé IA Pré-Consultation",
+    "brief_unavailable": "Résumé indisponible",
+    "noshow_risk_high": "Risque d'Absence: ÉLEVÉ",
+    "noshow_risk_medium": "Risque d'Absence: MOYEN",
+    "preparing_brief": "Préparation du résumé IA...",
+    "regenerate_brief": "Régénérer le Résumé"
+  },
   "labs": {
     "what_does_this_mean": "Que signifie cela?",
     "interpretation_pending": "Interprétation en attente — consultez votre clinicien.",

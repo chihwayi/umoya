@@ -439,6 +439,8 @@ import { PatientRiskScoringService } from './services/patient-risk-scoring.servi
 import { CronRiskSweepService } from './services/cron-risk-sweep.service';
 import { LabAiNarrativeService } from './services/lab-ai-narrative.service';
 import { LabNarrativeController } from './controllers/lab-narrative.controller';
+import { AppointmentAiService } from './services/appointment-ai.service';
+import { AppointmentAiController } from './controllers/appointment-ai.controller';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -741,6 +743,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EducationPersonalizationController,
     ProactiveRiskController,
     LabNarrativeController,
+    AppointmentAiController,
   ],
   providers: [
     AuthService,
@@ -914,6 +917,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TelemedicinePostcallService,
     AbstentionLogService,
     LabAiNarrativeService,
+    AppointmentAiService,
     EducationPersonalizationService,
     PatientRiskScoringService,
     CronRiskSweepService,

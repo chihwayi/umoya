@@ -199,6 +199,14 @@
     "rescore": "Re-avaliar Paciente",
     "no_high_risk": "Nenhum paciente de alto risco hoje"
   },
+  "appointments": {
+    "next_brief": "Resumo AI Pré-Consulta",
+    "brief_unavailable": "Resumo indisponível",
+    "noshow_risk_high": "Risco de Não Comparência: ALTO",
+    "noshow_risk_medium": "Risco de Não Comparência: MÉDIO",
+    "preparing_brief": "A preparar resumo AI...",
+    "regenerate_brief": "Regenerar Resumo"
+  },
   "labs": {
     "what_does_this_mean": "O que isso significa?",
     "interpretation_pending": "Interpretação pendente — consulte o seu clínico.",

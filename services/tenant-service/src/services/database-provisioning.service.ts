@@ -2978,6 +2978,42 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        id: 'appointment_ai',
+        label: 'Sprint 175 — Intelligent Appointment AI',
+        version: '2026.05.28.1',
+        description: 'No-show scoring and pre-appointment AI brief tables',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS appointment_noshow_scores (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            appointment_id UUID NOT NULL,
+            patient_id UUID NOT NULL,
+            score INTEGER NOT NULL CHECK (score >= 0 AND score <= 100),
+            risk_level VARCHAR(16) NOT NULL
+              CHECK (risk_level IN ('low','medium','high')),
+            factors JSONB NOT NULL DEFAULT '{}',
+            scored_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(appointment_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ans_appointment ON appointment_noshow_scores(appointment_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_ans_patient ON appointment_noshow_scores(patient_id)`,
+          `CREATE TABLE IF NOT EXISTS appointment_ai_briefs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            appointment_id UUID NOT NULL,
+            patient_id UUID NOT NULL,
+            doctor_id UUID NOT NULL,
+            brief_text TEXT NOT NULL,
+            active_diagnoses JSONB NOT NULL DEFAULT '[]',
+            recent_labs JSONB NOT NULL DEFAULT '[]',
+            active_medications JSONB NOT NULL DEFAULT '[]',
+            open_tasks JSONB NOT NULL DEFAULT '[]',
+            generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(appointment_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_aab_appointment ON appointment_ai_briefs(appointment_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_aab_doctor ON appointment_ai_briefs(doctor_id, generated_at DESC)`,
+        ],
+      },
+      {
         id: 'lab_ai_narratives',
         label: 'Sprint 174 — AI Lab Interpretation Narratives',
         version: '2026.05.28.1',

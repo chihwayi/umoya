@@ -199,6 +199,14 @@
     "rescore": "Pima Tena Mgonjwa",
     "no_high_risk": "Hakuna wagonjwa wa hatari kubwa leo"
   },
+  "appointments": {
+    "next_brief": "Muhtasari wa AI Kabla ya Miadi",
+    "brief_unavailable": "Muhtasari haupatikani",
+    "noshow_risk_high": "Hatari ya Kutokuja: JUU",
+    "noshow_risk_medium": "Hatari ya Kutokuja: KATI",
+    "preparing_brief": "Inatayarisha muhtasari wa AI...",
+    "regenerate_brief": "Tengeneza Muhtasari Upya"
+  },
   "labs": {
     "what_does_this_mean": "Hii inamaanisha nini?",
     "interpretation_pending": "Tafsiri inasubiri — wasiliana na daktari wako.",

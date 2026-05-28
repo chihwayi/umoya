@@ -199,6 +199,14 @@
     "rescore": "Verengazve Murwere",
     "no_high_risk": "Hapana varwere vane njodzi yakakura nhasi"
   },
+  "appointments": {
+    "next_brief": "Pfupiso yeAI Isingapfuuri Musangano",
+    "brief_unavailable": "Pfupiso haikwanisi",
+    "noshow_risk_high": "Njodzi yokurega kuuya: YAKAKURA",
+    "noshow_risk_medium": "Njodzi yokurega kuuya: PAKATI",
+    "preparing_brief": "Kugadzirira pfupiso yeAI...",
+    "regenerate_brief": "Gadzira Pfupiso Zvakare"
+  },
   "labs": {
     "what_does_this_mean": "Izvi zvinoreva chii?",
     "interpretation_pending": "Tsananguro ichiri kumirirwa — taura negurukota rako.",

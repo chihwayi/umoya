@@ -199,6 +199,14 @@
     "rescore": "Bala Kabusha Isiguli",
     "no_high_risk": "Azikho iziguli ezinobungozi obuphezulu namuhla"
   },
+  "appointments": {
+    "next_brief": "Isifinyezo se-AI Sangaphambi Kohlelo",
+    "brief_unavailable": "Isifinyezo asitholakali",
+    "noshow_risk_high": "Ingozi Yokungafikanga: EPHEZULU",
+    "noshow_risk_medium": "Ingozi Yokungafikanga: EPHAKATHI",
+    "preparing_brief": "Ilungiselela isifinyezo se-AI...",
+    "regenerate_brief": "Baza Kabusha Isifinyezo"
+  },
   "labs": {
     "what_does_this_mean": "Lokhu kusho ukuthini?",
     "interpretation_pending": "Incazelo ilindile — xoxisana nodokotela wakho.",

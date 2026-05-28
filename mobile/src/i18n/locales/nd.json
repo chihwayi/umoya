@@ -199,6 +199,14 @@
     "rescore": "Bheka Futhi Isiguli",
     "no_high_risk": "Azikho iziguli ezinengozi ephezulu namuhla"
   },
+  "appointments": {
+    "next_brief": "Isifinyezo se-AI Sangaphambi Kohlelo",
+    "brief_unavailable": "Isifinyezo asitholakali",
+    "noshow_risk_high": "Ingozi yokungafikanga: EPHEZULU",
+    "noshow_risk_medium": "Ingozi yokungafikanga: EPHAKATHI",
+    "preparing_brief": "Ilungiselela isifinyezo se-AI...",
+    "regenerate_brief": "Akhela Isifinyezo Futhi"
+  },
   "labs": {
     "what_does_this_mean": "Lokhu kutsho ukuthini?",
     "interpretation_pending": "Incazelo ilindile — xoxisana nodokotela wakho.",

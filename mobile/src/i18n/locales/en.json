@@ -199,6 +199,14 @@
     "rescore": "Re-Score Patient",
     "no_high_risk": "No high-risk patients today"
   },
+  "appointments": {
+    "next_brief": "AI Pre-Appointment Brief",
+    "brief_unavailable": "Brief unavailable",
+    "noshow_risk_high": "No-Show Risk: HIGH",
+    "noshow_risk_medium": "No-Show Risk: MEDIUM",
+    "preparing_brief": "Preparing AI brief...",
+    "regenerate_brief": "Regenerate Brief"
+  },
   "labs": {
     "what_does_this_mean": "What does this mean?",
     "interpretation_pending": "Interpretation pending — please consult your clinician.",
