@@ -176,7 +176,7 @@ services:
       context: ./services/cdss-service
       dockerfile: Dockerfile
     container_name: umoya-cdss-worker
-    command: ["sh", "-c", "pip install --quiet 'asyncpg>=0.29.0' && python worker_main.py"]
+    command: ["python", "worker_main.py"]
     healthcheck:
       disable: true
     environment:
