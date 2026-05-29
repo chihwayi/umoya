@@ -425,6 +425,7 @@ export class EarlyWarningService {
     explanation: any,
     db: DataSource,
   ): Promise<void> {
+    if (!this.alertDeliveryService) return;
     const severity = this.deriveEscalationSeverity(score.riskLevel || 'medium');
 
     await this.alertDeliveryService.broadcastCriticalAlert(subdomain, {
