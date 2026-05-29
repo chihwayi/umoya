@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Plus, Trash2, Package, Clock, TestTube2, CreditCard, Brain, AlertTriangle } from 'lucide-react';
-import { ehrApi, cdssApi } from '../services/api';
+import { ehrApi, cdssApi, storeroomApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
@@ -58,13 +58,29 @@ export default function EnhancedLabOrderModal({
   const [activeTab, setActiveTab] = useState<'search' | 'order-sets'>('order-sets');
   const [cdssInsights, setCdssInsights] = useState<Array<{ testName: string; insights: any }>>([]);
   const [reorderFlags, setReorderFlags] = useState<any[]>([]);
+  const [kitStock, setKitStock] = useState<Record<string, number>>({});
   const { showSuccess, showError } = useNotification();
 
   const totalEstimatedCost = selectedTests.reduce((sum, test) => sum + (test.cost || 0), 0);
 
   useEffect(() => {
     loadOrderSets();
+    loadKitStock();
   }, []);
+
+  async function loadKitStock() {
+    try {
+      const locations = await storeroomApi.listLocations(token!, tenantSlug!);
+      const lab = locations.find((l: any) => l.code === 'LAB');
+      if (!lab) return;
+      const stock = await storeroomApi.getStockByLocation(lab.id, { category: 'test_kit' }, token!, tenantSlug!);
+      const map: Record<string, number> = {};
+      for (const s of stock) {
+        if (s.catalog_id) map[s.catalog_id] = (map[s.catalog_id] ?? 0) + (s.quantity_on_hand ?? 0);
+      }
+      setKitStock(map);
+    } catch { /* non-blocking */ }
+  }
 
   // Lab reorder suppression check — fires whenever selected tests change
   useEffect(() => {
@@ -446,11 +462,22 @@ export default function EnhancedLabOrderModal({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 flex-wrap">
                             <span className="font-semibold text-gray-900">{test.test_name}</span>
                             <span className={`px-2 py-1 rounded-full text-xs ${getCategoryColor(test.category)}`}>
                               {test.category}
                             </span>
+                            {(test as any).kit_catalog_id && kitStock[(test as any).kit_catalog_id] !== undefined && (
+                              <span style={{
+                                padding: '2px 7px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                                background: kitStock[(test as any).kit_catalog_id] === 0 ? '#fee2e2'
+                                          : kitStock[(test as any).kit_catalog_id] <= 3 ? '#fef3c7' : '#f0fdf4',
+                                color: kitStock[(test as any).kit_catalog_id] === 0 ? '#dc2626'
+                                     : kitStock[(test as any).kit_catalog_id] <= 3 ? '#d97706' : '#16a34a',
+                              }}>
+                                {kitStock[(test as any).kit_catalog_id] === 0 ? 'No kits' : `${kitStock[(test as any).kit_catalog_id]} kits`}
+                              </span>
+                            )}
                           </div>
                           <div className="text-sm text-gray-600 mt-1">
                             <span className="font-medium">{test.test_code}</span> • {test.specimen_type}

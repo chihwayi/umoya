@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { pharmacyApi, ehrApi } from '../services/api';
+import { pharmacyApi, ehrApi, storeroomApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import {
   Package,
@@ -63,6 +63,7 @@ const PharmacyInventory: React.FC = () => {
   
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [storeroomStock, setStoreroomStock] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterSupplier, setFilterSupplier] = useState<string>('');
@@ -99,7 +100,24 @@ const PharmacyInventory: React.FC = () => {
   useEffect(() => {
     loadInventory();
     loadSuppliers();
+    loadStoreroomStock();
   }, []);
+
+  async function loadStoreroomStock() {
+    try {
+      const locations = await storeroomApi.listLocations(token!, tenantSlug!);
+      const pharmacy = locations.find((l: any) => l.code === 'PHARMACY');
+      if (!pharmacy) return;
+      const stock = await storeroomApi.getStockByLocation(pharmacy.id, {}, token!, tenantSlug!);
+      const map: Record<string, number> = {};
+      for (const s of stock) {
+        if (s.drug_id) map[s.drug_id] = (map[s.drug_id] ?? 0) + (s.quantity_on_hand ?? 0);
+      }
+      setStoreroomStock(map);
+    } catch {
+      // non-blocking
+    }
+  }
 
   useEffect(() => {
     if (drugSearchTerm.length >= 2) {
@@ -394,13 +412,14 @@ const PharmacyInventory: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost/Price</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Storeroom</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredInventory.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-500">No inventory items found</p>
                     <button
@@ -483,6 +502,15 @@ const PharmacyInventory: React.FC = () => {
                         }`}>
                           {item.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        {item.drug_id && storeroomStock[item.drug_id] !== undefined ? (
+                          <span className={`font-semibold ${storeroomStock[item.drug_id] > 0 ? 'text-gray-800' : 'text-gray-400'}`}>
+                            {storeroomStock[item.drug_id]}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">

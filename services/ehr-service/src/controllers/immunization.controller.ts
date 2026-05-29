@@ -138,5 +138,15 @@ export class ImmunizationController {
     const vxu = await this.immunizationService.buildVxuMessage(id, tenantDb);
     return { immunizationId: id, messageType: 'VXU^V04', hl7: vxu };
   }
+
+  @Get('vaccines/stock')
+  @ApiOperation({ summary: 'Get current vaccine stock levels at the vaccine cold store' })
+  async getVaccineStock(
+    @Req() req: RequestWithTenant,
+    @Query('locationId') locationId?: string,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.immunizationService.getVaccineStockAtLocation(tenantDb, locationId);
+  }
 }
 

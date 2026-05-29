@@ -1,15 +1,34 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Immunization } from '../entities/immunization.entity';
 import { VaccineInventory } from '../entities/vaccine-inventory.entity';
 import { ImmunizationSchedule } from '../entities/immunization-schedule.entity';
 import { CdssService } from './cdss.service';
+import { StoreroomService } from './storeroom.service';
 
 @Injectable()
 export class ImmunizationService {
   private readonly logger = new Logger(ImmunizationService.name);
 
-  constructor(private readonly cdssService: CdssService) {}
+  constructor(
+    private readonly cdssService: CdssService,
+    @Optional() private readonly storeroomService: StoreroomService,
+  ) {}
+
+  private async getVaccineLocationId(tenantDb: any): Promise<string | null> {
+    if (!this.storeroomService) return null;
+    const [row] = await tenantDb.query(
+      `SELECT id FROM inventory_locations WHERE code = 'VACCINE_STORE' AND is_active = true LIMIT 1`,
+    );
+    return row?.id ?? null;
+  }
+
+  async getVaccineStockAtLocation(tenantDb: any, locationId?: string): Promise<any[]> {
+    if (!this.storeroomService) return [];
+    const locId = locationId ?? await this.getVaccineLocationId(tenantDb);
+    if (!locId) return [];
+    return this.storeroomService.getStockByLocation(tenantDb, locId, { category: 'vaccine' });
+  }
 
   private async generateImmunizationNumber(tenantDb: DataSource): Promise<string> {
     const [result] = await tenantDb.query(
@@ -44,6 +63,28 @@ export class ImmunizationService {
     // Generate immunization number
     const immunizationNumber = await this.generateImmunizationNumber(tenantDb);
 
+    // ── Storeroom availability check ────────────────────────────────────────
+    if (this.storeroomService) {
+      const vaccineLocationId = await this.getVaccineLocationId(tenantDb);
+      if (vaccineLocationId) {
+        const catalogItem = await this.storeroomService.getCatalogByName(
+          tenantDb, immunizationData.vaccineName, 'vaccine',
+        );
+        if (catalogItem) {
+          const avail = await this.storeroomService.checkAvailability(
+            tenantDb, vaccineLocationId, catalogItem.id, 1,
+          );
+          if (!avail.available) {
+            throw new BadRequestException(
+              `"${immunizationData.vaccineName}" is out of stock. ` +
+              `Submit a storeroom request to replenish vaccine supply.`,
+            );
+          }
+        }
+      }
+    }
+    // ── end storeroom check ─────────────────────────────────────────────────
+
     // Check vaccine inventory if lot number provided
     if (immunizationData.lotNumber) {
       await this.updateInventory(immunizationData.vaccineCode, immunizationData.lotNumber, tenantDb);
@@ -60,6 +101,25 @@ export class ImmunizationService {
     const saved = await repository.save(immunization);
 
     this.logger.log(`Immunization recorded: ${saved.id} for patient ${immunizationData.patientId}`);
+
+    // ── Storeroom deduction ─────────────────────────────────────────────────
+    if (this.storeroomService) {
+      const vaccineLocationId = await this.getVaccineLocationId(tenantDb);
+      if (vaccineLocationId) {
+        const catalogItem = await this.storeroomService.getCatalogByName(
+          tenantDb, immunizationData.vaccineName, 'vaccine',
+        );
+        if (catalogItem) {
+          this.storeroomService.deductStock(
+            tenantDb, vaccineLocationId, catalogItem.id, 1,
+            'vaccine', saved.id, immunizationData.patientId, userId,
+          ).catch((e: any) =>
+            this.logger.warn(`Storeroom deduction failed for vaccine ${immunizationData.vaccineName}: ${e.message}`),
+          );
+        }
+      }
+    }
+    // ── end storeroom deduction ─────────────────────────────────────────────
 
     // Schedule registry submission (async)
     this.scheduleRegistrySubmission(saved.id, tenantDb).catch(err =>

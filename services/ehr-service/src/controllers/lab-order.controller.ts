@@ -190,6 +190,12 @@ export class LabOrderController {
     return this.labOrderService.upsertReagentInventoryItem(req.tenantDb, body, userId);
   }
 
+  @Get('kits/stock')
+  @ApiOperation({ summary: 'Get test kit stock levels at the LAB location' })
+  async getKitStock(@Request() req: RequestWithTenant) {
+    return this.labOrderService.getKitStockAtLab(req.tenantDb);
+  }
+
   @Patch('inventory/reagents/:id/quantity')
   @ApiOperation({ summary: 'Update reagent quantity' })
   async updateReagentQuantity(

@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
+import { StoreroomIntelligenceService } from './storeroom-intelligence.service';
 import { ClinicalNlpService, ClinicalEntities } from './clinical-nlp.service';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
@@ -237,6 +238,8 @@ export class CdssService {
     @Optional() @Inject(PatientConsentService)
     private readonly patientConsentService?: PatientConsentService,
     @Optional() private readonly clinicalNlp?: ClinicalNlpService,
+    @Optional() private readonly storeroomService?: any,
+    @Optional() private readonly intelligenceService?: StoreroomIntelligenceService,
   ) {
     this.cdssServiceUrl = String(process.env.CDSS_SERVICE_URL || envConfig.urls.cdssService || '').trim();
     this.cdssServiceToken = process.env.CDSS_SERVICE_TOKEN;
@@ -1236,6 +1239,38 @@ export class CdssService {
         governance: responseData?.governance || {},
       });
 
+      // ── Stock context enrichment ──────────────────────────────────────────
+      let wardStockContext: string | undefined;
+      if (this.storeroomService && patientData?.wardLocationId && tenantDb) {
+        try {
+          const wardStock: any[] = await this.storeroomService.getStockByLocation(tenantDb, patientData.wardLocationId);
+          const inStock = wardStock.filter((s: any) => s.quantity_on_hand > 0).map((s: any) => s.item_name).join(', ');
+          const oos = wardStock.filter((s: any) => s.quantity_on_hand === 0).map((s: any) => s.item_name).join(', ');
+          if (inStock || oos) {
+            wardStockContext = [
+              inStock ? `Available at ward: ${inStock}` : '',
+              oos ? `Out of stock at ward: ${oos}` : '',
+            ].filter(Boolean).join('. ');
+          }
+        } catch { /* non-blocking */ }
+      }
+
+      // ── Drug substitution suggestions when prescribed drug is OOS ─────────
+      let substitutionSuggestions: any[] | undefined;
+      if (this.storeroomService && this.intelligenceService && patientData?.prescribedCatalogId && patientData?.wardLocationId && tenantDb) {
+        try {
+          const avail = await this.storeroomService.checkAvailability(
+            tenantDb, patientData.wardLocationId, patientData.prescribedCatalogId, patientData.quantity ?? 1,
+          );
+          if (!avail.available) {
+            substitutionSuggestions = await this.intelligenceService.suggestSubstitutions(
+              tenantDb, patientData.prescribedCatalogId, patientData.quantity ?? 1, patientData.wardLocationId,
+            );
+          }
+        } catch { /* non-blocking */ }
+      }
+      // ── end stock context ─────────────────────────────────────────────────
+
       return {
         guidelines: responseData.guidelines || [],
         recommendations: responseData.recommendations || [],
@@ -1247,6 +1282,8 @@ export class CdssService {
         knowledge_metadata: responseData.knowledge_metadata || null,
         abstained: responseData.abstained === true,
         abstain_reason: responseData.abstain_reason || null,
+        ...(wardStockContext ? { ward_stock_context: wardStockContext } : {}),
+        ...(substitutionSuggestions ? { substitution_suggestions: substitutionSuggestions } : {}),
       };
     } catch (error: any) {
       this.logger.warn(`CDSS guidelines unavailable: ${error.message}`);

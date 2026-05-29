@@ -290,7 +290,7 @@ export class DatabaseProvisioningService {
       await tenantDb.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
       await tenantDb.query(`
         ALTER TABLE users ADD CONSTRAINT users_role_check 
-        CHECK (role IN ('doctor', 'nurse', 'nurse_accounts', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts'));
+        CHECK (role IN ('doctor', 'nurse', 'nurse_accounts', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts', 'store_manager'));
       `);
     } catch (e) {
       this.logger.warn(`Skipping constraint update due to error: ${e instanceof Error ? e.message : String(e)}`);
@@ -3434,6 +3434,723 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_tpc_session ON telemedicine_postcall_events(session_id)`,
           `CREATE INDEX IF NOT EXISTS idx_tpc_patient ON telemedicine_postcall_events(patient_id, created_at DESC)`,
           `CREATE INDEX IF NOT EXISTS idx_tpc_status ON telemedicine_postcall_events(status) WHERE status = 'failed'`,
+        ],
+      },
+      {
+        id: 'storeroom_core',
+        label: 'Sprint 190 — Central Storeroom Core Tables',
+        version: '2026.05.28.0',
+        description: 'Locations, catalog, live stock, request/transfer workflow, consumption audit',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS inventory_locations (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name            VARCHAR(100) NOT NULL,
+            code            VARCHAR(20)  NOT NULL,
+            location_type   VARCHAR(30)  NOT NULL
+                CHECK (location_type IN
+                  ('central_storeroom','ward','pharmacy','lab','clinic','cold_storage')),
+            parent_id       UUID REFERENCES inventory_locations(id),
+            manager_id      UUID,
+            is_dispensing_point BOOLEAN NOT NULL DEFAULT false,
+            is_active       BOOLEAN NOT NULL DEFAULT true,
+            notes           TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(code)
+          )`,
+          `INSERT INTO inventory_locations (name, code, location_type, is_dispensing_point)
+           VALUES ('Central Storeroom', 'CENTRAL', 'central_storeroom', false)
+           ON CONFLICT (code) DO NOTHING`,
+
+          `CREATE TABLE IF NOT EXISTS storeroom_catalog (
+            id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name                VARCHAR(200) NOT NULL,
+            code                VARCHAR(50)  UNIQUE,
+            category            VARCHAR(30)  NOT NULL
+                CHECK (category IN
+                  ('medicine','vaccine','consumable','test_kit','blood_product','equipment','other')),
+            subcategory         VARCHAR(50),
+            unit_of_measure     VARCHAR(20)  NOT NULL,
+            drug_id             UUID REFERENCES drugs(id),
+            atc_code            VARCHAR(20),
+            inn_name            VARCHAR(200),
+            drug_strength       VARCHAR(50),
+            drug_form           VARCHAR(30)
+                CHECK (drug_form IS NULL OR drug_form IN
+                  ('tablet','capsule','syrup','injection','cream','drops','patch','powder','suppository','inhaler','gel','other')),
+            who_eml             BOOLEAN NOT NULL DEFAULT false,
+            regulatory_code     VARCHAR(80),
+            loinc_code          VARCHAR(20),
+            requires_cold_chain BOOLEAN NOT NULL DEFAULT false,
+            storage_conditions  VARCHAR(100),
+            reorder_lead_days   INTEGER NOT NULL DEFAULT 7,
+            default_reorder_qty INTEGER NOT NULL DEFAULT 0,
+            is_controlled       BOOLEAN NOT NULL DEFAULT false,
+            is_active           BOOLEAN NOT NULL DEFAULT true,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_category  ON storeroom_catalog(category)`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_drug_id   ON storeroom_catalog(drug_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_active    ON storeroom_catalog(is_active)`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_atc       ON storeroom_catalog(atc_code) WHERE atc_code IS NOT NULL`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_who_eml   ON storeroom_catalog(who_eml) WHERE who_eml = true`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_name_trgm ON storeroom_catalog USING gin(name gin_trgm_ops)`,
+
+          `CREATE TABLE IF NOT EXISTS location_stock (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            location_id       UUID NOT NULL REFERENCES inventory_locations(id),
+            catalog_id        UUID NOT NULL REFERENCES storeroom_catalog(id),
+            batch_number      VARCHAR(50),
+            expiry_date       DATE,
+            quantity_on_hand  INTEGER NOT NULL DEFAULT 0 CHECK (quantity_on_hand >= 0),
+            quantity_reserved INTEGER NOT NULL DEFAULT 0 CHECK (quantity_reserved >= 0),
+            min_level         INTEGER NOT NULL DEFAULT 0,
+            max_level         INTEGER,
+            unit_cost         NUMERIC(12,4),
+            last_restocked_at TIMESTAMPTZ,
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(location_id, catalog_id, COALESCE(batch_number, ''))
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_location_stock_location ON location_stock(location_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_location_stock_catalog  ON location_stock(catalog_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_location_stock_expiry   ON location_stock(expiry_date) WHERE expiry_date IS NOT NULL`,
+
+          `CREATE TABLE IF NOT EXISTS stock_requests (
+            id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            request_number         VARCHAR(30) UNIQUE NOT NULL,
+            requesting_location_id UUID NOT NULL REFERENCES inventory_locations(id),
+            fulfilling_location_id UUID NOT NULL REFERENCES inventory_locations(id),
+            requested_by           UUID NOT NULL,
+            status                 VARCHAR(25) NOT NULL DEFAULT 'pending'
+                CHECK (status IN
+                  ('pending','approved','partially_fulfilled','fulfilled','rejected','cancelled')),
+            priority               VARCHAR(10) NOT NULL DEFAULT 'routine'
+                CHECK (priority IN ('urgent','routine')),
+            notes                  TEXT,
+            approved_by            UUID,
+            approved_at            TIMESTAMPTZ,
+            fulfilled_at           TIMESTAMPTZ,
+            rejection_reason       TEXT,
+            created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_requests_status   ON stock_requests(status)`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_requests_location ON stock_requests(requesting_location_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_requests_created  ON stock_requests(created_at DESC)`,
+
+          `CREATE TABLE IF NOT EXISTS stock_request_items (
+            id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            request_id          UUID NOT NULL REFERENCES stock_requests(id) ON DELETE CASCADE,
+            catalog_id          UUID NOT NULL REFERENCES storeroom_catalog(id),
+            quantity_requested  INTEGER NOT NULL CHECK (quantity_requested > 0),
+            quantity_approved   INTEGER,
+            quantity_fulfilled  INTEGER NOT NULL DEFAULT 0,
+            notes               TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_req_items_request ON stock_request_items(request_id)`,
+
+          `CREATE TABLE IF NOT EXISTS stock_transfers (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            transfer_number   VARCHAR(30) UNIQUE NOT NULL,
+            request_id        UUID REFERENCES stock_requests(id),
+            from_location_id  UUID NOT NULL REFERENCES inventory_locations(id),
+            to_location_id    UUID NOT NULL REFERENCES inventory_locations(id),
+            transferred_by    UUID NOT NULL,
+            received_by       UUID,
+            status            VARCHAR(25) NOT NULL DEFAULT 'dispatched'
+                CHECK (status IN ('dispatched','received','partially_received','rejected')),
+            dispatched_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            received_at       TIMESTAMPTZ,
+            notes             TEXT,
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_transfers_status ON stock_transfers(status)`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_transfers_from   ON stock_transfers(from_location_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_transfers_to     ON stock_transfers(to_location_id)`,
+
+          `CREATE TABLE IF NOT EXISTS stock_transfer_items (
+            id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            transfer_id           UUID NOT NULL REFERENCES stock_transfers(id) ON DELETE CASCADE,
+            catalog_id            UUID NOT NULL REFERENCES storeroom_catalog(id),
+            batch_number          VARCHAR(50),
+            expiry_date           DATE,
+            quantity_transferred  INTEGER NOT NULL CHECK (quantity_transferred > 0),
+            quantity_received     INTEGER,
+            condition             VARCHAR(20) NOT NULL DEFAULT 'good'
+                CHECK (condition IN ('good','damaged','expired','short'))
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_xfr_items_transfer ON stock_transfer_items(transfer_id)`,
+
+          `CREATE TABLE IF NOT EXISTS stock_consumption_log (
+            id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            location_id         UUID NOT NULL REFERENCES inventory_locations(id),
+            catalog_id          UUID NOT NULL REFERENCES storeroom_catalog(id),
+            batch_number        VARCHAR(50),
+            quantity_used       INTEGER NOT NULL CHECK (quantity_used > 0),
+            source_module       VARCHAR(30) NOT NULL
+                CHECK (source_module IN
+                  ('prescription','vaccine','lab','nursing','manual','transfer','adjustment')),
+            source_reference_id UUID,
+            patient_id          UUID,
+            performed_by        UUID NOT NULL,
+            performed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            notes               TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_consumption_location ON stock_consumption_log(location_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_consumption_catalog  ON stock_consumption_log(catalog_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_consumption_module   ON stock_consumption_log(source_module)`,
+          `CREATE INDEX IF NOT EXISTS idx_consumption_date     ON stock_consumption_log(performed_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_consumption_patient  ON stock_consumption_log(patient_id) WHERE patient_id IS NOT NULL`,
+
+          `CREATE TABLE IF NOT EXISTS storeroom_supplier_receipts (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            receipt_number  VARCHAR(30) UNIQUE NOT NULL,
+            location_id     UUID NOT NULL REFERENCES inventory_locations(id),
+            supplier_id     UUID REFERENCES pharmacy_suppliers(id),
+            po_reference    VARCHAR(50),
+            received_by     UUID NOT NULL,
+            received_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            notes           TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE TABLE IF NOT EXISTS storeroom_supplier_receipt_items (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            receipt_id        UUID NOT NULL REFERENCES storeroom_supplier_receipts(id) ON DELETE CASCADE,
+            catalog_id        UUID NOT NULL REFERENCES storeroom_catalog(id),
+            batch_number      VARCHAR(50),
+            expiry_date       DATE,
+            quantity_received INTEGER NOT NULL CHECK (quantity_received > 0),
+            unit_cost         NUMERIC(12,4),
+            condition         VARCHAR(20) NOT NULL DEFAULT 'good'
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS storeroom_alerts (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            alert_type  VARCHAR(30) NOT NULL
+                CHECK (alert_type IN
+                  ('low_stock','stockout','expiry_soon','overstock','transfer_pending','receipt_pending')),
+            severity    VARCHAR(10) NOT NULL CHECK (severity IN ('critical','high','medium','low')),
+            location_id UUID REFERENCES inventory_locations(id),
+            catalog_id  UUID REFERENCES storeroom_catalog(id),
+            message     TEXT NOT NULL,
+            resolved    BOOLEAN NOT NULL DEFAULT false,
+            resolved_by UUID,
+            resolved_at TIMESTAMPTZ,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(alert_type, location_id, catalog_id, resolved)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_alerts_open
+             ON storeroom_alerts(created_at DESC) WHERE resolved = false`,
+        ],
+      },
+      {
+        id: 'storeroom_seed_catalog',
+        label: 'Sprint 190 — Storeroom Starter Catalog (WHO EML)',
+        version: '2026.05.28.0b',
+        description: 'Seeds ~60 common medicines, vaccines, consumables, test kits with ATC/LOINC codes',
+        statements: () => {
+          const med = (
+            name: string, atc: string, strength: string, form: string,
+            unit: string, controlled = false,
+          ) => `INSERT INTO storeroom_catalog
+              (name, atc_code, drug_strength, drug_form, unit_of_measure,
+               category, who_eml, is_controlled, reorder_lead_days, default_reorder_qty)
+            SELECT '${name}','${atc}','${strength}','${form}','${unit}','medicine',true,${controlled},7,100
+            WHERE NOT EXISTS (SELECT 1 FROM storeroom_catalog WHERE name='${name}' AND category='medicine')`;
+
+          const vax = (name: string, unit = 'doses') =>
+            `INSERT INTO storeroom_catalog (name,category,unit_of_measure,requires_cold_chain,who_eml,reorder_lead_days,default_reorder_qty)
+             SELECT '${name}','vaccine','${unit}',true,true,14,50
+             WHERE NOT EXISTS (SELECT 1 FROM storeroom_catalog WHERE name='${name}' AND category='vaccine')`;
+
+          const cons = (name: string, unit: string, qty = 500) =>
+            `INSERT INTO storeroom_catalog (name,category,unit_of_measure,reorder_lead_days,default_reorder_qty)
+             SELECT '${name}','consumable','${unit}',7,${qty}
+             WHERE NOT EXISTS (SELECT 1 FROM storeroom_catalog WHERE name='${name}' AND category='consumable')`;
+
+          const kit = (name: string, loinc: string, unit = 'kits') =>
+            `INSERT INTO storeroom_catalog (name,category,loinc_code,unit_of_measure,reorder_lead_days,default_reorder_qty)
+             SELECT '${name}','test_kit','${loinc}','${unit}',7,50
+             WHERE NOT EXISTS (SELECT 1 FROM storeroom_catalog WHERE name='${name}' AND category='test_kit')`;
+
+          return [
+            med('Amoxicillin 500mg Capsules',         'J01CA04','500mg',       'capsule',   'capsules'),
+            med('Amoxicillin 250mg/5ml Suspension',   'J01CA04','250mg/5ml',   'syrup',     'bottles'),
+            med('Amoxicillin-Clavulanate 625mg',      'J01CR02','625mg',       'tablet',    'tablets'),
+            med('Ciprofloxacin 500mg Tablets',        'J01MA02','500mg',       'tablet',    'tablets'),
+            med('Metronidazole 400mg Tablets',        'P01AB01','400mg',       'tablet',    'tablets'),
+            med('Metronidazole 500mg/100ml Infusion', 'P01AB01','500mg/100ml', 'injection', 'bags'),
+            med('Doxycycline 100mg Capsules',         'J01AA02','100mg',       'capsule',   'capsules'),
+            med('Cotrimoxazole 480mg Tablets',        'J01EE01','480mg',       'tablet',    'tablets'),
+            med('Erythromycin 250mg Tablets',         'J01FA01','250mg',       'tablet',    'tablets'),
+            med('Benzylpenicillin 1MU Injection',     'J01CE01','1 megaunit',  'injection', 'vials'),
+            med('Paracetamol 500mg Tablets',          'N02BE01','500mg',       'tablet',    'tablets'),
+            med('Paracetamol 120mg/5ml Syrup',        'N02BE01','120mg/5ml',   'syrup',     'bottles'),
+            med('Ibuprofen 400mg Tablets',            'M01AE01','400mg',       'tablet',    'tablets'),
+            med('Diclofenac 50mg Tablets',            'M01AB05','50mg',        'tablet',    'tablets'),
+            med('Diclofenac 75mg/3ml Injection',      'M01AB05','75mg/3ml',    'injection', 'ampoules'),
+            med('Tramadol 50mg Capsules',             'N02AX02','50mg',        'capsule',   'capsules', true),
+            med('Morphine 10mg/ml Injection',         'N02AA01','10mg/ml',     'injection', 'ampoules', true),
+            med('Artemether-Lumefantrine 20/120mg',   'P01BF01','20/120mg',    'tablet',    'tablets'),
+            med('Quinine 300mg Tablets',              'P01BC01','300mg',       'tablet',    'tablets'),
+            med('Artesunate 60mg Injection',          'P01BE03','60mg',        'injection', 'vials'),
+            med('Amlodipine 5mg Tablets',             'C08CA01','5mg',         'tablet',    'tablets'),
+            med('Enalapril 5mg Tablets',              'C09AA02','5mg',         'tablet',    'tablets'),
+            med('Hydrochlorothiazide 25mg Tablets',   'C03AA03','25mg',        'tablet',    'tablets'),
+            med('Atenolol 50mg Tablets',              'C07AB03','50mg',        'tablet',    'tablets'),
+            med('Furosemide 40mg Tablets',            'C03CA01','40mg',        'tablet',    'tablets'),
+            med('Furosemide 20mg/2ml Injection',      'C03CA01','20mg/2ml',    'injection', 'ampoules'),
+            med('Metformin 500mg Tablets',            'A10BA02','500mg',       'tablet',    'tablets'),
+            med('Glibenclamide 5mg Tablets',          'A10BB01','5mg',         'tablet',    'tablets'),
+            med('Insulin Regular 100IU/ml',           'A10AB01','100IU/ml',    'injection', 'vials'),
+            med('Insulin NPH 100IU/ml',               'A10AC01','100IU/ml',    'injection', 'vials'),
+            med('Salbutamol 100mcg Inhaler',          'R03AC02','100mcg/dose', 'inhaler',   'inhalers'),
+            med('Prednisolone 5mg Tablets',           'H02AB06','5mg',         'tablet',    'tablets'),
+            med('Hydrocortisone 100mg Injection',     'H02AB09','100mg',       'injection', 'vials'),
+            med('Omeprazole 20mg Capsules',           'A02BC01','20mg',        'capsule',   'capsules'),
+            med('ORS Sachet (WHO formula)',           'A07CA',  '',            'powder',    'sachets'),
+            med('Folic Acid 5mg Tablets',             'B03BB01','5mg',         'tablet',    'tablets'),
+            med('Ferrous Sulphate 200mg Tablets',     'B03AA07','200mg',       'tablet',    'tablets'),
+            med('Zinc Sulphate 20mg Tablets',         'A12CB01','20mg',        'tablet',    'tablets'),
+            med('Vitamin A 200000IU Capsules',        'A11CA01','200000IU',    'capsule',   'capsules'),
+            med('TDF/3TC/EFV 300/300/600mg (TLE)',    'J05AR10','300/300/600mg','tablet',   'tablets'),
+            med('Nevirapine 200mg Tablets',           'J05AG01','200mg',       'tablet',    'tablets'),
+            med('Cotrimoxazole 960mg (OI prophylaxis)','J01EE01','960mg',      'tablet',    'tablets'),
+            vax('BCG Vaccine'),
+            vax('Oral Polio Vaccine (OPV)'),
+            vax('DTP-HepB-Hib Pentavalent Vaccine'),
+            vax('Measles-Rubella Vaccine'),
+            vax('Rotavirus Vaccine'),
+            vax('Pneumococcal Conjugate Vaccine (PCV13)'),
+            vax('Tetanus-Diphtheria (Td) Vaccine'),
+            vax('Hepatitis B Vaccine (adult)'),
+            vax('HPV Vaccine (Cervarix/Gardasil)'),
+            vax('Influenza Vaccine (seasonal)'),
+            vax('Yellow Fever Vaccine'),
+            vax('Meningococcal ACYW135 Vaccine'),
+            vax('COVID-19 Vaccine'),
+            vax('Rabies Vaccine (post-exposure)'),
+            cons('Examination Gloves S (box/100)',   'boxes',  50),
+            cons('Examination Gloves M (box/100)',   'boxes',  50),
+            cons('Examination Gloves L (box/100)',   'boxes',  50),
+            cons('Surgical Gloves 7.0 (pair)',       'pairs',  100),
+            cons('Surgical Gloves 7.5 (pair)',       'pairs',  100),
+            cons('Syringe 2ml with needle',          'units',  500),
+            cons('Syringe 5ml with needle',          'units',  500),
+            cons('Syringe 10ml with needle',         'units',  200),
+            cons('IV Cannula 18G',                   'units',  200),
+            cons('IV Cannula 20G',                   'units',  200),
+            cons('IV Cannula 22G',                   'units',  200),
+            cons('IV Giving Set (drip set)',         'units',  200),
+            cons('Normal Saline 0.9% 500ml bag',     'bags',   100),
+            cons("Ringer's Lactate 500ml bag",       'bags',   100),
+            cons('Dextrose 5% 500ml bag',            'bags',   100),
+            cons('Gauze Swabs 10x10cm (pkt/5)',      'packets',200),
+            cons('Crepe Bandage 10cm',               'rolls',  100),
+            cons('Adhesive Plasters (box)',           'boxes',   50),
+            cons('Sterile Suture 2/0 Vicryl',        'units',   50),
+            cons('Sterile Suture 3/0 Prolene',       'units',   50),
+            cons('Foley Catheter 16Fr',              'units',   50),
+            cons('Urinary Drainage Bag 2L',          'units',   50),
+            cons('Nasogastric Tube 14Fr',            'units',   20),
+            cons('Oxygen Simple Face Mask',          'units',   50),
+            cons('Surgical Mask (box/50)',           'boxes',   50),
+            cons('N95 Respirator',                   'units',  100),
+            cons('Alcohol Hand Rub 500ml',           'bottles', 100),
+            kit('HIV Rapid Test (Ab 1+2)',           '5221-7'),
+            kit('Malaria RDT (Pf/Pan)',              '32700-7'),
+            kit('Pregnancy Test (urine hCG)',        '2106-3'),
+            kit('Blood Glucose Test Strips',         '2345-7'),
+            kit('Urine Dipstick (10-param)',         '5792-7'),
+            kit('HBsAg Rapid Test (Hepatitis B)',    '5196-1'),
+            kit('Syphilis Rapid Test (RPR/TPHA)',    '31147-2'),
+            kit('COVID-19 Antigen Rapid Test',       '96094-8'),
+            kit('Haemoglobin Test Strip (HemoCue)', '718-7'),
+            kit('CRP Rapid Test',                   '1988-5'),
+            kit('Dengue NS1 Antigen RDT',           '29897-2'),
+            kit('Typhoid IgM/IgG Rapid Test',       '16943-6'),
+          ];
+        },
+      },
+      {
+        id: 'storeroom_pharmacy_link',
+        label: 'Sprint 191 — Storeroom ↔ Pharmacy Link',
+        version: '2026.05.29.1',
+        description: 'Links pharmacy_inventory to inventory_locations; seeds catalog and location_stock from existing drug stock',
+        statements: () => [
+          `ALTER TABLE pharmacy_inventory
+             ADD COLUMN IF NOT EXISTS storeroom_location_id UUID
+               REFERENCES inventory_locations(id)`,
+
+          `INSERT INTO storeroom_catalog
+             (name, category, unit_of_measure, drug_id, is_active)
+           SELECT DISTINCT
+             d.generic_name,
+             'medicine',
+             'units',
+             pi.drug_id,
+             true
+           FROM pharmacy_inventory pi
+           JOIN drugs d ON d.id = pi.drug_id
+           WHERE pi.drug_id IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM storeroom_catalog sc WHERE sc.drug_id = pi.drug_id
+             )
+           ON CONFLICT DO NOTHING`,
+
+          `INSERT INTO inventory_locations
+             (name, code, location_type, is_dispensing_point)
+           VALUES ('Main Pharmacy', 'PHARMACY', 'pharmacy', true)
+           ON CONFLICT (code) DO NOTHING`,
+
+          `UPDATE pharmacy_inventory
+              SET storeroom_location_id = (
+                SELECT id FROM inventory_locations WHERE code = 'PHARMACY' LIMIT 1
+              )
+            WHERE storeroom_location_id IS NULL`,
+
+          `INSERT INTO location_stock
+             (location_id, catalog_id, batch_number, expiry_date,
+              quantity_on_hand, quantity_reserved, unit_cost, last_restocked_at)
+           SELECT
+             pi.storeroom_location_id,
+             sc.id,
+             pi.batch_number,
+             pi.expiry_date,
+             COALESCE(pi.quantity_on_hand, 0),
+             COALESCE(pi.quantity_reserved, 0),
+             pi.cost_per_unit,
+             NOW()
+           FROM pharmacy_inventory pi
+           JOIN storeroom_catalog sc ON sc.drug_id = pi.drug_id
+           WHERE pi.storeroom_location_id IS NOT NULL
+             AND pi.drug_id IS NOT NULL
+           ON CONFLICT (location_id, catalog_id, COALESCE(batch_number, ''))
+           DO NOTHING`,
+        ],
+      },
+      {
+        id: 'storeroom_vaccine_link',
+        label: 'Sprint 192 — Storeroom ↔ Vaccine Link',
+        version: '2026.05.29.2',
+        description: 'Links vaccine_inventory to inventory_locations; seeds vaccine catalog entries and location_stock',
+        statements: () => [
+          `ALTER TABLE vaccine_inventory
+             ADD COLUMN IF NOT EXISTS storeroom_location_id UUID
+               REFERENCES inventory_locations(id)`,
+
+          `INSERT INTO inventory_locations
+             (name, code, location_type, is_dispensing_point)
+           VALUES ('Vaccine Cold Storage', 'VACCINE_STORE', 'cold_storage', false)
+           ON CONFLICT (code) DO NOTHING`,
+
+          `INSERT INTO storeroom_catalog
+             (name, category, unit_of_measure, requires_cold_chain, is_active)
+           SELECT DISTINCT
+             vaccine_name,
+             'vaccine',
+             'vials',
+             true,
+             true
+           FROM vaccine_inventory
+           WHERE NOT EXISTS (
+             SELECT 1 FROM storeroom_catalog sc
+             WHERE sc.name = vaccine_inventory.vaccine_name
+               AND sc.category = 'vaccine'
+           )
+           ON CONFLICT DO NOTHING`,
+
+          `UPDATE vaccine_inventory
+              SET storeroom_location_id = (
+                SELECT id FROM inventory_locations WHERE code = 'VACCINE_STORE' LIMIT 1
+              )
+            WHERE storeroom_location_id IS NULL`,
+
+          `INSERT INTO location_stock
+             (location_id, catalog_id, batch_number, expiry_date, quantity_on_hand)
+           SELECT
+             vi.storeroom_location_id,
+             sc.id,
+             vi.batch_number,
+             vi.expiry_date,
+             COALESCE(vi.quantity_on_hand, 0)
+           FROM vaccine_inventory vi
+           JOIN storeroom_catalog sc
+             ON sc.name = vi.vaccine_name AND sc.category = 'vaccine'
+           WHERE vi.storeroom_location_id IS NOT NULL
+           ON CONFLICT (location_id, catalog_id, COALESCE(batch_number, ''))
+           DO NOTHING`,
+        ],
+      },
+      {
+        id: 'storeroom_lab_link',
+        label: 'Sprint 193 — Storeroom ↔ Lab Link',
+        version: '2026.05.29.3',
+        description: 'Links lab_orders to storeroom catalog for test kit consumption tracking',
+        statements: () => [
+          `INSERT INTO inventory_locations
+             (name, code, location_type, is_dispensing_point)
+           VALUES ('Laboratory', 'LAB', 'lab', false)
+           ON CONFLICT (code) DO NOTHING`,
+
+          `ALTER TABLE lab_orders
+             ADD COLUMN IF NOT EXISTS kit_catalog_id UUID
+               REFERENCES storeroom_catalog(id)`,
+
+          `ALTER TABLE lab_orders
+             ADD COLUMN IF NOT EXISTS kit_deducted BOOLEAN NOT NULL DEFAULT false`,
+
+          `CREATE INDEX IF NOT EXISTS idx_lab_orders_kit
+             ON lab_orders(kit_catalog_id) WHERE kit_catalog_id IS NOT NULL`,
+
+          `ALTER TABLE lab_test_catalog
+             ADD COLUMN IF NOT EXISTS kit_catalog_id UUID
+               REFERENCES storeroom_catalog(id)`,
+        ],
+      },
+
+      {
+        id: 'storeroom_nursing_link',
+        label: 'Sprint 194 — Storeroom ↔ Nursing Wards',
+        version: '2026.05.29.4',
+        description: 'Seeds inventory_locations for each distinct ward name from beds; adds ward_location_id to admissions; creates medication_administrations table',
+        statements: () => [
+          `INSERT INTO inventory_locations (name, code, location_type, is_dispensing_point)
+           SELECT DISTINCT
+             ward_name,
+             UPPER(REPLACE(REPLACE(ward_name, ' ', '_'), '-', '_')),
+             'ward',
+             false
+           FROM beds
+           WHERE ward_name IS NOT NULL AND ward_name <> ''
+           ON CONFLICT (code) DO NOTHING`,
+
+          `ALTER TABLE admissions
+             ADD COLUMN IF NOT EXISTS ward_location_id UUID
+               REFERENCES inventory_locations(id)`,
+
+          `UPDATE admissions a
+              SET ward_location_id = (
+                SELECT id FROM inventory_locations il
+                WHERE il.name = a.current_ward
+                  AND il.location_type = 'ward'
+                LIMIT 1
+              )
+            WHERE ward_location_id IS NULL
+              AND current_ward IS NOT NULL`,
+
+          `CREATE TABLE IF NOT EXISTS medication_administrations (
+             id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             admission_id     UUID REFERENCES admissions(id),
+             patient_id       UUID NOT NULL,
+             drug_id          UUID REFERENCES drugs(id),
+             drug_name        VARCHAR(200) NOT NULL,
+             dose             VARCHAR(50),
+             route            VARCHAR(30),
+             administered_by  UUID NOT NULL,
+             administered_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+             ward_location_id UUID REFERENCES inventory_locations(id),
+             notes            TEXT,
+             created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+           )`,
+          `CREATE INDEX IF NOT EXISTS idx_med_admin_patient
+             ON medication_administrations(patient_id, administered_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_med_admin_admission
+             ON medication_administrations(admission_id)`,
+        ],
+      },
+
+      {
+        id: 'storeroom_ai',
+        label: 'Sprint 195 — Storeroom AI & Demand Forecasting',
+        version: '2026.05.29.5',
+        description: 'Demand forecast cache table for storeroom intelligence service',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS storeroom_demand_forecasts (
+             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             location_id     UUID NOT NULL REFERENCES inventory_locations(id),
+             catalog_id      UUID NOT NULL REFERENCES storeroom_catalog(id),
+             forecast_date   DATE NOT NULL,
+             horizon_days    INTEGER NOT NULL,
+             predicted_qty   INTEGER NOT NULL,
+             confidence      NUMERIC(4,3),
+             reasoning       TEXT,
+             model_backend   VARCHAR(30),
+             generated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+             UNIQUE(location_id, catalog_id, forecast_date, horizon_days)
+           )`,
+          `CREATE INDEX IF NOT EXISTS idx_forecasts_location_catalog
+             ON storeroom_demand_forecasts(location_id, catalog_id, forecast_date DESC)`,
+        ],
+      },
+
+      {
+        id: 'storeroom_soft_lock',
+        label: 'Sprint 196 — Prescription Soft Lock & Auto-Release',
+        version: '2026.05.29.6',
+        description: 'stock_reservations table for prescription soft locks',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS stock_reservations (
+             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             location_id     UUID NOT NULL REFERENCES inventory_locations(id),
+             catalog_id      UUID NOT NULL REFERENCES storeroom_catalog(id),
+             batch_id        UUID REFERENCES location_stock(id),
+             prescription_id UUID,
+             patient_id      UUID,
+             reserved_by     UUID NOT NULL,
+             quantity        INTEGER NOT NULL CHECK (quantity > 0),
+             status          VARCHAR(20) NOT NULL DEFAULT 'active',
+             reserved_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+             expires_at      TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '48 hours',
+             released_at     TIMESTAMPTZ,
+             deducted_at     TIMESTAMPTZ
+           )`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_reservations_active
+             ON stock_reservations(location_id, catalog_id, status)
+             WHERE status = 'active'`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_reservations_prescription
+             ON stock_reservations(prescription_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_stock_reservations_expires
+             ON stock_reservations(expires_at) WHERE status = 'active'`,
+        ],
+      },
+
+      {
+        id: 'storeroom_expiry_coldchain',
+        label: 'Sprint 197 — Expiry Management, FEFO Visibility & Cold Chain',
+        version: '2026.05.29.7',
+        description: 'Cold-chain flag on catalog; expiry_alert_sent tracking on location_stock',
+        statements: () => [
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS requires_refrigeration BOOLEAN NOT NULL DEFAULT false`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS cold_chain_notes TEXT`,
+          `ALTER TABLE location_stock
+             ADD COLUMN IF NOT EXISTS expiry_alert_sent_at TIMESTAMPTZ`,
+          `CREATE INDEX IF NOT EXISTS idx_location_stock_expiry_active
+             ON location_stock(expiry_date ASC)
+             WHERE expiry_date IS NOT NULL AND quantity_on_hand > 0`,
+        ],
+      },
+
+      {
+        id: 'storeroom_module_integration',
+        label: 'Sprint 198 — Maternity, HIV & Oncology Storeroom Integration',
+        version: '2026.05.29.8',
+        description: 'location_subtype, emergency_kit_items, ARV/chemo flags on catalog',
+        statements: () => [
+          `ALTER TABLE inventory_locations
+             ADD COLUMN IF NOT EXISTS location_subtype VARCHAR(30) NOT NULL DEFAULT 'general'`,
+          `CREATE TABLE IF NOT EXISTS emergency_kit_items (
+             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             location_id     UUID NOT NULL REFERENCES inventory_locations(id),
+             catalog_id      UUID NOT NULL REFERENCES storeroom_catalog(id),
+             minimum_qty     INTEGER NOT NULL DEFAULT 1,
+             replenish_qty   INTEGER NOT NULL DEFAULT 5,
+             created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+             UNIQUE(location_id, catalog_id)
+           )`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS is_arv               BOOLEAN NOT NULL DEFAULT false`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS is_emergency_kit     BOOLEAN NOT NULL DEFAULT false`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS is_chemo_component   BOOLEAN NOT NULL DEFAULT false`,
+          `CREATE TABLE IF NOT EXISTS chemo_regimen_components (
+             id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             regimen_id            UUID NOT NULL,
+             catalog_id            UUID NOT NULL REFERENCES storeroom_catalog(id),
+             quantity_per_session  INTEGER NOT NULL DEFAULT 1,
+             unit                  VARCHAR(20),
+             UNIQUE(regimen_id, catalog_id)
+           )`,
+          `CREATE INDEX IF NOT EXISTS idx_emergency_kit_items_location
+             ON emergency_kit_items(location_id)`,
+        ],
+      },
+
+      {
+        id: 'storeroom_procurement',
+        label: 'Sprint 199 — Storeroom Procurement & Purchase Orders',
+        version: '2026.05.29.9',
+        description: 'storeroom_suppliers, storeroom_purchase_orders, storeroom_po_items tables',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS storeroom_suppliers (
+             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             name            VARCHAR(200) NOT NULL,
+             contact_person  VARCHAR(100),
+             email           VARCHAR(200),
+             phone           VARCHAR(50),
+             address         TEXT,
+             lead_time_days  INTEGER NOT NULL DEFAULT 7,
+             is_active       BOOLEAN NOT NULL DEFAULT true,
+             created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+           )`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS preferred_supplier_id UUID REFERENCES storeroom_suppliers(id)`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS reorder_level    INTEGER`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS reorder_quantity INTEGER`,
+          `CREATE TABLE IF NOT EXISTS storeroom_purchase_orders (
+             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             po_number       VARCHAR(50) UNIQUE NOT NULL DEFAULT 'PO-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || FLOOR(RANDOM()*10000)::TEXT,
+             supplier_id     UUID NOT NULL REFERENCES storeroom_suppliers(id),
+             status          VARCHAR(20) NOT NULL DEFAULT 'draft',
+             total_amount    NUMERIC(14,2),
+             ordered_at      TIMESTAMPTZ,
+             expected_at     TIMESTAMPTZ,
+             fulfilled_at    TIMESTAMPTZ,
+             created_by      UUID,
+             auto_generated  BOOLEAN NOT NULL DEFAULT false,
+             notes           TEXT,
+             created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+           )`,
+          `CREATE TABLE IF NOT EXISTS storeroom_po_items (
+             id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             po_id             UUID NOT NULL REFERENCES storeroom_purchase_orders(id) ON DELETE CASCADE,
+             catalog_id        UUID NOT NULL REFERENCES storeroom_catalog(id),
+             to_location_id    UUID NOT NULL REFERENCES inventory_locations(id),
+             quantity_ordered  INTEGER NOT NULL,
+             quantity_received INTEGER NOT NULL DEFAULT 0,
+             unit_cost         NUMERIC(10,2),
+             received_at       TIMESTAMPTZ,
+             UNIQUE(po_id, catalog_id)
+           )`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_po_supplier ON storeroom_purchase_orders(supplier_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_po_status   ON storeroom_purchase_orders(status)`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_po_items_po ON storeroom_po_items(po_id)`,
+        ],
+      },
+
+      {
+        id: 'storeroom_drug_substitution',
+        label: 'Sprint 200 — CDSS Drug Substitution Engine',
+        version: '2026.05.29.10',
+        description: 'drug_equivalents table, ATC code and controlled flag on catalog',
+        statements: () => [
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS atc_code   VARCHAR(20)`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS drug_class VARCHAR(100)`,
+          `ALTER TABLE storeroom_catalog
+             ADD COLUMN IF NOT EXISTS category   VARCHAR(30) NOT NULL DEFAULT 'general'`,
+          `CREATE TABLE IF NOT EXISTS drug_equivalents (
+             id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             catalog_id       UUID NOT NULL REFERENCES storeroom_catalog(id),
+             equivalent_id    UUID NOT NULL REFERENCES storeroom_catalog(id),
+             equivalence_type VARCHAR(30) NOT NULL DEFAULT 'therapeutic',
+             approved_by      UUID,
+             approved_at      TIMESTAMPTZ,
+             notes            TEXT,
+             UNIQUE(catalog_id, equivalent_id)
+           )`,
+          `CREATE INDEX IF NOT EXISTS idx_drug_equivalents_catalog
+             ON drug_equivalents(catalog_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_atc
+             ON storeroom_catalog(atc_code) WHERE atc_code IS NOT NULL`,
         ],
       },
     ];

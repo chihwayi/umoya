@@ -1,6 +1,6 @@
 # MediCore Architecture Reference
 
-Last updated: 2026-05-27
+Last updated: 2026-05-29
 
 This document contains the architecture rules, DB provisioning patterns, and agent constraints that apply to all work on this codebase. Read it before editing any file.
 
@@ -60,6 +60,13 @@ Add a provisioning bundle to `getProvisioningBundles()` in `services/tenant-serv
 | `nc_dental_anc_paediatric` | Dental chart + treatment plans, ANC registrations, EID schedules, growth measurements |
 | `nc_alumni_consent_webauthn` | WebAuthn credentials, teleconsult-EHR links |
 | `patient_health_education` | 10 education tables: courses, modules, lessons, translations, quizzes, questions, options, enrollments, lesson progress, quiz attempts |
+| `storeroom_core` | Central inventory: `inventory_locations`, `storeroom_catalog`, `location_stock`, `stock_movements`, `stock_transfers`, `transfer_items`, `stock_requests`, `request_items`, `consumption_records` |
+| `storeroom_ai` | AI layer: `demand_forecasts`, `storeroom_anomaly_events`, `reorder_suggestions` |
+| `storeroom_soft_lock` | `stock_reservations` — soft locks on prescription creation; auto-expire after 24 hours; partial indexes for active/prescription lookups |
+| `storeroom_expiry_coldchain` | `requires_refrigeration` + `cold_chain_notes` on `storeroom_catalog`; `expiry_alert_sent_at` on `location_stock` |
+| `storeroom_module_integration` | `location_subtype` on `inventory_locations`; `emergency_kit_items`; `is_arv`, `is_emergency_kit`, `is_chemo_component` flags on catalog; `chemo_regimen_components` |
+| `storeroom_procurement` | `storeroom_suppliers`, `storeroom_purchase_orders`, `storeroom_po_items`; `preferred_supplier_id`, `reorder_level`, `reorder_quantity` on catalog |
+| `storeroom_drug_substitution` | `atc_code`, `drug_class`, `category` on catalog; `drug_equivalents` mapping table |
 
 ### System-level column additions (via `ensureSubscriptionSchema()`)
 
@@ -91,6 +98,7 @@ Every controller must appear in `controllers: []`.
 | `PatientPortalHivController` | `/patient-portal` | MMD, support groups, comms prefs, ANC/EID, growth, dental, flags |
 | `HealthEducationController` | `/health-education` | Staff course authoring (requires `is_health_educator`) |
 | `PatientPortalHealthEducationController` | `/patient-portal/education` | Patient course enrollment and progress |
+| `StoreroomController` | `/storeroom` | Multi-location inventory, catalog, stock, transfers, requests, expiry/FEFO, emergency kits, ARV/chemo, procurement, AI intelligence (forecast, anomalies, reorder, expiry risk), drug substitution |
 
 ---
 

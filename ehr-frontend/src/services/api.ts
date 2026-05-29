@@ -13558,3 +13558,138 @@ export const healthEducationApi = {
     return { data: response.data };
   },
 };
+
+export const storeroomApi = {
+  getDashboard: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/storeroom/dashboard', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listLocations: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/storeroom/locations', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  createLocation: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/storeroom/locations', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateLocation: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/storeroom/locations/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listCatalog: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/storeroom/catalog', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return response.data;
+  },
+  createCatalogItem: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/storeroom/catalog', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateCatalogItem: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/storeroom/catalog/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getStockByLocation: async (locationId: string, params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/storeroom/stock', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: { locationId, ...params },
+    });
+    return response.data;
+  },
+  getStockByItem: async (catalogId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/storeroom/stock/item/${catalogId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getAlerts: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/storeroom/stock/alerts', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  adjustStock: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/storeroom/stock/adjust', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  receiveStock: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/storeroom/stock/receive', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listRequests: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/storeroom/requests', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return response.data;
+  },
+  createRequest: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/storeroom/requests', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  approveRequest: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/storeroom/requests/${id}/approve`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  rejectRequest: async (id: string, reason: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/storeroom/requests/${id}/reject`, { reason }, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listTransfers: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/storeroom/transfers', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return response.data;
+  },
+  createTransfer: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/storeroom/transfers', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  receiveTransfer: async (id: string, items: any[], token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/storeroom/transfers/${id}/receive`, { items }, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  getConsumption: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/storeroom/consumption', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return response.data;
+  },
+  getWardStock: async (ward: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/bcma/ward-stock', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: { ward },
+    });
+    return response.data;
+  },
+};

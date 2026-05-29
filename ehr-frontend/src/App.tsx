@@ -83,6 +83,7 @@ const InteropDashboard = lazy(() => import('./components/InteropDashboard'));
 const CrvsDashboard = lazy(() => import('./pages/CrvsDashboard'));
 const NtdDashboard = lazy(() => import('./pages/NtdDashboard'));
 const SurveillanceDashboard = lazy(() => import('./pages/SurveillanceDashboard'));
+const StoreroomPage = lazy(() => import('./pages/StoreroomPage'));
 
 const TenantScopedNhifDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -1150,6 +1151,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin']}>
                   <CourseProgressPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/storeroom"
+              element={
+                <RoleProtectedRoute allowedRoles={['store_manager', 'admin']}>
+                  <StoreroomPage />
                 </RoleProtectedRoute>
               }
             />

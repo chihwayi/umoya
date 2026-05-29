@@ -7,7 +7,8 @@ import {
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import ICD10Picker from './ICD10Picker';
-import { ehrAxios } from '../services/api';
+import { ehrAxios, storeroomApi } from '../services/api';
+import StockRequestModal from './StockRequestModal';
 
 interface AdmittedPatientWorkflowProps {
   admission: any;
@@ -75,6 +76,10 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
   });
   
   const [availableBeds, setAvailableBeds] = useState<any[]>([]);
+  const [wardStock, setWardStock] = useState<any[]>([]);
+  const [wardLocationId, setWardLocationId] = useState<string | null>(null);
+  const [wardStockPanelOpen, setWardStockPanelOpen] = useState(false);
+  const [showStoreroomRequest, setShowStoreroomRequest] = useState(false);
 
   useEffect(() => {
     if (admission) {
@@ -83,15 +88,27 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
       // Don't load progress notes, prescriptions, labs, imaging on mount
       // They'll show empty states with helpful messages
     }
-    
+
     // Lock body scroll when modal opens
     document.body.style.overflow = 'hidden';
-    
+
     return () => {
       // Restore body scroll when modal closes
       document.body.style.overflow = 'unset';
     };
   }, [admission]);
+
+  useEffect(() => {
+    if (!admission?.current_ward) return;
+    storeroomApi.listLocations(token, tenantSlug).then((locs: any[]) => {
+      const wardLoc = locs.find((l: any) => l.name === admission.current_ward && l.location_type === 'ward');
+      if (!wardLoc) return;
+      setWardLocationId(wardLoc.id);
+      storeroomApi.getStockByLocation(wardLoc.id, {}, token, tenantSlug)
+        .then((stock: any[]) => setWardStock(stock || []))
+        .catch(() => {});
+    }).catch(() => {});
+  }, [admission?.current_ward, token, tenantSlug]);
 
   const loadVitals = async () => {
     try {
@@ -494,16 +511,97 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
         )}
 
         {activeTab === 'medications' && (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Medications & Prescriptions</h3>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
-              <Pill className="w-16 h-16 text-green-400 mx-auto mb-4" />
-              <p className="text-green-900 font-medium mb-2">Prescription Management</p>
-              <p className="text-green-700 text-sm mb-4">
-                To prescribe medications for this admitted patient, use the main <strong>Doctor Dashboard</strong>.
-              </p>
-              <div className="text-xs text-green-600">
-                💡 Prescription history will appear here once orders are placed through the main workflow
+          <div className="space-y-4">
+            {/* Ward Stock Panel */}
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+              <button
+                onClick={() => setWardStockPanelOpen(p => !p)}
+                style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 14px', fontSize: 13, cursor: 'pointer', color: '#374151', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <span className="font-semibold">Ward Stock</span>
+                <span>{wardStockPanelOpen ? '▲' : '▼'}</span>
+                {wardStock.some((s: any) => s.quantity_on_hand === 0) && (
+                  <span style={{ background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                    STOCKOUT
+                  </span>
+                )}
+                {wardStock.length > 0 && !wardStock.some((s: any) => s.quantity_on_hand === 0) && (
+                  <span style={{ background: '#dcfce7', color: '#16a34a', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
+                    {wardStock.length} items
+                  </span>
+                )}
+              </button>
+
+              {wardStockPanelOpen && (
+                <div style={{ marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+                  {wardStock.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
+                      No stock found at ward <strong>{admission?.current_ward}</strong>. Request items from the storeroom below.
+                    </div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#f9fafb' }}>
+                          <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, borderBottom: '1px solid #e5e7eb' }}>Item</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid #e5e7eb' }}>On Hand</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, borderBottom: '1px solid #e5e7eb' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {wardStock.map((s: any, idx: number) => (
+                          <tr key={s.id ?? idx} style={{ borderBottom: '1px solid #f3f4f6', background: s.quantity_on_hand === 0 ? '#fff5f5' : 'white' }}>
+                            <td style={{ padding: '8px 12px', fontWeight: 600 }}>{s.item_name}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: s.quantity_on_hand === 0 ? '#dc2626' : '#111827' }}>
+                              {s.quantity_on_hand} {s.unit_of_measure}
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                              <span style={{
+                                padding: '2px 9px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                                background: s.stock_status === 'ok' ? '#dcfce7' : s.stock_status === 'stockout' ? '#fee2e2' : '#fef3c7',
+                                color: s.stock_status === 'ok' ? '#16a34a' : s.stock_status === 'stockout' ? '#dc2626' : '#d97706',
+                              }}>
+                                {(s.stock_status ?? 'unknown').toUpperCase()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  <div style={{ padding: '10px 14px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setShowStoreroomRequest(true)}
+                      style={{ padding: '6px 18px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}
+                    >
+                      + Request from Storeroom
+                    </button>
+                    <button
+                      onClick={() => {
+                        storeroomApi.getStockByLocation(wardLocationId!, {}, token, tenantSlug)
+                          .then((s: any[]) => setWardStock(s || []))
+                          .catch(() => {});
+                      }}
+                      style={{ padding: '6px 14px', background: 'white', color: '#374151', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Prescription placeholder */}
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">Medications & Prescriptions</h3>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
+                <Pill className="w-16 h-16 text-green-400 mx-auto mb-4" />
+                <p className="text-green-900 font-medium mb-2">Prescription Management</p>
+                <p className="text-green-700 text-sm mb-4">
+                  To prescribe medications for this admitted patient, use the main <strong>Doctor Dashboard</strong>.
+                </p>
+                <div className="text-xs text-green-600">
+                  Prescription history will appear here once orders are placed through the main workflow
+                </div>
               </div>
             </div>
           </div>
@@ -928,6 +1026,13 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {showStoreroomRequest && (
+        <StockRequestModal
+          requestingLocationId={wardLocationId ?? undefined}
+          onClose={() => setShowStoreroomRequest(false)}
+          onDone={() => setShowStoreroomRequest(false)}
+        />
       )}
     </div>
   );

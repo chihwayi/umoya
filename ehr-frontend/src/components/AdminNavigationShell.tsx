@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Bell, Heart, LogOut, Menu, Settings, User, Users, X, CheckCheck, ExternalLink, type LucideIcon } from 'lucide-react';
+import { Bell, Heart, LogOut, Menu, Package, Settings, User, Users, X, CheckCheck, ExternalLink, type LucideIcon } from 'lucide-react';
 import { tenantApi, cdssApi } from '../services/api';
 import LanguageSwitcher from './LanguageSwitcher';
 import { OnboardingChecklist } from './OnboardingChecklist';
@@ -248,6 +248,14 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
         icon: Users,
         exact: true,
         roles: ['admin'],
+      },
+      {
+        key: 'storeroom',
+        label: 'Storeroom',
+        path: `/ehr/${tenantSlug}/storeroom`,
+        icon: Package,
+        exact: true,
+        roles: ['store_manager', 'admin'],
       },
       {
         key: 'settings',

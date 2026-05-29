@@ -1,6 +1,7 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Inject, Optional, forwardRef } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { BillingService } from './billing.service';
+import { StoreroomService } from './storeroom.service';
 import {
   CreateSupplierDto,
   UpdateSupplierDto,
@@ -34,7 +35,16 @@ export class PharmacyService {
   constructor(
     @Inject(forwardRef(() => BillingService))
     private readonly billingService: BillingService,
+    @Optional() private readonly storeroomService: StoreroomService,
   ) {}
+
+  private async getPharmacyLocationId(tenantDb: any): Promise<string | null> {
+    if (!this.storeroomService) return null;
+    const [row] = await tenantDb.query(
+      `SELECT id FROM inventory_locations WHERE code = 'PHARMACY' AND is_active = true LIMIT 1`,
+    );
+    return row?.id ?? null;
+  }
 
   private ensureTenantDb(tenantDb: DataSource) {
     if (!tenantDb) {
@@ -657,6 +667,26 @@ export class PharmacyService {
               ) VALUES ($1, 'receipt', $2, 'receipt', $3, $4, NOW())`,
               [inventoryId, item.quantityReceived, receipt.id, item.notes ?? null],
             );
+
+            // ── Storeroom replenishment ────────────────────────────────────────
+            if (this.storeroomService && item.drugId) {
+              const pharmacyLocationId = await this.getPharmacyLocationId(tenantDb);
+              if (pharmacyLocationId) {
+                const catalogItem = await this.storeroomService.getCatalogByDrugId(tenantDb, item.drugId);
+                if (catalogItem) {
+                  try {
+                    await this.storeroomService.receiveStock(
+                      tenantDb, pharmacyLocationId, catalogItem.id,
+                      item.batchNumber ?? null, item.expiryDate ?? null,
+                      item.quantityReceived, item.unitCost ?? 0,
+                    );
+                  } catch (e: any) {
+                    this.logger.warn(`Storeroom receipt sync failed for drug ${item.drugId}: ${e.message}`);
+                  }
+                }
+              }
+            }
+            // ── end storeroom replenishment ────────────────────────────────────
           }
         }
       }
@@ -897,15 +927,33 @@ export class PharmacyService {
     }
 
     const matchingItems = await tenantDb.query(
-      `SELECT pi.*, 
+      `SELECT pi.*,
               (pi.quantity_on_hand >= $${searchParams.length + 1}) as has_sufficient_stock
        FROM pharmacy_inventory pi
-       WHERE (${searchTerms.join(' OR ')}) 
+       WHERE (${searchTerms.join(' OR ')})
          AND pi.status = 'active'
        ORDER BY pi.expiry_date ASC, pi.quantity_on_hand DESC
        LIMIT 10`,
       [...searchParams, prescription.quantity],
     );
+
+    // Enrich with storeroom reserved quantity for each matching drug
+    const reservedByDrug: Record<string, number> = {};
+    try {
+      const drugIds = matchingItems.map((i: any) => i.drug_id).filter(Boolean);
+      if (drugIds.length > 0) {
+        const placeholders = drugIds.map((_: any, idx: number) => `$${idx + 1}`).join(',');
+        const reserved = await tenantDb.query(
+          `SELECT sc.drug_id, COALESCE(SUM(sr.quantity), 0) AS reserved_qty
+             FROM stock_reservations sr
+             JOIN storeroom_catalog sc ON sc.id = sr.catalog_id
+            WHERE sc.drug_id IN (${placeholders}) AND sr.status = 'active'
+            GROUP BY sc.drug_id`,
+          drugIds,
+        );
+        for (const r of reserved) reservedByDrug[r.drug_id] = Number(r.reserved_qty);
+      }
+    } catch { /* non-blocking: storeroom table may not exist yet */ }
 
     const availableItems = matchingItems.filter((item: any) => item.has_sufficient_stock);
     const totalAvailable = availableItems.reduce((sum: number, item: any) => sum + item.quantity_on_hand, 0);
@@ -923,6 +971,7 @@ export class PharmacyService {
         expiryDate: item.expiry_date,
         batchNumber: item.batch_number,
         hasSufficientStock: item.has_sufficient_stock,
+        reserved_qty: reservedByDrug[(item as any).drug_id] ?? 0,
       })),
       message: availableItems.length > 0 
         ? `Stock available: ${totalAvailable} units`
@@ -980,6 +1029,35 @@ export class PharmacyService {
           'Pharmacy intelligence review must be acknowledged before dispensing this prescription',
         );
       }
+
+      // ── Storeroom availability check ────────────────────────────────────────
+      if (this.storeroomService) {
+        const pharmacyLocationId = await this.getPharmacyLocationId(tenantDb);
+        if (pharmacyLocationId) {
+          for (const item of dto.items) {
+            const [invRow] = await queryRunner.query(
+              `SELECT drug_id, name FROM pharmacy_inventory WHERE id = $1`,
+              [item.inventoryId],
+            );
+            if (invRow?.drug_id) {
+              const catalogItem = await this.storeroomService.getCatalogByDrugId(tenantDb, invRow.drug_id);
+              if (catalogItem) {
+                const avail = await this.storeroomService.checkAvailability(
+                  tenantDb, pharmacyLocationId, catalogItem.id, item.quantityDispensed,
+                );
+                if (!avail.available) {
+                  throw new BadRequestException(
+                    `"${invRow.name ?? catalogItem.name}" is out of stock at the pharmacy ` +
+                    `(${avail.quantity_available} available, ${item.quantityDispensed} requested). ` +
+                    `Submit a storeroom request to replenish.`,
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+      // ── end storeroom check ─────────────────────────────────────────────────
 
       // Generate dispensing number
       const [countResult] = await queryRunner.query('SELECT COUNT(*)::int as count FROM pharmacy_dispensings');
@@ -1087,9 +1165,36 @@ export class PharmacyService {
         );
       }
 
+      // ── Storeroom deduction ─────────────────────────────────────────────────
+      if (this.storeroomService) {
+        const pharmacyLocationId = await this.getPharmacyLocationId(tenantDb);
+        if (pharmacyLocationId) {
+          for (const item of dispensingItems) {
+            const [invRow] = await tenantDb.query(
+              `SELECT drug_id FROM pharmacy_inventory WHERE id = $1`,
+              [item.inventoryId],
+            );
+            if (invRow?.drug_id) {
+              const catalogItem = await this.storeroomService.getCatalogByDrugId(tenantDb, invRow.drug_id);
+              if (catalogItem) {
+                try {
+                  await this.storeroomService.deductStock(
+                    tenantDb, pharmacyLocationId, catalogItem.id, item.quantityDispensed,
+                    'prescription', dispensing.id, prescription.patient_id, userId,
+                  );
+                } catch (e: any) {
+                  this.logger.warn(`Storeroom deduction failed for inventory ${item.inventoryId}: ${e.message}`);
+                }
+              }
+            }
+          }
+        }
+      }
+      // ── end storeroom deduction ─────────────────────────────────────────────
+
       // Update prescription status
       await queryRunner.query(
-        `UPDATE prescriptions 
+        `UPDATE prescriptions
          SET status = 'completed'
          WHERE id = $1`,
         [prescriptionId],

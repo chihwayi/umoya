@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { pharmacyApi } from '../services/api';
+import { pharmacyApi, storeroomApi } from '../services/api';
 import { useParams } from 'react-router-dom';
 import { useNotification } from './GlobalNotification';
+import StockRequestModal from './StockRequestModal';
 
 interface PendingPrescription {
   id: string;
@@ -94,10 +95,42 @@ const PharmacyDispensing: React.FC = () => {
   const [planLoading, setPlanLoading] = useState(false);
   const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stockStatus, setStockStatus] = useState<Record<string, 'ok' | 'low' | 'stockout'>>({});
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestItems, setRequestItems] = useState<any[]>([]);
 
   useEffect(() => {
     loadPendingPrescriptions();
   }, []);
+
+  useEffect(() => {
+    if (!selectedPrescription) { setStockStatus({}); return; }
+    async function checkStoreroomStock() {
+      try {
+        const locations = await storeroomApi.listLocations(token!, tenantSlug!);
+        const pharmacy = locations.find((l: any) => l.code === 'PHARMACY');
+        if (!pharmacy) return;
+        const stock = await storeroomApi.getStockByLocation(pharmacy.id, {}, token!, tenantSlug!);
+        const byDrug: Record<string, { qty: number; min: number }> = {};
+        for (const s of stock) {
+          if (!s.drug_id) continue;
+          if (!byDrug[s.drug_id]) byDrug[s.drug_id] = { qty: 0, min: s.min_level ?? 0 };
+          byDrug[s.drug_id].qty += s.quantity_on_hand ?? 0;
+        }
+        const map: Record<string, 'ok' | 'low' | 'stockout'> = {};
+        if (selectedPrescription!.stockAvailability?.matchingItems) {
+          for (const item of selectedPrescription!.stockAvailability.matchingItems) {
+            const entry = byDrug[(item as any).drug_id];
+            if (!entry || entry.qty === 0) map[(item as any).drug_id ?? item.id] = 'stockout';
+            else if (entry.qty <= entry.min) map[(item as any).drug_id ?? item.id] = 'low';
+            else map[(item as any).drug_id ?? item.id] = 'ok';
+          }
+        }
+        setStockStatus(map);
+      } catch { /* non-blocking */ }
+    }
+    checkStoreroomStock();
+  }, [selectedPrescription, token, tenantSlug]);
 
   const loadPendingPrescriptions = async () => {
     try {
@@ -301,7 +334,20 @@ const PharmacyDispensing: React.FC = () => {
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <div className="font-medium text-gray-800">{item.name}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-800">{item.name}</span>
+                              {stockStatus[(item as any).drug_id ?? item.id] === 'stockout' && (
+                                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">OUT OF STOCK</span>
+                              )}
+                              {stockStatus[(item as any).drug_id ?? item.id] === 'low' && (
+                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">LOW STOCK</span>
+                              )}
+                              {(item as any).reserved_qty > 0 && (
+                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded-full">
+                                  {(item as any).reserved_qty} reserved
+                                </span>
+                              )}
+                            </div>
                             <div className="text-sm text-gray-600">{item.genericName}</div>
                             <div className="text-xs text-gray-500 mt-1">
                               Batch: {item.batchNumber} | Expiry: {new Date(item.expiryDate).toLocaleDateString()}
@@ -496,6 +542,21 @@ const PharmacyDispensing: React.FC = () => {
                 />
               </div>
 
+              {Object.values(stockStatus).some(s => s === 'stockout') && (
+                <button
+                  onClick={() => {
+                    const oosItems = (selectedPrescription?.stockAvailability?.matchingItems ?? [])
+                      .filter(i => stockStatus[(i as any).drug_id ?? i.id] === 'stockout')
+                      .map(i => ({ catalog_id: i.id, item_name: i.name, quantity: 1 }));
+                    setRequestItems(oosItems);
+                    setShowRequestModal(true);
+                  }}
+                  className="w-full py-2 px-4 bg-amber-50 border border-amber-300 text-amber-800 rounded-lg font-medium hover:bg-amber-100 transition-colors text-sm"
+                >
+                  Request Missing Items from Storeroom
+                </button>
+              )}
+
               <button
                 onClick={handleDispense}
                 disabled={
@@ -508,6 +569,14 @@ const PharmacyDispensing: React.FC = () => {
               >
                 {dispensing ? 'Dispensing...' : 'Dispense Prescription'}
               </button>
+
+              {showRequestModal && (
+                <StockRequestModal
+                  defaultItems={requestItems}
+                  onClose={() => setShowRequestModal(false)}
+                  onDone={() => setShowRequestModal(false)}
+                />
+              )}
             </div>
           ) : (
             <div className="text-center py-12 text-gray-500">

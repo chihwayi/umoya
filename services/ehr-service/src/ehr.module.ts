@@ -467,6 +467,10 @@ import { ClinicalLlmService } from './services/clinical-llm.service';
 import { ClinicalLlmController } from './controllers/clinical-llm.controller';
 import { ClinicalNlpService } from './services/clinical-nlp.service';
 import { CdssNlpController } from './controllers/cdss-nlp.controller';
+import { StoreroomService } from './services/storeroom.service';
+import { StoreroomController } from './controllers/storeroom.controller';
+import { StoreroomIntelligenceService } from './services/storeroom-intelligence.service';
+import { CronStoreroomService } from './services/cron-storeroom.service';
 import { PostVisitBillingIntelligenceService } from './services/post-visit-billing-intelligence.service';
 import { PostVisitCompanionMemoryService } from './services/post-visit-companion-memory.service';
 import { PostVisitSessionService } from './services/post-visit-session.service';
@@ -782,6 +786,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     FollowUpController,
     ClinicalLlmController,
     CdssNlpController,
+    StoreroomController,
   ],
   providers: [
     AuthService,
@@ -965,6 +970,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CronMortalityService,
     ClinicalLlmService,
     ClinicalNlpService,
+    StoreroomService,
+    StoreroomIntelligenceService,
+    CronStoreroomService,
     ClinicalSummaryService,
     CareGapEngineService,
     ClinicalDocumentService,

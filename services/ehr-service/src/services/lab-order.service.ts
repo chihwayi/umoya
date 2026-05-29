@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource, DeepPartial } from 'typeorm';
 import { LabOrder, LabOrderStatus } from '../entities/lab-order.entity';
 import { LabTest } from '../entities/lab-test.entity';
@@ -9,6 +9,7 @@ import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 import { TerminologyService, SnomedMapping } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
+import { StoreroomService } from './storeroom.service';
 
 @Injectable()
 export class LabOrderService {
@@ -19,7 +20,23 @@ export class LabOrderService {
     private financeService: FinanceService,
     private terminologyService: TerminologyService,
     private readonly cdssHookService: CdssHookService,
+    @Optional() private readonly storeroomService: StoreroomService,
   ) {}
+
+  private async getLabLocationId(tenantDb: any): Promise<string | null> {
+    if (!this.storeroomService) return null;
+    const [row] = await tenantDb.query(
+      `SELECT id FROM inventory_locations WHERE code = 'LAB' AND is_active = true LIMIT 1`,
+    );
+    return row?.id ?? null;
+  }
+
+  async getKitStockAtLab(tenantDb: any): Promise<any[]> {
+    if (!this.storeroomService) return [];
+    const labLocationId = await this.getLabLocationId(tenantDb);
+    if (!labLocationId) return [];
+    return this.storeroomService.getStockByLocation(tenantDb, labLocationId, { category: 'test_kit' });
+  }
   
   private appendWorkflowEvent(
     labOrder: LabOrder,
@@ -261,6 +278,26 @@ export class LabOrderService {
         [saved.id, financeTransactionId],
       );
     }
+
+    // ── Copy kit_catalog_id from test catalog ───────────────────────────────
+    const testCatalogId = createDto.testCatalogId ?? (Array.isArray(tests) && tests.length > 0 ? tests[0]?.testCatalogId : null);
+    if (testCatalogId) {
+      try {
+        const [testCatalogRow] = await tenantDb.query(
+          `SELECT kit_catalog_id FROM lab_test_catalog WHERE id = $1 LIMIT 1`,
+          [testCatalogId],
+        );
+        if (testCatalogRow?.kit_catalog_id) {
+          await tenantDb.query(
+            `UPDATE lab_orders SET kit_catalog_id = $1 WHERE id = $2`,
+            [testCatalogRow.kit_catalog_id, saved.id],
+          );
+        }
+      } catch {
+        // Non-blocking — column may not exist in older schema versions
+      }
+    }
+    // ── end kit link ────────────────────────────────────────────────────────
 
     let cdssInsights: any = null;
     try {
@@ -862,7 +899,27 @@ export class LabOrderService {
         statusAfter: LabOrderStatus.COMPLETED,
       });
       
-    return labOrderRepository.save(labOrder);
+    const completedOrder = await labOrderRepository.save(labOrder);
+
+    // ── Storeroom kit deduction ─────────────────────────────────────────────
+    const kitCatalogId = (completedOrder as any).kit_catalog_id;
+    const kitDeducted = (completedOrder as any).kit_deducted;
+    if (this.storeroomService && kitCatalogId && !kitDeducted) {
+      const labLocationId = await this.getLabLocationId(tenantDb);
+      if (labLocationId) {
+        this.storeroomService.deductStock(
+          tenantDb, labLocationId, kitCatalogId, 1,
+          'lab', completedOrder.id, completedOrder.patientId, reviewedById,
+        ).then(() =>
+          tenantDb.query(`UPDATE lab_orders SET kit_deducted = true WHERE id = $1`, [completedOrder.id])
+        ).catch((e: any) =>
+          this.logger.warn(`Kit deduction failed for lab order ${completedOrder.id}: ${e.message}`),
+        );
+      }
+    }
+    // ── end kit deduction ────────────────────────────────────────────────────
+
+    return completedOrder;
   }
 
   private async checkCriticalValue(

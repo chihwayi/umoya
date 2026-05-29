@@ -1,16 +1,65 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { MedicationAdministrationRecord } from '../entities/medication-administration-record.entity';
 import { PatientWristband } from '../entities/patient-wristband.entity';
 import { MedicationBarcodeMaster } from '../entities/medication-barcode-master.entity';
 import { MedicationAlert } from '../entities/medication-alert.entity';
 import { Prescription } from '../entities/prescription.entity';
+import { StoreroomService } from './storeroom.service';
 
 @Injectable()
 export class BcmaService {
   private readonly logger = new Logger(BcmaService.name);
 
-  constructor() {}
+  constructor(
+    @Optional() private readonly storeroomService: StoreroomService,
+  ) {}
+
+  private async resolveWardLocationId(
+    tenantDb: DataSource,
+    admissionId?: string,
+    wardName?: string,
+  ): Promise<string | null> {
+    if (!this.storeroomService) return null;
+
+    if (admissionId) {
+      const { rows } = await tenantDb.query(
+        `SELECT ward_location_id FROM admissions WHERE id = $1 LIMIT 1`,
+        [admissionId],
+      );
+      if (rows[0]?.ward_location_id) return rows[0].ward_location_id;
+    }
+
+    if (wardName) {
+      const { rows } = await tenantDb.query(
+        `SELECT id FROM inventory_locations WHERE name = $1 AND location_type = 'ward' LIMIT 1`,
+        [wardName],
+      );
+      return rows[0]?.id ?? null;
+    }
+
+    return null;
+  }
+
+  async getWardStock(tenantDb: DataSource, wardIdentifier: string): Promise<any[]> {
+    if (!this.storeroomService) return [];
+
+    const isUuid = /^[0-9a-f-]{36}$/i.test(wardIdentifier);
+    let locationId: string | null;
+
+    if (isUuid) {
+      locationId = wardIdentifier;
+    } else {
+      const { rows } = await tenantDb.query(
+        `SELECT id FROM inventory_locations WHERE name = $1 AND location_type = 'ward' LIMIT 1`,
+        [wardIdentifier],
+      );
+      locationId = rows[0]?.id ?? null;
+    }
+
+    if (!locationId) return [];
+    return this.storeroomService.getStockByLocation(tenantDb, locationId);
+  }
 
   // ==================== PATIENT WRISTBAND ====================
 
@@ -137,6 +186,30 @@ export class BcmaService {
   ): Promise<MedicationAdministrationRecord> {
     const repository = tenantDb.getRepository(MedicationAdministrationRecord);
 
+    // ── Ward stock check ─────────────────────────────────────────────────────
+    let wardLocationId: string | null = null;
+    if (this.storeroomService && marData.drug_id) {
+      wardLocationId = await this.resolveWardLocationId(
+        tenantDb, marData.admission_id, marData.ward_name,
+      );
+      if (wardLocationId) {
+        const catalogItem = await this.storeroomService.getCatalogByDrugId(tenantDb, marData.drug_id);
+        if (catalogItem) {
+          const avail = await this.storeroomService.checkAvailability(
+            tenantDb, wardLocationId, catalogItem.id, 1,
+          );
+          if (!avail.available) {
+            throw new BadRequestException(
+              `"${marData.drug_name ?? 'This medication'}" is not in stock at this ward. ` +
+              `Current ward stock: ${avail.quantity_on_hand ?? 0}. ` +
+              `A restocking request has been automatically raised.`,
+            );
+          }
+        }
+      }
+    }
+    // ── end ward stock check ─────────────────────────────────────────────────
+
     const mar = repository.create({
       ...marData,
       administeredById: userId,
@@ -144,7 +217,28 @@ export class BcmaService {
       administrationStatus: 'administered',
     });
 
-    return await repository.save(mar) as unknown as MedicationAdministrationRecord;
+    const saved = await repository.save(mar) as unknown as MedicationAdministrationRecord;
+
+    // ── Ward stock deduction ─────────────────────────────────────────────────
+    if (this.storeroomService && wardLocationId && marData.drug_id) {
+      this.storeroomService.getCatalogByDrugId(tenantDb, marData.drug_id).then(async (catalogItem) => {
+        if (catalogItem) {
+          try {
+            await this.storeroomService!.deductStock(
+              tenantDb, wardLocationId!, catalogItem.id, 1, 'nursing',
+              (saved as any).id, marData.patient_id, userId,
+            );
+          } catch (e: any) {
+            this.logger.warn(`Ward stock deduction failed for ${marData.drug_name}: ${e.message}`);
+          }
+        }
+      }).catch((e: any) => {
+        this.logger.warn(`Ward stock catalog lookup failed: ${e.message}`);
+      });
+    }
+    // ── end ward stock deduction ─────────────────────────────────────────────
+
+    return saved;
   }
 
   async getMARsByPatient(

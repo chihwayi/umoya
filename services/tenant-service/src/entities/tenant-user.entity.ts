@@ -10,7 +10,8 @@ export enum UserRole {
   PHARMACIST = 'pharmacist',
   LAB_TECHNICIAN = 'lab_technician',
   ACCOUNTS = 'accounts',
-  RADIOLOGIST = 'radiologist'
+  RADIOLOGIST = 'radiologist',
+  STORE_MANAGER = 'store_manager',
 }
 
 export enum UserStatus {

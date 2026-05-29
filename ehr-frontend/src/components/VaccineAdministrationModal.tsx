@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Syringe, Calendar, User, AlertTriangle, X } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker from './SnomedConceptPicker';
-import { ehrAxios } from '../services/api';
+import { ehrAxios, storeroomApi } from '../services/api';
+import StockRequestModal from './StockRequestModal';
 
 interface VaccineAdministrationModalProps {
   patientId: string;
@@ -40,6 +41,26 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [vaccineStock, setVaccineStock] = useState<Record<string, number>>({});
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestVaccine, setRequestVaccine] = useState<string | null>(null);
+
+  useEffect(() => {
+    storeroomApi.listLocations(token, tenantSlug).then((locs: any[]) => {
+      const store = locs.find((l: any) => l.code === 'VACCINE_STORE');
+      if (!store) return;
+      storeroomApi.getStockByLocation(store.id, { category: 'vaccine' }, token, tenantSlug)
+        .then((stock: any[]) => {
+          const map: Record<string, number> = {};
+          for (const s of stock) {
+            const key = s.item_name ?? s.name;
+            if (key) map[key] = (map[key] ?? 0) + (s.quantity_on_hand ?? 0);
+          }
+          setVaccineStock(map);
+        })
+        .catch(() => {});
+    }).catch(() => {});
+  }, [token, tenantSlug]);
 
   const administrationSites = [
     'Left deltoid',
@@ -72,6 +93,7 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6">
@@ -109,7 +131,32 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
                 placeholder="Search vaccine (e.g., Influenza, COVID-19)..."
               />
               {formData.vaccineName && (
-                <p className="text-xs text-green-600 mt-1">Selected: {formData.vaccineName} ({formData.vaccineCode})</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <p className="text-xs text-green-600">Selected: {formData.vaccineName} ({formData.vaccineCode})</p>
+                  {vaccineStock[formData.vaccineName] !== undefined && (
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                      background: vaccineStock[formData.vaccineName] === 0 ? '#fee2e2'
+                                : vaccineStock[formData.vaccineName] <= 5  ? '#fef3c7' : '#dcfce7',
+                      color: vaccineStock[formData.vaccineName] === 0 ? '#dc2626'
+                           : vaccineStock[formData.vaccineName] <= 5  ? '#d97706' : '#16a34a',
+                    }}>
+                      {vaccineStock[formData.vaccineName] === 0 ? 'OUT OF STOCK' : `${vaccineStock[formData.vaccineName]} vials`}
+                    </span>
+                  )}
+                  {vaccineStock[formData.vaccineName] === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { setRequestVaccine(formData.vaccineName); setShowRequestModal(true); }}
+                      style={{
+                        padding: '2px 10px', background: '#fef3c7', border: '1px solid #fde68a',
+                        borderRadius: 8, fontSize: 11, cursor: 'pointer', color: '#92400e', fontWeight: 600,
+                      }}
+                    >
+                      Request Stock
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <div>
@@ -313,6 +360,15 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
         </div>
       </div>
     </div>
+
+    {showRequestModal && requestVaccine && (
+      <StockRequestModal
+        defaultItems={[{ catalog_id: '', item_name: requestVaccine, quantity: 10 }]}
+        onClose={() => { setShowRequestModal(false); setRequestVaccine(null); }}
+        onDone={() => { setShowRequestModal(false); setRequestVaccine(null); }}
+      />
+    )}
+    </>
   );
 };
 

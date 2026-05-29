@@ -44,6 +44,7 @@ MediCore is a production-grade, AI-first, multi-tenant electronic health record 
 - HIV care, ART management, viral load tracking, and DHIS2 reporting
 - Maternity, oncology, ophthalmology, cardiology, and diabetes modules
 - Pharmacy dispensing with adherence monitoring
+- Central Storeroom and Inventory Management — multi-location inventory hub spanning medicines, vaccines, consumables, lab reagents, and emergency kits; FEFO dispensing, expiry tracking, cold-chain flagging, procurement automation, and AI demand forecasting tightly integrated into pharmacy, ward, lab, and maternity workflows
 - Immunizations and travel vaccines
 - Population health and care gap management
 - Prior authorizations and claims management
@@ -105,6 +106,25 @@ Tenant-managed health education content with patient self-service enrollment, le
 
 ---
 
+## Smart Inventory and Central Storeroom
+
+A fully integrated central inventory hub connecting pharmacy, ward, lab, maternity, and oncology to a single authoritative stock record with AI demand forecasting, expiry intelligence, and therapeutic substitution.
+
+- **Multi-location Inventory** — Separate stock ledgers for pharmacy, ward stores, lab sites, and community stores; inter-location transfers with two-step receive confirmation; real-time dashboard with low-stock alerts, reorder thresholds, and consumption analytics
+- **FEFO Dispensing** — First Expiry First Out batch selection enforced at every dispense and transfer; expiry alerts generated automatically at 7, 30, and 90 days; cold-chain flagging on refrigerated and frozen items with per-item notes
+- **Soft Stock Reservations** — On prescription creation, stock is soft-reserved at the dispensing pharmacy; reservation is automatically released on dispense, prescription cancellation, or 24-hour expiry; prevents over-dispensing for high-demand and controlled drugs
+- **Pharmacy and Ward Integration** — Dispensing workflow shows live reserved quantities alongside available stock; CDSS queries current availability before surfacing drug substitution suggestions; ward staff submit and track stock requests directly to the central store
+- **Vaccine and Lab Reagent Tracking** — Vaccine inventory is linked to immunization administration records; lab reagent stocks are depleted as test results are entered; low-reagent alerts surface in the lab dashboard
+- **Emergency Kit Management** — Per-location emergency kit par levels with automatic replenishment requests when an item falls below threshold; kit status dashboard accessible to nurses, doctors, and store managers
+- **ARV and Chemotherapy Intelligence** — ARV stock compared daily against active patient load with a days-of-stock calculation; chemotherapy regimen component availability verified before dose preparation approval
+- **AI Demand Forecasting** — LLM-augmented consumption trend analysis with seasonality detection; 30-day forward stock forecast per item and location; configurable horizon and AI-assisted anomaly flag when actual consumption diverges from forecast
+- **Procurement Automation** — Supplier registry with lead times; purchase order lifecycle (draft → submitted → partially received → fully received); one-click AI-assisted reorder that auto-generates purchase orders for all items below the reorder level
+- **Drug Substitution Engine** — When a prescribed drug is out of stock, ranked therapeutic equivalents are surfaced with confidence scores and AI rationale from direct drug mappings, ATC code family matching, and LLM clinical grounding; selection persisted for audit
+- **Expiry Risk Reporting** — AI-generated cross-location expiry risk summary identifying high-waste items and recommending redistribution or accelerated usage before loss occurs
+- **Role-Based Access** — Store managers and administrators manage catalog, stock adjustments, supplier orders, and transfers; pharmacists access FEFO batches, reservations, and substitution suggestions; nurses and doctors view emergency kit status and submit requests
+
+---
+
 ## AI and Clinical Decision Support
 
 MediCore is AI-first — every major clinical surface has an integrated AI layer governed through a single audited pathway.
@@ -134,6 +154,9 @@ MediCore is AI-first — every major clinical surface has an integrated AI layer
 | Treatment gap detection | Rule-based care gap engine detects overdue cervical screening, HbA1c, HIV testing, flu vaccination, and lapsed follow-up with AI-recommended actions, dismiss (30-day), and resolve workflows |
 | AI-generated documents | One-click referral letters, discharge summaries, pre-authorisation requests, and sick notes — AI drafts from structured clinical data, clinician reviews and signs; patient portal shows only signed documents |
 | Drug substitution engine | Out-of-stock medication → ranked therapeutic equivalents with confidence scores, rationale, and caveats sourced from CDSS, LLM grounding, and protocol rules; selection persisted for audit |
+| Inventory demand forecasting | AI consumption trend analysis with seasonality detection; 30-day forward stock forecast per item and location; reorder suggestions auto-generated to prevent stockouts before they affect patient care |
+| Storeroom anomaly detection | Consumption surveillance automatically flags sudden spikes, unexplained drops, and receive-vs-issue discrepancies across all inventory locations |
+| Expiry risk AI | Cross-location expiry risk summary with redistribution and accelerated-usage recommendations; prevents medication and reagent waste before it occurs |
 | AI follow-up scheduler | Post-encounter AI recommendation for optimal follow-up interval and modality (in-person / telemedicine / phone) based on risk band and diagnoses; nightly cron flags overdue follow-ups and alerts the care team |
 | AI lab interpretation | Dual narrative per lab result — technical clinician narrative and patient-safe plain language; critical flags trigger real-time alerts; patients see "What does this mean?" expandable section |
 | Appointment no-show prediction | Pre-encounter no-show risk score + auto-generated AI pre-appointment brief (diagnoses, recent labs, meds, tasks) delivered to the clinician 30 minutes before each visit |
@@ -304,5 +327,5 @@ npm run report:soc2-hipaa
 
 | Document | Contents |
 |---|---|
-| [docs/rollout/README.md](./docs/rollout/README.md) | Architecture rules, DB provisioning patterns, and agent constraints |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Architecture rules, DB provisioning patterns, and agent constraints |
 | [.env.example](./.env.example) | All required environment variables |

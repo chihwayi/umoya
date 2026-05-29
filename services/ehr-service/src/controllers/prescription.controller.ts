@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { Response } from 'express';
 import { PrescriptionService } from '../services/prescription.service';
@@ -48,6 +48,13 @@ export class PrescriptionController {
   @ApiOperation({ summary: 'Dispense prescription' })
   async dispensePrescription(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.prescriptionService.dispense(id, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
+  }
+
+  @Patch(':id/cancel')
+  @ApiOperation({ summary: 'Cancel prescription and release any stock reservation' })
+  async cancelPrescription(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    await this.prescriptionService.cancelPrescription(id, req.tenantDb);
+    return { success: true };
   }
 
   @Get(':id/download')

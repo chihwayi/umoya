@@ -6,6 +6,7 @@ import { CdssHookService } from './cdss-hook.service';
 import { ClinicalWorkflowService } from './clinical-workflow.service';
 import { CdssService } from './cdss.service';
 import { HipaaAuditService } from './hipaa-audit.service';
+import { StoreroomService } from './storeroom.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -24,6 +25,7 @@ export class PrescriptionService {
     @Optional() private workflowService?: ClinicalWorkflowService,
     @Optional() @Inject(CdssService) private readonly cdssService?: CdssService,
     @Optional() @Inject(HipaaAuditService) private readonly hipaaAuditService?: HipaaAuditService,
+    @Optional() private readonly storeroomService?: StoreroomService,
   ) {}
   
   private extractConceptId(candidate: any): string | null {
@@ -200,6 +202,34 @@ export class PrescriptionService {
 
     const createdPrescription = result[0] as Prescription;
 
+    // Fire-and-forget soft lock — never blocks prescription creation
+    if (this.storeroomService && createDto.quantity) {
+      (async () => {
+        try {
+          const [pharmacyLoc] = await (tenantDb as any).query(
+            `SELECT id FROM inventory_locations WHERE location_type = 'pharmacy' LIMIT 1`,
+          );
+          if (!pharmacyLoc) return;
+          const catalog = await this.storeroomService!.getCatalogByDrugId(
+            tenantDb, createdPrescription.id,
+          );
+          // getCatalogByDrugId expects a drug_id; fall back to name match
+          const [catalogByName] = catalog ? [catalog] : await (tenantDb as any).query(
+            `SELECT id FROM storeroom_catalog WHERE name ILIKE $1 LIMIT 1`,
+            [`%${createDto.medicationName}%`],
+          );
+          if (!catalogByName) return;
+          await this.storeroomService!.reserveStock(
+            tenantDb, pharmacyLoc.id, catalogByName.id,
+            createDto.quantity, createdPrescription.id,
+            createDto.patientId ?? null, prescriberId,
+          );
+        } catch (err: any) {
+          this.logger.warn(`Soft lock failed for prescription ${createdPrescription.id}: ${err.message}`);
+        }
+      })();
+    }
+
     let cdssInsights: any = null;
     try {
       cdssInsights = await this.cdssHookService.handlePrescriptionCreated({
@@ -254,6 +284,20 @@ export class PrescriptionService {
       this.logger.error(`Error finding prescriptions for patient ${patientId}: ${error instanceof Error ? error.message : error}`);
       // Return empty array instead of throwing to prevent breaking the UI
       return [];
+    }
+  }
+
+  async cancelPrescription(id: string, tenantDb: DataSource): Promise<void> {
+    const [prescription] = await (tenantDb as any).query(
+      `UPDATE prescriptions SET status = 'cancelled' WHERE id = $1 AND status != 'cancelled' RETURNING id`,
+      [id],
+    );
+    if (!prescription) throw new NotFoundException('Prescription not found or already cancelled');
+
+    if (this.storeroomService) {
+      await this.storeroomService.releaseReservationsByPrescription(tenantDb as any, id).catch(
+        (err: any) => this.logger.warn(`Release reservation failed for ${id}: ${err.message}`),
+      );
     }
   }
 

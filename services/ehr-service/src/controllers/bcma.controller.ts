@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Req, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
@@ -266,5 +266,15 @@ export class BcmaController {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     const userId = req.user?.userId ?? (req.user as any)?.id;
     return this.bcmaService.administerFromScheduledEntry(id, body, userId, tenantDb);
+  }
+
+  @Get('ward-stock')
+  @ApiOperation({ summary: 'Get current stock for a ward location (by name or UUID)' })
+  async getWardStock(
+    @Query('ward') ward: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.bcmaService.getWardStock(tenantDb, ward);
   }
 }
