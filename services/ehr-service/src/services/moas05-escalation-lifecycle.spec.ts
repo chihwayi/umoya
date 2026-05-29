@@ -232,7 +232,7 @@ describe('MOAS-05 escalation lifecycle', () => {
       }),
       updateTask: jest.fn(),
     };
-    const earlyWarningService = new EarlyWarningService(nurseTaskService as any);
+    const earlyWarningService = new EarlyWarningService(null as any, null as any, nurseTaskService as any);
     const hipaaAuditService = {
       logAuditEvent: jest.fn().mockResolvedValue(undefined),
     };
@@ -256,7 +256,7 @@ describe('MOAS-05 escalation lifecycle', () => {
       systolicBp: 84,
       heartRate: 132,
       consciousness: 'alert',
-    });
+    }, 'test-tenant');
 
     expect(savedScore.escalationTaskId).toBe('esc-1');
     expect(savedScore.explanationSummary).toContain('NEWS2');

@@ -6,7 +6,7 @@ describe('PharmacyService', () => {
     new PharmacyService({
       createBill: jest.fn().mockResolvedValue({ id: 'bill-1' }),
       addPayment: jest.fn().mockResolvedValue({ id: 'payment-1' }),
-    } as any);
+    } as any, null as any);
 
   it('requires pharmacist acknowledgment before dispensing when pharmacy intelligence signals exist', async () => {
     const queryRunner = {

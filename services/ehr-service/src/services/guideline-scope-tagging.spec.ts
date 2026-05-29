@@ -160,7 +160,7 @@ describe('Guideline scope tagging', () => {
     const nephrology = new nephrologyModule.NephrologyService({} as any, cdssService as any);
     const malaria = new malariaModule.MalariaService({} as any, cdssService as any);
     const tb = new tbModule.TbService(cdssService as any);
-    const immunization = new immunizationModule.ImmunizationService(cdssService as any);
+    const immunization = new immunizationModule.ImmunizationService(cdssService as any, null as any);
 
     await pulmonology.asthmaStepUp({});
     await pulmonology.prescribeOxygen({});

@@ -3,7 +3,7 @@ import { EarlyWarningService, News2Input } from './early-warning.service';
 let service: EarlyWarningService;
 
 beforeEach(() => {
-  service = new EarlyWarningService();
+  service = new EarlyWarningService(null as any, null as any);
 });
 
 describe('EarlyWarningService', () => {
@@ -447,7 +447,7 @@ describe('EarlyWarningService', () => {
         createTask: jest.fn().mockResolvedValue({ id: 'nurse-task-1' }),
         updateTask: jest.fn(),
       };
-      const workflowService = new EarlyWarningService(nurseTaskService as any);
+      const workflowService = new EarlyWarningService(null as any, null as any, nurseTaskService as any);
 
       let scoreRow: any = null;
       const baselineRepo = {
@@ -502,7 +502,7 @@ describe('EarlyWarningService', () => {
         temperature: 38.4,
         systolicBp: 102,
         consciousness: 'alert',
-      });
+      }, 'test-tenant');
 
       expect(result.alertTriggered).toBe(true);
       expect(result.escalationTaskId).toBe('esc-1');
@@ -533,7 +533,7 @@ describe('EarlyWarningService', () => {
         createTask: jest.fn(),
         updateTask: jest.fn().mockResolvedValue({}),
       };
-      const workflowService = new EarlyWarningService(nurseTaskService as any);
+      const workflowService = new EarlyWarningService(null as any, null as any, nurseTaskService as any);
 
       const savedScore = {
         id: 'ews-ack-1',

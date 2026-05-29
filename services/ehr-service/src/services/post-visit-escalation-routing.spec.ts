@@ -13,7 +13,7 @@ describe('PostVisitEscalationRoutingService', () => {
     };
     service = new PostVisitEscalationRoutingService(
       alertDelivery,
-      { getAllTenants: jest.fn().mockResolvedValue([{ dbName: 'clinic_test_db', subdomain: 'tc' }]) } as any,
+      { getAllActiveTenants: jest.fn().mockResolvedValue([{ databaseName: 'clinic_test_db', subdomain: 'tc' }]) } as any,
     );
   });
 

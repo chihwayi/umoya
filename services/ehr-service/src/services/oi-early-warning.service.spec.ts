@@ -1,7 +1,7 @@
 import { OiEarlyWarningService } from './oi-early-warning.service';
 
 describe('OiEarlyWarningService', () => {
-  const svc = new OiEarlyWarningService();
+  const svc = new OiEarlyWarningService(null as any, null as any);
 
   it('fires pcp_risk when CD4 < 200', () => {
     const alerts = svc.evaluateOiRisks({ cd4Count: 150, symptoms: [], tbScreenPositive: false, currentRegimen: '', vl: 0 });
