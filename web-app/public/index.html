@@ -3,22 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" href="/umoya.png" />
-  <link rel="apple-touch-icon" href="/umoya.png" />
-  <meta name="theme-color" content="#080E1A" />
-  <title>Umoya - Tenant Management</title>
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/png" sizes="32x32"  href="/favicon.png" />
+  <link rel="icon" type="image/png" sizes="16x16"  href="/favicon.png" />
+  <link rel="shortcut icon"                        href="/favicon.png" />
+  <link rel="apple-touch-icon" sizes="180x180"     href="/umoya-icon.png" />
+
+  <meta name="theme-color" content="#0AA98A" />
+  <meta name="application-name" content="Umoya Admin" />
+  <meta name="description" content="Umoya — Tenant management and system administration." />
+  <title>Umoya Admin</title>
   <script>
-    // Completely disable WebSocket to stop connection attempts
     window.WebSocket = function() { return { close: function() {}, send: function() {} }; };
     window.EventSource = function() { return { close: function() {} }; };
-    
-    // Suppress console errors
     const originalError = console.error;
     console.error = function(...args) {
       const message = args.join(' ');
-      if (message.includes('WebSocket') || message.includes('ws://') || message.includes('interrupted while')) {
-        return;
-      }
+      if (message.includes('WebSocket') || message.includes('ws://') || message.includes('interrupted while')) return;
       originalError.apply(console, args);
     };
   </script>

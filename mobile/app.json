@@ -4,13 +4,13 @@
     "slug": "umoya-clinical",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/umoya-icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#080E1A",
+    "backgroundColor": "#070C17",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/umoya-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#070C17"
     },
     "scheme": "umoya",
     "ios": {
@@ -69,8 +69,8 @@
       "package": "com.umoya.clinical",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#080E1A"
+        "foregroundImage": "./assets/umoya-icon.png",
+        "backgroundColor": "#070C17"
       },
       "permissions": [
         "android.permission.CAMERA",
@@ -90,7 +90,7 @@
       "googleServicesFile": "./google-services.json"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/umoya-icon.png"
     },
     "plugins": [
       "expo-secure-store",
@@ -110,8 +110,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
-          "color": "#00C896",
+          "icon": "./assets/umoya-icon.png",
+          "color": "#0AA98A",
           "sounds": []
         }
       ],

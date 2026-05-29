@@ -1,25 +1,14 @@
 {
+  "name": "Umoya",
   "short_name": "Umoya",
-  "name": "Umoya Patient Portal",
-  "icons": [
-    {
-      "src": "umoya.png",
-      "sizes": "1073x768",
-      "type": "image/png"
-    },
-    {
-      "src": "logo192.png",
-      "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "logo512.png",
-      "type": "image/png",
-      "sizes": "512x512"
-    }
-  ],
+  "description": "Your health. Your care. In your hands.",
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "background_color": "#F5F8FA",
+  "theme_color": "#0AA98A",
+  "icons": [
+    { "src": "favicon.png",  "sizes": "any",     "type": "image/png", "purpose": "any" },
+    { "src": "logo192.png",  "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "logo512.png",  "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
 }

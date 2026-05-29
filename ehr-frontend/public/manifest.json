@@ -1,12 +1,14 @@
 {
-  "name": "Umoya",
+  "name": "Umoya EHR",
   "short_name": "Umoya",
+  "description": "Clinical intelligence. Continuity of care.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1d4ed8",
+  "background_color": "#070C17",
+  "theme_color": "#0AA98A",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/favicon.png",  "sizes": "any",     "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

@@ -1,5 +1,5 @@
 """
-MediCore icon generator — uses the real brand logo (medicore.png from webapps).
+Umoya icon generator — uses the real brand logo (umoya-logo-dark.png from brand/).
 Extracts the hexagon mark, removes the white paper background,
 centres it on the dark navy brand background, and writes all required sizes.
 
@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw
 
 # ─── Paths ─────────────────────────────────────────────────────────────────────
 ROOT   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SOURCE = os.path.join(ROOT, 'web-app', 'public', 'medicore.png')
+SOURCE = os.path.join(ROOT, 'brand', 'umoya-logo-dark.png')
 OUT    = os.path.join(ROOT, 'mobile', 'assets')
 
 # ─── Brand colours ─────────────────────────────────────────────────────────────
