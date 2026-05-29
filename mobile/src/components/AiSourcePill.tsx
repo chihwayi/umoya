@@ -47,12 +47,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   text: {
-    ...FONT.ui,
+    fontFamily: FONT.ui,
     fontSize: 11,
     fontWeight: '500',
   },
   textCompact: {
-    ...FONT.ui,
+    fontFamily: FONT.ui,
     fontSize: 10,
     fontWeight: '500',
   },

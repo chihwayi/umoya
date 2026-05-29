@@ -30,7 +30,7 @@ export default function NarrativeExtractorSheet({
   const [text, setText] = useState(initialText);
   const [entities, setEntities] = useState<ClinicalEntities | null>(null);
   const [loading, setLoading] = useState(false);
-  const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   function handleChange(val: string) {
     setText(val);

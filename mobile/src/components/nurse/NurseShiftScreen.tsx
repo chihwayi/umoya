@@ -524,6 +524,7 @@ interface WorklistProps {
 }
 
 const Worklist: React.FC<WorklistProps> = ({ tasks, onToggle, onEscalate, aiSummary, highRiskPatients }) => {
+  const { t } = useTranslation();
   const pending = tasks.filter((t) => !t.done);
   const done    = tasks.filter((t) => t.done);
   const urgent  = tasks.filter((t) => t.priority === 'URGENT' && !t.done).length;

@@ -323,7 +323,7 @@ export const PatientTelemedicineScreen: React.FC<PatientTelemedicineScreenProps>
       try {
         const { api } = await import('../../services/api');
         const res = await api.get('/patient-portal/notifications?type=telemedicine_summary&limit=1');
-        if ((res.data ?? []).length > 0) {
+        if (((res.data as unknown[]) ?? []).length > 0) {
           clearInterval(poll);
           setSummaryPreparing(false);
           setSummaryReady(true);

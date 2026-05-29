@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { C, FONT, RADIUS, SHADOW } from '../design/tokens';
 import { AiStatusChip } from './AiStatusChip';
-import api from '../services/api';
+import { api } from '../services/api';
 
 interface Suggestion {
   drug: string;

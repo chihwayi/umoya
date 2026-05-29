@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { C, FONT, RADIUS, SHADOW } from '../design/tokens';
 import { AiStatusChip } from '../components/AiStatusChip';
-import api from '../services/api';
+import { api } from '../services/api';
 
 interface OverdueItem {
   id: number;

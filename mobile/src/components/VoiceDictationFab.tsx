@@ -57,7 +57,7 @@ export function VoiceDictationFab({ language = 'en', patientId, encounterId, onP
       recordingRef.current = null;
       if (!uri) throw new Error('no uri');
 
-      const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
 
       const { data: transcribeResult } = await voiceApi.transcribe(audioBase64, language, { patientId, encounterId });
 
