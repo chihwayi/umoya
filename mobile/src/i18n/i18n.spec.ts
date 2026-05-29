@@ -32,7 +32,7 @@ describe('i18n initialisation', () => {
     const enKeys = Object.keys(i18n.getResourceBundle('en', 'translation'));
     for (const locale of locales) {
       const bundle = i18n.getResourceBundle(locale, 'translation');
-      expect(Object.keys(bundle)).toEqual(enKeys);
+      expect(Object.keys(bundle).sort()).toEqual([...enKeys].sort());
     }
   });
 });

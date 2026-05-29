@@ -16,6 +16,7 @@ const LabResultsPage: React.FC = () => {
 
   const loadNarrative = async (resultId: string) => {
     if (narratives[resultId]) return;
+    if (!token) return;
     try {
       const res = await patientPortalApi.getLabNarrative(token, tenantSlug, resultId);
       setNarratives((prev) => ({ ...prev, [resultId]: res.patientNarrative }));
