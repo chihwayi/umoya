@@ -29,8 +29,8 @@ export default function OverdueFollowUpsScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (api.get('/followup/overdue') as Promise<any[]>)
-      .then(data => setItems(data.map(d => ({
+    api.get('/followup/overdue')
+      .then(res => setItems((res.data as any[]).map(d => ({
         id: d.id,
         patientId: d.patient_id,
         fullName: d.full_name,

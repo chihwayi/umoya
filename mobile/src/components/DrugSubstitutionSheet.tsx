@@ -41,7 +41,11 @@ export default function DrugSubstitutionSheet({
     if (!drug.trim()) return;
     setLoading(true);
     try {
-      const data = await api.post('/drug-substitution/suggest', {
+      const { data } = await api.post<{
+        id: number;
+        suggestions: Suggestion[];
+        cdssAvailable: boolean;
+      }>('/drug-substitution/suggest', {
         originalDrug: drug.trim(),
         originalDose: dose.trim() || undefined,
         patientId,
