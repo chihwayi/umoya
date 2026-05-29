@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
-import api from '../services/api';
+import { patientPortalApi } from '../services/api';
 
-export function useTelemedicineSummary(patientId: string) {
+export function useTelemedicineSummary(patientId: string, token: string, tenantSlug: string) {
   const [summaryReady, setSummaryReady] = useState(false);
 
   useEffect(() => {
-    if (!patientId) return;
+    if (!patientId || !token || !tenantSlug) return;
     const poll = setInterval(async () => {
       try {
-        const res = await api.get('/patient-portal/notifications?type=telemedicine_summary&limit=1');
-        const notifications: unknown[] = res.data ?? [];
-        if (notifications.length > 0) {
+        const notifications = await patientPortalApi.getNotifications(token, tenantSlug, {
+          notificationType: 'telemedicine_summary',
+          limit: 1,
+        });
+        if ((notifications as unknown[]).length > 0) {
           setSummaryReady(true);
           clearInterval(poll);
         }
@@ -19,7 +21,7 @@ export function useTelemedicineSummary(patientId: string) {
       }
     }, 10000);
     return () => clearInterval(poll);
-  }, [patientId]);
+  }, [patientId, token, tenantSlug]);
 
   return { summaryReady };
 }
