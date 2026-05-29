@@ -11,7 +11,7 @@ export class FileStorageService {
   private useS3: boolean;
 
   constructor() {
-    this.bucketName = process.env.S3_BUCKET_NAME || process.env.STORAGE_BUCKET || 'medicore-reports';
+    this.bucketName = process.env.S3_BUCKET_NAME || process.env.STORAGE_BUCKET || 'umoya-reports';
     this.useS3 = process.env.USE_S3 === 'true' || process.env.STORAGE_DRIVER === 's3' || !!process.env.AWS_ACCESS_KEY_ID;
 
     if (this.useS3) {

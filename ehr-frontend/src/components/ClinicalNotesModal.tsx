@@ -147,7 +147,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-900 text-lg">WHO Clinical Notes Workflow (optional)</h4>
-                      <p className="text-sm text-slate-600 mt-1">Optional WHO-aligned forms. The regular Medicore notes remain the main form.</p>
+                      <p className="text-sm text-slate-600 mt-1">Optional WHO-aligned forms. The regular Umoya notes remain the main form.</p>
                     </div>
                   </div>
                   <button

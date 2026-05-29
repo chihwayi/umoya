@@ -50,7 +50,7 @@ export async function registerPushToken(): Promise<void> {
 
   // Android needs a notification channel
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('medicore-critical', {
+    await Notifications.setNotificationChannelAsync('umoya-critical', {
       name: 'Critical Alerts',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],

@@ -10,7 +10,7 @@ const axios = require('axios');
 
 const EHR_API_URL = process.env.EHR_API_URL;
 const TENANT_SLUG = process.env.TENANT_SLUG || 'demo-clinic';
-const LOGIN_EMAIL = process.env.SEED_LOGIN_EMAIL || 'doctor@demo-clinic.medicore.health';
+const LOGIN_EMAIL = process.env.SEED_LOGIN_EMAIL || 'doctor@demo-clinic.umoya.health';
 const LOGIN_PASSWORD = process.env.SEED_LOGIN_PASSWORD || 'Password1#';
 
 const ehr = axios.create({ baseURL: EHR_API_URL, timeout: 20000 });
@@ -204,9 +204,9 @@ async function main() {
 
   // 9) Create extra staff users (2 doctors, 1 nurse)
   const staff = [
-    { email: 'dr.moyo@demo-clinic.medicore.health', firstName: 'Takudzwa', lastName: 'Moyo', role: 'doctor', phone: '0772000001' },
-    { email: 'dr.ndlovu@demo-clinic.medicore.health', firstName: 'Nomsa', lastName: 'Ndlovu', role: 'doctor', phone: '0772000002' },
-    { email: 'nurse.chipo@demo-clinic.medicore.health', firstName: 'Chipo', lastName: 'Dube', role: 'nurse', phone: '0772000003' },
+    { email: 'dr.moyo@demo-clinic.umoya.health', firstName: 'Takudzwa', lastName: 'Moyo', role: 'doctor', phone: '0772000001' },
+    { email: 'dr.ndlovu@demo-clinic.umoya.health', firstName: 'Nomsa', lastName: 'Ndlovu', role: 'doctor', phone: '0772000002' },
+    { email: 'nurse.chipo@demo-clinic.umoya.health', firstName: 'Chipo', lastName: 'Dube', role: 'nurse', phone: '0772000003' },
   ];
   for (const u of staff) {
     try {

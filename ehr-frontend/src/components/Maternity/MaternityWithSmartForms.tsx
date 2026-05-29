@@ -215,7 +215,7 @@ export const MaternityWithSmartForms: React.FC<MaternityWithSmartFormsProps> = (
             <div>
               <h3 className="font-semibold text-slate-900">WHO Maternity/PMTCT Workflow (optional)</h3>
               <p className="text-sm text-slate-600">
-                Optional WHO-aligned maternity and PMTCT steps. The regular Medicore maternity form remains the main form.
+                Optional WHO-aligned maternity and PMTCT steps. The regular Umoya maternity form remains the main form.
               </p>
             </div>
           </div>

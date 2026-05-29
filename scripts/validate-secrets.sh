@@ -27,7 +27,7 @@ if [ -f .env ]; then
   done < .env
 fi
 
-echo "=== MediCore Production Secrets Validation ==="
+echo "=== Umoya Production Secrets Validation ==="
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 is_default() {

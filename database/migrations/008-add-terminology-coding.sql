@@ -176,5 +176,5 @@ CREATE INDEX IF NOT EXISTS idx_patient_consents_procedure_snomed ON patient_cons
 CREATE INDEX IF NOT EXISTS idx_patient_consents_diagnosis_icd10 ON patient_consents(diagnosis_icd10);
 
 -- Add final comments
-COMMENT ON SCHEMA public IS 'MediCore EHR Schema with complete terminology integration (SNOMED-CT, ICD-10, CVX, LOINC, CPT, RxNorm)';
+COMMENT ON SCHEMA public IS 'Umoya EHR Schema with complete terminology integration (SNOMED-CT, ICD-10, CVX, LOINC, CPT, RxNorm)';
 

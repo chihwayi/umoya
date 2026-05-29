@@ -39,7 +39,7 @@ export DB_PORT="${DB_PORT:-5432}"
 export DB_HOST="${DB_HOST:-${SERVER_HOST:-localhost}}"
 export DB_USERNAME="${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
 export DB_PASSWORD="${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
-export POSTGRES_DB="${POSTGRES_DB:-medicore}"
+export POSTGRES_DB="${POSTGRES_DB:-umoya}"
 export MASTER_POSTGRES_DB="${MASTER_POSTGRES_DB:-${POSTGRES_DB}}"
 
 # Master DB URL required by repairTenants.ts (tenant registry lives in POSTGRES_DB on the master instance)
@@ -55,7 +55,7 @@ TSNODE=(npx ts-node --project "${ROOT}/services/tenant-service/tsconfig.json")
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════════════╗"
-echo "║          MediCore — Full Tenant + Master DB Repair                  ║"
+echo "║          Umoya — Full Tenant + Master DB Repair                  ║"
 echo "║          Connecting to: ${DB_HOST}:${DB_PORT}/${POSTGRES_DB}                   ║"
 echo "╚══════════════════════════════════════════════════════════════════════╝"
 

@@ -23,7 +23,7 @@ import { MinioService } from './minio.service';
 @Injectable()
 export class TelemedicinePostVisitBridgeService {
   private readonly logger = new Logger(TelemedicinePostVisitBridgeService.name);
-  private readonly bucket = process.env.MINIO_BUCKET || 'medicore';
+  private readonly bucket = process.env.MINIO_BUCKET || 'umoya';
 
   constructor(
     private readonly videoService: TelemedicineVideoService,

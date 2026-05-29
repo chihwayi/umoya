@@ -8,7 +8,7 @@
     "base": {
       "node": "22.14.0",
       "cache": {
-        "key": "medicore-v1",
+        "key": "umoya-v1",
         "paths": ["node_modules", ".expo"]
       }
     },
@@ -64,7 +64,7 @@
         "ascAppId":    "REPLACE_WITH_ASC_APP_ID",
         "appleTeamId": "REPLACE_WITH_TEAM_ID",
         "language":    "en-US",
-        "sku":         "com.medicore.clinical"
+        "sku":         "com.umoya.clinical"
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-key.json",

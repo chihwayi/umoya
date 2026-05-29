@@ -1,4 +1,4 @@
-const DB_NAME = 'MediCoreOffline';
+const DB_NAME = 'UmoyaOffline';
 const DB_VERSION = 2;
 
 const STORES = [

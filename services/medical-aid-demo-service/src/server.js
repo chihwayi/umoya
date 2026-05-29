@@ -5,7 +5,7 @@ const path = require('path');
 const app = express();
 const PORT = Number.parseInt(process.env.PORT || '3004', 10);
 const DATA_DIR = process.env.DEMO_DATA_DIR || path.join(__dirname, '..', 'data');
-const PROVIDER_NAME = process.env.DEMO_PROVIDER_NAME || 'MediCore Demo Medical Aid';
+const PROVIDER_NAME = process.env.DEMO_PROVIDER_NAME || 'Umoya Demo Medical Aid';
 const PROVIDER_CODE = (process.env.DEMO_PROVIDER_CODE || 'demo_aid').toLowerCase();
 const DEFAULT_CURRENCY = process.env.DEMO_DEFAULT_CURRENCY || 'USD';
 const REQUIRE_API_KEY = String(process.env.DEMO_REQUIRE_API_KEY || 'false').toLowerCase() === 'true';
@@ -582,7 +582,7 @@ function bootstrapIfEmpty() {
     dateOfBirth: '1992-02-14',
     gender: 'female',
     phone: '+263770000001',
-    email: 'demo.patient@medicore.local',
+    email: 'demo.patient@umoya.local',
     relationship: 'self',
     status: 'active',
     planId: defaultPlan.id,

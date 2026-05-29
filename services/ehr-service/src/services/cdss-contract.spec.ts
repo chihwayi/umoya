@@ -51,7 +51,7 @@ describe('CDSS contract drift guard', () => {
     const ehrCdssService = readRepoFile('services', 'ehr-service', 'src', 'services', 'cdss.service.ts');
     let apiReference: string | null = null;
     try {
-      apiReference = readRepoFile('docs', 'MEDICORE_SYSTEM_REFERENCE.md');
+      apiReference = readRepoFile('docs', 'UMOYA_SYSTEM_REFERENCE.md');
     } catch {
       // docs file not yet created — skip doc-coverage check
     }

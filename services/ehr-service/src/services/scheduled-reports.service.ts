@@ -430,10 +430,10 @@ Report Details:
 
 ${result.fileUrl ? `Download Link: ${result.fileUrl}` : 'The report file is attached to this email.'}
 
-Thank you for using MediCore EHR.
+Thank you for using Umoya EHR.
 
 Best regards,
-MediCore System
+Umoya System
     `.trim();
 
     const htmlBody = `
@@ -453,7 +453,7 @@ MediCore System
         </div>
         ${result.fileUrl ? `<p><a href="${result.fileUrl}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Download Report</a></p>` : '<p>The report file is attached to this email.</p>'}
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-        <p style="color: #6b7280; font-size: 12px;">Thank you for using MediCore EHR.</p>
+        <p style="color: #6b7280; font-size: 12px;">Thank you for using Umoya EHR.</p>
       </div>
     `;
 

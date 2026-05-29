@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright configuration for MediCore QA tests.
+ * Playwright configuration for Umoya QA tests.
  * In CI, set EHR_API_URL and EHR_SERVICE_URL via GitHub Actions secrets.
  * Locally, point at your running stack (e.g. http://localhost:3013).
  */

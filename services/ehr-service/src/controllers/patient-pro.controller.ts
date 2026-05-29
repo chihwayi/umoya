@@ -355,7 +355,7 @@ export class PatientProController {
       if (phone) {
         await this.smsService.send(
           phone,
-          `MediCore: Hi ${firstName}, your care team has left you a message about your recent health questionnaire. Please open the MediCore Patient app to read it.`,
+          `Umoya: Hi ${firstName}, your care team has left you a message about your recent health questionnaire. Please open the Umoya Patient app to read it.`,
         );
       }
     } catch {

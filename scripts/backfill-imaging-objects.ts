@@ -233,8 +233,8 @@ async function backfillTenant(tenant: TenantRow, storageService: StorageService)
 function buildTenantConnectionString(databaseName: string): string {
   const host = process.env.DB_HOST || 'localhost';
   const port = process.env.DB_PORT || '5432';
-  const username = process.env.DB_USERNAME || 'medicore';
-  const password = process.env.DB_PASSWORD || 'medicore_password';
+  const username = process.env.DB_USERNAME || 'umoya';
+  const password = process.env.DB_PASSWORD || 'umoya_password';
   return `postgresql://${username}:${password}@${host}:${port}/${databaseName}`;
 }
 

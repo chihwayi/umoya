@@ -85,7 +85,7 @@ export const ROLE_CHECKLISTS: Record<string, RoleChecklist> = {
 
 export const DEFAULT_CHECKLIST: RoleChecklist = {
   role: "default",
-  title: "Welcome To MediCore",
+  title: "Welcome To Umoya",
   steps: [
     { id: "explore", label: "Explore the system", description: "Use the navigation menu to find your workspace." },
   ],

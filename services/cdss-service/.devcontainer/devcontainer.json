@@ -1,6 +1,6 @@
 {
-  "name": "MediCore CDSS Service",
-  "image": "medicore-cdss-service:latest",
+  "name": "Umoya CDSS Service",
+  "image": "umoya-cdss-service:latest",
   "workspaceFolder": "/app",
   "features": {
     "ghcr.io/devcontainers/features/python:1": {

@@ -77,7 +77,7 @@ export class AllergyIntoleranceMapper {
               ]
             : []),
           {
-            system: 'http://medicore.health/fhir/allergen',
+            system: 'http://umoya.health/fhir/allergen',
             code: allergy.allergen.toLowerCase().replace(/\s+/g, '-'),
             display: allergy.allergen,
           },

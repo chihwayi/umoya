@@ -127,7 +127,7 @@ export class HealthMonitorService {
     
     // Send alert email to admin
     await this.emailService.sendEmail({
-      to: process.env.ADMIN_ALERT_EMAIL || 'admin@medicore.health',
+      to: process.env.ADMIN_ALERT_EMAIL || 'admin@umoya.health',
       subject: `ALERT: Tenant Database Issue - ${tenant.clinicName}`,
       html: `
         <h2>Tenant Database Health Alert</h2>

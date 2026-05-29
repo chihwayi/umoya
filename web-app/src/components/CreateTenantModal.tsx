@@ -239,7 +239,7 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
                 placeholder="clinic-name"
               />
               <div className="absolute inset-y-0 right-0 flex items-center pr-4 text-sm text-slate-500 bg-slate-50 rounded-r-xl border-l border-slate-300 pl-3">
-                .medicore.health
+                .umoya.health
               </div>
             </div>
             <p className="text-xs text-slate-500 mt-2 ml-1">Lowercase letters, numbers, hyphens only (min 3 chars)</p>

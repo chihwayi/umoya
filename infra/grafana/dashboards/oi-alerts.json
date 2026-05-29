@@ -9,7 +9,7 @@
       "id": 1,
       "title": "Open OI Alerts (Unacknowledged)",
       "type": "stat",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT COUNT(*) AS open_alerts FROM hiv_oi_alerts WHERE status = 'open' AND acknowledged_at IS NULL",
         "format": "table"
@@ -32,7 +32,7 @@
       "id": 2,
       "title": "Acknowledged Today",
       "type": "stat",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT COUNT(*) AS acknowledged FROM hiv_oi_alerts WHERE acknowledged_at >= CURRENT_DATE",
         "format": "table"
@@ -43,7 +43,7 @@
       "id": 3,
       "title": "Critical OI Alerts",
       "type": "stat",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT COUNT(*) AS critical FROM hiv_oi_alerts WHERE severity = 'critical' AND status = 'open'",
         "format": "table"
@@ -65,7 +65,7 @@
       "id": 4,
       "title": "OI Alerts by Type",
       "type": "piechart",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT oi_type, COUNT(*) AS count FROM hiv_oi_alerts WHERE status = 'open' GROUP BY oi_type ORDER BY count DESC",
         "format": "table"
@@ -76,7 +76,7 @@
       "id": 5,
       "title": "OI Alert Trend (30 days)",
       "type": "timeseries",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT DATE_TRUNC('day', created_at) AS time, COUNT(*) AS alerts FROM hiv_oi_alerts WHERE created_at > NOW() - INTERVAL '30 days' GROUP BY 1 ORDER BY 1",
         "format": "table",

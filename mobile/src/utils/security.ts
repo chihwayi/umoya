@@ -1,5 +1,5 @@
 /**
- * MediCore Security Utilities — S118
+ * Umoya Security Utilities — S118
  *
  * HIPAA-required controls:
  *  - Certificate pinning config (enforced by axios interceptor in api.ts)
@@ -15,16 +15,16 @@ import { AppState, AppStateStatus, Platform } from 'react-native';
 // ─── Certificate pinning ──────────────────────────────────────────────────────
 
 /**
- * SHA-256 SPKI pins for api.medicore.app.
+ * SHA-256 SPKI pins for api.umoya.app.
  * Both current cert and backup are pinned — rotate 60 days before expiry.
  * Consumed by the axios TLS adapter (native modules only; ignored in Expo Go).
  */
 export const CERT_PINS: Record<string, string[]> = {
-  'api.medicore.app': [
+  'api.umoya.app': [
     'sha256/REPLACE_WITH_PRIMARY_SPKI_HASH=',
     'sha256/REPLACE_WITH_BACKUP_SPKI_HASH=',
   ],
-  'api-staging.medicore.app': [
+  'api-staging.umoya.app': [
     'sha256/REPLACE_WITH_STAGING_SPKI_HASH=',
   ],
 };

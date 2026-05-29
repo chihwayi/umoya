@@ -15,7 +15,7 @@ export class StripeProvider implements IPaymentGateway {
       'payment_method_types[]': 'card',
       'line_items[0][price_data][currency]': 'usd',
       'line_items[0][price_data][unit_amount]': String(Math.round(options.amountUsd * 100)),
-      'line_items[0][price_data][product_data][name]': `MediCore Subscription — ${options.clinicName}`,
+      'line_items[0][price_data][product_data][name]': `Umoya Subscription — ${options.clinicName}`,
       'line_items[0][price_data][product_data][description]': `${options.monthsToExtend} month(s) renewal`,
       'line_items[0][quantity]': '1',
       mode: 'payment',

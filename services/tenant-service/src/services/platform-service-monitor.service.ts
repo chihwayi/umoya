@@ -51,49 +51,49 @@ export class PlatformServiceMonitorService {
       id: 'tenant-service',
       name: 'Tenant Service',
       description: 'Provisioning, tenancy, and super admin APIs',
-      containerName: process.env.CONTAINER_TENANT_SERVICE || 'medicore-tenant-service',
+      containerName: process.env.CONTAINER_TENANT_SERVICE || 'umoya-tenant-service',
       restartable: true,
     },
     {
       id: 'ehr-service',
       name: 'EHR Service',
       description: 'Clinical workflows and EHR APIs',
-      containerName: process.env.CONTAINER_EHR_SERVICE || 'medicore-ehr-service',
+      containerName: process.env.CONTAINER_EHR_SERVICE || 'umoya-ehr-service',
       restartable: true,
     },
     {
       id: 'cdss-service',
       name: 'CDSS Service',
       description: 'Clinical decision support, AI and inference APIs',
-      containerName: process.env.CONTAINER_CDSS_SERVICE || 'medicore-cdss-service',
+      containerName: process.env.CONTAINER_CDSS_SERVICE || 'umoya-cdss-service',
       restartable: true,
     },
     {
       id: 'cdss-worker',
       name: 'CDSS Worker',
       description: 'Background ingestion and async AI jobs',
-      containerName: process.env.CONTAINER_CDSS_WORKER || 'medicore-cdss-worker',
+      containerName: process.env.CONTAINER_CDSS_WORKER || 'umoya-cdss-worker',
       restartable: true,
     },
     {
       id: 'medical-aid-demo-service',
       name: 'Medical Aid Demo Service',
       description: 'Demo payer integration service',
-      containerName: process.env.CONTAINER_MEDICAL_AID_DEMO || 'medicore-medical-aid-demo-service',
+      containerName: process.env.CONTAINER_MEDICAL_AID_DEMO || 'umoya-medical-aid-demo-service',
       restartable: true,
     },
     {
       id: 'web-app',
       name: 'Super Admin Frontend',
       description: 'Super admin web application',
-      containerName: process.env.CONTAINER_WEB_APP || 'medicore-web-app',
+      containerName: process.env.CONTAINER_WEB_APP || 'umoya-web-app',
       restartable: true,
     },
     {
       id: 'ehr-frontend',
       name: 'EHR Frontend',
       description: 'Tenant-facing clinical frontend',
-      containerName: process.env.CONTAINER_EHR_FRONTEND || 'medicore-ehr-frontend',
+      containerName: process.env.CONTAINER_EHR_FRONTEND || 'umoya-ehr-frontend',
       restartable: true,
     },
     {
@@ -559,7 +559,7 @@ export class PlatformServiceMonitorService {
   }
 
   private buildMultipartBody(fieldName: string, filename: string, contentType: string, fileBuffer: Buffer) {
-    const boundary = `----MediCore${Date.now().toString(16)}`;
+    const boundary = `----Umoya${Date.now().toString(16)}`;
     const top = Buffer.from(
       `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
       'utf8',

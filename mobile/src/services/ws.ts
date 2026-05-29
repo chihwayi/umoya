@@ -20,8 +20,8 @@ export function createWsClient(
   const connect = async () => {
     if (closed) return;
     const [jwt, tenantRaw] = await Promise.all([
-      SecureStore.getItemAsync('medicore_jwt'),
-      SecureStore.getItemAsync('medicore_tenant'),
+      SecureStore.getItemAsync('umoya_jwt'),
+      SecureStore.getItemAsync('umoya_tenant'),
     ]);
     const tenant = tenantRaw ? JSON.parse(tenantRaw) : null;
     const slug = tenant?.slug ?? '';

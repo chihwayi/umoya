@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { config as envConfig } from '@medicore/config';
+import { config as envConfig } from '@umoya/config';
 import PDFDocument from 'pdfkit';
 import {
   CreateDigitalPrescriptionDto,
@@ -189,7 +189,7 @@ export class DigitalPrescriptionService {
 
     let pdfUrl: string;
     if (this.minioService) {
-      const bucket = process.env.STORAGE_S3_BUCKET ?? 'medicore-documents';
+      const bucket = process.env.STORAGE_S3_BUCKET ?? 'umoya-documents';
       const key = `prescriptions/${prescriptionId}.pdf`;
       await this.minioService.uploadBuffer(bucket, key, pdfBuffer, 'application/pdf');
       pdfUrl = `${process.env.MINIO_PUBLIC_URL ?? ''}/${bucket}/${key}`;
@@ -276,7 +276,7 @@ export class DigitalPrescriptionService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      doc.fontSize(18).font('Helvetica-Bold').text('MediCore — Digital Prescription', { align: 'center' });
+      doc.fontSize(18).font('Helvetica-Bold').text('Umoya — Digital Prescription', { align: 'center' });
       doc.moveDown(0.5);
       doc.fontSize(10).font('Helvetica').text(`Date: ${new Date().toLocaleDateString()}`, { align: 'right' });
       doc.moveDown();

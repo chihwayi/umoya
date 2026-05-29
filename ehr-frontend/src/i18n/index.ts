@@ -29,7 +29,7 @@ i18n
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
-      lookupLocalStorage: 'medicore_language',
+      lookupLocalStorage: 'umoya_language',
     },
     interpolation: {
       escapeValue: false,

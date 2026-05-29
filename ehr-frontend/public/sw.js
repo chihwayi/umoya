@@ -1,4 +1,4 @@
-const CACHE_NAME = 'medicore-lite-v1';
+const CACHE_NAME = 'umoya-lite-v1';
 const OFFLINE_URLS = [
   '/',
   '/index.html',
@@ -31,7 +31,7 @@ self.addEventListener('fetch', event => {
 });
 
 self.addEventListener('sync', event => {
-  if (event.tag === 'medicore-offline-sync') {
+  if (event.tag === 'umoya-offline-sync') {
     event.waitUntil(syncOfflineQueue());
   }
 });
@@ -40,7 +40,7 @@ async function syncOfflineQueue() {
   // Simple check for pending items in IndexedDB
   // In a real implementation, we'd use a library like idb
   const db = await new Promise((resolve, reject) => {
-    const req = indexedDB.open('medicore_offline', 1);
+    const req = indexedDB.open('umoya_offline', 1);
     req.onsuccess = e => resolve((e.target as any).result);
     req.onerror = e => reject((e.target as any).error);
   });

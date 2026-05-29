@@ -1,9 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PostVisitBillingIntelligenceService } from './post-visit-billing-intelligence.service';
 
-// ── Mock @medicore/config ─────────────────────────────────────────────────────
+// ── Mock @umoya/config ─────────────────────────────────────────────────────
 
-jest.mock('@medicore/config', () => ({ config: {} }));
+jest.mock('@umoya/config', () => ({ config: {} }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -1091,7 +1091,7 @@ describe('CdssService proxy routing', () => {
         findings: [{ label: 'Pneumothorax', severity: 'critical', confidence: 0.91 }],
         top_finding: 'Pneumothorax',
         confidence: 0.91,
-        model_version: 'medicore-cxr-v1.0',
+        model_version: 'umoya-cxr-v1.0',
       },
     });
     (service as any).cdssClient = { post: postMock };
@@ -1112,7 +1112,7 @@ describe('CdssService proxy routing', () => {
     expect(response.top_finding).toBe('Pneumothorax');
     expect(auditMock.registerModelEntry).toHaveBeenCalledWith(
       tenantDb,
-      expect.objectContaining({ modelId: 'medicore-cxr-v1.0' }),
+      expect.objectContaining({ modelId: 'umoya-cxr-v1.0' }),
     );
     expect(auditMock.logPromptAudit).toHaveBeenCalledWith(
       tenantDb,
@@ -1289,7 +1289,7 @@ describe('CdssService proxy routing', () => {
         summary: 'Urgent oncology referral.',
         flags: ['document_type:referral_letter'],
         confidence: 0.86,
-        model: 'medicore-llm',
+        model: 'umoya-llm',
         governance: { governed_path: true, use_case: 'registration_document_intelligence' },
       },
     });

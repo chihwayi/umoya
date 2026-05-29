@@ -227,7 +227,7 @@ const LinkAccountPage: React.FC = () => {
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
                 Having trouble?{' '}
-                <a href="mailto:support@medicore.com" className="font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
+                <a href="mailto:support@umoya.com" className="font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
                   Contact Support
                 </a>
               </p>

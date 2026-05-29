@@ -1,18 +1,18 @@
 {
-  "appName": "MediCore Clinical",
+  "appName": "Umoya Clinical",
   "subtitle": "AI-First Clinical Companion",
-  "bundleId": "com.medicore.clinical",
+  "bundleId": "com.umoya.clinical",
   "version": "1.0.0",
 
   "shortDescription": "AI-powered ward rounds, SOAP dictation, escalations & patient care — built for clinicians.",
 
-  "fullDescription": "MediCore Clinical is a world-class, AI-first electronic health record companion designed for doctors, nurses, and patients in modern healthcare facilities.\n\nFOR DOCTORS:\n• Smart ward rounds with AI patient summaries, SLA timers, and vital trend sparklines\n• Voice dictation → AI-drafted SOAP notes awaiting your signature\n• CDSS tools: drug interactions, dose calculator, WHO guidelines, diagnosis suggestions\n• Real-time escalation inbox with live SLA countdown timers\n• HIPAA-secure messaging with colleagues and patients\n\nFOR NURSES:\n• Shift worklist with AI copilot task prioritisation\n• Triage dashboard with ESI scoring assistance\n• Live vitals entry with instant AI interpretation and escalation\n• Quick-reply secure messaging\n\nFOR PATIENTS:\n• Plain-language visit summary: understand your diagnosis and treatment plan\n• Ask AI about any part of your care — citation-grounded answers\n• Medication adherence tracker with 7-day history\n• Bill management with EcoCash, OneMoney, card, and bank transfer payment\n• Connected health devices: Apple Health, Fitbit, Google Fit, Samsung Health, Garmin, Withings\n• Medical records vault: view, share, and ask AI about your documents\n\nSECURITY & COMPLIANCE:\n• HIPAA end-to-end encrypted messaging\n• All sessions audit-logged\n• Screen privacy overlay prevents OS screenshots of patient data\n• Automatic session lock after 5 minutes of inactivity\n• Biometric authentication (Face ID / Fingerprint)",
+  "fullDescription": "Umoya Clinical is a world-class, AI-first electronic health record companion designed for doctors, nurses, and patients in modern healthcare facilities.\n\nFOR DOCTORS:\n• Smart ward rounds with AI patient summaries, SLA timers, and vital trend sparklines\n• Voice dictation → AI-drafted SOAP notes awaiting your signature\n• CDSS tools: drug interactions, dose calculator, WHO guidelines, diagnosis suggestions\n• Real-time escalation inbox with live SLA countdown timers\n• HIPAA-secure messaging with colleagues and patients\n\nFOR NURSES:\n• Shift worklist with AI copilot task prioritisation\n• Triage dashboard with ESI scoring assistance\n• Live vitals entry with instant AI interpretation and escalation\n• Quick-reply secure messaging\n\nFOR PATIENTS:\n• Plain-language visit summary: understand your diagnosis and treatment plan\n• Ask AI about any part of your care — citation-grounded answers\n• Medication adherence tracker with 7-day history\n• Bill management with EcoCash, OneMoney, card, and bank transfer payment\n• Connected health devices: Apple Health, Fitbit, Google Fit, Samsung Health, Garmin, Withings\n• Medical records vault: view, share, and ask AI about your documents\n\nSECURITY & COMPLIANCE:\n• HIPAA end-to-end encrypted messaging\n• All sessions audit-logged\n• Screen privacy overlay prevents OS screenshots of patient data\n• Automatic session lock after 5 minutes of inactivity\n• Biometric authentication (Face ID / Fingerprint)",
 
   "keywords": [
     "EMR", "EHR", "clinical", "doctor", "nurse", "patient",
     "HIPAA", "medical", "healthcare", "AI", "telemedicine",
     "ward rounds", "SOAP notes", "dictation", "vitals",
-    "medication", "escalation", "MediCore"
+    "medication", "escalation", "Umoya"
   ],
 
   "category": {
@@ -25,9 +25,9 @@
     "android": "PEGI 3"
   },
 
-  "supportUrl":  "https://support.medicore.app",
-  "marketingUrl": "https://medicore.app",
-  "privacyUrl":  "https://medicore.app/privacy",
+  "supportUrl":  "https://support.umoya.app",
+  "marketingUrl": "https://umoya.app",
+  "privacyUrl":  "https://umoya.app/privacy",
 
   "screenshots": {
     "ios": {
@@ -61,7 +61,7 @@
   },
 
   "releaseNotes": {
-    "en-US": "Initial release of MediCore Clinical — AI-first ward rounds, voice SOAP dictation, real-time escalation inbox, nurse shift management, and the full patient companion suite including medication tracking, bills, and health records."
+    "en-US": "Initial release of Umoya Clinical — AI-first ward rounds, voice SOAP dictation, real-time escalation inbox, nurse shift management, and the full patient companion suite including medication tracking, bills, and health records."
   },
 
   "easBuildCommands": {

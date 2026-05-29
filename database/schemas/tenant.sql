@@ -251,10 +251,10 @@ CREATE INDEX IF NOT EXISTS idx_runtime_endpoint_configs_updated_at ON runtime_en
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs("userId");
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs("createdAt");
 
--- Insert default super admin user (password: medicore123)
+-- Insert default super admin user (password: umoya123)
 INSERT INTO admin_users (email, "passwordHash", "firstName", "lastName", role, "mustChangePassword")
 VALUES (
-    'admin@medicore.health',
+    'admin@umoya.health',
     '$2b$12$ylEv9v4PCtLxQ6DWSKzPFOvfRAaJiAdnX8JOGOYb6Cd7KCl/RPixG',
     'System',
     'Administrator',

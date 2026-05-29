@@ -151,7 +151,7 @@ export class AlertDeliveryService {
     try {
       await axios.post(this.smsUrl, {
         to: phone,
-        message: `MEDICORE ALERT: ${alert.message} | Patient: ${alert.patientId}`,
+        message: `UMOYA ALERT: ${alert.message} | Patient: ${alert.patientId}`,
       }, { timeout: 5000 });
       return true;
     } catch (e: any) {

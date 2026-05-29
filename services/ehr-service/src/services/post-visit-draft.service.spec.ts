@@ -1,7 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { PostVisitDraftService } from './post-visit-draft.service';
 
-jest.mock('@medicore/config', () => ({ config: {} }));
+jest.mock('@umoya/config', () => ({ config: {} }));
 
 // annotateTextWithEntities is a pure util — let it run for real (no mock needed)
 

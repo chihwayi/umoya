@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { config as envConfig } from '@medicore/config';
+import { config as envConfig } from '@umoya/config';
 import { Patient } from '../entities/patient.entity';
 import { TenantService } from './tenant.service';
 import { EmailService } from './email.service';
@@ -220,12 +220,12 @@ export class PatientAuthService {
     try {
       await this.emailService.sendEmail({
         to: registerDto.email,
-        subject: 'Verify Your MediCore Patient Portal Account',
+        subject: 'Verify Your Umoya Patient Portal Account',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Welcome to MediCore Patient Portal</h2>
+            <h2 style="color: #2563eb;">Welcome to Umoya Patient Portal</h2>
             <p>Dear ${patient.firstName} ${patient.lastName},</p>
-            <p>Thank you for registering for the MediCore Patient Portal. Please verify your email address by clicking the link below:</p>
+            <p>Thank you for registering for the Umoya Patient Portal. Please verify your email address by clicking the link below:</p>
             <p style="text-align: center; margin: 30px 0;">
               <a href="${this.getPortalLink(`/patient/verify-email?token=${verificationToken}`)}" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
@@ -383,7 +383,7 @@ export class PatientAuthService {
     try {
       await this.emailService.sendEmail({
         to: resetDto.email,
-        subject: 'Reset Your MediCore Patient Portal Password',
+        subject: 'Reset Your Umoya Patient Portal Password',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #2563eb;">Password Reset Request</h2>

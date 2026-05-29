@@ -21,8 +21,8 @@ const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
   database: process.env.DB_NAME || 'tenant_bulawayo_general',
-  user: process.env.DB_USER || 'medicore',
-  password: process.env.DB_PASSWORD || 'medicore_password',
+  user: process.env.DB_USER || 'umoya',
+  password: process.env.DB_PASSWORD || 'umoya_password',
 });
 
 // ICD-10 chapter categories

@@ -79,15 +79,15 @@ const ChangePassword: React.FC = () => {
   return (
     <div className="min-h-screen overflow-hidden bg-[#080E1A] px-4 py-8 text-[#E8F0FF]">
       <div className="pointer-events-none fixed inset-0">
-        <div className="absolute inset-x-0 top-[-10rem] mx-auto h-[30rem] w-[30rem] rounded-full bg-[#00C896]/18 blur-3xl" />
-        <div className="absolute right-[-8rem] top-[16rem] h-[22rem] w-[22rem] rounded-full bg-[#2B7FFF]/16 blur-3xl" />
-        <div className="absolute bottom-[-8rem] left-[-6rem] h-[20rem] w-[20rem] rounded-full bg-[#FF7A40]/10 blur-3xl" />
+        <div className="absolute inset-x-0 top-[-10rem] mx-auto h-[30rem] w-[30rem] rounded-full bg-[#0AA98A]/18 blur-3xl" />
+        <div className="absolute right-[-8rem] top-[16rem] h-[22rem] w-[22rem] rounded-full bg-[#3B9EFF]/16 blur-3xl" />
+        <div className="absolute bottom-[-8rem] left-[-6rem] h-[20rem] w-[20rem] rounded-full bg-[#E8614D]/10 blur-3xl" />
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center">
         <div className="w-full rounded-[36px] border border-[#253A58] bg-[linear-gradient(180deg,rgba(14,24,41,0.98),rgba(8,14,26,0.99))] p-8 shadow-[0_35px_120px_rgba(0,0,0,0.45)] backdrop-blur-xl">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#00C896]/30 bg-[#00C896]/12 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#7DE8CA]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#0AA98A]/30 bg-[#0AA98A]/12 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#7DE8CA]">
               <Sparkles className="h-4 w-4" />
               Security update
             </div>
@@ -112,7 +112,7 @@ const ChangePassword: React.FC = () => {
                   required
                   value={formData.currentPassword}
                   onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
-                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
+                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#3B9EFF] focus:ring-2 focus:ring-[#3B9EFF]/20"
                   placeholder="Enter current password"
                 />
                 <button
@@ -136,7 +136,7 @@ const ChangePassword: React.FC = () => {
                   required
                   value={formData.newPassword}
                   onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
+                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#3B9EFF] focus:ring-2 focus:ring-[#3B9EFF]/20"
                   placeholder="Enter new password"
                 />
                 <button
@@ -177,7 +177,7 @@ const ChangePassword: React.FC = () => {
                   className={`w-full rounded-2xl py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:ring-2 ${
                     formData.confirmPassword && !passwordsMatch
                       ? 'border border-red-400 bg-[#200F1A] focus:border-red-400 focus:ring-red-400/20'
-                      : 'border border-[#253A58] bg-[#091320] focus:border-[#2B7FFF] focus:ring-[#2B7FFF]/20'
+                      : 'border border-[#253A58] bg-[#091320] focus:border-[#3B9EFF] focus:ring-[#3B9EFF]/20'
                   }`}
                   placeholder="Confirm new password"
                 />
@@ -197,7 +197,7 @@ const ChangePassword: React.FC = () => {
             <button
               type="submit"
               disabled={loading || !isPasswordValid || !passwordsMatch}
-              className="w-full rounded-2xl bg-gradient-to-r from-[#00C896] to-[#0BBE8A] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_12px_35px_rgba(0,200,150,0.3)] transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-[#00C896]/35 disabled:cursor-not-allowed disabled:opacity-55"
+              className="w-full rounded-2xl bg-gradient-to-r from-[#0AA98A] to-[#0BBE8A] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_12px_35px_rgba(0,200,150,0.3)] transition hover:brightness-105 focus:outline-none focus:ring-2 focus:ring-[#0AA98A]/35 disabled:cursor-not-allowed disabled:opacity-55"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">

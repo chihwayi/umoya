@@ -19,7 +19,7 @@ export default function LanguageSwitcher() {
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const lang = e.target.value;
     i18n.changeLanguage(lang);
-    localStorage.setItem('medicore_language', lang);
+    localStorage.setItem('umoya_language', lang);
   };
 
   return (

@@ -278,8 +278,8 @@ export class CcdaService {
     const docId = this.generateDocumentId();
     const authorName = author ? `${author.firstName} ${author.lastName}` : 'Unknown';
     const authorId = author?.id || 'unknown';
-    const orgName = 'MediCore Solutions';
-    const orgId = 'medicore';
+    const orgName = 'Umoya Solutions';
+    const orgId = 'umoya';
 
     // Build CCDA XML document
     const xml = `<?xml version="1.0" encoding="UTF-8"?>

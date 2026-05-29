@@ -39,7 +39,7 @@ export class PrescriptionPdfService {
     }
 
     // Get tenant information for letterhead
-    const clinicName = process.env.CLINIC_NAME || 'MediCore Health';
+    const clinicName = process.env.CLINIC_NAME || 'Umoya Health';
     const clinicAddress = process.env.CLINIC_ADDRESS || '';
     const clinicPhone = process.env.CLINIC_PHONE || '';
     const clinicEmail = process.env.CLINIC_EMAIL || '';

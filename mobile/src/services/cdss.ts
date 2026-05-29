@@ -1,5 +1,5 @@
 /**
- * MediCore CDSS Service — Mobile
+ * Umoya CDSS Service — Mobile
  *
  * All methods proxy to the EHR service which forwards to the CDSS FastAPI
  * service at port 8000. Never call CDSS directly from mobile.

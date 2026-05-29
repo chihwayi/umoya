@@ -46,10 +46,10 @@ interface AuthState {
 }
 
 const KEYS = {
-  JWT:    'medicore_jwt',
-  ROLE:   'medicore_role',
-  USER:   'medicore_user',
-  TENANT: 'medicore_tenant',
+  JWT:    'umoya_jwt',
+  ROLE:   'umoya_role',
+  USER:   'umoya_user',
+  TENANT: 'umoya_tenant',
 } as const;
 
 export const useAuthStore = create<AuthState>((set, get) => ({

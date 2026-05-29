@@ -115,7 +115,7 @@ export const EducationService = {
     return {
       ...materialToArticle(item),
       body: item.contentHtml || `<p>${(item.content ?? '').replace(/\n/g, '</p><p>')}</p>`,
-      authorName: item.aiGenerated ? 'MediCore AI' : undefined,
+      authorName: item.aiGenerated ? 'Umoya AI' : undefined,
     } as EducationArticleDetail;
   },
 };

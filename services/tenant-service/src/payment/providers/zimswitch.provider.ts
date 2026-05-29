@@ -25,7 +25,7 @@ export class ZimSwitchProvider implements IPaymentGateway {
       currency: 'USD',
       customerPhone: options.contactPhone,
       customerEmail: options.contactEmail,
-      description: `MediCore ${options.monthsToExtend}mo subscription — ${options.clinicName}`,
+      description: `Umoya ${options.monthsToExtend}mo subscription — ${options.clinicName}`,
       callbackUrl: options.callbackUrl,
       timestamp,
       signature,

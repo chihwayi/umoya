@@ -52,10 +52,10 @@ export class PaymentService {
     if (result.paymentUrl && tenant.contactPhone) {
       await this.smsService.send(
         tenant.contactPhone,
-        `MediCore: Complete your ${monthsToExtend}-month subscription renewal for ${tenant.clinicName}. Pay here: ${result.paymentUrl}`,
+        `Umoya: Complete your ${monthsToExtend}-month subscription renewal for ${tenant.clinicName}. Pay here: ${result.paymentUrl}`,
       );
     } else if (result.instruction && tenant.contactPhone) {
-      await this.smsService.send(tenant.contactPhone, `MediCore: ${result.instruction}`);
+      await this.smsService.send(tenant.contactPhone, `Umoya: ${result.instruction}`);
     }
 
     return { ok: true, reference, ...result };
@@ -126,7 +126,7 @@ export class PaymentService {
     if (tenant.contactPhone) {
       await this.smsService.send(
         tenant.contactPhone,
-        `MediCore: Payment received for ${tenant.clinicName}. Subscription extended by ${txn.months_to_extend} month(s) until ${newBillingEndsAt.toDateString()}. Thank you.`,
+        `Umoya: Payment received for ${tenant.clinicName}. Subscription extended by ${txn.months_to_extend} month(s) until ${newBillingEndsAt.toDateString()}. Thank you.`,
       );
     }
 

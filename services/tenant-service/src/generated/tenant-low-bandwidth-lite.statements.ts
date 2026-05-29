@@ -37,7 +37,7 @@ export const TENANT_LOW_BANDWIDTH_STATEMENTS: string[] = [
     chw_user_id UUID,                    -- if CHW is registered
     entry_type TEXT NOT NULL,            -- 'patient_lookup' | 'vitals_entry' | 'symptom_checklist' | 'referral' | 'drug_dispense'
     patient_id UUID,
-    patient_identifier TEXT,             -- NID or MediCore patient number
+    patient_identifier TEXT,             -- NID or Umoya patient number
     -- Entered data (structured from USSD menus)
     data_entered JSONB NOT NULL DEFAULT '{}',
     -- Processing

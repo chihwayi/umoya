@@ -6,7 +6,7 @@ import { Prescription } from '../entities/prescription.entity';
 import { LabOrder } from '../entities/lab-order.entity';
 import { Bill } from '../entities/billing.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
-import { config as envConfig } from '@medicore/config';
+import { config as envConfig } from '@umoya/config';
 
 @Injectable()
 export class NotificationsService {
@@ -75,7 +75,7 @@ export class NotificationsService {
       throw new Error('Appointment not found');
     }
 
-    const message = `Dear ${appointment.patient.firstName}, this is a reminder for your appointment on ${appointment.appointmentDate.toDateString()} at ${appointment.appointmentDate.toTimeString()}. Please arrive 15 minutes early. MediCore Clinic`;
+    const message = `Dear ${appointment.patient.firstName}, this is a reminder for your appointment on ${appointment.appointmentDate.toDateString()} at ${appointment.appointmentDate.toTimeString()}. Please arrive 15 minutes early. Umoya Clinic`;
 
     return this.sendSms({
       phone: appointment.patient.phone,
@@ -94,7 +94,7 @@ export class NotificationsService {
       throw new Error('Prescription not found');
     }
 
-    const message = `Dear ${prescription.patient.firstName}, your prescription for ${prescription.medicationName} is ready for collection. Please bring your ID. MediCore Pharmacy`;
+    const message = `Dear ${prescription.patient.firstName}, your prescription for ${prescription.medicationName} is ready for collection. Please bring your ID. Umoya Pharmacy`;
 
     return this.sendSms({
       phone: prescription.patient.phone,
@@ -114,7 +114,7 @@ export class NotificationsService {
     }
 
     const testName = labOrder.tests?.[0]?.testName || 'the requested tests';
-    const message = `Dear ${labOrder.patient.firstName}, your lab results for ${testName} are ready. Please visit the clinic to collect them or call us for details. MediCore Lab`;
+    const message = `Dear ${labOrder.patient.firstName}, your lab results for ${testName} are ready. Please visit the clinic to collect them or call us for details. Umoya Lab`;
 
     return this.sendSms({
       phone: labOrder.patient.phone,
@@ -133,7 +133,7 @@ export class NotificationsService {
       throw new Error('Bill not found');
     }
 
-    const message = `Dear ${bill.patient.firstName}, your bill #${bill.billNumber} of $${bill.totalAmount} is due. Pay via EcoCash, OneMoney or visit our clinic. Thank you. MediCore`;
+    const message = `Dear ${bill.patient.firstName}, your bill #${bill.billNumber} of $${bill.totalAmount} is due. Pay via EcoCash, OneMoney or visit our clinic. Thank you. Umoya`;
 
     return this.sendSms({
       phone: bill.patient.phone,

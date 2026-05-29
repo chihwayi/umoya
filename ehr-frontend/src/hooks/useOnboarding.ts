@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { getChecklist, RoleChecklist } from "../data/onboarding";
 
-const STORAGE_KEY_PREFIX = "medicore_onboarding_";
+const STORAGE_KEY_PREFIX = "umoya_onboarding_";
 
 function getStorageKey(role: string): string {
   return `${STORAGE_KEY_PREFIX}${role}`;

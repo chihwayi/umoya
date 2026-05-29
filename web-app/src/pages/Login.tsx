@@ -7,7 +7,7 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const logoSrc = '/medicore.png';
+  const logoSrc = '/umoya.png';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -32,24 +32,24 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   return (
     <div className="min-h-screen overflow-hidden bg-[#080E1A] px-4 py-8 text-[#E8F0FF]">
       <div className="pointer-events-none fixed inset-0">
-        <div className="absolute inset-x-0 top-[-10rem] mx-auto h-[32rem] w-[32rem] rounded-full bg-[#00C896]/18 blur-3xl" />
-        <div className="absolute right-[-8rem] top-[16rem] h-[24rem] w-[24rem] rounded-full bg-[#2B7FFF]/16 blur-3xl" />
-        <div className="absolute bottom-[-10rem] left-[-6rem] h-[22rem] w-[22rem] rounded-full bg-[#FF7A40]/10 blur-3xl" />
+        <div className="absolute inset-x-0 top-[-10rem] mx-auto h-[32rem] w-[32rem] rounded-full bg-[#0AA98A]/18 blur-3xl" />
+        <div className="absolute right-[-8rem] top-[16rem] h-[24rem] w-[24rem] rounded-full bg-[#3B9EFF]/16 blur-3xl" />
+        <div className="absolute bottom-[-10rem] left-[-6rem] h-[22rem] w-[22rem] rounded-full bg-[#E8614D]/10 blur-3xl" />
       </div>
 
       <div className="relative z-10 mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.02fr_0.98fr]">
         <section className="rounded-[36px] border border-white/10 bg-[linear-gradient(180deg,rgba(14,24,41,0.94),rgba(8,14,26,0.98))] p-8 shadow-[0_35px_120px_rgba(0,0,0,0.45)]">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#00C896]/30 bg-[#00C896]/12 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#7DE8CA]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#0AA98A]/30 bg-[#0AA98A]/12 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5DDBB8]">
             <Sparkles className="h-4 w-4" />
             Super admin
           </div>
 
           <div className="mt-6 flex items-center gap-4">
-            <div className="rounded-[24px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.14)]">
-              <img src={logoSrc} alt="MediCore logo" className="h-14 w-auto rounded-xl" />
+            <div className="rounded-[24px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(10,169,138,0.14)]">
+              <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto rounded-xl" />
             </div>
             <div>
-              <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">MediCore</div>
+              <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
               <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">
                 Control the platform, not just a dashboard.
               </h1>
@@ -70,7 +70,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               const IconComponent = item.icon;
               return (
                 <div key={item.title} className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#102139] text-[#7DE8CA]">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[#102139] text-[#5DDBB8]">
                     <IconComponent className="h-5 w-5" />
                   </div>
                   <h2 className="text-sm font-semibold text-white">{item.title}</h2>
@@ -85,7 +85,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <div>
             <div className="text-xs uppercase tracking-[0.24em] text-[#7A92B8]">Admin login</div>
             <h2 style={{ fontFamily: '"Fraunces", serif' }} className="mt-2 text-3xl text-white">
-              Sign in to the MediCore control plane.
+              Sign in to the Umoya control plane.
             </h2>
             <p className="mt-2 text-sm leading-6 text-[#AFC1DF]">
               The same visual language as the public site, tuned for platform administration instead of marketing.
@@ -111,8 +111,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <input
                   type="email"
                   required
-                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
-                  placeholder="admin@medicore.health"
+                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#3B9EFF] focus:ring-2 focus:ring-[#3B9EFF]/20"
+                  placeholder="admin@umoya.health"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -126,7 +126,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:ring-2 focus:ring-[#2B7FFF]/20"
+                  className="w-full rounded-2xl border border-[#253A58] bg-[#091320] py-3.5 pl-12 pr-12 text-sm text-white outline-none transition placeholder:text-[#4A6080] focus:border-[#3B9EFF] focus:ring-2 focus:ring-[#3B9EFF]/20"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -150,11 +150,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#00C896] px-6 py-3.5 text-sm font-semibold text-[#051119] shadow-[0_20px_80px_rgba(0,200,150,0.22)] transition hover:bg-[#24D9A8] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#0AA98A] px-6 py-3.5 text-sm font-semibold text-[#040A10] shadow-[0_20px_80px_rgba(10,169,138,0.22)] transition hover:bg-[#12BFAB] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <>
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#051119]/30 border-t-[#051119]"></div>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#040A10]/30 border-t-[#040A10]"></div>
                   <span>Signing in...</span>
                 </>
               ) : (
@@ -167,7 +167,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </form>
 
           <div className="mt-6 rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center gap-2 text-[#7DE8CA]">
+            <div className="flex items-center gap-2 text-[#5DDBB8]">
               <Shield className="h-4 w-4" />
               <span className="text-sm font-medium">Platform-secure access</span>
             </div>
@@ -177,7 +177,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           <div className="mt-6 text-center text-sm text-[#7A92B8]">
-            © {new Date().getFullYear()} MediCore Solutions.
+            © {new Date().getFullYear()} Umoya Solutions.
           </div>
         </section>
       </div>

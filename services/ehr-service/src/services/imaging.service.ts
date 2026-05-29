@@ -2731,12 +2731,12 @@ export class ImagingService {
   }
 
   async uploadDicomToMinio(objectKey: string, buffer: Buffer, contentType: string): Promise<void> {
-    const bucket = process.env.MINIO_BUCKET ?? 'medicore-dicom';
+    const bucket = process.env.MINIO_BUCKET ?? 'umoya-dicom';
     await this.minioService.uploadBuffer(bucket, objectKey, buffer, contentType);
   }
 
   async getDicomBuffer(objectKey: string): Promise<Buffer> {
-    const bucket = process.env.MINIO_BUCKET ?? 'medicore-dicom';
+    const bucket = process.env.MINIO_BUCKET ?? 'umoya-dicom';
     return this.minioService.getObjectBuffer(bucket, objectKey);
   }
 }

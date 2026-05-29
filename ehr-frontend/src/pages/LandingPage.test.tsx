@@ -43,7 +43,7 @@ describe('LandingPage', () => {
 
     fireEvent.change(screen.getByPlaceholderText('Dr. Amara Nkosi'), { target: { value: 'Dr Tariro Moyo' } });
     fireEvent.change(screen.getByPlaceholderText('Nairobi Regional Health Centre'), { target: { value: 'Borrowdale Specialist Centre' } });
-    fireEvent.change(screen.getByPlaceholderText('doctor@clinic.medicore.health'), { target: { value: 'doctor@clinic.co.zw' } });
+    fireEvent.change(screen.getByPlaceholderText('doctor@clinic.umoya.health'), { target: { value: 'doctor@clinic.co.zw' } });
     fireEvent.change(screen.getByPlaceholderText('+27 / +254 / +260 ...'), { target: { value: '+263771234567' } });
     fireEvent.change(screen.getByPlaceholderText('Consultant physician'), { target: { value: 'Consultant physician' } });
     fireEvent.change(screen.getByPlaceholderText('Internal medicine, maternity, radiology'), { target: { value: 'HIV Medicine' } });

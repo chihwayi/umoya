@@ -68,11 +68,11 @@ export class HimisReportingService {
 
     for (const rec of records) {
       try {
-        const medicoreId = await this.importOpenMrsRecord(ds, rec.resourceType, rec.data);
+        const umoyaId = await this.importOpenMrsRecord(ds, rec.resourceType, rec.data);
         await logRepo.save(logRepo.create({
           batchId, resourceType: rec.resourceType,
           openmrsUuid: rec.openmrsUuid,
-          medicoreId,
+          umoyaId,
           rawRecord: rec.data,
           status: 'migrated',
         }));

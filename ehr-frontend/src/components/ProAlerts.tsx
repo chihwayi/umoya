@@ -181,7 +181,7 @@ const ProAlerts: React.FC<ProAlertsProps> = ({
               </button>
             </div>
             <p className="text-xs text-slate-500 mb-3">
-              This message will be visible to the patient in their MediCore app, and they will receive an SMS notification.
+              This message will be visible to the patient in their Umoya app, and they will receive an SMS notification.
             </p>
             <div className="mb-2">
               <span className="text-xs font-semibold text-slate-700">Re: </span>

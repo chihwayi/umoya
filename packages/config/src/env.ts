@@ -3,7 +3,7 @@ import { z } from 'zod';
 const envSchema = z.object({
   // System
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  SYSTEM_DOMAIN: z.string().default('medicore.health'),
+  SYSTEM_DOMAIN: z.string().default('umoya.health'),
 
   // URL inheritance (single-base, optional)
   SERVICE_BASE_URL: z.string().optional(),
@@ -40,9 +40,9 @@ const envSchema = z.object({
 
   // Database
   DATABASE_URL: z.string().optional(),
-  POSTGRES_USER: z.string().default('medicore'),
-  POSTGRES_PASSWORD: z.string().default('medicore_password'),
-  POSTGRES_DB: z.string().default('medicore_master'),
+  POSTGRES_USER: z.string().default('umoya'),
+  POSTGRES_PASSWORD: z.string().default('umoya_password'),
+  POSTGRES_DB: z.string().default('umoya_master'),
 
   // Third Party
   DHIS2_URL: z.string().optional(),

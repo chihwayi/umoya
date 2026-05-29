@@ -22,7 +22,7 @@ export class FlutterwaveProvider implements IPaymentGateway {
         name: options.clinicName,
       },
       customizations: {
-        title: `MediCore Subscription — ${options.clinicName}`,
+        title: `Umoya Subscription — ${options.clinicName}`,
         description: `${options.monthsToExtend} month(s) subscription renewal`,
       },
     };

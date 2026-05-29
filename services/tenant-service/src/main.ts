@@ -4,7 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { TenantModule } from './tenant.module';
 import { SentryFilter } from './filters/sentry.filter';
-import { config as envConfig } from '@medicore/config';
+import { config as envConfig } from '@umoya/config';
 import { randomUUID } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
@@ -13,7 +13,7 @@ function validateCriticalSecurityEnv(): void {
   const isDevLike = ['dev', 'development', 'local', 'test'].includes(env);
 
   const jwt = (process.env.JWT_SECRET || '').trim();
-  const insecureJwtDefaults = new Set(['dev_secret_key_change_in_production', 'medicore-super-secret-key', 'ehr-super-secret-key']);
+  const insecureJwtDefaults = new Set(['dev_secret_key_change_in_production', 'umoya-super-secret-key', 'ehr-super-secret-key']);
 
   if (!jwt) {
     throw new Error('JWT_SECRET is required for tenant-service startup.');
@@ -66,8 +66,8 @@ async function bootstrap() {
 
   // Swagger setup
   const config = new DocumentBuilder()
-    .setTitle('MediCore Tenant Management API')
-    .setDescription('Complete tenant management system for MediCore eHR platform')
+    .setTitle('Umoya Tenant Management API')
+    .setDescription('Complete tenant management system for Umoya eHR platform')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -77,7 +77,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3001;
   await app.listen(port);
   
-  console.log(`🏥 MediCore Tenant Service running on port ${port}`);
+  console.log(`🏥 Umoya Tenant Service running on port ${port}`);
 }
 
 bootstrap();

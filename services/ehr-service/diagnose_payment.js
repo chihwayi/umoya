@@ -8,9 +8,9 @@ async function diagnose() {
   const masterClient = new Client({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT) || 5432,
-    username: process.env.DB_USERNAME || 'medicore',
-    password: process.env.DB_PASSWORD || 'medicore_password',
-    database: 'medicore_master',
+    username: process.env.DB_USERNAME || 'umoya',
+    password: process.env.DB_PASSWORD || 'umoya_password',
+    database: 'umoya_master',
   });
 
   try {
@@ -31,8 +31,8 @@ async function diagnose() {
     const tenantClient = new Client({
         host: process.env.DB_HOST || 'localhost',
         port: parseInt(process.env.DB_PORT) || 5432,
-        username: process.env.DB_USERNAME || 'medicore',
-        password: process.env.DB_PASSWORD || 'medicore_password',
+        username: process.env.DB_USERNAME || 'umoya',
+        password: process.env.DB_PASSWORD || 'umoya_password',
         database: tenant.databaseName,
     });
 

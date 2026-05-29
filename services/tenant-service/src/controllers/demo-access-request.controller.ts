@@ -11,7 +11,7 @@ export class DemoAccessRequestController {
   constructor(private readonly demoAccessRequestService: DemoAccessRequestService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Submit a public request for guided MediCore test access' })
+  @ApiOperation({ summary: 'Submit a public request for guided Umoya test access' })
   @ApiResponse({ status: 201, description: 'Demo access request submitted successfully' })
   async createRequest(@Body(ValidationPipe) body: CreateDemoAccessRequestDto) {
     const request = await this.demoAccessRequestService.createRequest(body);

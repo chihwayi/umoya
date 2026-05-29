@@ -1,6 +1,6 @@
 import { device, element, by, expect as detoxExpect } from 'detox';
 
-describe('MediCore Mobile — Smoke Tests', () => {
+describe('Umoya Mobile — Smoke Tests', () => {
   beforeAll(async () => {
     await device.launchApp({ newInstance: true });
   });

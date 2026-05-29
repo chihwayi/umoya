@@ -15,7 +15,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { config } from '@medicore/config';
+import { config } from '@umoya/config';
 import { ReviewPostVisitBillingSuggestionDto } from '../dto/post-visit.dto';
 import { HipaaAuditService, HipaaAuditAction } from './hipaa-audit.service';
 

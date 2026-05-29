@@ -21,7 +21,7 @@ describe('NhlsHl7Service', () => {
 
     const service = new NhlsHl7Service(tenantService as any);
     const hl7 = [
-      'MSH|^~\\&|NHLS|LAB|MEDICORE|EHR|20260411090000||ORU^R01|LAB-001|P|2.5',
+      'MSH|^~\\&|NHLS|LAB|UMOYA|EHR|20260411090000||ORU^R01|LAB-001|P|2.5',
       'PID|1||8001015009087^^^RSA^NI||Doe^Jane',
       'OBR|1|ORD-1|ACC-1|PANEL^NHLS HIV PANEL||20260410080000',
       'OBX|1|NM|NHLS-CD4^CD4 Count||523|cells/uL|350-1200|N|||F|||20260411083000',

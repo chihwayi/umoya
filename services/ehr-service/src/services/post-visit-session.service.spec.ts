@@ -1,9 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { PostVisitSessionService } from './post-visit-session.service';
 
-// ── Mock @medicore/config ─────────────────────────────────────────────────────
+// ── Mock @umoya/config ─────────────────────────────────────────────────────
 
-jest.mock('@medicore/config', () => ({ config: {} }));
+jest.mock('@umoya/config', () => ({ config: {} }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

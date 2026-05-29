@@ -1,5 +1,5 @@
 {
-  "name": "@medicore/web-app",
+  "name": "@umoya/web-app",
   "version": "1.0.0",
   "private": true,
   "dependencies": {

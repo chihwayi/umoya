@@ -298,7 +298,7 @@ function mapApiDocuments(docs: any[]): MedDocument[] {
     date: (d.uploadedAt ?? d.createdAt)
       ? new Date(d.uploadedAt ?? d.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
       : "—",
-    doctor: d.uploadedBy ?? "MediCore",
+    doctor: d.uploadedBy ?? "Umoya",
     size: d.fileSize ? `${Math.round(d.fileSize / 1024)} KB` : "—",
   }));
 }

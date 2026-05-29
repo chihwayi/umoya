@@ -1,5 +1,5 @@
 -- Add public doctor demo access request queue
--- Run against medicore master database
+-- Run against umoya master database
 
 CREATE TABLE IF NOT EXISTS demo_access_requests (
     id varchar(36) PRIMARY KEY,

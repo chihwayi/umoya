@@ -72,7 +72,7 @@ export class PaymentsService {
       {
         ...paymentData,
         instructionsBuilder: (amount: number) =>
-          `Dial *151# and follow prompts to pay $${amount} to MediCore Clinic`,
+          `Dial *151# and follow prompts to pay $${amount} to Umoya Clinic`,
         expiryMinutes: 15,
         feeCalculator: (amount: number) => this.calculateEcoCashFees(amount),
       },
@@ -86,7 +86,7 @@ export class PaymentsService {
       {
         ...paymentData,
         instructionsBuilder: (amount: number) =>
-          `You will receive an SMS prompt to authorize payment of $${amount} to MediCore Clinic`,
+          `You will receive an SMS prompt to authorize payment of $${amount} to Umoya Clinic`,
         expiryMinutes: 10,
         feeCalculator: (amount: number) => this.calculateOneMoneyFees(amount),
       },

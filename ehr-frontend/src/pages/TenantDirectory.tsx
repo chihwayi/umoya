@@ -78,7 +78,7 @@ const CDSSIngestPanel: React.FC<{
           onClick={() => { setShowUpload(v => !v); setUploadFile(null); }}
           disabled={status === 'running'}
           title="Upload a single updated guideline PDF"
-          className="inline-flex items-center gap-2 rounded-full border border-[#2B7FFF]/30 bg-[#2B7FFF]/10 px-4 py-3 text-sm font-medium text-[#7DB9FF] transition hover:border-[#2B7FFF]/60 hover:bg-[#2B7FFF]/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-full border border-[#3B9EFF]/30 bg-[#3B9EFF]/10 px-4 py-3 text-sm font-medium text-[#7DB9FF] transition hover:border-[#3B9EFF]/60 hover:bg-[#3B9EFF]/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Upload className="h-4 w-4" />
           Upload Guideline
@@ -86,16 +86,16 @@ const CDSSIngestPanel: React.FC<{
         <button
           onClick={onSync}
           disabled={status === 'running'}
-          className="inline-flex items-center gap-2 rounded-full border border-[#00C896]/30 bg-[#00C896]/10 px-5 py-3 text-sm font-medium text-[#7DE8CA] transition hover:border-[#00C896]/60 hover:bg-[#00C896]/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-full border border-[#0AA98A]/30 bg-[#0AA98A]/10 px-5 py-3 text-sm font-medium text-[#7DE8CA] transition hover:border-[#0AA98A]/60 hover:bg-[#0AA98A]/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {status === 'running' ? <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#00C896]" /> : <Database className="h-4 w-4" />}
+          {status === 'running' ? <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#0AA98A]" /> : <Database className="h-4 w-4" />}
           {status === 'running' ? 'Ingesting...' : status === 'done' ? 'Re-sync Guidelines' : 'Sync CDSS Guidelines'}
         </button>
       </div>
 
       {/* Single-file upload dropzone */}
       {showUpload && status !== 'running' && (
-        <div className="w-80 rounded-2xl border border-[#2B7FFF]/20 bg-[#0A1525]/90 p-4 shadow-lg backdrop-blur-xl">
+        <div className="w-80 rounded-2xl border border-[#3B9EFF]/20 bg-[#0A1525]/90 p-4 shadow-lg backdrop-blur-xl">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold text-[#7DB9FF]">Upload updated guideline PDF</span>
             <button onClick={() => { setShowUpload(false); setUploadFile(null); }} className="text-[#4A6080] hover:text-white">
@@ -107,7 +107,7 @@ const CDSSIngestPanel: React.FC<{
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => !uploadFile && fileInputRef.current?.click()}
-            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 transition ${dragOver ? 'border-[#2B7FFF]/60 bg-[#2B7FFF]/10' : 'border-white/15 hover:border-[#2B7FFF]/40'}`}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 transition ${dragOver ? 'border-[#3B9EFF]/60 bg-[#3B9EFF]/10' : 'border-white/15 hover:border-[#3B9EFF]/40'}`}
           >
             {uploadFile ? (
               <div className="flex items-center gap-2 text-xs text-[#7DB9FF]">
@@ -120,7 +120,7 @@ const CDSSIngestPanel: React.FC<{
             ) : (
               <>
                 <Upload className="h-6 w-6 text-[#4A6080]" />
-                <p className="text-center text-[11px] text-[#4A6080]">Drop PDF here or click to select<br /><span className="text-[#2B7FFF]/70">PDF only · max 50 MB</span></p>
+                <p className="text-center text-[11px] text-[#4A6080]">Drop PDF here or click to select<br /><span className="text-[#3B9EFF]/70">PDF only · max 50 MB</span></p>
               </>
             )}
           </div>
@@ -128,7 +128,7 @@ const CDSSIngestPanel: React.FC<{
           {uploadFile && (
             <button
               onClick={handleConfirmUpload}
-              className="mt-3 w-full rounded-xl bg-[#2B7FFF] py-2 text-xs font-semibold text-white transition hover:bg-[#1a6aee]"
+              className="mt-3 w-full rounded-xl bg-[#3B9EFF] py-2 text-xs font-semibold text-white transition hover:bg-[#1a6aee]"
             >
               Ingest this guideline
             </button>
@@ -148,7 +148,7 @@ const CDSSIngestPanel: React.FC<{
           </div>
           <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-2 rounded-full bg-[#00C896] transition-all duration-300"
+              className="h-2 rounded-full bg-[#0AA98A] transition-all duration-300"
               style={{ width: `${pct}%`, boxShadow: status === 'running' ? '0 0 8px rgba(0,200,150,0.6)' : 'none' }}
             />
           </div>
@@ -190,7 +190,7 @@ const CDSSIngestPanel: React.FC<{
 
 const TenantDirectory: React.FC = () => {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -295,7 +295,7 @@ const TenantDirectory: React.FC = () => {
       case 'enterprise':
         return 'border-[#A66CFF]/40 bg-[#A66CFF]/14 text-[#E4D6FF]';
       case 'professional':
-        return 'border-[#2B7FFF]/40 bg-[#2B7FFF]/14 text-[#CFE0FF]';
+        return 'border-[#3B9EFF]/40 bg-[#3B9EFF]/14 text-[#CFE0FF]';
       default:
         return 'border-white/10 bg-white/5 text-[#B9CBE6]';
     }
@@ -304,9 +304,9 @@ const TenantDirectory: React.FC = () => {
   return (
     <div className="min-h-screen overflow-hidden bg-[#080E1A] text-[#E8F0FF]">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-x-0 top-[-12rem] mx-auto h-[34rem] w-[34rem] rounded-full bg-[#00C896]/18 blur-3xl" />
-        <div className="absolute right-[-8rem] top-[18rem] h-[24rem] w-[24rem] rounded-full bg-[#2B7FFF]/16 blur-3xl" />
-        <div className="absolute bottom-[-10rem] left-[-8rem] h-[22rem] w-[22rem] rounded-full bg-[#FF7A40]/10 blur-3xl" />
+        <div className="absolute inset-x-0 top-[-12rem] mx-auto h-[34rem] w-[34rem] rounded-full bg-[#0AA98A]/18 blur-3xl" />
+        <div className="absolute right-[-8rem] top-[18rem] h-[24rem] w-[24rem] rounded-full bg-[#3B9EFF]/16 blur-3xl" />
+        <div className="absolute bottom-[-10rem] left-[-8rem] h-[22rem] w-[22rem] rounded-full bg-[#E8614D]/10 blur-3xl" />
       </div>
 
       <div className="relative z-10 flex min-h-screen flex-col">
@@ -317,17 +317,17 @@ const TenantDirectory: React.FC = () => {
                 <button
                   onClick={() => navigate('/')}
                   className="rounded-[20px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.12)] transition hover:scale-[1.02]"
-                  title="Back to MediCore overview"
+                  title="Back to Umoya overview"
                 >
-                  <img src={logoSrc} alt="MediCore logo" className="h-8 w-auto sm:h-10" />
+                  <img src={logoSrc} alt="Umoya logo" className="h-8 w-auto sm:h-10" />
                 </button>
                 <div>
-                  <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">MediCore</div>
+                  <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
                   <h1 style={{ fontFamily: '"Fraunces", serif' }} className="text-2xl leading-none text-white">
                     Existing Clinic Access
                   </h1>
                   <p className="mt-1 text-sm text-[#8EA7CD]">
-                    Search your clinic, then continue to the live MediCore workspace.
+                    Search your clinic, then continue to the live Umoya workspace.
                   </p>
                 </div>
               </div>
@@ -335,7 +335,7 @@ const TenantDirectory: React.FC = () => {
               <div className="flex w-full flex-col gap-3 md:max-w-2xl md:flex-row md:items-center md:justify-end">
                 <button
                   onClick={() => navigate('/#request-access')}
-                  className="inline-flex items-center justify-center rounded-full border border-[#253A58] bg-[#0E1829]/90 px-5 py-3 text-sm font-medium text-white transition hover:border-[#00C896]/50 hover:bg-[#13233A]"
+                  className="inline-flex items-center justify-center rounded-full border border-[#253A58] bg-[#0E1829]/90 px-5 py-3 text-sm font-medium text-white transition hover:border-[#0AA98A]/50 hover:bg-[#13233A]"
                 >
                   Request test access
                 </button>
@@ -352,7 +352,7 @@ const TenantDirectory: React.FC = () => {
                   </div>
                   <input
                     type="text"
-                    className="block w-full rounded-full border border-[#253A58] bg-[#091320] py-3 pl-11 pr-4 text-sm text-white placeholder:text-[#4A6080] focus:border-[#2B7FFF] focus:outline-none focus:ring-2 focus:ring-[#2B7FFF]/20"
+                    className="block w-full rounded-full border border-[#253A58] bg-[#091320] py-3 pl-11 pr-4 text-sm text-white placeholder:text-[#4A6080] focus:border-[#3B9EFF] focus:outline-none focus:ring-2 focus:ring-[#3B9EFF]/20"
                     placeholder="Search by clinic name or subdomain..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -368,10 +368,10 @@ const TenantDirectory: React.FC = () => {
             <div className="rounded-[30px] border border-[#253A58] bg-[#0E1829]/92 p-7 shadow-[0_30px_120px_rgba(0,0,0,0.35)]">
               <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Tenant Directory</div>
               <h2 style={{ fontFamily: '"Fraunces", serif' }} className="mt-3 text-4xl leading-tight text-white">
-                Pick your clinic and continue into the right MediCore environment.
+                Pick your clinic and continue into the right Umoya environment.
               </h2>
               <p className="mt-4 text-sm leading-7 text-[#AFC1DF]">
-                This page is for existing tenants already using MediCore. If you are evaluating the platform,
+                This page is for existing tenants already using Umoya. If you are evaluating the platform,
                 return to the main page and request guided access so we can prepare the correct trial environment.
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
@@ -388,8 +388,8 @@ const TenantDirectory: React.FC = () => {
 
             <div className="grid gap-4 md:grid-cols-3">
               {[
-                ['Active clinics', String(filteredTenants.length), '#00C896'],
-                ['Fast access', '1 click', '#2B7FFF'],
+                ['Active clinics', String(filteredTenants.length), '#0AA98A'],
+                ['Fast access', '1 click', '#3B9EFF'],
                 ['Status', 'Operational', '#FFB020'],
               ].map(([label, value, color]) => (
                 <div key={label} className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_25px_90px_rgba(0,0,0,0.18)] backdrop-blur-xl">
@@ -405,7 +405,7 @@ const TenantDirectory: React.FC = () => {
 
           {loading ? (
             <div className="flex h-64 flex-col items-center justify-center rounded-[32px] border border-white/10 bg-white/5 text-center backdrop-blur-xl">
-              <div className="mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-[#00C896]"></div>
+              <div className="mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-[#0AA98A]"></div>
               <p className="font-medium text-[#B4C7E6]">Loading clinic directory...</p>
             </div>
           ) : error ? (
@@ -451,13 +451,13 @@ const TenantDirectory: React.FC = () => {
                   <div
                     key={tenant.id}
                     onClick={() => handleTenantSelect(tenant.subdomain)}
-                    className="group relative flex cursor-pointer flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(14,24,41,0.98),rgba(8,14,26,0.98))] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-[#00C896]/30"
+                    className="group relative flex cursor-pointer flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(14,24,41,0.98),rgba(8,14,26,0.98))] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-1 hover:border-[#0AA98A]/30"
                   >
                     {/* QR button — top-right, stops propagation so card click doesn't fire */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setQrTenant(tenant); }}
                       title="View / Print QR code"
-                      className="absolute right-5 top-5 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-[#00C896]/30 bg-[#00C896]/10 text-[#7DE8CA] opacity-0 transition duration-200 hover:bg-[#00C896]/25 group-hover:opacity-100"
+                      className="absolute right-5 top-5 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-[#0AA98A]/30 bg-[#0AA98A]/10 text-[#7DE8CA] opacity-0 transition duration-200 hover:bg-[#0AA98A]/25 group-hover:opacity-100"
                     >
                       <QrCode className="h-4 w-4" />
                     </button>
@@ -470,7 +470,7 @@ const TenantDirectory: React.FC = () => {
                         {tenant.logoUrl ? (
                           <img src={tenant.logoUrl} alt={tenant.clinicName} className="h-10 w-10 rounded-xl object-cover" />
                         ) : (
-                          <Building2 className="h-7 w-7 text-[#2B7FFF]" />
+                          <Building2 className="h-7 w-7 text-[#3B9EFF]" />
                         )}
                       </div>
                       <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${getTierColor(tenant.subscriptionTier)}`}>
@@ -483,14 +483,14 @@ const TenantDirectory: React.FC = () => {
                         {tenant.clinicName}
                       </h3>
                       <p className="mt-2 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-xs text-[#A8BEDD]">
-                        {tenant.subdomain}.medicore.health
+                        {tenant.subdomain}.umoya.health
                       </p>
                     </div>
 
                     <div className="mt-auto border-t border-white/10 pt-4">
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2 text-[#CBEBDD]">
-                          <div className="h-2.5 w-2.5 rounded-full bg-[#00C896] shadow-[0_0_14px_rgba(0,200,150,0.7)]" />
+                          <div className="h-2.5 w-2.5 rounded-full bg-[#0AA98A] shadow-[0_0_14px_rgba(0,200,150,0.7)]" />
                           <span className="font-medium">System operational</span>
                         </div>
                         <span className="font-medium text-[#7DE8CA]">Access portal</span>
@@ -517,7 +517,7 @@ const TenantDirectory: React.FC = () => {
                         onClick={() => setCurrentPage(page)}
                         className={`h-10 w-10 rounded-full text-sm font-medium transition ${
                           currentPage === page
-                            ? 'bg-[#00C896] text-[#051119] shadow-[0_12px_40px_rgba(0,200,150,0.28)]'
+                            ? 'bg-[#0AA98A] text-[#051119] shadow-[0_12px_40px_rgba(0,200,150,0.28)]'
                             : 'border border-white/10 bg-white/5 text-[#B2C6E3] hover:bg-white/10'
                         }`}
                       >
@@ -541,7 +541,7 @@ const TenantDirectory: React.FC = () => {
 
         <footer className="border-t border-white/10 bg-[#080E1A]/70 py-6">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 text-sm text-[#7F96BA] sm:px-6 md:flex-row lg:px-8">
-            <p>© {new Date().getFullYear()} MediCore Health Systems. Intelligent workflows for modern clinics.</p>
+            <p>© {new Date().getFullYear()} Umoya Health Systems. Intelligent workflows for modern clinics.</p>
             <div className="flex gap-6">
               <button onClick={() => navigate('/')} className="transition hover:text-white">Overview</button>
               <button onClick={() => navigate('/#request-access')} className="transition hover:text-white">Request Access</button>

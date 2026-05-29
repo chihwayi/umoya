@@ -147,7 +147,7 @@ export class MedicationReminderService {
   private async sendReminder(connection: any, reminder: any, tenantId: string) {
     const { reminder_type, medication_name, dosage, frequency, patient_id, prescription_id } = reminder;
     const patientName = `${reminder.first_name} ${reminder.last_name}`;
-    const message = `Medication Reminder: Time to take ${medication_name} (${dosage}, ${frequency}). MediCore`;
+    const message = `Medication Reminder: Time to take ${medication_name} (${dosage}, ${frequency}). Umoya`;
 
     // Send based on reminder type
     const sendPromises: Promise<any>[] = [];
@@ -178,7 +178,7 @@ export class MedicationReminderService {
                 <li><strong>Dosage:</strong> ${dosage}</li>
                 <li><strong>Frequency:</strong> ${frequency}</li>
               </ul>
-              <p>Thank you for using MediCore.</p>
+              <p>Thank you for using Umoya.</p>
             `,
           }),
         );

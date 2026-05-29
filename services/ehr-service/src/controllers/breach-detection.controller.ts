@@ -46,7 +46,7 @@ export class BreachDetectionController {
     const { user } = req as any;
     if (user?.role !== 'admin') throw new ForbiddenException('Admin only');
     const tenantId = req.headers['x-tenant-id'] as string;
-    return this.backup.backupTenant(tenantId, `medicore_${tenantId}`);
+    return this.backup.backupTenant(tenantId, `umoya_${tenantId}`);
   }
 
   @Get('backup/jobs')

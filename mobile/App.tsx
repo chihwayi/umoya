@@ -111,7 +111,7 @@ export default function App() {
               <View style={styles.privacyLock}>
                 <Text style={styles.privacyLockIcon}>🔒</Text>
               </View>
-              <Text style={styles.privacyTitle}>MediCore Clinical</Text>
+              <Text style={styles.privacyTitle}>Umoya Clinical</Text>
               <Text style={styles.privacySubtitle}>Screen hidden for patient privacy</Text>
             </View>
           </View>

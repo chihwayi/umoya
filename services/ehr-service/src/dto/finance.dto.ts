@@ -134,7 +134,7 @@ export class CreateInvoiceTemplateDto {
 
   @ApiProperty({
     example: {
-      headerTitle: 'MediCore Health',
+      headerTitle: 'Umoya Health',
       headerSubtitle: 'Excellence in Care',
       addressLines: ['123 Health St.', 'Bulawayo'],
       brandColor: '#2563eb',

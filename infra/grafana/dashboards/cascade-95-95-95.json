@@ -9,7 +9,7 @@
       "id": 1,
       "title": "Second 95 (Diagnosed → On ART)",
       "type": "gauge",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT second_95 FROM cascade_snapshots WHERE period_end = (SELECT MAX(period_end) FROM cascade_snapshots) LIMIT 1",
         "format": "table"
@@ -35,7 +35,7 @@
       "id": 2,
       "title": "Third 95 (On ART → Suppressed)",
       "type": "gauge",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT third_95 FROM cascade_snapshots WHERE period_end = (SELECT MAX(period_end) FROM cascade_snapshots) LIMIT 1",
         "format": "table"
@@ -61,7 +61,7 @@
       "id": 3,
       "title": "First 95 (PLHIV → Diagnosed)",
       "type": "gauge",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT first_95 FROM cascade_snapshots WHERE period_end = (SELECT MAX(period_end) FROM cascade_snapshots) LIMIT 1",
         "format": "table"
@@ -87,7 +87,7 @@
       "id": 4,
       "title": "Cascade Trend (12 months)",
       "type": "timeseries",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT period_end AS time, first_95, second_95, third_95 FROM cascade_snapshots WHERE period_end > NOW() - INTERVAL '12 months' ORDER BY period_end",
         "format": "table",

@@ -64,7 +64,7 @@ const MfaSetupPage: React.FC = () => {
     <div className="flex min-h-screen items-center justify-center bg-[#080E1A] px-4 text-[#E8F0FF]">
       <form onSubmit={finish} className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0A1525] p-6 shadow-2xl">
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#00C896]/15 text-[#7DE8CA]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0AA98A]/15 text-[#7DE8CA]">
             <ShieldCheck className="h-6 w-6" />
           </div>
           <div>
@@ -86,7 +86,7 @@ const MfaSetupPage: React.FC = () => {
           <div className="relative mt-2">
             <KeyRound className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#5D789B]" />
             <input
-              className="w-full rounded-xl border border-[#253A58] bg-[#091320] py-3 pl-11 pr-4 text-white outline-none focus:border-[#2B7FFF]"
+              className="w-full rounded-xl border border-[#253A58] bg-[#091320] py-3 pl-11 pr-4 text-white outline-none focus:border-[#3B9EFF]"
               inputMode="numeric"
               maxLength={6}
               value={code}
@@ -95,7 +95,7 @@ const MfaSetupPage: React.FC = () => {
           </div>
         </label>
 
-        <button disabled={loading || code.trim().length < 6} className="mt-5 w-full rounded-xl bg-[#00C896] px-4 py-3 text-sm font-bold text-[#051119] disabled:opacity-60">
+        <button disabled={loading || code.trim().length < 6} className="mt-5 w-full rounded-xl bg-[#0AA98A] px-4 py-3 text-sm font-bold text-[#051119] disabled:opacity-60">
           {loading ? 'Verifying...' : 'Verify and continue'}
         </button>
       </form>

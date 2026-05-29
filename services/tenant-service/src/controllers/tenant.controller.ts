@@ -256,7 +256,7 @@ export class TenantController {
     if (tenant.contactPhone) {
       await this.smsService.send(
         tenant.contactPhone,
-        `MediCore: Payment confirmed for ${tenant.clinicName}. Access extended by ${monthsToExtend} month(s) until ${newBillingEndsAt.toDateString()}. Thank you.`,
+        `Umoya: Payment confirmed for ${tenant.clinicName}. Access extended by ${monthsToExtend} month(s) until ${newBillingEndsAt.toDateString()}. Thank you.`,
       );
     }
 

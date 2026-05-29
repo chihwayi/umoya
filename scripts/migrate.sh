@@ -20,12 +20,12 @@ else
   exit 1
 fi
 
-DB_CONTAINER="${DOCKER_PG_CONTAINER:-medicore-postgres-master}"
+DB_CONTAINER="${DOCKER_PG_CONTAINER:-umoya-postgres-master}"
 DB_HOST="${DB_HOST:-${SERVICE_POSTGRES_HOST:-postgres-master}}"
 DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
 DB_PASSWORD="${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
-MASTER_DB="${POSTGRES_DB:-medicore}"
+MASTER_DB="${POSTGRES_DB:-umoya}"
 TARGET_DB="${TARGET_DB:-}"
 
 wait_for_postgres() {

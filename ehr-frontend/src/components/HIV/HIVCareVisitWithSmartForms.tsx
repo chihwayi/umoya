@@ -286,7 +286,7 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
             <div>
               <h3 className="text-xl font-bold text-slate-900">WHO HIV Care Visit Workflow (optional)</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Optional WHO-aligned care visit steps. The regular Medicore visit form remains the main form.
+                Optional WHO-aligned care visit steps. The regular Umoya visit form remains the main form.
               </p>
             </div>
           </div>

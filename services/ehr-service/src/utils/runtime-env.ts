@@ -17,7 +17,7 @@ export function getMasterDbConfig(databaseOverride?: string): DbEnvConfig {
     port: parsePort(process.env.DB_PORT, 5432),
     username: process.env.DB_USERNAME || process.env.POSTGRES_USER || 'postgres',
     password: process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || 'postgres',
-    database: databaseOverride || process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'medicore',
+    database: databaseOverride || process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'umoya',
   };
 }
 

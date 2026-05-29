@@ -3,7 +3,7 @@ version: '3.8'
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: medicore-elasticsearch
+    container_name: umoya-elasticsearch
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms4g -Xmx4g"
@@ -24,11 +24,11 @@ services:
       timeout: 10s
       retries: 10
     networks:
-      - medicore
+      - umoya
 
   snowstorm:
     image: snomedinternational/snowstorm:latest
-    container_name: medicore-snowstorm
+    container_name: umoya-snowstorm
     environment:
       - "JAVA_OPTS=-Xms2g -Xmx4g -XX:+UseG1GC"
       - elasticsearch.urls=http://elasticsearch:9200
@@ -41,8 +41,8 @@ services:
     ports:
       - "${PORT_SNOWSTORM:-8080}:8080"
     networks:
-      - medicore
+      - umoya
 
 networks:
-  medicore:
+  umoya:
     external: true

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MediCore Clinical",
-    "slug": "medicore-clinical",
+    "name": "Umoya Clinical",
+    "slug": "umoya-clinical",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,17 +12,17 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "scheme": "medicore",
+    "scheme": "umoya",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.medicore.clinical",
+      "bundleIdentifier": "com.umoya.clinical",
       "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "MediCore uses the camera to scan clinic QR codes for secure login.",
-        "NSFaceIDUsageDescription": "MediCore uses Face ID to securely authenticate clinical staff and protect patient data.",
-        "NSHealthShareUsageDescription": "MediCore reads your health data from Apple Health to display your vitals history and medication adherence.",
-        "NSHealthUpdateUsageDescription": "MediCore writes medication adherence records and vitals data to Apple Health.",
-        "NSMicrophoneUsageDescription": "MediCore uses the microphone for voice dictation of clinical notes.",
+        "NSCameraUsageDescription": "Umoya uses the camera to scan clinic QR codes for secure login.",
+        "NSFaceIDUsageDescription": "Umoya uses Face ID to securely authenticate clinical staff and protect patient data.",
+        "NSHealthShareUsageDescription": "Umoya reads your health data from Apple Health to display your vitals history and medication adherence.",
+        "NSHealthUpdateUsageDescription": "Umoya writes medication adherence records and vitals data to Apple Health.",
+        "NSMicrophoneUsageDescription": "Umoya uses the microphone for voice dictation of clinical notes.",
         "UIBackgroundModes": [
           "fetch",
           "remote-notification"
@@ -66,7 +66,7 @@
       }
     },
     "android": {
-      "package": "com.medicore.clinical",
+      "package": "com.umoya.clinical",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -98,13 +98,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "MediCore uses the camera to scan clinic QR codes."
+          "cameraPermission": "Umoya uses the camera to scan clinic QR codes."
         }
       ],
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "MediCore uses Face ID to securely sign you in."
+          "faceIDPermission": "Umoya uses Face ID to securely sign you in."
         }
       ],
       [

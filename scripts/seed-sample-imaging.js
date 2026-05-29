@@ -8,7 +8,7 @@
  *
  * Environment variables:
  *   TENANT_SLUG          (default: demo-clinic)
- *   LOGIN_EMAIL          (default: doctor@demo-clinic.medicore.health)
+ *   LOGIN_EMAIL          (default: doctor@demo-clinic.umoya.health)
  *   LOGIN_PASSWORD       (default: Password1#)
  *   DICOM_PATH           (default: sample-data/dicom/CT-MONO2-16-ankle.dcm)
  *   EHR_API_URL          (Required)
@@ -25,10 +25,10 @@ if (!API_URL) {
 }
 
 const TENANT_SLUG = process.env.TENANT_SLUG || 'demo-clinic';
-const LOGIN_EMAIL = process.env.LOGIN_EMAIL || 'doctor@demo-clinic.medicore.health';
+const LOGIN_EMAIL = process.env.LOGIN_EMAIL || 'doctor@demo-clinic.umoya.health';
 const LOGIN_PASSWORD = process.env.LOGIN_PASSWORD || 'Password1#';
 const TECH_LOGIN_EMAIL =
-  process.env.TECH_LOGIN_EMAIL || 'radiologist@demo-clinic.medicore.health';
+  process.env.TECH_LOGIN_EMAIL || 'radiologist@demo-clinic.umoya.health';
 const TECH_LOGIN_PASSWORD = process.env.TECH_LOGIN_PASSWORD || 'Password1#';
 const DICOM_PATH =
   process.env.DICOM_PATH ||

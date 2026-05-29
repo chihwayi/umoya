@@ -173,7 +173,7 @@ export class PostVisitIngestionCronService {
       throw new Error('FileStorageService not available - cannot transcribe recording');
     }
 
-    const bucket = process.env.MINIO_BUCKET || 'medicore';
+    const bucket = process.env.MINIO_BUCKET || 'umoya';
     const buffer = await this.fileStorageService.downloadBuffer(bucket, recordingStorageKey);
 
     const multerFile: Express.Multer.File = {

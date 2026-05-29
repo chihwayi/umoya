@@ -14,8 +14,8 @@ export class OpenMrsMigrationLog {
   @Column({ name: 'openmrs_uuid', nullable: true })
   openmrsUuid: string;
 
-  @Column({ name: 'medicore_id', nullable: true })
-  medicoreId: string;
+  @Column({ name: 'umoya_id', nullable: true })
+  umoyaId: string;
 
   @Column({ default: 'migrated' }) // migrated | skipped | failed | conflict
   status: string;

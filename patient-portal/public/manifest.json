@@ -1,9 +1,9 @@
 {
-  "short_name": "MediCore",
-  "name": "MediCore Patient Portal",
+  "short_name": "Umoya",
+  "name": "Umoya Patient Portal",
   "icons": [
     {
-      "src": "medicore.png",
+      "src": "umoya.png",
       "sizes": "1073x768",
       "type": "image/png"
     },

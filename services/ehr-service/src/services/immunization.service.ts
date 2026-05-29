@@ -367,12 +367,12 @@ export class ImmunizationService {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().replace(/[-:T]/g, '').slice(0, 14);
     const fmtDate = (d: string | Date | null) => d ? new Date(d).toISOString().slice(0, 10).replace(/-/g, '') : '';
-    const msgId = `MEDICORE${Date.now()}`;
-    const sendingFacility = process.env.SYSTEM_DOMAIN ?? 'medicore.local';
+    const msgId = `UMOYA${Date.now()}`;
+    const sendingFacility = process.env.SYSTEM_DOMAIN ?? 'umoya.local';
 
     return [
-      `MSH|^~\\&|MEDICORE|${sendingFacility}|IIS|NATIONAL|${fmt(now)}||VXU^V04^VXU_V04|${msgId}|P|2.5.1|||NE|AL|||||Z22^CDCPHINVS`,
-      `PID|1||${imm.patient_id}^^^MEDICORE^MR||${(imm.last_name ?? '').toUpperCase()}^${(imm.first_name ?? '').toUpperCase()}||${fmtDate(imm.date_of_birth)}|${(imm.sex ?? 'U').charAt(0).toUpperCase()}|||||||${imm.phone ?? ''}`,
+      `MSH|^~\\&|UMOYA|${sendingFacility}|IIS|NATIONAL|${fmt(now)}||VXU^V04^VXU_V04|${msgId}|P|2.5.1|||NE|AL|||||Z22^CDCPHINVS`,
+      `PID|1||${imm.patient_id}^^^UMOYA^MR||${(imm.last_name ?? '').toUpperCase()}^${(imm.first_name ?? '').toUpperCase()}||${fmtDate(imm.date_of_birth)}|${(imm.sex ?? 'U').charAt(0).toUpperCase()}|||||||${imm.phone ?? ''}`,
       `ORC|RE|||||||||||${imm.administered_by ?? ''}`,
       `RXA|0|1|${fmtDate(imm.administered_date)}|${fmtDate(imm.administered_date)}|${imm.vaccine_code ?? ''}^${imm.vaccine_name ?? ''}^CVX|${imm.dose_number ?? 1}|mL||01^Historical^NIP001|||${imm.lot_number ?? ''}||${fmtDate(imm.expiration_date)}|${imm.manufacturer ?? ''}^${imm.manufacturer ?? ''}^MVX|||CP`,
       `RXR|${imm.route ?? 'IM'}^${imm.route ?? 'Intramuscular'}^CDCPHINVS|${imm.site ?? 'LA'}^${imm.site ?? 'Left Arm'}^CDCPHINVS`,

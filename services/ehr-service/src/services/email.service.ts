@@ -81,8 +81,8 @@ export class EmailService {
       contentType?: string;
     }>;
   }): Promise<{ messageId?: string; success: boolean; error?: string }> {
-    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@medicore.health';
-    const fromName = process.env.EMAIL_FROM_NAME || 'MediCore EHR';
+    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@umoya.health';
+    const fromName = process.env.EMAIL_FROM_NAME || 'Umoya EHR';
 
     // If no transporter configured, log and return success (for development)
     if (!this.transporter) {

@@ -136,10 +136,10 @@ type InvoiceTemplateFormState = {
 
 const defaultTemplateFormState: InvoiceTemplateFormState = {
   name: '',
-  headerTitle: 'MediCore Health',
+  headerTitle: 'Umoya Health',
   headerSubtitle: 'Excellence in Care',
   addressLines: '',
-  footerNotes: 'Thank you for choosing MediCore Health.',
+  footerNotes: 'Thank you for choosing Umoya Health.',
   brandColor: '#2563eb',
   contactEmail: '',
   contactPhone: '',

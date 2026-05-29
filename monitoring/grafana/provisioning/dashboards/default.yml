@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: 'MediCore Dashboards'
+  - name: 'Umoya Dashboards'
     orgId: 1
-    folder: 'MediCore'
+    folder: 'Umoya'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 10

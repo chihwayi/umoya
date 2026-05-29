@@ -69,26 +69,40 @@ const interestOptions = [
   'AI demand forecasting & auto-procurement',
   'FEFO expiry tracking & cold-chain management',
   'Drug substitution AI engine',
+  'QR code patient check-in',
+  'Pre-visit digital intake form',
+  'Discharge documents to patient app',
+  'Wearable and home device sync',
+  'Referral tracking portal',
+  'In-app bill payment (EcoCash / OneMoney)',
+  'Real-time queue and wait time',
+  'Theatre utilization dashboard',
+  'Post-visit CSAT and NPS surveys',
+  'Clinician mobile ward round',
+  'Household and family risk graph',
+  'Digital procedural consent with e-signature',
+  'Cross-facility stock balancing',
+  'Safe offline sync conflict resolution',
 ];
 
 const STANDARDS = [
-  { label: 'FHIR R4', color: '#00C896' },
-  { label: 'SNOMED CT', color: '#2B7FFF' },
-  { label: 'ICD-10-CM', color: '#FF7A40' },
-  { label: 'ICD-10-PCS', color: '#00C896' },
-  { label: 'RxNorm', color: '#2B7FFF' },
-  { label: 'DHIS2', color: '#FF7A40' },
-  { label: 'HL7 v2/v3', color: '#00C896' },
-  { label: 'HIPAA', color: '#2B7FFF' },
-  { label: 'LOINC', color: '#FF7A40' },
-  { label: 'OpenEHR', color: '#00C896' },
-  { label: 'CDA R2', color: '#2B7FFF' },
-  { label: 'DICOM', color: '#FF7A40' },
+  { label: 'FHIR R4', color: '#0AA98A' },
+  { label: 'SNOMED CT', color: '#3B9EFF' },
+  { label: 'ICD-10-CM', color: '#E8614D' },
+  { label: 'ICD-10-PCS', color: '#0AA98A' },
+  { label: 'RxNorm', color: '#3B9EFF' },
+  { label: 'DHIS2', color: '#E8614D' },
+  { label: 'HL7 v2/v3', color: '#0AA98A' },
+  { label: 'HIPAA', color: '#3B9EFF' },
+  { label: 'LOINC', color: '#E8614D' },
+  { label: 'OpenEHR', color: '#0AA98A' },
+  { label: 'CDA R2', color: '#3B9EFF' },
+  { label: 'DICOM', color: '#E8614D' },
 ];
 
 const stats = [
-  { value: '65+', label: 'Clinical modules', sub: 'From maternity to storeroom AI' },
-  { value: '25+', label: 'AI capabilities', sub: 'Risk, forecasting, substitution, adherence, voice' },
+  { value: '80+', label: 'Clinical modules', sub: 'From maternity to wearables and theatre AI' },
+  { value: '30+', label: 'AI capabilities', sub: 'Risk, forecasting, substitution, adherence, voice' },
   { value: '8 langs', label: 'Mobile languages', sub: 'Auto-detected from device locale' },
   { value: 'DHIS2', label: 'Program reporting', sub: 'HIV, maternal, vaccine cohorts' },
 ];
@@ -97,7 +111,7 @@ const audiences = [
   {
     icon: Stethoscope,
     tag: 'Clinicians & Doctors',
-    color: '#00C896',
+    color: '#0AA98A',
     headline: 'AI that works at the bedside, not in a slide deck.',
     points: [
       'CDSS dose checks and risk flags in every encounter',
@@ -107,28 +121,38 @@ const audiences = [
       'Composite mortality risk badge and proactive daily risk score on every patient card',
       'One-click AI documents — referral letters, discharge summaries, pre-auth, sick notes',
       'AI follow-up scheduler — optimal timing and modality after every encounter',
+      'Full ward round from mobile — SOAP notes and bedside orders without leaving the patient',
+      'PRO surveys feed the AI risk engine in real time — high-risk patients trigger outreach tasks automatically',
+      'Wearable and home device readings surface as 7-day sparklines in every patient chart',
+      'Family and household risk graph — linked members flagged when infectious or heritable condition is diagnosed',
       'Offline-first mobile — ward rounds work without Wi-Fi; vitals queue and sync automatically',
+      'Safe conflict resolution — allergy and medication sync conflicts queued for your review, never silently overwritten',
     ],
   },
   {
     icon: Building2,
     tag: 'Private Clinics & Hospitals',
-    color: '#2B7FFF',
+    color: '#3B9EFF',
     headline: 'One platform. Every revenue line. Zero gaps.',
     points: [
       'Claims, medical-aid, and billing in the same system',
+      'Patients pay outstanding invoices with EcoCash, OneMoney, or ZiG directly from the app — no cashier queue',
+      'QR self-check-in and digital pre-visit intake eliminate front-desk bottlenecks',
+      'Theatre utilization dashboard — Gantt board, on-time start rate, cancellation tracking',
       'SaaS billing enforcer — demo trials auto-expire, grace periods auto-suspend, payments extend access in one API call',
       'Deployment mode gating — clinic, hospital, or ministry tier hides irrelevant modules automatically',
       'Multi-tenant architecture — isolate each facility',
+      'Cross-facility stock balancing — AI spots surplus and shortage across all sites and recommends transfers',
       'Lab, radiology, pharmacy, and nursing all connected',
       'Central storeroom with FEFO dispensing, expiry tracking, and AI demand forecasting across all locations',
-      'Patient portal for post-visit engagement and retention',
+      'Patient satisfaction surveys (CSAT/NPS) fire automatically after each visit — management dashboard with trend charts',
+      'Patient portal and mobile app for post-visit engagement and retention',
     ],
   },
   {
     icon: Shield,
     tag: 'Compliance & HIPAA Teams',
-    color: '#FF7A40',
+    color: '#E8614D',
     headline: 'Audit trails. Structured data. Defensible records.',
     points: [
       'HIPAA-aware audit logging on every action',
@@ -141,7 +165,7 @@ const audiences = [
   {
     icon: BarChart3,
     tag: 'AI Researchers & Data Scientists',
-    color: '#00C896',
+    color: '#0AA98A',
     headline: 'Structured clinical data. Research-ready pipelines.',
     points: [
       'SNOMED CT terminology-aware charting from day one',
@@ -153,7 +177,7 @@ const audiences = [
   {
     icon: Globe,
     tag: 'NGOs & Public Health Programs',
-    color: '#2B7FFF',
+    color: '#3B9EFF',
     headline: 'DHIS2-native reporting. Program visibility at scale.',
     points: [
       'HIV program workflows with cohort and retention tracking',
@@ -169,7 +193,7 @@ const audiences = [
   {
     icon: Code2,
     tag: 'Health IT Teams & Integrators',
-    color: '#FF7A40',
+    color: '#E8614D',
     headline: 'Open standards. Clean APIs. Real interoperability.',
     points: [
       'FHIR R4 REST API with full resource coverage',
@@ -187,85 +211,115 @@ const aiFeatures = [
     icon: Brain,
     title: 'Clinical Decision Support (CDSS)',
     description: 'Real-time drug interaction checks, dosage alerts, sepsis risk scoring, and protocol-linked recommendations fire during the encounter — not after.',
-    color: '#00C896',
+    color: '#0AA98A',
   },
   {
     icon: FileText,
     title: 'PostVisit AI',
     description: 'AI-generated post-visit summaries with grounded follow-up instructions, patient-safe language publishing, and full signoff workflow before delivery.',
-    color: '#2B7FFF',
+    color: '#3B9EFF',
   },
   {
     icon: AlertCircle,
     title: 'Real-time Clinical Alerts',
     description: 'Abnormal vitals, critical lab results, sepsis indicators, and nurse task overdue notifications reach the right person on the right screen in real time.',
-    color: '#FF7A40',
+    color: '#E8614D',
   },
   {
     icon: Sparkles,
     title: 'AI Documentation Support',
     description: 'Terminology-aware charting that suggests SNOMED CT concepts, ICD-10 codes, and structured coding as the clinician types — no manual lookup required.',
-    color: '#00C896',
+    color: '#0AA98A',
   },
   {
     icon: TrendingUp,
     title: 'Population Health & Risk Stratification',
     description: 'Cohort-level chronic disease dashboards, vaccination coverage tracking, and HIV/TB program retention analytics using the same operational data.',
-    color: '#2B7FFF',
+    color: '#3B9EFF',
   },
   {
     icon: Zap,
     title: 'Telemedicine + Async AI Review',
     description: 'Video consultations, secure async messaging, and AI-assisted consultation notes in a single integrated telemedicine workflow.',
-    color: '#FF7A40',
+    color: '#E8614D',
   },
   {
     icon: Globe,
     title: 'SADC & Africa-Specific AI',
     description: 'Herb-drug interaction alerts for traditional medicine disclosures, sickle cell crisis triage, PACTR clinical trial matching, Ubuntu psychosocial SDOH scoring, and IHR Annex 2 outbreak notification — built for the African clinical context.',
-    color: '#00C896',
+    color: '#0AA98A',
   },
   {
     icon: TrendingUp,
     title: 'Proactive Risk Scoring Engine',
     description: 'Nightly composite risk scores across every active patient — NEWS2, vitals, labs, adherence, and missed appointments combined. High and critical patients trigger automatic nurse alerts before deterioration occurs.',
-    color: '#FF7A40',
+    color: '#E8614D',
   },
   {
     icon: HeartPulse,
     title: 'Mortality Risk Prediction',
     description: 'Composite 30-day mortality risk badge on every patient card — age, comorbidities, NEWS2, ICU status, and critical labs into a single defensible score with factor breakdown. Critical alerts deduplicated to once per 6 hours.',
-    color: '#FF7A40',
+    color: '#E8614D',
   },
   {
     icon: Sparkles,
     title: 'AI Clinical Summary & Timeline',
     description: '5-sentence AI summary auto-generated on every patient record open. Longitudinal pattern detection identifies recurring infections, drug failures, and chronic progression across the full care history.',
-    color: '#00C896',
+    color: '#0AA98A',
   },
   {
     icon: FileText,
     title: 'AI-Generated Clinical Documents',
     description: 'One-click referral letters, discharge summaries, pre-authorisation requests, and sick notes. AI drafts from structured clinical data; the clinician reviews, edits, and signs. Patient portal shows only signed documents.',
-    color: '#2B7FFF',
+    color: '#3B9EFF',
   },
   {
     icon: Activity,
     title: 'Drug Substitution Engine',
     description: 'When a medication is out of stock, AI suggests ranked therapeutic equivalents with confidence scores, rationale, and caveats — sourced from CDSS, LLM grounding, and protocol rules. Selection logged for audit.',
-    color: '#00C896',
+    color: '#0AA98A',
   },
   {
     icon: Database,
     title: 'Inventory Demand Forecasting',
     description: 'AI consumption trend analysis with seasonality detection produces 30-day forward stock forecasts per item and location. Reorder suggestions fire automatically — stockouts are predicted and prevented before they affect patient care.',
-    color: '#2B7FFF',
+    color: '#3B9EFF',
   },
   {
     icon: Workflow,
     title: 'AI Follow-up Scheduler',
     description: 'After every encounter, AI recommends optimal follow-up interval and modality — in-person, telemedicine, or phone — based on risk band, diagnoses, and open care gaps. Overdue follow-ups alert the care team nightly.',
-    color: '#2B7FFF',
+    color: '#3B9EFF',
+  },
+  {
+    icon: Activity,
+    title: 'Wearable & Home Device Integration',
+    description: 'Apple Health, Google Fit, and Bluetooth medical devices (BP cuffs, glucometers) sync directly into the patient record. Out-of-range readings are flagged instantly; three consecutive abnormal readings in 24 hours fire a clinical trend alert.',
+    color: '#0AA98A',
+  },
+  {
+    icon: TrendingUp,
+    title: 'PRO → AI Risk Loop',
+    description: 'Every patient-reported outcome survey triggers an immediate AI risk recalculation. High-risk patients (score ≥ 70) automatically generate a care outreach task for their assigned clinician — turning passive survey data into proactive intervention.',
+    color: '#E8614D',
+  },
+  {
+    icon: Users,
+    title: 'Household & Family Risk Graph',
+    description: 'Patients are linked into household and family units. When a TB, HIV, or heritable condition diagnosis is recorded, household exposure alerts fire automatically for linked members — turning individual care into population-level prevention.',
+    color: '#3B9EFF',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Digital Procedural Consent',
+    description: 'Paper consent forms are eliminated. Patients read procedure-specific risk and benefit information on their device or a clinic tablet, sign with finger or stylus, and a legally valid PDF is generated, stored in MinIO, and attached to the encounter — all before the procedure begins.',
+    color: '#0AA98A',
+  },
+  {
+    icon: Zap,
+    title: 'Real-Time Queue Transparency',
+    description: 'Patients see their live queue position, number of patients ahead, and estimated wait time — updated in real time via WebSocket from the moment they check in. A push alert fires the instant the nurse calls their name.',
+    color: '#E8614D',
   },
 ];
 
@@ -274,145 +328,174 @@ const standardsGrid = [
     standard: 'FHIR R4',
     org: 'HL7 International',
     icon: Network,
-    color: '#00C896',
+    color: '#0AA98A',
     description: 'Native FHIR R4 data model for patient records, clinical documents, lab results, medications, and encounters. Enables referrals, payer integration, and research export.',
   },
   {
     standard: 'SNOMED CT',
     org: 'SNOMED International',
     icon: Database,
-    color: '#2B7FFF',
+    color: '#3B9EFF',
     description: 'Terminology-aware charting with SNOMED CT concept binding. Every diagnosis, finding, and procedure is codeable, searchable, and interoperable.',
   },
   {
     standard: 'ICD-10 CM/PCS',
     org: 'WHO / CMS',
     icon: FileText,
-    color: '#FF7A40',
+    color: '#E8614D',
     description: 'ICD-10-CM for diagnoses, ICD-10-PCS for procedures. Powers claims, medical aid billing, disease registry, and epidemiological reporting.',
   },
   {
     standard: 'DHIS2',
     org: 'University of Oslo',
     icon: Globe,
-    color: '#00C896',
+    color: '#0AA98A',
     description: 'Native DHIS2 integration for aggregate data push, tracker programs, and program reporting. HIV, maternal, vaccination, and NCD program visibility.',
   },
   {
     standard: 'LOINC',
     org: 'Regenstrief Institute',
     icon: FlaskConical,
-    color: '#2B7FFF',
+    color: '#3B9EFF',
     description: 'LOINC-coded laboratory and clinical observations. Enables lab result comparison, clinical trial matching, and research cohort queries.',
   },
   {
     standard: 'RxNorm',
     org: 'US NLM',
     icon: Activity,
-    color: '#FF7A40',
+    color: '#E8614D',
     description: 'RxNorm-coded medication events for drug interaction checking, dose validation, pharmacy workflows, and medication reconciliation.',
   },
   {
     standard: 'HIPAA',
     org: 'US HHS',
     icon: Lock,
-    color: '#00C896',
+    color: '#0AA98A',
     description: 'HIPAA-aware audit logging, access controls, and data handling practices. Every user action is logged, every access is role-gated, every record is attributable.',
   },
   {
     standard: 'HL7 v2 / CDA R2',
     org: 'HL7 International',
     icon: Workflow,
-    color: '#2B7FFF',
+    color: '#3B9EFF',
     description: 'HL7 v2 ADT, ORU, and ORM messaging for lab and radiology system integration. CDA R2 for clinical document exchange with legacy hospital systems.',
   },
 ];
 
 const modules = [
-  { label: 'CDSS + AI Guidance', icon: Brain, color: '#00C896' },
-  { label: 'PostVisit AI', icon: Sparkles, color: '#2B7FFF' },
-  { label: 'Maternity + Newborn', icon: HeartPulse, color: '#FF7A40' },
-  { label: 'Diabetes + Chronic Care', icon: Activity, color: '#00C896' },
-  { label: 'Vaccination + Preventive', icon: ShieldCheck, color: '#2B7FFF' },
-  { label: 'Lab + Radiology', icon: FlaskConical, color: '#FF7A40' },
-  { label: 'HIV Program Workflow', icon: Users, color: '#00C896' },
-  { label: 'Cancer + Oncology', icon: TrendingUp, color: '#2B7FFF' },
-  { label: 'Emergency Department', icon: AlertCircle, color: '#FF7A40' },
-  { label: 'Cardiology', icon: HeartPulse, color: '#00C896' },
-  { label: 'Ophthalmology', icon: Zap, color: '#2B7FFF' },
-  { label: 'Claims + Medical Aid', icon: Wallet, color: '#FF7A40' },
-  { label: 'Telemedicine + Video', icon: MessageSquare, color: '#00C896' },
-  { label: 'Pharmacy + MAR', icon: Activity, color: '#2B7FFF' },
-  { label: 'Blood Bank + Transfusion', icon: FlaskConical, color: '#FF7A40' },
-  { label: 'Infection Control', icon: Shield, color: '#00C896' },
-  { label: 'Population Health', icon: BarChart3, color: '#2B7FFF' },
-  { label: 'Patient App + Portal', icon: Smartphone, color: '#FF7A40' },
-  { label: 'Sickle Cell Disease', icon: Activity, color: '#FF7A40' },
-  { label: 'Epilepsy + NCD Register', icon: Zap, color: '#2B7FFF' },
-  { label: 'Traditional Medicine CDSS', icon: Sparkles, color: '#00C896' },
-  { label: 'Maternal Mortality Audit', icon: HeartPulse, color: '#FF7A40' },
-  { label: 'Ubuntu SDOH Wellbeing', icon: Users, color: '#00C896' },
-  { label: 'NHIF / CBHI Insurance', icon: Wallet, color: '#2B7FFF' },
-  { label: 'PACTR Clinical Trials', icon: FlaskConical, color: '#FF7A40' },
-  { label: 'Cross-border Continuity', icon: Globe, color: '#00C896' },
-  { label: 'NCD Complications', icon: TrendingUp, color: '#2B7FFF' },
-  { label: 'SaaS Billing Enforcer', icon: Wallet, color: '#00C896' },
-  { label: 'Deployment Mode Gating', icon: Lock, color: '#2B7FFF' },
-  { label: 'CRVS Civil Registration', icon: FileText, color: '#FF7A40' },
-  { label: 'Multilingual Mobile (8 langs)', icon: Globe, color: '#00C896' },
-  { label: 'Proactive Risk Engine', icon: TrendingUp, color: '#FF7A40' },
-  { label: 'Mortality Risk Score', icon: HeartPulse, color: '#FF7A40' },
-  { label: 'AI Clinical Summary', icon: Sparkles, color: '#00C896' },
-  { label: 'Care Gap Engine', icon: CheckCircle2, color: '#2B7FFF' },
-  { label: 'AI Clinical Documents', icon: FileText, color: '#00C896' },
-  { label: 'Drug Substitution AI', icon: Activity, color: '#2B7FFF' },
-  { label: 'AI Follow-up Scheduler', icon: Workflow, color: '#FF7A40' },
-  { label: 'AI Lab Narratives', icon: FlaskConical, color: '#00C896' },
-  { label: 'Appointment AI Brief', icon: Brain, color: '#2B7FFF' },
-  { label: 'Ambient Voice AI', icon: MessageSquare, color: '#FF7A40' },
-  { label: 'Adherence Engine', icon: Activity, color: '#00C896' },
-  { label: 'AI Timeline & Patterns', icon: TrendingUp, color: '#2B7FFF' },
-  { label: 'CDSS Status Badges', icon: ShieldCheck, color: '#00C896' },
-  { label: 'Telemedicine AI Bridge', icon: Zap, color: '#2B7FFF' },
-  { label: 'Central Storeroom', icon: Database, color: '#00C896' },
-  { label: 'Inventory Demand AI', icon: TrendingUp, color: '#2B7FFF' },
-  { label: 'FEFO Expiry Tracking', icon: AlertCircle, color: '#FF7A40' },
-  { label: 'Procurement Automation', icon: Workflow, color: '#00C896' },
-  { label: 'Stock Reservations', icon: CheckCircle2, color: '#2B7FFF' },
-  { label: 'Expiry Risk Report', icon: BarChart3, color: '#FF7A40' },
+  { label: 'CDSS + AI Guidance', icon: Brain, color: '#0AA98A' },
+  { label: 'PostVisit AI', icon: Sparkles, color: '#3B9EFF' },
+  { label: 'Maternity + Newborn', icon: HeartPulse, color: '#E8614D' },
+  { label: 'Diabetes + Chronic Care', icon: Activity, color: '#0AA98A' },
+  { label: 'Vaccination + Preventive', icon: ShieldCheck, color: '#3B9EFF' },
+  { label: 'Lab + Radiology', icon: FlaskConical, color: '#E8614D' },
+  { label: 'HIV Program Workflow', icon: Users, color: '#0AA98A' },
+  { label: 'Cancer + Oncology', icon: TrendingUp, color: '#3B9EFF' },
+  { label: 'Emergency Department', icon: AlertCircle, color: '#E8614D' },
+  { label: 'Cardiology', icon: HeartPulse, color: '#0AA98A' },
+  { label: 'Ophthalmology', icon: Zap, color: '#3B9EFF' },
+  { label: 'Claims + Medical Aid', icon: Wallet, color: '#E8614D' },
+  { label: 'Telemedicine + Video', icon: MessageSquare, color: '#0AA98A' },
+  { label: 'Pharmacy + MAR', icon: Activity, color: '#3B9EFF' },
+  { label: 'Blood Bank + Transfusion', icon: FlaskConical, color: '#E8614D' },
+  { label: 'Infection Control', icon: Shield, color: '#0AA98A' },
+  { label: 'Population Health', icon: BarChart3, color: '#3B9EFF' },
+  { label: 'Patient App + Portal', icon: Smartphone, color: '#E8614D' },
+  { label: 'Sickle Cell Disease', icon: Activity, color: '#E8614D' },
+  { label: 'Epilepsy + NCD Register', icon: Zap, color: '#3B9EFF' },
+  { label: 'Traditional Medicine CDSS', icon: Sparkles, color: '#0AA98A' },
+  { label: 'Maternal Mortality Audit', icon: HeartPulse, color: '#E8614D' },
+  { label: 'Ubuntu SDOH Wellbeing', icon: Users, color: '#0AA98A' },
+  { label: 'NHIF / CBHI Insurance', icon: Wallet, color: '#3B9EFF' },
+  { label: 'PACTR Clinical Trials', icon: FlaskConical, color: '#E8614D' },
+  { label: 'Cross-border Continuity', icon: Globe, color: '#0AA98A' },
+  { label: 'NCD Complications', icon: TrendingUp, color: '#3B9EFF' },
+  { label: 'SaaS Billing Enforcer', icon: Wallet, color: '#0AA98A' },
+  { label: 'Deployment Mode Gating', icon: Lock, color: '#3B9EFF' },
+  { label: 'CRVS Civil Registration', icon: FileText, color: '#E8614D' },
+  { label: 'Multilingual Mobile (8 langs)', icon: Globe, color: '#0AA98A' },
+  { label: 'Proactive Risk Engine', icon: TrendingUp, color: '#E8614D' },
+  { label: 'Mortality Risk Score', icon: HeartPulse, color: '#E8614D' },
+  { label: 'AI Clinical Summary', icon: Sparkles, color: '#0AA98A' },
+  { label: 'Care Gap Engine', icon: CheckCircle2, color: '#3B9EFF' },
+  { label: 'AI Clinical Documents', icon: FileText, color: '#0AA98A' },
+  { label: 'Drug Substitution AI', icon: Activity, color: '#3B9EFF' },
+  { label: 'AI Follow-up Scheduler', icon: Workflow, color: '#E8614D' },
+  { label: 'AI Lab Narratives', icon: FlaskConical, color: '#0AA98A' },
+  { label: 'Appointment AI Brief', icon: Brain, color: '#3B9EFF' },
+  { label: 'Ambient Voice AI', icon: MessageSquare, color: '#E8614D' },
+  { label: 'Adherence Engine', icon: Activity, color: '#0AA98A' },
+  { label: 'AI Timeline & Patterns', icon: TrendingUp, color: '#3B9EFF' },
+  { label: 'CDSS Status Badges', icon: ShieldCheck, color: '#0AA98A' },
+  { label: 'Telemedicine AI Bridge', icon: Zap, color: '#3B9EFF' },
+  { label: 'Central Storeroom', icon: Database, color: '#0AA98A' },
+  { label: 'Inventory Demand AI', icon: TrendingUp, color: '#3B9EFF' },
+  { label: 'FEFO Expiry Tracking', icon: AlertCircle, color: '#E8614D' },
+  { label: 'Procurement Automation', icon: Workflow, color: '#0AA98A' },
+  { label: 'Stock Reservations', icon: CheckCircle2, color: '#3B9EFF' },
+  { label: 'Expiry Risk Report', icon: BarChart3, color: '#E8614D' },
+  { label: 'QR Patient Check-in', icon: Smartphone, color: '#0AA98A' },
+  { label: 'Pre-Visit Digital Intake', icon: FileText, color: '#3B9EFF' },
+  { label: 'Discharge to Patient App', icon: ArrowRight, color: '#E8614D' },
+  { label: 'Wearable & Device Sync', icon: Activity, color: '#0AA98A' },
+  { label: 'Referral Tracking Portal', icon: Network, color: '#3B9EFF' },
+  { label: 'PRO → AI Risk Loop', icon: TrendingUp, color: '#E8614D' },
+  { label: 'In-App Bill Payment', icon: Wallet, color: '#0AA98A' },
+  { label: 'Real-Time Queue & Wait', icon: Zap, color: '#3B9EFF' },
+  { label: 'Theatre Utilization', icon: BarChart3, color: '#E8614D' },
+  { label: 'Post-Visit CSAT / NPS', icon: CheckCircle2, color: '#0AA98A' },
+  { label: 'Mobile Ward Round', icon: Stethoscope, color: '#3B9EFF' },
+  { label: 'Household Risk Graph', icon: Users, color: '#E8614D' },
+  { label: 'Digital E-Consent + PDF', icon: ShieldCheck, color: '#0AA98A' },
+  { label: 'Cross-Facility Stock', icon: Database, color: '#3B9EFF' },
+  { label: 'Safe Sync Conflicts', icon: Shield, color: '#E8614D' },
 ];
 
 const liveActivityItems = [
-  { type: 'cdss', text: 'CDSS: Sepsis risk score elevated — initiating SIRS criteria review', color: '#FF7A40' },
-  { type: 'ai', text: 'PostVisit AI: Generating SNOMED-coded discharge summary...', color: '#00C896' },
-  { type: 'herb', text: 'Herb-drug alert: Umhlonyane + Warfarin — MAJOR interaction flagged in ward round', color: '#FF7A40' },
-  { type: 'lang', text: 'Voice AI: Transcribed Setswana clinical notes → structured SOAP encounter', color: '#00C896' },
-  { type: 'dhis2', text: 'DHIS2 sync: 14 ANC records pushed to national aggregate (Zambia MOH)', color: '#00C896' },
-  { type: 'pactr', text: 'PACTR trial match: Patient eligible for Phase II SCD hydroxyurea dose optimisation trial', color: '#2B7FFF' },
-  { type: 'fhir', text: 'FHIR R4: Patient bundle exported for cross-border SADC ART continuity transfer', color: '#2B7FFF' },
-  { type: 'scd', text: 'SCD crisis: Vaso-occlusive crisis triage initiated — hydration + analgesia protocol loaded', color: '#FF7A40' },
-  { type: 'icd', text: 'ICD-10: Auto-suggested Z34.0 for ANC first trimester visit', color: '#00C896' },
-  { type: 'billing', text: 'Billing enforcer: Demo tenant expired → suspended after 14-day trial period', color: '#FF7A40' },
-  { type: 'gating', text: 'Module gating: OR and Blood Bank routes hidden for clinic-mode tenant (Lusaka Primary)', color: '#2B7FFF' },
-  { type: 'crvs', text: 'CRVS: Birth notification sent to Zimbabwe Civil Registry for patient ID NR-2026-00441', color: '#00C896' },
-  { type: 'i18n', text: 'Mobile i18n: Device locale "sw-TZ" detected → app language switched to Swahili', color: '#2B7FFF' },
-  { type: 'risk', text: 'Risk engine: Patient #4471 scored 87/100 (CRITICAL) — proactive alert dispatched to on-call nurse', color: '#FF7A40' },
-  { type: 'mortality', text: 'Mortality AI: 30-day risk 78% (HIGH) on post-op patient — ICU, age 71, NEWS2 score 8 — care team notified', color: '#FF7A40' },
-  { type: 'gap', text: 'Care gap engine: Diabetic patient overdue HbA1c by 94 days — lab order recommended', color: '#2B7FFF' },
-  { type: 'doc', text: 'AI Documents: Nephrology referral letter drafted in 1.2s — awaiting clinician sign-off', color: '#00C896' },
-  { type: 'drug', text: 'Drug substitution: Amoxicillin out of stock → Ampicillin 500mg suggested (CDSS confidence 80%)', color: '#00C896' },
-  { type: 'followup', text: 'Follow-up AI: Post-discharge critical patient → 2-day in-person recall (urgent) recommended', color: '#FF7A40' },
-  { type: 'adherence', text: 'Adherence engine: Patient missed 4 of last 7 Metformin doses → personalised nudge sent via portal', color: '#2B7FFF' },
-  { type: 'timeline', text: 'AI Timeline: Recurring respiratory infection pattern detected — 4 episodes in 14 months', color: '#00C896' },
-  { type: 'storeroom', text: 'Storeroom AI: Paracetamol 500mg demand forecast — 340 units needed in 30 days (28% above seasonal baseline)', color: '#00C896' },
-  { type: 'stock', text: 'Stock alert: Amoxicillin 250mg below reorder level at Ward 3 — purchase order auto-generated for supplier', color: '#FF7A40' },
-  { type: 'fefo', text: 'FEFO dispense: Batch EXP-2026-08 selected first for Metformin 500mg — 87 days to expiry', color: '#2B7FFF' },
-  { type: 'subst', text: 'Drug substitution: Ciprofloxacin 500mg out of stock → Norfloxacin 400mg suggested (ATC J01MA match, confidence 85%)', color: '#00C896' },
+  { type: 'cdss', text: 'CDSS: Sepsis risk score elevated — initiating SIRS criteria review', color: '#E8614D' },
+  { type: 'ai', text: 'PostVisit AI: Generating SNOMED-coded discharge summary...', color: '#0AA98A' },
+  { type: 'herb', text: 'Herb-drug alert: Umhlonyane + Warfarin — MAJOR interaction flagged in ward round', color: '#E8614D' },
+  { type: 'lang', text: 'Voice AI: Transcribed Setswana clinical notes → structured SOAP encounter', color: '#0AA98A' },
+  { type: 'dhis2', text: 'DHIS2 sync: 14 ANC records pushed to national aggregate (Zambia MOH)', color: '#0AA98A' },
+  { type: 'pactr', text: 'PACTR trial match: Patient eligible for Phase II SCD hydroxyurea dose optimisation trial', color: '#3B9EFF' },
+  { type: 'fhir', text: 'FHIR R4: Patient bundle exported for cross-border SADC ART continuity transfer', color: '#3B9EFF' },
+  { type: 'scd', text: 'SCD crisis: Vaso-occlusive crisis triage initiated — hydration + analgesia protocol loaded', color: '#E8614D' },
+  { type: 'icd', text: 'ICD-10: Auto-suggested Z34.0 for ANC first trimester visit', color: '#0AA98A' },
+  { type: 'billing', text: 'Billing enforcer: Demo tenant expired → suspended after 14-day trial period', color: '#E8614D' },
+  { type: 'gating', text: 'Module gating: OR and Blood Bank routes hidden for clinic-mode tenant (Lusaka Primary)', color: '#3B9EFF' },
+  { type: 'crvs', text: 'CRVS: Birth notification sent to Zimbabwe Civil Registry for patient ID NR-2026-00441', color: '#0AA98A' },
+  { type: 'i18n', text: 'Mobile i18n: Device locale "sw-TZ" detected → app language switched to Swahili', color: '#3B9EFF' },
+  { type: 'risk', text: 'Risk engine: Patient #4471 scored 87/100 (CRITICAL) — proactive alert dispatched to on-call nurse', color: '#E8614D' },
+  { type: 'mortality', text: 'Mortality AI: 30-day risk 78% (HIGH) on post-op patient — ICU, age 71, NEWS2 score 8 — care team notified', color: '#E8614D' },
+  { type: 'gap', text: 'Care gap engine: Diabetic patient overdue HbA1c by 94 days — lab order recommended', color: '#3B9EFF' },
+  { type: 'doc', text: 'AI Documents: Nephrology referral letter drafted in 1.2s — awaiting clinician sign-off', color: '#0AA98A' },
+  { type: 'drug', text: 'Drug substitution: Amoxicillin out of stock → Ampicillin 500mg suggested (CDSS confidence 80%)', color: '#0AA98A' },
+  { type: 'followup', text: 'Follow-up AI: Post-discharge critical patient → 2-day in-person recall (urgent) recommended', color: '#E8614D' },
+  { type: 'adherence', text: 'Adherence engine: Patient missed 4 of last 7 Metformin doses → personalised nudge sent via portal', color: '#3B9EFF' },
+  { type: 'timeline', text: 'AI Timeline: Recurring respiratory infection pattern detected — 4 episodes in 14 months', color: '#0AA98A' },
+  { type: 'storeroom', text: 'Storeroom AI: Paracetamol 500mg demand forecast — 340 units needed in 30 days (28% above seasonal baseline)', color: '#0AA98A' },
+  { type: 'stock', text: 'Stock alert: Amoxicillin 250mg below reorder level at Ward 3 — purchase order auto-generated for supplier', color: '#E8614D' },
+  { type: 'fefo', text: 'FEFO dispense: Batch EXP-2026-08 selected first for Metformin 500mg — 87 days to expiry', color: '#3B9EFF' },
+  { type: 'subst',    text: 'Drug substitution: Ciprofloxacin 500mg out of stock → Norfloxacin 400mg suggested (ATC J01MA match, confidence 85%)', color: '#0AA98A' },
+  { type: 'checkin',  text: 'QR check-in: Patient scanned at clinic door — record opened in 0.4s, visit timer started, queue position assigned', color: '#0AA98A' },
+  { type: 'intake',   text: 'Pre-visit intake: Patient completed demographics, chief complaint, and CDPA consent 2 hours before arrival — encounter draft pre-filled', color: '#3B9EFF' },
+  { type: 'discharge',text: 'Discharge push: Dr. Moyo tapped "Finalise & Send" — 3 documents (summary, Rx, follow-up) delivered to patient app in 1.8s', color: '#0AA98A' },
+  { type: 'wearable', text: 'Wearable alert: Patient #3812 — 3 consecutive high SBP readings (152/162/158 mmHg) in last 24 h — trend alert raised', color: '#E8614D' },
+  { type: 'queue',    text: 'Queue WS: Patient #4490 received "Your Turn!" notification — queue position 1, waited 18 minutes', color: '#3B9EFF' },
+  { type: 'payment',  text: 'EcoCash payment confirmed: Invoice INV-2026-0441 (ZiG 85.00) — invoice marked paid, SMS receipt sent to patient', color: '#0AA98A' },
+  { type: 'theatre',  text: 'Theatre AI: OR-2 utilization 74% today — 1 cancellation (patient unwell), on-time start rate 83%', color: '#E8614D' },
+  { type: 'csat',     text: 'CSAT survey: 47 responses this week — avg 4.3★, NPS +62 — clinician Dr. Chikara top-rated (4.9★)', color: '#3B9EFF' },
+  { type: 'ward',     text: 'Ward round mobile: Dr. Dube issued 3 SOAP notes and 2 medication orders from mobile — Ward B census complete at 07:52', color: '#0AA98A' },
+  { type: 'household',text: 'Household alert: Patient diagnosed TB → household exposure alert raised for 3 linked members — screening recommended', color: '#E8614D' },
+  { type: 'consent',  text: 'Digital consent: Laparoscopic cholecystectomy consent signed by patient on tablet — PDF archived to MinIO in 0.9s', color: '#3B9EFF' },
+  { type: 'transfer', text: 'Stock transfer: AI recommends 200 units Amoxicillin 500mg from Facility B (surplus 340) → Facility A (shortage 60)', color: '#0AA98A' },
+  { type: 'pro',      text: 'PRO risk loop: Patient pain score 8/10 submitted → risk recalculated 84/100 (HIGH) → outreach task created for Dr. Ndlovu', color: '#E8614D' },
+  { type: 'referral', text: 'Referral update: Cardiology referral for patient #2204 → status "Appointment Scheduled: 2026-06-10" received via webhook', color: '#3B9EFF' },
 ];
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
   const currentYear = new Date().getFullYear();
 
   const [form, setForm] = useState({
@@ -489,7 +572,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#080E1A] text-[#E8F0FF]">
+    <div className="min-h-screen overflow-x-hidden bg-[#070C17] text-[#E2EDF8]">
       <style>{`
         @keyframes marquee {
           0% { transform: translateX(0); }
@@ -523,19 +606,25 @@ export default function LandingPage() {
           border: 2px solid currentColor;
           animation: pulse-ring 2.5s ease-out infinite;
         }
-        .glow-teal { box-shadow: 0 0 40px rgba(0, 200, 150, 0.25), 0 0 80px rgba(0, 200, 150, 0.1); }
-        .glow-blue { box-shadow: 0 0 40px rgba(43, 127, 255, 0.25), 0 0 80px rgba(43, 127, 255, 0.1); }
-        .glow-orange { box-shadow: 0 0 40px rgba(255, 122, 64, 0.25), 0 0 80px rgba(255, 122, 64, 0.1); }
+        .glow-teal { box-shadow: 0 0 40px rgba(10, 169, 138, 0.25), 0 0 80px rgba(10, 169, 138, 0.1); }
+        .glow-blue { box-shadow: 0 0 40px rgba(59, 158, 255, 0.25), 0 0 80px rgba(59, 158, 255, 0.1); }
+        .glow-orange { box-shadow: 0 0 40px rgba(232, 97, 77, 0.25), 0 0 80px rgba(232, 97, 77, 0.1); }
         .card-hover { transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease; }
         .card-hover:hover { transform: translateY(-4px); }
         .gradient-text-teal {
-          background: linear-gradient(135deg, #00C896 0%, #2B7FFF 100%);
+          background: linear-gradient(135deg, #0AA98A 0%, #1B6B3A 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
         }
-        .gradient-text-orange {
-          background: linear-gradient(135deg, #FF7A40 0%, #FFB347 100%);
+        .gradient-text-coral {
+          background: linear-gradient(135deg, #E8614D 0%, #F0954A 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        .gradient-text-brand {
+          background: linear-gradient(135deg, #0AA98A 0%, #3B9EFF 60%, #1B6B3A 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
@@ -544,24 +633,24 @@ export default function LandingPage() {
 
       {/* Ambient background orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="orb-1 absolute top-[-12rem] left-1/2 -translate-x-1/2 h-[50rem] w-[50rem] rounded-full bg-[#00C896]/[0.07] blur-3xl" />
-        <div className="orb-2 absolute right-[-12rem] top-[25rem] h-[36rem] w-[36rem] rounded-full bg-[#2B7FFF]/[0.09] blur-3xl" />
-        <div className="orb-3 absolute bottom-[-15rem] left-[-8rem] h-[40rem] w-[40rem] rounded-full bg-[#FF7A40]/[0.06] blur-3xl" />
+        <div className="orb-1 absolute top-[-12rem] left-1/2 -translate-x-1/2 h-[50rem] w-[50rem] rounded-full bg-[#0AA98A]/[0.08] blur-3xl" />
+        <div className="orb-2 absolute right-[-12rem] top-[25rem] h-[36rem] w-[36rem] rounded-full bg-[#1B6B3A]/[0.10] blur-3xl" />
+        <div className="orb-3 absolute bottom-[-15rem] left-[-8rem] h-[40rem] w-[40rem] rounded-full bg-[#E8614D]/[0.05] blur-3xl" />
       </div>
 
       <div className="relative z-10">
         {/* ── HEADER ── */}
-        <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#080E1A]/80 backdrop-blur-2xl">
+        <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#070C17]/80 backdrop-blur-2xl">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 lg:px-8">
             <button
               className="flex items-center gap-3"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
-              <div className="rounded-2xl border border-[#1E3A5F] bg-white/90 p-1.5 shadow-[0_0_30px_rgba(0,200,150,0.15)]">
-                <img src={logoSrc} alt="MediCore" className="h-9 w-auto md:h-10" />
+              <div className="rounded-2xl border border-[#1E3A5F] bg-white/90 p-1.5 shadow-[0_0_30px_rgba(10,169,138,0.15)]">
+                <img src={logoSrc} alt="Umoya" className="h-9 w-auto md:h-10" />
               </div>
               <div className="text-left leading-none">
-                <div className="text-[10px] uppercase tracking-[0.32em] text-[#5A78A0]">MediCore</div>
+                <div className="text-[10px] uppercase tracking-[0.32em] text-[#5A78A0]">Umoya</div>
                 <div
                   style={{ fontFamily: '"Fraunces", serif' }}
                   className="text-[18px] font-bold text-white"
@@ -572,7 +661,7 @@ export default function LandingPage() {
             </button>
 
             <nav className="hidden items-center gap-7 text-sm text-[#8FA8CC] lg:flex">
-              <a href="#why" className="transition-colors hover:text-white">Why MediCore</a>
+              <a href="#why" className="transition-colors hover:text-white">Why Umoya</a>
               <a href="#ai" className="transition-colors hover:text-white">AI & CDSS</a>
               <a href="#standards" className="transition-colors hover:text-white">Standards</a>
               <a href="#modules" className="transition-colors hover:text-white">Modules</a>
@@ -582,13 +671,13 @@ export default function LandingPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate('/tenants')}
-                className="hidden rounded-full border border-[#1E3050] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[#C5D5EE] transition hover:border-[#2B7FFF]/50 hover:bg-white/[0.08] lg:block"
+                className="hidden rounded-full border border-[#1E3050] bg-white/[0.04] px-4 py-2 text-sm font-medium text-[#C5D5EE] transition hover:border-[#3B9EFF]/50 hover:bg-white/[0.08] lg:block"
               >
                 Tenant Login
               </button>
               <button
                 onClick={() => document.getElementById('request-access')?.scrollIntoView({ behavior: 'smooth' })}
-                className="rounded-full bg-gradient-to-r from-[#00C896] to-[#00B080] px-4 py-2 text-xs font-bold text-[#051119] transition hover:from-[#00D9A3] hover:to-[#00C896] sm:px-5 sm:text-sm"
+                className="rounded-full bg-gradient-to-r from-[#0AA98A] to-[#0D9479] px-4 py-2 text-xs font-bold text-[#040A10] transition hover:from-[#12BFAB] hover:to-[#0AA98A] sm:px-5 sm:text-sm"
               >
                 Request Access
               </button>
@@ -602,39 +691,40 @@ export default function LandingPage() {
             <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16 lg:items-start">
               {/* Left */}
               <div>
-                <div className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-[#00C896]/25 bg-[#00C896]/[0.08] px-4 py-2 text-xs font-semibold uppercase tracking-[0.26em] text-[#6EE7C2]">
+                <div className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-[#0AA98A]/30 bg-[#0AA98A]/[0.10] px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#5DDBB8]">
                   <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00C896] opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00C896]" />
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#0AA98A] opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#0AA98A]" />
                   </span>
-                  SADC-first · Built for Africa · SaaS-ready · 8 Languages
+                  Breath · Intelligence · Continuity of Care
                 </div>
 
                 <h1
-                  style={{ fontFamily: '"Fraunces", serif' }}
-                  className="text-[2.4rem] font-black leading-[0.95] tracking-tight text-white sm:text-[3.2rem] md:text-[4rem] xl:text-[5rem]"
+                  style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', letterSpacing: '-0.025em' }}
+                  className="text-[2.6rem] font-extrabold leading-[1.02] text-white sm:text-[3.4rem] md:text-[4.2rem] xl:text-[5rem]"
                 >
-                  The EHR that{' '}
-                  <span className="gradient-text-teal">thinks with you.</span>
+                  <span className="gradient-text-teal">Every breath.</span>
                   <br />
-                  <span className="text-[#E8F0FF]/80">Not against you.</span>
+                  <span className="text-[#E2EDF8]">Every patient.</span>
+                  <br />
+                  <span className="text-[#E2EDF8]/55">Every facility.</span>
                 </h1>
 
-                <p className="mt-6 max-w-2xl text-[1.05rem] leading-[1.85] text-[#8FAACA]">
-                  MediCore is an AI-first clinical platform built for SADC, Africa, and beyond. Real-time CDSS, PostVisit AI, proactive risk scoring, mortality prediction, AI-generated clinical documents, drug substitution engine, inventory demand forecasting, central storeroom management, follow-up scheduler, predictive adherence, and 25+ more AI capabilities — all wired end-to-end. FHIR R4, DHIS2, 65+ clinical modules, and a multilingual mobile app in 8 African languages. Designed for clinicians across Johannesburg, Nairobi, Lusaka, Gaborone, Maputo, and wherever care happens.
+                <p className="mt-7 max-w-2xl text-[1.05rem] leading-[1.9] text-[#7A9CBC]">
+                  Umoya is the clinical operating system built for Africa and the world. AI-first, offline-capable, and deeply human — 80+ clinical modules, 30+ AI capabilities, FHIR R4, DHIS2, SNOMED CT, and a multilingual mobile app in 8 languages. Designed for clinicians in Harare, Johannesburg, Nairobi, Lusaka, Maputo — and everywhere care cannot wait for a signal.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <button
                     onClick={() => document.getElementById('request-access')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="glow-teal inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#00C896] to-[#00A87A] px-6 py-3 text-sm font-bold text-[#051119] transition hover:from-[#00D9A3] hover:to-[#00C896] sm:px-7 sm:py-3.5"
+                    className="glow-teal inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#0AA98A] to-[#0D9479] px-6 py-3 text-sm font-bold text-[#040A10] transition hover:from-[#12BFAB] hover:to-[#0AA98A] sm:px-7 sm:py-3.5"
                   >
                     Request Guided Test Access
                     <ArrowRight className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => navigate('/tenants')}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1E3A5F] bg-white/[0.04] px-6 py-3 text-sm font-bold text-white transition hover:border-[#2B7FFF]/60 hover:bg-white/[0.08] sm:px-7 sm:py-3.5"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1E3A5F] bg-white/[0.04] px-6 py-3 text-sm font-bold text-white transition hover:border-[#3B9EFF]/60 hover:bg-white/[0.08] sm:px-7 sm:py-3.5"
                   >
                     Clinic Login Directory
                     <ChevronRight className="h-4 w-4" />
@@ -656,9 +746,9 @@ export default function LandingPage() {
                 {/* Key proof points */}
                 <div className="mt-6 grid gap-3 grid-cols-1 sm:grid-cols-3">
                   {[
-                    { icon: Brain, color: '#00C896', title: 'AI-First CDSS', sub: 'Real-time, protocol-linked, bedside' },
-                    { icon: ShieldCheck, color: '#2B7FFF', title: 'HIPAA & FHIR', sub: 'Audit logs, structured, exportable' },
-                    { icon: Globe, color: '#FF7A40', title: 'SADC + Africa', sub: '16 SADC countries, 40+ languages' },
+                    { icon: Brain, color: '#0AA98A', title: 'AI-First CDSS', sub: 'Real-time, protocol-linked, bedside' },
+                    { icon: ShieldCheck, color: '#3B9EFF', title: 'HIPAA & FHIR', sub: 'Audit logs, structured, exportable' },
+                    { icon: Globe, color: '#E8614D', title: 'SADC + Africa', sub: '16 SADC countries, 40+ languages' },
                   ].map((item) => {
                     const Icon = item.icon;
                     return (
@@ -691,10 +781,10 @@ export default function LandingPage() {
                       <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
                       <span className="h-3 w-3 rounded-full bg-[#28C840]" />
                     </div>
-                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#4A6A90]">MediCore AI Live Feed</span>
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#4A6A90]">Umoya AI Live Feed</span>
                   </div>
-                  <span className="flex items-center gap-1.5 text-xs font-bold text-[#00C896]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#00C896] animate-pulse" />
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-[#0AA98A]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#0AA98A] animate-pulse" />
                     Active
                   </span>
                 </div>
@@ -734,9 +824,9 @@ export default function LandingPage() {
 
                 <div className="border-t border-white/[0.06] px-5 py-5 space-y-3">
                   {[
-                    { label: 'Sepsis Risk Score', val: '78%', color: '#FF7A40', w: '78%' },
-                    { label: 'ANC Cohort Coverage', val: '94%', color: '#00C896', w: '94%' },
-                    { label: 'CDSS Alert Precision', val: '91%', color: '#2B7FFF', w: '91%' },
+                    { label: 'Sepsis Risk Score', val: '78%', color: '#E8614D', w: '78%' },
+                    { label: 'ANC Cohort Coverage', val: '94%', color: '#0AA98A', w: '94%' },
+                    { label: 'CDSS Alert Precision', val: '91%', color: '#3B9EFF', w: '91%' },
                   ].map((bar) => (
                     <div key={bar.label}>
                       <div className="mb-1.5 flex justify-between text-[11px]">
@@ -799,7 +889,7 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* ── WHY MEDICORE / AUDIENCE SEGMENTS ── */}
+          {/* ── WHY UMOYA / AUDIENCE SEGMENTS ── */}
           <section id="why" className="mx-auto max-w-7xl px-4 py-10 sm:px-5 lg:px-8">
             <div className="mb-10 text-center">
               <div className="mb-3 inline-block text-xs font-bold uppercase tracking-[0.3em] text-[#5A78A0]">Built for every stakeholder</div>
@@ -812,7 +902,7 @@ export default function LandingPage() {
                 to switch.
               </h2>
               <p className="mx-auto mt-4 max-w-2xl text-[#7A9CC0]">
-                Whether you are a clinician, a data scientist, or running an NGO program — MediCore has exactly what you need.
+                Whether you are a clinician, a data scientist, or running an NGO program — Umoya has exactly what you need.
               </p>
             </div>
 
@@ -849,7 +939,7 @@ export default function LandingPage() {
 
                     <ul className="mt-4 space-y-2.5">
                       {audience.points.map((point) => (
-                        <li key={point} className="flex items-start gap-2.5 text-sm text-[#8FAACA]">
+                        <li key={point} className="flex items-start gap-2.5 text-sm text-[#7A9CBC]">
                           <CheckCircle2
                             className="mt-0.5 h-4 w-4 shrink-0"
                             style={{ color: audience.color }}
@@ -866,12 +956,12 @@ export default function LandingPage() {
 
           {/* ── AI / CDSS SHOWCASE ── */}
           <section id="ai" className="relative py-16 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-[#080E1A] via-[#060E1F] to-[#080E1A]" />
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_50%,rgba(0,200,150,0.06),transparent)]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[#070C17] via-[#060E1F] to-[#070C17]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_50%,rgba(10,169,138,0.06),transparent)]" />
 
             <div className="relative mx-auto max-w-7xl px-5 lg:px-8">
               <div className="mb-10 text-center">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#00C896]/20 bg-[#00C896]/[0.07] px-4 py-2 text-xs font-bold uppercase tracking-[0.26em] text-[#6EE7C2]">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#0AA98A]/20 bg-[#0AA98A]/[0.07] px-4 py-2 text-xs font-bold uppercase tracking-[0.26em] text-[#5DDBB8]">
                   <Brain className="h-3.5 w-3.5" />
                   AI & Clinical Decision Support
                 </div>
@@ -883,7 +973,7 @@ export default function LandingPage() {
                   <span className="gradient-text-teal">every clinical moment.</span>
                 </h2>
                 <p className="mx-auto mt-4 max-w-2xl text-[#7A9CC0]">
-                  Not an AI chatbot bolted on the side. MediCore's CDSS fires at the point of care, PostVisit AI closes the loop, and every alert reaches the right person in real time.
+                  Not an AI chatbot bolted on the side. Umoya's CDSS fires at the point of care, PostVisit AI closes the loop, and every alert reaches the right person in real time.
                 </p>
               </div>
 
@@ -893,7 +983,7 @@ export default function LandingPage() {
                   return (
                     <div
                       key={feature.title}
-                      className="card-hover rounded-[24px] border border-white/[0.08] bg-gradient-to-b from-[#0D1829] to-[#080E1A] p-6"
+                      className="card-hover rounded-[24px] border border-white/[0.08] bg-gradient-to-b from-[#0D1829] to-[#070C17] p-6"
                     >
                       <div
                         className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-[18px] border"
@@ -979,7 +1069,7 @@ export default function LandingPage() {
                   {['Research-ready', 'Referral-ready', 'Regulatory-ready', 'Interoperable'].map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-[#2B7FFF]/30 bg-[#2B7FFF]/10 px-4 py-1.5 text-xs font-bold text-[#7AB8FF]"
+                      className="rounded-full border border-[#3B9EFF]/30 bg-[#3B9EFF]/10 px-4 py-1.5 text-xs font-bold text-[#90C4FF]"
                     >
                       {tag}
                     </span>
@@ -1050,25 +1140,25 @@ export default function LandingPage() {
                   {[
                     {
                       icon: Users,
-                      color: '#00C896',
+                      color: '#0AA98A',
                       title: 'Doctor-first review',
                       body: 'Every request is reviewed by someone who understands clinical workflows — not a sales bot.',
                     },
                     {
                       icon: Zap,
-                      color: '#2B7FFF',
+                      color: '#3B9EFF',
                       title: 'Provisioned tenant after approval',
                       body: 'A real test environment with your clinic\'s configuration. Not a generic demo.',
                     },
                     {
                       icon: Database,
-                      color: '#FF7A40',
+                      color: '#E8614D',
                       title: 'Test any module end-to-end',
                       body: 'CDSS, PostVisit AI, proactive risk scoring, mortality prediction, AI documents, drug substitution, inventory demand forecasting, central storeroom management, follow-up scheduler, adherence engine, maternity, sickle cell, epilepsy, traditional medicine herb-drug, PACTR trials, Ubuntu SDOH, NHIF/CBHI, lab, radiology, HIV, oncology, DHIS2, claims, and more.',
                     },
                     {
                       icon: ShieldCheck,
-                      color: '#00C896',
+                      color: '#0AA98A',
                       title: 'Standards compliance included',
                       body: 'Your test environment uses the same SNOMED CT, ICD-10, FHIR R4, and DHIS2 data model as production.',
                     },
@@ -1091,8 +1181,8 @@ export default function LandingPage() {
                   })}
                 </div>
 
-                <div className="mt-8 rounded-[20px] border border-[#00C896]/20 bg-[#00C896]/[0.07] p-5">
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#4DDBB0]">Who uses MediCore?</p>
+                <div className="mt-8 rounded-[20px] border border-[#0AA98A]/20 bg-[#0AA98A]/[0.07] p-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#4DDBB0]">Who uses Umoya?</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {[
                       'Private clinics',
@@ -1105,7 +1195,7 @@ export default function LandingPage() {
                     ].map((who) => (
                       <span
                         key={who}
-                        className="rounded-full border border-[#00C896]/25 bg-[#00C896]/[0.08] px-3 py-1 text-[11px] font-semibold text-[#6EE7C2]"
+                        className="rounded-full border border-[#0AA98A]/25 bg-[#0AA98A]/[0.08] px-3 py-1 text-[11px] font-semibold text-[#5DDBB8]"
                       >
                         {who}
                       </span>
@@ -1123,7 +1213,7 @@ export default function LandingPage() {
                   {[
                     { field: 'fullName' as const, label: 'Full name', placeholder: 'Dr. Amara Nkosi', required: true, type: 'text' },
                     { field: 'clinicName' as const, label: 'Clinic or hospital', placeholder: 'Nairobi Regional Health Centre', required: true, type: 'text' },
-                    { field: 'workEmail' as const, label: 'Work email', placeholder: 'doctor@clinic.medicore.health', required: true, type: 'email' },
+                    { field: 'workEmail' as const, label: 'Work email', placeholder: 'doctor@clinic.umoya.health', required: true, type: 'email' },
                     { field: 'phone' as const, label: 'Phone', placeholder: '+27 / +254 / +260 ...', required: true, type: 'text' },
                     { field: 'roleTitle' as const, label: 'Role', placeholder: 'Consultant physician', required: false, type: 'text' },
                     { field: 'specialization' as const, label: 'Specialty', placeholder: 'Internal medicine, maternity, radiology', required: false, type: 'text' },
@@ -1136,7 +1226,7 @@ export default function LandingPage() {
                         value={form[f.field]}
                         onChange={(e) => updateField(f.field, e.target.value)}
                         placeholder={f.placeholder}
-                        className="w-full rounded-2xl border border-[#1E3A5F] bg-[#060E1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#3A5070] focus:border-[#00C896]/60 focus:ring-1 focus:ring-[#00C896]/20"
+                        className="w-full rounded-2xl border border-[#1E3A5F] bg-[#070C17] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#3A5070] focus:border-[#0AA98A]/60 focus:ring-1 focus:ring-[#0AA98A]/20"
                       />
                     </label>
                   ))}
@@ -1148,7 +1238,7 @@ export default function LandingPage() {
                     value={form.currentSystem}
                     onChange={(e) => updateField('currentSystem', e.target.value)}
                     placeholder="Current EHR or clinical workflow pain point"
-                    className="w-full rounded-2xl border border-[#1E3A5F] bg-[#060E1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#3A5070] focus:border-[#00C896]/60 focus:ring-1 focus:ring-[#00C896]/20"
+                    className="w-full rounded-2xl border border-[#1E3A5F] bg-[#070C17] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#3A5070] focus:border-[#0AA98A]/60 focus:ring-1 focus:ring-[#0AA98A]/20"
                   />
                 </label>
 
@@ -1166,8 +1256,8 @@ export default function LandingPage() {
                           onClick={() => toggleInterest(option)}
                           className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
                             active
-                              ? 'border-[#00C896]/50 bg-[#00C896]/12 text-[#7AEEC8]'
-                              : 'border-[#1E3A5F] bg-[#060E1A] text-[#6A88AA] hover:border-[#2B7FFF]/40 hover:text-[#9AB8E8]'
+                              ? 'border-[#0AA98A]/50 bg-[#0AA98A]/12 text-[#7AEEC8]'
+                              : 'border-[#1E3A5F] bg-[#070C17] text-[#6A88AA] hover:border-[#3B9EFF]/40 hover:text-[#9AB8E8]'
                           }`}
                         >
                           {option}
@@ -1187,7 +1277,7 @@ export default function LandingPage() {
                     value={form.interestSummary}
                     onChange={(e) => updateField('interestSummary', e.target.value)}
                     placeholder="Tell us what you want to test: CDSS, PostVisit AI, maternity, DHIS2 reporting, lab workflows, claims, or specialty modules."
-                    className="w-full rounded-[20px] border border-[#1E3A5F] bg-[#060E1A] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#3A5070] focus:border-[#00C896]/60 focus:ring-1 focus:ring-[#00C896]/20"
+                    className="w-full rounded-[20px] border border-[#1E3A5F] bg-[#070C17] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#3A5070] focus:border-[#0AA98A]/60 focus:ring-1 focus:ring-[#0AA98A]/20"
                   />
                 </label>
 
@@ -1196,7 +1286,7 @@ export default function LandingPage() {
                   <select
                     value={form.preferredContactMethod}
                     onChange={(e) => updateField('preferredContactMethod', e.target.value as ContactMethod)}
-                    className="w-full rounded-2xl border border-[#1E3A5F] bg-[#060E1A] px-4 py-3 text-sm text-white outline-none transition focus:border-[#00C896]/60"
+                    className="w-full rounded-2xl border border-[#1E3A5F] bg-[#070C17] px-4 py-3 text-sm text-white outline-none transition focus:border-[#0AA98A]/60"
                   >
                     <option value="email">Email</option>
                     <option value="phone">Phone call</option>
@@ -1212,7 +1302,7 @@ export default function LandingPage() {
                 )}
 
                 {success && (
-                  <div className="mt-4 flex items-start gap-3 rounded-2xl border border-[#00C896]/25 bg-[#00C896]/[0.08] px-4 py-3 text-sm text-[#7AEEC8]">
+                  <div className="mt-4 flex items-start gap-3 rounded-2xl border border-[#0AA98A]/25 bg-[#0AA98A]/[0.08] px-4 py-3 text-sm text-[#7AEEC8]">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                     {success}
                   </div>
@@ -1222,7 +1312,7 @@ export default function LandingPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="glow-teal inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#00C896] to-[#00A87A] px-7 py-3.5 text-sm font-bold text-[#051119] transition hover:from-[#00D9A3] hover:to-[#00C896] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="glow-teal inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#0AA98A] to-[#0D9479] px-7 py-3.5 text-sm font-bold text-[#040A10] transition hover:from-[#12BFAB] hover:to-[#0AA98A] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submitting ? 'Submitting...' : 'Request test access'}
                     <ArrowRight className="h-4 w-4" />
@@ -1230,7 +1320,7 @@ export default function LandingPage() {
                   <button
                     type="button"
                     onClick={() => navigate('/tenants')}
-                    className="inline-flex items-center gap-2 rounded-full border border-[#1E3A5F] bg-[#060E1A] px-6 py-3.5 text-sm font-bold text-[#C5D5EE] transition hover:border-[#2B7FFF]/50"
+                    className="inline-flex items-center gap-2 rounded-full border border-[#1E3A5F] bg-[#070C17] px-6 py-3.5 text-sm font-bold text-[#C5D5EE] transition hover:border-[#3B9EFF]/50"
                   >
                     Existing tenant login
                     <ChevronRight className="h-4 w-4" />
@@ -1249,15 +1339,15 @@ export default function LandingPage() {
               <div>
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl border border-[#1A2E45] bg-white/90 p-1.5">
-                    <img src={logoSrc} alt="MediCore" className="h-8 w-auto" />
+                    <img src={logoSrc} alt="Umoya" className="h-8 w-auto" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#4A6A8A]">MediCore</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#4A6A8A]">Umoya</p>
                     <p className="text-sm font-bold text-white">Clinical Intelligence Platform</p>
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[#5A7A9A]">
-                  SADC-first clinical AI platform — 65+ clinical modules, 25+ AI capabilities. Proactive risk scoring, mortality prediction, AI clinical summaries, care gap detection, AI-generated documents, drug substitution engine, inventory demand forecasting, central storeroom management, follow-up scheduler, predictive adherence, ambient voice AI, FHIR R4, DHIS2, SNOMED CT, SaaS billing enforcement, deployment mode gating (clinic / hospital / ministry), CRVS civil registration, 8 African languages. Serving clinics across Southern, Eastern, and Western Africa.
+                  The clinical operating system built for Africa and the world. 80+ clinical modules · 30+ AI capabilities. Breath intelligence, offline-first, FHIR R4 · DHIS2 · SNOMED CT · 8 languages. Serving clinicians, hospitals, NGOs, and ministries of health across Southern, Eastern, and Western Africa.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC', 'SADC'].map((s) => (
@@ -1326,7 +1416,7 @@ export default function LandingPage() {
           <div className="border-t border-white/[0.05] px-5 py-4 lg:px-8">
             <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[11px] text-[#3A5A7A]">
-                © {currentYear} MediCore EHR. SADC-first · Built for Africa · Used globally — serving clinicians, NGOs, and MOH programs across 16 SADC nations. 65+ clinical modules · 25+ AI capabilities.
+                © {currentYear} Umoya Health. Breath · Intelligence · Continuity of Care. 80+ modules · 30+ AI capabilities · 8 languages · FHIR R4 · DHIS2.
               </p>
               <p className="text-[11px] text-[#2A4060]">
                 FHIR R4 · SNOMED CT · ICD-10 · DHIS2 · LOINC · RxNorm · HIPAA-aware · HL7 · PACTR · 40+ languages

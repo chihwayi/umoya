@@ -9,7 +9,7 @@ import * as path from 'path';
 @Injectable()
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
-  private readonly BACKUP_DIR = process.env.BACKUP_DIR ?? '/var/backups/medicore';
+  private readonly BACKUP_DIR = process.env.BACKUP_DIR ?? '/var/backups/umoya';
   private readonly S3_BUCKET = process.env.BACKUP_S3_BUCKET ?? '';
   private readonly ENCRYPTION_KEY = process.env.BACKUP_ENCRYPTION_KEY ?? '';
 

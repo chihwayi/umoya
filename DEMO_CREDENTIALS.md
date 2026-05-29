@@ -1,4 +1,4 @@
-# MediCore Demo Credentials
+# Umoya Demo Credentials
 
 All demo accounts are automatically provisioned when a new tenant/clinic is created.
 Replace `{slug}` with the clinic's subdomain (e.g. `kids-clinic`, `city-hospital`).
@@ -9,7 +9,7 @@ Replace `{slug}` with the clinic's subdomain (e.g. `kids-clinic`, `city-hospital
 
 | URL | Email | Password |
 |-----|-------|----------|
-| http://localhost:3011 | admin@medicore.health | medicore123 |
+| http://localhost:3011 | admin@umoya.health | umoya123 |
 
 > Manages tenants, billing, and platform-wide settings.
 
@@ -20,7 +20,7 @@ Replace `{slug}` with the clinic's subdomain (e.g. `kids-clinic`, `city-hospital
 Login at: **http://localhost:3000** (EHR Frontend)
 API at: **http://localhost:3013**
 
-All demo staff accounts share the same password: **`Medicore1#`**
+All demo staff accounts share the same password: **`Umoya1#`**
 
 | Role | Email |
 |------|-------|
@@ -35,9 +35,9 @@ All demo staff accounts share the same password: **`Medicore1#`**
 | Clinic Admin | `admin@{slug}.com` |
 
 **Example** — if the clinic slug is `kids-clinic`:
-- `doctor@kids-clinic.com` / `Medicore1#`
-- `nurse@kids-clinic.com` / `Medicore1#`
-- `admin@kids-clinic.com` / `Medicore1#`
+- `doctor@kids-clinic.com` / `Umoya1#`
+- `nurse@kids-clinic.com` / `Umoya1#`
+- `admin@kids-clinic.com` / `Umoya1#`
 
 ---
 
@@ -64,6 +64,6 @@ No pre-seeded patient portal accounts — use the "Register" flow.
 
 ## Notes
 
-- Demo passwords (`Medicore1#`) meet policy requirements: uppercase, lowercase, digit, special character.
+- Demo passwords (`Umoya1#`) meet policy requirements: uppercase, lowercase, digit, special character.
 - Infrastructure passwords above are **dev defaults** — change before any production deployment (`scripts/validate-secrets.sh` will catch them).
 - The CDSS `/admin/*` endpoints require a JWT signed with `JWT_SECRET` and an email in `OWNER_EMAILS`.

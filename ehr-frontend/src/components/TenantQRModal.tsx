@@ -19,7 +19,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
   const [copied, setCopied] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(qrUrl);
@@ -67,7 +67,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
       pdf.setLineWidth(0.8);
       pdf.line(20, 18, W - 20, 18);
 
-      // ── MediCore logo ──────────────────────────────────────────────────────
+      // ── Umoya logo ──────────────────────────────────────────────────────
       if (logoData) {
         // white pill background for the logo
         pdf.setFillColor(255, 255, 255);
@@ -77,7 +77,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(14);
         pdf.setTextColor(0, 200, 150);
-        pdf.text('MEDICORE', W / 2, 32, { align: 'center' });
+        pdf.text('UMOYA', W / 2, 32, { align: 'center' });
       }
 
       // ── "Clinic Access QR" badge ───────────────────────────────────────────
@@ -129,7 +129,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
       pdf.setFont('courier', 'normal');
       pdf.setFontSize(10);
       pdf.setTextColor(125, 200, 202);
-      pdf.text(`${tenant.subdomain}.medicore.health`, W / 2, infoY + 9, { align: 'center' });
+      pdf.text(`${tenant.subdomain}.umoya.health`, W / 2, infoY + 9, { align: 'center' });
 
       // ── Divider ────────────────────────────────────────────────────────────
       pdf.setDrawColor(37, 58, 88);
@@ -140,7 +140,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(11);
       pdf.setTextColor(175, 193, 223);
-      pdf.text('Scan to access this clinic on the MediCore app', W / 2, infoY + 26, { align: 'center' });
+      pdf.text('Scan to access this clinic on the Umoya app', W / 2, infoY + 26, { align: 'center' });
 
       // ── Step-by-step instructions box ─────────────────────────────────────
       const boxY = infoY + 33;
@@ -155,7 +155,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
       pdf.text('HOW TO USE', W / 2, boxY + 7, { align: 'center', charSpace: 1 });
 
       const steps = [
-        '1  Download the MediCore app from the App Store or Google Play',
+        '1  Download the Umoya app from the App Store or Google Play',
         '2  Open the app and tap "Select Your Clinic"',
         '3  Tap the QR icon and point your camera at this code',
         '4  Sign in with your clinic credentials',
@@ -176,9 +176,9 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(7.5);
       pdf.setTextColor(90, 120, 160);
-      pdf.text('medicore.health  ·  AI-Powered Clinical Platform  ·  Confidential — For clinic use only', W / 2, H - 11, { align: 'center' });
+      pdf.text('umoya.health  ·  AI-Powered Clinical Platform  ·  Confidential — For clinic use only', W / 2, H - 11, { align: 'center' });
 
-      pdf.save(`${tenant.subdomain}-medicore-qr.pdf`);
+      pdf.save(`${tenant.subdomain}-umoya-qr.pdf`);
     } finally {
       setPdfLoading(false);
     }
@@ -192,7 +192,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>${tenant.clinicName} — MediCore QR</title>
+  <title>${tenant.clinicName} — Umoya QR</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -218,7 +218,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
     }
     .top-line, .bottom-line {
       position: absolute; left: 20mm; right: 20mm; height: 1px;
-      background: #00C896;
+      background: #0AA98A;
     }
     .top-line { top: 18mm; }
     .bottom-line { bottom: 18mm; }
@@ -229,7 +229,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
     }
     .logo-wrap img { height: 36px; display: block; }
     .badge {
-      background: #002C21; color: #00C896;
+      background: #002C21; color: #0AA98A;
       font-size: 8px; font-weight: 700; letter-spacing: 2px;
       text-transform: uppercase; border-radius: 4px;
       padding: 4px 14px; margin-bottom: 24px;
@@ -243,7 +243,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
     .qr-frame span::before, .qr-frame span::after {
       content: ''; position: absolute;
       width: 20px; height: 20px;
-      border-color: #00C896; border-style: solid;
+      border-color: #0AA98A; border-style: solid;
     }
     .qr-frame::before  { top: -4px; left: -4px;  border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
     .qr-frame::after   { top: -4px; right: -4px; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
@@ -266,7 +266,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
       border-radius: 10px; padding: 14px 20px;
       width: 100%; max-width: 140mm;
     }
-    .steps-title { color: #00C896; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-align: center; margin-bottom: 10px; }
+    .steps-title { color: #0AA98A; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-align: center; margin-bottom: 10px; }
     .step { color: #AFC1DF; font-size: 9px; line-height: 1.9; }
     .footer {
       position: absolute; bottom: 24mm;
@@ -283,7 +283,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
   <div class="glow"></div>
   <div class="top-line"></div>
   <div class="logo-wrap">
-    <img src="${window.location.origin}/medicore.png" alt="MediCore" />
+    <img src="${window.location.origin}/umoya.png" alt="Umoya" />
   </div>
   <div class="badge">Clinic Access QR Code</div>
   <div class="qr-frame">
@@ -291,17 +291,17 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
     <img src="${qrUrl}" alt="QR Code" crossorigin="anonymous" />
   </div>
   <div class="clinic-name">${tenant.clinicName}</div>
-  <div class="subdomain">${tenant.subdomain}.medicore.health</div>
+  <div class="subdomain">${tenant.subdomain}.umoya.health</div>
   <div class="divider"></div>
-  <div class="scan-hint">Scan to access this clinic on the MediCore app</div>
+  <div class="scan-hint">Scan to access this clinic on the Umoya app</div>
   <div class="steps-box">
     <div class="steps-title">HOW TO USE</div>
-    <div class="step">1&nbsp;&nbsp;Download the MediCore app from the App Store or Google Play</div>
+    <div class="step">1&nbsp;&nbsp;Download the Umoya app from the App Store or Google Play</div>
     <div class="step">2&nbsp;&nbsp;Open the app and tap "Select Your Clinic"</div>
     <div class="step">3&nbsp;&nbsp;Tap the QR icon and point your camera at this code</div>
     <div class="step">4&nbsp;&nbsp;Sign in with your clinic credentials</div>
   </div>
-  <div class="footer">medicore.health &nbsp;·&nbsp; AI-Powered Clinical Platform &nbsp;·&nbsp; Confidential — For clinic use only</div>
+  <div class="footer">umoya.health &nbsp;·&nbsp; AI-Powered Clinical Platform &nbsp;·&nbsp; Confidential — For clinic use only</div>
   <div class="bottom-line"></div>
 </div>
 <script>window.onload = function() { window.print(); };</script>
@@ -334,8 +334,8 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
         <div className="flex flex-col items-center px-8 py-6">
           <div className="relative mb-5">
             {/* Teal glow behind QR */}
-            <div className="absolute inset-0 -z-10 rounded-2xl bg-[#00C896]/10 blur-xl" />
-            <div className="rounded-2xl border border-[#00C896]/30 bg-white p-3 shadow-[0_0_40px_rgba(0,200,150,0.15)]">
+            <div className="absolute inset-0 -z-10 rounded-2xl bg-[#0AA98A]/10 blur-xl" />
+            <div className="rounded-2xl border border-[#0AA98A]/30 bg-white p-3 shadow-[0_0_40px_rgba(0,200,150,0.15)]">
               <img
                 ref={imgRef}
                 src={qrUrl}
@@ -348,7 +348,7 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
             {(['tl','tr','bl','br'] as const).map((c) => (
               <div
                 key={c}
-                className={`absolute h-5 w-5 border-[#00C896] border-2 ${
+                className={`absolute h-5 w-5 border-[#0AA98A] border-2 ${
                   c === 'tl' ? 'left-0 top-0 rounded-tl-lg border-r-0 border-b-0' :
                   c === 'tr' ? 'right-0 top-0 rounded-tr-lg border-l-0 border-b-0' :
                   c === 'bl' ? 'left-0 bottom-0 rounded-bl-lg border-r-0 border-t-0' :
@@ -360,9 +360,9 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
 
           {/* Clinic info */}
           <p className="text-center text-sm font-semibold text-[#E8F0FF]">{tenant.clinicName}</p>
-          <p className="mt-1 font-mono text-[11px] text-[#7DC8CA]">{tenant.subdomain}.medicore.health</p>
+          <p className="mt-1 font-mono text-[11px] text-[#7DC8CA]">{tenant.subdomain}.umoya.health</p>
           <p className="mt-3 text-center text-[11px] leading-relaxed text-[#8EA7CD]">
-            Place this QR code where patients and staff can scan it with the MediCore app.
+            Place this QR code where patients and staff can scan it with the Umoya app.
           </p>
         </div>
 
@@ -372,20 +372,20 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
             onClick={handleCopy}
             className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-2 py-3 text-[11px] font-medium text-[#A8BEDD] transition hover:bg-white/10 hover:text-white"
           >
-            {copied ? <Check className="h-4 w-4 text-[#00C896]" /> : <Copy className="h-4 w-4" />}
+            {copied ? <Check className="h-4 w-4 text-[#0AA98A]" /> : <Copy className="h-4 w-4" />}
             {copied ? 'Copied!' : 'Copy URL'}
           </button>
           <button
             onClick={handlePDF}
             disabled={pdfLoading}
-            className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#2B7FFF]/30 bg-[#2B7FFF]/10 px-2 py-3 text-[11px] font-medium text-[#93BCFF] transition hover:bg-[#2B7FFF]/20 disabled:opacity-50"
+            className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#3B9EFF]/30 bg-[#3B9EFF]/10 px-2 py-3 text-[11px] font-medium text-[#93BCFF] transition hover:bg-[#3B9EFF]/20 disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             {pdfLoading ? 'Building…' : 'Download PDF'}
           </button>
           <button
             onClick={handlePrint}
-            className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#00C896]/30 bg-[#00C896]/10 px-2 py-3 text-[11px] font-medium text-[#7DE8CA] transition hover:bg-[#00C896]/20"
+            className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#0AA98A]/30 bg-[#0AA98A]/10 px-2 py-3 text-[11px] font-medium text-[#7DE8CA] transition hover:bg-[#0AA98A]/20"
           >
             <Printer className="h-4 w-4" />
             Print PDF

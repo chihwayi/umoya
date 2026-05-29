@@ -201,7 +201,7 @@ export class MedicationDispenseMapper {
       // Extension for payment status
       extension: dispensing.paymentStatus && dispensing.paymentStatus !== 'pending' ? [
         {
-          url: 'http://medicore.health/fhir/StructureDefinition/payment-status',
+          url: 'http://umoya.health/fhir/StructureDefinition/payment-status',
           valueCode: dispensing.paymentStatus,
         },
       ] : undefined,
@@ -228,7 +228,7 @@ export class MedicationDispenseMapper {
 
     // Extract payment status from extension
     const paymentStatus = fhirDispense.extension
-      ?.find(ext => ext.url === 'http://medicore.health/fhir/StructureDefinition/payment-status')
+      ?.find(ext => ext.url === 'http://umoya.health/fhir/StructureDefinition/payment-status')
       ?.valueCode as PaymentStatus | undefined;
 
     // Extract notes

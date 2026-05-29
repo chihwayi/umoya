@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Image } from 'react-native';
 import { C } from '../../design/tokens';
 
-const LOGO = require('../../../assets/medicore-logo.png');
+const LOGO = require('../../../assets/umoya-logo.png');
 
 interface AiPulseProps {
   size?: number;

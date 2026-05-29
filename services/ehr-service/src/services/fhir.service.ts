@@ -117,24 +117,24 @@ export class FhirService {
   getCapabilityStatement() {
     return {
       resourceType: 'CapabilityStatement',
-      id: 'medicore-fhir-server',
-      url: 'http://medicore.health/fhir/CapabilityStatement/medicore-fhir-server',
+      id: 'umoya-fhir-server',
+      url: 'http://umoya.health/fhir/CapabilityStatement/umoya-fhir-server',
       version: '1.0.0',
-      name: 'MediCore FHIR Server',
-      title: 'MediCore FHIR R4 Server',
+      name: 'Umoya FHIR Server',
+      title: 'Umoya FHIR R4 Server',
       status: 'active',
       experimental: false,
       date: new Date().toISOString(),
-      publisher: 'MediCore Solutions',
-      description: 'FHIR R4 compliant server for MediCore EHR system',
+      publisher: 'Umoya Solutions',
+      description: 'FHIR R4 compliant server for Umoya EHR system',
       kind: 'instance',
       software: {
-        name: 'MediCore EHR',
+        name: 'Umoya EHR',
         version: '1.0.0'
       },
       implementation: {
-        description: 'MediCore FHIR Server',
-        url: 'http://medicore.health/fhir'
+        description: 'Umoya FHIR Server',
+        url: 'http://umoya.health/fhir'
       },
       fhirVersion: '4.0.1',
       format: ['json', 'xml'],
@@ -2214,7 +2214,7 @@ export class FhirService {
       identifier: [
         {
           use: 'usual',
-          system: 'http://medicore.health/fhir/patient-number',
+          system: 'http://umoya.health/fhir/patient-number',
           value: patient.patientNumber
         },
         ...(patient.nationalId ? [{
@@ -3494,7 +3494,7 @@ export class FhirService {
       resourceType: 'Location',
       id: 'clinic',
       status: 'active',
-      name: 'MediCore Clinic',
+      name: 'Umoya Clinic',
       description: 'Primary clinic location',
       type: [
         {
@@ -3525,7 +3525,7 @@ export class FhirService {
       resourceType: 'Location',
       id: id,
       status: 'active',
-      name: 'MediCore Clinic',
+      name: 'Umoya Clinic',
       description: 'Primary clinic location',
       type: [
         {
@@ -3547,9 +3547,9 @@ export class FhirService {
     // Return default organization
     const organization = {
       resourceType: 'Organization',
-      id: 'medicore',
+      id: 'umoya',
       active: true,
-      name: 'MediCore Solutions',
+      name: 'Umoya Solutions',
       type: [
         {
           coding: [
@@ -3576,7 +3576,7 @@ export class FhirService {
       resourceType: 'Organization',
       id: id,
       active: true,
-      name: 'MediCore Solutions',
+      name: 'Umoya Solutions',
       type: [
         {
           coding: [
@@ -3658,7 +3658,7 @@ export class FhirService {
       ],
       identifier: user.licenseNumber ? [
         {
-          system: 'http://medicore.health/fhir/license',
+          system: 'http://umoya.health/fhir/license',
           value: user.licenseNumber,
         },
       ] : undefined,
@@ -3719,7 +3719,7 @@ export class FhirService {
         reference: `Practitioner/${user.id}`,
       },
       organization: {
-        reference: 'Organization/medicore',
+        reference: 'Organization/umoya',
       },
       code: roleCode ? [
         {

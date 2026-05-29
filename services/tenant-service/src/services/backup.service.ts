@@ -26,7 +26,7 @@ export class BackupService {
   private readonly bucketName: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.bucketName = this.configService.get<string>('BACKUP_BUCKET_NAME', 'medicore-backups');
+    this.bucketName = this.configService.get<string>('BACKUP_BUCKET_NAME', 'umoya-backups');
     
     const region = this.configService.get<string>('AWS_REGION', 'us-east-1');
     const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID');
@@ -439,6 +439,6 @@ export class BackupService {
       return explicit.trim();
     }
 
-    return 'medicore';
+    return 'umoya';
   }
 }

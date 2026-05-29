@@ -173,7 +173,7 @@ export class AuthService {
     user.twoFactorSecret = secret;
     user.twoFactorEnabled = false;
     await userRepository.save(user);
-    const otpauthUrl = authenticator.keyuri(user.email, 'MediCore', secret);
+    const otpauthUrl = authenticator.keyuri(user.email, 'Umoya', secret);
     return { secret, otpauthUrl };
   }
 

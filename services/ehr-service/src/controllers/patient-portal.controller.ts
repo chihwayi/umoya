@@ -401,7 +401,7 @@ export class PatientPortalController {
         <p><strong>Dosage:</strong> ${prescription.dosage}</p>
         <p><strong>Frequency:</strong> ${prescription.frequency}</p>
         ${prescription.instructions ? `<p><strong>Instructions:</strong> ${prescription.instructions}</p>` : ''}
-        <p><em>Shared via MediCore Patient Portal</em></p>
+        <p><em>Shared via Umoya Patient Portal</em></p>
       `,
     });
     return { message: `Prescription shared to ${body.recipientEmail.trim()}` };

@@ -26,7 +26,7 @@ async function bootstrap() {
 
   // Swagger setup
   const config = new DocumentBuilder()
-    .setTitle('MediCore EHR API (Mock)')
+    .setTitle('Umoya EHR API (Mock)')
     .setDescription('Mock EHR service for testing')
     .setVersion('1.0')
     .addBearerAuth()
@@ -38,7 +38,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3013;
   await app.listen(port, '0.0.0.0');
   
-  console.log(`🏥 MediCore EHR Service (Mock) running on port ${port}`);
+  console.log(`🏥 Umoya EHR Service (Mock) running on port ${port}`);
   const host = process.env.HOST || 'localhost';
   console.log(`📚 API Documentation: http://${host}:${port}/api/docs`);
 }

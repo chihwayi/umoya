@@ -139,7 +139,7 @@ export const notifyTenantSubscriptionStatus = (
 
   const severity = summary.tone === 'critical' || summary.tone === 'expired' ? 'critical' : 'warning';
   const daysMarker = summary.daysUntilSuspension ?? summary.daysRemaining ?? 'na';
-  const key = `medicore-subscription-notice:${tenantInfo.id}:${severity}:${daysMarker}`;
+  const key = `umoya-subscription-notice:${tenantInfo.id}:${severity}:${daysMarker}`;
   if (sessionStorage.getItem(key)) return;
   sessionStorage.setItem(key, '1');
 

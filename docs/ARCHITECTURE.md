@@ -1,4 +1,4 @@
-# MediCore Architecture Reference
+# Umoya Architecture Reference
 
 Last updated: 2026-05-29
 
@@ -67,6 +67,21 @@ Add a provisioning bundle to `getProvisioningBundles()` in `services/tenant-serv
 | `storeroom_module_integration` | `location_subtype` on `inventory_locations`; `emergency_kit_items`; `is_arv`, `is_emergency_kit`, `is_chemo_component` flags on catalog; `chemo_regimen_components` |
 | `storeroom_procurement` | `storeroom_suppliers`, `storeroom_purchase_orders`, `storeroom_po_items`; `preferred_supplier_id`, `reorder_level`, `reorder_quantity` on catalog |
 | `storeroom_drug_substitution` | `atc_code`, `drug_class`, `category` on catalog; `drug_equivalents` mapping table |
+| `clinical_conflict_safety` | `clinical_resolution_queue` (safety-critical sync conflict review queue); `sync_safety_fields` (per-field LWW vs queue strategy registry) |
+| `qr_checkin` | `patient_checkin_tokens` (SHA-256 hashed one-time tokens); `actual_checkin_at`, `checkin_method` columns on `appointments` |
+| `pre_visit_intake` | `pre_visit_intake_forms` (patient-completed demographics, symptoms, medications, allergies, consent, insurance before arrival) |
+| `discharge_push` | `patient_discharge_documents` (PDF discharge papers in MinIO); `finalized_at`, `finalized_by`, `discharge_sent` columns on `encounters` |
+| `wearable_sync` | `wearable_devices`, `wearable_readings` (append-only), `wearable_trend_alerts` (3-consecutive-abnormal AI detection) |
+| `referral_tracking` | `referral_status_log` (audit trail), `referral_messages` (secure thread), `referral_webhook_keys` (SHA-256 receiving-facility API keys) |
+| `pro_risk_loop` | `risk_outreach_tasks` (auto-created for high-risk patients); `latest_risk_score`, `latest_risk_level`, `risk_updated_at` cache columns on `patients` |
+| `in_app_payment` | `patient_payment_transactions` (EcoCash/OneMoney/ZiG); `payment_status`, `paid_at`, `paid_via` columns on `invoices` |
+| `queue_wait_time` | `clinic_queue` (daily queue with position and wait estimate); `queue_config` (configurable average consult duration) |
+| `theatre_utilization` | `theatre_rooms`, `theatre_cases` (planned vs actual times, surgeon, cancellation reason), `theatre_config` |
+| `csat_survey` | `csat_surveys` (SHA-256 token-gated CSAT/NPS/category ratings + free text, 48 h expiry) |
+| `ward_round` | `ward_beds`, `inpatient_admissions`, `ward_round_notes` (structured SOAP), `ward_orders` (medication/lab/imaging/nursing) |
+| `household_family_graph` | `household_groups`, `patient_family_links`; `household_id` on `patients`; `household_alerts` (infectious/genetic propagation) |
+| `digital_consent` | `consent_form_templates` (procedure-specific risks/benefits), `consent_requests` (e-signature + PDF via pdfkit → MinIO) |
+| `stock_transfer` | `stock_transfer_orders` (cross-facility transfer lifecycle); `min_stock_level`, `reorder_point` columns on `storeroom_items` |
 
 ### System-level column additions (via `ensureSubscriptionSchema()`)
 
@@ -99,6 +114,21 @@ Every controller must appear in `controllers: []`.
 | `HealthEducationController` | `/health-education` | Staff course authoring (requires `is_health_educator`) |
 | `PatientPortalHealthEducationController` | `/patient-portal/education` | Patient course enrollment and progress |
 | `StoreroomController` | `/storeroom` | Multi-location inventory, catalog, stock, transfers, requests, expiry/FEFO, emergency kits, ARV/chemo, procurement, AI intelligence (forecast, anomalies, reorder, expiry risk), drug substitution |
+| `ConflictResolutionController` | `/conflict-queue` | Safety-critical sync conflict queue — list, resolve (keep server / keep client), patient-scoped view, badge count |
+| `CheckinController` | `/checkin` | QR token generation, token redemption on nurse scan, today's waiting queue |
+| `PreVisitIntakeController` | `/intake` | Token-gated pre-visit form fetch, patient submission, encounter sync, intake status badge |
+| `DischargeController` | `/encounters/:id/discharge` | Finalise and push discharge documents to patient app |
+| `PatientDischargeController` | `/patient/discharge-documents` | Patient portal discharge document list and presigned download URLs |
+| `WearableController` | `/wearable` | Device registration, reading ingestion with auto-flagging, 7-day timeline, trend alert management |
+| `ProRiskController` | `/risk` | High-risk patient list, per-patient score history, outreach task management |
+| `InAppPaymentController` | `/payments/patient` | Patient-facing invoice list, EcoCash/OneMoney payment initiation, transaction status polling |
+| `QueueController` | `/queue` | Enqueue patient, update status, real-time WebSocket broadcasts via QueueGateway |
+| `TheatreController` | `/theatre` | Theatre room listing, case scheduling, day schedule (Gantt), utilisation metrics, case start/end/cancel |
+| `CsatController` | `/csat` | Post-visit survey dispatch (SMS + push), token-gated survey fetch and submission, aggregate and per-clinician stats |
+| `WardRoundController` | `/ward` | Inpatient census, admissions, bedside SOAP note save/load, order creation and retrieval |
+| `HouseholdRiskController` | `/household` | Household creation and assignment, family linking, diagnosis propagation, alert management |
+| `DigitalConsentController` | `/consent` | Consent request creation, token-gated form fetch, e-signature submission → PDF → MinIO, encounter consent status |
+| `CrossFacilityStockController` | `/network/stock` | Cross-tenant stock level aggregation, AI rebalancing recommendations, transfer order lifecycle |
 
 ---
 

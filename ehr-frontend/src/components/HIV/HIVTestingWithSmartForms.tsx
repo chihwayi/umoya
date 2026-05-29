@@ -173,7 +173,7 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
             <div>
               <h3 className="text-xl font-bold text-slate-900">WHO HIV Testing Workflow (optional)</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Optional WHO-aligned testing steps. The standard Medicore HIV test remains the main form.
+                Optional WHO-aligned testing steps. The standard Umoya HIV test remains the main form.
               </p>
             </div>
           </div>

@@ -9,7 +9,7 @@
       "id": 1,
       "title": "Current LTFU Rate (%)",
       "type": "stat",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT (ltfu_count::float / NULLIF(active_count,0) * 100)::numeric(5,1) AS ltfu_rate FROM retention_snapshots ORDER BY computed_at DESC LIMIT 1",
         "format": "table"
@@ -33,7 +33,7 @@
       "id": 2,
       "title": "Reengagement Count (30 days)",
       "type": "stat",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT COUNT(*) AS reengaged FROM ltfu_reengagement_log WHERE reengaged_at > NOW() - INTERVAL '30 days'",
         "format": "table"
@@ -44,7 +44,7 @@
       "id": 3,
       "title": "6-Month Retention (%)",
       "type": "stat",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT retention_6m FROM retention_snapshots ORDER BY computed_at DESC LIMIT 1",
         "format": "table"
@@ -68,7 +68,7 @@
       "id": 4,
       "title": "12-Month Retention (%)",
       "type": "stat",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT retention_12m FROM retention_snapshots ORDER BY computed_at DESC LIMIT 1",
         "format": "table"
@@ -92,7 +92,7 @@
       "id": 5,
       "title": "LTFU Trend (6 months)",
       "type": "timeseries",
-      "datasource": "PostgreSQL-MediCore",
+      "datasource": "PostgreSQL-Umoya",
       "targets": [{
         "rawSql": "SELECT computed_at AS time, (ltfu_count::float / NULLIF(active_count,0) * 100)::numeric(5,1) AS ltfu_rate FROM retention_snapshots WHERE computed_at > NOW() - INTERVAL '6 months' ORDER BY computed_at",
         "format": "table",

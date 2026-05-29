@@ -4,7 +4,7 @@ import 'multer';
 import axios from 'axios';
 import FormData from 'form-data';
 import { createHash } from 'crypto';
-import { config, env } from '@medicore/config';
+import { config, env } from '@umoya/config';
 import {
   CuratePostVisitCompanionMemoryDto,
   CreatePostVisitSessionDto,
@@ -4846,8 +4846,8 @@ export class PostVisitService {
         end: this.toIsoDate(sessionRow.completed_at || sessionRow.updated_at),
       },
       meta: {
-        profile: ['https://medicore.health/fhir/StructureDefinition/post-visit-encounter'],
-        tag: [{ system: 'https://medicore.health/fhir/tags', code: 'post-visit' }],
+        profile: ['https://umoya.health/fhir/StructureDefinition/post-visit-encounter'],
+        tag: [{ system: 'https://umoya.health/fhir/tags', code: 'post-visit' }],
       },
     };
 

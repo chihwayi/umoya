@@ -134,7 +134,7 @@ const TenantScopedMessagingDashboard: React.FC = () => {
   return <MessagingDashboard tenantSlug={tenantSlug} token={token} />;
 };
 
-const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'medicore-tenant-subscription:';
+const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'umoya-tenant-subscription:';
 
 const readTenantSubscriptionCache = (tenantSlug?: string | null): TenantSubscriptionInfo | null => {
   if (typeof window === 'undefined' || !tenantSlug) return null;

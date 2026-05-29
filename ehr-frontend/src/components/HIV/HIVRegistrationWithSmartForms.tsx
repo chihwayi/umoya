@@ -168,7 +168,7 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
             <div>
               <h3 className="text-xl font-bold text-slate-900">WHO HIV Registration Workflow (optional)</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Optional WHO-aligned registration steps. The standard Medicore enrollment form remains the main form.
+                Optional WHO-aligned registration steps. The standard Umoya enrollment form remains the main form.
               </p>
             </div>
           </div>

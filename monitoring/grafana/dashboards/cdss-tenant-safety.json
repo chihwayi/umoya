@@ -1,7 +1,7 @@
 {
   "dashboard": {
-    "title": "MediCore CDSS - Tenant Safety Dashboard",
-    "tags": ["medicore", "cdss", "tenant", "safety"],
+    "title": "Umoya CDSS - Tenant Safety Dashboard",
+    "tags": ["umoya", "cdss", "tenant", "safety"],
     "timezone": "browser",
     "schemaVersion": 38,
     "version": 1,

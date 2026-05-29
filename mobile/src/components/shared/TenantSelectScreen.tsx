@@ -63,7 +63,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
     debounce.current = setTimeout(async () => {
       setSearching(true);
       try {
-        // Discovery endpoint on the main MediCore platform
+        // Discovery endpoint on the main Umoya platform
         const url = `${TENANT_DISCOVERY_URL}/search?q=${encodeURIComponent(q)}`;
         console.log('[TenantSearch] GET', url);
         const res = await axios.get<Tenant[]>(url, { timeout: 8000 });
@@ -117,7 +117,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
       if (parsed.slug && parsed.baseUrl) {
         await select(parsed);
       } else {
-        Alert.alert('Invalid QR', 'This QR code is not a valid MediCore clinic QR.');
+        Alert.alert('Invalid QR', 'This QR code is not a valid Umoya clinic QR.');
         setScanned(false);
       }
     } catch {
@@ -243,7 +243,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>Can't find your clinic?</Text>
             <Text style={styles.emptyBody}>
-              Ask your clinic for a QR code, or type the full subdomain (e.g. city-hospital.medicore.app)
+              Ask your clinic for a QR code, or type the full subdomain (e.g. city-hospital.umoya.app)
             </Text>
           </View>
         )}

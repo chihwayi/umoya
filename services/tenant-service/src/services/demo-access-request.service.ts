@@ -150,11 +150,11 @@ export class DemoAccessRequestService implements OnModuleInit {
   }
 
   private async generateUniqueTrialSubdomain(clinicName: string): Promise<string> {
-    const base = (clinicName || 'medicore-demo')
+    const base = (clinicName || 'umoya-demo')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 36) || 'medicore-demo';
+      .slice(0, 36) || 'umoya-demo';
 
     const root = `${base.replace(/-trial$/, '')}-trial`.slice(0, 48).replace(/^-+|-+$/g, '');
 
@@ -167,6 +167,6 @@ export class DemoAccessRequestService implements OnModuleInit {
       }
     }
 
-    return `medicore-trial-${randomUUID().slice(0, 8)}`;
+    return `umoya-trial-${randomUUID().slice(0, 8)}`;
   }
 }

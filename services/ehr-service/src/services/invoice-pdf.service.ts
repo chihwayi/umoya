@@ -38,13 +38,13 @@ export class InvoicePdfService {
       : 'Walk-in Patient';
     const content = template?.template_content || {};
     const brandColor = content.brandColor || '#0ea5e9';
-    const headerTitle = content.headerTitle || 'MediCore Health';
+    const headerTitle = content.headerTitle || 'Umoya Health';
     const headerSubtitle = content.headerSubtitle || 'Excellence in Care';
     const addressLines: string[] = Array.isArray(content.addressLines) ? content.addressLines : [];
     const footerNotes: string[] = Array.isArray(content.footerNotes)
       ? content.footerNotes
       : [
-          'Thank you for choosing MediCore Health.',
+          'Thank you for choosing Umoya Health.',
           'Please contact Accounts if you have any questions about this invoice.',
         ];
     const contactEmail = content.contactEmail;

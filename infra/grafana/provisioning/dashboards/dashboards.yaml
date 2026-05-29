@@ -1,6 +1,6 @@
 apiVersion: 1
 providers:
-  - name: MediCore Clinical
+  - name: Umoya Clinical
     folder: Newlands Clinic
     type: file
     options:

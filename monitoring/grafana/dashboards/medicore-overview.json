@@ -1,7 +1,7 @@
 {
   "dashboard": {
-    "title": "MediCore EHR - Overview Dashboard",
-    "tags": ["medicore", "ehr", "overview"],
+    "title": "Umoya EHR - Overview Dashboard",
+    "tags": ["umoya", "ehr", "overview"],
     "timezone": "browser",
     "schemaVersion": 38,
     "version": 1,

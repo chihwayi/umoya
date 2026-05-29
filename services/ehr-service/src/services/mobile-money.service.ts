@@ -103,7 +103,7 @@ export class MobileMoneyService {
         PhoneNumber: tx.phoneNumber,
         CallBackURL: callbackUrl,
         AccountReference: tx.invoiceId,
-        TransactionDesc: 'MediCore Invoice Payment',
+        TransactionDesc: 'Umoya Invoice Payment',
       },
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
@@ -143,7 +143,7 @@ export class MobileMoneyService {
         currency: tx.currency,
         externalId: tx.invoiceId,
         payer: { partyIdType: 'MSISDN', partyId: tx.phoneNumber },
-        payerMessage: 'MediCore Invoice Payment',
+        payerMessage: 'Umoya Invoice Payment',
         payeeNote: tx.invoiceId,
       },
       {
@@ -178,7 +178,7 @@ export class MobileMoneyService {
         clientCorrelator: tx.id,
         notifyUrl: process.env.ECOCASH_CALLBACK_URL || '',
         referenceCode: tx.invoiceId,
-        transactionDescription: 'MediCore Invoice Payment',
+        transactionDescription: 'Umoya Invoice Payment',
       },
     );
   }
@@ -229,9 +229,9 @@ export class MobileMoneyService {
         phone_number: tx.phoneNumber,
         amount: tx.amount,
         currency: tx.currency,
-        email: 'patient@medicore.health',
+        email: 'patient@umoya.health',
         tx_ref: tx.id,
-        fullname: 'MediCore Patient',
+        fullname: 'Umoya Patient',
       },
       { headers: { Authorization: `Bearer ${secretKey}` } },
     );

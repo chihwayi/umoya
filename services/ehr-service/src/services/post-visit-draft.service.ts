@@ -20,7 +20,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { config } from '@medicore/config';
+import { config } from '@umoya/config';
 import {
   ReviewPostVisitArtifactDto,
 } from '../dto/post-visit.dto';

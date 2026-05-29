@@ -1,25 +1,32 @@
+// UMOYA Design System — Mobile Tokens
+// Brand: Breath · Intelligence · Continuity of Care
+// Primary: Breath Teal (#0AA98A) | Forest Green (#1B6B3A) | Deep Night (#080E1A)
+
 export const C = {
-  // Backgrounds
-  bg:       '#080E1A',
-  surface:  '#0E1829',
-  surface2: '#132236',   // between surface and card — used for elevated insets
-  card:     '#121F33',
-  // Borders
-  border:      '#1A2B45',
-  borderLight: '#243550',
-  // Brand
-  teal:   '#00C896',   // AI / brand accent
-  blue:   '#2B7FFF',   // primary action / info
-  purple: '#A66CFF',   // nurse accent
-  red:    '#FF4D6A',   // critical / danger
-  amber:  '#FF7A40',   // warning / high severity
-  green:  '#22C55E',   // success / normal / stable  ← differentiated from teal
-  orange: '#FF6B00',   // escalation variant
-  // Text — aliases for ergonomic shorthand
-  text:          '#E8F0FA',   // == textPrimary
-  textPrimary:   '#E8F0FA',
-  textSecondary: '#8FA8CC',
-  textMuted:     '#4A6A8A',
+  // ── Backgrounds (deep night palette) ──────────────────────────────────
+  bg:       '#070C17',   // deepest — page background
+  surface:  '#0C1524',   // cards, panels
+  surface2: '#101D2E',   // elevated insets, secondary panels
+  card:     '#0F1B2B',   // card background
+  // ── Borders ────────────────────────────────────────────────────────────
+  border:      '#152236',
+  borderLight: '#1E3450',
+  // ── UMOYA Brand Colors ──────────────────────────────────────────────────
+  teal:   '#0AA98A',   // Breath Teal — primary brand, AI, active states
+  green:  '#1B9E5A',   // Forest Green — success, stable, growth
+  blue:   '#3B9EFF',   // Sky Blue — info, links, secondary actions
+  violet: '#9B6BFF',   // Nurse Violet — nursing workflows accent
+  coral:  '#E8614D',   // Warm Coral — critical alerts, urgent CTAs
+  amber:  '#F0954A',   // Alert Amber — warnings, high severity
+  orange: '#D95F1A',   // Deep Orange — escalation
+  red:    '#C93B3B',   // Clinical Red — danger, blood bank, critical
+  // ── Semantic aliases (keep for backward compat) ────────────────────────
+  purple: '#9B6BFF',
+  // ── Text ────────────────────────────────────────────────────────────────
+  text:          '#E2EDF8',   // primary body text
+  textPrimary:   '#E2EDF8',
+  textSecondary: '#7A9CBC',
+  textMuted:     '#3D607F',
 } as const;
 
 export const FONT = {
@@ -29,7 +36,7 @@ export const FONT = {
   uiBd: 'Sora_700Bold',
   uiXb: 'Sora_800ExtraBold',
   uiBk: 'Sora_800ExtraBold',
-  mono: 'JetBrainsMono_400Regular',
+  mono:   'JetBrainsMono_400Regular',
   monoBd: 'JetBrainsMono_700Bold',
 } as const;
 
@@ -46,44 +53,60 @@ export const RADIUS = {
 
 export const SHADOW = {
   sm: {
-    shadowColor: '#000',
+    shadowColor: '#0AA98A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.20,
-    shadowRadius: 6,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
     elevation: 3,
   },
   card: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
+    shadowOpacity: 0.30,
+    shadowRadius: 14,
     elevation: 8,
   },
   lg: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
+    shadowOpacity: 0.40,
+    shadowRadius: 22,
     elevation: 14,
   },
   heavy: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.55,
-    shadowRadius: 28,
+    shadowOpacity: 0.50,
+    shadowRadius: 30,
     elevation: 20,
+  },
+  teal: {
+    shadowColor: '#0AA98A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
 } as const;
 
-// Severity colors
+// Semantic severity — unchanged names, updated to UMOYA palette
 export const SEVERITY = {
-  critical: C.red,
-  high:     C.amber,
-  warning:  C.amber,
-  medium:   C.blue,
-  stable:   C.green,
-  info:     C.blue,
-  normal:   C.green,
-  low:      C.amber,
-  elevated: C.amber,
+  critical: '#C93B3B',
+  high:     '#E8614D',
+  warning:  '#F0954A',
+  medium:   '#3B9EFF',
+  stable:   '#1B9E5A',
+  info:     '#3B9EFF',
+  normal:   '#1B9E5A',
+  low:      '#F0954A',
+  elevated: '#F0954A',
+} as const;
+
+// UMOYA gradient pairs (for LinearGradient usage)
+export const GRADIENTS = {
+  brand:    ['#0AA98A', '#1B6B3A'],   // teal → forest
+  night:    ['#070C17', '#0C1524'],   // page bg
+  coral:    ['#E8614D', '#C93B3B'],   // alert
+  info:     ['#3B9EFF', '#1B6B8A'],
+  surface:  ['#0C1524', '#101D2E'],
 } as const;

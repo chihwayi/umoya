@@ -13,7 +13,7 @@ interface Tenant {
 
 const TenantSelectorPage: React.FC = () => {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -77,10 +77,10 @@ const TenantSelectorPage: React.FC = () => {
 
           <div className="mt-6 flex items-center gap-4">
             <div className="rounded-[24px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.14)]">
-              <img src={logoSrc} alt="MediCore logo" className="h-14 w-auto rounded-xl" />
+              <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto rounded-xl" />
             </div>
             <div>
-              <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">MediCore</div>
+              <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
               <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">
                 Patient access should feel as polished as care delivery.
               </h1>
@@ -187,7 +187,7 @@ const TenantSelectorPage: React.FC = () => {
 
           <div className="mt-8 border-t border-white/10 pt-6 text-center text-xs text-[#6F87AB]">
             Can&apos;t find your clinic?{' '}
-            <a href="mailto:support@medicore.health" className="text-[#7DE8CA] transition hover:text-white">
+            <a href="mailto:support@umoya.health" className="text-[#7DE8CA] transition hover:text-white">
               Contact Support
             </a>
           </div>

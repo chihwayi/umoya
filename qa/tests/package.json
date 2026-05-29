@@ -1,7 +1,7 @@
 {
-  "name": "@medicore/qa-tests",
+  "name": "@umoya/qa-tests",
   "version": "1.0.0",
-  "description": "MediCore QA test suite",
+  "description": "Umoya QA test suite",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",

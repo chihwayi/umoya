@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
-import { env } from '@medicore/config';
+import { env } from '@umoya/config';
 import { Dhis2Service } from './dhis2.service';
 import { TenantDhis2Config, TenantService } from './tenant.service';
 

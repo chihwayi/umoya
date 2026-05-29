@@ -9,7 +9,7 @@ import FormData from 'form-data';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
-import { config } from '@medicore/config';
+import { config } from '@umoya/config';
 
 export interface TranscriptionOptions {
   language?: 'en' | 'sn' | 'nd' | 'auto';

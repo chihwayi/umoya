@@ -8,7 +8,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EhrModule } from './ehr.module';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { AllExceptionsFilter } from './filters/http-exception.filter';
-import { config as envConfig } from '@medicore/config';
+import { config as envConfig } from '@umoya/config';
 import { randomUUID } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
@@ -25,7 +25,7 @@ function validateCriticalSecurityEnv(): void {
   const isDevLike = ['dev', 'development', 'local', 'test'].includes(env);
 
   const jwt = (process.env.JWT_SECRET || '').trim();
-  const insecureJwtDefaults = new Set(['dev_secret_key_change_in_production', 'medicore-super-secret-key', 'ehr-super-secret-key']);
+  const insecureJwtDefaults = new Set(['dev_secret_key_change_in_production', 'umoya-super-secret-key', 'ehr-super-secret-key']);
   if (!jwt) {
     throw new Error('JWT_SECRET is required for ehr-service startup.');
   }
@@ -105,7 +105,7 @@ async function bootstrap() {
 
       // Swagger setup
       const config = new DocumentBuilder()
-        .setTitle('MediCore EHR API')
+        .setTitle('Umoya EHR API')
         .setDescription('Complete Electronic Health Records system with FHIR/HL7 support')
         .setVersion('1.0')
         .addBearerAuth()
@@ -142,7 +142,7 @@ async function bootstrap() {
   const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
   const host = process.env.HOST || 'localhost';
   
-  console.log(`🏥 MediCore EHR Service running on port ${port}`);
+  console.log(`🏥 Umoya EHR Service running on port ${port}`);
   console.log(`📚 API Documentation: ${protocol}://${host}:${port}/api/docs`);
 }
 

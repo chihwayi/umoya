@@ -188,6 +188,35 @@ import { PatientPortalHealthEducationController } from './controllers/patient-po
 import { OfflineSyncController } from './controllers/offline-sync.controller';
 import { ClinicalSpecialtiesController } from './controllers/clinical-specialties.controller';
 import { ConflictResolverService } from './services/conflict-resolver.service';
+import { ClinicalConflictResolutionService } from './services/clinical-conflict-resolution.service';
+import { ConflictResolutionController } from './controllers/conflict-resolution.controller';
+import { CheckinService } from './services/checkin.service';
+import { CheckinController } from './controllers/checkin.controller';
+import { PreVisitIntakeService } from './services/pre-visit-intake.service';
+import { PreVisitIntakeController } from './controllers/pre-visit-intake.controller';
+import { DischargeDocumentService } from './services/discharge-document.service';
+import { DischargeController, PatientDischargeController } from './controllers/discharge.controller';
+import { WearableSyncService } from './services/wearable-sync.service';
+import { WearableController } from './controllers/wearable.controller';
+import { ProRiskLoopService } from './services/pro-risk-loop.service';
+import { ProRiskController } from './controllers/pro-risk.controller';
+import { InAppPaymentService } from './services/in-app-payment.service';
+import { InAppPaymentController } from './controllers/in-app-payment.controller';
+import { QueueService } from './services/queue.service';
+import { QueueController } from './controllers/queue.controller';
+import { QueueGateway } from './gateways/queue.gateway';
+import { TheatreService } from './services/theatre.service';
+import { TheatreController } from './controllers/theatre.controller';
+import { CsatService } from './services/csat.service';
+import { CsatController } from './controllers/csat.controller';
+import { WardRoundService } from './services/ward-round.service';
+import { WardRoundController } from './controllers/ward-round.controller';
+import { HouseholdRiskService } from './services/household-risk.service';
+import { HouseholdRiskController } from './controllers/household-risk.controller';
+import { DigitalConsentService } from './services/digital-consent.service';
+import { DigitalConsentController } from './controllers/digital-consent.controller';
+import { CrossFacilityStockService } from './services/cross-facility-stock.service';
+import { CrossFacilityStockController } from './controllers/cross-facility-stock.controller';
 import { DentalService } from './services/dental.service';
 import { AncService } from './services/anc.service';
 import { WebAuthnService } from './services/webauthn.service';
@@ -742,6 +771,21 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     HealthEducationController,
     PatientPortalHealthEducationController,
     OfflineSyncController,
+    ConflictResolutionController,
+    CheckinController,
+    PreVisitIntakeController,
+    DischargeController,
+    PatientDischargeController,
+    WearableController,
+    ProRiskController,
+    InAppPaymentController,
+    QueueController,
+    TheatreController,
+    CsatController,
+    WardRoundController,
+    HouseholdRiskController,
+    DigitalConsentController,
+    CrossFacilityStockController,
     ClinicalSpecialtiesController,
     WebAuthnController,
     ConsentRecordsController,
@@ -1019,6 +1063,21 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PatientHealthEducationService,
     OfflineSyncService,
     ConflictResolverService,
+    ClinicalConflictResolutionService,
+    CheckinService,
+    PreVisitIntakeService,
+    DischargeDocumentService,
+    WearableSyncService,
+    ProRiskLoopService,
+    InAppPaymentService,
+    QueueService,
+    QueueGateway,
+    TheatreService,
+    CsatService,
+    WardRoundService,
+    HouseholdRiskService,
+    DigitalConsentService,
+    CrossFacilityStockService,
     WebAuthnService,
     ConsentRecordsService,
     TeleconsultBridgeService,

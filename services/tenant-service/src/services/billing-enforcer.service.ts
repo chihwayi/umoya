@@ -44,7 +44,7 @@ export class BillingEnforcerService {
       if (tenant.contactPhone) {
         await this.smsService.send(
           tenant.contactPhone,
-          `MediCore: Your demo account for ${tenant.clinicName} has expired and has been suspended. Contact us to activate a paid subscription.`,
+          `Umoya: Your demo account for ${tenant.clinicName} has expired and has been suspended. Contact us to activate a paid subscription.`,
         );
       }
       this.logger.log(`Demo expired -> suspended: ${tenant.subdomain}`);
@@ -70,7 +70,7 @@ export class BillingEnforcerService {
       if (tenant.contactPhone) {
         await this.smsService.send(
           tenant.contactPhone,
-          `MediCore: Your subscription for ${tenant.clinicName} has lapsed. You have ${graceDays} days to make a payment before access is suspended. Contact your MediCore account manager to pay.`,
+          `Umoya: Your subscription for ${tenant.clinicName} has lapsed. You have ${graceDays} days to make a payment before access is suspended. Contact your Umoya account manager to pay.`,
         );
       }
       this.logger.log(`Billing lapsed -> grace: ${tenant.subdomain}, grace ends ${graceEndsAt.toISOString()}`);
@@ -95,7 +95,7 @@ export class BillingEnforcerService {
       if (tenant.contactPhone) {
         await this.smsService.send(
           tenant.contactPhone,
-          `MediCore: Access to ${tenant.clinicName} has been suspended due to non-payment. Contact your account manager urgently to restore access.`,
+          `Umoya: Access to ${tenant.clinicName} has been suspended due to non-payment. Contact your account manager urgently to restore access.`,
         );
       }
       this.logger.log(`Grace expired -> suspended: ${tenant.subdomain}`);
@@ -126,7 +126,7 @@ export class BillingEnforcerService {
       if (daysLeft === 7 && tenant.contactPhone) {
         await this.smsService.send(
           tenant.contactPhone,
-          `MediCore: Your ${tenant.subscriptionMode === 'demo' ? 'demo' : 'subscription'} for ${tenant.clinicName} expires in 7 days (${expiry.toDateString()}). Please contact your account manager to renew.`,
+          `Umoya: Your ${tenant.subscriptionMode === 'demo' ? 'demo' : 'subscription'} for ${tenant.clinicName} expires in 7 days (${expiry.toDateString()}). Please contact your account manager to renew.`,
         );
         this.logger.log(`7-day expiry warning sent to ${tenant.subdomain}`);
       }

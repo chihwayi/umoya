@@ -1,7 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PostVisitCompanionMemoryService } from './post-visit-companion-memory.service';
 
-jest.mock('@medicore/config', () => ({ config: {} }));
+jest.mock('@umoya/config', () => ({ config: {} }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

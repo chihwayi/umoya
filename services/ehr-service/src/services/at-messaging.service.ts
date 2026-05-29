@@ -346,7 +346,7 @@ export class AtMessagingService {
   private resolveMenu(steps: string[]): string {
     if (steps.length === 0) {
       return (
-        'CON Welcome to MediCore Health\n' +
+        'CON Welcome to Umoya Health\n' +
         '1. My Appointments\n' +
         '2. My Medications\n' +
         '3. Lab Results\n' +
@@ -406,7 +406,7 @@ export class AtMessagingService {
         // CHW Clinical Menu
         if (rest.length === 0) {
           return (
-            'CON MediCore CHW Menu\n' +
+            'CON Umoya CHW Menu\n' +
             '1. Patient Lookup\n' +
             '2. Record Vitals\n' +
             '3. Symptom Check\n' +
@@ -417,7 +417,7 @@ export class AtMessagingService {
         return this.resolveChwMenu(rest);
 
       case '0':
-        return 'END Thank you for using MediCore Health. Goodbye!';
+        return 'END Thank you for using Umoya Health. Goodbye!';
     }
 
     return 'END Invalid option. Please try again.';

@@ -108,7 +108,7 @@ export const DemoAccessRequestsPanel: React.FC = () => {
         <div>
           <h2 className="text-2xl font-semibold text-white">Demo Access Requests</h2>
           <p className="mt-1 text-sm text-[#7A9AB8]">
-            Review doctors and clinics requesting guided MediCore test access before creating testing tenants.
+            Review doctors and clinics requesting guided Umoya test access before creating testing tenants.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

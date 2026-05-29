@@ -356,7 +356,7 @@ export class PatientProService {
       if (phone && this.smsService) {
         await this.smsService.send(
           phone,
-          `MediCore: Hi ${name}, your care team has assigned you a health questionnaire: "${template.name ?? template.code}". Please open the MediCore Patient app to complete it.`,
+          `Umoya: Hi ${name}, your care team has assigned you a health questionnaire: "${template.name ?? template.code}". Please open the Umoya Patient app to complete it.`,
         );
       }
       this.logger.log(`Questionnaire ${template.code} assigned to patient ${patientId}`);

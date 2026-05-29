@@ -1,5 +1,5 @@
 -- Add demo/paid subscription lifecycle fields for master tenant metadata
--- Run against medicore master database
+-- Run against umoya master database
 
 ALTER TABLE IF EXISTS tenants
   ADD COLUMN IF NOT EXISTS "subscriptionMode" VARCHAR(20) NOT NULL DEFAULT 'paid',

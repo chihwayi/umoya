@@ -126,7 +126,7 @@ export const TBScreeningWithSmartForms: React.FC<TBScreeningWithSmartFormsProps>
             <div>
               <h3 className="text-xl font-bold text-slate-900">WHO TB Screening Workflow (optional)</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Optional WHO-aligned TB screening steps. The regular Medicore TB form remains the main form.
+                Optional WHO-aligned TB screening steps. The regular Umoya TB form remains the main form.
               </p>
             </div>
           </div>

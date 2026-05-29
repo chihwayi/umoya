@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 /**
- * MediCore Mobile — Unified Environment Config
+ * Umoya Mobile — Unified Environment Config
  *
  * Set EXPO_PUBLIC_API_BASE in the active environment.
  * Everything else is derived from that single value.

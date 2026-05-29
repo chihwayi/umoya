@@ -218,7 +218,7 @@ export class OpenmrsFhirService {
       identifier: patient.nationalId
         ? [
             {
-              system: 'urn:medicore:national-id',
+              system: 'urn:umoya:national-id',
               value: patient.nationalId,
             },
           ]

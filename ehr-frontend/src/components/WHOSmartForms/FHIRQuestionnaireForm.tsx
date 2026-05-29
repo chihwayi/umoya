@@ -416,7 +416,7 @@ export const FHIRQuestionnaireForm: React.FC<FHIRQuestionnaireFormProps> = ({
           <p className="text-slate-600 text-lg leading-relaxed">{form.description}</p>
         )}
         <p className="mt-3 text-sm text-slate-500">
-          Preview of WHO Smart Form for future use. Some answer choices may be empty until official WHO code lists are loaded. Use the standard Medicore forms as your main workflow for now.
+          Preview of WHO Smart Form for future use. Some answer choices may be empty until official WHO code lists are loaded. Use the standard Umoya forms as your main workflow for now.
         </p>
       </div>
 

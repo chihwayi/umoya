@@ -248,7 +248,7 @@ export class CrvsService {
 
   private generateDeathCertificateText(body: any): string | null {
     const lines = [
-      'MediCore Death Certificate',
+      'Umoya Death Certificate',
       `Patient ID: ${body.patientId}`,
       `Death date: ${body.deathDate}`,
       `Death time: ${body.deathTime || 'N/A'}`,

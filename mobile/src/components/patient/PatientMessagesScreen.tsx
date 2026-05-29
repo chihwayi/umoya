@@ -49,7 +49,7 @@ function getInitials(label: string): string {
 function labelForType(type?: string): { name: string; role: string } {
   if (type === 'doctor') return { name: 'Doctor', role: 'Care Team' };
   if (type === 'staff') return { name: 'Clinic Staff', role: 'Support Desk' };
-  if (type === 'system') return { name: 'Medicore', role: 'System Message' };
+  if (type === 'system') return { name: 'Umoya', role: 'System Message' };
   return { name: 'Care Team', role: 'Secure Messaging' };
 }
 

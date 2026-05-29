@@ -13,7 +13,7 @@ const toFieldLabel = (field: string) =>
     .replace(/\b\w/g, (value) => value.toUpperCase());
 
 const RegisterPage: React.FC = () => {
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { register, assessRegistration } = usePatientAuth();
@@ -227,9 +227,9 @@ const RegisterPage: React.FC = () => {
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
               <div className="rounded-2xl bg-white/95 p-2 shadow-lg">
-                <img src={logoSrc} alt="MediCore logo" className="h-12 w-auto rounded-xl" />
+                <img src={logoSrc} alt="Umoya logo" className="h-12 w-auto rounded-xl" />
               </div>
-              <h1 className="text-3xl font-bold">MediCore</h1>
+              <h1 className="text-3xl font-bold">Umoya</h1>
             </div>
             <p className="text-xl text-white/90 font-light">Join thousands of patients managing their health</p>
           </div>
@@ -267,7 +267,7 @@ const RegisterPage: React.FC = () => {
         <div className="w-full max-w-md my-8">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <img src={logoSrc} alt="MediCore logo" className="h-14 w-auto rounded-xl shadow-lg" />
+            <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto rounded-xl shadow-lg" />
           </div>
 
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl p-8 sm:p-10 border border-white/20">

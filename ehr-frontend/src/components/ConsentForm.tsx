@@ -58,7 +58,7 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
       // Auto-fill known fields
       fields['patient_name'] = patientName;
       fields['consent_date'] = new Date().toLocaleDateString();
-      fields['facility_name'] = 'MediCore Health System';
+      fields['facility_name'] = 'Umoya Health System';
       
       setFilledFields(fields);
       renderContent(response.data.content, fields);

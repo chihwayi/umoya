@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
-import { env } from '@medicore/config';
+import { env } from '@umoya/config';
 import { TerminologyPostgresService } from './terminology-postgres.service';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
@@ -108,7 +108,7 @@ export class TerminologyService {
    */
   private async initializeMasterDb() {
     try {
-      const cfg = getMasterDbConfig(process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'medicore');
+      const cfg = getMasterDbConfig(process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'umoya');
       this.masterDb = new DataSource({
         type: 'postgres',
         host: cfg.host,

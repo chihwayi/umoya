@@ -131,11 +131,11 @@ const testTypeOptions = [
 
 const resultOptions = [
   { value: 'reactive', label: 'Reactive', color: '#FF4D6A', bg: '#FF4D6A15', border: '#FF4D6A40' },
-  { value: 'non_reactive', label: 'Non-reactive', color: '#00C896', bg: '#00C89615', border: '#00C89640' },
+  { value: 'non_reactive', label: 'Non-reactive', color: '#0AA98A', bg: '#0AA98A15', border: '#0AA98A40' },
   { value: 'positive', label: 'Positive', color: '#FF4D6A', bg: '#FF4D6A15', border: '#FF4D6A40' },
-  { value: 'negative', label: 'Negative', color: '#00C896', bg: '#00C89615', border: '#00C89640' },
-  { value: 'invalid', label: 'Invalid', color: '#FF7A40', bg: '#FF7A4015', border: '#FF7A4040' },
-  { value: 'indeterminate', label: 'Indeterminate', color: '#FF7A40', bg: '#FF7A4015', border: '#FF7A4040' },
+  { value: 'negative', label: 'Negative', color: '#0AA98A', bg: '#0AA98A15', border: '#0AA98A40' },
+  { value: 'invalid', label: 'Invalid', color: '#E8614D', bg: '#E8614D15', border: '#E8614D40' },
+  { value: 'indeterminate', label: 'Indeterminate', color: '#E8614D', bg: '#E8614D15', border: '#E8614D40' },
   { value: 'pending', label: 'Pending', color: '#5A78A0', bg: '#5A78A015', border: '#5A78A040' },
 ];
 
@@ -304,8 +304,8 @@ const Field: React.FC<{ label: string; children: React.ReactNode; className?: st
   </div>
 );
 
-const selectCls = 'w-full px-3 py-2 bg-[#060C16] border border-white/[0.1] rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-[#00C896]/50 focus:border-[#00C896]/50 transition';
-const inputCls = 'w-full px-3 py-2 bg-[#060C16] border border-white/[0.1] rounded-xl text-white text-sm placeholder-[#3A5A7A] focus:outline-none focus:ring-1 focus:ring-[#00C896]/50 focus:border-[#00C896]/50 transition';
+const selectCls = 'w-full px-3 py-2 bg-[#060C16] border border-white/[0.1] rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-[#0AA98A]/50 focus:border-[#0AA98A]/50 transition';
+const inputCls = 'w-full px-3 py-2 bg-[#060C16] border border-white/[0.1] rounded-xl text-white text-sm placeholder-[#3A5A7A] focus:outline-none focus:ring-1 focus:ring-[#0AA98A]/50 focus:border-[#0AA98A]/50 transition';
 
 const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, patientId, initialData, onDataChange }) => {
   const { showSuccess, showError } = useNotification();
@@ -642,7 +642,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
         title: 'HIV NEGATIVE',
         message: 'Algorithm is complete. Provide post-test counselling, prevention package, and schedule retesting.',
         action: 'Record Follow-up & Close',
-        color: '#00C896',
+        color: '#0AA98A',
         nextStep: 'linkage_sti' as WizardStep,
       };
     }
@@ -656,7 +656,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
         title: stage === 'screening' ? 'Repeat Screening Test' : stage === 'confirmatory' ? 'Repeat Confirmatory Test' : 'Repeat Tie-breaker',
         message: `Result is ${testResult}. The WHO algorithm requires repeating this test with a fresh sample or different kit.`,
         action: 'Repeat This Test',
-        color: '#FF7A40',
+        color: '#E8614D',
         nextStep: 'run_test' as WizardStep,
       };
     }
@@ -666,7 +666,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
         title: 'Screening Reactive — Proceed to Test 2',
         message: `Test 1 (${lastTest?.test_kit_name || 'screening kit'}) returned ${testResult}. WHO algorithm requires a second test using a DIFFERENT kit to confirm.`,
         action: 'Perform Confirmatory Test 2',
-        color: '#FF7A40',
+        color: '#E8614D',
         nextStep: 'run_test' as WizardStep,
       };
     }
@@ -679,7 +679,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
           title: 'Discordant Results — Tie-breaker Required',
           message: `Test 1: ${sResult} / Test 2: ${testResult} — these disagree. WHO algorithm requires a third test with a different kit to resolve.`,
           action: 'Perform Tie-breaker Test 3',
-          color: '#FF7A40',
+          color: '#E8614D',
           nextStep: 'run_test' as WizardStep,
         };
       }
@@ -690,7 +690,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
         title: 'Algorithm Complete',
         message: 'Tie-breaker test performed. Review the final algorithm result above and record linkage actions.',
         action: 'Record Linkage & Close',
-        color: '#00C896',
+        color: '#0AA98A',
         nextStep: 'linkage_sti' as WizardStep,
       };
     }
@@ -701,7 +701,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
         title: 'HIV NEGATIVE',
         message: 'Non-reactive on screening. Provide post-test counselling, risk reduction, and schedule retesting.',
         action: 'Record Follow-up & Close',
-        color: '#00C896',
+        color: '#0AA98A',
         nextStep: 'linkage_sti' as WizardStep,
       };
     }
@@ -753,13 +753,13 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#00C896]" />
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#00C896]">WHO 2024 · Zimbabwe National Algorithm</p>
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#0AA98A]" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#0AA98A]">WHO 2024 · Zimbabwe National Algorithm</p>
             </div>
             <h1 className="text-xl font-bold text-white">HIV Testing Workspace</h1>
             <p className="text-sm text-[#5A78A0] mt-0.5">Algorithm-driven · Test 1 → 2 → 3 · Integrated STI screening</p>
           </div>
-          <TestTube className="w-10 h-10 text-[#00C896]/40" />
+          <TestTube className="w-10 h-10 text-[#0AA98A]/40" />
         </div>
 
         {/* Algorithm progress */}
@@ -768,9 +768,9 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
             <React.Fragment key={stage.key}>
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
                 stage.done
-                  ? 'border-[#00C896]/40 bg-[#00C896]/10 text-[#00C896]'
+                  ? 'border-[#0AA98A]/40 bg-[#0AA98A]/10 text-[#0AA98A]'
                   : stage.active && wizardStep === 'run_test'
-                  ? 'border-[#FF7A40]/40 bg-[#FF7A40]/10 text-[#FF7A40]'
+                  ? 'border-[#E8614D]/40 bg-[#E8614D]/10 text-[#E8614D]'
                   : 'border-white/[0.07] bg-white/[0.03] text-[#3A5A7A]'
               }`}>
                 {stage.done ? <CheckCircle className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current flex items-center justify-center text-[8px]">{i+1}</span>}
@@ -786,7 +786,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold ${
                 (algorithmResult?.result || algorithmResult?.algorithm_result) === 'positive'
                   ? 'border-[#FF4D6A]/40 bg-[#FF4D6A]/10 text-[#FF4D6A]'
-                  : 'border-[#00C896]/40 bg-[#00C896]/10 text-[#00C896]'
+                  : 'border-[#0AA98A]/40 bg-[#0AA98A]/10 text-[#0AA98A]'
               }`}>
                 <CheckCircle className="w-3 h-3" />
                 Final Result
@@ -794,15 +794,15 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
             </>
           )}
         </div>
-        <div className="absolute -bottom-8 -right-8 w-32 h-32 rounded-full bg-[#00C896]/[0.06] blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-8 -right-8 w-32 h-32 rounded-full bg-[#0AA98A]/[0.06] blur-3xl pointer-events-none" />
       </div>
 
       {/* ── Patient Search ── */}
       {!patientId && (
         <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 p-5">
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#2B7FFF]/15 border border-[#2B7FFF]/25">
-              <User className="w-4 h-4 text-[#2B7FFF]" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#3B9EFF]/15 border border-[#3B9EFF]/25">
+              <User className="w-4 h-4 text-[#3B9EFF]" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">Patient Search</h3>
@@ -821,7 +821,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
             <button
               onClick={searchPatients}
               disabled={searching || !searchTerm.trim()}
-              className="px-4 py-2 bg-[#2B7FFF] text-white rounded-xl text-sm font-semibold hover:bg-[#3A8FFF] disabled:opacity-40 transition shrink-0"
+              className="px-4 py-2 bg-[#3B9EFF] text-white rounded-xl text-sm font-semibold hover:bg-[#3A8FFF] disabled:opacity-40 transition shrink-0"
             >
               {searching ? '...' : 'Search'}
             </button>
@@ -853,10 +853,10 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
 
       {/* ── Selected Patient Card ── */}
       {selectedPatient && (
-        <div className="flex items-center justify-between rounded-2xl border border-[#00C896]/25 bg-[#00C896]/[0.05] px-4 py-3">
+        <div className="flex items-center justify-between rounded-2xl border border-[#0AA98A]/25 bg-[#0AA98A]/[0.05] px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-[#00C896]/15 border border-[#00C896]/30 flex items-center justify-center">
-              <User className="w-4 h-4 text-[#00C896]" />
+            <div className="h-9 w-9 rounded-full bg-[#0AA98A]/15 border border-[#0AA98A]/30 flex items-center justify-center">
+              <User className="w-4 h-4 text-[#0AA98A]" />
             </div>
             <div>
               <p className="text-sm font-bold text-white">
@@ -888,15 +888,15 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
             <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05]">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#2B7FFF]/15 border border-[#2B7FFF]/25">
-                    <ClipboardList className="w-4 h-4 text-[#2B7FFF]" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#3B9EFF]/15 border border-[#3B9EFF]/25">
+                    <ClipboardList className="w-4 h-4 text-[#3B9EFF]" />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white">Testing Context</h3>
                     <p className="text-[11px] text-[#5A78A0]">Reason · approach · location · cadre</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-bold text-[#2B7FFF] bg-[#2B7FFF]/10 border border-[#2B7FFF]/20 px-2 py-1 rounded-full">Step 1 of flow</span>
+                <span className="text-[10px] font-bold text-[#3B9EFF] bg-[#3B9EFF]/10 border border-[#3B9EFF]/20 px-2 py-1 rounded-full">Step 1 of flow</span>
               </div>
               <div className="p-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -943,7 +943,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                 <div className="flex justify-end pt-2">
                   <button
                     onClick={() => setWizardStep('run_test')}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#00C896] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] transition"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#0AA98A] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] transition"
                   >
                     Begin Testing <ArrowRight className="w-4 h-4" />
                   </button>
@@ -956,20 +956,20 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
           {wizardStep === 'run_test' && (
             <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 overflow-hidden">
               {/* Algorithm step banner */}
-              <div className="px-5 py-3 border-b border-white/[0.05] bg-[#FF7A40]/[0.05]">
+              <div className="px-5 py-3 border-b border-white/[0.05] bg-[#E8614D]/[0.05]">
                 <div className="flex items-center gap-3">
-                  <Zap className="w-4 h-4 text-[#FF7A40]" />
+                  <Zap className="w-4 h-4 text-[#E8614D]" />
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#FF7A40]">Algorithm in progress</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#E8614D]">Algorithm in progress</p>
                     <p className="text-sm font-bold text-white">{currentStageLabel}</p>
                   </div>
                   {testForm.testStage === 'confirmatory' && (
-                    <span className="ml-auto text-[10px] text-[#FF7A40] bg-[#FF7A40]/10 border border-[#FF7A40]/20 px-2 py-1 rounded-full font-semibold">
+                    <span className="ml-auto text-[10px] text-[#E8614D] bg-[#E8614D]/10 border border-[#E8614D]/20 px-2 py-1 rounded-full font-semibold">
                       Must use different kit from Test 1
                     </span>
                   )}
                   {testForm.testStage === 'tie_breaker' && (
-                    <span className="ml-auto text-[10px] text-[#FF7A40] bg-[#FF7A40]/10 border border-[#FF7A40]/20 px-2 py-1 rounded-full font-semibold">
+                    <span className="ml-auto text-[10px] text-[#E8614D] bg-[#E8614D]/10 border border-[#E8614D]/20 px-2 py-1 rounded-full font-semibold">
                       Must use kit not used in Tests 1 or 2
                     </span>
                   )}
@@ -992,14 +992,14 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                           onClick={() => !disabled && setTestForm({ ...testForm, testKitName: kit })}
                           className={`relative text-left px-3 py-2.5 rounded-xl border text-xs font-medium transition-all ${
                             disabled ? 'opacity-30 cursor-not-allowed border-white/[0.05] bg-white/[0.02] text-[#3A5A7A]'
-                            : selected ? 'border-[#00C896]/60 bg-[#00C896]/10 text-white'
+                            : selected ? 'border-[#0AA98A]/60 bg-[#0AA98A]/10 text-white'
                             : 'border-white/[0.07] bg-white/[0.02] text-[#8FA8CC] hover:border-white/[0.14] hover:text-white'
                           }`}
                         >
-                          {selected && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[#00C896]" />}
+                          {selected && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[#0AA98A]" />}
                           <span className="block truncate">{kit}</span>
                           {isDual && !disabled && (
-                            <span className="mt-1 block text-[9px] text-[#FF7A40] font-bold">HIV + Syphilis</span>
+                            <span className="mt-1 block text-[9px] text-[#E8614D] font-bold">HIV + Syphilis</span>
                           )}
                           {disabled && <span className="mt-1 block text-[9px] text-[#3A5A7A]">Used in previous test</span>}
                         </button>
@@ -1080,7 +1080,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                         type="checkbox"
                         checked={testForm[field as keyof typeof testForm] as boolean}
                         onChange={e => setTestForm({ ...testForm, [field]: e.target.checked })}
-                        className="rounded border-white/20 bg-[#060C16] text-[#00C896] focus:ring-[#00C896]/30"
+                        className="rounded border-white/20 bg-[#060C16] text-[#0AA98A] focus:ring-[#0AA98A]/30"
                       />
                       {label}
                     </label>
@@ -1104,7 +1104,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                     <button
                       type="button"
                       onClick={() => setShowSnomedExpanded(p => !p)}
-                      className="text-xs text-[#5A78A0] hover:text-[#00C896] transition-colors font-semibold"
+                      className="text-xs text-[#5A78A0] hover:text-[#0AA98A] transition-colors font-semibold"
                     >
                       {showSnomedExpanded ? '▲ Hide' : '▼ Add'} SNOMED CT concepts (optional)
                     </button>
@@ -1119,14 +1119,14 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
 
                 {/* STI panel — only when dual kit active */}
                 {isStiBundleEnabled && (
-                  <div className="rounded-xl border border-[#FF7A40]/20 bg-[#FF7A40]/[0.04] p-4">
+                  <div className="rounded-xl border border-[#E8614D]/20 bg-[#E8614D]/[0.04] p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-[#FF7A40]" />
+                        <Activity className="w-4 h-4 text-[#E8614D]" />
                         <p className="text-sm font-bold text-white">Integrated STI Testing</p>
-                        <span className="text-[10px] text-[#FF7A40] bg-[#FF7A40]/10 border border-[#FF7A40]/20 px-2 py-0.5 rounded-full">Dual kit detected</span>
+                        <span className="text-[10px] text-[#E8614D] bg-[#E8614D]/10 border border-[#E8614D]/20 px-2 py-0.5 rounded-full">Dual kit detected</span>
                       </div>
-                      <button type="button" onClick={addStiPanel} className="text-xs text-[#FF7A40] hover:text-[#FFB380] font-semibold flex items-center gap-1 transition-colors">
+                      <button type="button" onClick={addStiPanel} className="text-xs text-[#E8614D] hover:text-[#FFB380] font-semibold flex items-center gap-1 transition-colors">
                         <Plus className="w-3.5 h-3.5" /> Add STI
                       </button>
                     </div>
@@ -1170,7 +1170,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                             </Field>
                           </div>
                           <label className="mt-2 flex items-center gap-2 text-xs text-[#8FA8CC] cursor-pointer">
-                            <input type="checkbox" checked={panel.treatmentProvided} onChange={e => handleStiChange(index, 'treatmentProvided', e.target.checked)} className="rounded border-white/20 bg-[#060C16] text-[#00C896]" />
+                            <input type="checkbox" checked={panel.treatmentProvided} onChange={e => handleStiChange(index, 'treatmentProvided', e.target.checked)} className="rounded border-white/20 bg-[#060C16] text-[#0AA98A]" />
                             Treatment provided during this visit
                           </label>
                           {snomedReady && (
@@ -1198,7 +1198,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                     <button
                       onClick={handleSubmit}
                       disabled={submitting}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#00C896] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] disabled:opacity-50 transition shadow-lg"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#0AA98A] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] disabled:opacity-50 transition shadow-lg"
                     >
                       {submitting ? (
                         <span className="h-4 w-4 border-2 border-[#051119]/30 border-t-[#051119] rounded-full animate-spin" />
@@ -1243,14 +1243,14 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                 {/* CDSS explanation toggle */}
                 <button
                   onClick={() => setShowAlgorithmExplanation(p => !p)}
-                  className="text-xs font-semibold text-[#5A78A0] hover:text-[#00C896] transition-colors mb-4 flex items-center gap-1.5"
+                  className="text-xs font-semibold text-[#5A78A0] hover:text-[#0AA98A] transition-colors mb-4 flex items-center gap-1.5"
                 >
                   <Shield className="w-3.5 h-3.5" />
                   {showAlgorithmExplanation ? 'Hide' : 'Show'} CDSS explanation
                 </button>
                 {showAlgorithmExplanation && (
-                  <div className="mb-4 rounded-xl border border-[#2B7FFF]/20 bg-[#2B7FFF]/[0.05] p-4 space-y-2">
-                    <p className="text-xs font-bold text-[#2B7FFF]">Why this decision?</p>
+                  <div className="mb-4 rounded-xl border border-[#3B9EFF]/20 bg-[#3B9EFF]/[0.05] p-4 space-y-2">
+                    <p className="text-xs font-bold text-[#3B9EFF]">Why this decision?</p>
                     {algorithmResult?.interpretation ? (
                       <p className="text-xs text-[#8FA8CC]">{algorithmResult.interpretation}</p>
                     ) : (
@@ -1316,13 +1316,13 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
 
           {/* ── Wizard Step: POST RECORD (no algorithm yet) ── */}
           {wizardStep === 'post_record' && !algorithmDecision && (
-            <div className="rounded-2xl border border-[#00C896]/20 bg-[#00C896]/[0.05] p-5">
+            <div className="rounded-2xl border border-[#0AA98A]/20 bg-[#0AA98A]/[0.05] p-5">
               <div className="flex items-center gap-3 mb-3">
-                <CheckCircle className="w-5 h-5 text-[#00C896]" />
+                <CheckCircle className="w-5 h-5 text-[#0AA98A]" />
                 <p className="text-sm font-bold text-white">Test result recorded</p>
               </div>
               <p className="text-xs text-[#5A78A0] mb-4">The result has been saved. Review the testing timeline below and proceed as guided by the algorithm.</p>
-              <button onClick={() => setWizardStep('linkage_sti')} className="px-4 py-2 text-sm font-semibold text-[#00C896] border border-[#00C896]/30 rounded-xl hover:bg-[#00C896]/10 transition">
+              <button onClick={() => setWizardStep('linkage_sti')} className="px-4 py-2 text-sm font-semibold text-[#0AA98A] border border-[#0AA98A]/30 rounded-xl hover:bg-[#0AA98A]/10 transition">
                 Record Follow-up &amp; Close →
               </button>
             </div>
@@ -1352,7 +1352,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                         onClick={() => toggleFollowUpAction(option.value)}
                         className={`px-3 py-1.5 text-xs rounded-full border font-semibold transition ${
                           followUpActions.includes(option.value)
-                            ? 'border-[#00C896]/40 bg-[#00C896]/10 text-[#00C896]'
+                            ? 'border-[#0AA98A]/40 bg-[#0AA98A]/10 text-[#0AA98A]'
                             : 'border-white/[0.07] bg-white/[0.02] text-[#5A78A0] hover:border-white/[0.14] hover:text-white'
                         }`}
                       >
@@ -1378,7 +1378,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                   </Field>
                   <div className="flex items-end pb-1">
                     <label className="flex items-center gap-2 text-xs text-[#8FA8CC] font-medium cursor-pointer">
-                      <input type="checkbox" checked={testForm.linkageCompleted} onChange={e => setTestForm({ ...testForm, linkageCompleted: e.target.checked })} className="rounded border-white/20 bg-[#060C16] text-[#00C896]" />
+                      <input type="checkbox" checked={testForm.linkageCompleted} onChange={e => setTestForm({ ...testForm, linkageCompleted: e.target.checked })} className="rounded border-white/20 bg-[#060C16] text-[#0AA98A]" />
                       Linkage completed
                     </label>
                   </div>
@@ -1426,7 +1426,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                       resetFormState();
                       loadTestHistory();
                     }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#00C896] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] transition"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#0AA98A] to-[#00A87A] text-[#051119] text-sm font-bold rounded-xl hover:from-[#00D9A3] transition"
                   >
                     <CheckCircle className="w-4 h-4" />
                     Complete Encounter
@@ -1440,8 +1440,8 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
           {historyWithParsed.length > 0 && (
             <div className="rounded-2xl border border-white/[0.07] bg-[#0A1525]/90 overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.05]">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FF7A40]/15 border border-[#FF7A40]/25">
-                  <Calendar className="w-4 h-4 text-[#FF7A40]" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E8614D]/15 border border-[#E8614D]/25">
+                  <Calendar className="w-4 h-4 text-[#E8614D]" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Testing Timeline</h3>
@@ -1461,7 +1461,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                     return (
                       <div key={test.id} className={`rounded-xl border px-4 py-3 ${
                         isPositive ? 'border-[#FF4D6A]/25 bg-[#FF4D6A]/[0.05]'
-                        : isOverdue ? 'border-[#FF7A40]/25 bg-[#FF7A40]/[0.04]'
+                        : isOverdue ? 'border-[#E8614D]/25 bg-[#E8614D]/[0.04]'
                         : 'border-white/[0.06] bg-white/[0.02]'
                       }`}>
                         <div className="flex items-center justify-between gap-2">
@@ -1471,8 +1471,8 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                 isPositive ? 'bg-[#FF4D6A]/15 text-[#FF4D6A] border border-[#FF4D6A]/25'
                                 : test.test_result === 'non_reactive' || test.test_result === 'negative'
-                                ? 'bg-[#00C896]/10 text-[#00C896] border border-[#00C896]/20'
-                                : 'bg-[#FF7A40]/10 text-[#FF7A40] border border-[#FF7A40]/20'
+                                ? 'bg-[#0AA98A]/10 text-[#0AA98A] border border-[#0AA98A]/20'
+                                : 'bg-[#E8614D]/10 text-[#E8614D] border border-[#E8614D]/20'
                               }`}>
                                 {test.test_result}
                               </span>
@@ -1481,12 +1481,12 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                               {formatDateToDDMMYYYY(test.test_date)} · {stageLabel} · {testingReasonLookup[test.testing_reason] || test.testing_reason || '—'}
                             </p>
                             {isPositive && <p className="text-xs font-semibold text-[#FF4D6A] mt-1">{cdssConfig.messages.testingTimelinePositive}</p>}
-                            {isOverdue && <p className="text-xs font-semibold text-[#FF7A40] mt-1">{cdssConfig.messages.testingTimelineOverduePrefix} {formatDateToDDMMYYYY(test.next_test_due_date)}</p>}
+                            {isOverdue && <p className="text-xs font-semibold text-[#E8614D] mt-1">{cdssConfig.messages.testingTimelineOverduePrefix} {formatDateToDDMMYYYY(test.next_test_due_date)}</p>}
                             {test.follow_up_actions?.length > 0 && (
                               <p className="text-[11px] text-[#5A78A0] mt-1">Follow-up: {test.follow_up_actions.join(', ')}</p>
                             )}
                             {test.sti_tests?.length > 0 && (
-                              <p className="text-[11px] text-[#FF7A40] mt-0.5">
+                              <p className="text-[11px] text-[#E8614D] mt-0.5">
                                 STI: {test.sti_tests.map((s: any) => `${s.infection_type} (${s.result})`).join(', ')}
                               </p>
                             )}
@@ -1494,8 +1494,8 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                           {test.algorithm_result && (
                             <span className={`shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
                               test.algorithm_result === 'positive' ? 'bg-[#FF4D6A]/10 text-[#FF4D6A] border-[#FF4D6A]/25'
-                              : test.algorithm_result === 'negative' ? 'bg-[#00C896]/10 text-[#00C896] border-[#00C896]/25'
-                              : 'bg-[#FF7A40]/10 text-[#FF7A40] border-[#FF7A40]/25'
+                              : test.algorithm_result === 'negative' ? 'bg-[#0AA98A]/10 text-[#0AA98A] border-[#0AA98A]/25'
+                              : 'bg-[#E8614D]/10 text-[#E8614D] border-[#E8614D]/25'
                             }`}>
                               {test.algorithm_result}
                             </span>

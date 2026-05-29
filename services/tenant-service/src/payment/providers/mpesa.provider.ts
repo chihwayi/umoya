@@ -41,7 +41,7 @@ export class MpesaProvider implements IPaymentGateway {
       PhoneNumber: phone,
       CallBackURL: this.callbackUrl,
       AccountReference: options.reference,
-      TransactionDesc: `MediCore ${options.monthsToExtend}mo renewal`,
+      TransactionDesc: `Umoya ${options.monthsToExtend}mo renewal`,
     };
 
     const res = await fetch(`${this.baseUrl}/mpesa/stkpush/v1/processrequest`, {

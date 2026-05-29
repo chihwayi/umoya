@@ -1133,7 +1133,7 @@ export class HipaaAuditService {
     if (!normalizedIp) {
       return null;
     }
-    const salt = String(process.env.HIPAA_AUDIT_IP_HASH_SALT || 'medicore-hipaa-audit-salt-v1');
+    const salt = String(process.env.HIPAA_AUDIT_IP_HASH_SALT || 'umoya-hipaa-audit-salt-v1');
     return createHash('sha256').update(`${salt}:${normalizedIp}`).digest('hex');
   }
 

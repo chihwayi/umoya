@@ -15,12 +15,12 @@ TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 OUTPUT_DIR="${BACKUP_OUTPUT_DIR:-$ROOT_DIR/backups}"
 mkdir -p "$OUTPUT_DIR"
 
-DB_CONTAINER="${DOCKER_PG_CONTAINER:-medicore-postgres-master}"
+DB_CONTAINER="${DOCKER_PG_CONTAINER:-umoya-postgres-master}"
 DB_HOST="${DB_HOST:-${SERVICE_POSTGRES_HOST:-postgres-master}}"
 DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USERNAME:-${POSTGRES_USER:-postgres}}"
 DB_PASSWORD="${DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}"
-TARGET_DB="${TARGET_DB:-${POSTGRES_DB:-medicore}}"
+TARGET_DB="${TARGET_DB:-${POSTGRES_DB:-umoya}}"
 OUTPUT_FILE="$OUTPUT_DIR/${TARGET_DB}-${TIMESTAMP}.sql.gz"
 
 if docker ps --format '{{.Names}}' | grep -qx "$DB_CONTAINER"; then

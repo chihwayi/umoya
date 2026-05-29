@@ -55,7 +55,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   // Restore last-used role so returning patients don't have to switch tabs
   useEffect(() => {
-    SecureStore.getItemAsync('medicore_role').then(saved => {
+    SecureStore.getItemAsync('umoya_role').then(saved => {
       if (saved === 'patient' || saved === 'doctor' || saved === 'nurse') {
         setRole(saved as UserRole);
         setMode(saved === 'patient' ? 'patient_password' : 'staff');
@@ -101,7 +101,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setMode(r === 'patient' ? 'patient_password' : 'staff');
     setEmail('');
     setPassword('');
-    SecureStore.setItemAsync('medicore_role', r).catch(() => {});
+    SecureStore.setItemAsync('umoya_role', r).catch(() => {});
   };
 
   // ── Staff login (Doctor / Nurse) ──────────────────────────────────────────
@@ -193,7 +193,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       return;
     }
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: `Unlock ${tenant?.name ?? 'MediCore'}`,
+      promptMessage: `Unlock ${tenant?.name ?? 'Umoya'}`,
       fallbackLabel: 'Use password',
       cancelLabel: 'Cancel',
       disableDeviceFallback: false,
@@ -239,7 +239,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           {/* Clinic branding — centred hero */}
           <View style={styles.heroSection}>
             <ClinicLogo tenant={tenant} accent={accent} />
-            <Text style={styles.clinicName}>{tenant?.name ?? 'MediCore'}</Text>
+            <Text style={styles.clinicName}>{tenant?.name ?? 'Umoya'}</Text>
             {tenant?.slug ? <Text style={styles.clinicSlug}>{tenant.slug}</Text> : null}
             <Text style={styles.headline}>Welcome back</Text>
             <Text style={styles.sub}>Sign in to continue</Text>

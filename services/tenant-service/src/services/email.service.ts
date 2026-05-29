@@ -40,12 +40,12 @@ export class EmailService {
   }
 
   async sendWelcomeEmail(tenantEmail: string, tenantName: string, subdomain: string, tempPassword: string) {
-    const tenantUrl = `${this.tenantAppProtocol}://${subdomain}.${process.env.SYSTEM_DOMAIN || 'medicore.health'}`;
+    const tenantUrl = `${this.tenantAppProtocol}://${subdomain}.${process.env.SYSTEM_DOMAIN || 'umoya.health'}`;
     const template: EmailTemplate = {
       to: tenantEmail,
-      subject: 'Welcome to MediCore - Your EHR System is Ready!',
+      subject: 'Welcome to Umoya - Your EHR System is Ready!',
       html: `
-        <h2>Welcome to MediCore!</h2>
+        <h2>Welcome to Umoya!</h2>
         <p>Dear ${tenantName} team,</p>
         <p>Your Electronic Health Record system has been successfully set up!</p>
         
@@ -68,7 +68,7 @@ export class EmailService {
         </ol>
         
         <p>If you need any assistance, please contact our support team.</p>
-        <p>Best regards,<br>MediCore Team</p>
+        <p>Best regards,<br>Umoya Team</p>
       `
     };
 
@@ -78,15 +78,15 @@ export class EmailService {
   async sendPasswordResetEmail(email: string, resetToken: string) {
     const template: EmailTemplate = {
       to: email,
-      subject: 'MediCore - Password Reset Request',
+      subject: 'Umoya - Password Reset Request',
       html: `
         <h2>Password Reset Request</h2>
-        <p>You requested a password reset for your MediCore account.</p>
+        <p>You requested a password reset for your Umoya account.</p>
         <p>Click the link below to reset your password:</p>
         <p><a href="${this.buildAdminLink(`/reset-password?token=${resetToken}`)}">Reset Password</a></p>
         <p>This link will expire in 1 hour.</p>
         <p>If you didn't request this, please ignore this email.</p>
-        <p>Best regards,<br>MediCore Team</p>
+        <p>Best regards,<br>Umoya Team</p>
       `
     };
 
@@ -96,14 +96,14 @@ export class EmailService {
   async sendTenantSuspensionEmail(tenantEmail: string, tenantName: string, reason: string) {
     const template: EmailTemplate = {
       to: tenantEmail,
-      subject: 'MediCore - Account Suspended',
+      subject: 'Umoya - Account Suspended',
       html: `
         <h2>Account Suspension Notice</h2>
         <p>Dear ${tenantName} team,</p>
-        <p>Your MediCore account has been temporarily suspended.</p>
+        <p>Your Umoya account has been temporarily suspended.</p>
         <p><strong>Reason:</strong> ${reason}</p>
         <p>Please contact our support team to resolve this issue.</p>
-        <p>Best regards,<br>MediCore Team</p>
+        <p>Best regards,<br>Umoya Team</p>
       `
     };
 

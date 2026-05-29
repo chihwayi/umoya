@@ -31,7 +31,7 @@ export class StorageService {
   constructor() {
     const driver = (process.env.STORAGE_DRIVER || '').toLowerCase();
     this.driverEnabled = driver === 's3' || driver === 'minio';
-    this.bucketName = process.env.STORAGE_S3_BUCKET || 'medicore-imaging';
+    this.bucketName = process.env.STORAGE_S3_BUCKET || 'umoya-imaging';
     this.publicBaseUrl = process.env.STORAGE_S3_PUBLIC_BASE_URL;
 
     if (!this.driverEnabled) {

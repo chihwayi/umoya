@@ -1,5 +1,5 @@
 /**
- * MediCore Performance Utilities — S118
+ * Umoya Performance Utilities — S118
  *
  * Patterns:
  *  - Defer non-critical work until after JS thread is free

@@ -1,5 +1,5 @@
 -- Add per-tenant DHIS2 scheduler and alert controls
--- Run against medicore master database
+-- Run against umoya master database
 
 ALTER TABLE IF EXISTS tenant_dhis2_config
   ADD COLUMN IF NOT EXISTS scheduled_sync_enabled BOOLEAN NOT NULL DEFAULT false;

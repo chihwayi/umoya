@@ -4,7 +4,7 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { LogIn, Mail, Lock, AlertCircle, Eye, EyeOff, Shield, Sparkles, Smartphone, HeartPulse } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/medicore.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { login } = usePatientAuth();
@@ -52,10 +52,10 @@ const LoginPage: React.FC = () => {
 
           <div className="mt-6 flex items-center gap-4">
             <div className="rounded-[24px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.14)]">
-              <img src={logoSrc} alt="MediCore logo" className="h-14 w-auto rounded-xl" />
+              <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto rounded-xl" />
             </div>
             <div>
-              <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">MediCore</div>
+              <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
               <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">
                 Your records, follow-up, and guidance in one place.
               </h1>
@@ -63,7 +63,7 @@ const LoginPage: React.FC = () => {
           </div>
 
           <p className="mt-6 max-w-xl text-sm leading-7 text-[#AFC1DF]">
-            The patient side of MediCore connects signed visit summaries, reminders, medications, secure messages, bills,
+            The patient side of Umoya connects signed visit summaries, reminders, medications, secure messages, bills,
             and future mobile workflows without feeling disconnected from the clinical system.
           </p>
 
@@ -187,7 +187,7 @@ const LoginPage: React.FC = () => {
           </div>
 
           <div className="mt-6 border-t border-white/10 pt-6 text-center text-xs text-[#6F87AB]">
-            By signing in, you agree to the MediCore patient portal terms and privacy controls.
+            By signing in, you agree to the Umoya patient portal terms and privacy controls.
           </div>
         </section>
       </div>

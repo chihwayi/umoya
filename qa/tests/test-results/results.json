@@ -1,7 +1,7 @@
 {
   "config": {
-    "configFile": "/Users/devoop/Dev/personal/medicore/qa/tests/playwright.config.ts",
-    "rootDir": "/Users/devoop/Dev/personal/medicore/qa/tests/e2e",
+    "configFile": "/Users/devoop/Dev/personal/umoya/qa/tests/playwright.config.ts",
+    "rootDir": "/Users/devoop/Dev/personal/umoya/qa/tests/e2e",
     "forbidOnly": false,
     "fullyParallel": true,
     "globalSetup": null,
@@ -35,13 +35,13 @@
     "quiet": false,
     "projects": [
       {
-        "outputDir": "/Users/devoop/Dev/personal/medicore/qa/tests/test-results",
+        "outputDir": "/Users/devoop/Dev/personal/umoya/qa/tests/test-results",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {},
         "id": "api-tests",
         "name": "api-tests",
-        "testDir": "/Users/devoop/Dev/personal/medicore/qa/tests/e2e",
+        "testDir": "/Users/devoop/Dev/personal/umoya/qa/tests/e2e",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"

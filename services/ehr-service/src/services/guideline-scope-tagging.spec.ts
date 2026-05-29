@@ -359,7 +359,7 @@ describe('Guideline scope tagging', () => {
         nctId: 'NCT-1',
         title: 'Precision Oncology Trial',
         phase: 'Phase 2',
-        sponsor: 'Medicore Research',
+        sponsor: 'Umoya Research',
         contactEmail: 'trial@example.com',
         locations: ['Harare, Zimbabwe'],
       },

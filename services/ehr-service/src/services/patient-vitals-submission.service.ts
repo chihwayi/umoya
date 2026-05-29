@@ -44,7 +44,7 @@ export class PatientVitalsSubmissionService {
   private async getOrCreatePatientSelfReportUser(tenantDb: DataSource): Promise<string> {
     // Try to find existing system user for patient self-reports
     const existingUser = await tenantDb.query(
-      `SELECT id FROM users WHERE email = 'patient.self.report@system.medicore' LIMIT 1`,
+      `SELECT id FROM users WHERE email = 'patient.self.report@system.umoya' LIMIT 1`,
     );
 
     if (existingUser.length > 0) {
@@ -56,7 +56,7 @@ export class PatientVitalsSubmissionService {
       `INSERT INTO users (
         email, password_hash, first_name, last_name, role, is_active, created_at, updated_at
       ) VALUES (
-        'patient.self.report@system.medicore',
+        'patient.self.report@system.umoya',
         '$2b$10$dummyhashforpatientreportsystemuser',
         'Patient',
         'Self-Report',

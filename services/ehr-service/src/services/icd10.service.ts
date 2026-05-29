@@ -38,7 +38,7 @@ export class Icd10Service {
    */
   private async initializeMasterDb() {
     try {
-      const cfg = getMasterDbConfig(process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'medicore');
+      const cfg = getMasterDbConfig(process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'umoya');
       this.masterDb = new DataSource({
         type: 'postgres',
         host: cfg.host,

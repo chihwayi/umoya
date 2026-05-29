@@ -51,7 +51,7 @@ export const TENANT_TBA_BIRTH_STATEMENTS: string[] = [
     attended_by_type TEXT NOT NULL,      -- 'tba' | 'relative' | 'alone' | 'other'
     attended_by_name TEXT,
     -- Mother
-    mother_patient_id UUID,              -- if registered in MediCore
+    mother_patient_id UUID,              -- if registered in Umoya
     mother_name TEXT NOT NULL,
     mother_phone TEXT,
     mother_village TEXT NOT NULL,

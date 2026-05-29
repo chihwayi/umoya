@@ -137,7 +137,7 @@ export class AppointmentService {
         const apptDate = new Date((createAppointmentDto as any).appointmentDate ?? (createAppointmentDto as any).start_time);
         await this.smsService.send(
           patientPhone,
-          `MediCore: Appointment confirmed at ${(createAppointmentDto as any).facilityName ?? 'your clinic'} on ${apptDate.toDateString()} at ${apptDate.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}. Reply STOP to opt out.`,
+          `Umoya: Appointment confirmed at ${(createAppointmentDto as any).facilityName ?? 'your clinic'} on ${apptDate.toDateString()} at ${apptDate.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}. Reply STOP to opt out.`,
         );
       }
     } catch {
@@ -1391,7 +1391,7 @@ Please arrive 15 minutes early for your appointment.
 If you need to reschedule or cancel, please contact us as soon as possible.
 
 Thank you,
-MediCore Clinic
+Umoya Clinic
         `.trim();
 
         const htmlBody = `
@@ -1409,7 +1409,7 @@ MediCore Clinic
             <p>Please arrive 15 minutes early for your appointment.</p>
             <p>If you need to reschedule or cancel, please contact us as soon as possible.</p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-            <p style="color: #6b7280; font-size: 12px;">Thank you,<br>MediCore Clinic</p>
+            <p style="color: #6b7280; font-size: 12px;">Thank you,<br>Umoya Clinic</p>
           </div>
         `;
 

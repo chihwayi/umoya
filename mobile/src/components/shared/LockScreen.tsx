@@ -26,7 +26,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlocked, onSignOut })
     }
 
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: `Unlock ${tenant?.name ?? 'MediCore'}`,
+      promptMessage: `Unlock ${tenant?.name ?? 'Umoya'}`,
       fallbackLabel: 'Use password',
       cancelLabel: 'Sign out',
       disableDeviceFallback: false,
@@ -52,7 +52,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlocked, onSignOut })
           <Icon name="shield" size={40} color={C.teal} />
         </View>
         <Text style={styles.title}>App Locked</Text>
-        <Text style={styles.sub}>{tenant?.name ?? 'MediCore'}</Text>
+        <Text style={styles.sub}>{tenant?.name ?? 'Umoya'}</Text>
 
         <TouchableOpacity style={styles.unlockBtn} onPress={attemptBiometric} activeOpacity={0.8}>
           <LinearGradient

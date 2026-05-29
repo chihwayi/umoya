@@ -15,7 +15,7 @@ const PROJECT_ROOT = process.cwd();
  *     for WHO ICD-11 MMS linearization support.
  */
 
-const MASTER_DB_NAME = process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'medicore';
+const MASTER_DB_NAME = process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'umoya';
 
 function buildMasterConnection() {
   return {

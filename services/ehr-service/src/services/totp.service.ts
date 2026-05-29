@@ -8,7 +8,7 @@ export class TotpService {
   }
 
   getOtpauthUrl(userId: string, secret: string): string {
-    return authenticator.keyuri(userId, 'MediCore EHR', secret);
+    return authenticator.keyuri(userId, 'Umoya EHR', secret);
   }
 
   verify(token: string, secret: string): boolean {

@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# MediCore Development Environment Setup Script
+# Umoya Development Environment Setup Script
 
 set -e
 
-echo "🏥 Setting up MediCore Development Environment..."
+echo "🏥 Setting up Umoya Development Environment..."
 
 # Check if required tools are installed
 check_requirements() {
@@ -72,7 +72,7 @@ setup_environment() {
         else
             echo "⚠️  No .env.example found, creating basic .env file"
             cat > .env << EOF
-# MediCore Environment Configuration
+# Umoya Environment Configuration
 NODE_ENV=development
 SERVICE_BASE_URL=
 SERVICE_TENANT_PATH=/tenant-service
@@ -99,7 +99,7 @@ PUBLIC_ADMIN_APP_PATH=/admin
 FRONTEND_URL=http://localhost:3000
 PORTAL_BASE_URL=http://localhost:3015
 WEB_APP_URL=http://localhost:3011
-REACT_APP_BASE_DOMAIN=medicore.health
+REACT_APP_BASE_DOMAIN=umoya.health
 REACT_APP_PROTOCOL=http
 
 CDSS_ENABLE_AI=true
@@ -112,7 +112,7 @@ POSTVISIT_CLINICALTRIALS_API_URL=https://clinicaltrials.gov/api/v2/studies
 POSTVISIT_CLINICALTRIALS_STUDY_BASE_URL=https://clinicaltrials.gov/study
 WHISPER_API_URL=https://api.openai.com/v1/audio/transcriptions
 
-DATABASE_URL=postgresql://medicore:medicore_password@localhost:5432/medicore_master
+DATABASE_URL=postgresql://umoya:umoya_password@localhost:5432/umoya_master
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 API_PORT=3000
@@ -167,7 +167,7 @@ STORAGE_PROVIDER=local
 STORAGE_PATH=./uploads
 # For cloud storage:
 # STORAGE_PROVIDER=aws
-# AWS_BUCKET=medicore-files
+# AWS_BUCKET=umoya-files
 # AWS_REGION=us-east-1
 EOF
         fi
@@ -251,7 +251,7 @@ create_admin_user() {
 
 # Main setup function
 main() {
-    echo "🚀 Starting MediCore setup..."
+    echo "🚀 Starting Umoya setup..."
     
     check_requirements
     install_dependencies
@@ -273,7 +273,7 @@ main() {
     create_admin_user
     
     echo ""
-    echo "🎉 MediCore development environment setup complete!"
+    echo "🎉 Umoya development environment setup complete!"
     echo ""
     echo "Next steps:"
     echo "1. Review and update the .env file with your specific configuration"

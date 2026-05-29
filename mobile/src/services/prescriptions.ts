@@ -95,7 +95,7 @@ export const PrescriptionsService = {
    * On Android it opens the system share intent.
    */
   downloadAndShare: async (id: string, rxLabel: string): Promise<void> => {
-    const jwt = await SecureStore.getItemAsync('medicore_jwt');
+    const jwt = await SecureStore.getItemAsync('umoya_jwt');
     const baseUrl = getApiClient().defaults.baseURL ?? '';
     const remoteUri = `${baseUrl}/patient-portal/prescriptions/${id}/download`;
     const localUri = `${FileSystem.cacheDirectory}prescription-${id}.pdf`;

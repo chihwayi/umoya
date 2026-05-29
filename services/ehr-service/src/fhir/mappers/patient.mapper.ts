@@ -8,14 +8,14 @@ export class PatientMapper {
   static toFhir(patient: Patient, tenantId?: string): fhir.Patient {
     const identifiers: fhir.Identifier[] = [
       {
-        system: `http://${tenantId || 'medicore'}.co.zw/patients`,
+        system: `http://${tenantId || 'umoya'}.co.zw/patients`,
         value: patient.patientNumber || patient.id,
       },
     ];
 
     if (patient.nationalId) {
       identifiers.push({
-        system: 'http://medicore.health/fhir/national-id',
+        system: 'http://umoya.health/fhir/national-id',
         value: patient.nationalId,
       });
     }
@@ -84,19 +84,19 @@ export class PatientMapper {
     const extensions: fhir.Extension[] = [];
     if (patient.bloodType) {
       extensions.push({
-        url: 'http://medicore.health/fhir/StructureDefinition/blood-type',
+        url: 'http://umoya.health/fhir/StructureDefinition/blood-type',
         valueString: patient.bloodType,
       });
     }
     if (patient.allergies) {
       extensions.push({
-        url: 'http://medicore.health/fhir/StructureDefinition/allergies',
+        url: 'http://umoya.health/fhir/StructureDefinition/allergies',
         valueString: patient.allergies,
       });
     }
     if (patient.medicalHistory) {
       extensions.push({
-        url: 'http://medicore.health/fhir/StructureDefinition/medical-history',
+        url: 'http://umoya.health/fhir/StructureDefinition/medical-history',
         valueString: patient.medicalHistory,
       });
     }

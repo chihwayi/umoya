@@ -135,7 +135,7 @@ describe('RadiologyAiService', () => {
         findings: [{ severity: 'critical', confidence: 0.91 }],
         top_finding: 'Pneumothorax',
         confidence: 0.91,
-        model_version: 'medicore-cxr-v1.0',
+        model_version: 'umoya-cxr-v1.0',
       }),
     };
 

@@ -7,7 +7,7 @@ import { Readable } from 'stream';
 export class MinioService {
   private readonly logger = new Logger(MinioService.name);
   private readonly s3Client: S3Client;
-  private readonly bucketName = process.env.STORAGE_S3_BUCKET || 'medicore-documents';
+  private readonly bucketName = process.env.STORAGE_S3_BUCKET || 'umoya-documents';
 
   constructor() {
     this.s3Client = new S3Client({

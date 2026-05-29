@@ -350,7 +350,7 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
           </div>
 
           {deploymentMode && deploymentMode !== 'clinic' && (
-            <div className="mx-3 mb-3 rounded-xl border border-[#2B7FFF]/20 bg-[#2B7FFF]/[0.07] px-3 py-2">
+            <div className="mx-3 mb-3 rounded-xl border border-[#3B9EFF]/20 bg-[#3B9EFF]/[0.07] px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#4A7AAA]">Deployment Mode</p>
               <p className="text-xs font-semibold text-[#C5D5EE] capitalize">{deploymentMode}</p>
             </div>

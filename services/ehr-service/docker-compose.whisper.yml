@@ -1,7 +1,7 @@
 services:
   whisper-api:
     image: onerahmet/whisper-api:latest-gpu
-    container_name: medicore-whisper-api
+    container_name: umoya-whisper-api
     ports:
       - "${PORT_WHISPER:-8001}:8000"
     # Uncomment if you have NVIDIA GPU:
@@ -24,7 +24,7 @@ services:
   # Alternative: CPU-only version (uncomment to use)
   # whisper-api-cpu:
   #   image: onerahmet/whisper-api:latest-cpu
-  #   container_name: medicore-whisper-api-cpu
+  #   container_name: umoya-whisper-api-cpu
   #   ports:
   #     - "${PORT_WHISPER:-8001}:8000"
   #   environment:

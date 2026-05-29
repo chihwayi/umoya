@@ -17,8 +17,8 @@ export function buildApiClient(baseUrl: string): AxiosInstance {
   // Attach JWT + Tenant on every request
   instance.interceptors.request.use(async (config) => {
     const [jwt, tenantRaw] = await Promise.all([
-      SecureStore.getItemAsync('medicore_jwt'),
-      SecureStore.getItemAsync('medicore_tenant'),
+      SecureStore.getItemAsync('umoya_jwt'),
+      SecureStore.getItemAsync('umoya_tenant'),
     ]);
     if (jwt) config.headers['Authorization'] = `Bearer ${jwt}`;
     if (tenantRaw) {
@@ -35,9 +35,9 @@ export function buildApiClient(baseUrl: string): AxiosInstance {
     res => res,
     async (err) => {
       if (err?.response?.status === 401) {
-        await SecureStore.deleteItemAsync('medicore_jwt');
-        await SecureStore.deleteItemAsync('medicore_role');
-        await SecureStore.deleteItemAsync('medicore_user');
+        await SecureStore.deleteItemAsync('umoya_jwt');
+        await SecureStore.deleteItemAsync('umoya_role');
+        await SecureStore.deleteItemAsync('umoya_user');
       }
       return Promise.reject(err);
     }

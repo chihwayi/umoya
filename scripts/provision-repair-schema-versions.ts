@@ -117,7 +117,7 @@ async function ensureMasterCompatColumns(master: Client): Promise<void> {
 
 async function main(): Promise<void> {
   const master = new Client(buildConnection(
-    process.env.POSTGRES_DB || process.env.MASTER_POSTGRES_DB || 'medicore'
+    process.env.POSTGRES_DB || process.env.MASTER_POSTGRES_DB || 'umoya'
   ));
   await master.connect();
 

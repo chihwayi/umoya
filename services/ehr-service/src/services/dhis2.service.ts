@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
-import { env } from '@medicore/config';
+import { env } from '@umoya/config';
 import { Patient } from '../entities/patient.entity';
 import { TenantDhis2Config, TenantService } from './tenant.service';
 

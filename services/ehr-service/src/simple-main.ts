@@ -24,7 +24,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3013;
   await app.listen(port);
   
-  console.log(`🏥 MediCore EHR Service (Simple) running on port ${port}`);
+  console.log(`🏥 Umoya EHR Service (Simple) running on port ${port}`);
   const host = process.env.HOST || 'localhost';
   console.log(`📚 API Documentation: http://${host}:${port}/api/docs`);
 }

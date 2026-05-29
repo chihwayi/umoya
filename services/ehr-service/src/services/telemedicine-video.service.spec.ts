@@ -40,14 +40,14 @@ describe('TelemedicineVideoService', () => {
   describe('createMeetingRoom', () => {
     it('returns room name and url from Daily.co response', async () => {
       mockAxiosInstance.post.mockResolvedValueOnce({
-        data: { name: 'room-abc123', url: 'https://medicore.daily.co/room-abc123' },
+        data: { name: 'room-abc123', url: 'https://umoya.daily.co/room-abc123' },
       });
 
       const result = await service.createMeetingRoom('consult-1', 'patient-1', 'doctor-1');
 
       expect(result).toMatchObject({
         meetingRoomId: 'room-abc123',
-        meetingUrl: 'https://medicore.daily.co/room-abc123',
+        meetingUrl: 'https://umoya.daily.co/room-abc123',
       });
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/rooms',

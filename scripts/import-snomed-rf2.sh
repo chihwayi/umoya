@@ -16,7 +16,7 @@ set -euo pipefail
 #   ./scripts/import-snomed-rf2.sh
 # -----------------------------------------------------------------------------
 
-SNOWSTORM_CONTAINER=${SNOWSTORM_CONTAINER:-medicore-snowstorm}
+SNOWSTORM_CONTAINER=${SNOWSTORM_CONTAINER:-umoya-snowstorm}
 IMPORT_PATH="/opt/snowstorm/import"
 
 if ! docker ps --format '{{.Names}}' | grep -q "^${SNOWSTORM_CONTAINER}$"; then

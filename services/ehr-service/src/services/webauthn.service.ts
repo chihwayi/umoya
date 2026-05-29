@@ -7,7 +7,7 @@ import {
 } from '@simplewebauthn/server';
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/types';
 
-const RP_NAME = 'Newlands Clinic MediCore';
+const RP_NAME = 'Newlands Clinic Umoya';
 const RP_ID = process.env.WEBAUTHN_RP_ID ?? 'localhost';
 const ORIGIN = process.env.WEBAUTHN_ORIGIN ?? 'http://localhost:3000';
 

@@ -1,5 +1,5 @@
 // Simple IndexedDB wrapper for offline queue
-const DB_NAME = 'medicore_offline';
+const DB_NAME = 'umoya_offline';
 const STORE_NAME = 'offline_queue';
 
 async function openDB(): Promise<IDBDatabase> {
@@ -34,6 +34,6 @@ export async function getQueuedCount(): Promise<number> {
 export async function triggerBackgroundSync(): Promise<void> {
   if ('serviceWorker' in navigator && 'SyncManager' in window) {
     const reg = await navigator.serviceWorker.ready;
-    await (reg as any).sync.register('medicore-offline-sync');
+    await (reg as any).sync.register('umoya-offline-sync');
   }
 }

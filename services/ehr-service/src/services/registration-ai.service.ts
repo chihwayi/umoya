@@ -93,7 +93,7 @@ export class RegistrationAiService {
     sessionToken: string,
     tenantId: string,
   ): Promise<InsuranceOcrResult> {
-    const bucket = process.env.MINIO_BUCKET ?? 'medicore-dicom';
+    const bucket = process.env.MINIO_BUCKET ?? 'umoya-dicom';
     const objectKey = `registration/insurance-cards/${sessionToken}/${Date.now()}`;
 
     await this.minioService.uploadBuffer(bucket, objectKey, imageBuffer, mimeType);

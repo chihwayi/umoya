@@ -62,22 +62,22 @@ export const UnifiedHIVTestingWorkflow: React.FC<UnifiedHIVTestingWorkflowProps>
     <div className="space-y-5">
       {/* CDSS Intelligence Panel */}
       {(loadingCdss || cdssRecommendations.length > 0) && (
-        <div className="rounded-2xl border border-[#2B7FFF]/20 bg-[#2B7FFF]/[0.05] p-4">
+        <div className="rounded-2xl border border-[#3B9EFF]/20 bg-[#3B9EFF]/[0.05] p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Brain className="w-4 h-4 text-[#2B7FFF]" />
+            <Brain className="w-4 h-4 text-[#3B9EFF]" />
             <p className="text-sm font-bold text-white">CDSS Intelligence</p>
-            {loadingCdss && <span className="h-3 w-3 border border-[#2B7FFF]/40 border-t-[#2B7FFF] rounded-full animate-spin ml-auto" />}
+            {loadingCdss && <span className="h-3 w-3 border border-[#3B9EFF]/40 border-t-[#3B9EFF] rounded-full animate-spin ml-auto" />}
           </div>
           {loadingCdss ? (
             <p className="text-xs text-[#5A78A0]">Analyzing clinical data against WHO guidelines...</p>
           ) : (
             <div className="space-y-2">
               {cdssRecommendations.map((rec, idx) => (
-                <div key={idx} className="flex items-start gap-2.5 rounded-xl border border-[#FF7A40]/20 bg-[#FF7A40]/[0.06] px-3 py-2.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-[#FF7A40] shrink-0 mt-0.5" />
+                <div key={idx} className="flex items-start gap-2.5 rounded-xl border border-[#E8614D]/20 bg-[#E8614D]/[0.06] px-3 py-2.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-[#E8614D] shrink-0 mt-0.5" />
                   <div>
                     <p className="text-xs font-semibold text-[#FFB380]">{rec.title}</p>
-                    <p className="text-[11px] text-[#FF7A40]/80 mt-0.5">{rec.description}</p>
+                    <p className="text-[11px] text-[#E8614D]/80 mt-0.5">{rec.description}</p>
                   </div>
                 </div>
               ))}

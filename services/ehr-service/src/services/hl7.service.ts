@@ -223,9 +223,9 @@ export class Hl7Service {
     };
 
     const hl7Message = [
-      `MSH|^~\\&|MEDICORE|CLINIC|HIS|HOSPITAL|${timestamp}||ADT^A04^ADT_A01|${messageControlId}|P|2.5`,
-      `EVN||${timestamp}|||^SYSTEM^MEDICORE`,
-      `PID|1||${patient.patientNumber}^^^MEDICORE^MR||${patient.lastName}^${patient.firstName}^${extendedPatient.middleName || ''}||${this.formatHl7Date(patient.dateOfBirth)}|${patient.gender?.toUpperCase()}|||${patient.address}^^${patient.city}^${extendedPatient.province || ''}^${extendedPatient.postalCode || ''}||${patient.phone}|||||||||||||||||||`,
+      `MSH|^~\\&|UMOYA|CLINIC|HIS|HOSPITAL|${timestamp}||ADT^A04^ADT_A01|${messageControlId}|P|2.5`,
+      `EVN||${timestamp}|||^SYSTEM^UMOYA`,
+      `PID|1||${patient.patientNumber}^^^UMOYA^MR||${patient.lastName}^${patient.firstName}^${extendedPatient.middleName || ''}||${this.formatHl7Date(patient.dateOfBirth)}|${patient.gender?.toUpperCase()}|||${patient.address}^^${patient.city}^${extendedPatient.province || ''}^${extendedPatient.postalCode || ''}||${patient.phone}|||||||||||||||||||`,
       `PV1|1|O|||||||||||||||||||||||||||||||||||||||||||||||||`
     ].join('\r');
 
@@ -252,8 +252,8 @@ export class Hl7Service {
     const messageControlId = `ORM${Date.now()}`;
 
     const hl7Message = [
-      `MSH|^~\\&|MEDICORE|CLINIC|LIS|LAB|${timestamp}||ORM^O01^ORM_O01|${messageControlId}|P|2.5`,
-      `PID|1||${labOrder.patient.patientNumber}^^^MEDICORE^MR||${labOrder.patient.lastName}^${labOrder.patient.firstName}||${this.formatHl7Date(labOrder.patient.dateOfBirth)}|${labOrder.patient.gender?.toUpperCase()}`,
+      `MSH|^~\\&|UMOYA|CLINIC|LIS|LAB|${timestamp}||ORM^O01^ORM_O01|${messageControlId}|P|2.5`,
+      `PID|1||${labOrder.patient.patientNumber}^^^UMOYA^MR||${labOrder.patient.lastName}^${labOrder.patient.firstName}||${this.formatHl7Date(labOrder.patient.dateOfBirth)}|${labOrder.patient.gender?.toUpperCase()}`,
       `ORC|NW|${labOrder.orderNumber}||||||${this.formatHl7DateTime(labOrder.createdAt)}`,
       ...labOrder.tests.map(test => 
         `OBR|1|${labOrder.orderNumber}||${test.testCode}^${test.testName}|||${this.formatHl7DateTime(labOrder.scheduledDateTime || labOrder.createdAt)}||||||||${labOrder.clinicalInfo}||||||||||F`

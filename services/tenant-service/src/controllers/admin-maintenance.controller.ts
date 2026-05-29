@@ -59,8 +59,8 @@ export class AdminMaintenanceController {
     }
     const host = process.env.DB_HOST || 'postgres-master';
     const port = process.env.DB_PORT || '5432';
-    const user = encodeURIComponent(process.env.DB_USERNAME || process.env.POSTGRES_USER || 'medicore');
-    const pass = encodeURIComponent(process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || 'medicore_password');
+    const user = encodeURIComponent(process.env.DB_USERNAME || process.env.POSTGRES_USER || 'umoya');
+    const pass = encodeURIComponent(process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || 'umoya_password');
     return `postgresql://${user}:${pass}@${host}:${port}/${databaseName}`;
   }
 

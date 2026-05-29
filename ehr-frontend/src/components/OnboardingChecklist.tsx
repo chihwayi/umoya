@@ -14,7 +14,7 @@ export function OnboardingChecklist({ role }: Props) {
   const totalCount = checklist.steps.length;
 
   return (
-    <div className="rounded-2xl border border-[#00C896]/20 bg-gradient-to-br from-[#00C896]/[0.06] to-[#2B7FFF]/[0.04] p-4 mb-4">
+    <div className="rounded-2xl border border-[#0AA98A]/20 bg-gradient-to-br from-[#0AA98A]/[0.06] to-[#3B9EFF]/[0.04] p-4 mb-4">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#4A7A5A]">Getting Started</p>
@@ -38,7 +38,7 @@ export function OnboardingChecklist({ role }: Props) {
                 type="checkbox"
                 checked={done}
                 onChange={() => completeStep(step.id)}
-                className="mt-0.5 h-3.5 w-3.5 rounded border-[#4A6A8A] bg-transparent accent-[#00C896] cursor-pointer"
+                className="mt-0.5 h-3.5 w-3.5 rounded border-[#4A6A8A] bg-transparent accent-[#0AA98A] cursor-pointer"
               />
               <div className="flex-1 min-w-0">
                 <span className={`text-sm font-medium ${done ? "line-through text-[#4A6A8A]" : "text-[#C5D5EE]"}`}>
@@ -48,7 +48,7 @@ export function OnboardingChecklist({ role }: Props) {
                   <p className="text-[11px] text-[#7A9AB8] mt-0.5 leading-snug">{step.description}</p>
                 )}
                 {!done && step.linkPath && (
-                  <a href={step.linkPath} className="text-[11px] text-[#00C896] hover:underline mt-0.5 block">
+                  <a href={step.linkPath} className="text-[11px] text-[#0AA98A] hover:underline mt-0.5 block">
                     {step.linkLabel ?? "Open"}
                   </a>
                 )}

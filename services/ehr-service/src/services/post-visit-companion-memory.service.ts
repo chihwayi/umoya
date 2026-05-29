@@ -13,7 +13,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { config } from '@medicore/config';
+import { config } from '@umoya/config';
 import { CuratePostVisitCompanionMemoryDto } from '../dto/post-visit.dto';
 
 type PostVisitCompanionMemoryCurationAction = 'promote' | 'retire' | 'reactivate';

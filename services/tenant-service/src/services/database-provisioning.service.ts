@@ -4153,6 +4153,575 @@ export class DatabaseProvisioningService {
              ON storeroom_catalog(atc_code) WHERE atc_code IS NOT NULL`,
         ],
       },
+      // ── S201 — Clinical Conflict Safety ───────────────────────────────────
+      {
+        id: 'clinical_conflict_safety',
+        label: 'Sprint 201 — Clinical Conflict Safety: Safe Merge for Allergies & Medications',
+        version: '2026.05.29.1',
+        description: 'clinical_resolution_queue and sync_safety_fields tables; prevents silent LWW on safety-critical fields',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS clinical_resolution_queue (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL,
+            record_type      TEXT NOT NULL CHECK (record_type IN ('allergy', 'active_medication')),
+            record_id        UUID NOT NULL,
+            conflict_field   TEXT NOT NULL,
+            server_value     JSONB NOT NULL,
+            client_value     JSONB NOT NULL,
+            client_device_id TEXT,
+            client_timestamp TIMESTAMPTZ NOT NULL,
+            server_timestamp TIMESTAMPTZ NOT NULL,
+            status           TEXT NOT NULL DEFAULT 'pending'
+                               CHECK (status IN ('pending', 'resolved_keep_server', 'resolved_keep_client', 'escalated')),
+            resolved_by      UUID,
+            resolved_at      TIMESTAMPTZ,
+            resolution_note  TEXT,
+            escalated_at     TIMESTAMPTZ,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_crq_patient ON clinical_resolution_queue (patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_crq_status  ON clinical_resolution_queue (status) WHERE status = 'pending'`,
+          `CREATE TABLE IF NOT EXISTS sync_safety_fields (
+            id           SERIAL PRIMARY KEY,
+            table_name   TEXT NOT NULL,
+            field_name   TEXT NOT NULL,
+            safety_level TEXT NOT NULL CHECK (safety_level IN ('critical', 'high', 'normal')),
+            strategy     TEXT NOT NULL CHECK (strategy IN ('queue_for_review', 'server_wins', 'client_wins', 'lww')),
+            UNIQUE (table_name, field_name)
+          )`,
+          `INSERT INTO sync_safety_fields (table_name, field_name, safety_level, strategy) VALUES
+            ('patient_allergies',  'allergen',       'critical', 'queue_for_review'),
+            ('patient_allergies',  'severity',       'critical', 'queue_for_review'),
+            ('patient_allergies',  'status',         'critical', 'queue_for_review'),
+            ('patient_allergies',  'reaction_type',  'critical', 'queue_for_review'),
+            ('active_medications', 'drug_name',      'critical', 'queue_for_review'),
+            ('active_medications', 'dose',           'critical', 'queue_for_review'),
+            ('active_medications', 'status',         'critical', 'queue_for_review'),
+            ('active_medications', 'stopped_reason', 'critical', 'queue_for_review'),
+            ('appointments',       'status',         'high',     'server_wins'),
+            ('clinical_notes',     'content',        'normal',   'lww')
+           ON CONFLICT (table_name, field_name) DO NOTHING`,
+        ],
+      },
+      // ── S202 — QR Code Patient Check-in ──────────────────────────────────
+      {
+        id: 'qr_checkin',
+        label: 'Sprint 202 — QR Code Patient Check-in',
+        version: '2026.05.29.1',
+        description: 'patient_checkin_tokens table and actual_checkin_at / checkin_method columns on appointments',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS patient_checkin_tokens (
+            id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id     UUID NOT NULL,
+            appointment_id UUID,
+            token_hash     TEXT NOT NULL UNIQUE,
+            expires_at     TIMESTAMPTZ NOT NULL,
+            used_at        TIMESTAMPTZ,
+            used_by        UUID,
+            visit_id       UUID,
+            created_at     TIMESTAMPTZ DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_checkin_token_hash ON patient_checkin_tokens (token_hash)`,
+          `CREATE INDEX IF NOT EXISTS idx_checkin_patient    ON patient_checkin_tokens (patient_id, expires_at)`,
+          `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS actual_checkin_at TIMESTAMPTZ`,
+          `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS checkin_method TEXT`,
+        ],
+      },
+      // ── S203 — Pre-Visit Digital Intake Form ─────────────────────────────
+      {
+        id: 'pre_visit_intake',
+        label: 'Sprint 203 — Pre-Visit Digital Intake Form',
+        version: '2026.05.29.1',
+        description: 'pre_visit_intake_forms table for patient-completed demographics, symptoms, consent, and insurance before arrival',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS pre_visit_intake_forms (
+            id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            appointment_id       UUID NOT NULL UNIQUE,
+            patient_id           UUID NOT NULL,
+            sent_at              TIMESTAMPTZ,
+            completed_at         TIMESTAMPTZ,
+            reminder_sent_at     TIMESTAMPTZ,
+            address              TEXT,
+            emergency_contact    JSONB,
+            chief_complaint      TEXT,
+            current_symptoms     JSONB,
+            symptom_duration     TEXT,
+            current_medications  JSONB,
+            known_allergies      JSONB,
+            insurance_provider   TEXT,
+            insurance_number     TEXT,
+            insurance_card_url   TEXT,
+            treatment_consent    BOOLEAN DEFAULT FALSE,
+            data_sharing_consent BOOLEAN DEFAULT FALSE,
+            sms_consent          BOOLEAN DEFAULT FALSE,
+            consent_signed_at    TIMESTAMPTZ,
+            synced_to_encounter  BOOLEAN DEFAULT FALSE,
+            synced_at            TIMESTAMPTZ,
+            encounter_id         UUID,
+            form_token_hash      TEXT NOT NULL,
+            form_token_expires   TIMESTAMPTZ NOT NULL,
+            created_at           TIMESTAMPTZ DEFAULT now(),
+            updated_at           TIMESTAMPTZ DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_pvif_appointment ON pre_visit_intake_forms (appointment_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_pvif_patient     ON pre_visit_intake_forms (patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_pvif_pending     ON pre_visit_intake_forms (completed_at) WHERE completed_at IS NULL`,
+        ],
+      },
+      // ── S204 — Discharge Documents Pushed to Patient App ─────────────────
+      {
+        id: 'discharge_push',
+        label: 'Sprint 204 — Discharge Documents Pushed to Patient App',
+        version: '2026.05.29.1',
+        description: 'patient_discharge_documents table and finalized_at/finalized_by/discharge_sent columns on encounters',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS patient_discharge_documents (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id    UUID NOT NULL,
+            encounter_id  UUID NOT NULL,
+            document_type TEXT NOT NULL
+                            CHECK (document_type IN ('discharge_summary', 'prescription', 'sick_note', 'follow_up_plan', 'referral_letter')),
+            storage_path  TEXT NOT NULL,
+            file_name     TEXT NOT NULL,
+            language      TEXT NOT NULL DEFAULT 'en',
+            signed_by     UUID NOT NULL,
+            signed_at     TIMESTAMPTZ NOT NULL,
+            pushed_at     TIMESTAMPTZ,
+            downloaded_at TIMESTAMPTZ,
+            created_at    TIMESTAMPTZ DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_pdd_patient    ON patient_discharge_documents (patient_id, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_pdd_encounter  ON patient_discharge_documents (encounter_id)`,
+          `ALTER TABLE encounters ADD COLUMN IF NOT EXISTS finalized_at   TIMESTAMPTZ`,
+          `ALTER TABLE encounters ADD COLUMN IF NOT EXISTS finalized_by   UUID`,
+          `ALTER TABLE encounters ADD COLUMN IF NOT EXISTS discharge_sent BOOLEAN DEFAULT FALSE`,
+        ],
+      },
+      // ── S205 — Wearable & Home Device Sync ───────────────────────────────
+      {
+        id: 'wearable_sync',
+        label: 'Sprint 205 — Wearable and Home Device Sync (HealthKit / Google Fit / BLE)',
+        version: '2026.05.29.1',
+        description: 'wearable_devices, wearable_readings, wearable_trend_alerts tables',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS wearable_devices (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id    UUID NOT NULL,
+            device_type   TEXT NOT NULL,
+            device_name   TEXT,
+            ble_address   TEXT,
+            external_id   TEXT,
+            is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+            registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            last_sync_at  TIMESTAMPTZ,
+            UNIQUE (patient_id, device_type, external_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_wearable_devices_patient ON wearable_devices (patient_id)`,
+          `CREATE TABLE IF NOT EXISTS wearable_readings (
+            id           BIGSERIAL PRIMARY KEY,
+            patient_id   UUID NOT NULL,
+            device_id    UUID REFERENCES wearable_devices(id) ON DELETE SET NULL,
+            reading_type TEXT NOT NULL,
+            value        NUMERIC(10,3) NOT NULL,
+            unit         TEXT NOT NULL,
+            recorded_at  TIMESTAMPTZ NOT NULL,
+            received_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+            is_flagged   BOOLEAN NOT NULL DEFAULT FALSE,
+            flag_reason  TEXT,
+            source_raw   JSONB
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_wearable_readings_patient_type_time
+             ON wearable_readings (patient_id, reading_type, recorded_at DESC)`,
+          `CREATE TABLE IF NOT EXISTS wearable_trend_alerts (
+            id               BIGSERIAL PRIMARY KEY,
+            patient_id       UUID NOT NULL,
+            reading_type     TEXT NOT NULL,
+            alert_level      TEXT NOT NULL CHECK (alert_level IN ('warning', 'critical')),
+            message          TEXT NOT NULL,
+            triggered_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+            acknowledged     BOOLEAN NOT NULL DEFAULT FALSE,
+            acknowledged_by  UUID,
+            acknowledged_at  TIMESTAMPTZ
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_wearable_alerts_patient ON wearable_trend_alerts (patient_id) WHERE acknowledged = FALSE`,
+        ],
+      },
+      // ── S206 — Referral Tracking Portal ──────────────────────────────────
+      {
+        id: 'referral_tracking',
+        label: 'Sprint 206 — Referral Tracking Portal (Cross-Facility Visibility)',
+        version: '2026.05.29.1',
+        description: 'referral_status_log, referral_messages, referral_webhook_keys tables for structured referral tracking',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS referral_status_log (
+            id          BIGSERIAL PRIMARY KEY,
+            referral_id UUID NOT NULL,
+            from_status TEXT,
+            to_status   TEXT NOT NULL,
+            changed_by  UUID,
+            note        TEXT,
+            changed_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_rsl_referral ON referral_status_log (referral_id, changed_at DESC)`,
+          `CREATE TABLE IF NOT EXISTS referral_messages (
+            id          BIGSERIAL PRIMARY KEY,
+            referral_id UUID NOT NULL,
+            sender_name TEXT NOT NULL,
+            sender_role TEXT,
+            body        TEXT NOT NULL,
+            sent_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_rm_referral ON referral_messages (referral_id, sent_at ASC)`,
+          `CREATE TABLE IF NOT EXISTS referral_webhook_keys (
+            id            BIGSERIAL PRIMARY KEY,
+            facility_name TEXT NOT NULL,
+            key_hash      CHAR(64) NOT NULL UNIQUE,
+            is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+        ],
+      },
+      // ── S207 — PRO → AI Risk Score Loop ──────────────────────────────────
+      {
+        id: 'pro_risk_loop',
+        label: 'Sprint 207 — PRO Data → AI Risk Score Loop Closure',
+        version: '2026.05.29.1',
+        description: 'risk_outreach_tasks table; latest_risk_score / latest_risk_level / risk_updated_at cache columns on patients',
+        statements: () => [
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS latest_risk_score  NUMERIC(5,2)`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS latest_risk_level  TEXT`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS risk_updated_at    TIMESTAMPTZ`,
+          `CREATE TABLE IF NOT EXISTS risk_outreach_tasks (
+            id            BIGSERIAL PRIMARY KEY,
+            patient_id    UUID NOT NULL,
+            risk_score_id BIGINT,
+            assigned_to   UUID,
+            status        TEXT NOT NULL DEFAULT 'open'
+                            CHECK (status IN ('open', 'in_progress', 'done', 'dismissed')),
+            due_at        TIMESTAMPTZ,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            completed_at  TIMESTAMPTZ
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_rot_patient    ON risk_outreach_tasks (patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_rot_assignee   ON risk_outreach_tasks (assigned_to) WHERE status = 'open'`,
+        ],
+      },
+      // ── S208 — In-App Bill Payment ────────────────────────────────────────
+      {
+        id: 'in_app_payment',
+        label: 'Sprint 208 — In-App Bill Payment (EcoCash / OneMoney / ZiG)',
+        version: '2026.05.29.1',
+        description: 'patient_payment_transactions table; payment_status / paid_at / paid_via columns on invoices',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS patient_payment_transactions (
+            id                BIGSERIAL PRIMARY KEY,
+            invoice_id        UUID NOT NULL,
+            patient_id        UUID NOT NULL,
+            amount            NUMERIC(12,2) NOT NULL,
+            currency          TEXT NOT NULL DEFAULT 'ZiG',
+            payment_method    TEXT NOT NULL,
+            gateway_reference TEXT,
+            mobile_number     TEXT,
+            status            TEXT NOT NULL DEFAULT 'pending'
+                                CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled')),
+            initiated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            confirmed_at      TIMESTAMPTZ,
+            failed_reason     TEXT,
+            receipt_sent      BOOLEAN NOT NULL DEFAULT FALSE
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ppt_invoice ON patient_payment_transactions (invoice_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_ppt_patient ON patient_payment_transactions (patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_ppt_status  ON patient_payment_transactions (status, initiated_at)`,
+          `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'unpaid'`,
+          `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at        TIMESTAMPTZ`,
+          `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_via       TEXT`,
+        ],
+      },
+      // ── S209 — Real-Time Queue & Wait Time ───────────────────────────────
+      {
+        id: 'queue_wait_time',
+        label: 'Sprint 209 — Real-Time Queue and Wait Time in Patient App',
+        version: '2026.05.29.1',
+        description: 'clinic_queue and queue_config tables for real-time patient queue with WebSocket updates',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS clinic_queue (
+            id                       BIGSERIAL PRIMARY KEY,
+            appointment_id           UUID,
+            patient_id               UUID NOT NULL,
+            queue_date               DATE NOT NULL DEFAULT CURRENT_DATE,
+            queue_number             INTEGER NOT NULL,
+            status                   TEXT NOT NULL DEFAULT 'waiting'
+                                       CHECK (status IN ('waiting','called','in_consultation','done','no_show')),
+            checked_in_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+            called_at                TIMESTAMPTZ,
+            seen_at                  TIMESTAMPTZ,
+            done_at                  TIMESTAMPTZ,
+            estimated_wait_minutes   INTEGER,
+            updated_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (queue_date, queue_number, patient_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_queue_date_status ON clinic_queue (queue_date, status)`,
+          `CREATE TABLE IF NOT EXISTS queue_config (
+            id               BIGSERIAL PRIMARY KEY,
+            avg_consult_mins INTEGER NOT NULL DEFAULT 10,
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `INSERT INTO queue_config (avg_consult_mins) VALUES (10) ON CONFLICT DO NOTHING`,
+        ],
+      },
+      // ── S210 — Theatre Utilization Dashboard ─────────────────────────────
+      {
+        id: 'theatre_utilization',
+        label: 'Sprint 210 — OR / Theatre Utilization Dashboard',
+        version: '2026.05.29.1',
+        description: 'theatre_rooms, theatre_cases, theatre_config tables',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS theatre_rooms (
+            id            BIGSERIAL PRIMARY KEY,
+            name          TEXT NOT NULL UNIQUE,
+            is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+            session_start TIME NOT NULL DEFAULT '07:30',
+            session_end   TIME NOT NULL DEFAULT '17:00'
+          )`,
+          `CREATE TABLE IF NOT EXISTS theatre_cases (
+            id                  BIGSERIAL PRIMARY KEY,
+            room_id             BIGINT NOT NULL,
+            patient_id          UUID NOT NULL,
+            surgeon_id          UUID NOT NULL,
+            anaesthetist_id     UUID,
+            procedure_name      TEXT NOT NULL,
+            procedure_codes     TEXT[],
+            planned_start       TIMESTAMPTZ NOT NULL,
+            planned_end         TIMESTAMPTZ NOT NULL,
+            actual_start        TIMESTAMPTZ,
+            actual_end          TIMESTAMPTZ,
+            turnover_start      TIMESTAMPTZ,
+            status              TEXT NOT NULL DEFAULT 'scheduled'
+                                  CHECK (status IN ('scheduled','in_progress','completed','cancelled')),
+            cancellation_reason TEXT,
+            cancellation_note   TEXT,
+            cancelled_at        TIMESTAMPTZ,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_tc_room_date ON theatre_cases (room_id, planned_start)`,
+          `CREATE INDEX IF NOT EXISTS idx_tc_surgeon   ON theatre_cases (surgeon_id, planned_start)`,
+          `CREATE INDEX IF NOT EXISTS idx_tc_status    ON theatre_cases (status)`,
+          `CREATE TABLE IF NOT EXISTS theatre_config (
+            id                           BIGSERIAL PRIMARY KEY,
+            daily_cancellation_threshold INTEGER NOT NULL DEFAULT 3,
+            updated_at                   TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `INSERT INTO theatre_config (daily_cancellation_threshold) VALUES (3) ON CONFLICT DO NOTHING`,
+        ],
+      },
+      // ── S211 — Post-Visit CSAT Survey ─────────────────────────────────────
+      {
+        id: 'csat_survey',
+        label: 'Sprint 211 — Post-Visit Patient Satisfaction Survey (CSAT / NPS)',
+        version: '2026.05.29.1',
+        description: 'csat_surveys table with token-gated submission and per-category ratings',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS csat_surveys (
+            id               BIGSERIAL PRIMARY KEY,
+            encounter_id     UUID NOT NULL,
+            patient_id       UUID NOT NULL,
+            token_hash       CHAR(64) NOT NULL UNIQUE,
+            sent_at          TIMESTAMPTZ,
+            expires_at       TIMESTAMPTZ NOT NULL,
+            submitted_at     TIMESTAMPTZ,
+            overall_csat     SMALLINT CHECK (overall_csat BETWEEN 1 AND 5),
+            nps_score        SMALLINT CHECK (nps_score BETWEEN 0 AND 10),
+            rating_wait      SMALLINT CHECK (rating_wait BETWEEN 1 AND 5),
+            rating_clinician SMALLINT CHECK (rating_clinician BETWEEN 1 AND 5),
+            rating_facility  SMALLINT CHECK (rating_facility BETWEEN 1 AND 5),
+            rating_admin     SMALLINT CHECK (rating_admin BETWEEN 1 AND 5),
+            free_text        TEXT,
+            clinician_id     UUID,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_csat_patient   ON csat_surveys (patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_csat_clinician ON csat_surveys (clinician_id)`,
+        ],
+      },
+      // ── S212 — Clinician Mobile Ward Round ────────────────────────────────
+      {
+        id: 'ward_round',
+        label: 'Sprint 212 — Clinician Mobile App — Full Ward Round Capability',
+        version: '2026.05.29.1',
+        description: 'ward_beds, inpatient_admissions, ward_round_notes, ward_orders tables',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS ward_beds (
+            id        BIGSERIAL PRIMARY KEY,
+            ward_name TEXT NOT NULL,
+            bay_name  TEXT,
+            bed_code  TEXT NOT NULL UNIQUE,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE
+          )`,
+          `CREATE TABLE IF NOT EXISTS inpatient_admissions (
+            id                  BIGSERIAL PRIMARY KEY,
+            patient_id          UUID NOT NULL,
+            encounter_id        UUID NOT NULL,
+            bed_id              BIGINT,
+            admitted_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+            discharged_at       TIMESTAMPTZ,
+            admitting_doctor_id UUID,
+            current_doctor_id   UUID,
+            status              TEXT NOT NULL DEFAULT 'admitted'
+                                  CHECK (status IN ('admitted','discharged','transferred')),
+            admission_notes     TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_admissions_active ON inpatient_admissions (status) WHERE status = 'admitted'`,
+          `CREATE TABLE IF NOT EXISTS ward_round_notes (
+            id             BIGSERIAL PRIMARY KEY,
+            admission_id   BIGINT NOT NULL,
+            encounter_id   UUID NOT NULL,
+            clinician_id   UUID NOT NULL,
+            note_date      DATE NOT NULL DEFAULT CURRENT_DATE,
+            subjective     TEXT,
+            objective      TEXT,
+            assessment     TEXT,
+            plan           TEXT,
+            dictation_raw  TEXT,
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE TABLE IF NOT EXISTS ward_orders (
+            id               BIGSERIAL PRIMARY KEY,
+            admission_id     BIGINT NOT NULL,
+            encounter_id     UUID NOT NULL,
+            ordered_by       UUID NOT NULL,
+            order_type       TEXT NOT NULL CHECK (order_type IN ('medication','lab','imaging','nursing')),
+            drug_name        TEXT,
+            dose             TEXT,
+            route            TEXT,
+            frequency        TEXT,
+            duration_days    INTEGER,
+            test_name        TEXT,
+            task_description TEXT,
+            priority         TEXT NOT NULL DEFAULT 'routine' CHECK (priority IN ('stat','urgent','routine')),
+            status           TEXT NOT NULL DEFAULT 'pending',
+            ordered_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+            acknowledged_at  TIMESTAMPTZ,
+            notes            TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ward_orders_admission ON ward_orders (admission_id)`,
+        ],
+      },
+      // ── S213 — Household / Family Risk Graph ─────────────────────────────
+      {
+        id: 'household_family_graph',
+        label: 'Sprint 213 — Household and Family Risk Graph',
+        version: '2026.05.29.1',
+        description: 'household_groups, patient_family_links, household_alerts tables; household_id on patients',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS household_groups (
+            id           BIGSERIAL PRIMARY KEY,
+            address_line1 TEXT,
+            address_line2 TEXT,
+            suburb        TEXT,
+            city          TEXT,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS household_id BIGINT`,
+          `CREATE INDEX IF NOT EXISTS idx_patients_household ON patients (household_id) WHERE household_id IS NOT NULL`,
+          `CREATE TABLE IF NOT EXISTS patient_family_links (
+            id           BIGSERIAL PRIMARY KEY,
+            patient_a_id UUID NOT NULL,
+            patient_b_id UUID NOT NULL,
+            relationship TEXT NOT NULL,
+            confirmed    BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (patient_a_id, patient_b_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_family_a ON patient_family_links (patient_a_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_family_b ON patient_family_links (patient_b_id)`,
+          `CREATE TABLE IF NOT EXISTS household_alerts (
+            id                BIGSERIAL PRIMARY KEY,
+            household_id      BIGINT,
+            source_patient_id UUID NOT NULL,
+            alert_type        TEXT NOT NULL,
+            condition_name    TEXT NOT NULL,
+            message           TEXT NOT NULL,
+            severity          TEXT NOT NULL DEFAULT 'advisory' CHECK (severity IN ('advisory','urgent')),
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+            resolved_at       TIMESTAMPTZ
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ha_household ON household_alerts (household_id) WHERE resolved_at IS NULL`,
+        ],
+      },
+      // ── S214 — Digital Procedural Consent ────────────────────────────────
+      {
+        id: 'digital_consent',
+        label: 'Sprint 214 — Digital Procedural Consent with E-Signature',
+        version: '2026.05.29.1',
+        description: 'consent_form_templates and consent_requests tables for paperless e-signature consent',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS consent_form_templates (
+            id             BIGSERIAL PRIMARY KEY,
+            procedure_name TEXT NOT NULL UNIQUE,
+            description    TEXT NOT NULL,
+            risks          TEXT NOT NULL,
+            benefits       TEXT NOT NULL,
+            alternatives   TEXT,
+            version        INTEGER NOT NULL DEFAULT 1,
+            is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE TABLE IF NOT EXISTS consent_requests (
+            id                BIGSERIAL PRIMARY KEY,
+            encounter_id      UUID NOT NULL,
+            patient_id        UUID NOT NULL,
+            template_id       BIGINT NOT NULL,
+            requested_by      UUID NOT NULL,
+            token_hash        CHAR(64) NOT NULL UNIQUE,
+            status            TEXT NOT NULL DEFAULT 'pending'
+                                CHECK (status IN ('pending','signed','declined','expired')),
+            sent_at           TIMESTAMPTZ,
+            expires_at        TIMESTAMPTZ NOT NULL,
+            signed_at         TIMESTAMPTZ,
+            declined_at       TIMESTAMPTZ,
+            signature_svg     TEXT,
+            pdf_key           TEXT,
+            witness_name      TEXT,
+            patient_statement TEXT,
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_consent_encounter ON consent_requests (encounter_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_consent_patient   ON consent_requests (patient_id)`,
+        ],
+      },
+      // ── S215 — Cross-Facility Stock Balancing ────────────────────────────
+      {
+        id: 'stock_transfer',
+        label: 'Sprint 215 — Cross-Facility Stock Balancing',
+        version: '2026.05.29.1',
+        description: 'stock_transfer_orders table; min_stock_level and reorder_point columns on storeroom_items',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS stock_transfer_orders (
+            id              BIGSERIAL PRIMARY KEY,
+            item_id         BIGINT NOT NULL,
+            quantity        INTEGER NOT NULL,
+            from_facility   TEXT NOT NULL,
+            to_facility     TEXT NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'requested'
+                              CHECK (status IN ('requested','approved','dispatched','received','cancelled')),
+            requested_by    UUID,
+            approved_by     UUID,
+            dispatched_at   TIMESTAMPTZ,
+            received_at     TIMESTAMPTZ,
+            notes           TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_sto_status ON stock_transfer_orders (status)`,
+          `CREATE INDEX IF NOT EXISTS idx_sto_item   ON stock_transfer_orders (item_id)`,
+          `ALTER TABLE storeroom_items ADD COLUMN IF NOT EXISTS min_stock_level INTEGER DEFAULT 0`,
+          `ALTER TABLE storeroom_items ADD COLUMN IF NOT EXISTS reorder_point   INTEGER DEFAULT 0`,
+        ],
+      },
     ];
   }
 
@@ -13165,7 +13734,7 @@ export class DatabaseProvisioningService {
 
     this.logger.log(`Seeding default demo users for tenant: ${s}`);
 
-    // Medicore1# — meets policy (uppercase, lowercase, digit, special char, 9 chars)
+    // Umoya1# — meets policy (uppercase, lowercase, digit, special char, 9 chars)
     const demoPasswordHash = '$2b$10$WN4.1EiRgPP.oBR2hKOurulJvnlC6muYcBOtesTwgekWhqmacgUDy';
     await tenantDataSource.query(`
       INSERT INTO users (email, password_hash, first_name, last_name, role, license_number, specialization, phone, must_change_password)
@@ -13182,7 +13751,7 @@ export class DatabaseProvisioningService {
       ON CONFLICT (email) DO NOTHING;
     `);
 
-    this.logger.log(`Demo users seeded. Password for all: Medicore1# | Logins: doctor@${s}.com, nurse@${s}.com, ...`);
+    this.logger.log(`Demo users seeded. Password for all: Umoya1# | Logins: doctor@${s}.com, nurse@${s}.com, ...`);
   }
 
   private async seedLabCatalog(tenantDataSource: DataSource): Promise<void> {
@@ -19183,7 +19752,7 @@ RECOMMENDATIONS:
         batch_id VARCHAR(100) NOT NULL,
         resource_type VARCHAR(50) NOT NULL,
         openmrs_uuid VARCHAR(100),
-        medicore_id UUID,
+        umoya_id UUID,
         status VARCHAR(20) NOT NULL DEFAULT 'migrated',
         error_details TEXT,
         raw_record JSONB,

@@ -1,4 +1,4 @@
-name: MediCore CI
+name: Umoya CI
 
 on:
   push:
@@ -36,7 +36,7 @@ jobs:
       run: npm install
 
     - name: Build Shared Config
-      run: npm run build -w @medicore/config
+      run: npm run build -w @umoya/config
 
     - name: Use Python
       if: matrix.service == 'ehr-service'

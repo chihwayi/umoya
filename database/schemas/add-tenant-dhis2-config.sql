@@ -1,5 +1,5 @@
 -- Add master-level tenant -> DHIS2 linkage configuration
--- Run against medicore master database
+-- Run against umoya master database
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 

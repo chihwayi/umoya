@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -343,6 +344,37 @@ export class ReferralController {
   @ApiResponse({ status: 200, description: 'Facility deleted successfully' })
   async deleteFacility(@Param('id') id: string, @Req() req: RequestWithTenant) {
     return this.referralFacilityService.deleteFacility(id, req.tenantDb);
+  }
+
+  // ==================== MESSAGES (S206) ====================
+
+  @Get(':id/messages')
+  @ApiOperation({ summary: 'Get referral thread messages' })
+  async getMessages(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.referralService.getMessages(req.tenantDb, id);
+  }
+
+  @Post(':id/messages')
+  @ApiOperation({ summary: 'Post a message to referral thread' })
+  async addMessage(
+    @Param('id') id: string,
+    @Body() body: { senderName: string; senderRole: string; body: string },
+    @Req() req: RequestWithTenant,
+  ) {
+    await this.referralService.addMessage(req.tenantDb, id, body.senderName, body.senderRole, body.body);
+    return { ok: true };
+  }
+
+  @Post(':id/webhook-status')
+  @ApiOperation({ summary: 'Receiving facility webhook: update referral status' })
+  async webhookTransition(
+    @Param('id') id: string,
+    @Headers('x-referral-key') key: string,
+    @Body() body: { status: string; note?: string },
+    @Req() req: RequestWithTenant,
+  ) {
+    await this.referralService.webhookTransition(req.tenantDb, key, id, body.status, body.note);
+    return { ok: true };
   }
 
   // ==================== REFERRAL ANALYTICS ====================
