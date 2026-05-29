@@ -29,9 +29,9 @@ describe('LandingPage', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByText(/AI-first clinical platform built for SADC, Africa, and beyond/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('DHIS2').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/FHIR R4/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Breath/i).length).toBeGreaterThan(0);
   });
 
   it('submits a guided test access request', async () => {

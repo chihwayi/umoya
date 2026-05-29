@@ -100,8 +100,8 @@ export default function WearableScreen() {
 
   async function loadAlerts() {
     try {
-      const { data } = await api.get('/wearable/alerts');
-      setAlerts(data ?? []);
+      const { data } = await api.get('/wearable/alerts') as any;
+      setAlerts(Array.isArray(data) ? data : []);
     } catch {
       // non-fatal; alerts will reload on next sync
     }

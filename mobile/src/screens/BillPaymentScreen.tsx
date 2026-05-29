@@ -50,7 +50,7 @@ export default function BillPaymentScreen() {
     if (!txId || txStatus === 'confirmed' || txStatus === 'failed') return;
     const interval = setInterval(async () => {
       try {
-        const { data } = await api.get(`/payments/patient/transactions/${txId}/status`);
+        const { data } = await api.get(`/payments/patient/transactions/${txId}/status`) as any;
         setTxStatus(data.status);
         if (data.status === 'confirmed') {
           clearInterval(interval);
@@ -80,7 +80,7 @@ export default function BillPaymentScreen() {
         invoiceId: selected.id,
         method,
         mobileNumber: mobile || undefined,
-      });
+      }) as any;
       setTxId(data.transactionId);
       setTxStatus('pending');
       if (data.instructions) {

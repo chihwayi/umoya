@@ -68,7 +68,6 @@ const interestOptions = [
   'Central storeroom & inventory management',
   'AI demand forecasting & auto-procurement',
   'FEFO expiry tracking & cold-chain management',
-  'Drug substitution AI engine',
   'QR code patient check-in',
   'Pre-visit digital intake form',
   'Discharge documents to patient app',

@@ -48,7 +48,7 @@ export default function DischargeDocumentsScreen() {
   }, []);
 
   async function openDoc(docId: string) {
-    const { data } = await api.get(`/patient/discharge-documents/${docId}/url`);
+    const { data } = await api.get(`/patient/discharge-documents/${docId}/url`) as any;
     await Linking.openURL(data.url);
   }
 

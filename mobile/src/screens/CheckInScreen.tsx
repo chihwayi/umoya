@@ -40,7 +40,7 @@ export default function CheckInScreen({ appointmentId, appointmentTime, doctorNa
   async function handleImHere() {
     setLoading(true);
     try {
-      const { data } = await api.post('/checkin/token', { appointmentId });
+      const { data } = await api.post('/checkin/token', { appointmentId }) as any;
       setToken(data.token);
       setExpiresAt(new Date(data.expiresAt));
       setSecondsLeft(600);
