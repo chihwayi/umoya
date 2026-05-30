@@ -126,7 +126,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        # Must match the production image (docker-compose postgres-master) so
+        # the pgvector "vector" extension is available for sprint114_clinical_rag.
+        image: pgvector/pgvector:pg15
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

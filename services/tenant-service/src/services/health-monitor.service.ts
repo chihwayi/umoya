@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { DatabaseProvisioningService } from './database-provisioning.service';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
 import { EmailService } from './email.service';
 
@@ -13,6 +12,9 @@ export interface HealthCheck {
   connectionTime: number;
   lastChecked: Date;
   error?: string;
+  // True when the DB is reachable but core schema is missing/incomplete.
+  // Repair via the Database Drift panel — NOT auto-reprovisioned here.
+  schemaIncomplete?: boolean;
 }
 
 @Injectable()
@@ -24,7 +26,6 @@ export class HealthMonitorService {
     @InjectRepository(Tenant)
     private tenantRepository: Repository<Tenant>,
     private emailService: EmailService,
-    private provisioning: DatabaseProvisioningService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -47,13 +48,18 @@ export class HealthMonitorService {
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         const health = result.value;
+        const previous = this.healthCache.get(health.tenantId);
         this.healthCache.set(health.tenantId, health);
-        
+
         if (health.databaseStatus === 'healthy') {
           healthyCount++;
         } else {
           unhealthyCount++;
-          this.handleUnhealthyTenant(activeTenants[index], health);
+          // Alert only on transition into an unhealthy state, not every tick —
+          // otherwise a persistently broken tenant emails the admin every 5 min.
+          if (!previous || previous.databaseStatus === 'healthy') {
+            this.handleUnhealthyTenant(activeTenants[index], health);
+          }
         }
       }
     });
@@ -84,21 +90,33 @@ export class HealthMonitorService {
       });
 
       await dataSource.initialize();
-      
-      // Ensure core tables exist
+
+      // Detect — but do NOT repair — missing core schema. Running a full
+      // re-provision (256 bundles, ~90s) inside this 5-minute cron would
+      // hammer the DB for any broken tenant. Flag it instead so an admin can
+      // repair via the Database Drift panel (drift auto-repair endpoint).
       const exists = await dataSource.query(
         `SELECT to_regclass('public.vitals') as v, to_regclass('public.orders') as o`
       );
-      if (!exists[0]?.v || !exists[0]?.o) {
-        const conn = tenant.connectionString!;
-        await this.provisioning.applyClinicSchema(conn);
-      }
+      const schemaIncomplete = !exists[0]?.v || !exists[0]?.o;
 
-      // Test query
+      // Connectivity test
       await dataSource.query('SELECT 1');
       await dataSource.destroy();
 
       const connectionTime = Date.now() - startTime;
+
+      if (schemaIncomplete) {
+        return {
+          tenantId: tenant.id,
+          tenantName: tenant.clinicName,
+          databaseStatus: 'unhealthy',
+          connectionTime,
+          lastChecked: new Date(),
+          schemaIncomplete: true,
+          error: 'Core schema incomplete (missing vitals/orders). Repair via Database Drift panel.',
+        };
+      }
 
       return {
         tenantId: tenant.id,

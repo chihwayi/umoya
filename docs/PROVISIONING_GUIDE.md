@@ -166,7 +166,10 @@ If the smoke test passes, the bundle is safe to merge.
 **Config:** `services/tenant-service/jest.smoke.config.js`
 **Script:** `npm run test:smoke` in `services/tenant-service`
 
-The normal `npm test` (unit tests) deliberately **excludes** smoke specs — they require a real PostgreSQL instance and take 30–90 seconds. The CI runs them in a separate job `tenant-provisioning-smoke` with a PostgreSQL 15 service container, gated after `build-and-test`.
+The normal `npm test` (unit tests) deliberately **excludes** smoke specs — they require a real PostgreSQL instance and take 30–90 seconds. The CI runs them in a separate job `tenant-provisioning-smoke` with a PostgreSQL service container, gated after `build-and-test`.
+
+> **The CI Postgres image MUST be `pgvector/pgvector:pg15`, not plain `postgres:15`.**
+> The `sprint114_clinical_rag` bundle runs `CREATE EXTENSION IF NOT EXISTS vector`, which only succeeds if the pgvector binaries are present in the image. This matches the production `postgres-master` image in `docker-compose.yml`. Any bundle that adds a new PostgreSQL extension must verify it exists in that image, or the smoke test (and real provisioning) will fail.
 
 To run locally with the Docker stack up:
 

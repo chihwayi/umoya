@@ -535,15 +535,19 @@ export const backupAPI = {
 
 export const healthAPI = {
   getSystemHealth: async () => {
-    const response = await api.get('/admin/system-health');
+    // Cache-backed endpoint — should respond fast; cap so a restarting
+    // backend fails cleanly instead of leaving the request hanging.
+    const response = await api.get('/admin/system-health', { timeout: 15000 });
     return response.data;
   },
   refreshSystemHealth: async () => {
-    const response = await api.post('/admin/system-health/refresh');
+    const response = await api.post('/admin/system-health/refresh', null, { timeout: 30000 });
     return response.data;
   },
   getPlatformServices: async () => {
-    const response = await api.get('/admin/platform-services');
+    // Probes Ollama/Whisper/containers server-side; allow a little longer
+    // but still bound it so the Health Monitor page never hangs forever.
+    const response = await api.get('/admin/platform-services', { timeout: 30000 });
     return response.data;
   },
   restartPlatformService: async (serviceId: string) => {
