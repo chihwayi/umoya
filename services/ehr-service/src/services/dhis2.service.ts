@@ -4148,20 +4148,4 @@ export class Dhis2Service {
     };
   }
 
-  async getPrograms(tenantId?: string) {
-    for (const row of rows) {
-      valueByDe[row[0]] = Number(row[3]);
-    }
-
-    return {
-      period: resolvedPeriod,
-      mock: false,
-      indicators: indicatorDefs.map(def => ({
-        label: def.label,
-        dataElement: def.dataElement,
-        facilityValue: valueByDe[def.dataElement] ?? null,
-        unit: def.unit,
-      })),
-    };
-  }
 }

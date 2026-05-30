@@ -225,8 +225,8 @@ Umoya implements the deepest DHIS2 integration of any open-source EHR. Every cli
 
 ### Bi-Directional Sync (Reverse Pull-Back)
 
-- `GET /dhis2/benchmarks/facility` — pull a single data element value for the facility's org unit and period from DHIS2 analytics
-- `GET /dhis2/benchmarks/doctor-dashboard` — pull 10 key performance indicators (TB cure rate, HIV VL suppression, malaria RDT positivity, ANC4 coverage, BP control, ICU mortality, HAI cases, lab TAT, cervical screening positivity, neonatal deaths) from DHIS2 analytics directly into the EHR doctor dashboard — doctors see how their facility compares to submitted data without opening DHIS2
+- `GET /dhis2/benchmarks/facility` — pull a single data element for the facility and return facility, district average, and national average values in one call
+- `GET /dhis2/benchmarks/doctor-dashboard` — pull 10 key KPIs from DHIS2 analytics into the EHR doctor dashboard showing **three columns**: facility value, district average, national average. Org unit hierarchy (district, national) is resolved automatically from DHIS2 — no manual configuration. A `trend` field per indicator (`above_district` / `below_district` / `at_par` within 5% / `no_benchmark`) drives the ▲/▼/≈ icons doctors see at a glance
 - All pull-back endpoints gracefully degrade to null values when DHIS2 is unavailable or in mock mode
 
 ### Supporting Infrastructure
@@ -238,12 +238,18 @@ Umoya implements the deepest DHIS2 integration of any open-source EHR. Every cli
 - **Scheduler** — hourly cron per tenant with configurable retry limit, error threshold alerting to Slack or PagerDuty, and manual `POST /dhis2/sync/run-now` override
 - **Mock mode** — `DHIS2_USE_MOCK=true` returns realistic mock responses so development works without a live DHIS2 instance
 
+### Validation Rules Engine
+
+- `POST /dhis2/validate` — standalone pre-submission validation against all DHIS2-defined validation rules for a dataset
+- Also runs automatically inside `sendAggregateReport` (non-blocking) — violations returned in the response with rule name, description, and the actual left/right values that failed
+- DHIS2 expression syntax (`#{UID}`) parsed and evaluated against submitted values; rules referencing absent data elements are skipped with a warning
+- Violations shown in the Aggregate Reports tab UI — green "✓ All rules passed" or yellow warning cards per rule
+
 ### Planned (Next)
 
-- DHIS2 validation rule pull — fetch DHIS2-defined validation rules (e.g. ANC4 ≤ ANC1) before submission and flag violations in the UI
-- District/national benchmark comparison — extend pull-back to fetch district and national aggregate values alongside facility values for true peer comparison
-- Automated anomaly narrative — LLM-generated plain-language commentary on aggregate report before submission ("HIV LTFU is 23% above last quarter's rate — review retention protocols")
-- Programme indicator subscription — subscribe to DHIS2 programme indicators and surface alerts back in the EHR (e.g. district VL suppression drops below 85%)
+- Automated anomaly narrative — LLM-generated plain-language commentary before submission ("HIV LTFU is 23% above last quarter — review retention protocols")
+- Programme indicator subscription — subscribe to DHIS2 programme indicators and surface alerts back in the EHR
+- DATIM MER v3 indicators
 
 ---
 
@@ -252,7 +258,7 @@ Umoya implements the deepest DHIS2 integration of any open-source EHR. Every cli
 - FHIR R4 endpoints
 - HL7 messaging
 - CCDA documents
-- **DHIS2** — 18 aggregate profiles, patient TEI tracker sync, clinical event push, and bi-directional benchmark pull-back (see full section above)
+- **DHIS2** — 18 aggregate profiles, patient TEI tracker sync (encounters, lab results, vital signs as program stage events), bi-directional benchmark pull-back with district/national peer comparison, and pre-submission validation rules engine (see full DHIS2 section above)
 - WHO SMART Guidelines and IHR international health regulations
 - SNOMED CT and ICD-10 terminology
 - SORMAS — surveillance, outbreak response, and epidemic management

@@ -79,13 +79,31 @@ export class PostVisitController {
 
     // Fire follow-up recommendation generation async — does not block the response
     if (body.patientId) {
-      this.followUpService
-        .generateRecommendation(req.tenantDb, {
-          patientId: body.patientId,
-          encounterId: body.consultationId ?? body.appointmentId ?? undefined,
-          triggeredBy: this.resolveUserId(req) ?? 'system',
-        })
-        .catch(() => { /* non-critical — nightly sweep is the safety net */ });
+      (async () => {
+        try {
+          // Fetch minimal patient context needed by the follow-up service
+          const [riskRow] = await req.tenantDb.query(
+            `SELECT latest_risk_level FROM patients WHERE id = $1 LIMIT 1`,
+            [body.patientId],
+          ).catch(() => [null]);
+          const riskBand = (['low','moderate','high','critical'] as const).find(
+            r => r === riskRow?.latest_risk_level,
+          ) ?? 'low';
+
+          await this.followUpService.generateRecommendation(req.tenantDb, {
+            patientId: Number(body.patientId) || 0,
+            encounterId: Number(body.consultationId ?? body.appointmentId) || undefined,
+            encounterType: (body as any).sourceType === 'telemedicine' ? 'telemedicine' : 'consultation',
+            riskBand,
+            diagnoses: [],
+            openCareGapsCount: 0,
+            medicationsChanged: false,
+            subdomain: req.tenantId ?? '',
+          });
+        } catch {
+          // non-critical — nightly sweep is the safety net
+        }
+      })();
     }
 
     return session;

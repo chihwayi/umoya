@@ -349,7 +349,7 @@ const standardsGrid = [
     org: 'University of Oslo',
     icon: Globe,
     color: '#0AA98A',
-    description: '18 aggregate profiles (TB, malaria, HIV, NCD, maternal, neonatal, lab, ICU, HAI, surgical, nutrition, mental health, pharmacy, cervical cancer & more). Bi-directional sync — facility benchmarks pulled from DHIS2 analytics back into the EHR so doctors see how their facility compares to district and national targets. Tracker TEI sync with real-time clinical event push for encounters, lab results, and vital signs. DATIM MER submission for PEPFAR-funded programs.',
+    description: '18 aggregate profiles (TB, malaria, HIV, NCD, maternal, neonatal, lab, ICU, HAI, surgical, nutrition, mental health, pharmacy, cervical cancer & more). Full bi-directional sync — push clinical data to DHIS2 and pull facility vs district vs national benchmarks back into the doctor dashboard with trend indicators. Tracker TEI sync with real-time event push for encounters, lab results, and vital signs. Pre-submission validation rules engine catches logical errors (e.g. ANC4 > ANC1) before data reaches DHIS2.',
   },
   {
     standard: 'LOINC',
@@ -593,6 +593,10 @@ export default function LandingPage() {
         }
         .marquee-track { animation: marquee 32s linear infinite; }
         .marquee-track:hover { animation-play-state: paused; }
+        .marquee-track-slow { animation: marquee 48s linear infinite; }
+        .marquee-track-slow:hover { animation-play-state: paused; }
+        .marquee-track-rev { animation: marquee 44s linear infinite reverse; }
+        .marquee-track-rev:hover { animation-play-state: paused; }
         .activity-item { animation: float-up 0.5s ease forwards; }
         .orb-1 { animation: orb-drift 18s ease-in-out infinite; }
         .orb-2 { animation: orb-drift 24s ease-in-out infinite reverse; }
@@ -1159,7 +1163,7 @@ export default function LandingPage() {
                     points: [
                       'Doctor dashboard pulls 10 key indicators from DHIS2 analytics — no login to DHIS2 required',
                       'TB cure rate, HIV VL suppression, malaria positivity, ANC4, BP control, ICU mortality, HAI cases, lab TAT, cervical screening, neonatal deaths',
-                      'Facility-level values compared to submitted data — coming: district/national peer comparison',
+                      'Facility vs district average vs national average — trend icon (▲ above / ▼ below / ≈ at par) on every KPI. Org unit hierarchy resolved automatically from DHIS2.',
                       'Graceful degradation to null when DHIS2 unavailable; mock mode for development',
                     ],
                   },
@@ -1184,8 +1188,6 @@ export default function LandingPage() {
                 <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.25em] text-[#4A6A90]">On the roadmap</div>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    'DHIS2 validation rule pull (pre-submission checks)',
-                    'District & national benchmark comparison',
                     'LLM-generated report narrative before DHIS2 submission',
                     'Programme indicator subscription → EHR alerts',
                     'DATIM MER v3 indicators',
@@ -1200,8 +1202,8 @@ export default function LandingPage() {
           </section>
 
           {/* ── CLINICAL MODULES ── */}
-          <section id="modules" className="mx-auto max-w-7xl px-4 py-10 sm:px-5 lg:px-8">
-            <div className="mb-8 text-center">
+          <section id="modules" className="py-10">
+            <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-8 mb-8 text-center">
               <div className="mb-3 text-xs font-bold uppercase tracking-[0.3em] text-[#5A78A0]">Clinical coverage</div>
               <h2
                 style={{ fontFamily: '"Fraunces", serif' }}
@@ -1215,21 +1217,55 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="grid gap-3 grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 lg:grid-cols-6">
-              {modules.map((mod) => {
-                const Icon = mod.icon;
-                return (
-                  <div
-                    key={mod.label}
-                    className="card-hover flex flex-col items-center gap-2 rounded-2xl border border-white/[0.07] bg-[#0A1525]/60 p-4 text-center"
-                  >
+            {/* First 3 rows — full cards */}
+            <div className="mx-auto max-w-7xl px-4 sm:px-5 lg:px-8">
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+                {modules.slice(0, 18).map((mod) => {
+                  const Icon = mod.icon;
+                  return (
                     <div
-                      className="flex h-9 w-9 items-center justify-center rounded-xl"
-                      style={{ background: `${mod.color}15`, border: `1px solid ${mod.color}30` }}
+                      key={mod.label}
+                      className="card-hover flex flex-col items-center gap-2 rounded-2xl border border-white/[0.07] bg-[#0A1525]/60 p-4 text-center"
                     >
-                      <Icon className="h-4 w-4" style={{ color: mod.color }} />
+                      <div
+                        className="flex h-9 w-9 items-center justify-center rounded-xl"
+                        style={{ background: `${mod.color}15`, border: `1px solid ${mod.color}30` }}
+                      >
+                        <Icon className="h-4 w-4" style={{ color: mod.color }} />
+                      </div>
+                      <p className="text-[11px] font-semibold leading-4 text-[#B0C8E8]">{mod.label}</p>
                     </div>
-                    <p className="text-[11px] font-semibold leading-4 text-[#B0C8E8]">{mod.label}</p>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Remaining modules — two infinite ticker rows */}
+            <div className="mt-4 space-y-2 overflow-hidden">
+              {[modules.slice(18, 42), modules.slice(42)].map((row, rowIdx) => {
+                const trackClass = rowIdx === 0 ? 'marquee-track-slow' : 'marquee-track-rev';
+                const doubled = [...row, ...row];
+                return (
+                  <div key={rowIdx} className="flex whitespace-nowrap">
+                    <div className={`${trackClass} flex gap-2 pr-2`}>
+                      {doubled.map((mod, i) => {
+                        const Icon = mod.icon;
+                        return (
+                          <div
+                            key={`${mod.label}-${i}`}
+                            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/[0.07] bg-[#0A1525]/60 px-3 py-2"
+                          >
+                            <div
+                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
+                              style={{ background: `${mod.color}15`, border: `1px solid ${mod.color}30` }}
+                            >
+                              <Icon className="h-3 w-3" style={{ color: mod.color }} />
+                            </div>
+                            <span className="text-[11px] font-semibold text-[#B0C8E8]">{mod.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
