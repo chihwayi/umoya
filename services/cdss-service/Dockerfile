@@ -45,7 +45,9 @@ RUN mkdir -p /opt/hf_cache && \
       python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" && \
     HF_HOME=/opt/hf_cache TRANSFORMERS_CACHE=/opt/hf_cache \
       python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')" && \
-    chmod -R a+rX /opt/hf_cache
+    HF_HOME=/opt/hf_cache \
+      python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')" && \
+    chown -R 1000:1000 /opt/hf_cache
 
 # Verify installation
 RUN python -c "import asyncpg, fastapi, uvicorn, pydantic, numpy, pandas, sklearn, redis, pytesseract; from pgvector.psycopg2 import register_vector; print('✅ All modules installed successfully')"

@@ -164,8 +164,8 @@ services:
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
-      - HF_HOME=/opt/hf_cache
-      - TRANSFORMERS_CACHE=/opt/hf_cache
+      - HF_HOME=/app/data/hf_cache
+      - TRANSFORMERS_CACHE=/app/data/hf_cache
       - HF_TOKEN=${HF_TOKEN}
       - CDSS_INGEST_MAX_CHUNKS_PER_FILE=400
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
@@ -240,8 +240,8 @@ services:
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
-      - HF_HOME=/opt/hf_cache
-      - TRANSFORMERS_CACHE=/opt/hf_cache
+      - HF_HOME=/app/data/hf_cache
+      - TRANSFORMERS_CACHE=/app/data/hf_cache
       - HF_TOKEN=${HF_TOKEN}
       - CDSS_INGEST_MAX_CHUNKS_PER_FILE=400
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
