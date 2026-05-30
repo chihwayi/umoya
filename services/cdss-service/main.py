@@ -2320,6 +2320,13 @@ def require_owner_scope(required_scope: str):
 
 @app.get("/admin/status")
 async def admin_status(owner: str = Depends(require_owner_scope("cdss.admin.read"))):
+    """
+    Fast, non-blocking status. Never forces full RAG initialization (which
+    loads models + builds a BM25 index over the whole corpus and would block
+    the event loop for ~60-90s). Reports document count from a cheap ChromaDB
+    read, and kicks off engine warm-up in the background so real queries are
+    ready shortly after.
+    """
     llm = {
         "enabled": os.getenv("LLM_ENABLED", "true").lower() == "true",
         "model": os.getenv("LLM_MODEL_NAME"),
@@ -2333,19 +2340,47 @@ async def admin_status(owner: str = Depends(require_owner_scope("cdss.admin.read
         except Exception:
             pass
 
-    rag_engine = _get_diagnostic_rag_engine()
+    # Use the already-initialized engine only — do NOT call
+    # _get_diagnostic_rag_engine() here (it would trigger a blocking init).
+    rag_engine = diagnostic_assistant.rag_engine if diagnostic_assistant else None
+    initializing = bool(
+        diagnostic_assistant
+        and getattr(diagnostic_assistant, "ai_enabled", False)
+        and rag_engine is None
+    )
+
+    documents = None
+    if rag_engine and rag_engine.collection:
+        try:
+            documents = rag_engine.collection.count()
+        except Exception:
+            documents = None
+    if documents is None:
+        documents = _get_chroma_guideline_doc_count()  # cheap, no model load
+
+    cache_enabled = False
+    if rag_engine and rag_engine.redis_client:
+        cache_enabled = True
+    else:
+        cache_enabled = _get_metrics_redis_client() is not None
+
+    # The engine is "enabled" if it's ready, or warming up, or there is a
+    # populated corpus on disk — without forcing a blocking init.
     rag = {
-        "enabled": rag_engine is not None,
-        "documents": None,
-        "cache_enabled": False
+        "enabled": rag_engine is not None or initializing or bool(documents),
+        "documents": documents,
+        "cache_enabled": cache_enabled,
+        "initializing": initializing,
     }
-    try:
-        if rag_engine and rag_engine.collection:
-            rag["documents"] = rag_engine.collection.count()
-        if rag_engine and rag_engine.redis_client:
-            rag["cache_enabled"] = True
-    except Exception:
-        pass
+
+    # Warm up the engine in the background (does not block this response).
+    if initializing:
+        try:
+            asyncio.get_event_loop().run_in_executor(
+                None, diagnostic_assistant.ensure_rag_engine_initialized
+            )
+        except Exception:
+            pass
 
     return {"llm": llm, "rag": rag}
 
