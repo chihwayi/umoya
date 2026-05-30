@@ -494,7 +494,7 @@ const liveActivityItems = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
   const currentYear = new Date().getFullYear();
 
   const [form, setForm] = useState({

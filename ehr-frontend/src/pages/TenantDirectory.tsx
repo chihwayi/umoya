@@ -190,7 +190,13 @@ const CDSSIngestPanel: React.FC<{
 
 const TenantDirectory: React.FC = () => {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
+
+  // CDSSIngestPanel is only for super-admins logged in to the admin portal (web-app on :3011)
+  const isSuperAdmin = (() => {
+    try { return Boolean(localStorage.getItem('auth_token')); } catch { return false; }
+  })();
+
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -316,7 +322,7 @@ const TenantDirectory: React.FC = () => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => navigate('/')}
-                  className="rounded-[20px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.12)] transition hover:scale-[1.02]"
+                  className="transition hover:opacity-80"
                   title="Back to Umoya overview"
                 >
                   <img src={logoSrc} alt="Umoya logo" className="h-8 w-auto sm:h-10" />
@@ -339,13 +345,15 @@ const TenantDirectory: React.FC = () => {
                 >
                   Request test access
                 </button>
-                <CDSSIngestPanel
-                  status={ingestStatus}
-                  progress={ingestProgress}
-                  error={ingestError}
-                  onSync={handleSync}
-                  onUpload={handleUploadGuideline}
-                />
+                {isSuperAdmin && (
+                  <CDSSIngestPanel
+                    status={ingestStatus}
+                    progress={ingestProgress}
+                    error={ingestError}
+                    onSync={handleSync}
+                    onUpload={handleUploadGuideline}
+                  />
+                )}
                 <div className="relative w-full md:max-w-md">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
                     <Search className="h-5 w-5 text-[#587296]" />
