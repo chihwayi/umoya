@@ -3,7 +3,7 @@ import { Injectable, Logger, BadRequestException, OnModuleDestroy } from '@nestj
 import { DataSource } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
-import AdmZip from 'adm-zip';
+import * as unzipper from 'unzipper';
 import * as readline from 'readline';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
@@ -302,46 +302,69 @@ export class TerminologyImportService implements OnModuleDestroy {
     }
   }
 
+  private isSnomedFileNeeded(entryName: string): boolean {
+    return (
+      /sct2_Concept_Snapshot_.*\.txt$/i.test(entryName) ||
+      /sct2_Description_Snapshot-en_.*\.txt$/i.test(entryName) ||
+      /sct2_Relationship_Snapshot_.*\.txt$/i.test(entryName) ||
+      /der2_iisssccRefset_ExtendedMapSnapshot_.*\.txt$/i.test(entryName)
+    );
+  }
+
   private async processZipFile(job: ImportStatus, zipPath: string, type: 'snomed' | 'icd10' | 'icd11') {
-    const zip = new AdmZip(zipPath);
-    const zipEntries = zip.getEntries();
     const extractPath = path.join(path.dirname(zipPath), `extract_${job.jobId}`);
-    const maxEntries = 10000;
-    
-    if (!fs.existsSync(extractPath)) {
-        fs.mkdirSync(extractPath);
-    }
+    fs.mkdirSync(extractPath, { recursive: true });
 
     try {
-        if (zipEntries.length > maxEntries) {
-          throw new Error(`Zip contains too many entries (${zipEntries.length}). Maximum allowed is ${maxEntries}.`);
-        }
-        job.message = `Extracting ${zipEntries.length} files...`;
-        const extractRoot = path.resolve(extractPath);
-        for (const entry of zipEntries) {
-          const entryName = String(entry.entryName || '').replace(/\\/g, '/');
-          if (!entryName || entryName.endsWith('/')) {
-            continue;
-          }
-          const destination = path.resolve(extractRoot, entryName);
-          if (!destination.startsWith(`${extractRoot}${path.sep}`)) {
-            throw new Error(`Unsafe zip entry path detected: ${entryName}`);
-          }
-          fs.mkdirSync(path.dirname(destination), { recursive: true });
-          fs.writeFileSync(destination, entry.getData());
-        }
+      job.message = 'Scanning ZIP entries...';
+      await this.saveJob(job);
 
-        if (type === 'snomed') {
-            await this.importSnomedFromFolder(job, extractPath);
-        } else if (type === 'icd10') {
-            await this.importIcd10FromFolder(job, extractPath);
-        } else if (type === 'icd11') {
-            await this.importIcd11FromFolder(job, extractPath);
+      const directory = await unzipper.Open.file(zipPath);
+      const extractRoot = path.resolve(extractPath);
+
+      const filesToExtract = directory.files.filter(entry => {
+        if (entry.type !== 'File') return false;
+        const entryName = entry.path.replace(/\\/g, '/');
+        if (type === 'snomed') return this.isSnomedFileNeeded(entryName);
+        return true;
+      });
+
+      if (filesToExtract.length === 0 && type === 'snomed') {
+        throw new Error(
+          'No SNOMED CT RF2 Snapshot files found in ZIP. ' +
+          'Expected sct2_Concept_Snapshot, sct2_Description_Snapshot-en, ' +
+          'sct2_Relationship_Snapshot, or der2_iisssccRefset_ExtendedMapSnapshot files.'
+        );
+      }
+
+      job.message = `Extracting ${filesToExtract.length} file(s)...`;
+      await this.saveJob(job);
+
+      for (const entry of filesToExtract) {
+        const entryName = entry.path.replace(/\\/g, '/');
+        const destination = path.resolve(extractRoot, entryName);
+        if (!destination.startsWith(extractRoot + path.sep)) {
+          throw new Error(`Unsafe zip entry path detected: ${entryName}`);
         }
+        fs.mkdirSync(path.dirname(destination), { recursive: true });
+        await new Promise<void>((resolve, reject) => {
+          entry.stream()
+            .pipe(fs.createWriteStream(destination))
+            .on('finish', resolve)
+            .on('error', reject);
+        });
+      }
+
+      if (type === 'snomed') {
+        await this.importSnomedFromFolder(job, extractPath);
+      } else if (type === 'icd10') {
+        await this.importIcd10FromFolder(job, extractPath);
+      } else if (type === 'icd11') {
+        await this.importIcd11FromFolder(job, extractPath);
+      }
 
     } finally {
-        // Cleanup extracted files
-        fs.rmSync(extractPath, { recursive: true, force: true });
+      fs.rmSync(extractPath, { recursive: true, force: true });
     }
   }
 

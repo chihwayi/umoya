@@ -13,7 +13,7 @@ interface Tenant {
 
 const TenantSelectorPage: React.FC = () => {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -76,9 +76,7 @@ const TenantSelectorPage: React.FC = () => {
           </div>
 
           <div className="mt-6 flex items-center gap-4">
-            <div className="rounded-[24px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.14)]">
-              <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto rounded-xl" />
-            </div>
+            <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto" style={{ mixBlendMode: 'screen' }} />
             <div>
               <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
               <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">

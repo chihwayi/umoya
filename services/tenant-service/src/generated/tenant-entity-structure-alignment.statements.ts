@@ -35,6 +35,7 @@ export const TENANT_ENTITY_STRUCTURE_ALIGNMENT_STATEMENTS = [
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -67,6 +68,7 @@ END $$;`,
       FOREIGN KEY (admitting_provider)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -99,6 +101,7 @@ END $$;`,
       FOREIGN KEY (initial_bed_id)
       REFERENCES beds (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -131,6 +134,7 @@ END $$;`,
       FOREIGN KEY (current_bed_id)
       REFERENCES beds (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -163,6 +167,7 @@ END $$;`,
       FOREIGN KEY (attending_provider)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -195,6 +200,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -227,6 +233,7 @@ END $$;`,
       FOREIGN KEY (recorded_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -259,6 +266,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -291,6 +299,7 @@ END $$;`,
       FOREIGN KEY (provider_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -323,6 +332,7 @@ END $$;`,
       FOREIGN KEY (surgical_case_id)
       REFERENCES surgical_cases (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -355,6 +365,7 @@ END $$;`,
       FOREIGN KEY (anesthesia_record_id)
       REFERENCES anesthesia_records (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -387,6 +398,7 @@ END $$;`,
       FOREIGN KEY (billed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -409,6 +421,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_anesthesia_record_case
       ON anesthesia_records (surgical_case_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -431,6 +444,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_anesthesia_record_patient
       ON anesthesia_records (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -453,6 +467,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_anesthesia_record_provider
       ON anesthesia_records (anesthesiologist_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -485,6 +500,7 @@ END $$;`,
       FOREIGN KEY (surgical_case_id)
       REFERENCES surgical_cases (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -517,6 +533,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -549,6 +566,7 @@ END $$;`,
       FOREIGN KEY (anesthesiologist_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -581,6 +599,7 @@ END $$;`,
       FOREIGN KEY (crna_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -603,6 +622,7 @@ END $$;`,
     CREATE UNIQUE INDEX IF NOT EXISTS uidx_anesthesia_vitals_anesthesia_record_id_chart_time
       ON anesthesia_vitals (anesthesia_record_id, chart_time);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -635,6 +655,7 @@ END $$;`,
       FOREIGN KEY (anesthesia_record_id)
       REFERENCES anesthesia_records (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -667,6 +688,7 @@ END $$;`,
       FOREIGN KEY (recorded_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -699,6 +721,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -731,6 +754,7 @@ END $$;`,
       FOREIGN KEY (reviewed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -763,6 +787,7 @@ END $$;`,
       FOREIGN KEY (prescribed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -795,6 +820,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -827,6 +853,7 @@ END $$;`,
       FOREIGN KEY (doctor_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -859,6 +886,7 @@ END $$;`,
       FOREIGN KEY (scheduled_appointment_id)
       REFERENCES appointments (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -891,6 +919,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -923,6 +952,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -955,6 +985,7 @@ END $$;`,
       FOREIGN KEY (doctor_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -987,6 +1018,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1019,6 +1051,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1051,6 +1084,7 @@ END $$;`,
       FOREIGN KEY (doctor_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1083,6 +1117,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1115,6 +1150,7 @@ END $$;`,
       FOREIGN KEY (current_patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1147,6 +1183,7 @@ END $$;`,
       FOREIGN KEY (last_cleaned_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1179,6 +1216,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1211,6 +1249,7 @@ END $$;`,
       FOREIGN KEY (appointment_id)
       REFERENCES appointments (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1243,6 +1282,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1275,6 +1315,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1307,6 +1348,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1339,6 +1381,7 @@ END $$;`,
       FOREIGN KEY (inventory_id)
       REFERENCES blood_inventory (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1371,6 +1414,7 @@ END $$;`,
       FOREIGN KEY (ordered_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1403,6 +1447,7 @@ END $$;`,
       FOREIGN KEY (consent_obtained_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1435,6 +1480,7 @@ END $$;`,
       FOREIGN KEY (administered_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1467,6 +1513,7 @@ END $$;`,
       FOREIGN KEY (monitored_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1499,6 +1546,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1531,6 +1579,7 @@ END $$;`,
       FOREIGN KEY (linked_task_id)
       REFERENCES nurse_tasks (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1563,6 +1612,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1595,6 +1645,7 @@ END $$;`,
       FOREIGN KEY (user_id)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1627,6 +1678,7 @@ END $$;`,
       FOREIGN KEY (patient_outcome_id)
       REFERENCES clinical_outcomes (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1659,6 +1711,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1691,6 +1744,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1723,6 +1777,7 @@ END $$;`,
       FOREIGN KEY (admission_id)
       REFERENCES admissions (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1755,6 +1810,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1787,6 +1843,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1819,6 +1876,7 @@ END $$;`,
       FOREIGN KEY (read_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1841,6 +1899,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_chronic_disease_registry_patient_id
       ON chronic_disease_registry (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1873,6 +1932,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1905,6 +1965,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1937,6 +1998,7 @@ END $$;`,
       FOREIGN KEY (related_appointment_id)
       REFERENCES appointments (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -1969,6 +2031,7 @@ END $$;`,
       FOREIGN KEY (related_prescription_id)
       REFERENCES prescriptions (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2001,6 +2064,7 @@ END $$;`,
       FOREIGN KEY (related_lab_order_id)
       REFERENCES lab_orders (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2033,6 +2097,7 @@ END $$;`,
       FOREIGN KEY (recorded_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2065,6 +2130,7 @@ END $$;`,
       FOREIGN KEY (last_reviewed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2097,6 +2163,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2129,6 +2196,7 @@ END $$;`,
       FOREIGN KEY (consent_id)
       REFERENCES patient_consents (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2161,6 +2229,7 @@ END $$;`,
       FOREIGN KEY (signer_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2193,6 +2262,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2225,6 +2295,7 @@ END $$;`,
       FOREIGN KEY (lab_order_id)
       REFERENCES lab_orders (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2257,6 +2328,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2289,6 +2361,7 @@ END $$;`,
       FOREIGN KEY (ordering_provider_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2321,6 +2394,7 @@ END $$;`,
       FOREIGN KEY (acknowledged_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2353,6 +2427,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2385,6 +2460,7 @@ END $$;`,
       FOREIGN KEY (assessed_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2417,6 +2493,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2449,6 +2526,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2481,6 +2559,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2513,6 +2592,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2545,6 +2625,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2577,6 +2658,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2609,6 +2691,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2641,6 +2724,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2673,6 +2757,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2705,6 +2790,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2737,6 +2823,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2769,6 +2856,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2801,6 +2889,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2833,6 +2922,7 @@ END $$;`,
       FOREIGN KEY (admission_id)
       REFERENCES admissions (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2865,6 +2955,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2897,6 +2988,7 @@ END $$;`,
       FOREIGN KEY (discharge_provider)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2929,6 +3021,7 @@ END $$;`,
       FOREIGN KEY (doctor_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2961,6 +3054,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -2993,6 +3087,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3015,6 +3110,7 @@ END $$;`,
     CREATE UNIQUE INDEX IF NOT EXISTS uidx_drug_interactions_drug1_id_drug2_id
       ON drug_interactions (drug1_id, drug2_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3047,6 +3143,7 @@ END $$;`,
       FOREIGN KEY (drug1_id)
       REFERENCES drugs (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3079,6 +3176,7 @@ END $$;`,
       FOREIGN KEY (drug2_id)
       REFERENCES drugs (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3111,6 +3209,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3143,6 +3242,7 @@ END $$;`,
       FOREIGN KEY (triage_completed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3175,6 +3275,7 @@ END $$;`,
       FOREIGN KEY (attending_provider)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3207,6 +3308,7 @@ END $$;`,
       FOREIGN KEY (primary_nurse)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3239,6 +3341,7 @@ END $$;`,
       FOREIGN KEY (appointment_id)
       REFERENCES appointments (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3271,6 +3374,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3293,6 +3397,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_exchange_rates_base_currency_quote_currency
       ON exchange_rates (base_currency, quote_currency);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3315,6 +3420,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_fee_schedule_items_fee_schedule_id
       ON fee_schedule_items (fee_schedule_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3337,6 +3443,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_fee_schedule_items_cpt_code
       ON fee_schedule_items (cpt_code);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3369,6 +3476,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3401,6 +3509,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3433,6 +3542,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3465,6 +3575,7 @@ END $$;`,
       FOREIGN KEY (measured_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3487,6 +3598,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_health_education_content_category
       ON health_education_content (category);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3509,6 +3621,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_health_education_content_language
       ON health_education_content (language);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3541,6 +3654,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3573,6 +3687,7 @@ END $$;`,
       FOREIGN KEY (administered_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3605,6 +3720,7 @@ END $$;`,
       FOREIGN KEY (ordering_provider)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3637,6 +3753,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3669,6 +3786,7 @@ END $$;`,
       FOREIGN KEY (user_id)
       REFERENCES users (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3701,6 +3819,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3733,6 +3852,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3765,6 +3885,7 @@ END $$;`,
       FOREIGN KEY (detected_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3797,6 +3918,7 @@ END $$;`,
       FOREIGN KEY (diabetes_registry_id)
       REFERENCES diabetes_registry (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3829,6 +3951,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3851,6 +3974,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_insurance_verifications_patient_id
       ON insurance_verifications (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3873,6 +3997,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_insurance_verifications_appointment_id
       ON insurance_verifications (appointment_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3905,6 +4030,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3937,6 +4063,7 @@ END $$;`,
       FOREIGN KEY (ordered_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -3969,6 +4096,7 @@ END $$;`,
       FOREIGN KEY (discontinued_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4001,6 +4129,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4033,6 +4162,7 @@ END $$;`,
       FOREIGN KEY (ordering_provider_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4065,6 +4195,7 @@ END $$;`,
       FOREIGN KEY (medical_record_id)
       REFERENCES medical_records (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4097,6 +4228,7 @@ END $$;`,
       FOREIGN KEY (collected_by_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4129,6 +4261,7 @@ END $$;`,
       FOREIGN KEY (reviewed_by_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4151,6 +4284,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medical_aid_claim_submissions_transaction_id
       ON medical_aid_claim_submissions (transaction_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4173,6 +4307,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medical_aid_claim_submissions_provider_id
       ON medical_aid_claim_submissions (provider_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4205,6 +4340,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4237,6 +4373,7 @@ END $$;`,
       FOREIGN KEY (billing_id)
       REFERENCES billing (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4259,6 +4396,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medical_aid_eligibility_checks_patient_id
       ON medical_aid_eligibility_checks (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4281,6 +4419,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medical_aid_eligibility_checks_provider_id
       ON medical_aid_eligibility_checks (provider_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4303,6 +4442,7 @@ END $$;`,
     CREATE UNIQUE INDEX IF NOT EXISTS uidx_medical_aid_providers_name
       ON medical_aid_providers (name);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4325,6 +4465,7 @@ END $$;`,
     CREATE UNIQUE INDEX IF NOT EXISTS uidx_medical_aid_providers_code
       ON medical_aid_providers (code);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4347,6 +4488,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medical_aid_remittances_provider_id
       ON medical_aid_remittances (provider_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4369,6 +4511,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medical_records_patient_id
       ON medical_records (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4391,6 +4534,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medical_records_type
       ON medical_records (record_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4423,6 +4567,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4455,6 +4600,7 @@ END $$;`,
       FOREIGN KEY (appointment_id)
       REFERENCES appointments (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4487,6 +4633,7 @@ END $$;`,
       FOREIGN KEY (doctor_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4519,6 +4666,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4541,6 +4689,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medication_adherence_medication_id
       ON medication_adherence (medication_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4563,6 +4712,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medication_adherence_patient_id
       ON medication_adherence (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4585,6 +4735,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medication_adherence_adherence_date
       ON medication_adherence (adherence_date);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4623,6 +4774,7 @@ END $$;`,
       ADD CONSTRAINT medication_adherence_medication_id_adherence_date_key
       UNIQUE (medication_id, adherence_date);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4655,6 +4807,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4687,6 +4840,7 @@ END $$;`,
       FOREIGN KEY (administered_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4719,6 +4873,7 @@ END $$;`,
       FOREIGN KEY (witnessed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4751,6 +4906,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4783,6 +4939,7 @@ END $$;`,
       FOREIGN KEY (mar_id)
       REFERENCES medication_administration_records (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4815,6 +4972,7 @@ END $$;`,
       FOREIGN KEY (acknowledged_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4837,6 +4995,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medication_reconciliation_log_patient_id
       ON medication_reconciliation_log (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4859,6 +5018,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medication_reconciliation_log_reconciliation_date
       ON medication_reconciliation_log (reconciliation_date);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4881,6 +5041,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_medication_reconciliation_log_reconciliation_type
       ON medication_reconciliation_log (reconciliation_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4913,6 +5074,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4945,6 +5107,7 @@ END $$;`,
       FOREIGN KEY (attending_clinician_id)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4967,6 +5130,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_notification_campaign_recipients_campaign_id
       ON notification_campaign_recipients (campaign_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -4989,6 +5153,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_notification_campaign_recipients_patient_id
       ON notification_campaign_recipients (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5011,6 +5176,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_notification_campaigns_status
       ON notification_campaigns (status);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5043,6 +5209,7 @@ END $$;`,
       FOREIGN KEY (user_id)
       REFERENCES users (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5075,6 +5242,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5107,6 +5275,7 @@ END $$;`,
       FOREIGN KEY (user_id)
       REFERENCES users (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5139,6 +5308,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5171,6 +5341,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5203,6 +5374,7 @@ END $$;`,
       FOREIGN KEY (destination_user_id)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5235,6 +5407,7 @@ END $$;`,
       FOREIGN KEY (acknowledged_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5267,6 +5440,7 @@ END $$;`,
       FOREIGN KEY (completed_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5299,6 +5473,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5331,6 +5506,7 @@ END $$;`,
       FOREIGN KEY (finalized_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5363,6 +5539,7 @@ END $$;`,
       FOREIGN KEY (reviewed_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5395,6 +5572,7 @@ END $$;`,
       FOREIGN KEY (shared_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5427,6 +5605,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5459,6 +5638,7 @@ END $$;`,
       FOREIGN KEY (assigned_to)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5491,6 +5671,7 @@ END $$;`,
       FOREIGN KEY (completed_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5523,6 +5704,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5555,6 +5737,7 @@ END $$;`,
       FOREIGN KEY (appointment_id)
       REFERENCES appointments (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5587,6 +5770,7 @@ END $$;`,
       FOREIGN KEY (doctor_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5619,6 +5803,7 @@ END $$;`,
       FOREIGN KEY (authorized_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5651,6 +5836,7 @@ END $$;`,
       FOREIGN KEY (executed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5683,6 +5869,7 @@ END $$;`,
       FOREIGN KEY (surgical_case_id)
       REFERENCES surgical_cases (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5715,6 +5902,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5747,6 +5935,7 @@ END $$;`,
       FOREIGN KEY (anesthesia_record_id)
       REFERENCES anesthesia_records (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5779,6 +5968,7 @@ END $$;`,
       FOREIGN KEY (pacu_nurse_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5811,6 +6001,7 @@ END $$;`,
       FOREIGN KEY (discharge_approved_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5843,6 +6034,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5875,6 +6067,7 @@ END $$;`,
       FOREIGN KEY (ordering_provider)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5907,6 +6100,7 @@ END $$;`,
       FOREIGN KEY (captured_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5939,6 +6133,7 @@ END $$;`,
       FOREIGN KEY (reviewed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -5971,6 +6166,7 @@ END $$;`,
       FOREIGN KEY (approved_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6003,6 +6199,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6035,6 +6232,7 @@ END $$;`,
       FOREIGN KEY (template_id)
       REFERENCES consent_templates (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6067,6 +6265,7 @@ END $$;`,
       FOREIGN KEY (presented_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6099,6 +6298,7 @@ END $$;`,
       FOREIGN KEY (revoked_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6131,6 +6331,7 @@ END $$;`,
       FOREIGN KEY (superseded_by)
       REFERENCES patient_consents (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6153,6 +6354,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_early_warning_scores_patient_id
       ON patient_early_warning_scores (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6175,6 +6377,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_early_warning_scores_risk_level
       ON patient_early_warning_scores (risk_level);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6197,6 +6400,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_family_access_patient_id
       ON patient_family_access (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6219,6 +6423,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_medications_patient_id
       ON patient_medications (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6241,6 +6446,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_medications_snomed_concept_id
       ON patient_medications (snomed_concept_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6263,6 +6469,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_medications_medication_type
       ON patient_medications (medication_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6285,6 +6492,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_medications_start_date
       ON patient_medications (start_date);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6307,6 +6515,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_medications_end_date
       ON patient_medications (end_date);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6329,6 +6538,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_medications_prescription_id
       ON patient_medications (prescription_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6351,6 +6561,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_medications_status
       ON patient_medications (status);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6373,6 +6584,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_medications_reconciliation_status
       ON patient_medications (reconciliation_status);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6395,6 +6607,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_portal_payments_patient_id
       ON patient_portal_payments (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6417,6 +6630,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_patient_portal_payments_bill_id
       ON patient_portal_payments (bill_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6449,6 +6663,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6481,6 +6696,7 @@ END $$;`,
       FOREIGN KEY (admission_id)
       REFERENCES admissions (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6513,6 +6729,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6545,6 +6762,7 @@ END $$;`,
       FOREIGN KEY (from_bed_id)
       REFERENCES beds (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6577,6 +6795,7 @@ END $$;`,
       FOREIGN KEY (to_bed_id)
       REFERENCES beds (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6609,6 +6828,7 @@ END $$;`,
       FOREIGN KEY (accepting_provider)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6641,6 +6861,7 @@ END $$;`,
       FOREIGN KEY (transferring_provider)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6663,6 +6884,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_payment_gateway_configurations_provider_type
       ON payment_gateway_configurations (provider_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6685,6 +6907,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_payment_gateway_configurations_is_active
       ON payment_gateway_configurations (is_active);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6717,6 +6940,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6749,6 +6973,7 @@ END $$;`,
       FOREIGN KEY (inventory_id)
       REFERENCES pharmacy_inventory (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6781,6 +7006,7 @@ END $$;`,
       FOREIGN KEY (acknowledged_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6813,6 +7039,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6845,6 +7072,7 @@ END $$;`,
       FOREIGN KEY (dispensing_id)
       REFERENCES pharmacy_dispensings (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6877,6 +7105,7 @@ END $$;`,
       FOREIGN KEY (inventory_id)
       REFERENCES pharmacy_inventory (id) ON DELETE RESTRICT;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6909,6 +7138,7 @@ END $$;`,
       FOREIGN KEY (prescription_id)
       REFERENCES prescriptions (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6941,6 +7171,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -6973,6 +7204,7 @@ END $$;`,
       FOREIGN KEY (dispensed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7005,6 +7237,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7037,6 +7270,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7069,6 +7303,7 @@ END $$;`,
       FOREIGN KEY (drug_id)
       REFERENCES drugs (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7101,6 +7336,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7133,6 +7369,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7165,6 +7402,7 @@ END $$;`,
       FOREIGN KEY (drug_id)
       REFERENCES drugs (id) ON DELETE RESTRICT;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7197,6 +7435,7 @@ END $$;`,
       FOREIGN KEY (supplier_id)
       REFERENCES pharmacy_suppliers (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7229,6 +7468,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7261,6 +7501,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7293,6 +7534,7 @@ END $$;`,
       FOREIGN KEY (drug_id)
       REFERENCES drugs (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7325,6 +7567,7 @@ END $$;`,
       FOREIGN KEY (supplier_id)
       REFERENCES pharmacy_suppliers (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7357,6 +7600,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7389,6 +7633,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7421,6 +7666,7 @@ END $$;`,
       FOREIGN KEY (purchase_order_id)
       REFERENCES pharmacy_purchase_orders (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7453,6 +7699,7 @@ END $$;`,
       FOREIGN KEY (drug_id)
       REFERENCES drugs (id) ON DELETE RESTRICT;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7485,6 +7732,7 @@ END $$;`,
       FOREIGN KEY (supplier_id)
       REFERENCES pharmacy_suppliers (id) ON DELETE RESTRICT;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7517,6 +7765,7 @@ END $$;`,
       FOREIGN KEY (approved_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7549,6 +7798,7 @@ END $$;`,
       FOREIGN KEY (ordered_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7581,6 +7831,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7613,6 +7864,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7645,6 +7897,7 @@ END $$;`,
       FOREIGN KEY (receipt_id)
       REFERENCES pharmacy_receipts (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7677,6 +7930,7 @@ END $$;`,
       FOREIGN KEY (purchase_order_item_id)
       REFERENCES pharmacy_purchase_order_items (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7709,6 +7963,7 @@ END $$;`,
       FOREIGN KEY (drug_id)
       REFERENCES drugs (id) ON DELETE RESTRICT;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7741,6 +7996,7 @@ END $$;`,
       FOREIGN KEY (purchase_order_id)
       REFERENCES pharmacy_purchase_orders (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7773,6 +8029,7 @@ END $$;`,
       FOREIGN KEY (supplier_id)
       REFERENCES pharmacy_suppliers (id) ON DELETE RESTRICT;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7805,6 +8062,7 @@ END $$;`,
       FOREIGN KEY (received_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7837,6 +8095,7 @@ END $$;`,
       FOREIGN KEY (verified_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7869,6 +8128,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7901,6 +8161,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7933,6 +8194,7 @@ END $$;`,
       FOREIGN KEY (return_id)
       REFERENCES pharmacy_returns (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7965,6 +8227,7 @@ END $$;`,
       FOREIGN KEY (dispensing_item_id)
       REFERENCES pharmacy_dispensing_items (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -7997,6 +8260,7 @@ END $$;`,
       FOREIGN KEY (inventory_id)
       REFERENCES pharmacy_inventory (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8029,6 +8293,7 @@ END $$;`,
       FOREIGN KEY (dispensing_id)
       REFERENCES pharmacy_dispensings (id) ON DELETE RESTRICT;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8061,6 +8326,7 @@ END $$;`,
       FOREIGN KEY (returned_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8093,6 +8359,7 @@ END $$;`,
       FOREIGN KEY (approved_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8125,6 +8392,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8157,6 +8425,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8189,6 +8458,7 @@ END $$;`,
       FOREIGN KEY (adjustment_id)
       REFERENCES pharmacy_stock_adjustments (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8221,6 +8491,7 @@ END $$;`,
       FOREIGN KEY (inventory_id)
       REFERENCES pharmacy_inventory (id) ON DELETE RESTRICT;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8253,6 +8524,7 @@ END $$;`,
       FOREIGN KEY (approved_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8285,6 +8557,7 @@ END $$;`,
       FOREIGN KEY (performed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8317,6 +8590,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8349,6 +8623,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8381,6 +8656,7 @@ END $$;`,
       FOREIGN KEY (inventory_id)
       REFERENCES pharmacy_inventory (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8413,6 +8689,7 @@ END $$;`,
       FOREIGN KEY (performed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8445,6 +8722,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8477,6 +8755,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8499,6 +8778,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_action_executions_session_id
       ON post_visit_action_executions (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8521,6 +8801,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_action_executions_recommendation_id
       ON post_visit_action_executions (recommendation_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8543,6 +8824,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_companion_acknowledgements_session_id
       ON post_visit_companion_acknowledgements (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8565,6 +8847,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_companion_acknowledgements_patient_id
       ON post_visit_companion_acknowledgements (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8587,6 +8870,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_thread_id
       ON post_visit_companion_messages (thread_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8609,6 +8893,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_session_id
       ON post_visit_companion_messages (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8631,6 +8916,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_patient_id
       ON post_visit_companion_messages (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8653,6 +8939,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_companion_threads_session_id
       ON post_visit_companion_threads (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8675,6 +8962,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_companion_threads_patient_id
       ON post_visit_companion_threads (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8697,6 +8985,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_draft_artifacts_session_id
       ON post_visit_draft_artifacts (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8719,6 +9008,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_draft_artifacts_artifact_type
       ON post_visit_draft_artifacts (artifact_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8741,6 +9031,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_session_id
       ON post_visit_escalation_events (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8763,6 +9054,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_patient_id
       ON post_visit_escalation_events (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8785,6 +9077,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_status
       ON post_visit_escalation_events (status);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8807,6 +9100,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_severity
       ON post_visit_escalation_events (severity);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8829,6 +9123,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_route_target
       ON post_visit_escalation_events (route_target);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8851,6 +9146,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_extracted_entities_session_id
       ON post_visit_extracted_entities (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8873,6 +9169,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_extracted_entities_entity_type
       ON post_visit_extracted_entities (entity_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8895,6 +9192,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_review_actions_session_id
       ON post_visit_review_actions (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8917,6 +9215,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_review_actions_artifact_type
       ON post_visit_review_actions (artifact_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8939,6 +9238,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_session_id
       ON post_visit_rule_citations (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8961,6 +9261,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_rule_id
       ON post_visit_rule_citations (rule_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -8983,6 +9284,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_guideline_id
       ON post_visit_rule_citations (guideline_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9005,6 +9307,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_tenant_id
       ON post_visit_sessions (tenant_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9027,6 +9330,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_patient_id
       ON post_visit_sessions (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9049,6 +9353,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_doctor_id
       ON post_visit_sessions (doctor_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9071,6 +9376,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_status
       ON post_visit_sessions (status);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9093,6 +9399,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_post_visit_transcript_segments_session_id
       ON post_visit_transcript_segments (session_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9125,6 +9432,7 @@ END $$;`,
       FOREIGN KEY (surgical_case_id)
       REFERENCES surgical_cases (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9157,6 +9465,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9189,6 +9498,7 @@ END $$;`,
       FOREIGN KEY (consent_obtained_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9221,6 +9531,7 @@ END $$;`,
       FOREIGN KEY (assessed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9253,6 +9564,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9285,6 +9597,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9317,6 +9630,7 @@ END $$;`,
       FOREIGN KEY (doctor_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9349,6 +9663,7 @@ END $$;`,
       FOREIGN KEY (medical_record_id)
       REFERENCES medical_records (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9371,6 +9686,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_preventive_care_reminders_patient_id
       ON preventive_care_reminders (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9393,6 +9709,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_prior_authorizations_patient_id
       ON prior_authorizations (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9415,6 +9732,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_prior_authorizations_status
       ON prior_authorizations (status);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9447,6 +9765,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9479,6 +9798,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9511,6 +9831,7 @@ END $$;`,
       FOREIGN KEY (uploaded_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9533,6 +9854,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_report_executions_template_id
       ON report_executions (report_template_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9555,6 +9877,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_report_executions_scheduled_id
       ON report_executions (scheduled_report_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9577,6 +9900,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_report_executions_executed_by
       ON report_executions (executed_by);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9599,6 +9923,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_report_executions_execution_time
       ON report_executions (execution_time);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9621,6 +9946,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_report_executions_status
       ON report_executions (status);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9653,6 +9979,7 @@ END $$;`,
       FOREIGN KEY (report_template_id)
       REFERENCES report_templates (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9685,6 +10012,7 @@ END $$;`,
       FOREIGN KEY (scheduled_report_id)
       REFERENCES scheduled_reports (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9717,6 +10045,7 @@ END $$;`,
       FOREIGN KEY (executed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9755,6 +10084,7 @@ END $$;`,
       ADD CONSTRAINT uq_report_favorites_user_id_report_template_id
       UNIQUE (user_id, report_template_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9787,6 +10117,7 @@ END $$;`,
       FOREIGN KEY (user_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9819,6 +10150,7 @@ END $$;`,
       FOREIGN KEY (report_template_id)
       REFERENCES report_templates (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9841,6 +10173,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_report_templates_report_type
       ON report_templates (report_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9863,6 +10196,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_report_templates_category
       ON report_templates (category);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9885,6 +10219,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_report_templates_created_by
       ON report_templates (created_by);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9917,6 +10252,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9939,6 +10275,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_scheduled_reports_template_id
       ON scheduled_reports (template_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9961,6 +10298,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_scheduled_reports_is_active
       ON scheduled_reports (is_active);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -9983,6 +10321,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_scheduled_reports_next_run
       ON scheduled_reports (next_run);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10015,6 +10354,7 @@ END $$;`,
       FOREIGN KEY (template_id)
       REFERENCES report_templates (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10047,6 +10387,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10079,6 +10420,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10111,6 +10453,7 @@ END $$;`,
       FOREIGN KEY (assessed_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10133,6 +10476,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_sms_gateway_configurations_provider_type
       ON sms_gateway_configurations (provider_type);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10155,6 +10499,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_sms_gateway_configurations_is_active
       ON sms_gateway_configurations (is_active);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10177,6 +10522,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_superbill_templates_created_by
       ON superbill_templates (created_by);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10209,6 +10555,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10241,6 +10588,7 @@ END $$;`,
       FOREIGN KEY (admission_id)
       REFERENCES admissions (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10273,6 +10621,7 @@ END $$;`,
       FOREIGN KEY (operating_room_id)
       REFERENCES operating_rooms (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10305,6 +10654,7 @@ END $$;`,
       FOREIGN KEY (primary_surgeon_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10337,6 +10687,7 @@ END $$;`,
       FOREIGN KEY (assistant_surgeon_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10369,6 +10720,7 @@ END $$;`,
       FOREIGN KEY (anesthesiologist_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10401,6 +10753,7 @@ END $$;`,
       FOREIGN KEY (consent_id)
       REFERENCES patient_consents (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10433,6 +10786,7 @@ END $$;`,
       FOREIGN KEY (surgical_case_id)
       REFERENCES surgical_cases (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10465,6 +10819,7 @@ END $$;`,
       FOREIGN KEY (implanted_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10497,6 +10852,7 @@ END $$;`,
       FOREIGN KEY (surgeon_id)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10529,6 +10885,7 @@ END $$;`,
       FOREIGN KEY (tb_patient_id)
       REFERENCES tb_patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10561,6 +10918,7 @@ END $$;`,
       FOREIGN KEY (contact_patient_id)
       REFERENCES patients (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10593,6 +10951,7 @@ END $$;`,
       FOREIGN KEY (tb_patient_id)
       REFERENCES tb_patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10625,6 +10984,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10657,6 +11017,7 @@ END $$;`,
       FOREIGN KEY (reported_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10689,6 +11050,7 @@ END $$;`,
       FOREIGN KEY (tb_patient_id)
       REFERENCES tb_patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10721,6 +11083,7 @@ END $$;`,
       FOREIGN KEY (episode_id)
       REFERENCES tb_treatment_episodes (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10753,6 +11116,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10785,6 +11149,7 @@ END $$;`,
       FOREIGN KEY (dot_worker_id)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10817,6 +11182,7 @@ END $$;`,
       FOREIGN KEY (tb_patient_id)
       REFERENCES tb_patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10849,6 +11215,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10881,6 +11248,7 @@ END $$;`,
       FOREIGN KEY (tb_patient_id)
       REFERENCES tb_patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10913,6 +11281,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10945,6 +11314,7 @@ END $$;`,
       FOREIGN KEY (episode_id)
       REFERENCES tb_treatment_episodes (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -10977,6 +11347,7 @@ END $$;`,
       FOREIGN KEY (recorded_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11009,6 +11380,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11041,6 +11413,7 @@ END $$;`,
       FOREIGN KEY (case_officer_id)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11073,6 +11446,7 @@ END $$;`,
       FOREIGN KEY (tb_patient_id)
       REFERENCES tb_patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11105,6 +11479,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11137,6 +11512,7 @@ END $$;`,
       FOREIGN KEY (prescribed_by)
       REFERENCES users (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11169,6 +11545,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11201,6 +11578,7 @@ END $$;`,
       FOREIGN KEY (witnessed_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11233,6 +11611,7 @@ END $$;`,
       FOREIGN KEY (appointment_id)
       REFERENCES appointments (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11265,6 +11644,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11297,6 +11677,7 @@ END $$;`,
       FOREIGN KEY (doctor_id)
       REFERENCES users (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11329,6 +11710,7 @@ END $$;`,
       FOREIGN KEY (created_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11361,6 +11743,7 @@ END $$;`,
       FOREIGN KEY (updated_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11393,6 +11776,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11425,6 +11809,7 @@ END $$;`,
       FOREIGN KEY (consultation_id)
       REFERENCES telemedicine_consultations (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11457,6 +11842,7 @@ END $$;`,
       FOREIGN KEY (prescription_id)
       REFERENCES prescriptions (id) ON DELETE SET NULL;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11489,6 +11875,7 @@ END $$;`,
       FOREIGN KEY (consultation_id)
       REFERENCES telemedicine_consultations (id) ON DELETE CASCADE;
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11521,6 +11908,7 @@ END $$;`,
       FOREIGN KEY (resolved_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11543,6 +11931,7 @@ END $$;`,
     CREATE UNIQUE INDEX IF NOT EXISTS uidx_travel_vaccine_destinations_iso_code
       ON travel_vaccine_destinations (iso_code);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11565,6 +11954,7 @@ END $$;`,
     CREATE INDEX IF NOT EXISTS idx_vaccination_certificates_patient_id
       ON vaccination_certificates (patient_id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11587,6 +11977,7 @@ END $$;`,
     CREATE UNIQUE INDEX IF NOT EXISTS uidx_vaccination_certificates_certificate_number
       ON vaccination_certificates (certificate_number);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11619,6 +12010,7 @@ END $$;`,
       FOREIGN KEY (patient_id)
       REFERENCES patients (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
   `DO $$ BEGIN
   IF NOT EXISTS (
@@ -11651,5 +12043,6 @@ END $$;`,
       FOREIGN KEY (recorded_by)
       REFERENCES users (id);
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`,
 ];

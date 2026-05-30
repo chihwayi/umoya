@@ -156,7 +156,6 @@ END
 $$;`,
   `UPDATE medical_records
     SET doctor_id = COALESCE(doctor_id, created_by),
-        record_type = COALESCE(record_type, type),
         visit_date = COALESCE(visit_date, created_at),
         chief_complaint = COALESCE(chief_complaint, title),
         history_present_illness = COALESCE(history_present_illness, content),

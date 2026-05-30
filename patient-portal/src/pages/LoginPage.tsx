@@ -4,7 +4,7 @@ import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { LogIn, Mail, Lock, AlertCircle, Eye, EyeOff, Shield, Sparkles, Smartphone, HeartPulse } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { login } = usePatientAuth();
@@ -51,9 +51,7 @@ const LoginPage: React.FC = () => {
           </div>
 
           <div className="mt-6 flex items-center gap-4">
-            <div className="rounded-[24px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(0,200,150,0.14)]">
-              <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto rounded-xl" />
-            </div>
+            <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto" style={{ mixBlendMode: 'screen' }} />
             <div>
               <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
               <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">

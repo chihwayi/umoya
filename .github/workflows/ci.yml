@@ -119,6 +119,52 @@ jobs:
         to: ${{ env.NOTIFICATION_EMAIL }}
         from: GitHub Actions <${{ env.SMTP_USERNAME }}>
 
+  tenant-provisioning-smoke:
+    name: Tenant Provisioning Smoke Test
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SMOKE_DB_HOST: localhost
+      SMOKE_DB_PORT: 5432
+      SMOKE_DB_USER: postgres
+      SMOKE_DB_PASSWORD: postgres
+      SMOKE_DB_NAME: postgres
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+
+    - name: Install Dependencies
+      working-directory: services/tenant-service
+      run: npm install
+
+    - name: Build Shared Config
+      run: npm run build -w @umoya/config
+
+    - name: Run Provisioning Smoke Test
+      working-directory: services/tenant-service
+      run: npm run test:smoke
+
   mobile-quality-gates:
     name: Mobile Quality Gates
     runs-on: ubuntu-latest

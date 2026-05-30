@@ -136,19 +136,50 @@ class RAGEngine:
         return (safe[:120] if safe else "public")
 
     def _build_bm25_index(self):
-        """Builds in-memory BM25 index from ChromaDB documents."""
+        """Builds in-memory BM25 index from ChromaDB documents.
+        Capped at BM25_MAX_DOCS to prevent OOM on large corpora."""
         try:
             from rank_bm25 import BM25Okapi
-            
+
             if not self.collection:
                 return
 
-            # Fetch all documents
-            # Note: For large datasets, this should be paginated or cached
-            all_docs = self.collection.get()
-            texts = all_docs['documents']
-            metadatas = all_docs['metadatas']
-            
+            total = self.collection.count()
+            if total == 0:
+                logger.info("No documents in ChromaDB. BM25 index is empty.")
+                return
+
+            # Guard: skip BM25 for very large corpora to avoid OOM
+            BM25_MAX_DOCS = int(os.getenv("RAG_BM25_MAX_DOCS", "50000"))
+            if total > BM25_MAX_DOCS:
+                logger.warning(
+                    f"Corpus has {total} chunks (>{BM25_MAX_DOCS}). "
+                    f"BM25 index skipped to avoid OOM. Set RAG_BM25_MAX_DOCS to raise the cap."
+                )
+                self.bm25 = None
+                return
+
+            # Page through documents — ChromaDB .get() without a limit fails on
+            # large collections with 'too many SQL variables'.
+            texts: List[str] = []
+            metadatas: List[Dict[str, Any]] = []
+            page_size = 5000
+            offset = 0
+            while True:
+                batch = self.collection.get(
+                    include=["documents", "metadatas"],
+                    limit=page_size,
+                    offset=offset,
+                )
+                batch_docs = batch.get('documents') or []
+                if not batch_docs:
+                    break
+                texts.extend(batch_docs)
+                metadatas.extend(batch.get('metadatas') or [])
+                if len(batch_docs) < page_size:
+                    break
+                offset += page_size
+
             if not texts:
                 logger.info("No documents found in ChromaDB. BM25 index is empty.")
                 return
@@ -156,10 +187,10 @@ class RAGEngine:
             self.bm25_docs = texts
             self.bm25_metadatas = metadatas
             self.bm25_corpus = [self._tokenize(doc) for doc in texts]
-            
+
             self.bm25 = BM25Okapi(self.bm25_corpus)
             logger.info(f"BM25 index built with {len(texts)} documents.")
-            
+
         except Exception as e:
             logger.warning(f"Failed to build BM25 index: {e}")
             self.bm25 = None

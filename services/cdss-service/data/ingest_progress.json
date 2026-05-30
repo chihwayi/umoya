@@ -1,0 +1,13 @@
+{
+  "job_id": null,
+  "status": "completed",
+  "total_files": 282,
+  "processed_files": 282,
+  "skipped_files": 9,
+  "total_chunks": 42004,
+  "new_chunks": 42004,
+  "collection_count": 39693,
+  "current_file": null,
+  "started_at": 1780147903.1261265,
+  "elapsed_seconds": 2842.4
+}

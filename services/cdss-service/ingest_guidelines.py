@@ -5,7 +5,9 @@ import logging
 import hashlib
 import json
 import time
+import threading
 import nltk
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional
 
 # Ensure NLTK data is available for unstructured
@@ -164,8 +166,50 @@ def _sha256_file(file_path: str) -> str:
 # Domain classifier
 # ---------------------------------------------------------------------------
 
+# WHO guideline PDFs are organised in domain folders — the folder name is a far
+# more reliable domain signal than per-chunk keyword matching. Map folder → domain.
+_FOLDER_DOMAIN_MAP = {
+    "cardiology": "cardiology",
+    "dermatology": "dermatology",
+    "emergency": "emergency",
+    "endocrinology": "endocrinology",
+    "infectious-disease": "infectious_disease",
+    "infectious_disease": "infectious_disease",
+    "mental-health": "mental_health",
+    "mental_health": "mental_health",
+    "nephrology": "nephrology",
+    "neurology": "neurology",
+    "nutrition": "nutrition",
+    "obstetrics": "obstetrics",
+    "oncology": "oncology",
+    "ophthalmology": "ophthalmology",
+    "pediatrics": "pediatrics",
+    "paediatrics": "pediatrics",
+    "reproductive-health": "reproductive_health",
+    "reproductive_health": "reproductive_health",
+    "respiratory": "respiratory",
+    "surgery": "surgery",
+}
+# Folders that are NOT domain-specific — fall back to keyword classification.
+_GENERIC_FOLDERS = {"general", "dak", "who-smart-guidelines", ""}
+
+
+def _domain_from_path(file_path: str) -> Optional[str]:
+    """Return the clinical domain implied by the parent folder, or None if generic."""
+    parts = os.path.normpath(file_path).split(os.sep)
+    # Walk parent folders from nearest to furthest; first domain match wins
+    for part in reversed(parts[:-1]):
+        key = part.strip().lower()
+        if key in _GENERIC_FOLDERS:
+            continue
+        mapped = _FOLDER_DOMAIN_MAP.get(key)
+        if mapped:
+            return mapped
+    return None
+
+
 def _classify_domain(lower_file: str, lower_text: str) -> str:
-    """Classify clinical domain from filename and text keywords."""
+    """Classify clinical domain from filename and text keywords (keyword fallback)."""
     combined = lower_file + " " + lower_text[:500]
 
     if any(k in combined for k in ["hiv", "aids", "antiretroviral", "art ", "tuberculosis", " tb ", "malaria", "cholera",
@@ -255,6 +299,9 @@ def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
             extract_images_in_pdf=False
         )
 
+        # Folder-based domain is authoritative for the whole document
+        folder_domain = _domain_from_path(pdf_path)
+
         processed_chunks = []
         for element in elements:
             text = str(element).strip()
@@ -276,7 +323,8 @@ def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
             elif "elderly" in lower_text or "geriatric" in lower_text:
                 target_pop = "elderly"
 
-            domain = _classify_domain(lower_file, lower_text)
+            # Folder domain wins; keyword classification only for generic folders
+            domain = folder_domain or _classify_domain(lower_file, lower_text)
 
             processed_chunks.append({
                 "text": text,
@@ -312,6 +360,8 @@ def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
 
         processed_chunks = []
         filename = os.path.basename(pdf_path)
+        # Folder-based domain is authoritative for the whole document
+        folder_domain = _domain_from_path(pdf_path)
 
         for page_num, page in enumerate(reader.pages):
             text = page.extract_text()
@@ -332,7 +382,8 @@ def process_pdf_fallback(pdf_path: str) -> List[Dict[str, Any]]:
                 elif "elderly" in lower_text or "geriatric" in lower_text:
                     target_pop = "elderly"
 
-                domain = _classify_domain(lower_file, lower_text)
+                # Folder domain wins; keyword classification only for generic folders
+                domain = folder_domain or _classify_domain(lower_file, lower_text)
 
                 processed_chunks.append({
                     "text": chunk,
@@ -427,106 +478,122 @@ def ingest_guidelines(rag: Optional[RAGEngine] = None, job_id: Optional[str] = N
         "elapsed_seconds": 0,
     })
 
-    for file_index, file_path in enumerate(files):
+    # Determine worker count — parallel PDF text extraction speeds things up
+    # dramatically (282 PDFs @ 405 MB went from 4 days → hours)
+    workers_raw = os.getenv("CDSS_INGEST_WORKERS", "4").strip()
+    num_workers = max(1, min(int(workers_raw) if workers_raw.isdigit() else 4, 16))
+
+    # Extractor strategy:
+    #   "quality" (default) → unstructured title-based chunking (better RAG, slower)
+    #   "fast"              → pure pypdf text split (much faster, lower chunk quality)
+    extractor_mode = os.getenv("CDSS_INGEST_EXTRACTOR", "quality").strip().lower()
+    _extract_fn = process_pdf_fallback if extractor_mode == "fast" else process_pdf
+    print(f"⚡ Parallel PDF extraction: {num_workers} workers · mode={extractor_mode}")
+
+    max_chunks_raw = os.getenv("CDSS_INGEST_MAX_CHUNKS_PER_FILE", "0").strip()
+    max_chunks_per_file = int(max_chunks_raw) if max_chunks_raw.isdigit() else 0
+
+    # --- Step 1: filter files that need processing (hash check, size check) ---
+    to_process: List[Dict[str, Any]] = []
+    for file_path in files:
         filename = os.path.basename(file_path)
         file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
 
-        # Update live progress before processing
+        if max_file_bytes > 0 and file_size > max_file_bytes:
+            processed_files.append({"fileName": filename, "filePath": file_path,
+                "sizeBytes": file_size, "sha256": None, "chunkCount": 0, "pageCount": 0,
+                "status": "skipped_too_large"})
+            skipped_files += 1
+            continue
+
+        file_sha256 = _sha256_file(file_path) if os.path.exists(file_path) else None
+        if file_sha256 and manifest.get(filename) == file_sha256:
+            processed_files.append({"fileName": filename, "filePath": file_path,
+                "sizeBytes": file_size, "sha256": file_sha256, "chunkCount": 0, "pageCount": 0,
+                "status": "skipped_already_ingested"})
+            skipped_files += 1
+            continue
+
+        to_process.append({"file_path": file_path, "filename": filename,
+                            "file_size": file_size, "file_sha256": file_sha256})
+
+    print(f"📋 {len(to_process)} files need processing, {skipped_files} already done.")
+
+    # --- Step 2: extract text in parallel (CPU-bound, no ChromaDB writes here) ---
+    _progress_lock = threading.Lock()
+    _files_done = [0]
+
+    def _extract_one(item: Dict[str, Any]) -> Dict[str, Any]:
+        chunks = _extract_fn(item["file_path"])
+        if max_chunks_per_file > 0 and len(chunks) > max_chunks_per_file:
+            chunks = chunks[:max_chunks_per_file]
+        with _progress_lock:
+            _files_done[0] += 1
+            done = _files_done[0]
         _write_progress({
             "job_id": job_id,
             "status": "running",
             "total_files": total_files,
-            "processed_files": file_index,
+            "processed_files": done + skipped_files,
             "skipped_files": skipped_files,
             "total_chunks": total_chunks,
-            "current_file": filename,
+            "current_file": item["filename"],
             "started_at": start_time,
             "elapsed_seconds": round(time.time() - start_time, 1),
         })
+        print(f"   📄 [{done}/{len(to_process)}] {item['filename']} — {len(chunks)} chunks extracted")
+        return {**item, "chunks": chunks}
 
-        print(f"📄 [{file_index + 1}/{total_files}] {filename} ({file_size // 1024}KB)...")
+    extracted: List[Dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=num_workers) as pool:
+        futures = {pool.submit(_extract_one, item): item for item in to_process}
+        for future in as_completed(futures):
+            try:
+                extracted.append(future.result())
+            except Exception as exc:
+                item = futures[future]
+                logger.error(f"Extraction failed for {item['filename']}: {exc}")
+                processed_files.append({"fileName": item["filename"], "filePath": item["file_path"],
+                    "sizeBytes": item["file_size"], "sha256": item["file_sha256"],
+                    "chunkCount": 0, "pageCount": 0, "status": "failed"})
 
-        if max_file_bytes > 0 and file_size > max_file_bytes:
-            print(f"   ⏭️ Skipping — file exceeds size limit ({file_size} > {max_file_bytes} bytes).")
-            processed_files.append({
-                "fileName": filename,
-                "filePath": file_path,
-                "sizeBytes": file_size,
-                "sha256": None,
-                "chunkCount": 0,
-                "pageCount": 0,
-                "status": "skipped_too_large",
-            })
-            skipped_files += 1
-            continue
-
-        # SHA256 skip: if hash matches the stored manifest this file is already ingested
-        file_sha256 = _sha256_file(file_path) if os.path.exists(file_path) else None
-        if file_sha256 and manifest.get(filename) == file_sha256:
-            print(f"   ✅ Already ingested (SHA256 match) — skipping.")
-            processed_files.append({
-                "fileName": filename,
-                "filePath": file_path,
-                "sizeBytes": file_size,
-                "sha256": file_sha256,
-                "chunkCount": 0,
-                "pageCount": 0,
-                "status": "skipped_already_ingested",
-            })
-            skipped_files += 1
-            continue
-
-        chunks = process_pdf_fallback(file_path)
+    # --- Step 3: embed and upsert into ChromaDB sequentially (ChromaDB is not thread-safe) ---
+    print(f"\n🔗 Embedding and upserting {len(extracted)} files into ChromaDB...")
+    for item in extracted:
+        chunks = item.get("chunks", [])
+        filename = item["filename"]
+        file_path = item["file_path"]
+        file_size = item["file_size"]
+        file_sha256 = item["file_sha256"]
 
         if not chunks:
-            print("   ⚠️ No chunks extracted.")
-            processed_files.append({
-                "fileName": filename,
-                "filePath": file_path,
-                "sizeBytes": file_size,
-                "sha256": file_sha256,
-                "chunkCount": 0,
-                "pageCount": 0,
-                "status": "skipped_no_chunks",
-            })
+            print(f"   ⚠️ {filename}: no chunks extracted.")
+            processed_files.append({"fileName": filename, "filePath": file_path,
+                "sizeBytes": file_size, "sha256": file_sha256,
+                "chunkCount": 0, "pageCount": 0, "status": "skipped_no_chunks"})
             continue
-
-        max_chunks_raw = os.getenv("CDSS_INGEST_MAX_CHUNKS_PER_FILE", "0").strip()
-        max_chunks = int(max_chunks_raw) if max_chunks_raw.isdigit() else 0
-        if max_chunks > 0 and len(chunks) > max_chunks:
-            print(f"   ⚠️ Chunk cap enabled. Limiting file to first {max_chunks} chunks.")
-            chunks = chunks[:max_chunks]
 
         texts = [c["text"] for c in chunks]
         metadatas = [c["metadata"] for c in chunks]
         all_metadatas.extend(metadatas)
-        ids = []
+        ids = [
+            f"{c['metadata']['source']}_p{c['metadata']['page']}_{hashlib.md5(c['text'].encode()).hexdigest()}"
+            for c in chunks
+        ]
 
-        for c in chunks:
-            text_hash = hashlib.md5(c["text"].encode('utf-8')).hexdigest()
-            ids.append(f"{c['metadata']['source']}_p{c['metadata']['page']}_{text_hash}")
-
-        # rebuild_bm25=False — BM25 is rebuilt once at the end of the full job
         rag.add_documents(texts, metadatas, ids, upsert=True, rebuild_bm25=False)
         total_chunks += len(chunks)
         new_chunks += len(chunks)
-        pages = {str((meta or {}).get("page") or "") for meta in metadatas}
+        pages = {str((m or {}).get("page") or "") for m in metadatas}
         pages.discard("")
-        print(f"   ✅ Added {len(chunks)} chunks. DB total: {rag.collection.count()}")
+        print(f"   ✅ {filename}: {len(chunks)} chunks → DB total: {rag.collection.count()}")
 
-        # Record this file in the manifest now that it's successfully upserted
         if file_sha256:
             manifest[filename] = file_sha256
 
-        processed_files.append({
-            "fileName": filename,
-            "filePath": file_path,
-            "sizeBytes": file_size,
-            "sha256": file_sha256,
-            "chunkCount": len(chunks),
-            "pageCount": len(pages),
-            "status": "completed",
-        })
+        processed_files.append({"fileName": filename, "filePath": file_path,
+            "sizeBytes": file_size, "sha256": file_sha256,
+            "chunkCount": len(chunks), "pageCount": len(pages), "status": "completed"})
 
     # Build BM25 once after all files are processed — avoids O(n²) per-file rebuilds
     if new_chunks > 0:

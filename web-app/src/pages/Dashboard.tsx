@@ -288,9 +288,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </svg>
             </button>
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl border border-[#1E3A5F] bg-white/90 p-1.5 shadow-[0_0_20px_rgba(10,169,138,0.12)]">
-                <img src="/umoya.png" alt="Umoya" className="h-8 w-auto rounded-lg" />
-              </div>
+              <img src="/umoya-dark.png" alt="Umoya" className="h-8 w-auto" style={{ mixBlendMode: 'screen' }} />
               <div className="leading-none">
                 <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#4A6A8A]">Umoya</div>
                 <div className="text-sm font-bold text-white">Control Plane</div>

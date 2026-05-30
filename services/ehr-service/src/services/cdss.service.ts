@@ -5155,6 +5155,32 @@ export class CdssService {
     );
   }
 
+  async getCorpusCoverage(ownerToken: string): Promise<any> {
+    return this.getWithPolicy<any>('corpus_coverage', '/admin/corpus/coverage', 30000);
+  }
+
+  async getCorpusDocuments(ownerToken: string, domain?: string): Promise<any> {
+    return this.getWithPolicy<any>('corpus_documents', `/admin/corpus/documents${domain ? `?domain=${encodeURIComponent(domain)}` : ''}`, 30000);
+  }
+
+  async getCorpusStats(ownerToken: string): Promise<any> {
+    return this.getWithPolicy<any>('corpus_stats', '/admin/corpus/stats', 15000);
+  }
+
+  async getIngestJobs(ownerToken: string, limit = 20): Promise<any> {
+    return this.getWithPolicy<any>('ingest_jobs', `/admin/ingest/jobs?limit=${limit}`, 15000);
+  }
+
+  async getIngestStatus(jobId: string): Promise<any> {
+    return this.getWithPolicy<any>('ingest_status', `/admin/ingest/status/${jobId}`, 15000);
+  }
+
+  async getIngestHistory(ownerToken: string, limit = 100, query?: string): Promise<any> {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    if (query) qs.set('query', query);
+    return this.getWithPolicy<any>('ingest_history', `/admin/ingest/history?${qs}`, 15000);
+  }
+
   async parseClinicalNarrative(
     text: string,
     db?: any,

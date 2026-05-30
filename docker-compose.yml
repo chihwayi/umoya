@@ -159,6 +159,9 @@ services:
       - HF_TOKEN=${HF_TOKEN}
       - CDSS_INGEST_MAX_CHUNKS_PER_FILE=400
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
+      - CDSS_INGEST_WORKERS=${CDSS_INGEST_WORKERS:-4}
+      - CDSS_INGEST_EXTRACTOR=${CDSS_INGEST_EXTRACTOR:-quality}
+      - RAG_BM25_MAX_DOCS=${RAG_BM25_MAX_DOCS:-50000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -232,6 +235,9 @@ services:
       - HF_TOKEN=${HF_TOKEN}
       - CDSS_INGEST_MAX_CHUNKS_PER_FILE=400
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
+      - CDSS_INGEST_WORKERS=${CDSS_INGEST_WORKERS:-4}
+      - CDSS_INGEST_EXTRACTOR=${CDSS_INGEST_EXTRACTOR:-quality}
+      - RAG_BM25_MAX_DOCS=${RAG_BM25_MAX_DOCS:-50000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

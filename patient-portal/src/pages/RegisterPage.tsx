@@ -13,7 +13,7 @@ const toFieldLabel = (field: string) =>
     .replace(/\b\w/g, (value) => value.toUpperCase());
 
 const RegisterPage: React.FC = () => {
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { register, assessRegistration } = usePatientAuth();
@@ -226,9 +226,7 @@ const RegisterPage: React.FC = () => {
         <div className="relative z-10 flex flex-col justify-center px-12 text-white">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
-              <div className="rounded-2xl bg-white/95 p-2 shadow-lg">
-                <img src={logoSrc} alt="Umoya logo" className="h-12 w-auto rounded-xl" />
-              </div>
+              <img src={logoSrc} alt="Umoya logo" className="h-12 w-auto" style={{ mixBlendMode: 'screen' }} />
               <h1 className="text-3xl font-bold">Umoya</h1>
             </div>
             <p className="text-xl text-white/90 font-light">Join thousands of patients managing their health</p>

@@ -3046,6 +3046,7 @@ export class DatabaseProvisioningService {
         version: '2026.05.28.1',
         description: 'Detected care gaps per patient with dismiss/resolve lifecycle',
         statements: () => [
+          `ALTER TABLE IF EXISTS care_gaps ADD COLUMN IF NOT EXISTS detected_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
           `CREATE TABLE IF NOT EXISTS care_gaps (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             patient_id UUID NOT NULL,
@@ -3495,6 +3496,7 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_active    ON storeroom_catalog(is_active)`,
           `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_atc       ON storeroom_catalog(atc_code) WHERE atc_code IS NOT NULL`,
           `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_who_eml   ON storeroom_catalog(who_eml) WHERE who_eml = true`,
+          `CREATE EXTENSION IF NOT EXISTS pg_trgm`,
           `CREATE INDEX IF NOT EXISTS idx_storeroom_catalog_name_trgm ON storeroom_catalog USING gin(name gin_trgm_ops)`,
 
           `CREATE TABLE IF NOT EXISTS location_stock (
@@ -3511,8 +3513,10 @@ export class DatabaseProvisioningService {
             last_restocked_at TIMESTAMPTZ,
             created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(location_id, catalog_id, COALESCE(batch_number, ''))
+            UNIQUE(location_id, catalog_id, batch_number)
           )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_location_stock_unique_batch
+             ON location_stock(location_id, catalog_id, COALESCE(batch_number, ''))`,
           `CREATE INDEX IF NOT EXISTS idx_location_stock_location ON location_stock(location_id)`,
           `CREATE INDEX IF NOT EXISTS idx_location_stock_catalog  ON location_stock(catalog_id)`,
           `CREATE INDEX IF NOT EXISTS idx_location_stock_expiry   ON location_stock(expiry_date) WHERE expiry_date IS NOT NULL`,
@@ -3745,7 +3749,7 @@ export class DatabaseProvisioningService {
             cons('IV Cannula 22G',                   'units',  200),
             cons('IV Giving Set (drip set)',         'units',  200),
             cons('Normal Saline 0.9% 500ml bag',     'bags',   100),
-            cons("Ringer's Lactate 500ml bag",       'bags',   100),
+            cons('Ringers Lactate 500ml bag',         'bags',   100),
             cons('Dextrose 5% 500ml bag',            'bags',   100),
             cons('Gauze Swabs 10x10cm (pkt/5)',      'packets',200),
             cons('Crepe Bandage 10cm',               'rolls',  100),
@@ -3873,9 +3877,9 @@ export class DatabaseProvisioningService {
            SELECT
              vi.storeroom_location_id,
              sc.id,
-             vi.batch_number,
-             vi.expiry_date,
-             COALESCE(vi.quantity_on_hand, 0)
+             vi.lot_number,
+             vi.expiration_date,
+             COALESCE(vi.quantity_remaining, 0)
            FROM vaccine_inventory vi
            JOIN storeroom_catalog sc
              ON sc.name = vi.vaccine_name AND sc.category = 'vaccine'
@@ -4293,9 +4297,18 @@ export class DatabaseProvisioningService {
           )`,
           `CREATE INDEX IF NOT EXISTS idx_pdd_patient    ON patient_discharge_documents (patient_id, created_at DESC)`,
           `CREATE INDEX IF NOT EXISTS idx_pdd_encounter  ON patient_discharge_documents (encounter_id)`,
-          `ALTER TABLE encounters ADD COLUMN IF NOT EXISTS finalized_at   TIMESTAMPTZ`,
-          `ALTER TABLE encounters ADD COLUMN IF NOT EXISTS finalized_by   UUID`,
-          `ALTER TABLE encounters ADD COLUMN IF NOT EXISTS discharge_sent BOOLEAN DEFAULT FALSE`,
+          `DO $$ BEGIN
+            ALTER TABLE encounters ADD COLUMN IF NOT EXISTS finalized_at TIMESTAMPTZ;
+            EXCEPTION WHEN undefined_table THEN NULL;
+          END $$`,
+          `DO $$ BEGIN
+            ALTER TABLE encounters ADD COLUMN IF NOT EXISTS finalized_by UUID;
+            EXCEPTION WHEN undefined_table THEN NULL;
+          END $$`,
+          `DO $$ BEGIN
+            ALTER TABLE encounters ADD COLUMN IF NOT EXISTS discharge_sent BOOLEAN DEFAULT FALSE;
+            EXCEPTION WHEN undefined_table THEN NULL;
+          END $$`,
         ],
       },
       // ── S205 — Wearable & Home Device Sync ───────────────────────────────
@@ -4433,9 +4446,9 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_ppt_invoice ON patient_payment_transactions (invoice_id)`,
           `CREATE INDEX IF NOT EXISTS idx_ppt_patient ON patient_payment_transactions (patient_id)`,
           `CREATE INDEX IF NOT EXISTS idx_ppt_status  ON patient_payment_transactions (status, initiated_at)`,
-          `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'unpaid'`,
-          `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at        TIMESTAMPTZ`,
-          `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_via       TEXT`,
+          `DO $$ BEGIN ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'unpaid'; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          `DO $$ BEGIN ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          `DO $$ BEGIN ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_via TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
         ],
       },
       // ── S209 — Real-Time Queue & Wait Time ───────────────────────────────
@@ -4718,8 +4731,8 @@ export class DatabaseProvisioningService {
           )`,
           `CREATE INDEX IF NOT EXISTS idx_sto_status ON stock_transfer_orders (status)`,
           `CREATE INDEX IF NOT EXISTS idx_sto_item   ON stock_transfer_orders (item_id)`,
-          `ALTER TABLE storeroom_items ADD COLUMN IF NOT EXISTS min_stock_level INTEGER DEFAULT 0`,
-          `ALTER TABLE storeroom_items ADD COLUMN IF NOT EXISTS reorder_point   INTEGER DEFAULT 0`,
+          `DO $$ BEGIN ALTER TABLE storeroom_items ADD COLUMN IF NOT EXISTS min_stock_level INTEGER DEFAULT 0; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          `DO $$ BEGIN ALTER TABLE storeroom_items ADD COLUMN IF NOT EXISTS reorder_point INTEGER DEFAULT 0; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
         ],
       },
     ];
@@ -5626,28 +5639,28 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_payment_anomaly_flags_detected_at ON payment_anomaly_flags(detected_at DESC)`,
 
       `DROP TRIGGER IF EXISTS update_payment_provider_events_updated_at ON payment_provider_events`,
-      `CREATE TRIGGER update_payment_provider_events_updated_at BEFORE UPDATE ON payment_provider_events
+      `CREATE OR REPLACE TRIGGER update_payment_provider_events_updated_at BEFORE UPDATE ON payment_provider_events
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_payment_verification_attempts_updated_at ON payment_verification_attempts`,
-      `CREATE TRIGGER update_payment_verification_attempts_updated_at BEFORE UPDATE ON payment_verification_attempts
+      `CREATE OR REPLACE TRIGGER update_payment_verification_attempts_updated_at BEFORE UPDATE ON payment_verification_attempts
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_claim_denial_predictions_updated_at ON claim_denial_predictions`,
-      `CREATE TRIGGER update_claim_denial_predictions_updated_at BEFORE UPDATE ON claim_denial_predictions
+      `CREATE OR REPLACE TRIGGER update_claim_denial_predictions_updated_at BEFORE UPDATE ON claim_denial_predictions
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_financial_clearance_assessments_updated_at ON financial_clearance_assessments`,
-      `CREATE TRIGGER update_financial_clearance_assessments_updated_at BEFORE UPDATE ON financial_clearance_assessments
+      `CREATE OR REPLACE TRIGGER update_financial_clearance_assessments_updated_at BEFORE UPDATE ON financial_clearance_assessments
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_prior_authorization_drafts_updated_at ON prior_authorization_drafts`,
-      `CREATE TRIGGER update_prior_authorization_drafts_updated_at BEFORE UPDATE ON prior_authorization_drafts
+      `CREATE OR REPLACE TRIGGER update_prior_authorization_drafts_updated_at BEFORE UPDATE ON prior_authorization_drafts
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_financial_quote_assessments_updated_at ON financial_quote_assessments`,
-      `CREATE TRIGGER update_financial_quote_assessments_updated_at BEFORE UPDATE ON financial_quote_assessments
+      `CREATE OR REPLACE TRIGGER update_financial_quote_assessments_updated_at BEFORE UPDATE ON financial_quote_assessments
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_bank_statements_updated_at ON bank_statements`,
-      `CREATE TRIGGER update_bank_statements_updated_at BEFORE UPDATE ON bank_statements
+      `CREATE OR REPLACE TRIGGER update_bank_statements_updated_at BEFORE UPDATE ON bank_statements
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_payment_anomaly_flags_updated_at ON payment_anomaly_flags`,
-      `CREATE TRIGGER update_payment_anomaly_flags_updated_at BEFORE UPDATE ON payment_anomaly_flags
+      `CREATE OR REPLACE TRIGGER update_payment_anomaly_flags_updated_at BEFORE UPDATE ON payment_anomaly_flags
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
     ];
   }
@@ -6061,7 +6074,7 @@ export class DatabaseProvisioningService {
       `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_password_reset_expires TIMESTAMP WITH TIME ZONE`,
 
       `CREATE TABLE IF NOT EXISTS patient_messages (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           tenant_id VARCHAR NOT NULL,
           patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
           sender_type VARCHAR(50) NOT NULL,
@@ -6136,7 +6149,7 @@ export class DatabaseProvisioningService {
   private getMedicationRemindersSchemaStatements(): string[] {
     return [
       `CREATE TABLE IF NOT EXISTS medication_reminders (
-        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
         prescription_id UUID REFERENCES prescriptions(id) ON DELETE CASCADE,
         medication_name VARCHAR(255) NOT NULL,
@@ -6272,17 +6285,17 @@ export class DatabaseProvisioningService {
       END;
       $$ language 'plpgsql';`,
       `DROP TRIGGER IF EXISTS update_nurse_copilot_task_events_updated_at ON nurse_copilot_task_events`,
-      `CREATE TRIGGER update_nurse_copilot_task_events_updated_at
+      `CREATE OR REPLACE TRIGGER update_nurse_copilot_task_events_updated_at
         BEFORE UPDATE ON nurse_copilot_task_events
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_nurse_copilot_alert_events_updated_at ON nurse_copilot_alert_events`,
-      `CREATE TRIGGER update_nurse_copilot_alert_events_updated_at
+      `CREATE OR REPLACE TRIGGER update_nurse_copilot_alert_events_updated_at
         BEFORE UPDATE ON nurse_copilot_alert_events
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_nurse_handoff_workflow_state_updated_at ON nurse_handoff_workflow_state`,
-      `CREATE TRIGGER update_nurse_handoff_workflow_state_updated_at
+      `CREATE OR REPLACE TRIGGER update_nurse_handoff_workflow_state_updated_at
         BEFORE UPDATE ON nurse_handoff_workflow_state
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6329,7 +6342,7 @@ export class DatabaseProvisioningService {
       END;
       $$ language 'plpgsql';`,
       `DROP TRIGGER IF EXISTS update_nurse_cross_module_workflow_state_updated_at ON nurse_cross_module_workflow_state`,
-      `CREATE TRIGGER update_nurse_cross_module_workflow_state_updated_at
+      `CREATE OR REPLACE TRIGGER update_nurse_cross_module_workflow_state_updated_at
         BEFORE UPDATE ON nurse_cross_module_workflow_state
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6420,22 +6433,22 @@ export class DatabaseProvisioningService {
       END;
       $$ language 'plpgsql';`,
       `DROP TRIGGER IF EXISTS update_post_visit_sessions_updated_at ON post_visit_sessions`,
-      `CREATE TRIGGER update_post_visit_sessions_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_sessions_updated_at
         BEFORE UPDATE ON post_visit_sessions
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_transcript_segments_updated_at ON post_visit_transcript_segments`,
-      `CREATE TRIGGER update_post_visit_transcript_segments_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_transcript_segments_updated_at
         BEFORE UPDATE ON post_visit_transcript_segments
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_extracted_entities_updated_at ON post_visit_extracted_entities`,
-      `CREATE TRIGGER update_post_visit_extracted_entities_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_extracted_entities_updated_at
         BEFORE UPDATE ON post_visit_extracted_entities
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_draft_artifacts_updated_at ON post_visit_draft_artifacts`,
-      `CREATE TRIGGER update_post_visit_draft_artifacts_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_draft_artifacts_updated_at
         BEFORE UPDATE ON post_visit_draft_artifacts
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6488,12 +6501,12 @@ export class DatabaseProvisioningService {
       END;
       $$ language 'plpgsql';`,
       `DROP TRIGGER IF EXISTS update_post_visit_review_actions_updated_at ON post_visit_review_actions`,
-      `CREATE TRIGGER update_post_visit_review_actions_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_review_actions_updated_at
         BEFORE UPDATE ON post_visit_review_actions
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_rule_citations_updated_at ON post_visit_rule_citations`,
-      `CREATE TRIGGER update_post_visit_rule_citations_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_rule_citations_updated_at
         BEFORE UPDATE ON post_visit_rule_citations
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6533,7 +6546,7 @@ export class DatabaseProvisioningService {
       END;
       $$ language 'plpgsql';`,
       `DROP TRIGGER IF EXISTS update_post_visit_action_executions_updated_at ON post_visit_action_executions`,
-      `CREATE TRIGGER update_post_visit_action_executions_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_action_executions_updated_at
         BEFORE UPDATE ON post_visit_action_executions
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6636,22 +6649,22 @@ export class DatabaseProvisioningService {
       END;
       $$ language 'plpgsql';`,
       `DROP TRIGGER IF EXISTS update_post_visit_companion_threads_updated_at ON post_visit_companion_threads`,
-      `CREATE TRIGGER update_post_visit_companion_threads_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_companion_threads_updated_at
         BEFORE UPDATE ON post_visit_companion_threads
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_companion_messages_updated_at ON post_visit_companion_messages`,
-      `CREATE TRIGGER update_post_visit_companion_messages_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_companion_messages_updated_at
         BEFORE UPDATE ON post_visit_companion_messages
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_escalation_events_updated_at ON post_visit_escalation_events`,
-      `CREATE TRIGGER update_post_visit_escalation_events_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_escalation_events_updated_at
         BEFORE UPDATE ON post_visit_escalation_events
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_companion_acknowledgements_updated_at ON post_visit_companion_acknowledgements`,
-      `CREATE TRIGGER update_post_visit_companion_acknowledgements_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_companion_acknowledgements_updated_at
         BEFORE UPDATE ON post_visit_companion_acknowledgements
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6724,7 +6737,7 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_route ON post_visit_intravisit_alert_events(route_target, assigned_role, status, sla_due_at)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_ack ON post_visit_intravisit_alert_events(status, acknowledged_at, detected_at DESC)`,
       `DROP TRIGGER IF EXISTS update_post_visit_intravisit_alert_events_updated_at ON post_visit_intravisit_alert_events`,
-      `CREATE TRIGGER update_post_visit_intravisit_alert_events_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_intravisit_alert_events_updated_at
         BEFORE UPDATE ON post_visit_intravisit_alert_events
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6795,7 +6808,7 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_post_visit_billing_audit_session ON post_visit_billing_audit_log(session_id, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_billing_audit_suggestion ON post_visit_billing_audit_log(suggestion_id, created_at DESC)`,
       `DROP TRIGGER IF EXISTS update_post_visit_billing_suggestions_updated_at ON post_visit_billing_suggestions`,
-      `CREATE TRIGGER update_post_visit_billing_suggestions_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_billing_suggestions_updated_at
         BEFORE UPDATE ON post_visit_billing_suggestions
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6848,7 +6861,7 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_doctor ON post_visit_previsit_briefs(doctor_id, generated_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_risk ON post_visit_previsit_briefs(follow_up_risk_tier, follow_up_risk_score DESC)`,
       `DROP TRIGGER IF EXISTS update_post_visit_previsit_briefs_updated_at ON post_visit_previsit_briefs`,
-      `CREATE TRIGGER update_post_visit_previsit_briefs_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_previsit_briefs_updated_at
         BEFORE UPDATE ON post_visit_previsit_briefs
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -6897,7 +6910,7 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_patient ON post_visit_admin_documents(patient_id, document_type, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_hash ON post_visit_admin_documents(immutable_hash)`,
       `DROP TRIGGER IF EXISTS update_post_visit_admin_documents_updated_at ON post_visit_admin_documents`,
-      `CREATE TRIGGER update_post_visit_admin_documents_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_admin_documents_updated_at
         BEFORE UPDATE ON post_visit_admin_documents
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -7027,17 +7040,17 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_key ON post_visit_companion_memory(memory_type, memory_key, is_active)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_curation ON post_visit_companion_memory(patient_id, promoted_at DESC, retired_at DESC)`,
       `DROP TRIGGER IF EXISTS update_post_visit_trial_matches_updated_at ON post_visit_trial_matches`,
-      `CREATE TRIGGER update_post_visit_trial_matches_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_trial_matches_updated_at
         BEFORE UPDATE ON post_visit_trial_matches
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_trial_match_audit_log_updated_at ON post_visit_trial_match_audit_log`,
-      `CREATE TRIGGER update_post_visit_trial_match_audit_log_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_trial_match_audit_log_updated_at
         BEFORE UPDATE ON post_visit_trial_match_audit_log
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_companion_memory_updated_at ON post_visit_companion_memory`,
-      `CREATE TRIGGER update_post_visit_companion_memory_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_companion_memory_updated_at
         BEFORE UPDATE ON post_visit_companion_memory
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -7097,7 +7110,7 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_post_visit_doc_intelligence_critical
         ON post_visit_document_intelligence(session_id, critical_detected, created_at DESC)`,
       `DROP TRIGGER IF EXISTS update_post_visit_document_intelligence_updated_at ON post_visit_document_intelligence`,
-      `CREATE TRIGGER update_post_visit_document_intelligence_updated_at
+      `CREATE OR REPLACE TRIGGER update_post_visit_document_intelligence_updated_at
         BEFORE UPDATE ON post_visit_document_intelligence
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
@@ -7252,10 +7265,10 @@ export class DatabaseProvisioningService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )`,
       `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
-       SELECT 'Yellow Fever', 'YF', 'Yellow Fever (17D)', 'adult', 1, NULL, NULL, true, 'travel', CURRENT_DATE
+       SELECT 'Yellow Fever', 'YF', 'Yellow Fever (17D)', 'adult', 1, NULL::INTEGER, NULL::INTEGER, true, 'travel', CURRENT_DATE
        WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = 'YF' AND schedule_type = 'travel')`,
       `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
-       SELECT 'Typhoid Vi', '101', 'Typhoid Vi Polysaccharide', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE
+       SELECT 'Typhoid Vi', '101', 'Typhoid Vi Polysaccharide', 'adult', 1, NULL::INTEGER, NULL::INTEGER, false, 'travel', CURRENT_DATE
        WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = '101' AND schedule_type = 'travel')`,
       `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
        SELECT 'BCG', '19', 'BCG (Tuberculosis)', 'infant', 1, 0, NULL, true, 'routine', CURRENT_DATE
@@ -7306,11 +7319,11 @@ export class DatabaseProvisioningService {
       // Travel vaccines
       `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
        SELECT v.* FROM (VALUES
-         ('Japanese Encephalitis', '134', 'Japanese Encephalitis (Ixiaro)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
-         ('Rabies Pre-Exposure', '40', 'Rabies (Pre-Exposure)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
-         ('Cholera (Oral)', '26', 'Cholera Oral (Dukoral)', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
-         ('Meningococcal ACWY Travel', '147', 'Meningococcal ACWY', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE),
-         ('Tick-Borne Encephalitis', '77', 'TBE Vaccine', 'adult', 1, NULL, NULL, false, 'travel', CURRENT_DATE)
+         ('Japanese Encephalitis', '134', 'Japanese Encephalitis (Ixiaro)', 'adult', 1, NULL::INTEGER, NULL::INTEGER, false, 'travel', CURRENT_DATE),
+         ('Rabies Pre-Exposure', '40', 'Rabies (Pre-Exposure)', 'adult', 1, NULL::INTEGER, NULL::INTEGER, false, 'travel', CURRENT_DATE),
+         ('Cholera (Oral)', '26', 'Cholera Oral (Dukoral)', 'adult', 1, NULL::INTEGER, NULL::INTEGER, false, 'travel', CURRENT_DATE),
+         ('Meningococcal ACWY Travel', '147', 'Meningococcal ACWY', 'adult', 1, NULL::INTEGER, NULL::INTEGER, false, 'travel', CURRENT_DATE),
+         ('Tick-Borne Encephalitis', '77', 'TBE Vaccine', 'adult', 1, NULL::INTEGER, NULL::INTEGER, false, 'travel', CURRENT_DATE)
        ) AS v(schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
        WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = v.vaccine_code AND schedule_type = 'travel')`,
     ];
@@ -7633,24 +7646,25 @@ export class DatabaseProvisioningService {
   }
 
   async createDatabase(databaseName: string, tenantSlug?: string): Promise<string> {
+    this.assertSafeDatabaseName(databaseName);
+    this.logger.log(`Creating database: ${databaseName}`);
+
+    await this.dataSource.query(`CREATE DATABASE "${databaseName}"`);
+    const connectionString = this.generateConnectionString(databaseName);
+
     try {
-      this.assertSafeDatabaseName(databaseName);
-      this.logger.log(`Creating database: ${databaseName}`);
-
-      // Create database
-      await this.dataSource.query(`CREATE DATABASE "${databaseName}"`);
-
-      // Generate connection string
-      const connectionString = this.generateConnectionString(databaseName);
-
-      // Run schema migration
       await this.applyClinicSchema(connectionString, { tenantSlug });
-      
       this.logger.log(`Database ${databaseName} created successfully`);
       return connectionString;
-      
     } catch (error) {
-      this.logger.error(`Failed to create database ${databaseName}:`, error);
+      this.logger.error(`Schema provisioning failed for ${databaseName} — dropping orphaned database`, error);
+      try {
+        // WITH (FORCE) terminates any lingering connections before drop (PostgreSQL 13+)
+        await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+        this.logger.log(`Orphaned database ${databaseName} removed`);
+      } catch (dropError) {
+        this.logger.error(`Could not remove orphaned database ${databaseName}: ${dropError instanceof Error ? dropError.message : String(dropError)}`);
+      }
       throw error;
     }
   }
@@ -7852,12 +7866,13 @@ export class DatabaseProvisioningService {
           );
         }
 
-        // Seed demo users even in non-strict mode (partial schema is still usable)
+        // Partial schema — only attempt seeding if users table landed (non-strict)
         if (options?.tenantSlug) {
           try {
             await this.seedDefaultUsers(tenantDataSource, options.tenantSlug);
           } catch (e) {
-            this.logger.warn(`seedDefaultUsers failed: ${e instanceof Error ? e.message : String(e)}`);
+            // users table check is now inside seedDefaultUsers — this is a real failure
+            this.logger.error(`seedDefaultUsers failed on partial schema: ${e instanceof Error ? e.message : String(e)}`);
           }
         }
 
@@ -7866,17 +7881,11 @@ export class DatabaseProvisioningService {
         };
       }
 
-      this.logger.log(
-        `Schema migration completed${pendingBundles.length > 0 ? ` with ${pendingBundles.length} unresolved bundle(s)` : ''}`,
-      );
+      this.logger.log(`Schema migration completed — all ${selectedBundles.length} bundle(s) applied`);
 
       // Seed demo users when a tenant slug is provided (frictionless demo setup)
       if (options?.tenantSlug) {
-        try {
-          await this.seedDefaultUsers(tenantDataSource, options.tenantSlug);
-        } catch (e) {
-          this.logger.warn(`seedDefaultUsers failed: ${e instanceof Error ? e.message : String(e)}`);
-        }
+        await this.seedDefaultUsers(tenantDataSource, options.tenantSlug);
       }
 
       return {
@@ -10973,13 +10982,13 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_imaging_order_templates_is_active ON imaging_order_templates(is_active)`,
 
       // Add updated_at trigger for new tables
-      `CREATE TRIGGER IF NOT EXISTS update_appointment_waitlist_updated_at BEFORE UPDATE ON appointment_waitlist
+      `CREATE OR REPLACE TRIGGER update_appointment_waitlist_updated_at BEFORE UPDATE ON appointment_waitlist
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_invoice_templates_updated_at BEFORE UPDATE ON invoice_templates
+      `CREATE OR REPLACE TRIGGER update_invoice_templates_updated_at BEFORE UPDATE ON invoice_templates
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_lab_order_templates_updated_at BEFORE UPDATE ON lab_order_templates
+      `CREATE OR REPLACE TRIGGER update_lab_order_templates_updated_at BEFORE UPDATE ON lab_order_templates
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_imaging_order_templates_updated_at BEFORE UPDATE ON imaging_order_templates
+      `CREATE OR REPLACE TRIGGER update_imaging_order_templates_updated_at BEFORE UPDATE ON imaging_order_templates
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
     ];
   }
@@ -11250,25 +11259,25 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_diabetes_device_integration_status ON diabetes_device_integration(integration_status)`,
 
       // Updated_at triggers
-      `CREATE TRIGGER IF NOT EXISTS update_diabetes_registry_updated_at BEFORE UPDATE ON diabetes_registry
+      `CREATE OR REPLACE TRIGGER update_diabetes_registry_updated_at BEFORE UPDATE ON diabetes_registry
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_diabetes_care_bundle_updated_at BEFORE UPDATE ON diabetes_care_bundle
+      `CREATE OR REPLACE TRIGGER update_diabetes_care_bundle_updated_at BEFORE UPDATE ON diabetes_care_bundle
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_glucose_monitoring_updated_at BEFORE UPDATE ON glucose_monitoring
+      `CREATE OR REPLACE TRIGGER update_glucose_monitoring_updated_at BEFORE UPDATE ON glucose_monitoring
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_cgm_summary_updated_at BEFORE UPDATE ON cgm_summary
+      `CREATE OR REPLACE TRIGGER update_cgm_summary_updated_at BEFORE UPDATE ON cgm_summary
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_diabetes_medications_updated_at BEFORE UPDATE ON diabetes_medications
+      `CREATE OR REPLACE TRIGGER update_diabetes_medications_updated_at BEFORE UPDATE ON diabetes_medications
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_insulin_regimens_updated_at BEFORE UPDATE ON insulin_regimens
+      `CREATE OR REPLACE TRIGGER update_insulin_regimens_updated_at BEFORE UPDATE ON insulin_regimens
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_diabetes_complication_screening_updated_at BEFORE UPDATE ON diabetes_complication_screening
+      `CREATE OR REPLACE TRIGGER update_diabetes_complication_screening_updated_at BEFORE UPDATE ON diabetes_complication_screening
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_diabetes_education_sessions_updated_at BEFORE UPDATE ON diabetes_education_sessions
+      `CREATE OR REPLACE TRIGGER update_diabetes_education_sessions_updated_at BEFORE UPDATE ON diabetes_education_sessions
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_diabetes_alerts_updated_at BEFORE UPDATE ON diabetes_alerts
+      `CREATE OR REPLACE TRIGGER update_diabetes_alerts_updated_at BEFORE UPDATE ON diabetes_alerts
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER IF NOT EXISTS update_diabetes_device_integration_updated_at BEFORE UPDATE ON diabetes_device_integration
+      `CREATE OR REPLACE TRIGGER update_diabetes_device_integration_updated_at BEFORE UPDATE ON diabetes_device_integration
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
     ];
   }
@@ -11788,33 +11797,33 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_created_at ON pharmacy_alerts(created_at)`);
 
     // Triggers for updated_at
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_suppliers_updated_at BEFORE UPDATE ON pharmacy_suppliers
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_suppliers_updated_at BEFORE UPDATE ON pharmacy_suppliers
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_inventory_updated_at BEFORE UPDATE ON pharmacy_inventory
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_inventory_updated_at BEFORE UPDATE ON pharmacy_inventory
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_purchase_orders_updated_at BEFORE UPDATE ON pharmacy_purchase_orders
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_purchase_orders_updated_at BEFORE UPDATE ON pharmacy_purchase_orders
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_purchase_order_items_updated_at BEFORE UPDATE ON pharmacy_purchase_order_items
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_purchase_order_items_updated_at BEFORE UPDATE ON pharmacy_purchase_order_items
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_receipts_updated_at BEFORE UPDATE ON pharmacy_receipts
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_receipts_updated_at BEFORE UPDATE ON pharmacy_receipts
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_receipt_items_updated_at BEFORE UPDATE ON pharmacy_receipt_items
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_receipt_items_updated_at BEFORE UPDATE ON pharmacy_receipt_items
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_dispensings_updated_at BEFORE UPDATE ON pharmacy_dispensings
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_dispensings_updated_at BEFORE UPDATE ON pharmacy_dispensings
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_dispensing_items_updated_at BEFORE UPDATE ON pharmacy_dispensing_items
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_dispensing_items_updated_at BEFORE UPDATE ON pharmacy_dispensing_items
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_returns_updated_at BEFORE UPDATE ON pharmacy_returns
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_returns_updated_at BEFORE UPDATE ON pharmacy_returns
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_return_items_updated_at BEFORE UPDATE ON pharmacy_return_items
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_return_items_updated_at BEFORE UPDATE ON pharmacy_return_items
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_stock_adjustments_updated_at BEFORE UPDATE ON pharmacy_stock_adjustments
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_stock_adjustments_updated_at BEFORE UPDATE ON pharmacy_stock_adjustments
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_stock_adjustment_items_updated_at BEFORE UPDATE ON pharmacy_stock_adjustment_items
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_stock_adjustment_items_updated_at BEFORE UPDATE ON pharmacy_stock_adjustment_items
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_pricing_rules_updated_at BEFORE UPDATE ON pharmacy_pricing_rules
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_pricing_rules_updated_at BEFORE UPDATE ON pharmacy_pricing_rules
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_formulary_updated_at BEFORE UPDATE ON pharmacy_formulary
+    statements.push(`CREATE OR REPLACE TRIGGER update_pharmacy_formulary_updated_at BEFORE UPDATE ON pharmacy_formulary
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
 
     return statements;
@@ -11843,7 +11852,7 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_doctor_availability_doctor_id ON doctor_availability(doctor_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_doctor_availability_dates ON doctor_availability(start_date, end_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_doctor_availability_is_unavailable ON doctor_availability(is_unavailable)`);
-    statements.push(`CREATE TRIGGER IF NOT EXISTS update_doctor_availability_updated_at BEFORE UPDATE ON doctor_availability
+    statements.push(`CREATE OR REPLACE TRIGGER update_doctor_availability_updated_at BEFORE UPDATE ON doctor_availability
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
 
     return statements;
@@ -12075,37 +12084,37 @@ export class DatabaseProvisioningService {
 
     // Triggers for updated_at
     statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_consultations_updated_at ON telemedicine_consultations`);
-    statements.push(`CREATE TRIGGER update_telemedicine_consultations_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_telemedicine_consultations_updated_at
       BEFORE UPDATE ON telemedicine_consultations
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_devices_updated_at ON telemedicine_devices`);
-    statements.push(`CREATE TRIGGER update_telemedicine_devices_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_telemedicine_devices_updated_at
       BEFORE UPDATE ON telemedicine_devices
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_consents_updated_at ON telemedicine_consents`);
-    statements.push(`CREATE TRIGGER update_telemedicine_consents_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_telemedicine_consents_updated_at
       BEFORE UPDATE ON telemedicine_consents
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_technical_logs_updated_at ON telemedicine_technical_logs`);
-    statements.push(`CREATE TRIGGER update_telemedicine_technical_logs_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_telemedicine_technical_logs_updated_at
       BEFORE UPDATE ON telemedicine_technical_logs
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_remote_patient_monitoring_updated_at ON remote_patient_monitoring`);
-    statements.push(`CREATE TRIGGER update_remote_patient_monitoring_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_remote_patient_monitoring_updated_at
       BEFORE UPDATE ON remote_patient_monitoring
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_prescriptions_updated_at ON telemedicine_prescriptions`);
-    statements.push(`CREATE TRIGGER update_telemedicine_prescriptions_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_telemedicine_prescriptions_updated_at
       BEFORE UPDATE ON telemedicine_prescriptions
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
@@ -12247,31 +12256,31 @@ export class DatabaseProvisioningService {
 
     // Triggers for updated_at
     statements.push(`DROP TRIGGER IF EXISTS update_report_templates_updated_at ON report_templates`);
-    statements.push(`CREATE TRIGGER update_report_templates_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_report_templates_updated_at
       BEFORE UPDATE ON report_templates
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_scheduled_reports_updated_at ON scheduled_reports`);
-    statements.push(`CREATE TRIGGER update_scheduled_reports_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_scheduled_reports_updated_at
       BEFORE UPDATE ON scheduled_reports
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_report_executions_updated_at ON report_executions`);
-    statements.push(`CREATE TRIGGER update_report_executions_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_report_executions_updated_at
       BEFORE UPDATE ON report_executions
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_clinical_outcomes_updated_at ON clinical_outcomes`);
-    statements.push(`CREATE TRIGGER update_clinical_outcomes_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_clinical_outcomes_updated_at
       BEFORE UPDATE ON clinical_outcomes
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_analytics_metrics_updated_at ON analytics_metrics`);
-    statements.push(`CREATE TRIGGER update_analytics_metrics_updated_at
+    statements.push(`CREATE OR REPLACE TRIGGER update_analytics_metrics_updated_at
       BEFORE UPDATE ON analytics_metrics
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
@@ -12361,13 +12370,13 @@ export class DatabaseProvisioningService {
         ON icd10_mapping_metadata (release_label)
       `,
       `
-        CREATE TRIGGER update_snomed_icd10_mappings_updated_at
+        CREATE OR REPLACE TRIGGER update_snomed_icd10_mappings_updated_at
         BEFORE UPDATE ON snomed_icd10_mappings
         FOR EACH ROW
         EXECUTE PROCEDURE update_updated_at_column()
       `,
       `
-        CREATE TRIGGER update_icd10_mapping_metadata_updated_at
+        CREATE OR REPLACE TRIGGER update_icd10_mapping_metadata_updated_at
         BEFORE UPDATE ON icd10_mapping_metadata
         FOR EACH ROW
         EXECUTE PROCEDURE update_updated_at_column()
@@ -12377,147 +12386,147 @@ export class DatabaseProvisioningService {
 
   private getTriggerStatements(): string[] {
     return [
-      `CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+      `CREATE OR REPLACE TRIGGER update_users_updated_at BEFORE UPDATE ON users
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_patients_updated_at BEFORE UPDATE ON patients
+      `CREATE OR REPLACE TRIGGER update_patients_updated_at BEFORE UPDATE ON patients
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_appointments_updated_at BEFORE UPDATE ON appointments
+      `CREATE OR REPLACE TRIGGER update_appointments_updated_at BEFORE UPDATE ON appointments
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_vitals_updated_at BEFORE UPDATE ON vitals
+      `CREATE OR REPLACE TRIGGER update_vitals_updated_at BEFORE UPDATE ON vitals
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_triage_updated_at BEFORE UPDATE ON triage_assessments
+      `CREATE OR REPLACE TRIGGER update_triage_updated_at BEFORE UPDATE ON triage_assessments
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_nursing_notes_updated_at BEFORE UPDATE ON nursing_notes
+      `CREATE OR REPLACE TRIGGER update_nursing_notes_updated_at BEFORE UPDATE ON nursing_notes
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
+      `CREATE OR REPLACE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_medical_records_updated_at BEFORE UPDATE ON medical_records
+      `CREATE OR REPLACE TRIGGER update_medical_records_updated_at BEFORE UPDATE ON medical_records
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_prescriptions_updated_at BEFORE UPDATE ON prescriptions
+      `CREATE OR REPLACE TRIGGER update_prescriptions_updated_at BEFORE UPDATE ON prescriptions
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_lab_results_updated_at BEFORE UPDATE ON lab_results
+      `CREATE OR REPLACE TRIGGER update_lab_results_updated_at BEFORE UPDATE ON lab_results
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_billing_updated_at BEFORE UPDATE ON billing
+      `CREATE OR REPLACE TRIGGER update_billing_updated_at BEFORE UPDATE ON billing
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_medical_aid_claims_updated_at BEFORE UPDATE ON medical_aid_claims
+      `CREATE OR REPLACE TRIGGER update_medical_aid_claims_updated_at BEFORE UPDATE ON medical_aid_claims
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_problems_updated_at BEFORE UPDATE ON problems
+      `CREATE OR REPLACE TRIGGER update_problems_updated_at BEFORE UPDATE ON problems
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_lab_orders_updated_at BEFORE UPDATE ON lab_orders
+      `CREATE OR REPLACE TRIGGER update_lab_orders_updated_at BEFORE UPDATE ON lab_orders
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_lab_tests_updated_at BEFORE UPDATE ON lab_tests
+      `CREATE OR REPLACE TRIGGER update_lab_tests_updated_at BEFORE UPDATE ON lab_tests
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_lab_order_sets_updated_at BEFORE UPDATE ON lab_order_sets
+      `CREATE OR REPLACE TRIGGER update_lab_order_sets_updated_at BEFORE UPDATE ON lab_order_sets
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_critical_alerts_updated_at BEFORE UPDATE ON critical_result_alerts
+      `CREATE OR REPLACE TRIGGER update_critical_alerts_updated_at BEFORE UPDATE ON critical_result_alerts
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_lab_test_catalog_updated_at BEFORE UPDATE ON lab_test_catalog
+      `CREATE OR REPLACE TRIGGER update_lab_test_catalog_updated_at BEFORE UPDATE ON lab_test_catalog
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_drugs_updated_at BEFORE UPDATE ON drugs
+      `CREATE OR REPLACE TRIGGER update_drugs_updated_at BEFORE UPDATE ON drugs
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_drug_interactions_updated_at BEFORE UPDATE ON drug_interactions
+      `CREATE OR REPLACE TRIGGER update_drug_interactions_updated_at BEFORE UPDATE ON drug_interactions
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_imaging_modalities_updated_at BEFORE UPDATE ON imaging_modalities
+      `CREATE OR REPLACE TRIGGER update_imaging_modalities_updated_at BEFORE UPDATE ON imaging_modalities
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_imaging_study_types_updated_at BEFORE UPDATE ON imaging_study_types
+      `CREATE OR REPLACE TRIGGER update_imaging_study_types_updated_at BEFORE UPDATE ON imaging_study_types
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_imaging_orders_updated_at BEFORE UPDATE ON imaging_orders
+      `CREATE OR REPLACE TRIGGER update_imaging_orders_updated_at BEFORE UPDATE ON imaging_orders
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_imaging_studies_updated_at BEFORE UPDATE ON imaging_studies
+      `CREATE OR REPLACE TRIGGER update_imaging_studies_updated_at BEFORE UPDATE ON imaging_studies
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_imaging_reports_updated_at BEFORE UPDATE ON imaging_reports
+      `CREATE OR REPLACE TRIGGER update_imaging_reports_updated_at BEFORE UPDATE ON imaging_reports
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_imaging_report_acknowledgements_updated_at BEFORE UPDATE ON imaging_report_acknowledgements
+      `CREATE OR REPLACE TRIGGER update_imaging_report_acknowledgements_updated_at BEFORE UPDATE ON imaging_report_acknowledgements
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_imaging_report_templates_updated_at BEFORE UPDATE ON imaging_report_templates
+      `CREATE OR REPLACE TRIGGER update_imaging_report_templates_updated_at BEFORE UPDATE ON imaging_report_templates
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_maternity_enrollments_updated_at BEFORE UPDATE ON maternity_enrollments
+      `CREATE OR REPLACE TRIGGER update_maternity_enrollments_updated_at BEFORE UPDATE ON maternity_enrollments
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_anc_visits_updated_at BEFORE UPDATE ON anc_visits
+      `CREATE OR REPLACE TRIGGER update_anc_visits_updated_at BEFORE UPDATE ON anc_visits
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_ultrasound_scans_updated_at BEFORE UPDATE ON ultrasound_scans
+      `CREATE OR REPLACE TRIGGER update_ultrasound_scans_updated_at BEFORE UPDATE ON ultrasound_scans
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_deliveries_updated_at BEFORE UPDATE ON deliveries
+      `CREATE OR REPLACE TRIGGER update_deliveries_updated_at BEFORE UPDATE ON deliveries
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_postnatal_visits_updated_at BEFORE UPDATE ON postnatal_visits
+      `CREATE OR REPLACE TRIGGER update_postnatal_visits_updated_at BEFORE UPDATE ON postnatal_visits
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_tests_updated_at BEFORE UPDATE ON hiv_tests
+      `CREATE OR REPLACE TRIGGER update_hiv_tests_updated_at BEFORE UPDATE ON hiv_tests
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_sti_tests_updated_at BEFORE UPDATE ON sti_tests
+      `CREATE OR REPLACE TRIGGER update_sti_tests_updated_at BEFORE UPDATE ON sti_tests
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_care_enrollments_updated_at BEFORE UPDATE ON hiv_care_enrollments
+      `CREATE OR REPLACE TRIGGER update_hiv_care_enrollments_updated_at BEFORE UPDATE ON hiv_care_enrollments
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_art_initiation_details_updated_at BEFORE UPDATE ON hiv_art_initiation_details
+      `CREATE OR REPLACE TRIGGER update_hiv_art_initiation_details_updated_at BEFORE UPDATE ON hiv_art_initiation_details
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_clinical_visits_updated_at BEFORE UPDATE ON hiv_clinical_visits
+      `CREATE OR REPLACE TRIGGER update_hiv_clinical_visits_updated_at BEFORE UPDATE ON hiv_clinical_visits
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_tb_screenings_updated_at BEFORE UPDATE ON tb_screenings
+      `CREATE OR REPLACE TRIGGER update_tb_screenings_updated_at BEFORE UPDATE ON tb_screenings
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_cervical_cancer_screenings_updated_at BEFORE UPDATE ON cervical_cancer_screenings
+      `CREATE OR REPLACE TRIGGER update_cervical_cancer_screenings_updated_at BEFORE UPDATE ON cervical_cancer_screenings
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_who_staging_updated_at BEFORE UPDATE ON hiv_who_staging
+      `CREATE OR REPLACE TRIGGER update_hiv_who_staging_updated_at BEFORE UPDATE ON hiv_who_staging
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_visit_types_updated_at BEFORE UPDATE ON hiv_visit_types
+      `CREATE OR REPLACE TRIGGER update_hiv_visit_types_updated_at BEFORE UPDATE ON hiv_visit_types
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_bmi_classifications_updated_at BEFORE UPDATE ON hiv_bmi_classifications
+      `CREATE OR REPLACE TRIGGER update_hiv_bmi_classifications_updated_at BEFORE UPDATE ON hiv_bmi_classifications
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_pregnancy_lactating_status_updated_at BEFORE UPDATE ON hiv_pregnancy_lactating_status
+      `CREATE OR REPLACE TRIGGER update_hiv_pregnancy_lactating_status_updated_at BEFORE UPDATE ON hiv_pregnancy_lactating_status
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_family_planning_methods_updated_at BEFORE UPDATE ON hiv_family_planning_methods
+      `CREATE OR REPLACE TRIGGER update_hiv_family_planning_methods_updated_at BEFORE UPDATE ON hiv_family_planning_methods
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_functional_status_updated_at BEFORE UPDATE ON hiv_functional_status
+      `CREATE OR REPLACE TRIGGER update_hiv_functional_status_updated_at BEFORE UPDATE ON hiv_functional_status
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_tb_screening_status_updated_at BEFORE UPDATE ON hiv_tb_screening_status
+      `CREATE OR REPLACE TRIGGER update_hiv_tb_screening_status_updated_at BEFORE UPDATE ON hiv_tb_screening_status
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_tb_investigation_results_updated_at BEFORE UPDATE ON hiv_tb_investigation_results
+      `CREATE OR REPLACE TRIGGER update_hiv_tb_investigation_results_updated_at BEFORE UPDATE ON hiv_tb_investigation_results
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_opportunistic_infections_updated_at BEFORE UPDATE ON hiv_opportunistic_infections
+      `CREATE OR REPLACE TRIGGER update_hiv_opportunistic_infections_updated_at BEFORE UPDATE ON hiv_opportunistic_infections
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_oi_sub_categories_updated_at BEFORE UPDATE ON hiv_oi_sub_categories
+      `CREATE OR REPLACE TRIGGER update_hiv_oi_sub_categories_updated_at BEFORE UPDATE ON hiv_oi_sub_categories
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_mental_health_results_updated_at BEFORE UPDATE ON hiv_mental_health_results
+      `CREATE OR REPLACE TRIGGER update_hiv_mental_health_results_updated_at BEFORE UPDATE ON hiv_mental_health_results
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_mental_health_management_updated_at BEFORE UPDATE ON hiv_mental_health_management
+      `CREATE OR REPLACE TRIGGER update_hiv_mental_health_management_updated_at BEFORE UPDATE ON hiv_mental_health_management
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_tpt_eligibility_updated_at BEFORE UPDATE ON hiv_tpt_eligibility
+      `CREATE OR REPLACE TRIGGER update_hiv_tpt_eligibility_updated_at BEFORE UPDATE ON hiv_tpt_eligibility
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_tpt_status_updated_at BEFORE UPDATE ON hiv_tpt_status
+      `CREATE OR REPLACE TRIGGER update_hiv_tpt_status_updated_at BEFORE UPDATE ON hiv_tpt_status
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_cryptococcal_signs_updated_at BEFORE UPDATE ON hiv_cryptococcal_signs
+      `CREATE OR REPLACE TRIGGER update_hiv_cryptococcal_signs_updated_at BEFORE UPDATE ON hiv_cryptococcal_signs
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_cryptococcal_status_updated_at BEFORE UPDATE ON hiv_cryptococcal_status
+      `CREATE OR REPLACE TRIGGER update_hiv_cryptococcal_status_updated_at BEFORE UPDATE ON hiv_cryptococcal_status
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_cryptococcal_treatment_updated_at BEFORE UPDATE ON hiv_cryptococcal_treatment
+      `CREATE OR REPLACE TRIGGER update_hiv_cryptococcal_treatment_updated_at BEFORE UPDATE ON hiv_cryptococcal_treatment
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_arv_status_updated_at BEFORE UPDATE ON hiv_arv_status
+      `CREATE OR REPLACE TRIGGER update_hiv_arv_status_updated_at BEFORE UPDATE ON hiv_arv_status
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_art_initiation_category_updated_at BEFORE UPDATE ON hiv_art_initiation_category
+      `CREATE OR REPLACE TRIGGER update_hiv_art_initiation_category_updated_at BEFORE UPDATE ON hiv_art_initiation_category
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_adverse_events_status_updated_at BEFORE UPDATE ON hiv_adverse_events_status
+      `CREATE OR REPLACE TRIGGER update_hiv_adverse_events_status_updated_at BEFORE UPDATE ON hiv_adverse_events_status
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_arv_reasons_not_on_updated_at BEFORE UPDATE ON hiv_arv_reasons_not_on
+      `CREATE OR REPLACE TRIGGER update_hiv_arv_reasons_not_on_updated_at BEFORE UPDATE ON hiv_arv_reasons_not_on
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_arv_reasons_start_updated_at BEFORE UPDATE ON hiv_arv_reasons_start
+      `CREATE OR REPLACE TRIGGER update_hiv_arv_reasons_start_updated_at BEFORE UPDATE ON hiv_arv_reasons_start
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_arv_change_stop_reasons_updated_at BEFORE UPDATE ON hiv_arv_change_stop_reasons
+      `CREATE OR REPLACE TRIGGER update_hiv_arv_change_stop_reasons_updated_at BEFORE UPDATE ON hiv_arv_change_stop_reasons
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_visit_status_updated_at BEFORE UPDATE ON hiv_visit_status
+      `CREATE OR REPLACE TRIGGER update_hiv_visit_status_updated_at BEFORE UPDATE ON hiv_visit_status
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_final_outcome_updated_at BEFORE UPDATE ON hiv_final_outcome
+      `CREATE OR REPLACE TRIGGER update_hiv_final_outcome_updated_at BEFORE UPDATE ON hiv_final_outcome
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_art_regimens_updated_at BEFORE UPDATE ON hiv_art_regimens
+      `CREATE OR REPLACE TRIGGER update_hiv_art_regimens_updated_at BEFORE UPDATE ON hiv_art_regimens
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_precancerous_lesion_treatment_updated_at BEFORE UPDATE ON hiv_precancerous_lesion_treatment
+      `CREATE OR REPLACE TRIGGER update_hiv_precancerous_lesion_treatment_updated_at BEFORE UPDATE ON hiv_precancerous_lesion_treatment
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_financial_transactions_updated_at BEFORE UPDATE ON financial_transactions
+      `CREATE OR REPLACE TRIGGER update_financial_transactions_updated_at BEFORE UPDATE ON financial_transactions
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_financial_line_items_updated_at BEFORE UPDATE ON financial_line_items
+      `CREATE OR REPLACE TRIGGER update_financial_line_items_updated_at BEFORE UPDATE ON financial_line_items
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_financial_payments_updated_at BEFORE UPDATE ON financial_payments
+      `CREATE OR REPLACE TRIGGER update_financial_payments_updated_at BEFORE UPDATE ON financial_payments
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_financial_claims_updated_at BEFORE UPDATE ON financial_claims
+      `CREATE OR REPLACE TRIGGER update_financial_claims_updated_at BEFORE UPDATE ON financial_claims
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_financial_reconciliation_logs_updated_at BEFORE UPDATE ON financial_reconciliation_logs
+      `CREATE OR REPLACE TRIGGER update_financial_reconciliation_logs_updated_at BEFORE UPDATE ON financial_reconciliation_logs
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
     ];
   }
@@ -12788,7 +12797,7 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_sti_tests_patient_id ON sti_tests(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sti_tests_infection_type ON sti_tests(infection_type)`,
       `CREATE INDEX IF NOT EXISTS idx_sti_tests_result ON sti_tests(result)`,
-      `CREATE TRIGGER update_sti_tests_updated_at BEFORE UPDATE ON sti_tests
+      `CREATE OR REPLACE TRIGGER update_sti_tests_updated_at BEFORE UPDATE ON sti_tests
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
     ];
   }
@@ -12834,9 +12843,9 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_condition_gin ON hiv_regimen_contraindication_rules USING GIN(condition_json)`,
       `ALTER TABLE hiv_arv_change_requests ADD COLUMN IF NOT EXISTS regimen_safety_summary JSONB DEFAULT '{}'::jsonb`,
       `ALTER TABLE hiv_arv_change_requests ADD COLUMN IF NOT EXISTS regimen_safety_blocked BOOLEAN DEFAULT false`,
-      `CREATE TRIGGER update_hiv_regimen_rule_versions_updated_at BEFORE UPDATE ON hiv_regimen_rule_versions
+      `CREATE OR REPLACE TRIGGER update_hiv_regimen_rule_versions_updated_at BEFORE UPDATE ON hiv_regimen_rule_versions
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
-      `CREATE TRIGGER update_hiv_regimen_contra_rules_updated_at BEFORE UPDATE ON hiv_regimen_contraindication_rules
+      `CREATE OR REPLACE TRIGGER update_hiv_regimen_contra_rules_updated_at BEFORE UPDATE ON hiv_regimen_contraindication_rules
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
     ];
   }
@@ -13731,6 +13740,17 @@ export class DatabaseProvisioningService {
     // Sanitize slug to alphanumeric + hyphen only before interpolating into SQL
     const s = tenantSlug.toLowerCase().replace(/[^a-z0-9-]/g, '');
     if (!s) return;
+
+    // Verify core schema landed before attempting to seed
+    const tableCheck = await tenantDataSource.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'users'
+      ) AS exists
+    `);
+    if (!tableCheck[0]?.exists) {
+      throw new Error('users table does not exist — core bundle did not apply successfully; cannot seed demo users');
+    }
 
     this.logger.log(`Seeding default demo users for tenant: ${s}`);
 
@@ -15722,9 +15742,9 @@ RECOMMENDATIONS:
     statements.push(`CREATE INDEX IF NOT EXISTS idx_consent_reminders_status ON consent_reminders(status)`);
 
     statements.push(`DROP TRIGGER IF EXISTS update_consent_templates_updated_at ON consent_templates`);
-    statements.push(`CREATE TRIGGER update_consent_templates_updated_at BEFORE UPDATE ON consent_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+    statements.push(`CREATE OR REPLACE TRIGGER update_consent_templates_updated_at BEFORE UPDATE ON consent_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
     statements.push(`DROP TRIGGER IF EXISTS update_patient_consents_updated_at ON patient_consents`);
-    statements.push(`CREATE TRIGGER update_patient_consents_updated_at BEFORE UPDATE ON patient_consents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+    statements.push(`CREATE OR REPLACE TRIGGER update_patient_consents_updated_at BEFORE UPDATE ON patient_consents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
 
     statements.push(`
       INSERT INTO consent_templates (
@@ -17817,7 +17837,7 @@ RECOMMENDATIONS:
 
     // Indexes
     statements.push(`CREATE INDEX IF NOT EXISTS idx_quality_results_measure ON quality_measure_results(measure_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_quality_results_period ON quality_measure_results(reporting_period_start, reporting_period_end)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_quality_results_period ON quality_measure_results(period_start, period_end)`);
 
     return statements;
   }

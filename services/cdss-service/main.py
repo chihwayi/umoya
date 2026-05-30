@@ -2333,15 +2333,16 @@ async def admin_status(owner: str = Depends(require_owner_scope("cdss.admin.read
         except Exception:
             pass
 
+    rag_engine = _get_diagnostic_rag_engine()
     rag = {
-        "enabled": diagnostic_assistant.rag_engine is not None,
+        "enabled": rag_engine is not None,
         "documents": None,
         "cache_enabled": False
     }
     try:
-        if diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.collection:
-            rag["documents"] = diagnostic_assistant.rag_engine.collection.count()
-        if diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.redis_client:
+        if rag_engine and rag_engine.collection:
+            rag["documents"] = rag_engine.collection.count()
+        if rag_engine and rag_engine.redis_client:
             rag["cache_enabled"] = True
     except Exception:
         pass
@@ -2823,6 +2824,192 @@ async def admin_ingest_retry(job_id: str, owner: str = Depends(require_owner_sco
         except Exception:
             pass
     return {"started": True, "jobId": new_id, "retry_of": job_id}
+
+
+# ── Corpus coverage & gap analysis ──────────────────────────────────────────
+
+_ALL_CLINICAL_DOMAINS = [
+    "infectious_disease", "cardiology", "obstetrics", "pediatrics",
+    "endocrinology", "oncology", "respiratory", "mental_health",
+    "nutrition", "surgery", "nephrology", "neurology", "ophthalmology",
+    "dermatology", "emergency", "reproductive_health", "general",
+]
+
+
+def _iter_all_metadatas(collection, where: Optional[Dict[str, Any]] = None, page_size: int = 5000):
+    """Yield metadata dicts from a ChromaDB collection in pages.
+
+    ChromaDB's .get() without a limit fails on large collections with
+    'too many SQL variables', so we page with limit/offset.
+    """
+    offset = 0
+    while True:
+        try:
+            batch = collection.get(include=["metadatas"], where=where, limit=page_size, offset=offset)
+        except Exception as exc:
+            logger.warning(f"corpus metadata paging failed at offset {offset}: {exc}")
+            return
+        metas = batch.get("metadatas") or []
+        if not metas:
+            return
+        for m in metas:
+            yield m
+        if len(metas) < page_size:
+            return
+        offset += page_size
+
+@app.get("/admin/corpus/coverage")
+async def corpus_coverage(owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
+    """
+    Returns per-domain chunk counts, document list, coverage gaps,
+    and the last metadata quality report — so admins know which
+    clinical areas lack guidelines and where to upload more PDFs.
+    """
+    rag = _get_diagnostic_rag_engine()
+    collection = getattr(rag, "collection", None) if rag else None
+
+    total_chunks = 0
+    domain_counts: Dict[str, int] = {d: 0 for d in _ALL_CLINICAL_DOMAINS}
+    population_counts: Dict[str, int] = {}
+    documents: Dict[str, Dict] = {}  # source filename → stats
+
+    if collection:
+        try:
+            total_chunks = collection.count()
+            # Page through metadata (avoids ChromaDB 'too many SQL variables' on large corpora)
+            for meta in _iter_all_metadatas(collection):
+                if not meta:
+                    continue
+                domain = str(meta.get("clinical_domain") or "general").strip().lower()
+                domain_counts[domain] = domain_counts.get(domain, 0) + 1
+
+                pop = str(meta.get("target_population") or "adults").strip().lower()
+                population_counts[pop] = population_counts.get(pop, 0) + 1
+
+                source = str(meta.get("source") or "unknown").strip()
+                if source not in documents:
+                    documents[source] = {
+                        "fileName": source,
+                        "chunkCount": 0,
+                        "domains": set(),
+                        "populations": set(),
+                        "pages": set(),
+                    }
+                documents[source]["chunkCount"] += 1
+                documents[source]["domains"].add(domain)
+                documents[source]["populations"].add(pop)
+                page = meta.get("page")
+                if page:
+                    documents[source]["pages"].add(str(page))
+        except Exception as e:
+            logger.warning(f"corpus_coverage: collection scan failed: {e}")
+
+    # Serialise sets for JSON
+    doc_list = [
+        {
+            "fileName": k,
+            "chunkCount": v["chunkCount"],
+            "domains": sorted(v["domains"]),
+            "populations": sorted(v["populations"]),
+            "pageCount": len(v["pages"]),
+        }
+        for k, v in sorted(documents.items(), key=lambda x: -x[1]["chunkCount"])
+    ]
+
+    # Gap analysis — domains with 0 chunks
+    covered = [d for d, c in domain_counts.items() if c > 0]
+    missing = [d for d in _ALL_CLINICAL_DOMAINS if domain_counts.get(d, 0) == 0]
+    sparse  = [d for d, c in domain_counts.items() if 0 < c < 20]
+
+    # Attach last metadata quality report if available
+    quality_report = None
+    try:
+        report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ingest_metadata_report.json")
+        with open(report_path, "r", encoding="utf-8") as fh:
+            quality_report = json.load(fh)
+    except Exception:
+        pass
+
+    return {
+        "totalChunks": total_chunks,
+        "totalDocuments": len(documents),
+        "domainCoverage": {
+            d: {"chunks": domain_counts.get(d, 0), "covered": domain_counts.get(d, 0) > 0}
+            for d in _ALL_CLINICAL_DOMAINS
+        },
+        "populationCoverage": population_counts,
+        "coveredDomains": covered,
+        "missingDomains": missing,
+        "sparseDomains": sparse,
+        "documents": doc_list,
+        "metadataQuality": quality_report,
+        "allDomains": _ALL_CLINICAL_DOMAINS,
+    }
+
+
+@app.get("/admin/corpus/documents")
+async def corpus_documents(
+    domain: Optional[str] = None,
+    owner: str = Depends(require_owner_scope("cdss.admin.jobs.read")),
+):
+    """List all documents in ChromaDB with optional domain filter."""
+    rag = _get_diagnostic_rag_engine()
+    collection = getattr(rag, "collection", None) if rag else None
+    if not collection:
+        return {"documents": [], "total": 0}
+
+    try:
+        where = {"clinical_domain": domain} if domain else None
+        documents: Dict[str, Dict] = {}
+        for meta in _iter_all_metadatas(collection, where=where):
+            if not meta:
+                continue
+            source = str(meta.get("source") or "unknown")
+            if source not in documents:
+                documents[source] = {"fileName": source, "chunkCount": 0, "domains": set(), "pages": set()}
+            documents[source]["chunkCount"] += 1
+            documents[source]["domains"].add(str(meta.get("clinical_domain") or "general"))
+            page = meta.get("page")
+            if page:
+                documents[source]["pages"].add(str(page))
+
+        return {
+            "documents": [
+                {"fileName": k, "chunkCount": v["chunkCount"], "domains": sorted(v["domains"]), "pageCount": len(v["pages"])}
+                for k, v in sorted(documents.items(), key=lambda x: -x[1]["chunkCount"])
+            ],
+            "total": len(documents),
+            "domainFilter": domain,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/admin/corpus/stats")
+async def corpus_stats(owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
+    """Quick stats: total chunks, collection name, embedding model, BM25 status."""
+    rag = _get_diagnostic_rag_engine()
+    collection = getattr(rag, "collection", None) if rag else None
+    bm25 = getattr(rag, "bm25", None) if rag else None
+    em = getattr(rag, "embedding_model", None) if rag else None
+
+    # Read ingest progress snapshot
+    progress = None
+    try:
+        progress_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ingest_progress.json")
+        with open(progress_path, "r", encoding="utf-8") as fh:
+            progress = json.load(fh)
+    except Exception:
+        pass
+
+    return {
+        "collectionName": getattr(collection, "name", None) if collection else None,
+        "totalChunks": collection.count() if collection else 0,
+        "bm25Active": bm25 is not None,
+        "bm25Docs": len(getattr(rag, "bm25_docs", [])) if rag else 0,
+        "embeddingModel": str(em) if em else None,
+        "lastIngestProgress": progress,
+    }
 
 
 @app.get("/admin/jobs")

@@ -7,7 +7,7 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const logoSrc = '/umoya.png';
+  const logoSrc = '/umoya-dark.png';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -45,9 +45,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           <div className="mt-6 flex items-center gap-4">
-            <div className="rounded-[24px] border border-[#253A58] bg-white/95 p-2 shadow-[0_0_40px_rgba(10,169,138,0.14)]">
-              <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto rounded-xl" />
-            </div>
+            <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto" style={{ mixBlendMode: 'screen' }} />
             <div>
               <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
               <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">
