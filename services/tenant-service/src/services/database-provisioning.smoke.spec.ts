@@ -42,10 +42,23 @@ describe('Tenant provisioning smoke test', () => {
   let service: DatabaseProvisioningService;
 
   beforeAll(async () => {
+    // Forward SMOKE_* vars into the env vars that DatabaseProvisioningService
+    // reads when building the tenant connection string, so it points to the
+    // same Postgres instance the test is connected to rather than 'postgres-master'.
+    const cfg = masterConfig();
+    process.env.DB_HOST               = cfg.host;
+    process.env.SERVICE_POSTGRES_HOST = cfg.host;
+    process.env.DB_PORT               = String(cfg.port);
+    process.env.DB_USERNAME           = cfg.username;
+    process.env.POSTGRES_USER         = cfg.username;
+    process.env.DB_PASSWORD           = cfg.password;
+    process.env.POSTGRES_PASSWORD     = cfg.password;
+    process.env.POSTGRES_DB           = cfg.database;
+
     master = new DataSource({
       name: 'smoke_master',
       type: 'postgres',
-      ...masterConfig(),
+      ...cfg,
     });
     await master.initialize();
 

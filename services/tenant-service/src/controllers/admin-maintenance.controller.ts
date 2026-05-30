@@ -4,11 +4,14 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Put,
   Req,
   ServiceUnavailableException,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -145,6 +148,11 @@ export class AdminMaintenanceController {
       const message = error?.message || 'Failed to restart service';
       if (String(message).toLowerCase().includes('docker control unavailable')) {
         throw new ServiceUnavailableException(message);
+      }
+      if (String(message).toLowerCase().includes('not restartable')) {
+        throw new UnprocessableEntityException(
+          `${message}. If Ollama runs natively, restart it manually: ollama serve`
+        );
       }
       throw new BadRequestException(message);
     }

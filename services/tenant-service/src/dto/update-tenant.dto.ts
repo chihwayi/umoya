@@ -14,6 +14,7 @@ import {
   IsIn,
   Length,
   IsBoolean,
+  IsObject,
 } from 'class-validator';
 import { SubscriptionTier } from '../entities/tenant.entity';
 
@@ -115,4 +116,8 @@ export class UpdateTenantDto {
   @IsOptional()
   @IsBoolean()
   allowEmergencyBypass?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  featureFlags?: Record<string, boolean>;
 }

@@ -116,6 +116,8 @@ export const CdssAdmin: React.FC = () => {
   });
   const [ingestionHistory, setIngestionHistory] = useState<any[]>([]);
   const [ingestionSearch, setIngestionSearch] = useState<string>('');
+  const [coverage, setCoverage] = useState<any>(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
   const [seedStatus, setSeedStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [seedProgress, setSeedProgress] = useState<{ seeded: number; total: number; current_label: string; started_at: number | null; finished_at: number | null; error: string | null }>({ seeded: 0, total: 32, current_label: '', started_at: null, finished_at: null, error: null });
   const [seedNow, setSeedNow] = useState(Date.now() / 1000);
@@ -136,7 +138,15 @@ export const CdssAdmin: React.FC = () => {
           setSeedNow(Date.now() / 1000);
           if (d.status === 'done') { stopSeedPoll(); setSeedStatus('done'); }
           if (d.status === 'error') { stopSeedPoll(); setSeedStatus('error'); }
-        } catch { /* poll silently */ }
+        } catch (pollErr: any) {
+          // 404 means the CDSS service restarted and lost the in-memory job — stop polling
+          if (pollErr?.response?.status === 404) {
+            stopSeedPoll();
+            setSeedStatus('error');
+            setSeedProgress(p => ({ ...p, error: 'Seed job lost — service may have restarted. Click Re-seed to try again.' }));
+          }
+          // other errors (502, network) are transient — keep polling
+        }
       }, 500);
     } catch (e: any) {
       setSeedProgress(p => ({ ...p, error: e?.response?.data?.detail || e?.message || 'Unknown error' }));
@@ -178,6 +188,9 @@ export const CdssAdmin: React.FC = () => {
       setAudit({ logs: au?.logs || [], limit: auditLimit, offset: auditOffset });
       setIngestJobs(jobs?.jobs || []);
       setIngestionHistory(history?.records || []);
+      // Load coverage in background (can be slow on large corpora)
+      setCoverageLoading(true);
+      cdssAdminAPI.getCorpusCoverage().then(c => setCoverage(c)).catch(() => {}).finally(() => setCoverageLoading(false));
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to load CDSS admin data');
     } finally {
@@ -815,6 +828,133 @@ export const CdssAdmin: React.FC = () => {
             Reset Counters
           </button>
         </div>
+      </div>
+
+      {/* ── Knowledge Base Coverage ── */}
+      <div className="bg-[#0A1525] border border-white/[0.10] shadow-sm rounded-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold tracking-wide text-[#7A9AB8] uppercase">Knowledge Base</div>
+            <div className="mt-1 text-sm font-semibold text-white">🗂 Guideline Coverage by Domain</div>
+          </div>
+          <div className="flex items-center gap-3">
+            {coverage && (
+              <span className="text-xs text-[#7A9AB8]">
+                {coverage.totalChunks?.toLocaleString()} chunks · {coverage.totalDocuments} sources
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setCoverageLoading(true);
+                cdssAdminAPI.getCorpusCoverage().then(c => setCoverage(c)).catch(() => {}).finally(() => setCoverageLoading(false));
+              }}
+              className="px-3 py-1.5 text-xs rounded-2xl bg-[#060C16] text-white hover:bg-[#0D1829] transition"
+            >
+              {coverageLoading ? 'Scanning…' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {coverageLoading && !coverage && (
+          <div className="text-xs text-[#5A78A0] py-4 text-center">Scanning ChromaDB — may take a few seconds on large corpora…</div>
+        )}
+
+        {coverage && (() => {
+          const domainLabels: Record<string, string> = {
+            infectious_disease: 'Infectious Disease',
+            cardiology: 'Cardiology',
+            obstetrics: 'Obstetrics & Maternal',
+            pediatrics: 'Paediatrics',
+            endocrinology: 'Endocrinology',
+            oncology: 'Oncology',
+            respiratory: 'Respiratory',
+            mental_health: 'Mental Health',
+            nutrition: 'Nutrition / SAM',
+            surgery: 'Surgery',
+            nephrology: 'Nephrology / Renal',
+            neurology: 'Neurology',
+            ophthalmology: 'Ophthalmology',
+            dermatology: 'Dermatology',
+            emergency: 'Emergency / Trauma',
+            reproductive_health: 'Reproductive Health',
+            general: 'General / Other',
+          };
+          const allDomains: string[] = coverage.allDomains || Object.keys(coverage.domainCoverage || {});
+          const domainData = coverage.domainCoverage || {};
+          // Sort: covered first (descending chunks), then missing
+          const sorted = [...allDomains].sort((a, b) => {
+            const ca = domainData[a]?.chunks || 0;
+            const cb = domainData[b]?.chunks || 0;
+            return cb - ca;
+          });
+          const maxChunks = Math.max(...sorted.map(d => domainData[d]?.chunks || 0), 1);
+
+          const statusColor = (chunks: number) => {
+            if (chunks === 0) return { bar: 'bg-red-500/60', badge: 'bg-red-500/15 text-red-300 border-red-500/20', label: 'Missing' };
+            if (chunks < 50) return { bar: 'bg-amber-500/70', badge: 'bg-amber-500/15 text-amber-300 border-amber-500/20', label: 'Sparse' };
+            if (chunks < 500) return { bar: 'bg-yellow-400/70', badge: 'bg-yellow-400/10 text-yellow-300 border-yellow-400/20', label: 'Thin' };
+            return { bar: 'bg-[#0AA98A]', badge: 'bg-[#0AA98A]/15 text-[#5DDBB8] border-[#0AA98A]/20', label: 'Good' };
+          };
+
+          return (
+            <div className="space-y-3">
+              {/* Summary chips */}
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="px-2.5 py-1 rounded-full bg-[#0AA98A]/15 text-[#5DDBB8] border border-[#0AA98A]/20">
+                  ✅ {coverage.coveredDomains?.length || 0} covered
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                  ⚠ {coverage.sparseDomains?.length || 0} sparse (&lt;20 chunks)
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-red-500/15 text-red-300 border border-red-500/20">
+                  ✗ {coverage.missingDomains?.length || 0} missing
+                </span>
+              </div>
+
+              {/* Domain bars */}
+              <div className="space-y-2">
+                {sorted.map(domain => {
+                  const chunks = domainData[domain]?.chunks || 0;
+                  const pct = Math.max(2, Math.round((chunks / maxChunks) * 100));
+                  const s = statusColor(chunks);
+                  return (
+                    <div key={domain} className="flex items-center gap-3">
+                      <div className="w-40 shrink-0 text-xs text-[#C5D5EE] truncate" title={domainLabels[domain] || domain}>
+                        {domainLabels[domain] || domain}
+                      </div>
+                      <div className="flex-1 bg-white/[0.05] rounded-full h-3 overflow-hidden">
+                        <div
+                          className={`h-3 rounded-full transition-all duration-500 ${s.bar}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="w-24 shrink-0 flex items-center justify-between gap-1.5">
+                        <span className="text-xs tabular-nums text-[#7A9AB8]">
+                          {chunks.toLocaleString()}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${s.badge}`}>
+                          {s.label}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Missing domains callout */}
+              {(coverage.missingDomains?.length > 0 || coverage.sparseDomains?.length > 0) && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-3 text-xs text-amber-300 mt-2">
+                  <span className="font-semibold">Gaps to fill: </span>
+                  {[...(coverage.missingDomains || []), ...(coverage.sparseDomains || [])]
+                    .map(d => domainLabels[d] || d)
+                    .join(' · ')}
+                  {' — '}
+                  <span className="text-amber-400/70">Upload PDFs or run Seed Guidelines to improve coverage.</span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="bg-[#0A1525] border border-white/[0.10] shadow-sm rounded-2xl p-5 space-y-5">

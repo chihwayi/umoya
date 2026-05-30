@@ -176,6 +176,8 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [selectedPaymentProvider, setSelectedPaymentProvider] = useState('zimswitch');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMonthsToExtend, setPaymentMonthsToExtend] = useState<number>(1);
+  const [flagsSaving, setFlagsSaving] = useState(false);
+  const [localFlags, setLocalFlags] = useState<Record<string, boolean>>({});
   const dhis2SectionRef = React.useRef<HTMLDivElement>(null);
 
   const loadUsers = useCallback(async () => {
@@ -280,6 +282,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       loadDhis2Config();
       loadSubscriptionPayments();
       setPackageForm(buildPackageForm(tenant));
+      setLocalFlags(tenant.featureFlags || {});
     } else {
       setUsers([]); // Clear users when closed or tenant cleared
       setDhis2Configured(false);
@@ -289,6 +292,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setPackageForm(null);
       setSubscriptionPaymentProviders([]);
       setSubscriptionPayments([]);
+      setLocalFlags({});
     }
   }, [isOpen, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
 
@@ -301,6 +305,34 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     }, 120);
     return () => window.clearTimeout(timer);
   }, [focusSection, isOpen, tenant?.id]);
+
+  const handleClose = useCallback(() => {
+    setCreatedUserCredentials(null);
+    setNewPassword('');
+    setUserToReset(null);
+    setUserToDelete(null);
+    setShowPasswordModal(false);
+    setShowDeleteModal(false);
+    setShowCreateUser(false);
+    setNewUser({ firstName: '', lastName: '', email: '', phone: '', role: 'admin', temporaryPassword: '' });
+    setErrorMessage('');
+    setShowSuccessMessage(false);
+    onClose();
+  }, [onClose]);
+
+  const handleSaveFlags = async () => {
+    if (!tenant) return;
+    setFlagsSaving(true);
+    try {
+      await tenantAPI.updateTenant(tenant.id, { featureFlags: localFlags } as any);
+      showSuccess('Feature flags updated');
+      onUpdate();
+    } catch (e: any) {
+      showError(e?.response?.data?.message || 'Failed to save flags');
+    } finally {
+      setFlagsSaving(false);
+    }
+  };
 
   const handlePackageFieldChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -623,11 +655,11 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     }
   };
 
-  const handleStatusChange = async (userId: string, status: string) => {
+  const handleStatusChange = async (userId: string, isActive: boolean) => {
     if (!tenant) return;
-    
+
     try {
-      await tenantAPI.updateUserStatus(tenant.id, userId, status);
+      await tenantAPI.updateUserStatus(tenant.id, userId, String(isActive));
       loadUsers();
     } catch (error) {
       console.error('Failed to update user status:', error);
@@ -636,15 +668,16 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
 
   const handleResetPassword = async () => {
     if (!tenant || !userToReset || newPassword.length < 8) return;
-    
+
     try {
       await tenantAPI.resetUserPassword(tenant.id, userToReset, newPassword);
       setShowPasswordModal(false);
       setUserToReset(null);
       setNewPassword('');
       showSuccess('Password reset successfully');
-    } catch (error) {
-      console.error('Failed to reset password:', error);
+    } catch (error: any) {
+      const msg = error?.response?.data?.message;
+      showError(Array.isArray(msg) ? msg.join(', ') : msg || 'Failed to reset password');
     }
   };
 
@@ -729,7 +762,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="Tenant Management" size="2xl">
+      <Modal isOpen={isOpen} onClose={handleClose} title="Tenant Management" size="2xl">
         <div className="space-y-6">
 
           {/* Tenant Header Card */}
@@ -1131,6 +1164,47 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
             </div>
           </div>
 
+          {/* Feature Flags Section */}
+          <div className="border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Feature Flags</h3>
+                <p className="text-xs text-[#5A78A0] mt-0.5">Toggle individual platform capabilities for this tenant</p>
+              </div>
+              <button
+                onClick={handleSaveFlags}
+                disabled={flagsSaving}
+                className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#0AA98A]/20 text-[#0AA98A] hover:bg-[#0AA98A]/30 transition disabled:opacity-50"
+              >
+                {flagsSaving ? 'Saving…' : 'Save Flags'}
+              </button>
+            </div>
+            <div className="p-5">
+              {Object.keys(localFlags).length === 0 ? (
+                <p className="text-xs text-[#5A78A0]">No feature flags configured for this tenant.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {Object.entries(localFlags).map(([flag, enabled]) => (
+                    <label key={flag} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-white/[0.07] bg-white/[0.02] cursor-pointer hover:bg-white/[0.04] transition">
+                      <span className="text-xs font-medium text-[#C5D5EE]">
+                        {flag.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLocalFlags(prev => ({ ...prev, [flag]: !prev[flag] }))}
+                        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border transition-colors focus:outline-none ${
+                          enabled ? 'bg-[#0AA98A] border-[#0AA98A]' : 'bg-white/[0.10] border-white/[0.15]'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5 ${enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                      </button>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* DHIS2 Integration Section */}
           <div ref={dhis2SectionRef} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-50/50">
@@ -1508,10 +1582,10 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                         </td>
                         <td className="px-6 py-4">
                           <button
-                            onClick={() => handleStatusChange(user.id, user.isActive ? 'false' : 'true')}
+                            onClick={() => handleStatusChange(user.id, !user.isActive)}
                             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${
-                              user.isActive 
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                              user.isActive
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                                 : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
                             }`}
                           >

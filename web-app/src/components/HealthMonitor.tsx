@@ -62,6 +62,17 @@ interface RuntimeTestEntry {
   health: 'healthy' | 'degraded' | 'unknown';
 }
 
+interface AiBackendInfo {
+  backend: string;
+  label: string;
+  configured: boolean;
+  endpoint: string | null;
+  model: string | null;
+  region?: string | null;
+  profile?: string | null;
+  hint?: string | null;
+}
+
 interface PlatformOverview {
   generatedAt: string;
   docker: {
@@ -69,6 +80,7 @@ interface PlatformOverview {
     socketPath: string;
     error?: string;
   };
+  aiBackend?: AiBackendInfo;
   services: PlatformServiceEntry[];
   runtimeTests: RuntimeTestEntry[];
 }
@@ -519,6 +531,58 @@ export const HealthMonitor: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* AI Backend Card */}
+      {platformOverview?.aiBackend && (() => {
+        const ai = platformOverview.aiBackend!;
+        return (
+          <section className="bg-[#0A1525] rounded-2xl border border-white/[0.10] overflow-hidden shadow-sm">
+            <div className="px-6 py-4 border-b border-white/[0.07] flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Clinical AI Backend</h3>
+                <p className="text-xs text-[#7A9AB8] mt-1">
+                  Active backend set by <code className="text-[#5DDBB8]">CLINICAL_LLM_BACKEND</code> in .env
+                </p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                ai.configured
+                  ? 'text-[#6EE7C2] bg-[#00C896]/10 border-emerald-500/30'
+                  : 'text-rose-300 bg-rose-500/10 border-rose-500/30'
+              }`}>
+                {ai.configured ? 'Configured' : 'Not Configured'}
+              </span>
+            </div>
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+                <div className="text-[#5A78A0] uppercase tracking-wider mb-1 font-semibold">Backend</div>
+                <div className="text-white font-bold text-sm">{ai.label}</div>
+                <div className="text-[#4A6080] mt-1">{ai.backend}</div>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+                <div className="text-[#5A78A0] uppercase tracking-wider mb-1 font-semibold">Model</div>
+                <div className="text-white font-mono text-xs break-all">{ai.model || '—'}</div>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+                <div className="text-[#5A78A0] uppercase tracking-wider mb-1 font-semibold">Endpoint</div>
+                <div className="text-[#C5D5EE] font-mono text-[11px] break-all">{ai.endpoint || '—'}</div>
+                {ai.region && <div className="text-[#4A6080] mt-1">Region: {ai.region}</div>}
+                {ai.profile && <div className="text-[#4A6080] mt-0.5">Profile: {ai.profile}</div>}
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+                <div className="text-[#5A78A0] uppercase tracking-wider mb-1 font-semibold">Status</div>
+                {ai.configured ? (
+                  <div className="text-[#6EE7C2]">Ready to use</div>
+                ) : (
+                  <div className="text-rose-300">Missing credentials</div>
+                )}
+                {ai.hint && (
+                  <div className="text-amber-400/80 mt-1 text-[10px] leading-4">{ai.hint}</div>
+                )}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       <section className="bg-white rounded-xl border border-white/[0.07] shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-white/[0.07] bg-[#080E1A]">

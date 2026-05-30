@@ -719,5 +719,9 @@ export const cdssAdminAPI = {
   getIngestJobStatus: async (jobId: string): Promise<any> => {
     const response = await api.get(`/cdss-admin/admin/ingest/status/${encodeURIComponent(jobId)}`, { headers: { ...getOwnerHeaders() } });
     return response.data;
-  }
+  },
+  getCorpusCoverage: async (): Promise<any> => {
+    const response = await api.get('/cdss-admin/admin/corpus/coverage', { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
 };

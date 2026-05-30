@@ -16,7 +16,7 @@ class RAGEngine:
     Handles Knowledge Base (Vector DB) interactions and Entity Extraction.
     """
     
-    def __init__(self, persistence_path: str = "./data/chroma_db"):
+    def __init__(self, persistence_path: str = "./data/chroma_db", skip_bm25: bool = False):
         self.persistence_path = persistence_path
         self.chroma_client = None
         self.collection = None
@@ -28,9 +28,9 @@ class RAGEngine:
         self.bm25_docs = []   # List of raw texts (aligned with corpus)
         self.bm25_metadatas = [] # List of metadatas (aligned with corpus)
         self.redis_client = None
-        self._initialize_components()
+        self._initialize_components(skip_bm25=skip_bm25)
 
-    def _initialize_components(self):
+    def _initialize_components(self, skip_bm25: bool = False):
         """Initialize ChromaDB, Embedding Model, NLP tools, BM25, and Redis."""
         try:
             import chromadb
@@ -95,8 +95,9 @@ class RAGEngine:
                 # We could load a default model or leave it None
                 self.nlp = None
                 
-            # 4. Initialize BM25 Index
-            self._build_bm25_index()
+            # 4. Initialize BM25 Index (skipped for seed-only instances)
+            if not skip_bm25:
+                self._build_bm25_index()
             
             # 5. Initialize Redis Cache
             try:

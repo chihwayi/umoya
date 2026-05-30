@@ -261,6 +261,7 @@ export class TenantService implements OnModuleInit {
     tenant.featureFlags = {
       ...tenant.featureFlags,
       ...this.getDefaultFeatureFlags(nextTier, enabledModules, packagePreset),
+      ...(updateData.featureFlags || {}), // explicit overrides always win
     };
     this.applyLifecycleState(tenant);
 

@@ -74,12 +74,22 @@ services:
       - MEDICAL_AID_DEMO_BASE_URL=${MEDICAL_AID_DEMO_BASE_URL}
       - CDSS_SERVICE_TOKEN=${CDSS_SERVICE_TOKEN}
       - LLM_API_URL=${LLM_API_URL}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - SUPER_ADMIN_TEST_TENANT_ID=${SUPER_ADMIN_TEST_TENANT_ID}
       - DOCKER_SOCKET_PATH=/var/run/docker.sock
+      - CLINICAL_LLM_BACKEND=${CLINICAL_LLM_BACKEND}
+      - AWS_PROFILE=${AWS_PROFILE}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}
     volumes:
       - ./services/tenant-service:/app/services/tenant-service
       - /app/services/tenant-service/node_modules
       - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.aws:/root/.aws:ro
     command: sh -lc "npm run build && npm start"
     healthcheck:
       test:

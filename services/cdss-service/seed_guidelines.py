@@ -336,23 +336,162 @@ GUIDELINES = [
         "text": "Palliative Symptom Control — Last Days of Life: Discontinue unnecessary medications (statins, antihypertensives, preventive meds). Subcutaneous syringe driver: morphine for pain/dyspnoea (starting dose 2.5–5mg/24h SC if opioid naive, or convert from oral at 1/3 ratio), midazolam 10–20mg/24h for anxiety/agitation, haloperidol 3–5mg/24h for nausea/delirium, hyoscine butylbromide 20–40mg/24h for respiratory secretions. PRN doses: 1/6 of 24h dose. Mouth care q2–4h. Pressure area care. Discontinue routine monitoring (BGL, vitals). Clear communication with family.",
         "metadata": {"source": "NICE NG31 Care of Dying Adults 2015 / RCGP Palliative Care Toolkit 2019", "type": "guideline", "clinical_domain": "palliative_care", "target_population": "adults", "page": 2}
     },
+
+    # ── ASTHMA ──────────────────────────────────────────────────────────────────
+    {
+        "text": "Asthma: Acute Severe Attack Management (GINA 2023): Administer oxygen to maintain SpO2 94–98%. Salbutamol (albuterol) 2.5–5mg via nebuliser or 4–8 puffs via spacer every 20 minutes for first hour. Prednisolone 40–50mg oral or IV hydrocortisone 100mg if unable to swallow. Add ipratropium bromide 0.5mg nebulised if severe. Reassess every 15–30 minutes. Indicators of life-threatening attack: SpO2 <92%, silent chest, cyanosis, PEFR <33% predicted. Transfer to ICU if no improvement after 1 hour.",
+        "metadata": {"source": "GINA Asthma Guidelines 2023", "type": "guideline", "clinical_domain": "respiratory", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Asthma: Step-Up Treatment Algorithm (GINA 2023): Step 1 (intermittent): PRN low-dose ICS-formoterol or PRN SABA. Step 2 (mild persistent): low-dose ICS daily (beclomethasone 200–500mcg/day or equivalent) + PRN SABA. Step 3 (moderate): low-dose ICS-LABA or medium-dose ICS. Step 4 (severe): medium-dose ICS-LABA. Step 5: high-dose ICS-LABA + tiotropium or anti-IL5/IL4 biologics. Review every 3 months. Step down if well-controlled ≥3 months.",
+        "metadata": {"source": "GINA Asthma Guidelines 2023", "type": "guideline", "clinical_domain": "respiratory", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Paediatric Asthma Acute Attack: Mild-moderate: salbutamol 2.5mg (<5y) or 5mg (≥5y) nebulised or 2–6 puffs MDI+spacer q20min × 3, then q1–4h. Oral prednisolone 1–2 mg/kg (max 40mg). Severe: continuous nebulised salbutamol + IV magnesium sulphate 40mg/kg (max 2g) over 20 minutes. Humidified oxygen. SpO2 target ≥94%. Consider ICU transfer if no response. Life-threatening signs: silent chest, cyanosis, poor respiratory effort, altered consciousness.",
+        "metadata": {"source": "GINA Paediatric Asthma 2023 / BTS/SIGN Asthma Guideline 2023", "type": "guideline", "clinical_domain": "respiratory", "target_population": "paediatrics", "page": 3}
+    },
+
+    # ── COPD ─────────────────────────────────────────────────────────────────────
+    {
+        "text": "COPD Exacerbation Management (GOLD 2023): Controlled oxygen therapy to SpO2 88–92% (avoid hyperoxia — risk of hypercapnic respiratory failure). Short-acting bronchodilators: salbutamol 2.5mg + ipratropium 0.5mg nebulised q4–6h. Systemic corticosteroids: prednisolone 40mg for 5 days. Antibiotics if purulent sputum/increased production/dyspnoea (amoxicillin 500mg TDS or doxycycline 100mg BD × 5 days). NIV (BiPAP) for pH <7.35 and PaCO2 >6kPa. Avoid opioids and benzodiazepines.",
+        "metadata": {"source": "GOLD COPD Guidelines 2023", "type": "guideline", "clinical_domain": "respiratory", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "COPD Stable Management (GOLD 2023): All patients: smoking cessation, influenza + pneumococcal vaccination, pulmonary rehabilitation. Group A (few symptoms, low exacerbation risk): SABA or SAMA PRN. Group B (more symptoms): LAMA (tiotropium 18mcg inhaled OD) or LABA. Group C/D (high exacerbation risk): LAMA + LABA; add ICS if asthma overlap or eosinophils >300/μL. LTOT if PaO2 <7.3kPa at rest. Target: reduce exacerbations, improve QOL.",
+        "metadata": {"source": "GOLD COPD Guidelines 2023", "type": "guideline", "clinical_domain": "respiratory", "target_population": "adults", "page": 2}
+    },
+
+    # ── MENTAL HEALTH ────────────────────────────────────────────────────────────
+    {
+        "text": "mhGAP Depression Assessment and Treatment (WHO 2016): Screen with PHQ-2: 'In past 2 weeks, how often felt down/hopeless or little interest in activities?' (0–3 each; ≥3 → full PHQ-9). PHQ-9 ≥10 = moderate-severe depression. Treatment: mild-moderate → psychosocial support, problem-solving therapy, behavioural activation. Moderate-severe → antidepressant + psychotherapy. First-line: fluoxetine 20mg OD (titrate to 40mg after 4 weeks if needed). Duration: minimum 6 months after remission; 2 years if recurrent. Monitor suicide risk at every visit.",
+        "metadata": {"source": "WHO mhGAP Intervention Guide v2 2016", "type": "guideline", "clinical_domain": "mental_health", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "mhGAP Psychosis Assessment and Treatment (WHO 2016): Assess for first-episode psychosis if: hearing voices, fixed false beliefs, disorganised behaviour, social withdrawal >1 month. Exclude organic causes (delirium, substance, HIV encephalopathy, neurological). First-line antipsychotic: haloperidol 2–5mg OD–BD (titrate by 2.5mg every 3–7 days; max 20mg/day) or risperidone 2mg BD. Acute agitation: haloperidol 5–10mg IM. Clozapine for treatment-refractory cases only (WBC monitoring mandatory). Involve family. Psychosocial rehabilitation.",
+        "metadata": {"source": "WHO mhGAP Intervention Guide v2 2016", "type": "guideline", "clinical_domain": "mental_health", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Suicide Risk Assessment and Management (WHO/IASP): Immediate risk factors: specific plan, means available, previous attempt, hopelessness, recent loss, substance use. High risk: hospitalise, remove means, 1:1 supervision. Medium risk: intensive outpatient follow-up within 24–48h, family support, safety planning. Low risk: follow-up within 1–2 weeks, psychoeducation. All patients: ask directly about suicidal thoughts (does not increase risk). Document risk assessment. Activate crisis support. Emergency contacts: family member or trusted person.",
+        "metadata": {"source": "WHO LIVE LIFE Suicide Prevention Implementation Guide 2021", "type": "guideline", "clinical_domain": "mental_health", "target_population": "adults", "page": 3}
+    },
+    {
+        "text": "Alcohol Use Disorder (WHO mhGAP 2016): AUDIT-C screen: ≥3 (women) or ≥4 (men) → brief intervention. Brief intervention (FRAMES): Feedback, Responsibility, Advice, Menu of options, Empathic style, Self-efficacy. Alcohol withdrawal: CIWA-Ar score; mild (<8): oral diazepam 10mg q4–6h, taper over 5–7 days; severe (>15): IV diazepam, thiamine 200mg IV before glucose, ICU monitoring. Delirium tremens: diazepam 10–20mg IV titrated, phenobarbitone if refractory. Maintenance: naltrexone 50mg OD or acamprosate for relapse prevention.",
+        "metadata": {"source": "WHO mhGAP Intervention Guide v2 2016", "type": "guideline", "clinical_domain": "mental_health", "target_population": "adults", "page": 4}
+    },
+
+    # ── RENAL DISEASE ────────────────────────────────────────────────────────────
+    {
+        "text": "Acute Kidney Injury (KDIGO 2012): Stage 1: creatinine ×1.5–1.9 baseline or rise ≥26.5 μmol/L within 48h or UO <0.5mL/kg/h for 6–12h. Stage 2: creatinine ×2.0–2.9 or UO <0.5mL/kg/h ≥12h. Stage 3: creatinine ×3.0+, or creatinine ≥354 μmol/L, or UO <0.3mL/kg/h ≥24h, or anuria ≥12h, or need for RRT. Management: identify and treat cause. IV fluid resuscitation for pre-renal (250mL bolus + reassess). Avoid nephrotoxins (NSAIDs, aminoglycosides, contrast). Correct hyperkalaemia. RRT indications: K+ >6.5, pH <7.15, fluid overload, uremic encephalopathy/pericarditis.",
+        "metadata": {"source": "KDIGO AKI Clinical Practice Guideline 2012", "type": "guideline", "clinical_domain": "nephrology", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "CKD Management (KDIGO 2024): eGFR classification: G1 ≥90, G2 60–89, G3a 45–59, G3b 30–44, G4 15–29, G5 <15 mL/min/1.73m². Albuminuria categories: A1 <30, A2 30–300, A3 >300 mg/g. BP target: <120/80 if tolerated. ACEi/ARB for proteinuria. SGLT-2 inhibitor (dapagliflozin) if eGFR >25 — reduces CKD progression. Dietary: restrict potassium if hyperkalaemia; restrict phosphate. Monitor: eGFR, urine ACR, BP, Hb, calcium, phosphate, PTH 3–12 monthly. Refer nephrology: eGFR <30, rapid decline (>5/year), uncontrolled proteinuria, suspected GN.",
+        "metadata": {"source": "KDIGO CKD Guidelines 2024", "type": "guideline", "clinical_domain": "nephrology", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Hyperkalaemia Emergency Management: K+ >6.0 mmol/L with ECG changes (peaked T waves, wide QRS, sine wave) = cardiac emergency. Calcium gluconate 10mL of 10% IV over 2 minutes — stabilises cardiac membrane (does not lower K+). Insulin-glucose: 10 units actrapid + 50mL 50% glucose IV — lowers K+ by 0.5–1.5 mmol/L within 15–30 min. Salbutamol 10–20mg nebulised — lowers K+ 0.5–1.0 mmol/L. Sodium bicarbonate 50–100mmol IV if acidosis. Calcium resonium for non-emergency. Dialysis if all measures fail or K+ >7.0 mmol/L.",
+        "metadata": {"source": "KDIGO AKI Guideline 2012 / UK Renal Association Hyperkalaemia Guidelines 2020", "type": "guideline", "clinical_domain": "nephrology", "target_population": "adults", "page": 3}
+    },
+
+    # ── SNAKE BITE & TOXICOLOGY ──────────────────────────────────────────────────
+    {
+        "text": "Snake Bite Management — Africa (WHO 2022): Immediate: immobilise bitten limb at heart level, remove constricting items, keep patient calm. Do NOT: incise, suck, tourniquet, apply ice, give alcohol. Assess envenomation signs: local (swelling, necrosis, ecchymosis) and systemic (coagulopathy, neurotoxicity, rhabdomyolysis). Coagulopathy: 20WBCT (20-minute whole blood clotting test) at presentation, 6h, 12h. Antivenom indications: systemic envenomation (coagulopathy, neurotoxicity, haemolysis, AKI) OR significant local envenomation with rapid swelling >50% limb. Antivenom dose: African polyvalent antivenom per manufacturer.",
+        "metadata": {"source": "WHO Guidelines for Management of Snake-Bites Africa 2nd Ed 2022", "type": "guideline", "clinical_domain": "emergency", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Snake Bite Antivenom Administration: Dilute antivenom in 250–500mL 0.9% NaCl. Administer IV slowly initially (adrenaline available for anaphylaxis). Repeat antivenom if coagulopathy persists at 6 hours (20WBCT still positive). Supportive: IV fluids for rhabdomyolysis (target UO >0.5mL/kg/h), dialysis for AKI, ventilation for neurotoxic paralysis (atropine + neostigmine for post-synaptic neurotoxins). Wound care: debride necrosis, elevate limb. Tetanus prophylaxis. Observe minimum 24h after antivenom. Paediatric dose: same as adults (antivenom dose is for the venom, not body weight).",
+        "metadata": {"source": "WHO Guidelines for Management of Snake-Bites Africa 2nd Ed 2022", "type": "guideline", "clinical_domain": "emergency", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "Organophosphate Poisoning Management: Clinical features: DUMBELS (Diarrhoea, Urination, Miosis, Bradycardia/Bronchospasm/secretions, Emesis, Lacrimation, Salivation) + weakness/paralysis. Muscarinic features respond to atropine; nicotinic (weakness) do not. Treatment: Atropine 2mg IV (paediatric: 0.02–0.05mg/kg) every 5–10 min until secretions dry (NOT heart rate). Large doses may be needed (sometimes hundreds of mg). Oximes (pralidoxime 1–2g IV over 15–30 min then infusion) — effective if given within 24–48h before ageing. Benzodiazepines for seizures. Airway management priority. Avoid morphine, aminophylline, succinylcholine.",
+        "metadata": {"source": "WHO Pesticide Poisoning Management Guidelines 2020", "type": "guideline", "clinical_domain": "emergency", "target_population": "adults", "page": 1}
+    },
+
+    # ── SEVERE ACUTE MALNUTRITION ────────────────────────────────────────────────
+    {
+        "text": "Severe Acute Malnutrition (SAM) Diagnosis and Triage (WHO 2013): SAM in children 6–59 months: MUAC <115mm OR WHZ <-3 SD OR bilateral pitting oedema. Medical complications requiring inpatient care: anorexia (failed appetite test), danger signs (lethargy, unconscious, convulsions, vomiting everything, high fever), severe bilateral oedema, IMCI general danger signs. Uncomplicated SAM: community-based management with RUTF (ready-to-use therapeutic food). Appetite test: offer child a standard sachet of RUTF in quiet, private area for 30 minutes.",
+        "metadata": {"source": "WHO SAM Management Guidelines 2013", "type": "guideline", "clinical_domain": "nutrition", "target_population": "paediatrics", "page": 1}
+    },
+    {
+        "text": "SAM Inpatient Management — Stabilisation Phase (WHO 2013): Phase 1 (Days 1–7): Treat/prevent: hypoglycaemia (F-75 formula or breastfeed q2–3h), hypothermia, dehydration (ReSoMal ORS 5mL/kg q30min × 2h only if clinically dehydrated — NOT standard ORS), infection (routine antibiotics: amoxicillin + gentamicin for uncomplicated; add Gram-negative cover for very sick), electrolyte correction (K+ and Mg2+ supplements), micronutrients (no iron in Phase 1). F-75 formula: 100mL/kg/day in 8 feeds. Transition to Phase 2 when oedema reduces, appetite returns (usually Day 3–7).",
+        "metadata": {"source": "WHO SAM Management Guidelines 2013", "type": "guideline", "clinical_domain": "nutrition", "target_population": "paediatrics", "page": 2}
+    },
+    {
+        "text": "SAM Rehabilitation Phase and RUTF Dosing (WHO 2013): Phase 2 (from Day 7–14+ until discharge): Switch to F-100 or RUTF. RUTF target: 200kcal/kg/day. RUTF daily dosing by weight band: 3.5–4kg → 2 sachets/day; 4–5.4kg → 2.5; 5.5–6.9kg → 3; 7–8.4kg → 3.5; 8.5–9.4kg → 4. Continue for 4–6 weeks minimum. Discharge criteria: no oedema, MUAC ≥125mm or WHZ ≥-2 SD, no acute illness, adequate appetite, caregiver education complete. Micronutrients: vitamin A on admission, iron from Phase 2 (2–3mg/kg/day), zinc, folic acid. Follow-up at 1 and 2 weeks post-discharge.",
+        "metadata": {"source": "WHO SAM Management Guidelines 2013 / UNICEF CMAM Guide", "type": "guideline", "clinical_domain": "nutrition", "target_population": "paediatrics", "page": 3}
+    },
+
+    # ── NEGLECTED TROPICAL DISEASES ──────────────────────────────────────────────
+    {
+        "text": "Schistosomiasis Treatment and Control (WHO 2022): Treatment: praziquantel 40mg/kg as single oral dose (or 2 × 20mg/kg 4–6h apart). All school-age children and adults in endemic areas. Contraindication: pregnancy (avoid in first trimester if possible; treatment preferable in 2nd/3rd trimester if heavy infection). Mass Drug Administration (MDA): annual in high-prevalence areas (>50% prevalence or ≥400 eggs/10mL urine), biennial if 10–50%. Side effects: headache, nausea, abdominal pain — usually mild and transient. Hepatosplenic schistosomiasis (late): refer for ultrasound and specialist care.",
+        "metadata": {"source": "WHO Schistosomiasis Control Guidelines 2022", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "general", "page": 1}
+    },
+    {
+        "text": "Soil-Transmitted Helminthiasis (STH) Control (WHO 2023): Species: roundworm (Ascaris), whipworm (Trichuris), hookworm (Necator/Ancylostoma). MDA drugs: albendazole 400mg single dose (all ages ≥1 year) OR mebendazole 500mg single dose. Frequency: ≥20% prevalence → annual MDA; ≥50% → biennial MDA. Target groups: preschool children, school-age children, women of reproductive age. Iron deficiency anaemia: hookworm — ensure iron supplementation alongside MDA. Hydatid disease (Echinococcus): surgery is primary treatment; albendazole 400mg BD × 1–6 months as adjunct or for inoperable cases.",
+        "metadata": {"source": "WHO STH Control Guidelines 2023", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "general", "page": 1}
+    },
+
+    # ── GENDER-BASED VIOLENCE ────────────────────────────────────────────────────
+    {
+        "text": "Sexual Violence — Clinical Management (WHO 2013): Within 72 hours: emergency contraception (levonorgestrel 1.5mg single dose or ulipristal within 5 days). HIV post-exposure prophylaxis: tenofovir + lamivudine + lopinavir/ritonavir (or TDF/3TC/EFV) for 28 days — start within 72 hours (more effective within 24h). STI prophylaxis: cefixime 400mg + azithromycin 1g + metronidazole 2g single doses. Hep B vaccination if not immune. Hepatitis B Ig within 72 hours if high-risk exposure and unvaccinated. Tetanus toxoid. Wound care. Safety planning and counselling. Document with informed consent.",
+        "metadata": {"source": "WHO Clinical Guidelines Sexual Violence 2013 / WHO PEP Guide 2021", "type": "guideline", "clinical_domain": "emergency", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Intimate Partner Violence (IPV) — Clinical Response (WHO 2013): Universal precautions approach — maintain privacy and confidentiality. Safe enquiry: 'Many patients experience violence at home. Is that happening to you?' Validate disclosure: 'This is not your fault. You are not alone.' Safety assessment: current danger, children at risk, escalating violence. Offer support: document injuries, provide information on local shelters/legal aid, safety planning. Mandatory reporting: only if required by law for minors or immediate life-threatening danger. Follow-up: regular appointments. Do NOT pressure disclosure or confront partner. Coordinate with social services.",
+        "metadata": {"source": "WHO IPV Clinical Guidelines 2013", "type": "guideline", "clinical_domain": "mental_health", "target_population": "adults", "page": 1}
+    },
+
+    # ── ONCOLOGY (RESOURCE-LIMITED SETTINGS) ─────────────────────────────────────
+    {
+        "text": "Cervical Cancer: Screening and Prevention (WHO 2021): HPV vaccination: girls 9–14 years, 2-dose schedule (0 and 6 months). Screening: preferred HPV DNA test (5-year interval if negative); if unavailable, VIA (visual inspection with acetic acid) every 3 years. Treat-all approach for screen-and-treat: if VIA+, cryotherapy or thermocoagulation for eligible lesions (ectocervical, <75% coverage, no glandular involvement). Refer for LEEP/cone biopsy or colposcopy if VIA+ and not eligible for ablation. Invasive cancer: staging clinical (FIGO), refer for radiotherapy/chemotherapy. Palliative care if advanced.",
+        "metadata": {"source": "WHO Cervical Cancer Guidelines 2021", "type": "guideline", "clinical_domain": "oncology", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Breast Cancer — Clinical Management in Resource-Limited Settings (WHO 2020): Diagnosis: clinical breast exam, ultrasound (preferred for <40y), mammography (40y+), fine needle aspiration cytology or core biopsy. Staging: chest X-ray, abdominal ultrasound, bone scan if symptomatic. Surgery: modified radical mastectomy (if breast-conserving not available) or BCS + sentinel node/axillary clearance. Systemic therapy: tamoxifen 20mg OD × 5 years for ER+. Chemotherapy: AC × 4 then paclitaxel × 4 for node-positive. Radiotherapy after BCS. Palliative: bisphosphonates for bone mets. Pathological complete response after neoadjuvant = better prognosis.",
+        "metadata": {"source": "WHO Cancer Control Programmes / NCCN Guidelines Developing Nations 2021", "type": "guideline", "clinical_domain": "oncology", "target_population": "adults", "page": 2}
+    },
+
+    # ── TUBERCULOSIS (SADC-SPECIFIC) ──────────────────────────────────────────────
+    {
+        "text": "TB Treatment — Standard Regimens (WHO 2022 / SADC): New drug-susceptible TB: 2HRZE/4HR (isoniazid + rifampicin + pyrazinamide + ethambutol × 2 months intensive, then isoniazid + rifampicin × 4 months). Weight-based dosing: H 5mg/kg (max 300mg), R 10mg/kg (max 600mg), Z 25mg/kg, E 15mg/kg. Pyridoxine 25mg OD with isoniazid to prevent peripheral neuropathy (especially PLHIV). DOT (directly observed therapy) strongly recommended. Smear positive patients: isolate for 2 weeks of treatment. Contact tracing for all new smear-positive cases.",
+        "metadata": {"source": "WHO TB Treatment Guidelines 2022 / Zimbabwe National TB Programme", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "adults", "page": 1}
+    },
+    {
+        "text": "Drug-Resistant TB (DR-TB) Management (WHO 2022): Rifampicin-resistant TB (RR-TB)/MDR-TB: shorter regimen (6BdqPaLfxCfzZ): bedaquiline + pretomanid + linezolid + levofloxacin + clofazimine + pyrazinamide × 6 months (if no fluoroquinolone/linezolid resistance). Or longer regimen 18–20 months. Bedaquiline 400mg OD × 2 weeks then 200mg TIW × 22 weeks. ECG monitoring (QTc). Linezolid: baseline CBC, monitor for myelosuppression and neuropathy. XDR-TB: bedaquiline + pretomanid + linezolid (BPaL regimen) × 6–9 months. All DR-TB must be notified and managed by specialist team.",
+        "metadata": {"source": "WHO DR-TB Treatment Guidelines 2022", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "adults", "page": 2}
+    },
+    {
+        "text": "TB/HIV Co-management (Zimbabwe/SADC Guidelines): Start TB treatment first, then ART within 2–8 weeks (earlier for CD4 <50). Exception: TB meningitis — delay ART 8 weeks (risk of IRIS). Preferred ART with rifampicin: efavirenz-based regimen (TDF/3TC/EFV) — rifampicin induces CYP3A4 but EFV dose unchanged at 600mg. Cotrimoxazole prophylaxis: all TB/HIV patients regardless of CD4 count. IPT (isoniazid preventive therapy): all PLHIV without active TB — isoniazid 300mg + pyridoxine 25mg OD × 6 months. Screen for TB at every HIV visit using WHO 4-symptom screen.",
+        "metadata": {"source": "Zimbabwe National HIV & TB Clinical Guidelines 2023", "type": "guideline", "clinical_domain": "infectious_disease", "target_population": "adults", "page": 3}
+    },
 ]
 
 
-def seed(progress_callback=None):
+def seed(progress_callback=None, rag=None):
     """
     Seed ChromaDB with all guideline chunks.
     progress_callback(seeded: int, total: int, label: str) is called after each chunk is added.
+    Pass an already-initialised RAGEngine via `rag` to avoid a cold BM25 rebuild on startup.
     """
     total = len(GUIDELINES)
     print(f"🌱 Seeding ChromaDB with {total} evidence-based guideline chunks...")
-    rag = RAGEngine()
+    if rag is None:
+        rag = RAGEngine()
 
     for i, g in enumerate(GUIDELINES):
-        rag.add_documents([g["text"]], metadatas=[g["metadata"]], ids=[f"seed-{i:03d}"], upsert=True)
+        # rebuild_bm25=False — avoid O(n²) rebuilds on every chunk;
+        # single rebuild happens once after all chunks are added below.
+        rag.add_documents([g["text"]], metadatas=[g["metadata"]], ids=[f"seed-{i:03d}"], upsert=True, rebuild_bm25=False)
         label = g["metadata"].get("source", "")[:50]
         if progress_callback:
             progress_callback(i + 1, total, label)
+
+    # Single BM25 rebuild after all chunks are in
+    if rag.collection:
+        try:
+            rag._build_bm25_index()
+        except Exception as e:
+            print(f"⚠️  BM25 rebuild failed (non-fatal): {e}")
 
     count = rag.collection.count() if rag.collection else 0
     print(f"✅ Done. ChromaDB now contains {count} documents.")

@@ -8,9 +8,11 @@ interface TenantCardProps {
   onDelete: (id: string) => void;
   onManageUsers: (tenant: Tenant) => void;
   onConfigureDhis2?: (tenant: Tenant) => void;
+  isSelected?: boolean;
+  onSelect?: (id: string) => void;
 }
 
-export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, onDelete, onManageUsers, onConfigureDhis2 }) => {
+export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, onDelete, onManageUsers, onConfigureDhis2, isSelected, onSelect }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const protocol = process.env.REACT_APP_PROTOCOL || window.location.protocol.replace(':', '') || 'https';
@@ -43,6 +45,14 @@ export const TenantCard: React.FC<TenantCardProps> = ({ tenant, onStatusChange, 
         <div className="p-5 border-b border-white/[0.05]">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
+              {onSelect && (
+                <input
+                  type="checkbox"
+                  checked={isSelected || false}
+                  onChange={() => onSelect(tenant.id)}
+                  className="mt-2 h-4 w-4 rounded border-white/[0.3] bg-white/[0.05] text-[#0AA98A] focus:ring-[#0AA98A] cursor-pointer"
+                />
+              )}
               <div className="relative shrink-0">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.1] bg-[#0D1829] overflow-hidden">
                   {tenant.logoUrl ? (

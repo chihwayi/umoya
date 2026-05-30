@@ -4,6 +4,7 @@ import { tenantAPI, authAPI } from '../services/api';
 import { TenantCard } from '../components/TenantCard';
 import { CreateTenantModal } from '../components/CreateTenantModal';
 import { TenantDetailsModal } from '../components/TenantDetailsModal';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { SystemOverview } from '../components/SystemOverview';
 import { HealthMonitor } from '../components/HealthMonitor';
 import { AuditLogs } from '../components/AuditLogs';
@@ -171,6 +172,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [detailsFocusSection, setDetailsFocusSection] = useState<'default' | 'dhis2'>('default');
   const [currentView, setCurrentView] = useState<ViewId>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedTenantIds, setSelectedTenantIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const loadTenants = useCallback(async () => {
     try {
@@ -224,6 +227,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const handleDeleteTenant = async (id: string) => {
     try {
       await tenantAPI.deleteTenant(id);
+      if (selectedTenant?.id === id) {
+        setDetailsModalOpen(false);
+        setSelectedTenant(null);
+      }
       success('Success', 'Tenant deleted successfully');
       loadTenants();
     } catch {
@@ -241,6 +248,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setSelectedTenant(tenant);
     setDetailsFocusSection('dhis2');
     setDetailsModalOpen(true);
+  };
+
+  const toggleTenantSelect = (id: string) => {
+    setSelectedTenantIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkSuspend = async () => {
+    if (!selectedTenantIds.size) return;
+    setBulkLoading(true);
+    try {
+      await Promise.all([...selectedTenantIds].map(id => tenantAPI.updateTenantStatus(id, 'suspended')));
+      setSelectedTenantIds(new Set());
+      loadTenants();
+      success('Bulk suspend', `${selectedTenantIds.size} tenants suspended`);
+    } catch {
+      notifyError('Bulk Error', 'Some tenants could not be suspended');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkExportCsv = () => {
+    const selected = tenants.filter(t => selectedTenantIds.has(t.id));
+    const rows = [
+      ['Name', 'Subdomain', 'Status', 'Tier', 'Mode', 'Email', 'Created'].join(','),
+      ...selected.map(t => [
+        `"${t.clinicName}"`, t.subdomain, t.status, t.subscriptionTier,
+        t.subscriptionMode, t.contactEmail, t.createdAt
+      ].join(','))
+    ];
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tenants.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -407,18 +455,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               </div>
             )}
 
-            {currentView === 'overview' && <SystemOverview tenants={tenants} />}
-            {currentView === 'health' && <HealthMonitor />}
-            {currentView === 'audit' && <AuditLogs />}
-            {currentView === 'security' && <SecurityPanel />}
-            {currentView === 'backups' && <BackupManager />}
-            {currentView === 'terminology' && <TerminologyImport />}
-            {currentView === 'cdss' && <CdssAdmin />}
-            {currentView === 'requests' && <DemoAccessRequestsPanel />}
-            {currentView === 'db-drift' && <DatabaseDriftPanel />}
-            {currentView === 'rollout' && <RolloutDashboard />}
-            {currentView === 'baa-registry' && <BaaRegistryPage />}
-            {currentView === 'data-migration' && <DataMigrationPanel tenants={tenants} />}
+            {currentView === 'overview' && <ErrorBoundary><SystemOverview tenants={tenants} /></ErrorBoundary>}
+            {currentView === 'health' && <ErrorBoundary><HealthMonitor /></ErrorBoundary>}
+            {currentView === 'audit' && <ErrorBoundary><AuditLogs /></ErrorBoundary>}
+            {currentView === 'security' && <ErrorBoundary><SecurityPanel /></ErrorBoundary>}
+            {currentView === 'backups' && <ErrorBoundary><BackupManager /></ErrorBoundary>}
+            {currentView === 'terminology' && <ErrorBoundary><TerminologyImport /></ErrorBoundary>}
+            {currentView === 'cdss' && <ErrorBoundary><CdssAdmin /></ErrorBoundary>}
+            {currentView === 'requests' && <ErrorBoundary><DemoAccessRequestsPanel /></ErrorBoundary>}
+            {currentView === 'db-drift' && <ErrorBoundary><DatabaseDriftPanel /></ErrorBoundary>}
+            {currentView === 'rollout' && <ErrorBoundary><RolloutDashboard /></ErrorBoundary>}
+            {currentView === 'baa-registry' && <ErrorBoundary><BaaRegistryPage /></ErrorBoundary>}
+            {currentView === 'data-migration' && <ErrorBoundary><DataMigrationPanel tenants={tenants} /></ErrorBoundary>}
 
             {currentView === 'tenants' && (
               <div className="space-y-6">
@@ -445,6 +493,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                   ))}
                 </div>
 
+                {/* Bulk action bar */}
+                {selectedTenantIds.size > 0 && (
+                  <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[#3B9EFF]/20 bg-[#3B9EFF]/[0.06] px-4 py-3">
+                    <span className="text-sm font-semibold text-[#3B9EFF]">{selectedTenantIds.size} selected</span>
+                    <button onClick={() => setSelectedTenantIds(new Set())} className="text-xs text-[#5A78A0] hover:text-white transition">Clear</button>
+                    <div className="ml-auto flex gap-2">
+                      <button onClick={handleBulkExportCsv} className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white/[0.07] text-white hover:bg-white/[0.12] transition">
+                        Export CSV
+                      </button>
+                      <button onClick={handleBulkSuspend} disabled={bulkLoading} className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30 transition disabled:opacity-50">
+                        {bulkLoading ? 'Suspending…' : 'Suspend All'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Tenants grid */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {tenants.map((tenant) => (
@@ -455,6 +519,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       onDelete={handleDeleteTenant}
                       onManageUsers={handleManageUsers}
                       onConfigureDhis2={handleConfigureDhis2}
+                      isSelected={selectedTenantIds.has(tenant.id)}
+                      onSelect={toggleTenantSelect}
                     />
                   ))}
                 </div>

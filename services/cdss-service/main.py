@@ -2609,7 +2609,16 @@ def _run_seed_job(job_id: str) -> None:
 
     try:
         from seed_guidelines import seed
-        result = seed(progress_callback=_progress)
+        # Use the already-running engine if available (BM25 already warm).
+        # If the engine hasn't been lazily initialised yet, create a lightweight
+        # seed-only instance that skips the slow BM25 build — seeding only needs
+        # the embedding model and ChromaDB collection, not BM25.
+        if diagnostic_assistant and diagnostic_assistant.rag_engine:
+            existing_rag = diagnostic_assistant.rag_engine
+        else:
+            from ai_models.rag_engine import RAGEngine
+            existing_rag = RAGEngine(skip_bm25=True)
+        result = seed(progress_callback=_progress, rag=existing_rag)
         # Rebuild BM25 in-memory index so searches pick up the seeded docs immediately
         if diagnostic_assistant and diagnostic_assistant.rag_engine:
             diagnostic_assistant.rag_engine._build_bm25_index()

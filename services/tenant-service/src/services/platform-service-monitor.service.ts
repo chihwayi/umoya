@@ -100,8 +100,9 @@ export class PlatformServiceMonitorService {
       id: 'ollama',
       name: 'Ollama Runtime',
       description: 'Local LLM runtime used by AI workflows',
-      containerName: process.env.CONTAINER_OLLAMA ? process.env.CONTAINER_OLLAMA : undefined,
-      restartable: true,
+      containerName: process.env.CONTAINER_OLLAMA || undefined,
+      // restartable only when explicitly containerised via CONTAINER_OLLAMA
+      restartable: !!process.env.CONTAINER_OLLAMA,
     },
   ];
 
@@ -128,6 +129,55 @@ export class PlatformServiceMonitorService {
 
   private readonly runtimeResults = new Map<RuntimeTestId, RuntimeTestResult>();
 
+  /** Describes the active CLINICAL_LLM_BACKEND with its configuration status. */
+  private getAiBackendInfo(): Record<string, any> {
+    const backend = (process.env.CLINICAL_LLM_BACKEND ?? 'ollama').toLowerCase();
+    const info: Record<string, any> = { backend };
+
+    switch (backend) {
+      case 'ollama':
+        info.label = 'Ollama (local)';
+        info.configured = !!process.env.OLLAMA_BASE_URL;
+        info.endpoint = process.env.OLLAMA_BASE_URL || process.env.LLM_API_URL || null;
+        info.model = process.env.OLLAMA_MODEL || process.env.LLM_MODEL_NAME || null;
+        break;
+      case 'aws_bedrock':
+        info.label = 'AWS Bedrock';
+        info.configured = !!(
+          (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) ||
+          process.env.AWS_PROFILE
+        );
+        info.endpoint = `https://bedrock-runtime.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`;
+        info.model = process.env.BEDROCK_MODEL_ID || null;
+        info.region = process.env.AWS_REGION || null;
+        info.profile = process.env.AWS_PROFILE || null;
+        info.hint = info.configured
+          ? null
+          : 'Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or AWS_PROFILE in .env';
+        break;
+      case 'anthropic':
+        info.label = 'Anthropic (direct)';
+        info.configured = !!process.env.ANTHROPIC_API_KEY;
+        info.endpoint = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
+        info.model = process.env.ANTHROPIC_MODEL || null;
+        info.hint = info.configured ? null : 'Set ANTHROPIC_API_KEY in .env';
+        break;
+      case 'azure_openai':
+        info.label = 'Azure OpenAI';
+        info.configured = !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY);
+        info.endpoint = process.env.AZURE_OPENAI_ENDPOINT || null;
+        info.model = process.env.AZURE_OPENAI_DEPLOYMENT || null;
+        info.hint = info.configured ? null : 'Set AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY in .env';
+        break;
+      default:
+        info.label = backend;
+        info.configured = false;
+        info.hint = `Unknown CLINICAL_LLM_BACKEND value: "${backend}"`;
+    }
+
+    return info;
+  }
+
   async getPlatformServicesOverview() {
     const runtimeConfig = await this.runtimeEndpointConfigService.getConfig();
     const docker = await this.getDockerStatus();
@@ -140,6 +190,7 @@ export class PlatformServiceMonitorService {
       generatedAt: new Date().toISOString(),
       docker,
       runtimeConfig,
+      aiBackend: this.getAiBackendInfo(),
       services,
       runtimeTests: this.runtimeTests.map((test) => {
         const latest = this.runtimeResults.get(test.id);

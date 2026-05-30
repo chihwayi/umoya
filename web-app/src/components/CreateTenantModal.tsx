@@ -71,9 +71,22 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
   const selectedPaidModules = sanitizeSelectedModules(formData.enabledModules);
   const isClaimsOnly = !isDemoMode && resolvePaidPackagePreset(selectedPaidModules) === 'claims_only';
 
+  const [error, setError] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    const subdomainRegex = /^[a-z0-9-]+$/;
+    if (!subdomainRegex.test(formData.subdomain || '')) {
+      setError('Subdomain can only contain lowercase letters, numbers, and hyphens');
+      return;
+    }
+    if ((formData.subdomain || '').length < 3) {
+      setError('Subdomain must be at least 3 characters');
+      return;
+    }
+
+    setError('');
     let finalLogoUrl = formData.logoUrl;
 
     if (logoFile) {
@@ -176,6 +189,14 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create New Tenant" size="xl">
+      {error && (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/[0.08] px-4 py-3 text-sm text-red-300">
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {error}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Logo Upload Section */}
         <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300 hover:border-blue-500 transition-colors cursor-pointer group"
