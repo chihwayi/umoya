@@ -6,7 +6,7 @@ import { patientPortalApi } from '../services/api';
 
 const PatientPortalLogin: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const brandLogoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark-transparent.png`;
+  const brandLogoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
 
@@ -51,7 +51,7 @@ const PatientPortalLogin: React.FC = () => {
             Patient access
           </div>
           <div className="mt-6 flex items-center gap-4">
-            <img src={brandLogoSrc} alt="Umoya logo" className="h-14 w-auto" />
+            <img src={brandLogoSrc} alt="Umoya logo" className="h-14 w-auto" style={{ mixBlendMode: 'screen' }} />
             <div>
               <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
               <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">
@@ -86,7 +86,7 @@ const PatientPortalLogin: React.FC = () => {
 
         <section className="rounded-[36px] border border-[#253A58] bg-[linear-gradient(180deg,rgba(14,24,41,0.98),rgba(8,14,26,0.99))] p-8 shadow-[0_35px_120px_rgba(0,0,0,0.45)]">
           <div className="mb-6 flex items-center gap-3">
-            <img src={brandLogoSrc} alt="Umoya logo" className="h-10 w-auto" />
+            <img src={brandLogoSrc} alt="Umoya logo" className="h-10 w-auto" style={{ mixBlendMode: 'screen' }} />
             <div>
               <h2 style={{ fontFamily: '"Fraunces", serif' }} className="text-2xl text-white">Patient Portal</h2>
               <p className="text-xs text-[#7A92B8]">Tenant: {tenantSlug}</p>

@@ -190,7 +190,7 @@ const CDSSIngestPanel: React.FC<{
 
 const TenantDirectory: React.FC = () => {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark-transparent.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
 
   // CDSSIngestPanel is only for super-admins logged in to the admin portal (web-app on :3011)
   const isSuperAdmin = (() => {
@@ -325,7 +325,7 @@ const TenantDirectory: React.FC = () => {
                   className="transition hover:opacity-80"
                   title="Back to Umoya overview"
                 >
-                  <img src={logoSrc} alt="Umoya logo" className="h-8 w-auto sm:h-10" />
+                  <img src={logoSrc} alt="Umoya logo" className="h-8 w-auto sm:h-10" style={{ mixBlendMode: 'screen' }} />
                 </button>
                 <div>
                   <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>

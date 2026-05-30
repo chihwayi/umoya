@@ -494,7 +494,7 @@ const liveActivityItems = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark-transparent.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
   const currentYear = new Date().getFullYear();
 
   const [form, setForm] = useState({
@@ -649,9 +649,7 @@ export default function LandingPage() {
               className="flex items-center gap-3"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             >
-              <div className="rounded-2xl border border-[#1E3A5F] bg-white/90 p-1.5 shadow-[0_0_30px_rgba(10,169,138,0.15)]">
-                <img src={logoSrc} alt="Umoya" className="h-9 w-auto md:h-10" />
-              </div>
+              <img src={logoSrc} alt="Umoya" className="h-9 w-auto md:h-10" style={{ mixBlendMode: 'screen' }} />
               <div className="text-left leading-none">
                 <div className="text-[10px] uppercase tracking-[0.32em] text-[#5A78A0]">Umoya</div>
                 <div
@@ -1469,9 +1467,7 @@ export default function LandingPage() {
               {/* Brand */}
               <div>
                 <div className="flex items-center gap-3">
-                  <div className="rounded-2xl border border-[#1A2E45] bg-white/90 p-1.5">
-                    <img src={logoSrc} alt="Umoya" className="h-8 w-auto" />
-                  </div>
+                  <img src={logoSrc} alt="Umoya" className="h-8 w-auto" style={{ mixBlendMode: 'screen' }} />
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#4A6A8A]">Umoya</p>
                     <p className="text-sm font-bold text-white">Clinical Intelligence Platform</p>

@@ -23,7 +23,7 @@ const EHRLogin: React.FC = () => {
   const [tenantInfoResolved, setTenantInfoResolved] = useState(false);
   const [tenantLogoReady, setTenantLogoReady] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark-transparent.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
 
   useEffect(() => {
     const fetchTenantDetails = async () => {
@@ -170,7 +170,7 @@ const EHRLogin: React.FC = () => {
           </div>
 
           <div className="mt-6 flex items-center gap-4">
-            <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto" />
+            <img src={logoSrc} alt="Umoya logo" className="h-14 w-auto" style={{ mixBlendMode: 'screen' }} />
             <div>
               <div className="text-xs uppercase tracking-[0.28em] text-[#7A92B8]">Umoya</div>
               <h1 style={{ fontFamily: '"Fraunces", serif' }} className="mt-1 text-4xl text-white">
@@ -220,7 +220,7 @@ const EHRLogin: React.FC = () => {
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center p-4">
-                      <img src={logoSrc} alt="Umoya logo" className="h-full w-full object-contain" />
+                      <img src={logoSrc} alt="Umoya logo" className="h-full w-full object-contain" style={{ mixBlendMode: 'screen' }} />
                     </div>
                   )}
                 </div>
