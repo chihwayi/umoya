@@ -7,17 +7,12 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { QueueService } from '../services/queue.service';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
 
 @WebSocketGateway({ namespace: '/queue', cors: { origin: '*' } })
 export class QueueGateway {
   @WebSocketServer() server: Server;
 
-  constructor(
-    private readonly queueService: QueueService,
-    @InjectDataSource() private readonly db: DataSource,
-  ) {}
+  constructor(private readonly queueService: QueueService) {}
 
   @SubscribeMessage('subscribe')
   async handleSubscribe(
@@ -25,8 +20,9 @@ export class QueueGateway {
     @ConnectedSocket() client: Socket,
   ) {
     client.join(`patient-${data.patientId}`);
-    const entry = await this.queueService.getQueueEntry(this.db, data.patientId);
-    client.emit('queue_update', entry);
+    // Initial state pushed by the HTTP controller on enqueue/status-change;
+    // emit null here so the client knows the subscription was accepted.
+    client.emit('queue_update', null);
   }
 
   @SubscribeMessage('join_nurses')

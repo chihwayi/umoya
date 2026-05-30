@@ -528,6 +528,7 @@ import { StreamingDiagnosisService } from './services/streaming-diagnosis.servic
 import { SmartSchedulingService } from './services/smart-scheduling.service';
 import { SmartDefaultsService } from './services/smart-defaults.service';
 import { EncounterCopilotService } from './services/encounter-copilot.service';
+import { AiSurfaceContractService } from './services/ai-surface-contract.service';
 import { FormularyOptimizationService } from './services/formulary-optimization.service';
 import { PredictiveRiskService } from './services/predictive-risk.service';
 import { FederatedLearningService } from './services/federated-learning.service';
@@ -538,6 +539,7 @@ import { HealthEducationService } from './services/health-education.service';
 import { PatientHealthEducationService } from './services/patient-health-education.service';
 import { OfflineSyncService } from './services/offline-sync.service';
 import { IotService } from './services/iot.service';
+import { PatientIntelligenceService } from './services/patient-intelligence.service';
 import { RadiologyAiService } from './services/radiology-ai.service';
 import { AlertDeliveryService } from './services/alert-delivery.service';
 import { ModelMonitoringService } from './services/model-monitoring.service';
@@ -1052,6 +1054,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     StreamingDiagnosisService,
     SmartSchedulingService,
     SmartDefaultsService,
+    AiSurfaceContractService,
     EncounterCopilotService,
     FormularyOptimizationService,
     PredictiveRiskService,
@@ -1114,6 +1117,32 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CdssOutcomeBatchService,
     NurseTaskService,
     CareGapSchedulerService,
+    PatientIntelligenceService,
+    AmbientService,
+    AppointmentPrecharterService,
+    InboxTriageService,
+    TbService,
+    PediatricsService,
+    MentalHealthService,
+    CervicalCancerService,
+    FamilyPlanningService,
+    MalariaService,
+    GeriatricsService,
+    NeurologyService,
+    PulmonologyService,
+    NephrologyService,
+    DermatologyService,
+    PalliativeService,
+    NutritionService,
+    NhlsHl7Service,
+    TierNetService,
+    EtrNetService,
+    DatimMerService,
+    OpenmrsFhirService,
+    MflService,
+    MalariaEpisodeService,
+    IcuService,
+    NtdService,
     AmbientGateway,
     InboxGateway,
     CriticalAlertGateway,

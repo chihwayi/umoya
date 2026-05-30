@@ -48,6 +48,7 @@ import {
 } from '../dto/post-visit.dto';
 import { PostVisitService } from '../services/post-visit.service';
 import { UploadSecurityService } from '../services/upload-security.service';
+import { FollowUpRecommendationService } from '../services/followup-recommendation.service';
 
 @ApiTags('Post Visit AI Companion')
 @ApiSecurity('tenant-key')
@@ -58,6 +59,7 @@ export class PostVisitController {
   constructor(
     private readonly postVisitService: PostVisitService,
     private readonly uploadSecurityService: UploadSecurityService,
+    private readonly followUpService: FollowUpRecommendationService,
   ) {}
 
   private resolveUserId(req: RequestWithTenant) {
@@ -70,10 +72,23 @@ export class PostVisitController {
   @ApiOperation({ summary: 'Create a post-visit session linked to appointment/consultation context' })
   @ApiResponse({ status: 201, description: 'Post-visit session created' })
   async createSession(@Body() body: CreatePostVisitSessionDto, @Request() req: RequestWithTenant) {
-    return this.postVisitService.createSession(req.tenantDb, body, {
+    const session = await this.postVisitService.createSession(req.tenantDb, body, {
       tenantId: req.tenantId,
       actorUserId: this.resolveUserId(req),
     });
+
+    // Fire follow-up recommendation generation async — does not block the response
+    if (body.patientId) {
+      this.followUpService
+        .generateRecommendation(req.tenantDb, {
+          patientId: body.patientId,
+          encounterId: body.consultationId ?? body.appointmentId ?? undefined,
+          triggeredBy: this.resolveUserId(req) ?? 'system',
+        })
+        .catch(() => { /* non-critical — nightly sweep is the safety net */ });
+    }
+
+    return session;
   }
 
   @Get('sessions')

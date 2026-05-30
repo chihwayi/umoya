@@ -179,10 +179,10 @@ const audiences = [
     color: '#3B9EFF',
     headline: 'DHIS2-native reporting. Program visibility at scale.',
     points: [
-      'HIV program workflows with cohort and retention tracking',
-      'Vaccination registers and immunization schedules',
-      'DHIS2 aggregate and tracker data push',
-      'Maternal health, TB, NCD, sickle cell, and epilepsy program dashboards',
+      '18 DHIS2 aggregate profiles — TB, malaria, HIV, NCD, maternal, neonatal, lab, ICU, HAI, surgical, nutrition, mental health, pharmacy, cervical cancer & outpatient morbidity',
+      'Bi-directional DHIS2 sync — push clinical data out AND pull district/national benchmarks back into the doctor dashboard',
+      'Tracker TEI sync with real-time clinical event push (encounters, labs, vitals as DHIS2 program stage events)',
+      'DATIM MER submission for PEPFAR-funded facilities',
       'SORMAS + IHR Annex 2 outbreak notification and PACTR trial registry integration',
       'CRVS integration — birth and death events auto-reported to national civil registries',
       'Mobile app in 8 languages (en, fr, pt, sw, sn, zu, nd, af) — locale auto-detected from device',
@@ -349,7 +349,7 @@ const standardsGrid = [
     org: 'University of Oslo',
     icon: Globe,
     color: '#0AA98A',
-    description: 'Native DHIS2 integration for aggregate data push, tracker programs, and program reporting. HIV, maternal, vaccination, and NCD program visibility.',
+    description: '18 aggregate profiles (TB, malaria, HIV, NCD, maternal, neonatal, lab, ICU, HAI, surgical, nutrition, mental health, pharmacy, cervical cancer & more). Bi-directional sync — facility benchmarks pulled from DHIS2 analytics back into the EHR so doctors see how their facility compares to district and national targets. Tracker TEI sync with real-time clinical event push for encounters, lab results, and vital signs. DATIM MER submission for PEPFAR-funded programs.',
   },
   {
     standard: 'LOINC',
@@ -662,6 +662,7 @@ export default function LandingPage() {
             <nav className="hidden items-center gap-7 text-sm text-[#8FA8CC] lg:flex">
               <a href="#why" className="transition-colors hover:text-white">Why Umoya</a>
               <a href="#ai" className="transition-colors hover:text-white">AI & CDSS</a>
+              <a href="#dhis2" className="transition-colors hover:text-white">DHIS2</a>
               <a href="#standards" className="transition-colors hover:text-white">Standards</a>
               <a href="#modules" className="transition-colors hover:text-white">Modules</a>
               <a href="#request-access" className="transition-colors hover:text-white">Get Access</a>
@@ -732,7 +733,7 @@ export default function LandingPage() {
 
                 {/* Compliance badges */}
                 <div className="mt-8 flex flex-wrap gap-2">
-                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2', 'LOINC', 'HIPAA-aware', 'HL7', '65+ modules', '25+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS', 'Inventory AI'].map((tag) => (
+                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2 18-profile', 'LOINC', 'HIPAA-aware', 'HL7', '65+ modules', '30+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS', 'Inventory AI', 'Tracker sync', 'Benchmark pull-back'].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8FA8CC]"
@@ -772,7 +773,7 @@ export default function LandingPage() {
               </div>
 
               {/* Right — live AI activity panel */}
-              <div className="rounded-[28px] border border-[#1A2E4A] bg-[#0A1525] shadow-[0_40px_120px_rgba(0,0,0,0.6)] overflow-hidden">
+              <div className="rounded-[28px] border border-[#1A2E4A] bg-[#0A1525] shadow-[0_40px_120px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between border-b border-white/[0.06] bg-[#0D1C30] px-5 py-4">
                   <div className="flex items-center gap-2.5">
                     <div className="flex gap-1.5">
@@ -788,7 +789,7 @@ export default function LandingPage() {
                   </span>
                 </div>
 
-                <div className="p-5 space-y-2 min-h-[220px]">
+                <div className="p-5 space-y-2 h-[500px] overflow-y-auto [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/10">
                   {liveActivityItems.map((item, i) => (
                     <div
                       key={i}
@@ -807,32 +808,30 @@ export default function LandingPage() {
                   ))}
                 </div>
 
-                <div className="border-t border-white/[0.06] bg-[#0D1C30] px-5 py-4 space-y-3">
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-[#4A6A90]">Platform standards layer</div>
-                  <div className="flex flex-wrap gap-2">
-                    {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC', 'RxNorm', 'HIPAA'].map((s) => (
-                      <span
-                        key={s}
-                        className="rounded-lg border border-[#1E3A5F] bg-[#0A1525] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-[#6A9AC8]"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
+                <div className="border-t border-white/[0.06] bg-[#0D1C30] px-5 py-3 flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-[#4A6A90] shrink-0 mr-1">Standards:</span>
+                  {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC', 'RxNorm', 'HIPAA'].map((s) => (
+                    <span
+                      key={s}
+                      className="rounded-md border border-[#1E3A5F] bg-[#0A1525] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#6A9AC8]"
+                    >
+                      {s}
+                    </span>
+                  ))}
                 </div>
 
-                <div className="border-t border-white/[0.06] px-5 py-5 space-y-3">
+                <div className="border-t border-white/[0.06] px-5 py-3 space-y-2">
                   {[
                     { label: 'Sepsis Risk Score', val: '78%', color: '#E8614D', w: '78%' },
                     { label: 'ANC Cohort Coverage', val: '94%', color: '#0AA98A', w: '94%' },
                     { label: 'CDSS Alert Precision', val: '91%', color: '#3B9EFF', w: '91%' },
                   ].map((bar) => (
                     <div key={bar.label}>
-                      <div className="mb-1.5 flex justify-between text-[11px]">
+                      <div className="mb-1 flex justify-between text-[11px]">
                         <span className="text-[#7A9CC0]">{bar.label}</span>
                         <span className="font-bold" style={{ color: bar.color }}>{bar.val}</span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-white/[0.07]">
+                      <div className="h-1 rounded-full bg-white/[0.07]">
                         <div
                           className="h-full rounded-full transition-all duration-1000"
                           style={{ width: bar.w, background: bar.color }}
@@ -1078,6 +1077,128 @@ export default function LandingPage() {
             </div>
           </section>
 
+          {/* ── DHIS2 DEEP-DIVE ── */}
+          <section id="dhis2" className="relative py-16 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-[#070C17] via-[#060E1F] to-[#070C17]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_50%,rgba(232,97,77,0.06),transparent)]" />
+            <div className="relative mx-auto max-w-7xl px-5 lg:px-8">
+              <div className="mb-10 text-center">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#E8614D]/20 bg-[#E8614D]/[0.07] px-4 py-2 text-xs font-bold uppercase tracking-[0.26em] text-[#F4896A]">
+                  <Globe className="h-3.5 w-3.5" />
+                  DHIS2 — Deepest Integration in Any Open EHR
+                </div>
+                <h2 style={{ fontFamily: '"Fraunces", serif' }} className="mx-auto max-w-3xl text-4xl font-black text-white md:text-5xl">
+                  Every clinical domain.{' '}
+                  <span style={{ color: '#E8614D' }}>Both directions.</span>
+                </h2>
+                <p className="mx-auto mt-4 max-w-2xl text-[#7A9CC0]">
+                  18 aggregate profiles sourced from live EHR data — push to DHIS2, pull benchmarks back. Patient-level tracker events for encounters, labs, and vitals. No manual data entry. No export files.
+                </p>
+              </div>
+
+              {/* Aggregate profiles grid */}
+              <div className="mb-10">
+                <div className="mb-4 text-xs font-bold uppercase tracking-[0.25em] text-[#5A78A0]">18 Aggregate Profiles — Period-Filtered from Live Clinical Data</div>
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+                  {[
+                    { label: 'Service Delivery', sub: 'OPD · Admissions · ED' },
+                    { label: 'Maternal & Newborn', sub: 'ANC 1/4/8+ · Deliveries' },
+                    { label: 'HIV Monthly', sub: 'VL Suppression · ART' },
+                    { label: 'Immunization', sub: 'DTP1/3 · MCV1 · AEFI' },
+                    { label: 'Pharmacy Stock', sub: 'On-hand · Dispensed' },
+                    { label: 'Tuberculosis', sub: 'Notifications · Outcomes' },
+                    { label: 'Malaria', sub: 'RDT+ · Species · Severity' },
+                    { label: 'NCD', sub: 'HTN · DM · CKD · Stroke' },
+                    { label: 'Outpatient Morbidity', sub: 'Top-10 ICD-10 by burden' },
+                    { label: 'Laboratory', sub: 'Volume · TAT · Critical values' },
+                    { label: 'Mental Health', sub: 'PHQ-9 · Suicide risk' },
+                    { label: 'Nutrition (SAM/MAM)', sub: 'MUAC · Cure rates · RUTF' },
+                    { label: 'ICU', sub: 'APACHE · LOS · Ventilator' },
+                    { label: 'Infection Control', sub: 'SSI · CAUTI · MRSA · ESBL' },
+                    { label: 'Surgical', sub: 'Volume · Complications · TAT' },
+                    { label: 'Cervical Cancer', sub: 'VIA+ · Cryotherapy · LEEP' },
+                    { label: 'Neonatal', sub: 'LBW · Apgar · SCBU · Deaths' },
+                    { label: 'PMTCT', sub: 'HIV+ booking · Infant testing' },
+                  ].map((p) => (
+                    <div key={p.label} className="rounded-xl border border-[#1A2E4A] bg-[#0A1525] px-3 py-2.5">
+                      <p className="text-xs font-bold text-white">{p.label}</p>
+                      <p className="text-[10px] text-[#4A6A90]">{p.sub}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Three pillars */}
+              <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
+                {[
+                  {
+                    color: '#E8614D',
+                    title: 'Push — Zero Manual Entry',
+                    points: [
+                      'All 18 profiles queried from live EHR tables — no export, no CSV, no copy-paste',
+                      'Metrics period-filtered (YYYYMM) so each monthly report reflects that month only',
+                      'Data element IDs resolved dynamically from DHIS2 metadata by code',
+                      'Auto period fallback when DHIS2 rejects a future period',
+                      'Full retry queue with audit log; scheduler runs hourly per tenant',
+                    ],
+                  },
+                  {
+                    color: '#3B9EFF',
+                    title: 'Tracker — Patient-Level Events',
+                    points: [
+                      'Patients pushed as TEIs with demographics; org unit and attribute IDs resolved from DHIS2',
+                      'Encounters pushed as program stage events with ICD-10 diagnoses and ward',
+                      'Lab results pushed as events with LOINC codes, values, units, and critical flags',
+                      'Vital signs pushed as events with NEWS2 score when computed',
+                      'Auto-enrollment in programs requiring registration before first event',
+                    ],
+                  },
+                  {
+                    color: '#0AA98A',
+                    title: 'Pull-Back — Benchmarks in the EHR',
+                    points: [
+                      'Doctor dashboard pulls 10 key indicators from DHIS2 analytics — no login to DHIS2 required',
+                      'TB cure rate, HIV VL suppression, malaria positivity, ANC4, BP control, ICU mortality, HAI cases, lab TAT, cervical screening, neonatal deaths',
+                      'Facility-level values compared to submitted data — coming: district/national peer comparison',
+                      'Graceful degradation to null when DHIS2 unavailable; mock mode for development',
+                    ],
+                  },
+                ].map((pillar) => (
+                  <div key={pillar.title} className="rounded-[20px] border border-white/[0.08] bg-gradient-to-b from-[#0D1829] to-[#070C17] p-5">
+                    <div className="mb-3 h-1 w-10 rounded-full" style={{ background: pillar.color }} />
+                    <h3 className="mb-3 text-sm font-bold text-white">{pillar.title}</h3>
+                    <ul className="space-y-2">
+                      {pillar.points.map((pt) => (
+                        <li key={pt} className="flex items-start gap-2 text-xs leading-5 text-[#7A9AB8]">
+                          <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full" style={{ background: pillar.color }} />
+                          {pt}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+
+              {/* Planned roadmap strip */}
+              <div className="mt-8 rounded-2xl border border-[#1E3A5F]/60 bg-[#0A1525]/60 px-5 py-4">
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.25em] text-[#4A6A90]">On the roadmap</div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    'DHIS2 validation rule pull (pre-submission checks)',
+                    'District & national benchmark comparison',
+                    'LLM-generated report narrative before DHIS2 submission',
+                    'Programme indicator subscription → EHR alerts',
+                    'DATIM MER v3 indicators',
+                  ].map((item) => (
+                    <span key={item} className="rounded-lg border border-[#1E3A5F] bg-[#070C17] px-2.5 py-1 text-[10px] text-[#4A6A90]">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* ── CLINICAL MODULES ── */}
           <section id="modules" className="mx-auto max-w-7xl px-4 py-10 sm:px-5 lg:px-8">
             <div className="mb-8 text-center">
@@ -1240,31 +1361,6 @@ export default function LandingPage() {
                     className="w-full rounded-2xl border border-[#1E3A5F] bg-[#070C17] px-4 py-3 text-sm text-white outline-none transition placeholder:text-[#3A5070] focus:border-[#0AA98A]/60 focus:ring-1 focus:ring-[#0AA98A]/20"
                   />
                 </label>
-
-                <div className="mt-4">
-                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A78A0]">
-                    What do you want to evaluate?
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {interestOptions.map((option) => {
-                      const active = selectedInterests.has(option);
-                      return (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => toggleInterest(option)}
-                          className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
-                            active
-                              ? 'border-[#0AA98A]/50 bg-[#0AA98A]/12 text-[#7AEEC8]'
-                              : 'border-[#1E3A5F] bg-[#070C17] text-[#6A88AA] hover:border-[#3B9EFF]/40 hover:text-[#9AB8E8]'
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
 
                 <label className="mt-4 block">
                   <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.2em] text-[#5A78A0]">

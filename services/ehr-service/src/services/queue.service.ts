@@ -85,6 +85,14 @@ export class QueueService {
     );
   }
 
+  async getPatientIdForQueue(db: DataSource, queueId: string): Promise<string | null> {
+    const [row] = await db.query(
+      `SELECT patient_id FROM clinic_queue WHERE id = $1`,
+      [queueId],
+    );
+    return row?.patient_id ?? null;
+  }
+
   async recalculateWaits(db: DataSource): Promise<void> {
     const [config] = await db.query(`SELECT avg_consult_mins FROM queue_config LIMIT 1`);
     const avgMins = config?.avg_consult_mins ?? 10;

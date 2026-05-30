@@ -187,12 +187,72 @@ All AI calls go through a governed pathway that enforces consent checks, PHI red
 
 ---
 
+## DHIS2 Integration — Full Utilization
+
+Umoya implements the deepest DHIS2 integration of any open-source EHR. Every clinical domain is wired to a corresponding DHIS2 reporting profile with full bi-directional sync.
+
+### Aggregate Reporting (18 profiles, all sourced from live clinical data)
+
+| Profile | Key Metrics |
+|---|---|
+| `service_delivery` | Consultations, admissions, discharges, ED visits — period-filtered monthly |
+| `maternal_newborn` | ANC 1/4/8+, deliveries, C-sections, live births, stillbirths, LBW |
+| `hiv_monthly` | PLHIV active, ART coverage, VL suppressed (<1000 and <50), LTFU, treatment failure, TB screened |
+| `immunization_monthly` | DTP1/DTP3, MCV1, fully immunized proxy, AEFI reports |
+| `pharmacy_stock` | Stock on hand, stockout items, dispensed units, dispensing transactions |
+| `ntd_regional` | Cholera, typhoid, schistosomiasis, other NTD new cases |
+| `pmtct_monthly` | Enrolled, HIV+ at booking, ART in pregnancy, infants tested at 6 weeks, infant HIV+ |
+| `tb_quarterly` | New pulmonary (bacteriological + clinical), EPTB, relapse, MDR-TB, XDR-TB, HIV co-infection, ART linkage, outcomes (cured/completed/failed/died/LTFU), contacts investigated, LTBI started |
+| `malaria_monthly` | RDT tested, RDT+, microscopy+, confirmed treated, uncomplicated/severe, deaths, P.falciparum/P.vivax, treatment failure, pregnant women tested/positive |
+| `ncd_monthly` | HTN newly diagnosed/active/BP controlled/on treatment; DM newly diagnosed/active/HbA1c controlled/on insulin; CKD stage 3–5/on RAS blockade; asthma active/uncontrolled; COPD active; stroke admissions/thrombolytics |
+| `outpatient_morbidity` | Total OPD, new attendances, top-10 ICD-10 disease categories (malaria, ARI, diarrhoea, skin, eye, injury, HTN, DM, TB suspect, STI) |
+| `laboratory_monthly` | Total tests ordered/completed, haematology/biochemistry/microbiology volumes, critical values, average TAT in hours, specimen rejections, CD4/VL/malaria RDT/sputum smear counts |
+| `mental_health_monthly` | Screened, depression+/anxiety+ (PHQ-9≥10/GAD-7≥10), substance use+, new care plans, active in care, psychiatric referrals, high suicide risk |
+| `nutrition_monthly` | SAM/MAM admissions, discharge outcomes (cured/died/defaulted/non-responsive), MUAC red/yellow, oedema, RUTF dispensed, therapeutic feeding enrolled |
+| `icu_monthly` | Admissions, deaths, avg LOS in hours, APACHE II ≥25, ventilator days, readmissions, sepsis, cardiac arrest |
+| `hai_monthly` | Total HAIs, SSI/CAUTI/CLABSI/VAP rates, MRSA/ESBL isolates, C.difficile, HAI deaths |
+| `surgical_monthly` | Total/elective/emergency cases, C-sections, major complications, mortality, cancellations, avg operative time, intraop transfusions |
+| `cervical_cancer_monthly` | Women screened, VIA+/Pap+/HPV+, cryotherapy, LEEP, colposcopy referrals, confirmed cancers |
+| `neonatal_monthly` | Live births, stillbirths, LBW, VLBW, preterm, Apgar <7 at 5 min, resuscitation, SCBU admissions, neonatal deaths, HIV-exposed infants, ARV prophylaxis given |
+
+### Tracker Sync (Patient-Level — Bi-Directional)
+
+- **Patient TEI sync** — all active patients pushed as DHIS2 Tracked Entity Instances with demographics; org unit, tracked entity type, and attribute IDs resolved dynamically from DHIS2 metadata
+- **Clinical encounter events** — outpatient and inpatient encounters pushed as DHIS2 program stage events with ICD-10 diagnosis codes, encounter type, ward/department, and clinician UID
+- **Lab result events** — LOINC-coded lab results pushed as program stage events in real time on result; includes test name, value, unit, flag (critical/high/low), and DHIS2 data element resolution by LOINC code
+- **Vital signs events** — complete vital sign sets (BP, HR, RR, SpO₂, temperature, weight, MUAC) pushed as program stage events; NEWS2 score included when computed
+- **Auto-enrollment** — on first event push for a program requiring registration (`WITH_REGISTRATION`), the service checks for an existing enrollment and creates one if absent; enrollment date defaults to event date
+
+### Bi-Directional Sync (Reverse Pull-Back)
+
+- `GET /dhis2/benchmarks/facility` — pull a single data element value for the facility's org unit and period from DHIS2 analytics
+- `GET /dhis2/benchmarks/doctor-dashboard` — pull 10 key performance indicators (TB cure rate, HIV VL suppression, malaria RDT positivity, ANC4 coverage, BP control, ICU mortality, HAI cases, lab TAT, cervical screening positivity, neonatal deaths) from DHIS2 analytics directly into the EHR doctor dashboard — doctors see how their facility compares to submitted data without opening DHIS2
+- All pull-back endpoints gracefully degrade to null values when DHIS2 is unavailable or in mock mode
+
+### Supporting Infrastructure
+
+- **Period-aware querying** — all aggregate metrics use parameterized date bounds (`startDate`, `endDate`) derived from `YYYYMM` period strings; exclusive upper bounds consistently applied
+- **Dynamic metadata resolution** — dataset IDs, data element IDs, and tracked entity attribute IDs are resolved from DHIS2 by code at runtime; hardcoded UIDs only as last-resort fallbacks
+- **Automatic period fallback** — if DHIS2 rejects a period as "future," the error response is parsed to extract the latest allowed period and the submission is automatically retried
+- **Retry and audit** — failed syncs logged to `dhis2_sync_log` with full payload; `POST /dhis2/retry-failed` replays retryable errors (server errors, timeouts) and skips non-retryable 4xx validation failures
+- **Scheduler** — hourly cron per tenant with configurable retry limit, error threshold alerting to Slack or PagerDuty, and manual `POST /dhis2/sync/run-now` override
+- **Mock mode** — `DHIS2_USE_MOCK=true` returns realistic mock responses so development works without a live DHIS2 instance
+
+### Planned (Next)
+
+- DHIS2 validation rule pull — fetch DHIS2-defined validation rules (e.g. ANC4 ≤ ANC1) before submission and flag violations in the UI
+- District/national benchmark comparison — extend pull-back to fetch district and national aggregate values alongside facility values for true peer comparison
+- Automated anomaly narrative — LLM-generated plain-language commentary on aggregate report before submission ("HIV LTFU is 23% above last quarter's rate — review retention protocols")
+- Programme indicator subscription — subscribe to DHIS2 programme indicators and surface alerts back in the EHR (e.g. district VL suppression drops below 85%)
+
+---
+
 ## Interoperability
 
 - FHIR R4 endpoints
 - HL7 messaging
 - CCDA documents
-- DHIS2 integration (HIV, immunization, maternal/newborn, pharmacy stock aggregates)
+- **DHIS2** — 18 aggregate profiles, patient TEI tracker sync, clinical event push, and bi-directional benchmark pull-back (see full section above)
 - WHO SMART Guidelines and IHR international health regulations
 - SNOMED CT and ICD-10 terminology
 - SORMAS — surveillance, outbreak response, and epidemic management

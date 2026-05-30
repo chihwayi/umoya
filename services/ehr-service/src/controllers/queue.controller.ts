@@ -36,12 +36,15 @@ export class QueueController {
   async updateStatus(
     @Req() req: any,
     @Param('queueId') queueId: string,
-    @Body() body: { status: 'called' | 'in_consultation' | 'done' | 'no_show'; patientId: string },
+    @Body() body: { status: 'called' | 'in_consultation' | 'done' | 'no_show' },
   ) {
+    const patientId = await this.queue.getPatientIdForQueue(req.tenantDb, queueId);
     await this.queue.updateStatus(req.tenantDb, queueId, body.status);
     await this.queue.recalculateWaits(req.tenantDb);
-    const entry = await this.queue.getQueueEntry(req.tenantDb, body.patientId);
-    await this.gateway.broadcastQueueUpdate(body.patientId, entry);
+    if (patientId) {
+      const entry = await this.queue.getQueueEntry(req.tenantDb, patientId);
+      await this.gateway.broadcastQueueUpdate(patientId, entry ?? { queueId, status: body.status });
+    }
     const fullQueue = await this.queue.getTodayQueue(req.tenantDb);
     await this.gateway.broadcastNurseQueue(fullQueue);
     return { ok: true };

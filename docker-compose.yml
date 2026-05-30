@@ -156,6 +156,7 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - HF_HOME=/opt/hf_cache
       - TRANSFORMERS_CACHE=/opt/hf_cache
+      - HF_TOKEN=${HF_TOKEN}
       - CDSS_INGEST_MAX_CHUNKS_PER_FILE=400
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
     extra_hosts:
@@ -228,6 +229,7 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - HF_HOME=/opt/hf_cache
       - TRANSFORMERS_CACHE=/opt/hf_cache
+      - HF_TOKEN=${HF_TOKEN}
       - CDSS_INGEST_MAX_CHUNKS_PER_FILE=400
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
     extra_hosts:

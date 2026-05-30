@@ -17,6 +17,17 @@ export class ClinicalSummaryController {
     return summary;
   }
 
+  /** Alias consumed by PatientAiSummaryBar — same data as /clinical-summary */
+  @Get(':patientId/ai-timeline')
+  async getAiTimeline(
+    @Param('patientId') patientId: string,
+    @Req() req: any,
+  ): Promise<unknown> {
+    let summary = await this.summaryService.getSummary(patientId, req.tenantDb);
+    if (!summary) summary = await this.summaryService.generateSummary(patientId, req.tenantDb);
+    return summary;
+  }
+
   @Post(':patientId/clinical-summary/regenerate')
   async regenerate(
     @Param('patientId') patientId: string,

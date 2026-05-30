@@ -113,13 +113,22 @@ export class WearableSyncService {
 
       if (rows.length === 3 && rows.every((r: any) => r.is_flagged)) {
         const level = rows.some((r: any) => r.flag_reason?.startsWith('Critical')) ? 'critical' : 'warning';
-        await db.query(
-          `INSERT INTO wearable_trend_alerts
-             (patient_id, reading_type, alert_level, message)
-           VALUES ($1, $2, $3, $4)`,
-          [patientId, type, level, `3 consecutive abnormal ${type} readings in last 24 h`],
+        const [existing] = await db.query(
+          `SELECT id FROM wearable_trend_alerts
+           WHERE patient_id = $1 AND reading_type = $2 AND acknowledged = FALSE
+             AND triggered_at > now() - interval '24 hours'
+           LIMIT 1`,
+          [patientId, type],
         );
-        this.logger.warn(`Trend alert fired: patient=${patientId} type=${type} level=${level}`);
+        if (!existing) {
+          await db.query(
+            `INSERT INTO wearable_trend_alerts
+               (patient_id, reading_type, alert_level, message)
+             VALUES ($1, $2, $3, $4)`,
+            [patientId, type, level, `3 consecutive abnormal ${type} readings in last 24 h`],
+          );
+          this.logger.warn(`Trend alert fired: patient=${patientId} type=${type} level=${level}`);
+        }
       }
     }
   }

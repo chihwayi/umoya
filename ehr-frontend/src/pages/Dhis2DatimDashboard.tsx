@@ -9,6 +9,11 @@ import {
   RefreshCw,
   Route,
   Send,
+  Activity,
+  TrendingUp,
+  CheckCircle2,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import {
   Bar,
@@ -22,7 +27,7 @@ import {
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 
-type TabKey = 'tracker' | 'datim' | 'mappings';
+type TabKey = 'tracker' | 'datim' | 'mappings' | 'aggregate' | 'benchmarks';
 
 interface Dhis2DatimDashboardProps {
   tenantSlug?: string;
@@ -134,6 +139,32 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
   const [mappings, setMappings] = useState<MappingRow[]>([]);
   const [teiLookupResult, setTeiLookupResult] = useState<any | null>(null);
 
+  // ── Aggregate reporting state ────────────────────────────────────────────
+  const [aggregateProfiles, setAggregateProfiles] = useState<Array<{ key: string; label: string; period: string }>>([]);
+  const [selectedProfile, setSelectedProfile] = useState('service_delivery');
+  const [aggregatePeriod, setAggregatePeriod] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [aggregateResult, setAggregateResult] = useState<any | null>(null);
+  const [aggregateLoading, setAggregateLoading] = useState(false);
+
+  // ── Benchmark / pull-back state ──────────────────────────────────────────
+  const [benchmarkPeriod, setBenchmarkPeriod] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [benchmarkData, setBenchmarkData] = useState<{
+    period: string; mock: boolean;
+    facilityOrgUnit: string | null; districtOrgUnit: string | null; nationalOrgUnit: string | null;
+    indicators: Array<{
+      label: string; dataElement: string; unit: string;
+      facilityValue: number | null; districtAvg: number | null; nationalAvg: number | null;
+      trend: 'above_district' | 'below_district' | 'at_par' | 'no_benchmark';
+    }>;
+  } | null>(null);
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false);
+
   const [hivEnrollmentForm, setHivEnrollmentForm] = useState({
     patientId: '',
     trackedEntityUid: '',
@@ -217,6 +248,49 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
   useEffect(() => {
     void refreshAll();
   }, [refreshAll]);
+
+  // Load aggregate profiles list on mount
+  useEffect(() => {
+    if (!tenantSlug || !token) return;
+    ehrAxios.get('/dhis2/profiles', { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } })
+      .then(r => setAggregateProfiles(r.data?.profiles || []))
+      .catch(() => {});
+  }, [tenantSlug, token]);
+
+  const sendAggregateReport = useCallback(async () => {
+    if (!tenantSlug || !token) return;
+    setAggregateLoading(true);
+    setAggregateResult(null);
+    try {
+      const res = await ehrAxios.post('/dhis2/reports/aggregate',
+        { profile: selectedProfile, period: aggregatePeriod },
+        { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } },
+      );
+      setAggregateResult(res.data);
+      showSuccess('Report sent', `${selectedProfile} → DHIS2: ${res.data?.status}`);
+    } catch (err: any) {
+      setAggregateResult({ status: 'ERROR', message: err?.response?.data?.message || err?.message });
+      showError('Send failed', apiError(err, 'Could not send aggregate report.'));
+    } finally {
+      setAggregateLoading(false);
+    }
+  }, [tenantSlug, token, selectedProfile, aggregatePeriod, showSuccess, showError]);
+
+  const loadBenchmarks = useCallback(async () => {
+    if (!tenantSlug || !token) return;
+    setBenchmarkLoading(true);
+    try {
+      const res = await ehrAxios.get('/dhis2/benchmarks/doctor-dashboard', {
+        params: { period: benchmarkPeriod },
+        headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug },
+      });
+      setBenchmarkData(res.data);
+    } catch (err: any) {
+      showError('Benchmark fetch failed', apiError(err, 'Could not pull benchmarks from DHIS2.'));
+    } finally {
+      setBenchmarkLoading(false);
+    }
+  }, [tenantSlug, token, benchmarkPeriod, showError]);
 
   const submissionChartData = useMemo(
     () =>
@@ -414,6 +488,8 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
             <TabButton active={tab === 'tracker'} icon={<Route className="h-4 w-4" />} label="DHIS2 Tracker" onClick={() => setTab('tracker')} />
             <TabButton active={tab === 'datim'} icon={<Database className="h-4 w-4" />} label="DATIM MER" onClick={() => setTab('datim')} />
             <TabButton active={tab === 'mappings'} icon={<GitMerge className="h-4 w-4" />} label="Indicator Mappings" onClick={() => setTab('mappings')} />
+            <TabButton active={tab === 'aggregate'} icon={<Activity className="h-4 w-4" />} label="Aggregate Reports" onClick={() => setTab('aggregate')} />
+            <TabButton active={tab === 'benchmarks'} icon={<TrendingUp className="h-4 w-4" />} label="Facility Benchmarks" onClick={() => { setTab('benchmarks'); loadBenchmarks(); }} />
           </div>
 
           {tab === 'tracker' && (
@@ -767,6 +843,240 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+          {tab === 'aggregate' && (
+            <div className="space-y-5">
+              <p className="text-sm text-slate-400">
+                Select a clinical domain and reporting period, then push aggregate data to DHIS2.
+                All 18 profiles are sourced directly from live EHR clinical data.
+              </p>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-widest text-slate-500">Profile</label>
+                  <select
+                    value={selectedProfile}
+                    onChange={e => setSelectedProfile(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-cyan-600"
+                  >
+                    {aggregateProfiles.map(p => (
+                      <option key={p.key} value={p.key}>{p.label} ({p.period})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-widest text-slate-500">Period (YYYYMM)</label>
+                  <input
+                    type="text"
+                    value={aggregatePeriod}
+                    onChange={e => setAggregatePeriod(e.target.value)}
+                    placeholder="202605"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-cyan-600"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={sendAggregateReport}
+                    disabled={aggregateLoading}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500 disabled:opacity-50"
+                  >
+                    {aggregateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Send to DHIS2
+                  </button>
+                </div>
+              </div>
+
+              {aggregateResult && (
+                <div className={`rounded-2xl border p-4 ${aggregateResult.status === 'ERROR' ? 'border-red-700/40 bg-red-900/20' : 'border-emerald-700/40 bg-emerald-900/20'}`}>
+                  <div className="mb-2 flex items-center gap-2">
+                    {aggregateResult.status === 'ERROR'
+                      ? <AlertTriangle className="h-4 w-4 text-red-400" />
+                      : <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+                    <span className={`text-sm font-bold ${aggregateResult.status === 'ERROR' ? 'text-red-300' : 'text-emerald-300'}`}>
+                      {aggregateResult.status}
+                    </span>
+                    {aggregateResult.profile && <span className="text-xs text-slate-400">— {aggregateResult.profile}</span>}
+                    {aggregateResult.period && <span className="text-xs text-slate-400">period {aggregateResult.period}</span>}
+                  </div>
+                  <p className="text-xs text-slate-300">{aggregateResult.message}</p>
+                  {aggregateResult.dataValues != null && (
+                    <p className="mt-1 text-xs text-slate-400">{aggregateResult.dataValues} data values submitted</p>
+                  )}
+                  {aggregateResult.imported != null && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Imported: {aggregateResult.imported} · Updated: {aggregateResult.updated ?? 0} · Ignored: {aggregateResult.ignored ?? 0}
+                    </p>
+                  )}
+                  {aggregateResult.validation && (
+                    <div className="mt-3 border-t border-white/10 pt-3">
+                      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        Validation — {aggregateResult.validation.rulesChecked} rule{aggregateResult.validation.rulesChecked !== 1 ? 's' : ''} checked
+                      </p>
+                      {aggregateResult.validation.violations.length === 0 ? (
+                        <p className="text-xs text-emerald-400">✓ All validation rules passed</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {aggregateResult.validation.violations.map((v: any, i: number) => (
+                            <div key={i} className="rounded-lg border border-yellow-700/30 bg-yellow-900/20 px-3 py-2 text-xs">
+                              <span className="font-semibold text-yellow-300">{v.ruleName}</span>
+                              <span className="ml-2 text-yellow-200/70">{v.description}</span>
+                              <span className="ml-2 text-slate-400">({v.leftValue} {v.operator.replace(/_/g,' ')} {v.rightValue})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="mb-3 text-sm font-semibold text-white">All Available Profiles</h3>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {aggregateProfiles.map(p => (
+                    <button
+                      key={p.key}
+                      onClick={() => setSelectedProfile(p.key)}
+                      className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
+                        selectedProfile === p.key
+                          ? 'border-cyan-600 bg-cyan-500/10 text-cyan-200'
+                          : 'border-slate-800 text-slate-400 hover:border-slate-600 hover:text-white'
+                      }`}
+                    >
+                      <span className="block font-semibold">{p.label}</span>
+                      <span className="text-slate-500">{p.period} · {p.key}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'benchmarks' && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-widest text-slate-500">Period (YYYYMM)</label>
+                  <input
+                    type="text"
+                    value={benchmarkPeriod}
+                    onChange={e => setBenchmarkPeriod(e.target.value)}
+                    placeholder="202605"
+                    className="w-48 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-cyan-600"
+                  />
+                </div>
+                <button
+                  onClick={loadBenchmarks}
+                  disabled={benchmarkLoading}
+                  className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500 disabled:opacity-50"
+                >
+                  {benchmarkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Pull from DHIS2
+                </button>
+                {benchmarkData?.mock && (
+                  <span className="rounded-full border border-yellow-700/40 bg-yellow-900/20 px-3 py-1 text-xs text-yellow-300">
+                    Mock mode — configure DHIS2 credentials for live data
+                  </span>
+                )}
+              </div>
+
+              <p className="text-sm text-slate-400">
+                This pulls your facility's key performance indicators directly from DHIS2 analytics.
+                Values reflect data already submitted to DHIS2 — configure credentials to see live benchmarks.
+              </p>
+
+              {benchmarkLoading && (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+                </div>
+              )}
+
+              {benchmarkData && !benchmarkLoading && (
+                <>
+                  {/* Org unit context */}
+                  {(benchmarkData.districtOrgUnit || benchmarkData.nationalOrgUnit) && (
+                    <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                      {benchmarkData.facilityOrgUnit && <span>Facility: <span className="font-mono text-slate-400">{benchmarkData.facilityOrgUnit}</span></span>}
+                      {benchmarkData.districtOrgUnit && <span>District: <span className="font-mono text-slate-400">{benchmarkData.districtOrgUnit}</span></span>}
+                      {benchmarkData.nationalOrgUnit && <span>National: <span className="font-mono text-slate-400">{benchmarkData.nationalOrgUnit}</span></span>}
+                    </div>
+                  )}
+
+                  {/* Column headers */}
+                  <div className="hidden sm:grid grid-cols-4 gap-2 px-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                    <span className="col-span-1">Indicator</span>
+                    <span className="text-center">Facility</span>
+                    <span className="text-center">District avg</span>
+                    <span className="text-center">National avg</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {benchmarkData.indicators.map(ind => {
+                      const trendColor = ind.trend === 'above_district' ? 'text-emerald-400'
+                        : ind.trend === 'below_district' ? 'text-red-400'
+                        : ind.trend === 'at_par' ? 'text-yellow-400'
+                        : 'text-slate-600';
+                      const trendIcon = ind.trend === 'above_district' ? '▲'
+                        : ind.trend === 'below_district' ? '▼'
+                        : ind.trend === 'at_par' ? '≈'
+                        : '—';
+                      const trendLabel = ind.trend === 'above_district' ? 'Above district'
+                        : ind.trend === 'below_district' ? 'Below district'
+                        : ind.trend === 'at_par' ? 'At par'
+                        : 'No benchmark';
+
+                      return (
+                        <div key={ind.dataElement} className="grid grid-cols-1 sm:grid-cols-4 gap-2 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 items-center">
+                          <div className="col-span-1">
+                            <p className="text-xs font-semibold text-white">{ind.label}</p>
+                            <p className="text-[10px] text-slate-600">{ind.unit}</p>
+                          </div>
+                          <div className="text-center">
+                            {ind.facilityValue !== null ? (
+                              <div>
+                                <span className="text-xl font-black text-white">{ind.facilityValue.toLocaleString()}</span>
+                                <span className={`ml-1.5 text-xs font-bold ${trendColor}`} title={trendLabel}>{trendIcon}</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-600">—</span>
+                            )}
+                          </div>
+                          <div className="text-center">
+                            {ind.districtAvg !== null ? (
+                              <span className="text-sm font-semibold text-slate-300">{ind.districtAvg.toLocaleString()}</span>
+                            ) : (
+                              <span className="text-xs text-slate-600">—</span>
+                            )}
+                          </div>
+                          <div className="text-center">
+                            {ind.nationalAvg !== null ? (
+                              <span className="text-sm font-semibold text-slate-400">{ind.nationalAvg.toLocaleString()}</span>
+                            ) : (
+                              <span className="text-xs text-slate-600">—</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex flex-wrap gap-4 text-[10px] text-slate-500">
+                    <span><span className="text-emerald-400 font-bold">▲</span> Above district average</span>
+                    <span><span className="text-red-400 font-bold">▼</span> Below district average</span>
+                    <span><span className="text-yellow-400 font-bold">≈</span> Within 5% of district average</span>
+                    <span><span className="text-slate-600 font-bold">—</span> No benchmark data available</span>
+                  </div>
+                </>
+              )}
+
+              {!benchmarkData && !benchmarkLoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500">
+                  <TrendingUp className="h-10 w-10 opacity-30" />
+                  <p className="text-sm">Click "Pull from DHIS2" to load your facility's performance indicators.</p>
+                </div>
+              )}
             </div>
           )}
         </div>

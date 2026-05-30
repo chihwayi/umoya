@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
+import {
   ArrowLeft, Users, Search, Filter, Eye, Phone, Mail, Calendar,
   User, Heart, RefreshCw, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, ehrAxios } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import { MortalityRiskBadge } from '../components/MortalityRiskBadge';
 
 interface Patient {
   id: string;
@@ -57,6 +58,7 @@ const DoctorPatientsList: React.FC<DoctorPatientsListProps> = ({ embedded = fals
   const [currentPage, setCurrentPage] = useState(1);
   const [patientsPerPage] = useState(10);
   const [patientAppointments, setPatientAppointments] = useState<{ [key: string]: Appointment[] }>({});
+  const [mortalityScores, setMortalityScores] = useState<{ [patientId: string]: { score: number; band: string; factors: Record<string, unknown> } }>({});
 
   const fetchPatientAppointments = useCallback(async (allPatients: Patient[]) => {
     try {
@@ -98,6 +100,25 @@ const DoctorPatientsList: React.FC<DoctorPatientsListProps> = ({ embedded = fals
     }
   }, [tenantSlug]);
 
+  const fetchMortalityScores = useCallback(async (allPatients: Patient[]) => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token) return;
+    const scores: typeof mortalityScores = {};
+    await Promise.allSettled(
+      allPatients.map(async (p) => {
+        try {
+          const res = await ehrAxios.get(`/patients/${p.id}/mortality-risk`, {
+            headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug },
+          });
+          if (res?.data?.score != null) scores[p.id] = res.data;
+        } catch {
+          // non-critical — badge simply won't render for this patient
+        }
+      }),
+    );
+    setMortalityScores(scores);
+  }, [tenantSlug]);
+
   const fetchPatients = useCallback(async () => {
     try {
       setLoading(true);
@@ -108,15 +129,15 @@ const DoctorPatientsList: React.FC<DoctorPatientsListProps> = ({ embedded = fals
       const fetchedPatients = response.data.patients || [];
       setPatients(fetchedPatients);
 
-      // Fetch appointments for each patient to show recent activity
       await fetchPatientAppointments(fetchedPatients);
+      fetchMortalityScores(fetchedPatients);
     } catch (error) {
       console.error('Error fetching patients:', error);
       showError('Error', 'Failed to fetch patients');
     } finally {
       setLoading(false);
     }
-  }, [fetchPatientAppointments, showError, tenantSlug]);
+  }, [fetchPatientAppointments, fetchMortalityScores, showError, tenantSlug]);
 
   useEffect(() => {
     fetchPatients();
@@ -362,9 +383,18 @@ const DoctorPatientsList: React.FC<DoctorPatientsListProps> = ({ embedded = fals
                             {patient.firstName.charAt(0)}{patient.lastName.charAt(0)}
                           </div>
                           <div className="flex-1">
-                            <h4 className="text-xl font-bold text-slate-900 group-hover:text-indigo-900 transition-colors mb-2">
-                              {patient.firstName} {patient.lastName}
-                            </h4>
+                            <div className="flex items-center gap-3 mb-2">
+                              <h4 className="text-xl font-bold text-slate-900 group-hover:text-indigo-900 transition-colors">
+                                {patient.firstName} {patient.lastName}
+                              </h4>
+                              {mortalityScores[patient.id] && (
+                                <MortalityRiskBadge
+                                  score={mortalityScores[patient.id].score}
+                                  band={mortalityScores[patient.id].band as any}
+                                  factors={mortalityScores[patient.id].factors}
+                                />
+                              )}
+                            </div>
                             <p className="text-slate-600 font-medium mb-3">
                               ID: {patient.patientNumber} • {calculateAge(patient.dateOfBirth)} years old • {patient.gender}
                             </p>

@@ -160,8 +160,18 @@ export class DigitalConsentService {
       doc.moveDown(1.5);
 
       doc.font('Helvetica-Bold').text('Patient Signature:');
-      doc.font('Helvetica').fontSize(9).text('[Electronic signature captured]');
-      doc.moveDown(0.5);
+      // Draw a visual signature line with cryptographic fingerprint
+      const sigHash = crypto.createHash('sha256').update(signatureSvg).digest('hex');
+      const sigLineY = doc.y + 4;
+      doc.moveTo(50, sigLineY + 28).lineTo(350, sigLineY + 28).lineWidth(0.5).stroke();
+      doc.fontSize(7).fillColor('grey')
+         .text(`Digitally signed — verification ID: ${sigHash.slice(0, 32).toUpperCase()}`, 50, sigLineY + 32);
+      doc.fillColor('black').fontSize(9)
+         .text(`Signature captured electronically on ${today}`, 50, sigLineY + 42);
+      doc.moveDown(2);
+      doc.fontSize(8).fillColor('grey')
+         .text(`Full signature hash (SHA-256): ${sigHash}`, { oblique: true });
+      doc.fillColor('black').fontSize(10).moveDown(0.5);
 
       if (witnessName) {
         doc.font('Helvetica-Bold').fontSize(10).text('Witness: ', { continued: true })

@@ -72,7 +72,19 @@ type AggregateProfileKey =
   | 'immunization_monthly'
   | 'pharmacy_stock'
   | 'ntd_regional'
-  | 'pmtct_monthly';
+  | 'pmtct_monthly'
+  | 'tb_quarterly'
+  | 'malaria_monthly'
+  | 'ncd_monthly'
+  | 'outpatient_morbidity'
+  | 'laboratory_monthly'
+  | 'mental_health_monthly'
+  | 'nutrition_monthly'
+  | 'icu_monthly'
+  | 'hai_monthly'
+  | 'surgical_monthly'
+  | 'cervical_cancer_monthly'
+  | 'neonatal_monthly';
 
 interface AggregateProfileDefinition {
   dataSetCode: string;
@@ -179,6 +191,197 @@ export class Dhis2Service {
         artStartedInPregnancy: 'MC_DE_PMTCT_ART_STARTED',
         infantsTestedAt6Weeks: 'MC_DE_PMTCT_INFANT_TESTED_6W',
         infantsHivPositive: 'MC_DE_PMTCT_INFANT_HIV_POSITIVE',
+      },
+    },
+    tb_quarterly: {
+      dataSetCode: 'MC_DS_TB_QUARTERLY',
+      metricCodes: {
+        tbNewPulmonaryBacteriologicallyConfirmed: 'MC_DE_TB_NEW_PULM_BACT',
+        tbNewPulmonaryClinicallyDiagnosed: 'MC_DE_TB_NEW_PULM_CLIN',
+        tbNewExtrapulmonary: 'MC_DE_TB_NEW_EPTB',
+        tbRelapse: 'MC_DE_TB_RELAPSE',
+        tbMdrConfirmed: 'MC_DE_TB_MDR_CONFIRMED',
+        tbXdrConfirmed: 'MC_DE_TB_XDR_CONFIRMED',
+        tbHivCoinfected: 'MC_DE_TB_HIV_COINFECTED',
+        tbOnArt: 'MC_DE_TB_HIV_ON_ART',
+        tbOutcomeCured: 'MC_DE_TB_OUTCOME_CURED',
+        tbOutcomeCompleted: 'MC_DE_TB_OUTCOME_COMPLETED',
+        tbOutcomeFailed: 'MC_DE_TB_OUTCOME_FAILED',
+        tbOutcomeDied: 'MC_DE_TB_OUTCOME_DIED',
+        tbOutcomeLtfu: 'MC_DE_TB_OUTCOME_LTFU',
+        tbContactsInvestigated: 'MC_DE_TB_CONTACTS_INVESTIGATED',
+        tbContactsLtbi: 'MC_DE_TB_CONTACTS_LTBI_STARTED',
+      },
+    },
+    malaria_monthly: {
+      dataSetCode: 'MC_DS_MALARIA_MONTHLY',
+      metricCodes: {
+        malariaTested: 'MC_DE_MALARIA_TESTED',
+        malariaRdtPositive: 'MC_DE_MALARIA_RDT_POSITIVE',
+        malariaMicroscopyPositive: 'MC_DE_MALARIA_MICRO_POSITIVE',
+        malariaConfirmedTreated: 'MC_DE_MALARIA_CONFIRMED_TREATED',
+        malariaUncomplicated: 'MC_DE_MALARIA_UNCOMPLICATED',
+        malariaSevere: 'MC_DE_MALARIA_SEVERE',
+        malariaDeath: 'MC_DE_MALARIA_DEATH',
+        malariaPlasmodiumFalciparum: 'MC_DE_MALARIA_PF',
+        malariaPlasmodiumVivax: 'MC_DE_MALARIA_PV',
+        malariaTreatmentFailure: 'MC_DE_MALARIA_TREATMENT_FAILURE',
+        malariaPregnantWomenTested: 'MC_DE_MALARIA_PREGNANT_TESTED',
+        malariaPregnantWomenPositive: 'MC_DE_MALARIA_PREGNANT_POSITIVE',
+      },
+    },
+    ncd_monthly: {
+      dataSetCode: 'MC_DS_NCD_MONTHLY',
+      metricCodes: {
+        hypertensionNewlyDiagnosed: 'MC_DE_HTN_NEW',
+        hypertensionActiveInCare: 'MC_DE_HTN_ACTIVE',
+        hypertensionBpControlled: 'MC_DE_HTN_BP_CONTROLLED',
+        hypertensionOnTreatment: 'MC_DE_HTN_ON_TREATMENT',
+        diabetesNewlyDiagnosed: 'MC_DE_DM_NEW',
+        diabetesActiveInCare: 'MC_DE_DM_ACTIVE',
+        diabetesHba1cControlled: 'MC_DE_DM_HBA1C_CONTROLLED',
+        diabetesOnInsulin: 'MC_DE_DM_ON_INSULIN',
+        ckdStage3to5: 'MC_DE_CKD_STAGE3_5',
+        ckdOnRasBlockade: 'MC_DE_CKD_RAS_BLOCKADE',
+        asthmaPatientsActive: 'MC_DE_ASTHMA_ACTIVE',
+        asthmaUncontrolled: 'MC_DE_ASTHMA_UNCONTROLLED',
+        copdActiveInCare: 'MC_DE_COPD_ACTIVE',
+        strokeAdmissions: 'MC_DE_STROKE_ADMISSIONS',
+        strokeThromboliticsGiven: 'MC_DE_STROKE_THROMBOLYTICS',
+      },
+    },
+    outpatient_morbidity: {
+      dataSetCode: 'MC_DS_OUTPATIENT_MORBIDITY_MONTHLY',
+      metricCodes: {
+        totalOutpatientAttendances: 'MC_DE_OPD_TOTAL',
+        totalNewAttendances: 'MC_DE_OPD_NEW',
+        malariaCases: 'MC_DE_OPD_MALARIA',
+        acuteRespiratoryInfection: 'MC_DE_OPD_ARI',
+        diarrhoeaCases: 'MC_DE_OPD_DIARRHOEA',
+        skinDisease: 'MC_DE_OPD_SKIN',
+        eyeDisease: 'MC_DE_OPD_EYE',
+        injuriesTrauma: 'MC_DE_OPD_INJURY',
+        hypertensionCases: 'MC_DE_OPD_HTN',
+        diabetesCases: 'MC_DE_OPD_DM',
+        tbSuspected: 'MC_DE_OPD_TB_SUSPECT',
+        stisUrogenital: 'MC_DE_OPD_STI',
+      },
+    },
+    laboratory_monthly: {
+      dataSetCode: 'MC_DS_LABORATORY_MONTHLY',
+      metricCodes: {
+        totalTestsOrdered: 'MC_DE_LAB_TESTS_ORDERED',
+        totalTestsCompleted: 'MC_DE_LAB_TESTS_COMPLETED',
+        haematologyTests: 'MC_DE_LAB_HAEMATOLOGY',
+        biochemistryTests: 'MC_DE_LAB_BIOCHEMISTRY',
+        microbiologyTests: 'MC_DE_LAB_MICROBIOLOGY',
+        criticalValuesReported: 'MC_DE_LAB_CRITICAL_VALUES',
+        avgTurnaroundHours: 'MC_DE_LAB_TAT_HOURS',
+        specimenRejections: 'MC_DE_LAB_SPECIMEN_REJECTIONS',
+        cd4CountTests: 'MC_DE_LAB_CD4',
+        viralLoadTests: 'MC_DE_LAB_VIRAL_LOAD',
+        malariaRdtTests: 'MC_DE_LAB_MALARIA_RDT',
+        sputumSmearTests: 'MC_DE_LAB_SPUTUM_SMEAR',
+      },
+    },
+    mental_health_monthly: {
+      dataSetCode: 'MC_DS_MENTAL_HEALTH_MONTHLY',
+      metricCodes: {
+        totalScreened: 'MC_DE_MH_SCREENED',
+        depressionPositive: 'MC_DE_MH_DEPRESSION_POSITIVE',
+        anxietyPositive: 'MC_DE_MH_ANXIETY_POSITIVE',
+        substanceUsePositive: 'MC_DE_MH_SUBSTANCE_POSITIVE',
+        newCarePlansCreated: 'MC_DE_MH_CARE_PLANS_NEW',
+        activeInMentalHealthCare: 'MC_DE_MH_ACTIVE_CARE',
+        psychiatricReferrals: 'MC_DE_MH_REFERRALS',
+        suicideRiskHigh: 'MC_DE_MH_SUICIDE_HIGH_RISK',
+      },
+    },
+    nutrition_monthly: {
+      dataSetCode: 'MC_DS_NUTRITION_MONTHLY',
+      metricCodes: {
+        samAdmissions: 'MC_DE_NUT_SAM_ADMISSIONS',
+        mamAdmissions: 'MC_DE_NUT_MAM_ADMISSIONS',
+        samCured: 'MC_DE_NUT_SAM_CURED',
+        samDied: 'MC_DE_NUT_SAM_DIED',
+        samDefaulted: 'MC_DE_NUT_SAM_DEFAULTED',
+        samNonResponsive: 'MC_DE_NUT_SAM_NON_RESPONSIVE',
+        mamCured: 'MC_DE_NUT_MAM_CURED',
+        muacRedAdmissions: 'MC_DE_NUT_MUAC_RED',
+        muacYellowAdmissions: 'MC_DE_NUT_MUAC_YELLOW',
+        oedemaCases: 'MC_DE_NUT_OEDEMA',
+        rutfDispensedKg: 'MC_DE_NUT_RUTF_KG',
+        therapeuticFeedingEnrolled: 'MC_DE_NUT_TF_ENROLLED',
+      },
+    },
+    icu_monthly: {
+      dataSetCode: 'MC_DS_ICU_MONTHLY',
+      metricCodes: {
+        icuAdmissions: 'MC_DE_ICU_ADMISSIONS',
+        icuDeaths: 'MC_DE_ICU_DEATHS',
+        icuAvgLosHours: 'MC_DE_ICU_AVG_LOS_HOURS',
+        icuApacheHigh: 'MC_DE_ICU_APACHE_HIGH',
+        icuVentilatorDays: 'MC_DE_ICU_VENTILATOR_DAYS',
+        icuReadmissions: 'MC_DE_ICU_READMISSIONS',
+        sepsisCases: 'MC_DE_ICU_SEPSIS',
+        icuCardiacArrest: 'MC_DE_ICU_CARDIAC_ARREST',
+      },
+    },
+    hai_monthly: {
+      dataSetCode: 'MC_DS_HAI_MONTHLY',
+      metricCodes: {
+        totalHaiCases: 'MC_DE_HAI_TOTAL',
+        ssiCases: 'MC_DE_HAI_SSI',
+        cautCases: 'MC_DE_HAI_CAUTI',
+        clabsiCases: 'MC_DE_HAI_CLABSI',
+        vapCases: 'MC_DE_HAI_VAP',
+        mrsaIsolates: 'MC_DE_HAI_MRSA',
+        esblIsolates: 'MC_DE_HAI_ESBL',
+        cdifficileCases: 'MC_DE_HAI_CDIFF',
+        haiDeaths: 'MC_DE_HAI_DEATHS',
+      },
+    },
+    surgical_monthly: {
+      dataSetCode: 'MC_DS_SURGICAL_MONTHLY',
+      metricCodes: {
+        totalSurgicalCases: 'MC_DE_SURG_TOTAL',
+        electiveCases: 'MC_DE_SURG_ELECTIVE',
+        emergencyCases: 'MC_DE_SURG_EMERGENCY',
+        caesareanSections: 'MC_DE_SURG_CSECTION',
+        majorSurgicalComplications: 'MC_DE_SURG_COMPLICATIONS',
+        surgicalMortality: 'MC_DE_SURG_MORTALITY',
+        cancelledCases: 'MC_DE_SURG_CANCELLED',
+        avgOperativeTimeMinutes: 'MC_DE_SURG_AVG_OP_TIME',
+        bloodTransfusionsIntraop: 'MC_DE_SURG_TRANSFUSIONS',
+      },
+    },
+    cervical_cancer_monthly: {
+      dataSetCode: 'MC_DS_CERVICAL_CANCER_MONTHLY',
+      metricCodes: {
+        womenScreened: 'MC_DE_CX_SCREENED',
+        viaPositive: 'MC_DE_CX_VIA_POSITIVE',
+        papPositive: 'MC_DE_CX_PAP_POSITIVE',
+        hpvPositive: 'MC_DE_CX_HPV_POSITIVE',
+        cryotherapyPerformed: 'MC_DE_CX_CRYOTHERAPY',
+        leepPerformed: 'MC_DE_CX_LEEP',
+        referredForColposcopy: 'MC_DE_CX_COLPOSCOPY_REFERRAL',
+        confirmedCancerCases: 'MC_DE_CX_CONFIRMED_CANCER',
+      },
+    },
+    neonatal_monthly: {
+      dataSetCode: 'MC_DS_NEONATAL_MONTHLY',
+      metricCodes: {
+        liveBirthsTotal: 'MC_DE_NEO_LIVE_BIRTHS',
+        stillbirthsTotal: 'MC_DE_NEO_STILLBIRTHS',
+        lowBirthWeightCount: 'MC_DE_NEO_LBW',
+        veryLowBirthWeightCount: 'MC_DE_NEO_VLBW',
+        pretermBirths: 'MC_DE_NEO_PRETERM',
+        apgar5MinUnder7: 'MC_DE_NEO_APGAR_LOW',
+        neonatalResuscitation: 'MC_DE_NEO_RESUSCITATION',
+        scbuAdmissions: 'MC_DE_NEO_SCBU_ADMISSIONS',
+        neonatalDeaths: 'MC_DE_NEO_DEATHS',
+        hivExposedInfants: 'MC_DE_NEO_HIV_EXPOSED',
+        arvProphylaxisGiven: 'MC_DE_NEO_ARV_PROPHYLAXIS',
       },
     },
   };
@@ -425,7 +628,10 @@ export class Dhis2Service {
       attributes.push({ attribute: attributeIds.dateOfBirth, value: this.formatDateOnly(patient.dateOfBirth) });
     }
     if (attributeIds.gender) {
-      attributes.push({ attribute: attributeIds.gender, value: (patient.gender || '').toUpperCase() });
+      // DHIS2 option sets expect title-case ("Male"/"Female"), not uppercase
+      const raw = (patient.gender || '').toLowerCase();
+      const genderValue = raw === 'male' ? 'Male' : raw === 'female' ? 'Female' : raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
+      attributes.push({ attribute: attributeIds.gender, value: genderValue });
     }
     if (attributeIds.nationalId) {
       attributes.push({ attribute: attributeIds.nationalId, value: patient.nationalId || '' });
@@ -727,27 +933,43 @@ export class Dhis2Service {
           this.safeMetricCount(
             tenantDb,
             'appointments_total',
-            `SELECT COUNT(*)::int AS total FROM appointments`,
+            `SELECT COUNT(*)::int AS total FROM appointments
+             WHERE COALESCE(appointment_date, created_at)::date >= $1
+               AND COALESCE(appointment_date, created_at)::date < $2`,
+            [startDate, endDate],
           ),
           this.safeMetricCount(
             tenantDb,
             'appointments_completed',
-            `SELECT COUNT(*)::int AS total FROM appointments WHERE LOWER(COALESCE(status, '')) = 'completed'`,
+            `SELECT COUNT(*)::int AS total FROM appointments
+             WHERE LOWER(COALESCE(status, '')) = 'completed'
+               AND COALESCE(appointment_date, created_at)::date >= $1
+               AND COALESCE(appointment_date, created_at)::date < $2`,
+            [startDate, endDate],
           ),
           this.safeMetricCount(
             tenantDb,
             'admissions_total',
-            `SELECT COUNT(*)::int AS total FROM admissions`,
+            `SELECT COUNT(*)::int AS total FROM admissions
+             WHERE COALESCE(admission_date, created_at)::date >= $1
+               AND COALESCE(admission_date, created_at)::date < $2`,
+            [startDate, endDate],
           ),
           this.safeMetricCount(
             tenantDb,
             'discharges_total',
-            `SELECT COUNT(*)::int AS total FROM discharges`,
+            `SELECT COUNT(*)::int AS total FROM discharges
+             WHERE COALESCE(discharge_date, created_at)::date >= $1
+               AND COALESCE(discharge_date, created_at)::date < $2`,
+            [startDate, endDate],
           ),
           this.safeMetricCount(
             tenantDb,
             'ed_visits_total',
-            `SELECT COUNT(*)::int AS total FROM ed_visits`,
+            `SELECT COUNT(*)::int AS total FROM ed_visits
+             WHERE COALESCE(visit_date, created_at)::date >= $1
+               AND COALESCE(visit_date, created_at)::date < $2`,
+            [startDate, endDate],
           ),
         ]);
 
@@ -1134,7 +1356,7 @@ export class Dhis2Service {
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'ntd_cholera_deaths',
           `SELECT COALESCE(SUM(cholera_deaths), 0)::int AS total FROM regional_disease_reports
-           WHERE report_period >= $1 AND report_period <= $2`,
+           WHERE report_period >= $1 AND report_period < $2`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'ntd_typhoid_new',
           `SELECT COUNT(*)::int AS total FROM typhoid_cases WHERE created_at >= $1 AND created_at < $2`,
@@ -1175,6 +1397,876 @@ export class Dhis2Service {
           [startDate, endDate]),
       ]);
       return { pmtctEnrolled, hivPositiveAtBooking, artStartedInPregnancy, infantsTestedAt6Weeks, infantsHivPositive };
+    }
+
+    if (profile === 'tb_quarterly') {
+      const [
+        tbNewPulmonaryBacteriologicallyConfirmed, tbNewPulmonaryClinicallyDiagnosed,
+        tbNewExtrapulmonary, tbRelapse, tbMdrConfirmed, tbXdrConfirmed,
+        tbHivCoinfected, tbOnArt, tbOutcomeCured, tbOutcomeCompleted,
+        tbOutcomeFailed, tbOutcomeDied, tbOutcomeLtfu,
+        tbContactsInvestigated, tbContactsLtbi,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'tb_new_pulm_bact',
+          `SELECT COUNT(*)::int AS total FROM tb_patients
+           WHERE notification_date >= $1 AND notification_date < $2
+             AND LOWER(COALESCE(case_type,'')) IN ('pulmonary','pulm')
+             AND LOWER(COALESCE(bacteriological_confirmation,'')) IN ('confirmed','positive','yes')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_new_pulm_clin',
+          `SELECT COUNT(*)::int AS total FROM tb_patients
+           WHERE notification_date >= $1 AND notification_date < $2
+             AND LOWER(COALESCE(case_type,'')) IN ('pulmonary','pulm')
+             AND LOWER(COALESCE(bacteriological_confirmation,'')) NOT IN ('confirmed','positive','yes')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_new_eptb',
+          `SELECT COUNT(*)::int AS total FROM tb_patients
+           WHERE notification_date >= $1 AND notification_date < $2
+             AND LOWER(COALESCE(case_type,'')) IN ('extrapulmonary','eptb')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_relapse',
+          `SELECT COUNT(*)::int AS total FROM tb_patients
+           WHERE notification_date >= $1 AND notification_date < $2
+             AND LOWER(COALESCE(treatment_category,'')) LIKE '%relapse%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_mdr',
+          `SELECT COUNT(*)::int AS total FROM tb_patients
+           WHERE notification_date >= $1 AND notification_date < $2
+             AND LOWER(COALESCE(case_type,'')) IN ('mdr','mdr-tb','mdr_tb')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_xdr',
+          `SELECT COUNT(*)::int AS total FROM tb_patients
+           WHERE notification_date >= $1 AND notification_date < $2
+             AND LOWER(COALESCE(case_type,'')) IN ('xdr','xdr-tb','xdr_tb')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_hiv',
+          `SELECT COUNT(*)::int AS total FROM tb_patients
+           WHERE notification_date >= $1 AND notification_date < $2
+             AND hiv_status = 'positive'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_hiv_on_art',
+          `SELECT COUNT(*)::int AS total FROM tb_patients
+           WHERE notification_date >= $1 AND notification_date < $2
+             AND hiv_status = 'positive' AND art_linkage_date IS NOT NULL`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_cured',
+          `SELECT COUNT(*)::int AS total FROM tb_treatment_episodes
+           WHERE outcome_date >= $1 AND outcome_date < $2
+             AND LOWER(COALESCE(treatment_outcome,'')) = 'cured'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_completed',
+          `SELECT COUNT(*)::int AS total FROM tb_treatment_episodes
+           WHERE outcome_date >= $1 AND outcome_date < $2
+             AND LOWER(COALESCE(treatment_outcome,'')) = 'treatment completed'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_failed',
+          `SELECT COUNT(*)::int AS total FROM tb_treatment_episodes
+           WHERE outcome_date >= $1 AND outcome_date < $2
+             AND LOWER(COALESCE(treatment_outcome,'')) = 'failed'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_died',
+          `SELECT COUNT(*)::int AS total FROM tb_treatment_episodes
+           WHERE outcome_date >= $1 AND outcome_date < $2
+             AND LOWER(COALESCE(treatment_outcome,'')) = 'died'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_ltfu',
+          `SELECT COUNT(*)::int AS total FROM tb_treatment_episodes
+           WHERE outcome_date >= $1 AND outcome_date < $2
+             AND LOWER(COALESCE(treatment_outcome,'')) IN ('lost to follow-up','ltfu','defaulted')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_contacts',
+          `SELECT COUNT(*)::int AS total FROM contact_tracing_contacts ctc
+           JOIN contact_tracing_records ctr ON ctr.id = ctc.record_id
+           WHERE ctr.created_at >= $1 AND ctr.created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'tb_contacts_ltbi',
+          `SELECT COUNT(*)::int AS total FROM contact_tracing_contacts ctc
+           JOIN contact_tracing_records ctr ON ctr.id = ctc.record_id
+           WHERE ctr.created_at >= $1 AND ctr.created_at < $2
+             AND ctc.rdt_result = 'positive'`,
+          [startDate, endDate]),
+      ]);
+      return {
+        tbNewPulmonaryBacteriologicallyConfirmed, tbNewPulmonaryClinicallyDiagnosed,
+        tbNewExtrapulmonary, tbRelapse, tbMdrConfirmed, tbXdrConfirmed,
+        tbHivCoinfected, tbOnArt, tbOutcomeCured, tbOutcomeCompleted,
+        tbOutcomeFailed, tbOutcomeDied, tbOutcomeLtfu,
+        tbContactsInvestigated, tbContactsLtbi,
+      };
+    }
+
+    if (profile === 'malaria_monthly') {
+      const [
+        malariaTested, malariaRdtPositive, malariaMicroscopyPositive,
+        malariaConfirmedTreated, malariaUncomplicated, malariaSevere,
+        malariaDeath, malariaPlasmodiumFalciparum, malariaPlasmodiumVivax,
+        malariaTreatmentFailure, malariaPregnantWomenTested, malariaPregnantWomenPositive,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'malaria_tested',
+          `SELECT COUNT(*)::int AS total FROM malaria_tests
+           WHERE test_date >= $1 AND test_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_rdt_pos',
+          `SELECT COUNT(*)::int AS total FROM malaria_tests
+           WHERE test_date >= $1 AND test_date < $2
+             AND LOWER(COALESCE(test_type,'')) IN ('rdt','rapid')
+             AND LOWER(COALESCE(result,'')) IN ('positive','pos')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_micro_pos',
+          `SELECT COUNT(*)::int AS total FROM malaria_tests
+           WHERE test_date >= $1 AND test_date < $2
+             AND LOWER(COALESCE(test_type,'')) IN ('microscopy','smear')
+             AND LOWER(COALESCE(result,'')) IN ('positive','pos')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_treated',
+          `SELECT COUNT(*)::int AS total FROM malaria_cases mc
+           JOIN malaria_treatment_episodes mte ON mte.malaria_case_id = mc.id
+           WHERE mc.case_date >= $1 AND mc.case_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_uncomp',
+          `SELECT COUNT(*)::int AS total FROM malaria_cases
+           WHERE case_date >= $1 AND case_date < $2
+             AND LOWER(COALESCE(severity,'')) IN ('uncomplicated','mild','moderate')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_severe',
+          `SELECT COUNT(*)::int AS total FROM malaria_cases
+           WHERE case_date >= $1 AND case_date < $2
+             AND LOWER(COALESCE(severity,'')) IN ('severe','critical')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_death',
+          `SELECT COUNT(*)::int AS total FROM malaria_cases
+           WHERE case_date >= $1 AND case_date < $2
+             AND LOWER(COALESCE(case_outcome,'')) = 'died'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_pf',
+          `SELECT COUNT(*)::int AS total FROM malaria_cases
+           WHERE case_date >= $1 AND case_date < $2
+             AND LOWER(COALESCE(parasite_species,'')) LIKE '%falciparum%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_pv',
+          `SELECT COUNT(*)::int AS total FROM malaria_cases
+           WHERE case_date >= $1 AND case_date < $2
+             AND LOWER(COALESCE(parasite_species,'')) LIKE '%vivax%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_failure',
+          `SELECT COUNT(*)::int AS total FROM malaria_treatment_episodes
+           WHERE created_at >= $1 AND created_at < $2
+             AND LOWER(COALESCE(treatment_outcome,'')) LIKE '%fail%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_preg_tested',
+          `SELECT COUNT(DISTINCT mc.id)::int AS total FROM malaria_cases mc
+           JOIN patients p ON p.id = mc.patient_id
+           WHERE mc.case_date >= $1 AND mc.case_date < $2
+             AND p.gender = 'female'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'malaria_preg_pos',
+          `SELECT COUNT(DISTINCT mc.id)::int AS total FROM malaria_cases mc
+           JOIN patients p ON p.id = mc.patient_id
+           WHERE mc.case_date >= $1 AND mc.case_date < $2
+             AND p.gender = 'female'
+             AND LOWER(COALESCE(mc.case_outcome,'')) != 'negative'`,
+          [startDate, endDate]),
+      ]);
+      return {
+        malariaTested, malariaRdtPositive, malariaMicroscopyPositive,
+        malariaConfirmedTreated, malariaUncomplicated, malariaSevere,
+        malariaDeath, malariaPlasmodiumFalciparum, malariaPlasmodiumVivax,
+        malariaTreatmentFailure, malariaPregnantWomenTested, malariaPregnantWomenPositive,
+      };
+    }
+
+    if (profile === 'ncd_monthly') {
+      const [
+        hypertensionNewlyDiagnosed, hypertensionActiveInCare, hypertensionBpControlled,
+        hypertensionOnTreatment, diabetesNewlyDiagnosed, diabetesActiveInCare,
+        diabetesHba1cControlled, diabetesOnInsulin, ckdStage3to5, ckdOnRasBlockade,
+        asthmaPatientsActive, asthmaUncontrolled, copdActiveInCare, strokeAdmissions, strokeThromboliticsGiven,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'htn_new',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses
+           WHERE created_at >= $1 AND created_at < $2
+             AND icd10_code LIKE 'I1%' AND status = 'active'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'htn_active',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM patient_diagnoses
+           WHERE icd10_code LIKE 'I1%' AND status = 'active'`),
+        this.safeMetricCount(tenantDb, 'htn_controlled',
+          `SELECT COUNT(DISTINCT htnr.patient_id)::int AS total
+           FROM hypertension_reviews htnr
+           WHERE htnr.review_date >= $1 AND htnr.review_date < $2
+             AND htnr.systolic_bp IS NOT NULL AND htnr.diastolic_bp IS NOT NULL
+             AND htnr.systolic_bp < 140 AND htnr.diastolic_bp < 90`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'htn_on_treatment',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM prescriptions
+           WHERE created_at >= $1 AND created_at < $2
+             AND LOWER(COALESCE(drug_class,'') || ' ' || COALESCE(medication_name,''))
+               SIMILAR TO '%(antihypertensive|ace inhibitor|arb|beta.block|calcium channel|diuretic|amlodipine|losartan|enalapril|hydrochlorothiazide)%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'dm_new',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses
+           WHERE created_at >= $1 AND created_at < $2
+             AND icd10_code LIKE 'E1%' AND status = 'active'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'dm_active',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM patient_diagnoses
+           WHERE icd10_code LIKE 'E1%' AND status = 'active'`),
+        this.safeMetricCount(tenantDb, 'dm_hba1c',
+          `SELECT COUNT(DISTINCT lr.patient_id)::int AS total FROM lab_results lr
+           WHERE lr.resulted_at >= $1 AND lr.resulted_at < $2
+             AND LOWER(COALESCE(lr.test_name,'')) LIKE '%hba1c%'
+             AND CAST(NULLIF(REGEXP_REPLACE(lr.value_text,'[^0-9.]','','g'),'') AS numeric) < 7.0`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'dm_insulin',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM prescriptions
+           WHERE created_at >= $1 AND created_at < $2
+             AND LOWER(COALESCE(medication_name,'')) LIKE '%insulin%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ckd_stage3_5',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM ckd_assessments
+           WHERE assessed_at >= $1 AND assessed_at < $2
+             AND ckd_stage >= 3`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ckd_ras',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM ckd_assessments
+           WHERE assessed_at >= $1 AND assessed_at < $2
+             AND on_ras_blockade = true`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'asthma_active',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM asthma_records
+           WHERE created_at >= $1 AND created_at < $2`),
+        this.safeMetricCount(tenantDb, 'asthma_uncontrolled',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM asthma_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND LOWER(COALESCE(asthma_control,'')) IN ('uncontrolled','poorly controlled')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'copd_active',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM copd_assessments
+           WHERE assessed_at >= $1 AND assessed_at < $2`),
+        this.safeMetricCount(tenantDb, 'stroke_admissions',
+          `SELECT COUNT(*)::int AS total FROM stroke_assessments
+           WHERE created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'stroke_thrombolytics',
+          `SELECT COUNT(*)::int AS total FROM stroke_assessments
+           WHERE created_at >= $1 AND created_at < $2
+             AND thrombolytic_given = true`,
+          [startDate, endDate]),
+      ]);
+      return {
+        hypertensionNewlyDiagnosed, hypertensionActiveInCare, hypertensionBpControlled,
+        hypertensionOnTreatment, diabetesNewlyDiagnosed, diabetesActiveInCare,
+        diabetesHba1cControlled, diabetesOnInsulin, ckdStage3to5, ckdOnRasBlockade,
+        asthmaPatientsActive, asthmaUncontrolled, copdActiveInCare, strokeAdmissions, strokeThromboliticsGiven,
+      };
+    }
+
+    if (profile === 'outpatient_morbidity') {
+      const [
+        totalOutpatientAttendances, totalNewAttendances, malariaCases,
+        acuteRespiratoryInfection, diarrhoeaCases, skinDisease,
+        eyeDisease, injuriesTrauma, hypertensionCases, diabetesCases,
+        tbSuspected, stisUrogenital,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'opd_total',
+          `SELECT COUNT(*)::int AS total FROM encounters
+           WHERE COALESCE(encounter_date, created_at)::date >= $1
+             AND COALESCE(encounter_date, created_at)::date < $2
+             AND LOWER(COALESCE(encounter_type,'')) IN ('outpatient','opd','consultation')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_new',
+          `SELECT COUNT(DISTINCT e.patient_id)::int AS total FROM encounters e
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND LOWER(COALESCE(e.encounter_type,'')) IN ('outpatient','opd','consultation')
+             AND NOT EXISTS (
+               SELECT 1 FROM encounters e2
+               WHERE e2.patient_id = e.patient_id
+                 AND COALESCE(e2.encounter_date, e2.created_at) < COALESCE(e.encounter_date, e.created_at)
+             )`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_malaria',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND pd.icd10_code LIKE 'B5%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_ari',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND (pd.icd10_code LIKE 'J0%' OR pd.icd10_code LIKE 'J1%' OR pd.icd10_code LIKE 'J2%')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_diarrhoea',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND (pd.icd10_code LIKE 'A0%' OR pd.icd10_code LIKE 'K58%' OR pd.icd10_code = 'K59.1')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_skin',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND pd.icd10_code LIKE 'L%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_eye',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND pd.icd10_code LIKE 'H%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_injury',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND (pd.icd10_code LIKE 'S%' OR pd.icd10_code LIKE 'T%')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_htn',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND pd.icd10_code LIKE 'I1%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_dm',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND pd.icd10_code LIKE 'E1%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_tb_suspect',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND (pd.icd10_code LIKE 'A1%' OR pd.icd10_code LIKE 'Z03.6%')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'opd_sti',
+          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
+           JOIN encounters e ON e.id = pd.encounter_id
+           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
+             AND COALESCE(e.encounter_date, e.created_at)::date < $2
+             AND (pd.icd10_code LIKE 'A5%' OR pd.icd10_code LIKE 'A6%' OR pd.icd10_code LIKE 'N74%')`,
+          [startDate, endDate]),
+      ]);
+      return {
+        totalOutpatientAttendances, totalNewAttendances, malariaCases,
+        acuteRespiratoryInfection, diarrhoeaCases, skinDisease,
+        eyeDisease, injuriesTrauma, hypertensionCases, diabetesCases,
+        tbSuspected, stisUrogenital,
+      };
+    }
+
+    if (profile === 'laboratory_monthly') {
+      const [
+        totalTestsOrdered, totalTestsCompleted, haematologyTests, biochemistryTests,
+        microbiologyTests, criticalValuesReported, avgTurnaroundHours, specimenRejections,
+        cd4CountTests, viralLoadTests, malariaRdtTests, sputumSmearTests,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'lab_ordered',
+          `SELECT COUNT(*)::int AS total FROM lab_orders
+           WHERE created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_completed',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_haem',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2
+             AND LOWER(COALESCE(category,'')) IN ('haematology','hematology','cbc')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_biochem',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2
+             AND LOWER(COALESCE(category,'')) IN ('biochemistry','chemistry','metabolic')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_micro',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2
+             AND LOWER(COALESCE(category,'')) IN ('microbiology','culture','sensitivity')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_critical',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2
+             AND flag IN ('HH','LL','critical')`,
+          [startDate, endDate]),
+        this.safeMetricSum(tenantDb, 'lab_tat',
+          `SELECT COALESCE(
+             AVG(EXTRACT(EPOCH FROM (resulted_at - ordered_at))/3600)
+           , 0)::numeric AS total
+           FROM lab_results lr
+           JOIN lab_orders lo ON lo.id = lr.order_id
+           WHERE lr.resulted_at >= $1 AND lr.resulted_at < $2
+             AND lo.created_at IS NOT NULL`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_rejection',
+          `SELECT COUNT(*)::int AS total FROM lab_orders
+           WHERE created_at >= $1 AND created_at < $2
+             AND LOWER(COALESCE(status,'')) = 'rejected'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_cd4',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2
+             AND LOWER(COALESCE(test_name,'')) LIKE '%cd4%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_vl',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2
+             AND LOWER(COALESCE(test_name,'')) LIKE '%viral load%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_malaria_rdt',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2
+             AND LOWER(COALESCE(test_name,'')) LIKE '%malaria%rdt%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'lab_sputum',
+          `SELECT COUNT(*)::int AS total FROM lab_results
+           WHERE resulted_at >= $1 AND resulted_at < $2
+             AND LOWER(COALESCE(test_name,'')) LIKE '%sputum%smear%'`,
+          [startDate, endDate]),
+      ]);
+      return {
+        totalTestsOrdered, totalTestsCompleted, haematologyTests, biochemistryTests,
+        microbiologyTests, criticalValuesReported,
+        avgTurnaroundHours: Math.round(avgTurnaroundHours * 10) / 10,
+        specimenRejections, cd4CountTests, viralLoadTests, malariaRdtTests, sputumSmearTests,
+      };
+    }
+
+    if (profile === 'mental_health_monthly') {
+      const [
+        totalScreened, depressionPositive, anxietyPositive, substanceUsePositive,
+        newCarePlansCreated, activeInMentalHealthCare, psychiatricReferrals, suicideRiskHigh,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'mh_screened',
+          `SELECT COUNT(*)::int AS total FROM mental_health_screenings
+           WHERE screening_date >= $1 AND screening_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'mh_depression',
+          `SELECT COUNT(*)::int AS total FROM mental_health_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND phq9_score IS NOT NULL AND phq9_score >= 10`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'mh_anxiety',
+          `SELECT COUNT(*)::int AS total FROM mental_health_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND gad7_score IS NOT NULL AND gad7_score >= 10`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'mh_substance',
+          `SELECT COUNT(*)::int AS total FROM mental_health_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND (audit_score >= 8 OR cage_score >= 2)`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'mh_care_plans',
+          `SELECT COUNT(*)::int AS total FROM mental_health_care_plans
+           WHERE created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'mh_active',
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM mental_health_care_plans
+           WHERE LOWER(COALESCE(status,'')) = 'active'`),
+        this.safeMetricCount(tenantDb, 'mh_referrals',
+          `SELECT COUNT(*)::int AS total FROM mental_health_follow_ups
+           WHERE follow_up_date >= $1 AND follow_up_date < $2
+             AND LOWER(COALESCE(disposition,'')) LIKE '%refer%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'mh_suicide_high',
+          `SELECT COUNT(*)::int AS total FROM mental_health_follow_ups
+           WHERE follow_up_date >= $1 AND follow_up_date < $2
+             AND LOWER(COALESCE(risk_tier,'')) IN ('high','critical')`,
+          [startDate, endDate]),
+      ]);
+      return {
+        totalScreened, depressionPositive, anxietyPositive, substanceUsePositive,
+        newCarePlansCreated, activeInMentalHealthCare, psychiatricReferrals, suicideRiskHigh,
+      };
+    }
+
+    if (profile === 'nutrition_monthly') {
+      const [
+        samAdmissions, mamAdmissions, samCured, samDied, samDefaulted, samNonResponsive,
+        mamCured, muacRedAdmissions, muacYellowAdmissions, oedemaCases,
+        rutfDispensedKg, therapeuticFeedingEnrolled,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'nut_sam',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND LOWER(COALESCE(acute_malnutrition_classification,'')) = 'sam'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_mam',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND LOWER(COALESCE(acute_malnutrition_classification,'')) = 'mam'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_sam_cured',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND LOWER(COALESCE(program_type,'')) IN ('imam','otp','sc')
+             AND LOWER(COALESCE(discharge_outcome,'')) = 'cured'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_sam_died',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND LOWER(COALESCE(discharge_outcome,'')) = 'died'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_sam_default',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND LOWER(COALESCE(discharge_outcome,'')) IN ('defaulted','default','ltfu')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_non_resp',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND LOWER(COALESCE(discharge_outcome,'')) LIKE '%non%resp%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_mam_cured',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND LOWER(COALESCE(program_type,'')) IN ('tsfp','sfp')
+             AND LOWER(COALESCE(discharge_outcome,'')) = 'cured'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_muac_red',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND muac IS NOT NULL AND muac < 115`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_muac_yellow',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND muac IS NOT NULL AND muac >= 115 AND muac < 125`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_oedema',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND bilateral_pitting_oedema = true`,
+          [startDate, endDate]),
+        this.safeMetricSum(tenantDb, 'nut_rutf',
+          `SELECT COALESCE(SUM(0), 0)::numeric AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'nut_tf',
+          `SELECT COUNT(*)::int AS total FROM nutrition_assessments
+           WHERE assessment_date >= $1 AND assessment_date < $2
+             AND LOWER(COALESCE(program_type,'')) IN ('imam','tsfp','otp','sc','sfp')`,
+          [startDate, endDate]),
+      ]);
+      return {
+        samAdmissions, mamAdmissions, samCured, samDied, samDefaulted, samNonResponsive,
+        mamCured, muacRedAdmissions, muacYellowAdmissions, oedemaCases,
+        rutfDispensedKg, therapeuticFeedingEnrolled,
+      };
+    }
+
+    if (profile === 'icu_monthly') {
+      const [
+        icuAdmissions, icuDeaths, icuAvgLosHours, icuApacheHigh,
+        icuVentilatorDays, icuReadmissions, sepsisCases, icuCardiacArrest,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'icu_admissions',
+          `SELECT COUNT(*)::int AS total FROM icu_admissions
+           WHERE admission_date >= $1 AND admission_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'icu_deaths',
+          `SELECT COUNT(*)::int AS total FROM icu_admissions
+           WHERE admission_date >= $1 AND admission_date < $2
+             AND LOWER(COALESCE(discharge_reason,'')) IN ('died','death','expired')`,
+          [startDate, endDate]),
+        this.safeMetricSum(tenantDb, 'icu_los',
+          `SELECT COALESCE(AVG(
+             EXTRACT(EPOCH FROM (COALESCE(discharge_date, NOW()) - admission_date))/3600
+           ), 0)::numeric AS total
+           FROM icu_admissions
+           WHERE admission_date >= $1 AND admission_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'icu_apache_high',
+          `SELECT COUNT(*)::int AS total FROM icu_admissions
+           WHERE admission_date >= $1 AND admission_date < $2
+             AND apache_ii_score IS NOT NULL AND apache_ii_score >= 25`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'icu_vent',
+          `SELECT COALESCE(SUM(
+             EXTRACT(DAY FROM (COALESCE(discharge_date, NOW()) - admission_date))
+           ), 0)::int AS total
+           FROM icu_admissions
+           WHERE admission_date >= $1 AND admission_date < $2
+             AND intubated = true`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'icu_readmit',
+          `SELECT COUNT(*)::int AS total FROM icu_admissions ia
+           WHERE ia.admission_date >= $1 AND ia.admission_date < $2
+             AND EXISTS (
+               SELECT 1 FROM icu_admissions ia2
+               WHERE ia2.patient_id = ia.patient_id
+                 AND ia2.admission_date < ia.admission_date
+                 AND ia2.discharge_date > ia.admission_date - INTERVAL '30 days'
+             )`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'icu_sepsis',
+          `SELECT COUNT(*)::int AS total FROM icu_admissions
+           WHERE admission_date >= $1 AND admission_date < $2
+             AND LOWER(COALESCE(primary_diagnosis,'')) LIKE '%sepsis%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'icu_arrest',
+          `SELECT COUNT(*)::int AS total FROM icu_admissions
+           WHERE admission_date >= $1 AND admission_date < $2
+             AND LOWER(COALESCE(primary_diagnosis,'')) LIKE '%cardiac arrest%'`,
+          [startDate, endDate]),
+      ]);
+      return {
+        icuAdmissions, icuDeaths,
+        icuAvgLosHours: Math.round(icuAvgLosHours * 10) / 10,
+        icuApacheHigh, icuVentilatorDays, icuReadmissions, sepsisCases, icuCardiacArrest,
+      };
+    }
+
+    if (profile === 'hai_monthly') {
+      const [
+        totalHaiCases, ssiCases, cautCases, clabsiCases, vapCases,
+        mrsaIsolates, esblIsolates, cdifficileCases, haiDeaths,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'hai_total',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'hai_ssi',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2
+             AND LOWER(COALESCE(infection_site,'')) IN ('ssi','surgical site','wound')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'hai_cauti',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2
+             AND LOWER(COALESCE(infection_site,'')) IN ('cauti','urinary','catheter')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'hai_clabsi',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2
+             AND LOWER(COALESCE(infection_site,'')) IN ('clabsi','bloodstream','bsi','central line')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'hai_vap',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2
+             AND LOWER(COALESCE(infection_site,'')) IN ('vap','ventilator','pneumonia')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'hai_mrsa',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2
+             AND LOWER(COALESCE(organism,'')) LIKE '%mrsa%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'hai_esbl',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2
+             AND LOWER(COALESCE(antibiotic_resistance_profile,'')) LIKE '%esbl%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'hai_cdiff',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2
+             AND LOWER(COALESCE(organism,'')) LIKE '%difficile%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'hai_deaths',
+          `SELECT COUNT(*)::int AS total FROM healthcare_associated_infections
+           WHERE onset_date >= $1 AND onset_date < $2
+             AND LOWER(COALESCE(outcome,'')) IN ('died','death')`,
+          [startDate, endDate]),
+      ]);
+      return {
+        totalHaiCases, ssiCases, cautCases, clabsiCases, vapCases,
+        mrsaIsolates, esblIsolates, cdifficileCases, haiDeaths,
+      };
+    }
+
+    if (profile === 'surgical_monthly') {
+      const [
+        totalSurgicalCases, electiveCases, emergencyCases, caesareanSections,
+        majorSurgicalComplications, surgicalMortality, cancelledCases,
+        avgOperativeTimeMinutes, bloodTransfusionsIntraop,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'surg_total',
+          `SELECT COUNT(*)::int AS total FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'surg_elective',
+          `SELECT COUNT(*)::int AS total FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2
+             AND LOWER(COALESCE(case_priority,'')) IN ('elective','routine')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'surg_emergency',
+          `SELECT COUNT(*)::int AS total FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2
+             AND LOWER(COALESCE(case_priority,'')) IN ('emergency','urgent','emergent')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'surg_csection',
+          `SELECT COUNT(*)::int AS total FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2
+             AND (LOWER(COALESCE(procedure_name,'')) LIKE '%caesarean%'
+               OR LOWER(COALESCE(procedure_name,'')) LIKE '%c-section%'
+               OR LOWER(COALESCE(procedure_name,'')) LIKE '%c section%')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'surg_complications',
+          `SELECT COUNT(*)::int AS total FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2
+             AND complications IS NOT NULL AND complications != '' AND complications != 'none'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'surg_mortality',
+          `SELECT COUNT(*)::int AS total FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2
+             AND LOWER(COALESCE(post_op_diagnosis,'')) LIKE '%died%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'surg_cancelled',
+          `SELECT COUNT(*)::int AS total FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2
+             AND LOWER(COALESCE(status,'')) IN ('cancelled','canceled')`,
+          [startDate, endDate]),
+        this.safeMetricSum(tenantDb, 'surg_op_time',
+          `SELECT COALESCE(AVG(
+             EXTRACT(EPOCH FROM (actual_end_time - actual_start_time))/60
+           ), 0)::numeric AS total
+           FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2
+             AND actual_start_time IS NOT NULL AND actual_end_time IS NOT NULL`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'surg_transfusions',
+          `SELECT COUNT(*)::int AS total FROM surgical_cases
+           WHERE scheduled_date >= $1 AND scheduled_date < $2
+             AND blood_products IS NOT NULL AND blood_products != ''`,
+          [startDate, endDate]),
+      ]);
+      return {
+        totalSurgicalCases, electiveCases, emergencyCases, caesareanSections,
+        majorSurgicalComplications, surgicalMortality, cancelledCases,
+        avgOperativeTimeMinutes: Math.round(avgOperativeTimeMinutes),
+        bloodTransfusionsIntraop,
+      };
+    }
+
+    if (profile === 'cervical_cancer_monthly') {
+      const [
+        womenScreened, viaPositive, papPositive, hpvPositive,
+        cryotherapyPerformed, leepPerformed, referredForColposcopy, confirmedCancerCases,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'cx_screened',
+          `SELECT COUNT(*)::int AS total FROM cervical_screenings
+           WHERE screening_date >= $1 AND screening_date < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'cx_via_pos',
+          `SELECT COUNT(*)::int AS total FROM cervical_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND LOWER(COALESCE(screening_type,'')) LIKE '%via%'
+             AND LOWER(COALESCE(result,'')) IN ('positive','pos','acetowhite','abnormal')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'cx_pap_pos',
+          `SELECT COUNT(*)::int AS total FROM cervical_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND LOWER(COALESCE(screening_type,'')) LIKE '%pap%'
+             AND LOWER(COALESCE(result,'')) NOT IN ('normal','negative','nilm')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'cx_hpv_pos',
+          `SELECT COUNT(*)::int AS total FROM cervical_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND LOWER(COALESCE(screening_type,'')) LIKE '%hpv%'
+             AND LOWER(COALESCE(result,'')) IN ('positive','detected')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'cx_cryo',
+          `SELECT COUNT(*)::int AS total FROM cervical_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND LOWER(COALESCE(treatment_method,'')) LIKE '%cryotherapy%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'cx_leep',
+          `SELECT COUNT(*)::int AS total FROM cervical_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND LOWER(COALESCE(treatment_method,'')) IN ('leep','lletz')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'cx_colpo_ref',
+          `SELECT COUNT(*)::int AS total FROM cervical_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND LOWER(COALESCE(referral_type,'')) LIKE '%colposcopy%'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'cx_cancer',
+          `SELECT COUNT(*)::int AS total FROM cervical_screenings
+           WHERE screening_date >= $1 AND screening_date < $2
+             AND LOWER(COALESCE(result,'')) LIKE '%cancer%'`,
+          [startDate, endDate]),
+      ]);
+      return {
+        womenScreened, viaPositive, papPositive, hpvPositive,
+        cryotherapyPerformed, leepPerformed, referredForColposcopy, confirmedCancerCases,
+      };
+    }
+
+    if (profile === 'neonatal_monthly') {
+      const [
+        liveBirthsTotal, stillbirthsTotal, lowBirthWeightCount, veryLowBirthWeightCount,
+        pretermBirths, apgar5MinUnder7, neonatalResuscitation, scbuAdmissions,
+        neonatalDeaths, hivExposedInfants, arvProphylaxisGiven,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'neo_live',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND LOWER(COALESCE(discharge_status,'')) != 'stillbirth'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_still',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND LOWER(COALESCE(discharge_status,'')) = 'stillbirth'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_lbw',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND birth_weight IS NOT NULL AND birth_weight > 0 AND birth_weight < 2500`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_vlbw',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND birth_weight IS NOT NULL AND birth_weight > 0 AND birth_weight < 1500`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_preterm',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND gestational_age IS NOT NULL AND gestational_age < 37`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_apgar_low',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND apgar_5min IS NOT NULL AND apgar_5min < 7`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_resus',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND resuscitation_performed = true`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_scbu',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND scbu_admission = true`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_deaths',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND LOWER(COALESCE(discharge_status,'')) IN ('died','death','neonatal death')`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_hiv_exposed',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND hiv_exposure_status = 'exposed'`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'neo_arv',
+          `SELECT COUNT(*)::int AS total FROM neonatal_records
+           WHERE created_at >= $1 AND created_at < $2
+             AND arvs_given = true`,
+          [startDate, endDate]),
+      ]);
+      return {
+        liveBirthsTotal, stillbirthsTotal, lowBirthWeightCount, veryLowBirthWeightCount,
+        pretermBirths, apgar5MinUnder7, neonatalResuscitation, scbuAdmissions,
+        neonatalDeaths, hivExposedInfants, arvProphylaxisGiven,
+      };
     }
 
     return {};
@@ -1891,7 +2983,9 @@ export class Dhis2Service {
         program: eventData.program,
         programStage: eventData.programStage,
         orgUnit: eventData.orgUnit || context.config.orgUnitId || this.envOrgUnit,
-        eventDate: eventData.eventDate,
+        eventDate: eventData.eventDate
+          ? this.formatDateOnly(eventData.eventDate)
+          : new Date().toISOString().slice(0, 10),
         status: 'COMPLETED',
         trackedEntityInstance,
         dataValues: eventData.dataValues || [],
@@ -1992,7 +3086,7 @@ export class Dhis2Service {
 
       const dhis2DataValues = {
         dataSet: dataValues.dataSet || context.config.dataSetId || this.envDataSetId,
-        completeDate: new Date().toISOString(),
+        completeDate: new Date().toISOString().slice(0, 10),
         period: dataValues.period,
         orgUnit: dataValues.orgUnit || context.config.orgUnitId || this.envOrgUnit,
         dataValues: (dataValues.values || []).map((item: any) => ({
@@ -2062,6 +3156,186 @@ export class Dhis2Service {
         error: error.response?.data || error.message,
       };
     }
+  }
+
+  // ── TRACKER PROGRAM STAGE EVENTS ────────────────────────────────────────
+
+  /**
+   * Push a clinical encounter as a DHIS2 program stage event.
+   * Requires the patient to already have a TEI mapping (run syncPatients first).
+   */
+  async syncEncounterAsTrackerEvent(
+    tenantDb: DataSource,
+    tenantId: string | undefined,
+    encounterId: string,
+    programId: string,
+    programStageId: string,
+  ): Promise<{ status: string; reference?: string; message: string }> {
+    const context = await this.resolveContext(tenantId);
+    if (!context.enabled) return { status: 'NOT_CONFIGURED', message: context.reason ?? 'DHIS2 not configured.' };
+    if (context.useMock || !context.client || !context.config) return { status: 'SUCCESS', reference: `MOCK_EVT_${encounterId}`, message: '[MOCK] Encounter event recorded.' };
+
+    await this.ensureTenantSyncTables(tenantDb);
+
+    const [encounter] = await tenantDb.query(
+      `SELECT e.id, e.patient_id, e.encounter_date, e.encounter_type, e.ward, e.department, e.created_at
+       FROM encounters e WHERE e.id = $1 LIMIT 1`,
+      [encounterId],
+    );
+    if (!encounter) return { status: 'ERROR', message: `Encounter ${encounterId} not found.` };
+
+    const teiId = await this.loadPatientTeiMapping(tenantDb, encounter.patient_id);
+    if (!teiId) return { status: 'ERROR', message: `No DHIS2 TEI mapping for patient ${encounter.patient_id}. Run patient sync first.` };
+
+    const diagnoses: Array<{ icd10_code: string; description: string }> = await tenantDb.query(
+      `SELECT icd10_code, COALESCE(description, display_name, icd10_code) AS description
+       FROM patient_diagnoses WHERE encounter_id = $1 ORDER BY created_at ASC LIMIT 5`,
+      [encounterId],
+    );
+
+    const eventDate = this.formatDateOnly(encounter.encounter_date || encounter.created_at);
+    const orgUnit = context.config.orgUnitId || this.envOrgUnit || '';
+
+    // Resolve data element IDs for encounter fields from DHIS2 metadata
+    const deMap = await this.resolveAggregateElementIdsByCode(context, undefined, {
+      encounterType: 'MC_DE_ENCOUNTER_TYPE',
+      ward: 'MC_DE_ENCOUNTER_WARD',
+      primaryDiagnosis: 'MC_DE_ENCOUNTER_PRIMARY_DIAGNOSIS',
+      diagnosisCodes: 'MC_DE_ENCOUNTER_DIAGNOSIS_CODES',
+    });
+
+    const dataValues = [
+      deMap.encounterType && { dataElement: deMap.encounterType, value: encounter.encounter_type || 'OPD' },
+      deMap.ward && encounter.ward && { dataElement: deMap.ward, value: encounter.ward },
+      deMap.primaryDiagnosis && diagnoses[0] && { dataElement: deMap.primaryDiagnosis, value: diagnoses[0].icd10_code },
+      deMap.diagnosisCodes && diagnoses.length > 0 && {
+        dataElement: deMap.diagnosisCodes,
+        value: diagnoses.map(d => d.icd10_code).join(';'),
+      },
+    ].filter(Boolean);
+
+    return this.sendEvent(
+      { program: programId, programStage: programStageId, orgUnit, eventDate, patientId: encounter.patient_id, dataValues },
+      tenantDb, tenantId,
+    );
+  }
+
+  /**
+   * Push a lab result as a DHIS2 program stage event.
+   */
+  async syncLabResultAsTrackerEvent(
+    tenantDb: DataSource,
+    tenantId: string | undefined,
+    labResultId: string,
+    programId: string,
+    programStageId: string,
+  ): Promise<{ status: string; reference?: string; message: string }> {
+    const context = await this.resolveContext(tenantId);
+    if (!context.enabled) return { status: 'NOT_CONFIGURED', message: context.reason ?? 'DHIS2 not configured.' };
+    if (context.useMock || !context.client || !context.config) return { status: 'SUCCESS', reference: `MOCK_LAB_${labResultId}`, message: '[MOCK] Lab event recorded.' };
+
+    await this.ensureTenantSyncTables(tenantDb);
+
+    const [result] = await tenantDb.query(
+      `SELECT lr.id, lr.patient_id, lr.test_name, lr.loinc_code, lr.value_text,
+              lr.value_numeric, lr.unit, lr.flag, lr.resulted_at, lr.reference_range
+       FROM lab_results lr WHERE lr.id = $1 LIMIT 1`,
+      [labResultId],
+    );
+    if (!result) return { status: 'ERROR', message: `Lab result ${labResultId} not found.` };
+
+    const teiId = await this.loadPatientTeiMapping(tenantDb, result.patient_id);
+    if (!teiId) return { status: 'ERROR', message: `No DHIS2 TEI mapping for patient ${result.patient_id}.` };
+
+    const deMap = await this.resolveAggregateElementIdsByCode(context, undefined, {
+      testName: 'MC_DE_LAB_TEST_NAME',
+      loincCode: 'MC_DE_LAB_LOINC_CODE',
+      resultValue: 'MC_DE_LAB_RESULT_VALUE',
+      resultUnit: 'MC_DE_LAB_RESULT_UNIT',
+      resultFlag: 'MC_DE_LAB_RESULT_FLAG',
+      referenceRange: 'MC_DE_LAB_REFERENCE_RANGE',
+    });
+
+    const dataValues = [
+      deMap.testName && { dataElement: deMap.testName, value: result.test_name || '' },
+      deMap.loincCode && result.loinc_code && { dataElement: deMap.loincCode, value: result.loinc_code },
+      deMap.resultValue && { dataElement: deMap.resultValue, value: String(result.value_numeric ?? result.value_text ?? '') },
+      deMap.resultUnit && result.unit && { dataElement: deMap.resultUnit, value: result.unit },
+      deMap.resultFlag && result.flag && { dataElement: deMap.resultFlag, value: result.flag },
+      deMap.referenceRange && result.reference_range && { dataElement: deMap.referenceRange, value: result.reference_range },
+    ].filter(Boolean);
+
+    const eventDate = this.formatDateOnly(result.resulted_at);
+    const orgUnit = context.config.orgUnitId || this.envOrgUnit || '';
+
+    return this.sendEvent(
+      { program: programId, programStage: programStageId, orgUnit, eventDate, patientId: result.patient_id, dataValues },
+      tenantDb, tenantId,
+    );
+  }
+
+  /**
+   * Push a vital signs set as a DHIS2 program stage event.
+   */
+  async syncVitalSignsAsTrackerEvent(
+    tenantDb: DataSource,
+    tenantId: string | undefined,
+    vitalSignsId: string,
+    programId: string,
+    programStageId: string,
+  ): Promise<{ status: string; reference?: string; message: string }> {
+    const context = await this.resolveContext(tenantId);
+    if (!context.enabled) return { status: 'NOT_CONFIGURED', message: context.reason ?? 'DHIS2 not configured.' };
+    if (context.useMock || !context.client || !context.config) return { status: 'SUCCESS', reference: `MOCK_VS_${vitalSignsId}`, message: '[MOCK] Vitals event recorded.' };
+
+    await this.ensureTenantSyncTables(tenantDb);
+
+    const [vitals] = await tenantDb.query(
+      `SELECT vs.id, vs.patient_id, vs.recorded_at,
+              vs.systolic_bp, vs.diastolic_bp, vs.heart_rate, vs.respiratory_rate,
+              vs.spo2, vs.temperature, vs.weight, vs.height, vs.muac,
+              vs.pain_score, vs.news2_total_score
+       FROM vital_signs vs WHERE vs.id = $1 LIMIT 1`,
+      [vitalSignsId],
+    );
+    if (!vitals) return { status: 'ERROR', message: `Vital signs ${vitalSignsId} not found.` };
+
+    const teiId = await this.loadPatientTeiMapping(tenantDb, vitals.patient_id);
+    if (!teiId) return { status: 'ERROR', message: `No DHIS2 TEI mapping for patient ${vitals.patient_id}.` };
+
+    const deMap = await this.resolveAggregateElementIdsByCode(context, undefined, {
+      systolicBp: 'MC_DE_VS_SYSTOLIC_BP',
+      diastolicBp: 'MC_DE_VS_DIASTOLIC_BP',
+      heartRate: 'MC_DE_VS_HEART_RATE',
+      respiratoryRate: 'MC_DE_VS_RESPIRATORY_RATE',
+      spo2: 'MC_DE_VS_SPO2',
+      temperature: 'MC_DE_VS_TEMPERATURE',
+      weight: 'MC_DE_VS_WEIGHT',
+      muac: 'MC_DE_VS_MUAC',
+      news2Score: 'MC_DE_VS_NEWS2_SCORE',
+    });
+
+    const dataValues = [
+      ['systolicBp', vitals.systolic_bp],
+      ['diastolicBp', vitals.diastolic_bp],
+      ['heartRate', vitals.heart_rate],
+      ['respiratoryRate', vitals.respiratory_rate],
+      ['spo2', vitals.spo2],
+      ['temperature', vitals.temperature],
+      ['weight', vitals.weight],
+      ['muac', vitals.muac],
+      ['news2Score', vitals.news2_total_score],
+    ]
+      .filter(([key, val]) => deMap[key as string] && val != null)
+      .map(([key, val]) => ({ dataElement: deMap[key as string], value: String(val) }));
+
+    const eventDate = this.formatDateOnly(vitals.recorded_at);
+    const orgUnit = context.config.orgUnitId || this.envOrgUnit || '';
+
+    return this.sendEvent(
+      { program: programId, programStage: programStageId, orgUnit, eventDate, patientId: vitals.patient_id, dataValues },
+      tenantDb, tenantId,
+    );
   }
 
   async getPrograms(tenantId?: string) {
@@ -2259,13 +3533,39 @@ export class Dhis2Service {
           status: 'NOT_CONFIGURED',
           period,
           dataValues: 0,
-              message:
-            `No aggregate data elements are configured for profile "${profile}". Provide reportData.dataElements or include mapped data elements in the target dataset.`,
+          message: `No aggregate data elements are configured for profile "${profile}". Provide reportData.dataElements or include mapped data elements in the target dataset.`,
         };
       }
 
+      // Pre-submission validation (non-blocking — violations are returned in response but don't prevent send)
+      let validationResult: Awaited<ReturnType<typeof this.validateBeforeSubmit>> | null = null;
+      if (report.validate !== false && dataSet) {
+        try {
+          validationResult = await this.validateBeforeSubmit(
+            tenantId,
+            dataSet,
+            payloadDataValues.map((dv: any) => ({ dataElement: dv.dataElement, value: String(dv.value) })),
+            period,
+            orgUnit,
+          );
+          if (validationResult.violations.length > 0) {
+            this.logger.warn(
+              `DHIS2 validation: ${validationResult.violations.length} rule violation(s) for ${profile} period ${period}: ` +
+              validationResult.violations.map(v => v.ruleName).join(', '),
+            );
+          }
+        } catch (valErr: any) {
+          this.logger.warn(`Validation check failed (non-blocking): ${valErr?.message}`);
+        }
+      }
+
+      // completeDate must be YYYY-MM-DD — last day of the reporting period
+      const { endDate: periodEnd } = this.resolveMonthlyPeriodBounds(period);
+      const completeDate = new Date(new Date(periodEnd).getTime() - 86400000).toISOString().slice(0, 10);
+
       let aggregateData = {
         dataSet,
+        completeDate,
         period,
         orgUnit,
         dataValues: payloadDataValues.map((item: any) => ({
@@ -2339,6 +3639,14 @@ export class Dhis2Service {
         ignored: importCounts.ignored,
         dataValues: aggregateData.dataValues.length,
         message: 'Aggregate report sent to DHIS2 successfully',
+        validation: validationResult
+          ? {
+              valid: validationResult.valid,
+              violationCount: validationResult.violations.length,
+              violations: validationResult.violations,
+              rulesChecked: validationResult.rulesChecked,
+            }
+          : null,
       };
     } catch (error: any) {
       this.logger.error('Error sending aggregate report to DHIS2:', error);
@@ -2467,5 +3775,393 @@ export class Dhis2Service {
         error: error.response?.data || error.message,
       };
     }
+  }
+
+  /**
+   * Pull aggregate analytics FROM DHIS2 for a given indicator/data element and org unit hierarchy.
+   * Returns facility value + district/national benchmark so doctors can compare performance.
+   */
+  // ── ORG UNIT HIERARCHY RESOLUTION ────────────────────────────────────────
+
+  private async resolveOrgUnitAncestors(
+    context: Dhis2Context,
+    orgUnitId: string,
+  ): Promise<{ districtId: string | null; nationalId: string | null }> {
+    if (!context.client || !orgUnitId) return { districtId: null, nationalId: null };
+    try {
+      const res = await context.client.get(`/organisationUnits/${orgUnitId}`, {
+        params: { fields: 'id,level,ancestors[id,level]' },
+      });
+      const ancestors: Array<{ id: string; level: number }> = res.data?.ancestors || [];
+      const facilityLevel = Number(res.data?.level ?? 0);
+      // District is typically one level above facility; national is level 1
+      const districtLevel = facilityLevel - 1;
+      const district = ancestors.find(a => a.level === districtLevel) ?? null;
+      const national = ancestors.find(a => a.level === 1) ?? null;
+      return { districtId: district?.id ?? null, nationalId: national?.id ?? null };
+    } catch {
+      return { districtId: null, nationalId: null };
+    }
+  }
+
+  private async analyticsValue(
+    context: Dhis2Context,
+    dataElement: string,
+    orgUnit: string,
+    period: string,
+    aggregationType: 'AVERAGE' | 'SUM' = 'SUM',
+  ): Promise<number | null> {
+    if (!context.client) return null;
+    try {
+      const res = await context.client.get('/analytics', {
+        params: {
+          dimension: `dx:${dataElement},ou:${orgUnit},pe:${period}`,
+          aggregationType,
+          skipMeta: true,
+        },
+      });
+      const rows: any[] = res.data?.rows || [];
+      if (rows.length === 0) return null;
+      // rows: [dxUid, ouUid, peUid, value]
+      const nums = rows.map((r: any) => Number(r[3])).filter(n => Number.isFinite(n));
+      if (nums.length === 0) return null;
+      return aggregationType === 'AVERAGE'
+        ? nums.reduce((a, b) => a + b, 0) / nums.length
+        : nums.reduce((a, b) => a + b, 0);
+    } catch {
+      return null;
+    }
+  }
+
+  async getFacilityBenchmarks(
+    tenantId: string | undefined,
+    args: {
+      dataElement: string;
+      period: string;
+      facilityOrgUnit?: string;
+      parentOrgUnit?: string;
+    },
+  ): Promise<{
+    facility: number | null;
+    district: number | null;
+    national: number | null;
+    districtOrgUnit: string | null;
+    nationalOrgUnit: string | null;
+    period: string;
+    dataElement: string;
+  }> {
+    const context = await this.resolveContext(tenantId);
+    const period = args.period || new Date().toISOString().slice(0, 7).replace('-', '');
+
+    if (context.useMock || !context.client || !context.config) {
+      return { facility: null, district: null, national: null, districtOrgUnit: null, nationalOrgUnit: null, period, dataElement: args.dataElement };
+    }
+
+    const facilityOrgUnit = args.facilityOrgUnit || context.config.orgUnitId || '';
+    if (!facilityOrgUnit) {
+      return { facility: null, district: null, national: null, districtOrgUnit: null, nationalOrgUnit: null, period, dataElement: args.dataElement };
+    }
+
+    // Resolve hierarchy from DHIS2 — use provided parentOrgUnit as override for district
+    const { districtId, nationalId } = args.parentOrgUnit
+      ? { districtId: args.parentOrgUnit, nationalId: null }
+      : await this.resolveOrgUnitAncestors(context, facilityOrgUnit);
+
+    const [facility, district, national] = await Promise.all([
+      this.analyticsValue(context, args.dataElement, facilityOrgUnit, period, 'SUM'),
+      districtId ? this.analyticsValue(context, args.dataElement, `LEVEL-${await this.getOrgUnitLevel(context, facilityOrgUnit)};${districtId}`, period, 'AVERAGE') : Promise.resolve(null),
+      nationalId ? this.analyticsValue(context, args.dataElement, `LEVEL-${await this.getOrgUnitLevel(context, facilityOrgUnit)};${nationalId}`, period, 'AVERAGE') : Promise.resolve(null),
+    ]);
+
+    return { facility, district, national, districtOrgUnit: districtId, nationalOrgUnit: nationalId, period, dataElement: args.dataElement };
+  }
+
+  private async getOrgUnitLevel(context: Dhis2Context, orgUnitId: string): Promise<number> {
+    if (!context.client) return 4;
+    try {
+      const res = await context.client.get(`/organisationUnits/${orgUnitId}`, { params: { fields: 'level' } });
+      return Number(res.data?.level ?? 4);
+    } catch {
+      return 4;
+    }
+  }
+
+  // ── VALIDATION RULES ENGINE ─────────────────────────────────────────────
+
+  /**
+   * Fetch DHIS2 validation rules for a dataset and evaluate them against
+   * the given data values before submission. Returns any violations.
+   */
+  async validateBeforeSubmit(
+    tenantId: string | undefined,
+    dataSetId: string,
+    dataValues: Array<{ dataElement: string; value: string }>,
+    period: string,
+    orgUnit: string,
+  ): Promise<{
+    valid: boolean;
+    violations: Array<{ ruleName: string; description: string; operator: string; leftValue: number; rightValue: number }>;
+    warnings: string[];
+    rulesChecked: number;
+  }> {
+    const context = await this.resolveContext(tenantId);
+
+    if (context.useMock || !context.client) {
+      return { valid: true, violations: [], warnings: ['DHIS2 in mock mode — validation skipped.'], rulesChecked: 0 };
+    }
+
+    // Build a lookup map from the submitted data values
+    const submitted: Record<string, number> = {};
+    for (const dv of dataValues) {
+      const n = Number(dv.value);
+      if (Number.isFinite(n)) submitted[dv.dataElement] = n;
+    }
+
+    // Fetch validation rules from DHIS2 for this dataset
+    let rules: any[] = [];
+    try {
+      const res = await context.client.get('/validationRules', {
+        params: {
+          filter: `dataSets.id:eq:${dataSetId}`,
+          fields: 'id,name,description,operator,leftSide[expression,description],rightSide[expression,description]',
+          paging: false,
+        },
+      });
+      rules = res.data?.validationRules || [];
+    } catch (err: any) {
+      this.logger.warn(`Could not fetch DHIS2 validation rules for ${dataSetId}: ${err?.message}`);
+      return { valid: true, violations: [], warnings: [`Validation rules unavailable: ${err?.message}`], rulesChecked: 0 };
+    }
+
+    const violations: Array<{ ruleName: string; description: string; operator: string; leftValue: number; rightValue: number }> = [];
+    const warnings: string[] = [];
+
+    for (const rule of rules) {
+      const leftVal = this.evaluateRuleExpression(rule.leftSide?.expression, submitted);
+      const rightVal = this.evaluateRuleExpression(rule.rightSide?.expression, submitted);
+
+      if (leftVal === null || rightVal === null) {
+        // Can't evaluate — data elements in rule not in submission
+        warnings.push(`Rule "${rule.name}" skipped — referenced data elements not in submission.`);
+        continue;
+      }
+
+      const violated = this.evaluateOperator(rule.operator, leftVal, rightVal);
+      if (violated) {
+        violations.push({
+          ruleName: rule.name || rule.id,
+          description: rule.description || `${rule.leftSide?.description} ${rule.operator} ${rule.rightSide?.description}`,
+          operator: rule.operator,
+          leftValue: leftVal,
+          rightValue: rightVal,
+        });
+      }
+    }
+
+    return {
+      valid: violations.length === 0,
+      violations,
+      warnings,
+      rulesChecked: rules.length,
+    };
+  }
+
+  private evaluateRuleExpression(expression: string | undefined, submitted: Record<string, number>): number | null {
+    if (!expression) return null;
+    // DHIS2 expressions reference data elements as #{UID} or #{UID.cocUID}
+    // Replace each #{...} with the submitted value; if any is missing return null
+    let resolved = expression;
+    const refs = [...expression.matchAll(/#\{([^}]+)\}/g)];
+    if (refs.length === 0) {
+      // Pure numeric literal
+      const n = Number(expression.trim());
+      return Number.isFinite(n) ? n : null;
+    }
+    for (const [token, inner] of refs) {
+      const deId = inner.split('.')[0]; // strip category option combo if present
+      const val = submitted[deId];
+      if (val === undefined) return null; // missing — can't evaluate
+      resolved = resolved.replace(token, String(val));
+    }
+    try {
+      // Safe arithmetic eval — only numbers and operators remain after substitution
+      if (!/^[\d\s+\-*/().]+$/.test(resolved)) return null;
+      // eslint-disable-next-line no-new-func
+      const result = Function(`"use strict"; return (${resolved})`)();
+      return Number.isFinite(result) ? result : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private evaluateOperator(operator: string, left: number, right: number): boolean {
+    // DHIS2 validation rule operators: EQUAL_TO, NOT_EQUAL_TO, LESS_THAN, LESS_THAN_OR_EQUAL_TO,
+    // GREATER_THAN, GREATER_THAN_OR_EQUAL_TO, COMPULSORY_PAIR, EXCLUSIVE_PAIR
+    // A rule is VIOLATED when the condition is FALSE
+    switch (operator) {
+      case 'LESS_THAN':               return !(left < right);
+      case 'LESS_THAN_OR_EQUAL_TO':   return !(left <= right);
+      case 'GREATER_THAN':            return !(left > right);
+      case 'GREATER_THAN_OR_EQUAL_TO':return !(left >= right);
+      case 'EQUAL_TO':                return !(left === right);
+      case 'NOT_EQUAL_TO':            return !(left !== right);
+      default:                        return false; // unknown operator — pass
+    }
+  }
+
+  /**
+   * Pull a set of performance benchmarks for the doctor dashboard.
+   * Returns facility, district average, and national average for each indicator.
+   */
+  async getDoctorPerformanceDashboard(
+    tenantId: string | undefined,
+    period: string,
+    facilityOrgUnit?: string,
+  ): Promise<{
+    period: string;
+    facilityOrgUnit: string | null;
+    districtOrgUnit: string | null;
+    nationalOrgUnit: string | null;
+    indicators: Array<{
+      label: string;
+      dataElement: string;
+      facilityValue: number | null;
+      districtAvg: number | null;
+      nationalAvg: number | null;
+      unit: string;
+      trend: 'above_district' | 'below_district' | 'at_par' | 'no_benchmark';
+    }>;
+    mock: boolean;
+  }> {
+    const context = await this.resolveContext(tenantId);
+    const resolvedPeriod = period || new Date().toISOString().slice(0, 7).replace('-', '');
+
+    if (context.useMock || !context.client || !context.config) {
+      return {
+        period: resolvedPeriod,
+        facilityOrgUnit: null,
+        districtOrgUnit: null,
+        nationalOrgUnit: null,
+        mock: true,
+        indicators: [
+          { label: 'TB Treatment Success Rate', dataElement: 'MC_DE_TB_OUTCOME_CURED', facilityValue: null, districtAvg: null, nationalAvg: null, unit: '%', trend: 'no_benchmark' },
+          { label: 'HIV VL Suppression', dataElement: 'MC_DE_HIV_VL_SUPPRESSED_LT1000', facilityValue: null, districtAvg: null, nationalAvg: null, unit: 'patients', trend: 'no_benchmark' },
+          { label: 'Malaria RDT Positivity', dataElement: 'MC_DE_MALARIA_RDT_POSITIVE', facilityValue: null, districtAvg: null, nationalAvg: null, unit: 'cases', trend: 'no_benchmark' },
+          { label: 'ANC 4+ Coverage', dataElement: 'MC_DE_MATERNAL_ANC4_PLUS', facilityValue: null, districtAvg: null, nationalAvg: null, unit: 'women', trend: 'no_benchmark' },
+          { label: 'BP Controlled (HTN)', dataElement: 'MC_DE_HTN_BP_CONTROLLED', facilityValue: null, districtAvg: null, nationalAvg: null, unit: 'patients', trend: 'no_benchmark' },
+        ],
+      };
+    }
+
+    const orgUnit = facilityOrgUnit || context.config.orgUnitId || '';
+    if (!orgUnit) {
+      return { period: resolvedPeriod, facilityOrgUnit: null, districtOrgUnit: null, nationalOrgUnit: null, mock: false, indicators: [] };
+    }
+
+    // Resolve org unit hierarchy once
+    const [facilityLevel, { districtId, nationalId }] = await Promise.all([
+      this.getOrgUnitLevel(context, orgUnit),
+      this.resolveOrgUnitAncestors(context, orgUnit),
+    ]);
+
+    const indicatorDefs = [
+      { label: 'TB Treatment Success Rate', dataElement: 'MC_DE_TB_OUTCOME_CURED', unit: '%', higherIsBetter: true },
+      { label: 'HIV VL Suppression (<1000)', dataElement: 'MC_DE_HIV_VL_SUPPRESSED_LT1000', unit: 'patients', higherIsBetter: true },
+      { label: 'Malaria RDT Positivity', dataElement: 'MC_DE_MALARIA_RDT_POSITIVE', unit: 'cases', higherIsBetter: false },
+      { label: 'ANC 4+ Coverage', dataElement: 'MC_DE_MATERNAL_ANC4_PLUS', unit: 'women', higherIsBetter: true },
+      { label: 'BP Controlled (HTN)', dataElement: 'MC_DE_HTN_BP_CONTROLLED', unit: 'patients', higherIsBetter: true },
+      { label: 'ICU Mortality', dataElement: 'MC_DE_ICU_DEATHS', unit: 'deaths', higherIsBetter: false },
+      { label: 'HAI Cases', dataElement: 'MC_DE_HAI_TOTAL', unit: 'cases', higherIsBetter: false },
+      { label: 'Lab Turnaround (hrs)', dataElement: 'MC_DE_LAB_TAT_HOURS', unit: 'hours', higherIsBetter: false },
+      { label: 'Cervical Screening VIA+', dataElement: 'MC_DE_CX_VIA_POSITIVE', unit: 'women', higherIsBetter: true },
+      { label: 'Neonatal Deaths', dataElement: 'MC_DE_NEO_DEATHS', unit: 'deaths', higherIsBetter: false },
+    ];
+
+    const dxList = indicatorDefs.map(d => d.dataElement).join(';');
+    const levelFilter = `LEVEL-${facilityLevel}`;
+
+    // Fetch facility values, district averages, and national averages in parallel
+    const [facilityRes, districtRes, nationalRes] = await Promise.allSettled([
+      context.client.get('/analytics', {
+        params: { dimension: `dx:${dxList},ou:${orgUnit},pe:${resolvedPeriod}`, skipMeta: true },
+      }),
+      districtId
+        ? context.client.get('/analytics', {
+            params: { dimension: `dx:${dxList},ou:${levelFilter};${districtId},pe:${resolvedPeriod}`, skipMeta: true, aggregationType: 'AVERAGE' },
+          })
+        : Promise.resolve(null),
+      nationalId
+        ? context.client.get('/analytics', {
+            params: { dimension: `dx:${dxList},ou:${levelFilter};${nationalId},pe:${resolvedPeriod}`, skipMeta: true, aggregationType: 'AVERAGE' },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const extractValues = (settled: PromiseSettledResult<any>): Record<string, number> => {
+      if (settled.status === 'rejected' || !settled.value) return {};
+      const rows: any[] = settled.value?.data?.rows || [];
+      const map: Record<string, number[]> = {};
+      for (const row of rows) {
+        const de = row[0]; const val = Number(row[3]);
+        if (Number.isFinite(val)) { (map[de] ??= []).push(val); }
+      }
+      // Average across all org units in the result (district/national analytics returns one row per facility)
+      const out: Record<string, number> = {};
+      for (const [de, vals] of Object.entries(map)) {
+        out[de] = vals.reduce((a, b) => a + b, 0) / vals.length;
+      }
+      return out;
+    };
+
+    const facilityVals = extractValues(facilityRes);
+    const districtVals = extractValues(districtRes);
+    const nationalVals = extractValues(nationalRes);
+
+    const computeTrend = (fVal: number | null, dVal: number | null, higherIsBetter: boolean): 'above_district' | 'below_district' | 'at_par' | 'no_benchmark' => {
+      if (fVal === null || dVal === null) return 'no_benchmark';
+      const threshold = dVal * 0.05; // 5% tolerance band = "at par"
+      if (Math.abs(fVal - dVal) <= threshold) return 'at_par';
+      const facilityBetter = higherIsBetter ? fVal > dVal : fVal < dVal;
+      return facilityBetter ? 'above_district' : 'below_district';
+    };
+
+    return {
+      period: resolvedPeriod,
+      facilityOrgUnit: orgUnit,
+      districtOrgUnit: districtId,
+      nationalOrgUnit: nationalId,
+      mock: false,
+      indicators: indicatorDefs.map(def => {
+        const fv = facilityVals[def.dataElement] ?? null;
+        const dv = districtVals[def.dataElement] ?? null;
+        const nv = nationalVals[def.dataElement] ?? null;
+        return {
+          label: def.label,
+          dataElement: def.dataElement,
+          facilityValue: fv,
+          districtAvg: dv !== null ? Math.round(dv * 10) / 10 : null,
+          nationalAvg: nv !== null ? Math.round(nv * 10) / 10 : null,
+          unit: def.unit,
+          trend: computeTrend(fv, dv, def.higherIsBetter),
+        };
+      }),
+    };
+  }
+
+  async getPrograms(tenantId?: string) {
+    for (const row of rows) {
+      valueByDe[row[0]] = Number(row[3]);
+    }
+
+    return {
+      period: resolvedPeriod,
+      mock: false,
+      indicators: indicatorDefs.map(def => ({
+        label: def.label,
+        dataElement: def.dataElement,
+        facilityValue: valueByDe[def.dataElement] ?? null,
+        unit: def.unit,
+      })),
+    };
   }
 }

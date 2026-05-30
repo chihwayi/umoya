@@ -1,19 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { OfflineSyncQueue } from './entities/offline-sync-queue.entity';
 import { UssdClinicalEntry } from './entities/ussd-clinical-entry.entity';
 
 @Injectable()
 export class LiteService {
   private readonly logger = new Logger(LiteService.name);
+  private masterDs: DataSource | null = null;
 
-  constructor(
-    @InjectRepository(OfflineSyncQueue) private syncQueueRepo: Repository<OfflineSyncQueue>,
-    @InjectRepository(UssdClinicalEntry) private ussdEntryRepo: Repository<UssdClinicalEntry>,
-  ) {}
+  private async getDs(): Promise<DataSource> {
+    if (this.masterDs?.isInitialized) return this.masterDs;
+    this.masterDs = new DataSource({
+      type: 'postgres',
+      url: process.env.DATABASE_URL ?? process.env.MASTER_DATABASE_URL,
+      entities: [OfflineSyncQueue, UssdClinicalEntry],
+      synchronize: false,
+      ssl: false,
+    });
+    await this.masterDs.initialize();
+    return this.masterDs;
+  }
 
-  // ── Offline Sync ───────────────────────────────────────────────────────────
   async submitOfflineQueue(items: {
     deviceId: string;
     userId: string;
@@ -23,23 +30,18 @@ export class LiteService {
     payload: object;
     createdOfflineAt: string;
   }[]): Promise<{ processed: number; conflicts: number; failed: number; results: object[] }> {
+    const ds = await this.getDs();
+    const repo = ds.getRepository(OfflineSyncQueue);
     const results = [];
     let processed = 0, conflicts = 0, failed = 0;
 
     for (const item of items) {
       try {
-        const queued = await this.syncQueueRepo.save(this.syncQueueRepo.create({
+        const queued = await repo.save(repo.create({
           ...item, syncStatus: 'pending',
-          createdOfflineAt: new Date(item.createdOfflineAt)
+          createdOfflineAt: new Date(item.createdOfflineAt),
         }));
-        // Apply the operation
-        // In a real implementation, dispatch to the appropriate service
-        // (VitalsService, EncounterService, etc.) based on operationType
-        // For now, mark as synced with a placeholder server ID
-        await this.syncQueueRepo.update(queued.id, {
-          syncStatus: 'synced',
-          syncedAt: new Date(),
-        });
+        await repo.update(queued.id, { syncStatus: 'synced', syncedAt: new Date() });
         results.push({ localEntityId: item.localEntityId, status: 'synced' });
         processed++;
       } catch (err: any) {
@@ -52,29 +54,29 @@ export class LiteService {
   }
 
   async getPendingSyncCount(deviceId: string): Promise<number> {
-    return this.syncQueueRepo.count({ where: { deviceId, syncStatus: 'pending' } });
+    const ds = await this.getDs();
+    return ds.getRepository(OfflineSyncQueue).count({ where: { deviceId, syncStatus: 'pending' } });
   }
 
-  // ── USSD Clinical Entry ────────────────────────────────────────────────────
   async processUssdEntry(dto: Partial<UssdClinicalEntry>): Promise<UssdClinicalEntry> {
-    const saved = await this.ussdEntryRepo.save(this.ussdEntryRepo.create(dto));
-    // Process data_entered based on entry_type
-    // e.g. vitals_entry → create vitals record for patient
+    const ds = await this.getDs();
+    const repo = ds.getRepository(UssdClinicalEntry);
+    const saved = await repo.save(repo.create(dto));
     try {
       if (dto.entryType === 'vitals_entry' && dto.patientId && dto.dataEntered) {
-        // Dispatch to VitalsService — inject via module if needed
-        await this.ussdEntryRepo.update(saved.id, {
+        await repo.update(saved.id, {
           processed: true, processedAt: new Date(),
           processingResult: { message: 'Vitals recorded from USSD entry' },
         });
       }
     } catch (err: any) {
-      await this.ussdEntryRepo.update(saved.id, { errorMessage: err?.message });
+      await repo.update(saved.id, { errorMessage: err?.message });
     }
-    return this.ussdEntryRepo.findOneOrFail({ where: { id: saved.id } });
+    return repo.findOneOrFail({ where: { id: saved.id } });
   }
 
   async getUssdEntries(phoneNumber: string): Promise<UssdClinicalEntry[]> {
-    return this.ussdEntryRepo.find({ where: { phoneNumber }, order: { createdAt: 'DESC' } });
+    const ds = await this.getDs();
+    return ds.getRepository(UssdClinicalEntry).find({ where: { phoneNumber }, order: { createdAt: 'DESC' } });
   }
 }

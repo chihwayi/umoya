@@ -41,6 +41,9 @@ function clearInactivityTimers() {
 }
 
 function scheduleWarningAndLogout() {
+  // Never start the timer when there is no active session or on public pages
+  if (!localStorage.getItem('ehr_token') || !isOnProtectedRoute()) return;
+
   const timeoutMs = getSessionTimeoutMs();
   const warningAt = timeoutMs - WARNING_BEFORE_LOGOUT_MS;
   if (warningAt <= 0) {
@@ -49,6 +52,8 @@ function scheduleWarningAndLogout() {
   }
   inactivityTimeoutId = setTimeout(() => {
     inactivityTimeoutId = null;
+    // Re-check: user may have navigated to a public page or logged out while timer was running
+    if (!localStorage.getItem('ehr_token') || !isOnProtectedRoute()) return;
     if (notificationCallback) {
       notificationCallback(
         'Session expiring',

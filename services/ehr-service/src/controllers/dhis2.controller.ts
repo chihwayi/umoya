@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, UseGuards, Request, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { Dhis2Service } from '../services/dhis2.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -98,6 +98,104 @@ export class Dhis2Controller {
     },
   ) {
     return this.dhis2Service.retryFailedSync(req.tenantDb, req.tenantId, body || {});
+  }
+
+  @Post('tracker/encounters/:encounterId/event')
+  @ApiOperation({ summary: 'Push a clinical encounter as a DHIS2 tracker program stage event' })
+  async syncEncounterEvent(
+    @Param('encounterId') encounterId: string,
+    @Body() body: { programId: string; programStageId: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.dhis2Service.syncEncounterAsTrackerEvent(req.tenantDb, req.tenantId, encounterId, body.programId, body.programStageId);
+  }
+
+  @Post('tracker/lab-results/:labResultId/event')
+  @ApiOperation({ summary: 'Push a lab result as a DHIS2 tracker program stage event' })
+  async syncLabResultEvent(
+    @Param('labResultId') labResultId: string,
+    @Body() body: { programId: string; programStageId: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.dhis2Service.syncLabResultAsTrackerEvent(req.tenantDb, req.tenantId, labResultId, body.programId, body.programStageId);
+  }
+
+  @Post('tracker/vital-signs/:vitalSignsId/event')
+  @ApiOperation({ summary: 'Push vital signs as a DHIS2 tracker program stage event' })
+  async syncVitalSignsEvent(
+    @Param('vitalSignsId') vitalSignsId: string,
+    @Body() body: { programId: string; programStageId: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.dhis2Service.syncVitalSignsAsTrackerEvent(req.tenantDb, req.tenantId, vitalSignsId, body.programId, body.programStageId);
+  }
+
+  @Get('profiles')
+  @ApiOperation({ summary: 'List all available DHIS2 aggregate report profiles' })
+  getProfiles() {
+    return {
+      profiles: [
+        { key: 'service_delivery',       label: 'Service Delivery',          period: 'monthly' },
+        { key: 'maternal_newborn',        label: 'Maternal & Newborn Health', period: 'monthly' },
+        { key: 'hiv_monthly',            label: 'HIV Monthly Return',        period: 'monthly' },
+        { key: 'immunization_monthly',   label: 'Immunization',              period: 'monthly' },
+        { key: 'pharmacy_stock',         label: 'Pharmacy & Stock',          period: 'monthly' },
+        { key: 'ntd_regional',           label: 'NTD Regional',              period: 'monthly' },
+        { key: 'pmtct_monthly',          label: 'PMTCT',                     period: 'monthly' },
+        { key: 'tb_quarterly',           label: 'Tuberculosis',              period: 'quarterly' },
+        { key: 'malaria_monthly',        label: 'Malaria',                   period: 'monthly' },
+        { key: 'ncd_monthly',            label: 'Non-Communicable Diseases', period: 'monthly' },
+        { key: 'outpatient_morbidity',   label: 'Outpatient Morbidity',      period: 'monthly' },
+        { key: 'laboratory_monthly',     label: 'Laboratory Services',       period: 'monthly' },
+        { key: 'mental_health_monthly',  label: 'Mental Health',             period: 'monthly' },
+        { key: 'nutrition_monthly',      label: 'Nutrition (SAM/MAM)',        period: 'monthly' },
+        { key: 'icu_monthly',            label: 'Intensive Care Unit',       period: 'monthly' },
+        { key: 'hai_monthly',            label: 'Healthcare-Associated Infections', period: 'monthly' },
+        { key: 'surgical_monthly',       label: 'Surgical Services',         period: 'monthly' },
+        { key: 'cervical_cancer_monthly',label: 'Cervical Cancer Screening', period: 'monthly' },
+        { key: 'neonatal_monthly',       label: 'Neonatal Care',             period: 'monthly' },
+      ],
+    };
+  }
+
+  @Post('validate')
+  @ApiOperation({ summary: 'Validate data values against DHIS2 dataset validation rules before submission' })
+  async validateDataValues(
+    @Body() body: { dataSetId: string; dataValues: Array<{ dataElement: string; value: string }>; period: string; orgUnit?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.dhis2Service.validateBeforeSubmit(
+      req.tenantId,
+      body.dataSetId,
+      body.dataValues,
+      body.period,
+      body.orgUnit || '',
+    );
+  }
+
+  @Get('benchmarks/facility')
+  @ApiOperation({ summary: 'Pull facility performance benchmarks from DHIS2 analytics (reverse sync)' })
+  async getFacilityBenchmarks(
+    @Request() req: RequestWithTenant,
+    @Query('dataElement') dataElement: string,
+    @Query('period') period: string,
+    @Query('parentOrgUnit') parentOrgUnit?: string,
+  ) {
+    return this.dhis2Service.getFacilityBenchmarks(req.tenantId, {
+      dataElement,
+      period,
+      parentOrgUnit,
+    });
+  }
+
+  @Get('benchmarks/doctor-dashboard')
+  @ApiOperation({ summary: 'Pull doctor performance dashboard from DHIS2 — facility vs benchmarks' })
+  async getDoctorDashboard(
+    @Request() req: RequestWithTenant,
+    @Query('period') period: string,
+    @Query('orgUnit') orgUnit?: string,
+  ) {
+    return this.dhis2Service.getDoctorPerformanceDashboard(req.tenantId, period, orgUnit);
   }
 
   @Post('sync/run-now')
