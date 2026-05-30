@@ -190,7 +190,7 @@ const CDSSIngestPanel: React.FC<{
 
 const TenantDirectory: React.FC = () => {
   const navigate = useNavigate();
-  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark.png`;
+  const logoSrc = `${process.env.PUBLIC_URL || ''}/umoya-dark-transparent.png`;
 
   // CDSSIngestPanel is only for super-admins logged in to the admin portal (web-app on :3011)
   const isSuperAdmin = (() => {
