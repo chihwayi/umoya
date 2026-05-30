@@ -116,6 +116,8 @@ export const CdssAdmin: React.FC = () => {
   });
   const [ingestionHistory, setIngestionHistory] = useState<any[]>([]);
   const [ingestionSearch, setIngestionSearch] = useState<string>('');
+  const [showAllIngestion, setShowAllIngestion] = useState<boolean>(false);
+  const INGESTION_PREVIEW_COUNT = 8;
   const [coverage, setCoverage] = useState<any>(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [seedStatus, setSeedStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
@@ -1285,7 +1287,12 @@ export const CdssAdmin: React.FC = () => {
       <div className="bg-[#0A1525] border border-white/[0.10] rounded-2xl p-4 space-y-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-sm font-semibold text-[#C5D5EE]">🗂 Ingestion History</div>
+            <div className="text-sm font-semibold text-[#C5D5EE]">
+              🗂 Ingestion History
+              <span className="ml-2 text-xs font-normal text-[#5A78A0]">
+                {filteredIngestionHistory.length} record{filteredIngestionHistory.length === 1 ? '' : 's'}
+              </span>
+            </div>
             <div className="text-xs text-[#7A9AB8] mt-1">
               Track ingested document versions, hashes, and duplicate uploads.
             </div>
@@ -1315,9 +1322,9 @@ export const CdssAdmin: React.FC = () => {
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto border border-white/[0.07] rounded-xl bg-[#080E1A]">
+        <div className={`overflow-auto border border-white/[0.07] rounded-xl bg-[#080E1A] ${showAllIngestion ? 'max-h-96' : ''}`}>
           <table className="w-full text-sm">
-            <thead className="bg-[#080E1A] border-b border-white/[0.07] text-left text-[#8FA8CC] uppercase text-xs">
+            <thead className="bg-[#080E1A] border-b border-white/[0.07] text-left text-[#8FA8CC] uppercase text-xs sticky top-0 z-10">
               <tr>
                 <th className="py-2 px-3">Document</th>
                 <th className="py-2 px-3">Version</th>
@@ -1336,7 +1343,7 @@ export const CdssAdmin: React.FC = () => {
                   </td>
                 </tr>
               )}
-              {filteredIngestionHistory.map((row: any, idx: number) => (
+              {(showAllIngestion ? filteredIngestionHistory : filteredIngestionHistory.slice(0, INGESTION_PREVIEW_COUNT)).map((row: any, idx: number) => (
                 <tr key={`${row?.jobId || 'job'}-${idx}`} className="border-t border-white/[0.05] hover:bg-[#080E1A]/70">
                   <td className="py-2 px-3">
                     <div className="font-medium text-white">{row?.fileName || 'Unknown'}</div>
@@ -1364,6 +1371,18 @@ export const CdssAdmin: React.FC = () => {
             </tbody>
           </table>
         </div>
+        {filteredIngestionHistory.length > INGESTION_PREVIEW_COUNT && (
+          <div className="flex justify-center pt-1">
+            <button
+              onClick={() => setShowAllIngestion((v) => !v)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white/[0.04] text-[#8FA8CC] hover:bg-white/[0.08] hover:text-white transition"
+            >
+              {showAllIngestion
+                ? 'Show less'
+                : `Show all ${filteredIngestionHistory.length} records`}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-[#0A1525] border border-white/[0.10] rounded-2xl p-4 space-y-4 shadow-sm">
