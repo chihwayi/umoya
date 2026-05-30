@@ -131,6 +131,10 @@ who-smart-guidelines-repos/
 data/chroma_db/
 services/cdss-service/data/chroma_db/
 
+# HuggingFace model cache — large binaries, downloaded at build/runtime, never commit
+services/cdss-service/data/hf_cache/
+data/hf_cache/
+
 # Local guideline PDFs and debug helpers (not for source control)
 # PDFs are large, often copyrighted, and sourced externally — never commit them
 services/cdss-service/who-smart-guidelines/**/*.pdf
