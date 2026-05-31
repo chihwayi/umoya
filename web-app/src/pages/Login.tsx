@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { authAPI } from '../services/api';
+import { readSessionEndReason } from '../utils/sessionGuard';
 import { Shield, Sparkles, Workflow, ArrowRight, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 interface LoginProps {
@@ -13,6 +14,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Why the previous session ended (set by the session guard via ?session=...)
+  const [sessionNotice] = useState<string | null>(() => {
+    const reason = readSessionEndReason();
+    if (reason === 'expired') return 'Your session expired. Please sign in again.';
+    if (reason === 'idle') return 'You were signed out after a period of inactivity.';
+    return null;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +29,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     try {
       await authAPI.login(email, password);
+      // Clear the ?session= flag from the URL so the banner doesn't persist.
+      window.history.replaceState({}, '', '/');
       onLogin();
     } catch (err) {
       setError('Invalid credentials');
@@ -100,6 +110,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               </span>
             ))}
           </div>
+
+          {sessionNotice && (
+            <div className="mt-6 flex items-center gap-2 rounded-2xl border border-[#3B9EFF]/30 bg-[#3B9EFF]/10 px-4 py-3 text-sm text-[#AFCFFF]">
+              <Shield className="h-4 w-4 shrink-0" />
+              <span>{sessionNotice}</span>
+            </div>
+          )}
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
             <div>

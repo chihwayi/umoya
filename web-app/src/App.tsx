@@ -3,6 +3,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { authAPI } from './services/api';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { startSessionGuard, stopSessionGuard } from './utils/sessionGuard';
 import './App.css';
 
 function App() {
@@ -11,15 +12,20 @@ function App() {
 
   useEffect(() => {
     // Check if user is already authenticated
-    setIsAuthenticated(authAPI.isAuthenticated());
+    const authed = authAPI.isAuthenticated();
+    setIsAuthenticated(authed);
+    if (authed) startSessionGuard();
     setLoading(false);
+    return () => stopSessionGuard();
   }, []);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
+    startSessionGuard();
   };
 
   const handleLogout = () => {
+    stopSessionGuard();
     setIsAuthenticated(false);
   };
 

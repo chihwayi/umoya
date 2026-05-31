@@ -65,7 +65,10 @@ function resolveJwtSecret(): string {
     ScheduleModule.forRoot(),
     JwtModule.register({
       secret: resolveJwtSecret(),
-      signOptions: { expiresIn: '24h' },
+      // 24h was too long for a high-privilege admin token (a leaked token would
+      // be valid a full day with no server-side revocation). Default to an 8h
+      // work-session; override via ADMIN_JWT_EXPIRES_IN (e.g. '2h', '30m').
+      signOptions: { expiresIn: process.env.ADMIN_JWT_EXPIRES_IN || '8h' },
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',

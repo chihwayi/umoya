@@ -88,10 +88,12 @@ CREATE TABLE IF NOT EXISTS snomed_to_icd10_map (
     snomed_code VARCHAR(20) NOT NULL,
     snomed_term TEXT,
     icd10_code VARCHAR(20) NOT NULL,
-    map_category VARCHAR(100),
-    map_rule VARCHAR(100),
+    -- SNOMED ExtendedMap mapRule/mapCategory/correlation are free-text and
+    -- routinely exceed 100 chars (e.g. "IFA 248152002 | Female (finding) | ELSE TRUE").
+    map_category TEXT,
+    map_rule TEXT,
     map_priority INTEGER DEFAULT 1,
-    correlation VARCHAR(100),
+    correlation TEXT,
     active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY (snomed_code, icd10_code, map_priority)

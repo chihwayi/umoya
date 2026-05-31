@@ -60,8 +60,13 @@ from uuid import uuid4
 from threading import Lock
 import asyncpg
 import json as _json
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
+
+# Dedicated single-thread executor for the (slow, one-shot) RAG/BM25 warm-up so
+# it never competes with FastAPI's default threadpool used by request handlers.
+_RAG_WARMUP_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rag-warmup")
 
 _CHROMA_PERSISTENCE_PATH = os.getenv("CHROMA_PERSISTENCE_PATH", "./data/chroma_db").strip() or "./data/chroma_db"
 
@@ -2374,10 +2379,13 @@ async def admin_status(owner: str = Depends(require_owner_scope("cdss.admin.read
     }
 
     # Warm up the engine in the background (does not block this response).
+    # Use a DEDICATED single-thread executor — not the default pool that
+    # FastAPI's run_in_threadpool uses — so the ~60-90s BM25 build never starves
+    # request-handling threads (which would make Whisper/OCR endpoints time out).
     if initializing:
         try:
             asyncio.get_event_loop().run_in_executor(
-                None, diagnostic_assistant.ensure_rag_engine_initialized
+                _RAG_WARMUP_EXECUTOR, diagnostic_assistant.ensure_rag_engine_initialized
             )
         except Exception:
             pass
