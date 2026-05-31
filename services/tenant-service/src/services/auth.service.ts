@@ -139,7 +139,7 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(userData.password, 12);
-    
+
     const user = this.adminUserRepository.create({
       ...userData,
       email: userData.email.toLowerCase(),
@@ -148,5 +148,123 @@ export class AuthService {
     });
 
     return this.adminUserRepository.save(user);
+  }
+
+  // ── Multi-admin management (RBAC) ──────────────────────────────────────────
+
+  private toSafeAdmin(u: AdminUser) {
+    return {
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: u.role,
+      isActive: u.isActive,
+      mustChangePassword: u.mustChangePassword,
+      twoFactorEnabled: u.twoFactorEnabled,
+      lastLogin: u.lastLogin,
+      lockedUntil: u.lockedUntil,
+      createdAt: u.createdAt,
+    };
+  }
+
+  private generateTempPassword(): string {
+    // Meets policy: upper, lower, digit, symbol; 14 chars.
+    const sets = ['ABCDEFGHJKMNPQRSTUVWXYZ', 'abcdefghijkmnpqrstuvwxyz', '23456789', '!@#$%^&*'];
+    let pw = sets.map((s) => s[Math.floor(Math.random() * s.length)]).join('');
+    const all = sets.join('');
+    while (pw.length < 14) pw += all[Math.floor(Math.random() * all.length)];
+    return pw.split('').sort(() => Math.random() - 0.5).join('');
+  }
+
+  private normalizeRole(role: string): AdminRole {
+    const r = String(role || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (r === 'super_admin' || r === 'superadmin') return AdminRole.SUPER_ADMIN;
+    if (r === 'admin') return AdminRole.ADMIN;
+    if (r === 'support') return AdminRole.SUPPORT;
+    throw new BadRequestException(`Invalid role: ${role}`);
+  }
+
+  async listAdmins() {
+    const admins = await this.adminUserRepository.find({ order: { createdAt: 'ASC' } });
+    return admins.map((a) => this.toSafeAdmin(a));
+  }
+
+  /** Create an admin with a generated temp password (shown once to the creator). */
+  async provisionAdmin(data: { email: string; firstName: string; lastName: string; role: string }) {
+    const role = this.normalizeRole(data.role);
+    const existing = await this.adminUserRepository.findOne({ where: { email: data.email.toLowerCase() } });
+    if (existing) throw new BadRequestException('An admin with that email already exists');
+
+    const tempPassword = this.generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+    const user = this.adminUserRepository.create({
+      email: data.email.toLowerCase(),
+      firstName: data.firstName,
+      lastName: data.lastName,
+      role,
+      passwordHash,
+      mustChangePassword: true,
+      isActive: true,
+    });
+    const saved = await this.adminUserRepository.save(user);
+    return { admin: this.toSafeAdmin(saved), tempPassword };
+  }
+
+  private async assertNotLastSuperAdmin(targetId: string) {
+    const target = await this.adminUserRepository.findOne({ where: { id: targetId } });
+    if (target?.role !== AdminRole.SUPER_ADMIN) return;
+    const activeSupers = await this.adminUserRepository.count({
+      where: { role: AdminRole.SUPER_ADMIN, isActive: true },
+    });
+    if (activeSupers <= 1) {
+      throw new BadRequestException('Cannot remove or demote the last active super admin');
+    }
+  }
+
+  async setAdminRole(targetId: string, role: string) {
+    const newRole = this.normalizeRole(role);
+    const target = await this.adminUserRepository.findOne({ where: { id: targetId } });
+    if (!target) throw new BadRequestException('Admin not found');
+    if (newRole !== AdminRole.SUPER_ADMIN) await this.assertNotLastSuperAdmin(targetId);
+    target.role = newRole;
+    await this.adminUserRepository.save(target);
+    return this.toSafeAdmin(target);
+  }
+
+  async setAdminStatus(targetId: string, isActive: boolean, actingUserId: string) {
+    if (targetId === actingUserId && !isActive) {
+      throw new BadRequestException('You cannot disable your own account');
+    }
+    const target = await this.adminUserRepository.findOne({ where: { id: targetId } });
+    if (!target) throw new BadRequestException('Admin not found');
+    if (!isActive) await this.assertNotLastSuperAdmin(targetId);
+    target.isActive = isActive;
+    if (isActive) { target.failedLoginAttempts = 0; target.lockedUntil = null; }
+    await this.adminUserRepository.save(target);
+    return this.toSafeAdmin(target);
+  }
+
+  async resetAdminPassword(targetId: string) {
+    const target = await this.adminUserRepository.findOne({ where: { id: targetId } });
+    if (!target) throw new BadRequestException('Admin not found');
+    const tempPassword = this.generateTempPassword();
+    target.passwordHash = await bcrypt.hash(tempPassword, 12);
+    target.mustChangePassword = true;
+    target.failedLoginAttempts = 0;
+    target.lockedUntil = null;
+    await this.adminUserRepository.save(target);
+    return { admin: this.toSafeAdmin(target), tempPassword };
+  }
+
+  async deleteAdmin(targetId: string, actingUserId: string) {
+    if (targetId === actingUserId) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
+    await this.assertNotLastSuperAdmin(targetId);
+    const target = await this.adminUserRepository.findOne({ where: { id: targetId } });
+    if (!target) throw new BadRequestException('Admin not found');
+    await this.adminUserRepository.remove(target);
+    return { deleted: true };
   }
 }

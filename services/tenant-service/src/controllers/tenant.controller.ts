@@ -353,16 +353,50 @@ export class TenantController {
 
   @Delete(":id")
   @UseGuards(JwtAuthGuard)
-  async deleteTenant(@Param("id") id: string, @Req() req: any): Promise<{ message: string }> {
-    const existing = await this.tenantService.findById(id).catch(() => null);
-    await this.tenantService.deleteTenant(id);
+  @ApiOperation({ summary: "Request tenant deletion (GDPR/CDPA soft-delete with grace period)" })
+  async deleteTenant(
+    @Param("id") id: string,
+    @Req() req: any,
+    @Query("force") force?: string,
+    @Body("reason") reason?: string,
+  ): Promise<{ message: string; purgeScheduledAt?: Date | null }> {
     const ctx = this.auditContext(req);
+
+    // Explicit, irreversible hard purge (e.g. compliance directive / cleanup).
+    if (String(force) === "true") {
+      const existing = await this.tenantService.findById(id).catch(() => null);
+      await this.tenantService.deleteTenant(id);
+      await this.auditService.safeLog(
+        ctx.userId, "delete", "tenant", id,
+        existing ? { clinicName: existing.clinicName, subdomain: existing.subdomain } : null,
+        { forcePurge: true }, ctx.ip, ctx.ua,
+      );
+      return { message: "Tenant permanently purged." };
+    }
+
+    // Default: GDPR/CDPA soft-delete — suspend now, purge after the grace window.
+    const tenant = await this.tenantService.requestDeletion(id, reason || null, ctx.userId);
     await this.auditService.safeLog(
       ctx.userId, "delete", "tenant", id,
-      existing ? { clinicName: existing.clinicName, subdomain: existing.subdomain } : null,
-      null, ctx.ip, ctx.ua,
+      null, { event: "deletion_requested", reason: reason || null, purgeScheduledAt: tenant.purgeScheduledAt },
+      ctx.ip, ctx.ua,
     );
-    return { message: "Tenant deleted successfully" };
+    return {
+      message: "Tenant scheduled for deletion. Access suspended; can be cancelled before the purge date.",
+      purgeScheduledAt: tenant.purgeScheduledAt,
+    };
+  }
+
+  @Post(":id/cancel-deletion")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Cancel a pending tenant deletion within the grace window" })
+  async cancelDeletion(@Param("id") id: string, @Req() req: any): Promise<SafeTenant> {
+    const tenant = await this.tenantService.cancelDeletion(id);
+    const ctx = this.auditContext(req);
+    await this.auditService.safeLog(
+      ctx.userId, "update", "tenant", id, null, { event: "deletion_cancelled", restoredStatus: tenant.status }, ctx.ip, ctx.ua,
+    );
+    return this.toSafeTenant(tenant);
   }
 
   @Get(":id/health")

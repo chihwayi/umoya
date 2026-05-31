@@ -9,6 +9,7 @@ import { SystemOverview } from '../components/SystemOverview';
 import { HealthMonitor } from '../components/HealthMonitor';
 import { AuditLogs } from '../components/AuditLogs';
 import { SecurityPanel } from '../components/SecurityPanel';
+import { AdminTeamPanel } from '../components/AdminTeamPanel';
 import { BackupManager } from '../components/BackupManager';
 import { TerminologyImport } from '../components/TerminologyImport';
 import { CdssAdmin } from '../components/CdssAdmin';
@@ -103,6 +104,16 @@ const NAV_ITEMS = [
       </svg>
     ),
     accent: '#3B9EFF',
+  },
+  {
+    id: 'team',
+    label: 'Team',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-1.34" />
+      </svg>
+    ),
+    accent: '#A66CFF',
   },
   {
     id: 'backups',
@@ -226,15 +237,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const handleDeleteTenant = async (id: string) => {
     try {
-      await tenantAPI.deleteTenant(id);
+      const res = await tenantAPI.deleteTenant(id);
       if (selectedTenant?.id === id) {
         setDetailsModalOpen(false);
         setSelectedTenant(null);
       }
-      success('Success', 'Tenant deleted successfully');
+      const when = res?.purgeScheduledAt ? new Date(res.purgeScheduledAt).toLocaleDateString() : null;
+      success('Deletion scheduled', when
+        ? `Access suspended. Permanent purge on ${when} — cancellable until then.`
+        : (res?.message || 'Tenant scheduled for deletion.'));
       loadTenants();
     } catch {
-      notifyError('Deletion Failed', 'Failed to delete tenant');
+      notifyError('Deletion Failed', 'Failed to schedule tenant deletion');
+    }
+  };
+
+  const handleCancelDeletion = async (id: string) => {
+    try {
+      await tenantAPI.cancelTenantDeletion(id);
+      success('Deletion cancelled', 'Tenant restored; purge cancelled.');
+      loadTenants();
+    } catch (e: any) {
+      notifyError('Cancel failed', e?.response?.data?.message || 'Could not cancel deletion');
     }
   };
 
@@ -459,6 +483,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             {currentView === 'health' && <ErrorBoundary><HealthMonitor /></ErrorBoundary>}
             {currentView === 'audit' && <ErrorBoundary><AuditLogs /></ErrorBoundary>}
             {currentView === 'security' && <ErrorBoundary><SecurityPanel /></ErrorBoundary>}
+            {currentView === 'team' && <ErrorBoundary><AdminTeamPanel /></ErrorBoundary>}
             {currentView === 'backups' && <ErrorBoundary><BackupManager /></ErrorBoundary>}
             {currentView === 'terminology' && <ErrorBoundary><TerminologyImport /></ErrorBoundary>}
             {currentView === 'cdss' && <ErrorBoundary><CdssAdmin /></ErrorBoundary>}
@@ -517,6 +542,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                       tenant={tenant}
                       onStatusChange={handleStatusChange}
                       onDelete={handleDeleteTenant}
+                      onCancelDeletion={handleCancelDeletion}
                       onManageUsers={handleManageUsers}
                       onConfigureDhis2={handleConfigureDhis2}
                       isSelected={selectedTenantIds.has(tenant.id)}

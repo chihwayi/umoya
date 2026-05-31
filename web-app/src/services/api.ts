@@ -131,6 +131,49 @@ if (authAPI.isAuthenticated()) {
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 }
 
+// Admin team management (RBAC)
+export interface AdminUserView {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'super_admin' | 'admin' | 'support';
+  isActive: boolean;
+  mustChangePassword: boolean;
+  twoFactorEnabled: boolean;
+  lastLogin: string | null;
+  lockedUntil: string | null;
+  createdAt: string;
+}
+
+export const adminTeamAPI = {
+  list: async (): Promise<AdminUserView[]> => {
+    const response = await api.get('/auth/admins');
+    return response.data;
+  },
+  create: async (data: { email: string; firstName: string; lastName: string; role: string }):
+    Promise<{ admin: AdminUserView; tempPassword: string }> => {
+    const response = await api.post('/auth/admins', data);
+    return response.data;
+  },
+  setRole: async (id: string, role: string): Promise<AdminUserView> => {
+    const response = await api.put(`/auth/admins/${id}/role`, { role });
+    return response.data;
+  },
+  setStatus: async (id: string, isActive: boolean): Promise<AdminUserView> => {
+    const response = await api.put(`/auth/admins/${id}/status`, { isActive });
+    return response.data;
+  },
+  resetPassword: async (id: string): Promise<{ admin: AdminUserView; tempPassword: string }> => {
+    const response = await api.post(`/auth/admins/${id}/reset-password`, null);
+    return response.data;
+  },
+  remove: async (id: string): Promise<{ deleted: boolean }> => {
+    const response = await api.delete(`/auth/admins/${id}`);
+    return response.data;
+  },
+};
+
 // Helper: owner header for CDSS admin endpoints
 const getOwnerHeaders = (): Record<string, string> => {
   try {
@@ -197,8 +240,22 @@ export const tenantAPI = {
     return response.data;
   },
 
-  deleteTenant: async (id: string): Promise<void> => {
-    await api.delete(`/tenants/${id}`);
+  // GDPR/CDPA soft-delete: schedules deletion after a grace window (cancellable).
+  deleteTenant: async (id: string, reason?: string): Promise<{ message: string; purgeScheduledAt?: string | null }> => {
+    const response = await api.delete(`/tenants/${id}`, { data: reason ? { reason } : undefined });
+    return response.data;
+  },
+
+  // Cancel a pending deletion within the grace window.
+  cancelTenantDeletion: async (id: string): Promise<Tenant> => {
+    const response = await api.post(`/tenants/${id}/cancel-deletion`, null);
+    return response.data;
+  },
+
+  // Irreversible immediate purge (super-admin / compliance directive).
+  forcePurgeTenant: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/tenants/${id}?force=true`);
+    return response.data;
   },
 
   // Tenant Users

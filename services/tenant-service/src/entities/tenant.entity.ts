@@ -71,6 +71,25 @@ export class Tenant {
   @Column({ type: 'int', default: 5 })
   suspensionWarningDays: number;
 
+  // ── GDPR / CDPA right-to-erasure (soft-delete with grace period) ───────────
+  // When a deletion is requested the tenant is suspended (access stopped) and a
+  // purge is scheduled for purgeScheduledAt. It can be cancelled any time before
+  // then; the hourly lifecycle cron performs the hard purge once the window ends.
+  @Column({ type: 'timestamptz', nullable: true })
+  deletionRequestedAt: Date | null;
+
+  @Column({ nullable: true })
+  deletionRequestedBy: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  deletionReason: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  purgeScheduledAt: Date | null;
+
+  @Column({ nullable: true })
+  deletionPriorStatus: string | null;
+
   @Column({
     type: 'enum',
     enum: TenantStatus,

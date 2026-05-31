@@ -164,6 +164,19 @@ export class TenantService implements OnModuleInit {
     const now = new Date();
 
     for (const tenant of tenants) {
+      // GDPR/CDPA: hard-purge tenants whose erasure grace window has elapsed.
+      if (tenant.purgeScheduledAt && tenant.purgeScheduledAt.getTime() <= now.getTime()) {
+        this.logger.warn(`Purging tenant ${tenant.id} (${tenant.subdomain}) — erasure grace window elapsed`);
+        try {
+          await this.deleteTenant(tenant.id);
+        } catch (err) {
+          this.logger.error(
+            `Failed to purge tenant ${tenant.id} (${tenant.subdomain}): ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        continue;
+      }
+
       if (tenant.subscriptionMode === 'demo' && tenant.autoDeleteAt && tenant.autoDeleteAt.getTime() <= now.getTime()) {
         this.logger.warn(`Auto-deleting expired demo tenant ${tenant.id} (${tenant.subdomain})`);
         try {
@@ -173,6 +186,11 @@ export class TenantService implements OnModuleInit {
             `Failed to auto-delete demo tenant ${tenant.id} (${tenant.subdomain}): ${err instanceof Error ? err.message : String(err)}`,
           );
         }
+        continue;
+      }
+
+      // Tenants pending deletion are frozen — skip normal lifecycle transitions.
+      if (tenant.purgeScheduledAt) {
         continue;
       }
 
@@ -342,17 +360,71 @@ export class TenantService implements OnModuleInit {
     return this.tenantRepository.save(tenant);
   }
 
+  /**
+   * Hard purge — drops the tenant database and removes the record. This is
+   * irreversible. Reached either via the grace-window cron, or an explicit
+   * force purge. For normal GDPR/CDPA erasure use requestDeletion().
+   */
   async deleteTenant(id: string): Promise<void> {
     const tenant = await this.findById(id);
-    
+
     // Delete tenant database
     if (tenant.databaseName) {
       await this.databaseProvisioningService.deleteDatabase(tenant.databaseName);
     }
-    
+
     // Delete tenant record
     await this.tenantRepository.remove(tenant);
-    this.logger.log(`Tenant deleted: ${id}`);
+    this.logger.log(`Tenant purged (hard delete): ${id}`);
+  }
+
+  private get deletionGraceDays(): number {
+    const n = Number(process.env.TENANT_DELETION_GRACE_DAYS);
+    return Number.isFinite(n) && n >= 0 ? n : 30;
+  }
+
+  /**
+   * GDPR / CDPA right-to-erasure: soft-delete with a cancellable grace window.
+   * Suspends the tenant immediately (access stopped) and schedules a hard purge.
+   */
+  async requestDeletion(id: string, reason: string | null, requestedBy: string | null): Promise<Tenant> {
+    const tenant = await this.findById(id);
+    if (tenant.purgeScheduledAt) {
+      // already pending — return as-is (idempotent)
+      return tenant;
+    }
+    const now = new Date();
+    const purgeAt = new Date(now.getTime() + this.deletionGraceDays * 24 * 60 * 60 * 1000);
+
+    tenant.deletionPriorStatus = tenant.status;
+    tenant.deletionRequestedAt = now;
+    tenant.deletionRequestedBy = requestedBy;
+    tenant.deletionReason = reason || null;
+    tenant.purgeScheduledAt = purgeAt;
+    tenant.status = TenantStatus.SUSPENDED; // stop access during the window
+
+    const saved = await this.tenantRepository.save(tenant);
+    this.logger.warn(`Deletion requested for tenant ${id} (${tenant.subdomain}); purge scheduled ${purgeAt.toISOString()}`);
+    return saved;
+  }
+
+  /** Cancel a pending deletion within the grace window and restore access. */
+  async cancelDeletion(id: string): Promise<Tenant> {
+    const tenant = await this.findById(id);
+    if (!tenant.purgeScheduledAt) {
+      throw new BadRequestException('Tenant is not pending deletion');
+    }
+    const prior = (tenant.deletionPriorStatus as TenantStatus) || TenantStatus.ACTIVE;
+    tenant.status = Object.values(TenantStatus).includes(prior) ? prior : TenantStatus.ACTIVE;
+    tenant.deletionRequestedAt = null;
+    tenant.deletionRequestedBy = null;
+    tenant.deletionReason = null;
+    tenant.purgeScheduledAt = null;
+    tenant.deletionPriorStatus = null;
+
+    const saved = await this.tenantRepository.save(tenant);
+    this.logger.log(`Deletion cancelled for tenant ${id} (${tenant.subdomain}); restored to ${saved.status}`);
+    return saved;
   }
 
   async getTenantDhis2Config(tenantId: string): Promise<TenantDhis2ConfigView | null> {

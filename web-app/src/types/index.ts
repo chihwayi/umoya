@@ -37,6 +37,11 @@ export interface Tenant {
   suspensionWarningDays: number;
   billingSummary: TenantBillingSummary;
   status: 'pending' | 'active' | 'suspended' | 'cancelled';
+  // GDPR/CDPA soft-delete state
+  deletionRequestedAt?: string | null;
+  deletionRequestedBy?: string | null;
+  deletionReason?: string | null;
+  purgeScheduledAt?: string | null;
   contactEmail: string;
   contactPhone: string;
   address: string | null;

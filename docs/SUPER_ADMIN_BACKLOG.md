@@ -42,14 +42,19 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started
 - Security: never reuse the admin token; scope the minted token; log every use.
 - Effort: M. **Security-sensitive — review before shipping.**
 
-### 4. Multi-admin RBAC — ⬜
-- Today: single super admin; `AdminRole` enum exists (`super_admin|admin|support`)
-  but there's no UI to manage admin users or enforce granular permissions.
-- **To build:** admin-user CRUD (create/disable/role-change/reset), enforce role
-  on every admin endpoint (guard already supports roles), and a "Team" panel.
-  `support` = read-only, `admin` = tenant ops, `super_admin` = everything incl.
-  managing other admins.
-- Effort: L.
+### 4. Multi-admin RBAC — ✅ DONE
+- Admin-user management endpoints (super-admin gated): `GET/POST /auth/admins`,
+  `PUT /auth/admins/:id/role`, `PUT /auth/admins/:id/status`,
+  `POST /auth/admins/:id/reset-password`, `DELETE /auth/admins/:id`.
+- `AuthService`: `listAdmins`, `provisionAdmin` (returns one-time temp password),
+  `setAdminRole`, `setAdminStatus`, `resetAdminPassword`, `deleteAdmin`.
+- Safety guards: cannot demote/disable/delete the **last active super admin**;
+  cannot disable or delete **your own** account. All actions audited.
+- Roles: `super_admin` (full), `admin` (view team, tenant ops), `support` (read-only).
+- UI: new **Team** panel (`AdminTeamPanel.tsx`) — list, create (temp-password modal),
+  inline role select, enable/disable, reset password, delete; role-aware (non-super
+  admins see a read-only view). Wired into the Dashboard nav.
+- Verified end-to-end incl. the last-super-admin guard.
 
 ### 5. API-key management — ⬜
 - **To build:** per-tenant programmatic API keys: `api_keys` table (hashed key,
@@ -57,13 +62,18 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started
   Show the secret once on creation only.
 - Effort: M.
 
-### 6. GDPR / CDPA right-to-erasure (soft-delete + grace) — ⬜
-- Today: `deleteTenant` hard-deletes immediately.
-- **To build:** soft-delete with a configurable grace window (default 30 days):
-  mark `deletion_requested_at`, stop access, schedule purge via the existing
-  lifecycle cron, allow cancel within the window, audit the whole flow. Emit a
-  confirmation + final purge record for compliance.
-- Effort: M-L.
+### 6. GDPR / CDPA right-to-erasure (soft-delete + grace) — ✅ DONE
+- `tenants` gains `deletionRequestedAt`, `deletionRequestedBy`, `deletionReason`,
+  `purgeScheduledAt`, `deletionPriorStatus` (live ALTER + entity).
+- `DELETE /tenants/:id` is now a **soft-delete**: suspends the tenant and schedules
+  a hard purge `TENANT_DELETION_GRACE_DAYS` (default **30**) out. `?force=true`
+  performs an immediate irreversible purge. `POST /tenants/:id/cancel-deletion`
+  cancels within the window and restores the prior status.
+- The hourly lifecycle cron hard-purges once `purgeScheduledAt` passes; pending-
+  deletion tenants are frozen from other lifecycle transitions. Whole flow audited.
+- UI: TenantCard shows a "Pending deletion · purge {date}" banner with a
+  **Cancel deletion** button; delete toast explains the grace window.
+- Verified: request → suspended + DB preserved → cancel → restored; force → purged.
 
 ### 7. White-labeling / tenant branding — ⬜
 - Today: `logoUrl` upload works.
