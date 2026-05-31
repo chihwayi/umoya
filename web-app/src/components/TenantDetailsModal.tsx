@@ -673,6 +673,22 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     }
   };
 
+  const handleImpersonate = async (user: TenantUser) => {
+    if (!tenant) return;
+    const reason = window.prompt(
+      `Log in as ${user.email}?\n\nThis opens a 15-minute support session in their account and is recorded in the audit trail. Enter a reason:`
+    );
+    if (reason === null) return; // cancelled
+    if (!reason.trim()) { showError('A reason is required to impersonate'); return; }
+    try {
+      const res = await tenantAPI.impersonate(tenant.id, reason.trim(), user.id);
+      showSuccess(`Opening session as ${res.user.email} (expires in ${res.expiresInMinutes} min)`);
+      window.open(res.deepLink, '_blank', 'noopener');
+    } catch (error: any) {
+      showError(error?.response?.data?.message || 'Failed to start impersonation session');
+    }
+  };
+
   const handleStatusChange = async (userId: string, isActive: boolean) => {
     if (!tenant) return;
 
@@ -1674,6 +1690,13 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleImpersonate(user)}
+                              className="p-1.5 text-slate-400 hover:text-[#0AA98A] hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="Log in as this user (audited, 15-min session)"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12H3m0 0l4-4m-4 4l4 4m6-11h4a2 2 0 012 2v10a2 2 0 01-2 2h-4" /></svg>
+                            </button>
                             <button
                               onClick={() => {
                                 setUserToReset(user.id);

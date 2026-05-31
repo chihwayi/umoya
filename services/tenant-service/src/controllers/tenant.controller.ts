@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException, NotFoundException, Res, Header, Req } from "@nestjs/common";
+import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException, NotFoundException, ForbiddenException, Res, Header, Req } from "@nestjs/common";
 import * as QRCode from "qrcode";
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
@@ -12,6 +12,10 @@ import { UpdateTenantDto } from "../dto/update-tenant.dto";
 import { Tenant, TenantStatus } from "../entities/tenant.entity";
 import { JwtAuthGuard } from "../guards/jwt-auth.guard";
 import { AuditService } from "../services/audit.service";
+import { TenantDatabaseService } from "../services/tenant-database.service";
+import { AdminRole } from "../entities/admin-user.entity";
+import { JwtService } from "@nestjs/jwt";
+import { randomUUID } from "crypto";
 import { TenantDhis2ConfigPayload, TenantDhis2ConfigView } from "../services/tenant.service";
 import { getCountryPack, listCountryPacks, CountryPack } from "../config/country-packs";
 import { getModeDefinition, DEPLOYMENT_MODES, ModeDefinition } from "../config/deployment-modes";
@@ -31,8 +35,18 @@ export class TenantController {
     private readonly paymentService: PaymentService,
     private readonly smsService: SmsService,
     private readonly storageService: StorageService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly tenantDatabaseService: TenantDatabaseService,
+    private readonly jwtService: JwtService
   ) {}
+
+  private assertRole(req: any, allowed: AdminRole[]) {
+    const r = String(req?.user?.role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const role = r === "superadmin" ? AdminRole.SUPER_ADMIN : (r as AdminRole);
+    if (!role || !allowed.includes(role)) {
+      throw new ForbiddenException("Insufficient privileges for this operation");
+    }
+  }
 
   /** Extract acting admin id + request context from the JWT-authenticated request. */
   private auditContext(req: any): { userId: string | null; ip?: string; ua?: string } {
@@ -397,6 +411,79 @@ export class TenantController {
       ctx.userId, "update", "tenant", id, null, { event: "deletion_cancelled", restoredStatus: tenant.status }, ctx.ip, ctx.ua,
     );
     return this.toSafeTenant(tenant);
+  }
+
+  @Post(":id/impersonate")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Mint a short-lived token to log in as a tenant user (super-admin only, audited)" })
+  async impersonate(
+    @Param("id") id: string,
+    @Req() req: any,
+    @Body("userId") userId?: string,
+    @Body("reason") reason?: string,
+  ): Promise<{ token: string; expiresInMinutes: number; deepLink: string; user: any }> {
+    // Super-admin only, and a reason is mandatory for the audit record.
+    this.assertRole(req, [AdminRole.SUPER_ADMIN]);
+    if (!reason || !reason.trim()) {
+      throw new BadRequestException("A reason is required to impersonate a tenant user");
+    }
+
+    const tenant = await this.tenantService.findById(id);
+    if (tenant.status !== TenantStatus.ACTIVE) {
+      throw new BadRequestException("Can only impersonate users of an active tenant");
+    }
+
+    const users = await this.tenantDatabaseService.getTenantUsers(id);
+    const active = users.filter((u) => (u as any).isActive !== false);
+    const target = userId
+      ? active.find((u) => u.id === userId)
+      : (active.find((u) => u.role === "admin") || active[0]);
+    if (!target) throw new NotFoundException("No suitable tenant user found to impersonate");
+
+    // Mint an EHR-compatible staff token (same JWT_SECRET, same claim shape),
+    // short-lived (15 min) and clearly marked as an impersonation session.
+    const expiresInMinutes = 15;
+    const jti = randomUUID();
+    const token = this.jwtService.sign(
+      {
+        sub: target.id,
+        email: target.email,
+        role: target.role,
+        // EHR guards compare the token's tenantId against the X-Tenant-ID header,
+        // which the EHR frontend sets to the SUBDOMAIN (not the UUID).
+        tenantId: tenant.subdomain,
+        firstName: (target as any).firstName,
+        lastName: (target as any).lastName,
+        mfaVerified: true,
+        mfaRequired: false,
+        sessionTimeoutMinutes: expiresInMinutes,
+        jti,
+        impersonation: true,
+        impersonatedBy: req?.user?.id || null,
+        impersonatorEmail: req?.user?.email || null,
+      },
+      { expiresIn: `${expiresInMinutes}m` },
+    );
+
+    // Browser-reachable URL (NOT the internal docker hostname EHR_FRONTEND_URL).
+    const ehrBase = (process.env.PUBLIC_EHR_FRONTEND_URL || process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/+$/, "");
+    // Token in the URL fragment (#) — never sent to servers / not in access logs.
+    const deepLink = `${ehrBase}/ehr/${tenant.subdomain}/impersonate#token=${encodeURIComponent(token)}`;
+
+    const ctx = this.auditContext(req);
+    await this.auditService.safeLog(
+      ctx.userId, "login", "tenant", id,
+      null,
+      { event: "impersonation", targetUserId: target.id, targetEmail: target.email, targetRole: target.role, reason: reason.trim(), expiresInMinutes },
+      ctx.ip, ctx.ua,
+    );
+
+    return {
+      token,
+      expiresInMinutes,
+      deepLink,
+      user: { id: target.id, email: target.email, role: target.role, firstName: (target as any).firstName, lastName: (target as any).lastName },
+    };
   }
 
   @Get(":id/health")

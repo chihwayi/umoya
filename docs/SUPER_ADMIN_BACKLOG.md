@@ -34,13 +34,22 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started
 - UI: "Audit Trail" timeline in `TenantDetailsModal` (actor, action, values, time, IP).
 - Verified end-to-end: create + suspend + delete events captured correctly.
 
-### 3. Impersonation / "Login as" — ⬜
-- **To build:** `POST /tenants/:id/impersonate` (super-admin only) that mints a
-  short-lived (≤15 min) tenant-user JWT signed for the EHR service, returns a
-  deep link to the EHR frontend. Must be heavily audited (who impersonated whom,
-  when, why). Add a confirmation modal + reason field.
-- Security: never reuse the admin token; scope the minted token; log every use.
-- Effort: M. **Security-sensitive — review before shipping.**
+### 3. Impersonation / "Login as" — ✅ DONE
+- `POST /tenants/:id/impersonate` (super-admin only; **reason required**; active
+  tenant only). Resolves the target tenant user (specified `userId` or the tenant
+  admin), mints a **15-minute** EHR-compatible staff JWT (same `JWT_SECRET`,
+  same claim shape, `tenantId = subdomain` to satisfy the EHR cross-tenant guard)
+  carrying `impersonation: true` + `impersonatedBy` claims. Heavily audited.
+- Returns a **browser-reachable** deep link (`PUBLIC_EHR_FRONTEND_URL`); token is
+  passed in the URL **fragment** (never hits server logs).
+- EHR frontend: new `/ehr/:tenantSlug/impersonate` landing page consumes the
+  fragment token, establishes the staff session, sets an `ehr_impersonation` flag,
+  and routes to the role dashboard. Expiry-checked.
+- web-app: per-user **"Log in as"** action in the tenant users table (reason prompt
+  → opens session in a new tab).
+- Verified: reason enforced, super-admin gated, and the minted token successfully
+  authenticates against the EHR service (`/api/auth/profile` returns the
+  impersonated user with the correct tenant).
 
 ### 4. Multi-admin RBAC — ✅ DONE
 - Admin-user management endpoints (super-admin gated): `GET/POST /auth/admins`,

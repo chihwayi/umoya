@@ -11,6 +11,7 @@ import { getEnabledModules, hasModuleAccess, TenantSubscriptionInfo } from './ut
 const TenantDirectory = lazy(() => import('./pages/TenantDirectory'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const EHRLogin = lazy(() => import('./pages/EHRLogin'));
+const ImpersonationLanding = lazy(() => import('./pages/ImpersonationLanding'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
 const MfaSetupPage = lazy(() => import('./pages/MfaSetupPage'));
 const StaffSessionsPage = lazy(() => import('./pages/StaffSessionsPage'));
@@ -380,6 +381,7 @@ function App() {
                 }
               />
               <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
+              <Route path="/ehr/:tenantSlug/impersonate" element={<ImpersonationLanding />} />
               <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
               <Route path="/ehr/:tenantSlug/mfa" element={<MfaSetupPage />} />
               <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />

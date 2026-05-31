@@ -258,6 +258,15 @@ export const tenantAPI = {
     return response.data;
   },
 
+  // Mint a short-lived impersonation session for a tenant user (super-admin only).
+  impersonate: async (id: string, reason: string, userId?: string): Promise<{
+    token: string; expiresInMinutes: number; deepLink: string;
+    user: { id: string; email: string; role: string; firstName: string; lastName: string };
+  }> => {
+    const response = await api.post(`/tenants/${id}/impersonate`, { reason, userId });
+    return response.data;
+  },
+
   // Tenant Users
   getTenantUsers: async (tenantId: string): Promise<TenantUser[]> => {
     const response = await api.get(`/tenants/${tenantId}/users`);
