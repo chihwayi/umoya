@@ -8,6 +8,7 @@ import { tenantApi } from './services/api';
 import ModuleUnavailablePage from './pages/ModuleUnavailablePage';
 import { TenantModuleRoute } from './components/TenantModuleRoute';
 import { getEnabledModules, hasModuleAccess, TenantSubscriptionInfo } from './utils/tenantSubscription';
+import { readCachedTenantBranding, applyTenantTheme, clearTenantTheme } from './utils/tenantBranding';
 const TenantDirectory = lazy(() => import('./pages/TenantDirectory'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const EHRLogin = lazy(() => import('./pages/EHRLogin'));
@@ -333,8 +334,19 @@ const RouteThemeManager: React.FC = () => {
     const isEhrRoute = location.pathname.startsWith('/ehr/');
     document.body.classList.toggle('ehr-theme', isEhrRoute);
 
+    // Apply the tenant's white-label brand colour on EHR routes (from cache,
+    // populated at login / tenant fetch); clear it elsewhere.
+    if (isEhrRoute) {
+      const slug = location.pathname.split('/')[2];
+      const branding = readCachedTenantBranding(slug);
+      applyTenantTheme(branding?.primaryColor);
+    } else {
+      clearTenantTheme();
+    }
+
     return () => {
       document.body.classList.remove('ehr-theme');
+      clearTenantTheme();
     };
   }, [location.pathname]);
 

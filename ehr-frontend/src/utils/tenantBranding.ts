@@ -1,7 +1,39 @@
 export interface TenantBranding {
   clinicName?: string;
   logoUrl?: string;
+  primaryColor?: string;
 }
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+/** Lighten a hex colour by `amt` (0-1) for a derived hover shade. */
+const lighten = (hex: string, amt = 0.15): string => {
+  if (!HEX_RE.test(hex)) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.round(((n >> 16) & 255) + 255 * amt));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) + 255 * amt));
+  const b = Math.min(255, Math.round((n & 255) + 255 * amt));
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+};
+
+/** Apply the tenant brand colour as the EHR theme accent (validated hex only). */
+export const applyTenantTheme = (primaryColor?: string | null): void => {
+  if (typeof document === 'undefined') return;
+  const body = document.body;
+  if (primaryColor && HEX_RE.test(primaryColor)) {
+    body.style.setProperty('--ehr-accent', primaryColor);
+    body.style.setProperty('--ehr-accent-hover', lighten(primaryColor));
+  } else {
+    body.style.removeProperty('--ehr-accent');
+    body.style.removeProperty('--ehr-accent-hover');
+  }
+};
+
+export const clearTenantTheme = (): void => {
+  if (typeof document === 'undefined') return;
+  document.body.style.removeProperty('--ehr-accent');
+  document.body.style.removeProperty('--ehr-accent-hover');
+};
 
 const TENANT_NAME_KEY = 'ehr_tenant_name';
 const tenantBrandKey = (tenantSlug: string) => `ehr_tenant_brand:${tenantSlug}`;
@@ -47,6 +79,7 @@ export const readCachedTenantBranding = (tenantSlug?: string | null): TenantBran
       return {
         clinicName: parsed?.clinicName || undefined,
         logoUrl: parsed?.logoUrl || undefined,
+        primaryColor: parsed?.primaryColor || undefined,
       };
     }
   } catch {}
@@ -60,6 +93,7 @@ export const cacheTenantBranding = (tenantSlug: string, branding: TenantBranding
   const payload: TenantBranding = {
     clinicName: branding.clinicName?.trim() || undefined,
     logoUrl: branding.logoUrl?.trim() || undefined,
+    primaryColor: branding.primaryColor?.trim() || undefined,
   };
 
   try {

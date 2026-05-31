@@ -91,11 +91,18 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started
   **Cancel deletion** button; delete toast explains the grace window.
 - Verified: request → suspended + DB preserved → cancel → restored; force → purged.
 
-### 7. White-labeling / tenant branding — ⬜
-- Today: `logoUrl` upload works.
-- **To build:** theme colors + email-template branding + (optional) custom domain
-  CNAME, stored per tenant and applied in the EHR frontend + patient portal.
-- Effort: L (touches ehr-frontend + patient-portal).
+### 7. White-labeling / tenant branding — ✅ DONE
+- Per-tenant `brandPrimaryColor` (VARCHAR(7) column on `tenants`, hex-validated in
+  `UpdateTenantDto` via `@Matches(/^#[0-9a-fA-F]{6}$/)`), exposed on the public
+  `toPublicTenant` payload (incl. `/tenants/subdomain/:slug`).
+- Super-admin UI: "Branding" section in `TenantDetailsModal` (colour picker + hex
+  input + live preview swatch) persisted via `updateTenant`.
+- EHR frontend: `tenantBranding.applyTenantTheme()` sets `--ehr-accent` /
+  `--ehr-accent-hover` (derived lighten) from the tenant's brand colour; applied on
+  EHR login (`EHRLogin`) and re-applied per EHR route (`RouteThemeManager` in App.tsx).
+  Falls back to the default accent when no colour is set or hex is invalid.
+- Verified: PUT `#FF6B35` round-trips through the public endpoint + DB; invalid hex
+  (`red`) rejected with a friendly message.
 
 ### 8. Rate-limit configuration UI — ✅ DONE
 - Per-tenant `apiRateLimitPerMin` (column on `tenants`, default 120, 0 = unlimited).

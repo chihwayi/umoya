@@ -4,7 +4,7 @@ import { Mail, Lock, Eye, EyeOff, Shield, Sparkles, Workflow, ArrowRight } from 
 import { v4 as uuidv4 } from 'uuid';
 import { ehrApi, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
-import { cacheTenantBranding, formatTenantDisplayName } from '../utils/tenantBranding';
+import { cacheTenantBranding, formatTenantDisplayName, applyTenantTheme, getBrandInitials } from '../utils/tenantBranding';
 
 const EHRLogin: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -41,7 +41,9 @@ const EHRLogin: React.FC = () => {
           cacheTenantBranding(tenantSlug, {
             clinicName: tenant.clinicName,
             logoUrl: tenant.logoUrl,
+            primaryColor: tenant.brandPrimaryColor || undefined,
           });
+          applyTenantTheme(tenant.brandPrimaryColor || undefined);
         } else {
           const fallbackName = location.state?.tenantName || formatTenantDisplayName(tenantSlug);
           setTenantInfo({
@@ -216,11 +218,16 @@ const EHRLogin: React.FC = () => {
                     <img
                       src={tenantInfo.logoUrl}
                       alt={`${tenantInfo.name} Logo`}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain p-2"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center p-4">
-                      <img src={logoSrc} alt="Umoya logo" className="h-full w-full object-contain" style={{ mixBlendMode: 'screen' }} />
+                    <div
+                      className="flex h-full w-full items-center justify-center"
+                      style={{ background: 'linear-gradient(135deg, var(--ehr-accent, #0AA98A), color-mix(in srgb, var(--ehr-accent, #0AA98A) 55%, #08111E))' }}
+                    >
+                      <span style={{ fontFamily: '"Fraunces", serif' }} className="text-4xl font-bold tracking-wide text-white">
+                        {getBrandInitials(tenantInfo?.name || tenantSlug)}
+                      </span>
                     </div>
                   )}
                 </div>

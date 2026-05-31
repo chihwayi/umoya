@@ -49,6 +49,7 @@ export interface Tenant {
   country: string;
   countryCode: string | null;
   logoUrl?: string;
+  brandPrimaryColor?: string | null;
   featureFlags: Record<string, boolean>;
   createdAt: string;
   updatedAt: string;
@@ -95,6 +96,8 @@ export interface UpdateTenantRequest {
   suspensionWarningDays?: number;
   countryCode?: string;
   deploymentMode?: 'clinic' | 'hospital' | 'ministry';
+  brandPrimaryColor?: string;
+  featureFlags?: Record<string, boolean>;
 }
 
 export type ReadinessStatus = 'ready' | 'needs_attention' | 'blocked' | 'not_configured';

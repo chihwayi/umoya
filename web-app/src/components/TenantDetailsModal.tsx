@@ -178,6 +178,8 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [paymentMonthsToExtend, setPaymentMonthsToExtend] = useState<number>(1);
   const [flagsSaving, setFlagsSaving] = useState(false);
   const [localFlags, setLocalFlags] = useState<Record<string, boolean>>({});
+  const [brandColor, setBrandColor] = useState<string>('#0AA98A');
+  const [savingBrand, setSavingBrand] = useState(false);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
@@ -374,6 +376,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       loadApiKeys();
       setPackageForm(buildPackageForm(tenant));
       setLocalFlags(tenant.featureFlags || {});
+      setBrandColor(tenant.brandPrimaryColor || '#0AA98A');
     } else {
       setUsers([]); // Clear users when closed or tenant cleared
       setDhis2Configured(false);
@@ -442,6 +445,24 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       showError(e?.response?.data?.message || 'Failed to save flags');
     } finally {
       setFlagsSaving(false);
+    }
+  };
+
+  const handleSaveBrand = async () => {
+    if (!tenant) return;
+    if (!/^#[0-9a-fA-F]{6}$/.test(brandColor)) {
+      showError('Enter a 6-digit hex colour like #0AA98A');
+      return;
+    }
+    setSavingBrand(true);
+    try {
+      await tenantAPI.updateTenant(tenant.id, { brandPrimaryColor: brandColor });
+      showSuccess('Brand colour updated');
+      onUpdate();
+    } catch (e: any) {
+      showError(e?.response?.data?.message || 'Failed to save brand colour');
+    } finally {
+      setSavingBrand(false);
     }
   };
 
@@ -1308,6 +1329,49 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Branding / White-labeling Section */}
+          <div className="border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Branding</h3>
+                <p className="text-xs text-[#5A78A0] mt-0.5">Primary brand colour applied across this tenant's EHR workspace</p>
+              </div>
+              <button
+                onClick={handleSaveBrand}
+                disabled={savingBrand}
+                className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#0AA98A]/20 text-[#0AA98A] hover:bg-[#0AA98A]/30 transition disabled:opacity-50"
+              >
+                {savingBrand ? 'Saving…' : 'Save Brand'}
+              </button>
+            </div>
+            <div className="p-5 flex flex-wrap items-center gap-4">
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(brandColor) ? brandColor : '#0AA98A'}
+                onChange={(e) => setBrandColor(e.target.value)}
+                className="h-10 w-14 rounded-lg border border-white/[0.1] bg-transparent cursor-pointer"
+                title="Pick brand colour"
+              />
+              <input
+                type="text"
+                value={brandColor}
+                onChange={(e) => setBrandColor(e.target.value)}
+                placeholder="#0AA98A"
+                maxLength={7}
+                className="w-32 px-3 py-2 text-xs font-mono rounded-xl border border-white/[0.1] bg-white/[0.03] text-white focus:outline-none focus:border-[#0AA98A]/50"
+              />
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#5A78A0]">Preview</span>
+                <span
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg text-white"
+                  style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(brandColor) ? brandColor : '#0AA98A' }}
+                >
+                  Accent
+                </span>
+              </div>
             </div>
           </div>
 

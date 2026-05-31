@@ -120,4 +120,10 @@ export class UpdateTenantDto {
   @IsOptional()
   @IsObject()
   featureFlags?: Record<string, boolean>;
+
+  // White-label brand colour. Strict 6-digit hex to prevent CSS injection when
+  // applied as a style property in the frontend.
+  @IsOptional()
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'brandPrimaryColor must be a 6-digit hex colour like #0AA98A' })
+  brandPrimaryColor?: string;
 }

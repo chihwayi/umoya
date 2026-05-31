@@ -22,7 +22,7 @@ import { getCountryPack, listCountryPacks, CountryPack } from "../config/country
 import { getModeDefinition, DEPLOYMENT_MODES, ModeDefinition } from "../config/deployment-modes";
 
 type SafeTenant = Omit<Tenant, "connectionString"> & { billingSummary: TenantBillingSummary };
-type PublicTenant = Pick<Tenant, "id" | "subdomain" | "clinicName" | "status" | "logoUrl" | "enabledModules" | "subscriptionMode" | "packagePreset" | "subscriptionState" | "packageName"> & {
+type PublicTenant = Pick<Tenant, "id" | "subdomain" | "clinicName" | "status" | "logoUrl" | "brandPrimaryColor" | "enabledModules" | "subscriptionMode" | "packagePreset" | "subscriptionState" | "packageName"> & {
   deploymentMode: string;
   billingSummary: TenantBillingSummary;
 };
@@ -74,6 +74,7 @@ export class TenantController {
       clinicName: tenant.clinicName,
       status: tenant.status,
       logoUrl: tenant.logoUrl,
+      brandPrimaryColor: tenant.brandPrimaryColor,
       enabledModules: tenant.enabledModules,
       subscriptionMode: tenant.subscriptionMode,
       packagePreset: tenant.packagePreset,

@@ -134,6 +134,11 @@ export class Tenant {
   @Column({ nullable: true })
   logoUrl: string;
 
+  // White-labeling: hex brand colour applied as the EHR theme accent for this
+  // tenant's staff workspace + login (e.g. "#0AA98A"). Null = platform default.
+  @Column({ nullable: true, length: 7 })
+  brandPrimaryColor: string | null;
+
   @Column({ type: 'jsonb', nullable: true })
   featureFlags: Record<string, boolean>;
 

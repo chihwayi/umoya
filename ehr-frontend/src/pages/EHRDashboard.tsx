@@ -573,15 +573,24 @@ const EHRDashboard: React.FC = () => {
         <div className="p-6">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="h-11 w-11 rounded-xl border border-white/20 bg-white/5 overflow-hidden flex items-center justify-center">
+              <div
+                className="h-14 w-14 shrink-0 rounded-2xl overflow-hidden flex items-center justify-center shadow-lg"
+                style={{
+                  border: '1px solid color-mix(in srgb, var(--ehr-accent, #0AA98A) 45%, transparent)',
+                  boxShadow: '0 0 0 3px color-mix(in srgb, var(--ehr-accent, #0AA98A) 18%, transparent)',
+                  background: tenantInfo?.logoUrl
+                    ? '#ffffff'
+                    : 'linear-gradient(135deg, var(--ehr-accent, #0AA98A), color-mix(in srgb, var(--ehr-accent, #0AA98A) 50%, #0f172a))',
+                }}
+              >
                 {tenantInfo?.logoUrl ? (
-                  <img 
-                    src={tenantInfo.logoUrl} 
-                    alt={`${tenantDisplayName} logo`} 
-                    className="h-full w-full object-cover"
+                  <img
+                    src={tenantInfo.logoUrl}
+                    alt={`${tenantDisplayName} logo`}
+                    className="h-full w-full object-contain p-1.5"
                   />
                 ) : (
-                  <span className="text-xs font-bold tracking-wide text-white">{tenantInitials}</span>
+                  <span className="text-base font-bold tracking-wide text-white">{tenantInitials}</span>
                 )}
               </div>
               <div className="min-w-0">
