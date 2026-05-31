@@ -25,12 +25,14 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started
   active users, storage, and a small trend. Endpoint exists → UI only.
 - Effort: S.
 
-### 2. Tenant audit trail UI — ⬜ (backend partial)
-- `tenant-service` has `audit_logs` + `AuditService` (admin actions) and CDSS has
-  its own audit panel. Tenant lifecycle events (create/suspend/delete/user changes)
-  are logged but not surfaced per-tenant in the UI.
-- **To build:** `GET /tenants/:id/audit` endpoint + a timeline in `TenantDetailsModal`.
-- Effort: M.
+### 2. Tenant audit trail UI — ✅ DONE
+- Tenant lifecycle events (create / update / activate / suspend / delete) and
+  tenant-user events (create / delete / status change / password reset) are now
+  audit-logged with `resourceId = tenant.id` and the acting admin + IP/UA.
+- `AuditService.getResourceAuditLogs()` + `safeLog()` (auditing never breaks the
+  operation it records). New endpoint `GET /tenants/:id/audit`.
+- UI: "Audit Trail" timeline in `TenantDetailsModal` (actor, action, values, time, IP).
+- Verified end-to-end: create + suspend + delete events captured correctly.
 
 ### 3. Impersonation / "Login as" — ⬜
 - **To build:** `POST /tenants/:id/impersonate` (super-admin only) that mints a

@@ -154,6 +154,18 @@ export const tenantAPI = {
     return response.data;
   },
 
+  getTenantAudit: async (id: string, page = 1, limit = 50): Promise<{
+    logs: Array<{
+      id: string; action: string; resource: string; resourceId: string;
+      oldValues: any; newValues: any; ipAddress?: string; createdAt: string;
+      actor: { id: string; email: string; name: string } | null;
+    }>;
+    total: number; page: number; totalPages: number;
+  }> => {
+    const response = await api.get(`/tenants/${id}/audit?page=${page}&limit=${limit}`);
+    return response.data;
+  },
+
   getRolloutReadiness: async () => {
     const response = await api.get('/rollout/tenants');
     return response.data;

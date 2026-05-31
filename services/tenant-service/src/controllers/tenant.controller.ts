@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException, NotFoundException, Res, Header } from "@nestjs/common";
+import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards, Query, BadRequestException, NotFoundException, Res, Header, Req } from "@nestjs/common";
 import * as QRCode from "qrcode";
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
@@ -11,6 +11,7 @@ import { CreateTenantDto } from "../dto/create-tenant.dto";
 import { UpdateTenantDto } from "../dto/update-tenant.dto";
 import { Tenant, TenantStatus } from "../entities/tenant.entity";
 import { JwtAuthGuard } from "../guards/jwt-auth.guard";
+import { AuditService } from "../services/audit.service";
 import { TenantDhis2ConfigPayload, TenantDhis2ConfigView } from "../services/tenant.service";
 import { getCountryPack, listCountryPacks, CountryPack } from "../config/country-packs";
 import { getModeDefinition, DEPLOYMENT_MODES, ModeDefinition } from "../config/deployment-modes";
@@ -29,8 +30,18 @@ export class TenantController {
     private readonly tenantService: TenantService,
     private readonly paymentService: PaymentService,
     private readonly smsService: SmsService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    private readonly auditService: AuditService
   ) {}
+
+  /** Extract acting admin id + request context from the JWT-authenticated request. */
+  private auditContext(req: any): { userId: string | null; ip?: string; ua?: string } {
+    return {
+      userId: req?.user?.id || null,
+      ip: req?.ip || req?.headers?.["x-forwarded-for"] || undefined,
+      ua: req?.headers?.["user-agent"] || undefined,
+    };
+  }
 
   private toSafeTenant(tenant: Tenant): SafeTenant {
     const { connectionString, ...safeTenant } = tenant;
@@ -84,9 +95,17 @@ export class TenantController {
   @ApiOperation({ summary: "Create new tenant" })
   @ApiResponse({ status: 201, description: "Tenant created successfully" })
   async createTenant(
-    @Body(ValidationPipe) createTenantDto: CreateTenantDto
+    @Body(ValidationPipe) createTenantDto: CreateTenantDto,
+    @Req() req: any
   ): Promise<{ tenant: SafeTenant; message: string }> {
     const tenant = await this.tenantService.createTenant(createTenantDto);
+    const ctx = this.auditContext(req);
+    await this.auditService.safeLog(
+      ctx.userId, "create", "tenant", tenant.id,
+      null,
+      { clinicName: tenant.clinicName, subdomain: tenant.subdomain, tier: tenant.subscriptionTier, mode: tenant.subscriptionMode },
+      ctx.ip, ctx.ua,
+    );
     return {
       tenant: this.toSafeTenant(tenant),
       message: "Tenant created successfully. Database provisioning in progress."
@@ -290,9 +309,14 @@ export class TenantController {
   @ApiResponse({ status: 200, description: "Tenant updated successfully" })
   async updateTenant(
     @Param("id") id: string,
-    @Body(ValidationPipe) updateTenantDto: UpdateTenantDto
+    @Body(ValidationPipe) updateTenantDto: UpdateTenantDto,
+    @Req() req: any
   ): Promise<SafeTenant> {
     const tenant = await this.tenantService.updateTenant(id, updateTenantDto);
+    const ctx = this.auditContext(req);
+    await this.auditService.safeLog(
+      ctx.userId, "update", "tenant", id, null, updateTenantDto as any, ctx.ip, ctx.ua,
+    );
     return this.toSafeTenant(tenant);
   }
 
@@ -300,16 +324,44 @@ export class TenantController {
   @UseGuards(JwtAuthGuard)
   async updateTenantStatus(
     @Param("id") id: string,
-    @Body("status") status: TenantStatus
+    @Body("status") status: TenantStatus,
+    @Req() req: any
   ): Promise<SafeTenant> {
     const tenant = await this.tenantService.updateTenantStatus(id, status);
+    const ctx = this.auditContext(req);
+    const action = status === TenantStatus.SUSPENDED ? "tenant_suspend"
+      : status === TenantStatus.ACTIVE ? "tenant_activate" : "update";
+    await this.auditService.safeLog(
+      ctx.userId, action, "tenant", id, null, { status }, ctx.ip, ctx.ua,
+    );
     return this.toSafeTenant(tenant);
+  }
+
+  @Get(":id/audit")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Get the audit trail for a tenant" })
+  @ApiResponse({ status: 200, description: "Tenant audit log entries" })
+  async getTenantAudit(
+    @Param("id") id: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+  ): Promise<any> {
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(200, Math.max(1, Number(limit) || 50));
+    return this.auditService.getResourceAuditLogs(id, p, l);
   }
 
   @Delete(":id")
   @UseGuards(JwtAuthGuard)
-  async deleteTenant(@Param("id") id: string): Promise<{ message: string }> {
+  async deleteTenant(@Param("id") id: string, @Req() req: any): Promise<{ message: string }> {
+    const existing = await this.tenantService.findById(id).catch(() => null);
     await this.tenantService.deleteTenant(id);
+    const ctx = this.auditContext(req);
+    await this.auditService.safeLog(
+      ctx.userId, "delete", "tenant", id,
+      existing ? { clinicName: existing.clinicName, subdomain: existing.subdomain } : null,
+      null, ctx.ip, ctx.ua,
+    );
     return { message: "Tenant deleted successfully" };
   }
 

@@ -178,7 +178,23 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [paymentMonthsToExtend, setPaymentMonthsToExtend] = useState<number>(1);
   const [flagsSaving, setFlagsSaving] = useState(false);
   const [localFlags, setLocalFlags] = useState<Record<string, boolean>>({});
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
   const dhis2SectionRef = React.useRef<HTMLDivElement>(null);
+
+  const loadAudit = useCallback(async () => {
+    if (!tenant) return;
+    setAuditLoading(true);
+    try {
+      const data = await tenantAPI.getTenantAudit(tenant.id, 1, 50);
+      setAuditLogs(Array.isArray(data?.logs) ? data.logs : []);
+    } catch (error) {
+      console.error('Failed to load tenant audit trail:', error);
+      setAuditLogs([]);
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [tenant]);
 
   const loadUsers = useCallback(async () => {
     if (!tenant) return;
@@ -281,6 +297,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       loadUsers();
       loadDhis2Config();
       loadSubscriptionPayments();
+      loadAudit();
       setPackageForm(buildPackageForm(tenant));
       setLocalFlags(tenant.featureFlags || {});
     } else {
@@ -293,8 +310,9 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setSubscriptionPaymentProviders([]);
       setSubscriptionPayments([]);
       setLocalFlags({});
+      setAuditLogs([]);
     }
-  }, [isOpen, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
+  }, [isOpen, loadAudit, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
 
   useEffect(() => {
     if (!isOpen || focusSection !== 'dhis2') {
@@ -1201,6 +1219,67 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                     </label>
                   ))}
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* Audit Trail Section */}
+          <div className="border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Audit Trail</h3>
+                <p className="text-xs text-[#5A78A0] mt-0.5">Lifecycle &amp; user events for this tenant (who did what, when)</p>
+              </div>
+              <button
+                onClick={loadAudit}
+                disabled={auditLoading}
+                className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white/[0.06] text-[#C5D5EE] hover:bg-white/[0.12] transition disabled:opacity-50"
+              >
+                {auditLoading ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
+            <div className="p-5">
+              {auditLoading && auditLogs.length === 0 ? (
+                <p className="text-xs text-[#5A78A0]">Loading audit trail…</p>
+              ) : auditLogs.length === 0 ? (
+                <p className="text-xs text-[#5A78A0]">No audit events recorded yet for this tenant.</p>
+              ) : (
+                <ol className="relative space-y-3 max-h-80 overflow-y-auto pr-1">
+                  {auditLogs.map((log) => {
+                    const actionColor = (a: string) => {
+                      if (a === 'delete' || a === 'user_delete' || a === 'tenant_suspend') return 'bg-rose-500/15 text-rose-300 border-rose-500/25';
+                      if (a === 'create' || a === 'user_create' || a === 'tenant_activate') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
+                      if (a === 'password_change') return 'bg-amber-500/15 text-amber-300 border-amber-500/25';
+                      return 'bg-blue-500/15 text-blue-300 border-blue-500/25';
+                    };
+                    const label = String(log.action || 'event').replace(/_/g, ' ');
+                    const when = log.createdAt ? new Date(log.createdAt) : null;
+                    return (
+                      <li key={log.id} className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                        <span className={`shrink-0 mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${actionColor(log.action)}`}>
+                          {label}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs text-[#C5D5EE] truncate">
+                            {log.actor ? (
+                              <span><span className="font-semibold text-white">{log.actor.name || log.actor.email}</span> · {log.actor.email}</span>
+                            ) : (
+                              <span className="text-[#7A92B8]">system</span>
+                            )}
+                          </div>
+                          {log.newValues && (
+                            <div className="text-[11px] text-[#7A92B8] mt-1 font-mono break-words">
+                              {(() => { try { return JSON.stringify(log.newValues); } catch { return ''; } })()}
+                            </div>
+                          )}
+                          <div className="text-[10px] text-[#4A6080] mt-1">
+                            {when ? when.toLocaleString() : '—'}{log.ipAddress ? ` · ${log.ipAddress}` : ''}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
               )}
             </div>
           </div>
