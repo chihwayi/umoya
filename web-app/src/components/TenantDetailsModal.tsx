@@ -9,7 +9,7 @@ import {
   TenantSubscriptionPayment,
   TenantSubscriptionPaymentProvider,
 } from '../types';
-import { tenantAPI } from '../services/api';
+import { tenantAPI, analyticsAPI, TenantUsageView } from '../services/api';
 import { ConfirmModal, Modal, PromptModal } from './Modal';
 import {
   CORE_INCLUDED_MODULES,
@@ -180,6 +180,9 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [localFlags, setLocalFlags] = useState<Record<string, boolean>>({});
   const [brandColor, setBrandColor] = useState<string>('#0AA98A');
   const [savingBrand, setSavingBrand] = useState(false);
+  const [usage, setUsage] = useState<TenantUsageView | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageDays, setUsageDays] = useState(30);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
@@ -204,6 +207,20 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setAuditLogs([]);
     } finally {
       setAuditLoading(false);
+    }
+  }, [tenant]);
+
+  const loadUsage = useCallback(async (days: number) => {
+    if (!tenant) return;
+    setUsageLoading(true);
+    try {
+      const data = await analyticsAPI.getTenantUsage(tenant.id, days);
+      setUsage(data);
+    } catch (error) {
+      console.error('Failed to load tenant usage:', error);
+      setUsage(null);
+    } finally {
+      setUsageLoading(false);
     }
   }, [tenant]);
 
@@ -374,6 +391,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       loadSubscriptionPayments();
       loadAudit();
       loadApiKeys();
+      loadUsage(usageDays);
       setPackageForm(buildPackageForm(tenant));
       setLocalFlags(tenant.featureFlags || {});
       setBrandColor(tenant.brandPrimaryColor || '#0AA98A');
@@ -391,8 +409,9 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setApiKeys([]);
       setRevealedKey(null);
       setNewKeyName('');
+      setUsage(null);
     }
-  }, [isOpen, loadApiKeys, loadAudit, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
+  }, [isOpen, loadApiKeys, loadAudit, loadUsage, usageDays, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
 
   useEffect(() => {
     if (!isOpen || focusSection !== 'dhis2') {
@@ -1328,6 +1347,101 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                     )}
                   </div>
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* Usage Analytics Section */}
+          <div className="border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Usage</h3>
+                <p className="text-xs text-[#5A78A0] mt-0.5">Live activity aggregated from the platform — users, API keys, and audited events</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {[7, 30, 90].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => { setUsageDays(d); loadUsage(d); }}
+                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition ${
+                      usageDays === d
+                        ? 'bg-[#0AA98A]/25 text-[#0AA98A]'
+                        : 'bg-white/[0.04] text-[#7E97BD] hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-5">
+              {usageLoading ? (
+                <p className="text-xs text-[#5A78A0]">Loading usage…</p>
+              ) : !usage ? (
+                <p className="text-xs text-[#5A78A0]">No usage data available.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Total users', value: usage.users.total },
+                      { label: 'Active users', value: usage.users.active },
+                      { label: `Active in ${usage.periodDays}d`, value: usage.users.recentlyActive },
+                      { label: `New in ${usage.periodDays}d`, value: usage.users.newInPeriod },
+                    ].map((kpi) => (
+                      <div key={kpi.label} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+                        <div className="text-xl font-bold text-white">{kpi.value}</div>
+                        <div className="text-[11px] text-[#5A78A0] mt-0.5">{kpi.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {Object.keys(usage.users.byRole).length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {Object.entries(usage.users.byRole).map(([role, count]) => (
+                        <span key={role} className="px-2.5 py-1 text-[11px] rounded-lg border border-white/[0.07] bg-white/[0.02] text-[#C5D5EE]">
+                          {role.replace(/_/g, ' ')}: <span className="font-semibold text-white">{count}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+                      <div className="text-[11px] text-[#5A78A0]">API keys</div>
+                      <div className="text-sm font-semibold text-white mt-0.5">{usage.apiKeys.active} active <span className="text-[#5A78A0] font-normal">/ {usage.apiKeys.total} total</span></div>
+                    </div>
+                    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+                      <div className="text-[11px] text-[#5A78A0]">Rate limit</div>
+                      <div className="text-sm font-semibold text-white mt-0.5">{usage.apiKeys.rateLimitPerMin === 0 ? 'Unlimited' : usage.apiKeys.rateLimitPerMin === null ? '—' : `${usage.apiKeys.rateLimitPerMin}/min`}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+                      <div className="text-[11px] text-[#5A78A0]">Last API use</div>
+                      <div className="text-sm font-semibold text-white mt-0.5">{usage.apiKeys.lastUsedAt ? new Date(usage.apiKeys.lastUsedAt).toLocaleDateString() : 'Never'}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px] text-[#5A78A0]">Audited activity ({usage.periodDays}d)</div>
+                      <div className="text-[11px] text-[#C5D5EE]"><span className="font-semibold text-white">{usage.activity.totalEvents}</span> events</div>
+                    </div>
+                    {(() => {
+                      const max = Math.max(1, ...usage.activity.trend.map((t) => t.count));
+                      return (
+                        <div className="mt-2 flex items-end gap-[2px] h-16">
+                          {usage.activity.trend.map((t) => (
+                            <div
+                              key={t.date}
+                              title={`${t.date}: ${t.count} event${t.count === 1 ? '' : 's'}`}
+                              className="flex-1 rounded-sm bg-[#0AA98A]/60 hover:bg-[#0AA98A] transition-colors"
+                              style={{ height: `${Math.max(3, (t.count / max) * 100)}%` }}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </>
               )}
             </div>
           </div>

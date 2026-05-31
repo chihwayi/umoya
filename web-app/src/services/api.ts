@@ -82,6 +82,10 @@ export const authAPI = {
   },
 
   logout: () => {
+    // Best-effort server-side revocation: dispatch with the current token, then
+    // clear locally regardless of the network result. The request is already
+    // built with the Authorization header before we delete it below.
+    api.post('/auth/logout').catch(() => {});
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');
     delete api.defaults.headers.common['Authorization'];
@@ -143,6 +147,30 @@ export interface ApiKeyView {
   expiresAt: string | null;
   revokedAt: string | null;
   createdAt: string;
+}
+
+// Per-tenant usage analytics (real, aggregated from the master DB)
+export interface TenantUsageView {
+  tenantId: string;
+  periodDays: number;
+  since: string;
+  users: {
+    total: number;
+    active: number;
+    recentlyActive: number;
+    newInPeriod: number;
+    byRole: Record<string, number>;
+  };
+  apiKeys: {
+    total: number;
+    active: number;
+    lastUsedAt: string | null;
+    rateLimitPerMin: number | null;
+  };
+  activity: {
+    totalEvents: number;
+    trend: { date: string; count: number }[];
+  };
 }
 
 // Admin team management (RBAC)
@@ -540,6 +568,11 @@ export const analyticsAPI = {
 
   getTenantMetrics: async (tenantId: string, days?: number): Promise<any> => {
     const response = await api.get(`/analytics/tenants/${tenantId}?days=${days || 30}`);
+    return response.data;
+  },
+
+  getTenantUsage: async (tenantId: string, days?: number): Promise<TenantUsageView> => {
+    const response = await api.get(`/analytics/tenants/${tenantId}/usage?days=${days || 30}`);
     return response.data;
   },
 

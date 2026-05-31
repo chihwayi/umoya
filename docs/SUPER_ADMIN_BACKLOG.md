@@ -11,19 +11,33 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started
 - ✅ Reduced admin JWT expiry 24h → configurable **8h** (`ADMIN_JWT_EXPIRES_IN`)
 - ✅ Client session guard: proactive expiry redirect, 30-min idle logout, cross-tab logout (`web-app/src/utils/sessionGuard.ts`)
 - ✅ Login page shows why the session ended (`?session=expired|idle`)
-- ⬜ **Server-side token revocation** — logout currently only clears client storage;
-  the stateless JWT stays valid until `exp`. To truly revoke on logout, add a
-  Redis denylist of `jti` values checked in `JwtStrategy.validate`. (Medium)
+- ✅ **Server-side token revocation** — admin login tokens now carry a `jti`;
+  `POST /auth/logout` adds it to a **Redis denylist** (`revoked:jwt:<jti>`, TTL =
+  the token's remaining lifetime so it self-expires) and `AuthService.validateUser`
+  rejects any denylisted `jti` with 401. Falls back to a per-process in-memory set
+  if Redis is down (`TokenDenylistService`). Web-app `authAPI.logout()` now calls
+  the endpoint (best-effort) before clearing local storage. Verified: same token
+  → 200 before logout, 401 after; revocation **survives a service restart**; TTL
+  observed = 28800s (the 8h token lifetime); fresh logins unaffected.
 
 ---
 
 ## Feature gaps
 
-### 1. Per-tenant usage analytics UI — 🟡 (backend exists)
-- Backend `analyticsAPI.getTenantMetrics(tenantId, days)` already returns metrics.
-- **To build:** a "Usage" section in `TenantDetailsModal` rendering API calls,
-  active users, storage, and a small trend. Endpoint exists → UI only.
-- Effort: S.
+### 1. Per-tenant usage analytics UI — ✅ DONE
+- The pre-existing `getTenantMetrics` read from `tenant_analytics`, but **nothing
+  writes to that table** (it's empty) — so a new real aggregator was built instead
+  of shipping a hollow UI.
+- New `GET /analytics/tenants/:id/usage?days=N` (`TenantAnalyticsService.getTenantUsage`)
+  aggregates **live from the master DB, no synthetic data**:
+  - **users**: total, active (status), recentlyActive (`lastLogin` in period),
+    newInPeriod (`createdAt` in period), byRole.
+  - **apiKeys**: total, active (not revoked/expired), lastUsedAt, configured rate limit.
+  - **activity**: per-day audit-event counts for the tenant over `days` + total.
+- UI: "Usage" section in `TenantDetailsModal` — 7/30/90-day selector, KPI cards,
+  per-role chips, API-key/rate-limit/last-use cards, and an audit-activity bar trend.
+- Verified: user counts (active excludes suspended), role breakdown, API-key count,
+  rate limit, and the 4 audit events land on the correct day; 401 without a token.
 
 ### 2. Tenant audit trail UI — ✅ DONE
 - Tenant lifecycle events (create / update / activate / suspend / delete) and

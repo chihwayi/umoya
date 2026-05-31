@@ -45,6 +45,7 @@ import { DemoAccessRequest } from './entities/demo-access-request.entity';
 import { BaaRegistryEntry } from './entities/baa-registry.entity';
 import { TenantApiKey } from './entities/tenant-api-key.entity';
 import { ApiKeyService } from './services/api-key.service';
+import { TokenDenylistService } from './services/token-denylist.service';
 import { DemoAccessRequestService } from './services/demo-access-request.service';
 import { BaaRegistryService } from './services/baa-registry.service';
 
@@ -97,6 +98,7 @@ function resolveJwtSecret(): string {
     AuthService,
     AuditService,
     ApiKeyService,
+    TokenDenylistService,
     EmailService,
     HealthMonitorService,
     RuntimeEndpointConfigService,

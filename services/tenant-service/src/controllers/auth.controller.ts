@@ -50,6 +50,17 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  @ApiOperation({ summary: 'Log out — server-side revokes the current token' })
+  @ApiResponse({ status: 200, description: 'Token revoked' })
+  async logout(@Request() req) {
+    const ipAddress = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.get('User-Agent');
+    await this.authService.logout(req.user?.tokenId, req.user?.tokenExp, req.user?.id, ipAddress, userAgent);
+    return { message: 'Logged out' };
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('change-password')
   async changePassword(
     @Request() req,

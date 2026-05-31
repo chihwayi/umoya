@@ -26,6 +26,15 @@ export class TenantAnalyticsController {
     return this.analyticsService.getTenantMetrics(tenantId, days || 30);
   }
 
+  @Get('tenants/:tenantId/usage')
+  async getTenantUsage(
+    @Param('tenantId') tenantId: string,
+    @Query('days') days?: number,
+  ): Promise<any> {
+    const d = Math.min(90, Math.max(1, Number(days) || 30));
+    return this.analyticsService.getTenantUsage(tenantId, d);
+  }
+
   @Get('tenants/:tenantId/report')
   async generateTenantReport(@Param('tenantId') tenantId: string): Promise<any> {
     return this.analyticsService.generateTenantReport(tenantId);

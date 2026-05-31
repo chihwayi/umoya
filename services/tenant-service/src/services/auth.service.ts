@@ -3,8 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import { AdminUser, AdminRole } from '../entities/admin-user.entity';
 import { AuditService } from './audit.service';
+import { TokenDenylistService } from './token-denylist.service';
 
 export interface LoginDto {
   email: string;
@@ -15,6 +17,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: AdminRole;
+  jti?: string;
   iat?: number;
   exp?: number;
 }
@@ -26,6 +29,7 @@ export class AuthService {
     private adminUserRepository: Repository<AdminUser>,
     private jwtService: JwtService,
     private auditService: AuditService,
+    private tokenDenylist: TokenDenylistService,
   ) {}
 
   async login(loginDto: LoginDto, ipAddress: string, userAgent: string) {
@@ -63,6 +67,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      jti: randomUUID(),
     };
 
     return {
@@ -79,6 +84,12 @@ export class AuthService {
   }
 
   async validateUser(payload: JwtPayload): Promise<AdminUser> {
+    // Server-side revocation: a logged-out (or force-revoked) token is rejected
+    // even though its signature is still valid and it hasn't expired yet.
+    if (payload.jti && (await this.tokenDenylist.isRevoked(payload.jti))) {
+      throw new UnauthorizedException('Session has been revoked');
+    }
+
     const user = await this.adminUserRepository.findOne({
       where: { id: payload.sub, isActive: true }
     });
@@ -87,7 +98,21 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
+    // Carry the token's identity/expiry through so logout can revoke exactly this token.
+    (user as any).tokenId = payload.jti;
+    (user as any).tokenExp = payload.exp;
     return user;
+  }
+
+  /** Revoke the caller's current token (logout). TTL = the token's remaining lifetime. */
+  async logout(jti: string | undefined, exp: number | undefined, userId?: string, ipAddress?: string, userAgent?: string): Promise<void> {
+    if (!jti) return;
+    const ttlSeconds = exp ? exp - Math.floor(Date.now() / 1000) : 8 * 3600;
+    if (ttlSeconds <= 0) return; // already expired — nothing to revoke
+    await this.tokenDenylist.revoke(jti, ttlSeconds);
+    if (userId) {
+      await this.auditService.safeLog(userId, 'logout', 'auth', null, null, null, ipAddress, userAgent);
+    }
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string) {
