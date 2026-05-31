@@ -2879,6 +2879,39 @@ _ALL_CLINICAL_DOMAINS = [
     "dermatology", "emergency", "reproductive_health", "general",
 ]
 
+# Fine-grained clinical_domain values (used by seed_guidelines.py and some PDFs)
+# are folded into the canonical set above so coverage bars and the gap analysis
+# use one consistent vocabulary. Anything not listed falls through to "general".
+_DOMAIN_ALIASES = {
+    "paediatrics": "pediatrics",          # British spelling
+    "neonatology": "pediatrics",
+    "critical_care": "emergency",
+    "emergency_medicine": "emergency",
+    "infection_control": "infectious_disease",
+    "sexual_health": "reproductive_health",
+    "womens_health": "obstetrics",
+    "palliative_care": "oncology",
+    "gastroenterology": "general",
+    "haematology": "general",
+    "hematology": "general",
+    "rheumatology": "general",
+    "geriatrics": "general",
+    "preventive_care": "general",
+    "psychiatry": "mental_health",
+    "renal": "nephrology",
+    "pulmonology": "respiratory",
+    "ent": "general",
+    "urology": "nephrology",
+}
+
+
+def _normalize_clinical_domain(value: Optional[str]) -> str:
+    """Map any clinical_domain string to one of _ALL_CLINICAL_DOMAINS."""
+    d = str(value or "general").strip().lower().replace("-", "_").replace(" ", "_")
+    if d in _ALL_CLINICAL_DOMAINS:
+        return d
+    return _DOMAIN_ALIASES.get(d, "general")
+
 
 def _iter_all_metadatas(collection, where: Optional[Dict[str, Any]] = None, page_size: int = 5000):
     """Yield metadata dicts from a ChromaDB collection in pages.
@@ -2902,15 +2935,33 @@ def _iter_all_metadatas(collection, where: Optional[Dict[str, Any]] = None, page
             return
         offset += page_size
 
-@app.get("/admin/corpus/coverage")
-async def corpus_coverage(owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
-    """
-    Returns per-domain chunk counts, document list, coverage gaps,
-    and the last metadata quality report — so admins know which
-    clinical areas lack guidelines and where to upload more PDFs.
-    """
-    rag = _get_diagnostic_rag_engine()
-    collection = getattr(rag, "collection", None) if rag else None
+def _open_guideline_collection_readonly():
+    """Open the medical_guidelines collection via a fresh ChromaDB client —
+    cheap, no model load, no BM25 build. Prefers the already-initialized
+    engine's collection if present to avoid a second client."""
+    try:
+        if diagnostic_assistant and getattr(diagnostic_assistant, "rag_engine", None):
+            col = getattr(diagnostic_assistant.rag_engine, "collection", None)
+            if col is not None:
+                return col
+    except Exception:
+        pass
+    try:
+        import chromadb
+        from chromadb.config import Settings
+        client = chromadb.PersistentClient(
+            path=_CHROMA_PERSISTENCE_PATH,
+            settings=Settings(anonymized_telemetry=False),
+        )
+        return client.get_collection("medical_guidelines")
+    except Exception:
+        return None
+
+
+def _compute_corpus_coverage() -> Dict[str, Any]:
+    """Heavy, synchronous corpus scan. Run via run_in_threadpool so it never
+    blocks the event loop (a full 40k-chunk metadata scan takes seconds)."""
+    collection = _open_guideline_collection_readonly()
 
     total_chunks = 0
     domain_counts: Dict[str, int] = {d: 0 for d in _ALL_CLINICAL_DOMAINS}
@@ -2920,11 +2971,10 @@ async def corpus_coverage(owner: str = Depends(require_owner_scope("cdss.admin.j
     if collection:
         try:
             total_chunks = collection.count()
-            # Page through metadata (avoids ChromaDB 'too many SQL variables' on large corpora)
             for meta in _iter_all_metadatas(collection):
                 if not meta:
                     continue
-                domain = str(meta.get("clinical_domain") or "general").strip().lower()
+                domain = _normalize_clinical_domain(meta.get("clinical_domain"))
                 domain_counts[domain] = domain_counts.get(domain, 0) + 1
 
                 pop = str(meta.get("target_population") or "adults").strip().lower()
@@ -2948,7 +2998,6 @@ async def corpus_coverage(owner: str = Depends(require_owner_scope("cdss.admin.j
         except Exception as e:
             logger.warning(f"corpus_coverage: collection scan failed: {e}")
 
-    # Serialise sets for JSON
     doc_list = [
         {
             "fileName": k,
@@ -2960,12 +3009,12 @@ async def corpus_coverage(owner: str = Depends(require_owner_scope("cdss.admin.j
         for k, v in sorted(documents.items(), key=lambda x: -x[1]["chunkCount"])
     ]
 
-    # Gap analysis — domains with 0 chunks
-    covered = [d for d, c in domain_counts.items() if c > 0]
+    # Gap analysis is computed ONLY over the canonical domain set so it stays
+    # consistent with the coverage bars (which also render _ALL_CLINICAL_DOMAINS).
+    covered = [d for d in _ALL_CLINICAL_DOMAINS if domain_counts.get(d, 0) > 0]
     missing = [d for d in _ALL_CLINICAL_DOMAINS if domain_counts.get(d, 0) == 0]
-    sparse  = [d for d, c in domain_counts.items() if 0 < c < 20]
+    sparse  = [d for d in _ALL_CLINICAL_DOMAINS if 0 < domain_counts.get(d, 0) < 20]
 
-    # Attach last metadata quality report if available
     quality_report = None
     try:
         report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ingest_metadata_report.json")
@@ -2989,6 +3038,17 @@ async def corpus_coverage(owner: str = Depends(require_owner_scope("cdss.admin.j
         "metadataQuality": quality_report,
         "allDomains": _ALL_CLINICAL_DOMAINS,
     }
+
+
+@app.get("/admin/corpus/coverage")
+async def corpus_coverage(owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
+    """
+    Returns per-domain chunk counts, document list, coverage gaps, and the last
+    metadata quality report. The heavy scan runs in a threadpool so it never
+    blocks the event loop, and reads ChromaDB directly without forcing the
+    (slow) RAG engine initialization.
+    """
+    return await run_in_threadpool(_compute_corpus_coverage)
 
 
 @app.get("/admin/corpus/documents")

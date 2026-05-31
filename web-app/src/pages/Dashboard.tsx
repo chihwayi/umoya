@@ -324,8 +324,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       )}
 
       {/* ── HEADER ── */}
-      <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#080E1A]/85 backdrop-blur-2xl">
-        <div className="flex items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-40 h-16 border-b border-white/[0.06] bg-[#080E1A]/85 backdrop-blur-2xl">
+        <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -373,7 +373,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
       <div className="relative flex">
         {/* ── SIDEBAR ── */}
-        <aside className={`fixed inset-y-0 left-0 z-50 w-60 bg-[#060C16]/98 border-r border-white/[0.06] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`fixed inset-y-0 left-0 z-50 w-60 bg-[#060C16]/98 border-r border-white/[0.06] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:sticky lg:top-16 lg:z-30 lg:h-[calc(100vh-4rem)] lg:self-start ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="flex flex-col h-full pt-[4.5rem] lg:pt-6">
             <div className="px-3 mb-4">
               <p className="px-3 text-[10px] font-bold uppercase tracking-[0.28em] text-[#3A5A7A]">Navigation</p>
