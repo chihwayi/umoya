@@ -43,6 +43,8 @@ import { AdminUser } from './entities/admin-user.entity';
 import { AuditLog } from './entities/audit-log.entity';
 import { DemoAccessRequest } from './entities/demo-access-request.entity';
 import { BaaRegistryEntry } from './entities/baa-registry.entity';
+import { TenantApiKey } from './entities/tenant-api-key.entity';
+import { ApiKeyService } from './services/api-key.service';
 import { DemoAccessRequestService } from './services/demo-access-request.service';
 import { BaaRegistryService } from './services/baa-registry.service';
 
@@ -73,10 +75,10 @@ function resolveJwtSecret(): string {
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest, BaaRegistryEntry],
+      entities: [Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest, BaaRegistryEntry, TenantApiKey],
       synchronize: false,
     }),
-    TypeOrmModule.forFeature([Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest, BaaRegistryEntry]),
+    TypeOrmModule.forFeature([Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog, DemoAccessRequest, BaaRegistryEntry, TenantApiKey]),
   ],
   controllers: [TenantController, TenantUserController, TenantAnalyticsController, RolloutController, PaymentWebhookController, AuthController, AdminMaintenanceController, BackupController, DemoAccessRequestController, BaaRegistryController],
   providers: [
@@ -94,6 +96,7 @@ function resolveJwtSecret(): string {
     TenantDatabaseService,
     AuthService,
     AuditService,
+    ApiKeyService,
     EmailService,
     HealthMonitorService,
     RuntimeEndpointConfigService,

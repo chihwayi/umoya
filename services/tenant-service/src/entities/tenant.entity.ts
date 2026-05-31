@@ -71,6 +71,10 @@ export class Tenant {
   @Column({ type: 'int', default: 5 })
   suspensionWarningDays: number;
 
+  // Max API requests/minute for this tenant's API keys (0 = unlimited).
+  @Column({ type: 'int', default: 120 })
+  apiRateLimitPerMin: number;
+
   // ── GDPR / CDPA right-to-erasure (soft-delete with grace period) ───────────
   // When a deletion is requested the tenant is suspended (access stopped) and a
   // purge is scheduled for purgeScheduledAt. It can be cancelled any time before

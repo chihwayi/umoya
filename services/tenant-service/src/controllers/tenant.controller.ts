@@ -12,6 +12,7 @@ import { UpdateTenantDto } from "../dto/update-tenant.dto";
 import { Tenant, TenantStatus } from "../entities/tenant.entity";
 import { JwtAuthGuard } from "../guards/jwt-auth.guard";
 import { AuditService } from "../services/audit.service";
+import { ApiKeyService } from "../services/api-key.service";
 import { TenantDatabaseService } from "../services/tenant-database.service";
 import { AdminRole } from "../entities/admin-user.entity";
 import { JwtService } from "@nestjs/jwt";
@@ -37,7 +38,8 @@ export class TenantController {
     private readonly storageService: StorageService,
     private readonly auditService: AuditService,
     private readonly tenantDatabaseService: TenantDatabaseService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly apiKeyService: ApiKeyService
   ) {}
 
   private assertRole(req: any, allowed: AdminRole[]) {
@@ -326,10 +328,20 @@ export class TenantController {
     @Body(ValidationPipe) updateTenantDto: UpdateTenantDto,
     @Req() req: any
   ): Promise<SafeTenant> {
+    // If the tier is changing, compute proration against the pre-update state
+    // so it can be recorded on the audit trail alongside the change.
+    const before = await this.tenantService.findById(id).catch(() => null);
+    let proration: any = null;
+    if (before && updateTenantDto.subscriptionTier && updateTenantDto.subscriptionTier !== before.subscriptionTier) {
+      proration = this.tenantService.computeProration(before, updateTenantDto.subscriptionTier as any);
+    }
+
     const tenant = await this.tenantService.updateTenant(id, updateTenantDto);
     const ctx = this.auditContext(req);
     await this.auditService.safeLog(
-      ctx.userId, "update", "tenant", id, null, updateTenantDto as any, ctx.ip, ctx.ua,
+      ctx.userId, "update", "tenant", id, null,
+      proration?.applicable ? { ...(updateTenantDto as any), proration } : (updateTenantDto as any),
+      ctx.ip, ctx.ua,
     );
     return this.toSafeTenant(tenant);
   }
@@ -484,6 +496,93 @@ export class TenantController {
       deepLink,
       user: { id: target.id, email: target.email, role: target.role, firstName: (target as any).firstName, lastName: (target as any).lastName },
     };
+  }
+
+  // ── Per-tenant API keys ────────────────────────────────────────────────────
+
+  @Get(":id/api-keys")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "List a tenant's API keys (secrets never returned)" })
+  async listApiKeys(@Param("id") id: string): Promise<any> {
+    await this.tenantService.findById(id); // 404 if tenant missing
+    return this.apiKeyService.list(id);
+  }
+
+  @Post(":id/api-keys")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Create a tenant API key (full secret shown once)" })
+  async createApiKey(
+    @Param("id") id: string,
+    @Req() req: any,
+    @Body("name") name: string,
+    @Body("scopes") scopes?: string[],
+    @Body("expiresAt") expiresAt?: string,
+  ): Promise<any> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN]);
+    await this.tenantService.findById(id);
+    const ctx = this.auditContext(req);
+    const result = await this.apiKeyService.create(id, { name, scopes, expiresAt, createdBy: ctx.userId });
+    await this.auditService.safeLog(
+      ctx.userId, "create", "tenant", id, null,
+      { event: "api_key_created", keyId: result.key.id, keyPrefix: result.key.keyPrefix, scopes: result.key.scopes },
+      ctx.ip, ctx.ua,
+    );
+    return result; // { key, secret }
+  }
+
+  @Delete(":id/api-keys/:keyId")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Revoke a tenant API key" })
+  async revokeApiKey(@Param("id") id: string, @Param("keyId") keyId: string, @Req() req: any): Promise<any> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN]);
+    const key = await this.apiKeyService.revoke(id, keyId);
+    const ctx = this.auditContext(req);
+    await this.auditService.safeLog(
+      ctx.userId, "update", "tenant", id, null, { event: "api_key_revoked", keyId }, ctx.ip, ctx.ua,
+    );
+    return key;
+  }
+
+  @Post("api-keys/verify")
+  @ApiOperation({ summary: "Verify an API key (used by integrations to authenticate)" })
+  async verifyApiKey(@Body("key") key: string): Promise<any> {
+    const result = await this.apiKeyService.verify(key);
+    return { valid: true, ...result };
+  }
+
+  @Get(":id/proration-preview")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Preview the prorated cost/credit of a tier change (no side effects)" })
+  async prorationPreview(@Param("id") id: string, @Query("tier") tier: string): Promise<any> {
+    const tenant = await this.tenantService.findById(id);
+    if (!tier) throw new BadRequestException("tier query param is required");
+    return this.tenantService.computeProration(tenant, tier as any);
+  }
+
+  @Get(":id/rate-limit")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Get a tenant's API rate limit (requests/minute)" })
+  async getRateLimit(@Param("id") id: string): Promise<{ apiRateLimitPerMin: number }> {
+    await this.tenantService.findById(id);
+    return this.apiKeyService.getRateLimit(id);
+  }
+
+  @Put(":id/rate-limit")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Set a tenant's API rate limit (requests/minute; 0 = unlimited)" })
+  async setRateLimit(
+    @Param("id") id: string,
+    @Req() req: any,
+    @Body("apiRateLimitPerMin") apiRateLimitPerMin: number,
+  ): Promise<{ apiRateLimitPerMin: number }> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN]);
+    const result = await this.apiKeyService.setRateLimit(id, apiRateLimitPerMin);
+    const ctx = this.auditContext(req);
+    await this.auditService.safeLog(
+      ctx.userId, "update", "tenant", id, null,
+      { event: "rate_limit_changed", apiRateLimitPerMin: result.apiRateLimitPerMin }, ctx.ip, ctx.ua,
+    );
+    return result;
   }
 
   @Get(":id/health")

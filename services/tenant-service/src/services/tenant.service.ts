@@ -965,14 +965,67 @@ export class TenantService implements OnModuleInit {
     };
   }
 
-  private estimateSubscriptionAmount(tier: SubscriptionTier, monthsToExtend: number): number {
-    const baseMonthlyRates: Record<SubscriptionTier, number> = {
+  /** Monthly USD rate for a tier (env-configurable). Single source of truth. */
+  getMonthlyRate(tier: SubscriptionTier): number {
+    const rates: Record<SubscriptionTier, number> = {
       [SubscriptionTier.BASIC]: Number(process.env.TENANT_PAYMENT_RATE_BASIC || 49),
       [SubscriptionTier.PROFESSIONAL]: Number(process.env.TENANT_PAYMENT_RATE_PROFESSIONAL || 99),
       [SubscriptionTier.ENTERPRISE]: Number(process.env.TENANT_PAYMENT_RATE_ENTERPRISE || 199),
     };
-    const monthly = baseMonthlyRates[tier] || 49;
-    return Number((monthly * monthsToExtend).toFixed(2));
+    return rates[tier] || 49;
+  }
+
+  private estimateSubscriptionAmount(tier: SubscriptionTier, monthsToExtend: number): number {
+    return Number((this.getMonthlyRate(tier) * monthsToExtend).toFixed(2));
+  }
+
+  /**
+   * Prorated cost/credit for changing a paid tenant's tier mid-cycle.
+   * credit for unused time on the current plan vs cost of the new plan over the
+   * remaining days. Positive proratedAmount = customer owes; negative = credit.
+   */
+  computeProration(tenant: Tenant, newTier: SubscriptionTier): any {
+    const currency = String(process.env.TENANT_PAYMENT_DEFAULT_CURRENCY || 'USD').toUpperCase();
+    const cycleDays = 30;
+    const currentTier = tenant.subscriptionTier;
+
+    if (tenant.subscriptionMode !== 'paid') {
+      return { applicable: false, reason: 'Tenant is not on a paid subscription', currentTier, newTier, currency };
+    }
+    if (currentTier === newTier) {
+      return { applicable: false, reason: 'No tier change', currentTier, newTier, currency };
+    }
+
+    const now = new Date();
+    const billingEndsAt = tenant.billingEndsAt ? new Date(tenant.billingEndsAt) : null;
+    const daysRemaining = billingEndsAt ? Math.max(0, this.diffInDays(billingEndsAt, now)) : 0;
+
+    const currentMonthly = this.getMonthlyRate(currentTier);
+    const newMonthly = this.getMonthlyRate(newTier);
+
+    if (daysRemaining <= 0) {
+      // No active paid period to prorate — new rate simply applies next cycle.
+      return {
+        applicable: false, reason: 'No remaining paid period to prorate',
+        currentTier, newTier, currency, currentMonthly, newMonthly, daysRemaining: 0,
+        proratedAmount: 0, direction: 'none',
+      };
+    }
+
+    const fraction = daysRemaining / cycleDays;
+    const unusedCredit = Number((currentMonthly * fraction).toFixed(2));
+    const newCharge = Number((newMonthly * fraction).toFixed(2));
+    const proratedAmount = Number((newCharge - unusedCredit).toFixed(2));
+    const direction = proratedAmount > 0 ? 'charge' : proratedAmount < 0 ? 'credit' : 'none';
+
+    return {
+      applicable: true,
+      currentTier, newTier, currency, cycleDays, daysRemaining,
+      currentMonthly, newMonthly, unusedCredit, newCharge,
+      proratedAmount: Math.abs(proratedAmount),
+      direction, // 'charge' (upgrade) | 'credit' (downgrade) | 'none'
+      billingEndsAt: tenant.billingEndsAt,
+    };
   }
 
   private resolveCheckoutUrl(

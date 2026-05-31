@@ -65,11 +65,18 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started
   admins see a read-only view). Wired into the Dashboard nav.
 - Verified end-to-end incl. the last-super-admin guard.
 
-### 5. API-key management — ⬜
-- **To build:** per-tenant programmatic API keys: `api_keys` table (hashed key,
-  scopes, last_used, revoked_at), generate/revoke endpoints, a keys panel.
-  Show the secret once on creation only.
-- Effort: M.
+### 5. API-key management — ✅ DONE
+- `tenant_api_keys` table + `TenantApiKey` entity: SHA-256 **hash only** (never the
+  secret), display `keyPrefix`, `scopes`, `lastUsedAt`, `expiresAt`, `revokedAt`.
+- `ApiKeyService`: create (full secret `umoya_<prefix>_<secret>` returned once),
+  list (masked), revoke, and **verify** (hash lookup + active/expiry check +
+  last-used update) — so keys genuinely authenticate, not decorative.
+- Endpoints (super-admin gated, audited): `GET/POST /tenants/:id/api-keys`,
+  `DELETE /tenants/:id/api-keys/:keyId`, plus open `POST /tenants/api-keys/verify`.
+- UI: "API Keys" section in `TenantDetailsModal` — create with one-time reveal +
+  copy, status chips, last-used, revoke.
+- Verified: create → list (no secret leaked) → verify (valid, correct tenant) →
+  revoke → verify now 401.
 
 ### 6. GDPR / CDPA right-to-erasure (soft-delete + grace) — ✅ DONE
 - `tenants` gains `deletionRequestedAt`, `deletionRequestedBy`, `deletionReason`,
@@ -90,17 +97,27 @@ Status legend: ✅ done · 🟡 in progress · ⬜ not started
   CNAME, stored per tenant and applied in the EHR frontend + patient portal.
 - Effort: L (touches ehr-frontend + patient-portal).
 
-### 8. Rate-limit configuration UI — ⬜
-- CDSS already rate-limits admin endpoints (`ADMIN_RATE_LIMIT_PER_MIN`); no UI to
-  view/tune per-tenant or global limits.
-- **To build:** a settings panel + persisted per-tenant override read by the limiter.
-- Effort: M.
+### 8. Rate-limit configuration UI — ✅ DONE
+- Per-tenant `apiRateLimitPerMin` (column on `tenants`, default 120, 0 = unlimited).
+- Enforced in `ApiKeyService.verify` via a **Redis-backed** fixed-window counter
+  (atomic INCR+EXPIRE) → returns 429 when exceeded (and `rateLimit: {limit, remaining}`
+  when OK). Survives restarts and works across multiple instances; falls back to
+  per-process in-memory if Redis is unreachable so verification never hard-fails.
+- Endpoints (super-admin gated, audited): `GET/PUT /tenants/:id/rate-limit`.
+- UI: editable "Rate limit … /min" control in the API Keys section header.
+- Verified: set 3/min → 3 requests 201, 4th/5th → 429.
 
-### 9. Subscription upgrade/downgrade with proration — ⬜
-- Today: tier/module changes replace dates with no prorated credit/charge.
-- **To build:** compute prorated delta on mid-cycle change, surface it in the
-  payment flow, and record it on the subscription ledger.
-- Effort: M.
+### 9. Subscription upgrade/downgrade with proration — ✅ DONE
+- `TenantService.getMonthlyRate(tier)` is the single pricing source (env-tunable
+  $49/$99/$199); `computeProration(tenant, newTier)` returns credit-for-unused +
+  charge-for-remaining over the days left in the cycle → net `proratedAmount` +
+  `direction` (charge on upgrade / credit on downgrade).
+- `GET /tenants/:id/proration-preview?tier=X` (no side effects). On `PUT /tenants/:id`
+  a tier change records the proration in the audit trail.
+- UI: live proration banner under the tier selector in the package form
+  (e.g. "Upgrade — additional USD 150 now"; downgrade shows a credit).
+- Verified: basic→enterprise (30 days left) = $150 charge; reverse = $150 credit;
+  recorded in audit.
 
 ---
 

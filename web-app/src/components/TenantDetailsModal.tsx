@@ -180,6 +180,15 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [localFlags, setLocalFlags] = useState<Record<string, boolean>>({});
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [revealedKey, setRevealedKey] = useState<{ name: string; secret: string } | null>(null);
+  const [rateLimit, setRateLimit] = useState<number>(120);
+  const [rateLimitDraft, setRateLimitDraft] = useState<string>('120');
+  const [savingRateLimit, setSavingRateLimit] = useState(false);
+  const [proration, setProration] = useState<any>(null);
   const dhis2SectionRef = React.useRef<HTMLDivElement>(null);
 
   const loadAudit = useCallback(async () => {
@@ -195,6 +204,70 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setAuditLoading(false);
     }
   }, [tenant]);
+
+  const loadApiKeys = useCallback(async () => {
+    if (!tenant) return;
+    setApiKeysLoading(true);
+    try {
+      const [keys, rl] = await Promise.all([
+        tenantAPI.listApiKeys(tenant.id),
+        tenantAPI.getRateLimit(tenant.id).catch(() => ({ apiRateLimitPerMin: 120 })),
+      ]);
+      setApiKeys(keys);
+      setRateLimit(rl.apiRateLimitPerMin);
+      setRateLimitDraft(String(rl.apiRateLimitPerMin));
+    } catch (error) {
+      console.error('Failed to load API keys:', error);
+      setApiKeys([]);
+    } finally {
+      setApiKeysLoading(false);
+    }
+  }, [tenant]);
+
+  const handleSaveRateLimit = async () => {
+    if (!tenant) return;
+    const n = Number(rateLimitDraft);
+    if (!Number.isFinite(n) || n < 0) { showError('Enter a valid number (0 = unlimited)'); return; }
+    setSavingRateLimit(true);
+    try {
+      const res = await tenantAPI.setRateLimit(tenant.id, Math.floor(n));
+      setRateLimit(res.apiRateLimitPerMin);
+      setRateLimitDraft(String(res.apiRateLimitPerMin));
+      showSuccess(`API rate limit set to ${res.apiRateLimitPerMin === 0 ? 'unlimited' : res.apiRateLimitPerMin + '/min'}`);
+    } catch (error: any) {
+      showError(error?.response?.data?.message || 'Failed to update rate limit');
+    } finally {
+      setSavingRateLimit(false);
+    }
+  };
+
+  const handleCreateApiKey = async () => {
+    if (!tenant || !newKeyName.trim()) { showError('Enter a name for the key'); return; }
+    setCreatingKey(true);
+    try {
+      const res = await tenantAPI.createApiKey(tenant.id, newKeyName.trim());
+      setRevealedKey({ name: res.key.name, secret: res.secret });
+      setNewKeyName('');
+      showSuccess('API key created');
+      loadApiKeys();
+    } catch (error: any) {
+      showError(error?.response?.data?.message || 'Failed to create API key');
+    } finally {
+      setCreatingKey(false);
+    }
+  };
+
+  const handleRevokeApiKey = async (keyId: string) => {
+    if (!tenant) return;
+    if (!window.confirm('Revoke this API key? Integrations using it will stop working immediately.')) return;
+    try {
+      await tenantAPI.revokeApiKey(tenant.id, keyId);
+      showSuccess('API key revoked');
+      loadApiKeys();
+    } catch (error: any) {
+      showError(error?.response?.data?.message || 'Failed to revoke API key');
+    }
+  };
 
   const loadUsers = useCallback(async () => {
     if (!tenant) return;
@@ -298,6 +371,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       loadDhis2Config();
       loadSubscriptionPayments();
       loadAudit();
+      loadApiKeys();
       setPackageForm(buildPackageForm(tenant));
       setLocalFlags(tenant.featureFlags || {});
     } else {
@@ -311,8 +385,11 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setSubscriptionPayments([]);
       setLocalFlags({});
       setAuditLogs([]);
+      setApiKeys([]);
+      setRevealedKey(null);
+      setNewKeyName('');
     }
-  }, [isOpen, loadAudit, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
+  }, [isOpen, loadApiKeys, loadAudit, loadDhis2Config, loadSubscriptionPayments, loadUsers, tenant]);
 
   useEffect(() => {
     if (!isOpen || focusSection !== 'dhis2') {
@@ -323,6 +400,22 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     }, 120);
     return () => window.clearTimeout(timer);
   }, [focusSection, isOpen, tenant?.id]);
+
+  // Live proration preview when the selected tier differs from the current one.
+  const selectedTier = packageForm?.subscriptionTier;
+  useEffect(() => {
+    if (!tenant || !isOpen) { setProration(null); return; }
+    const isDemo = packageForm?.subscriptionMode === 'demo';
+    if (isDemo || !selectedTier || selectedTier === tenant.subscriptionTier) {
+      setProration(null);
+      return;
+    }
+    let cancelled = false;
+    tenantAPI.getProrationPreview(tenant.id, selectedTier)
+      .then((p) => { if (!cancelled) setProration(p); })
+      .catch(() => { if (!cancelled) setProration(null); });
+    return () => { cancelled = true; };
+  }, [tenant, isOpen, selectedTier, packageForm?.subscriptionMode]);
 
   const handleClose = useCallback(() => {
     setCreatedUserCredentials(null);
@@ -973,6 +1066,26 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                           <option value="professional">Professional</option>
                           <option value="enterprise">Enterprise</option>
                         </select>
+                        {proration && proration.applicable && (
+                          <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${
+                            proration.direction === 'charge'
+                              ? 'border-amber-300 bg-amber-50 text-amber-800'
+                              : 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                          }`}>
+                            <div className="font-semibold">
+                              {proration.direction === 'charge'
+                                ? `Upgrade — additional ${proration.currency} ${proration.proratedAmount} now`
+                                : `Downgrade — ${proration.currency} ${proration.proratedAmount} credit`}
+                            </div>
+                            <div className="mt-0.5 text-[11px] opacity-80">
+                              {proration.daysRemaining} days left · {proration.currency} {proration.currentMonthly}/mo → {proration.currency} {proration.newMonthly}/mo
+                              {' · '}credit {proration.currency} {proration.unusedCredit}, new charge {proration.currency} {proration.newCharge}
+                            </div>
+                          </div>
+                        )}
+                        {proration && !proration.applicable && proration.reason && (
+                          <div className="mt-2 text-[11px] text-slate-500">{proration.reason}</div>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-500 mb-1">Suspension Warning Days</label>
@@ -1296,6 +1409,102 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                     );
                   })}
                 </ol>
+              )}
+            </div>
+          </div>
+
+          {/* API Keys Section */}
+          <div className="border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 bg-white/[0.03] border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">API Keys</h3>
+                <p className="text-xs text-[#5A78A0] mt-0.5">Programmatic access keys for this tenant. The secret is shown once on creation.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-[#7A92B8] whitespace-nowrap">Rate limit</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={rateLimitDraft}
+                  onChange={(e) => setRateLimitDraft(e.target.value)}
+                  className="w-20 rounded-lg border border-white/[0.12] bg-[#0D1829] px-2 py-1 text-xs text-white text-right focus:outline-none focus:ring-2 focus:ring-[#0AA98A]/30"
+                  title="Requests per minute (0 = unlimited)"
+                />
+                <span className="text-xs text-[#5A78A0]">/min</span>
+                <button
+                  onClick={handleSaveRateLimit}
+                  disabled={savingRateLimit || rateLimitDraft === String(rateLimit)}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white/[0.06] text-[#C5D5EE] hover:bg-white/[0.12] transition disabled:opacity-40"
+                >
+                  {savingRateLimit ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex gap-2">
+                <input
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder="Key name (e.g. Billing integration)"
+                  className="flex-1 rounded-xl border border-white/[0.12] bg-[#0D1829] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#0AA98A]/30"
+                />
+                <button
+                  onClick={handleCreateApiKey}
+                  disabled={creatingKey || !newKeyName.trim()}
+                  className="px-4 py-2 text-sm font-semibold rounded-xl bg-[#0AA98A] text-[#040A10] hover:bg-[#12BFAB] transition disabled:opacity-50"
+                >
+                  {creatingKey ? 'Creating…' : 'Create Key'}
+                </button>
+              </div>
+
+              {revealedKey && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3">
+                  <div className="text-xs font-semibold text-amber-300 mb-1">
+                    Copy “{revealedKey.name}” now — it won't be shown again
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <code className="font-mono text-xs text-amber-100 break-all">{revealedKey.secret}</code>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => navigator.clipboard?.writeText(revealedKey.secret).catch(() => {})}
+                        className="text-[11px] px-2 py-1 rounded-lg bg-white/[0.1] text-white hover:bg-white/[0.18]">Copy</button>
+                      <button onClick={() => setRevealedKey(null)}
+                        className="text-[11px] px-2 py-1 rounded-lg bg-white/[0.06] text-[#C5D5EE] hover:bg-white/[0.12]">Dismiss</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {apiKeysLoading && apiKeys.length === 0 ? (
+                <p className="text-xs text-[#5A78A0]">Loading keys…</p>
+              ) : apiKeys.length === 0 ? (
+                <p className="text-xs text-[#5A78A0]">No API keys yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {apiKeys.map((k) => (
+                    <div key={k.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-white truncate">
+                          {k.name}
+                          <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            k.status === 'active' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
+                            : k.status === 'revoked' ? 'bg-rose-500/15 text-rose-300 border-rose-500/25'
+                            : 'bg-amber-500/15 text-amber-300 border-amber-500/25'}`}>{k.status}</span>
+                        </div>
+                        <div className="text-[11px] text-[#7A92B8] font-mono mt-0.5">{k.keyPrefix}…</div>
+                        <div className="text-[10px] text-[#4A6080] mt-0.5">
+                          {k.lastUsedAt ? `Last used ${new Date(k.lastUsedAt).toLocaleString()}` : 'Never used'}
+                          {k.expiresAt ? ` · expires ${new Date(k.expiresAt).toLocaleDateString()}` : ''}
+                        </div>
+                      </div>
+                      {k.status === 'active' && (
+                        <button onClick={() => handleRevokeApiKey(k.id)}
+                          className="shrink-0 px-2.5 py-1 text-xs rounded-lg bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 transition">
+                          Revoke
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

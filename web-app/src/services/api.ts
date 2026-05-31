@@ -131,6 +131,20 @@ if (authAPI.isAuthenticated()) {
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 }
 
+export interface ApiKeyView {
+  id: string;
+  tenantId: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  status: 'active' | 'revoked' | 'expired';
+  createdBy: string | null;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
 // Admin team management (RBAC)
 export interface AdminUserView {
   id: string;
@@ -264,6 +278,43 @@ export const tenantAPI = {
     user: { id: string; email: string; role: string; firstName: string; lastName: string };
   }> => {
     const response = await api.post(`/tenants/${id}/impersonate`, { reason, userId });
+    return response.data;
+  },
+
+  // Per-tenant API keys
+  listApiKeys: async (id: string): Promise<ApiKeyView[]> => {
+    const response = await api.get(`/tenants/${id}/api-keys`);
+    return response.data;
+  },
+  createApiKey: async (id: string, name: string, scopes?: string[], expiresAt?: string | null):
+    Promise<{ key: ApiKeyView; secret: string }> => {
+    const response = await api.post(`/tenants/${id}/api-keys`, { name, scopes, expiresAt });
+    return response.data;
+  },
+  revokeApiKey: async (id: string, keyId: string): Promise<ApiKeyView> => {
+    const response = await api.delete(`/tenants/${id}/api-keys/${keyId}`);
+    return response.data;
+  },
+
+  // Preview prorated cost/credit for a proposed tier change (no side effects)
+  getProrationPreview: async (id: string, tier: string): Promise<{
+    applicable: boolean; reason?: string;
+    currentTier: string; newTier: string; currency: string;
+    daysRemaining?: number; currentMonthly?: number; newMonthly?: number;
+    unusedCredit?: number; newCharge?: number; proratedAmount?: number;
+    direction?: 'charge' | 'credit' | 'none';
+  }> => {
+    const response = await api.get(`/tenants/${id}/proration-preview?tier=${encodeURIComponent(tier)}`);
+    return response.data;
+  },
+
+  // Per-tenant API rate limit (requests/minute; 0 = unlimited)
+  getRateLimit: async (id: string): Promise<{ apiRateLimitPerMin: number }> => {
+    const response = await api.get(`/tenants/${id}/rate-limit`);
+    return response.data;
+  },
+  setRateLimit: async (id: string, apiRateLimitPerMin: number): Promise<{ apiRateLimitPerMin: number }> => {
+    const response = await api.put(`/tenants/${id}/rate-limit`, { apiRateLimitPerMin });
     return response.data;
   },
 
