@@ -171,9 +171,11 @@ class LLMProvider:
         model_name: Optional[str] = None,
         use_case: Optional[str] = None,
         tenant_id: Optional[str] = None,
+        max_tokens: Optional[int] = None,
     ) -> Optional[str]:
         """
-        Generate a text response from the LLM.
+        Generate a text response from the LLM. `max_tokens` caps the generated length
+        (num_predict); a smaller cap is much faster for short summaries.
         """
         selected_model = model_name or self.model_name
         try:
@@ -218,7 +220,7 @@ class LLMProvider:
             "stream": False,
             "options": {
                 "temperature": 0.2, # Low temperature for clinical factualness
-                "num_predict": 1024  # Increased for detailed JSON
+                "num_predict": int(max_tokens) if max_tokens else 1024
             }
         }
 

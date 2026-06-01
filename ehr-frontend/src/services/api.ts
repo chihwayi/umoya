@@ -126,6 +126,16 @@ const getActiveTenantSlug = (): string => {
   return localStorage.getItem('ehr_tenant_slug') || localStorage.getItem('ehr_tenant') || '';
 };
 
+// CDSS endpoints are tenant-guarded; ensure every cdssAxios call carries X-Tenant-ID
+// (the proxy adds the service token). Only set when the caller didn't already.
+cdssAxios.interceptors.request.use((config) => {
+  const slug = getActiveTenantSlug();
+  if (slug && !(config.headers as any)['X-Tenant-ID'] && !(config.headers as any)['x-tenant-id']) {
+    (config.headers as any)['X-Tenant-ID'] = slug;
+  }
+  return config;
+});
+
 /**
  * Shared EHR API client for feature components/pages that call relative EHR routes
  * (e.g. `api.get('/risk/...')`). Auto-attaches the bearer token and the X-Tenant-ID
@@ -1429,7 +1439,8 @@ export const ehrApi = {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
-      }
+      },
+      timeout: 90000,
     });
     return { data: response.data };
   },

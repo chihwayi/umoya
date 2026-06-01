@@ -172,7 +172,15 @@ services:
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
       - CDSS_INGEST_WORKERS=${CDSS_INGEST_WORKERS:-4}
       - CDSS_INGEST_EXTRACTOR=${CDSS_INGEST_EXTRACTOR:-quality}
-      - RAG_BM25_MAX_DOCS=${RAG_BM25_MAX_DOCS:-50000}
+      # Cap for building the in-memory BM25 index. The guideline corpus is ~40k chunks;
+      # with >=14 GB Docker RAM there's headroom to build BM25 and run HYBRID retrieval
+      # (vector + BM25 fused via RRF). Lower this (e.g. 15000) on memory-constrained hosts
+      # to fall back to fast vector-only semantic search.
+      - RAG_BM25_MAX_DOCS=${RAG_BM25_MAX_DOCS:-60000}
+      # Cross-encoder re-ranking is accurate but CPU-expensive (~seconds/query). Off here
+      # for responsiveness; RRF-fused vector+BM25 still orders results well. Set true on a
+      # GPU host for max precision.
+      - RAG_ENABLE_RERANK=${RAG_ENABLE_RERANK:-false}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -248,7 +256,15 @@ services:
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
       - CDSS_INGEST_WORKERS=${CDSS_INGEST_WORKERS:-4}
       - CDSS_INGEST_EXTRACTOR=${CDSS_INGEST_EXTRACTOR:-quality}
-      - RAG_BM25_MAX_DOCS=${RAG_BM25_MAX_DOCS:-50000}
+      # Cap for building the in-memory BM25 index. The guideline corpus is ~40k chunks;
+      # with >=14 GB Docker RAM there's headroom to build BM25 and run HYBRID retrieval
+      # (vector + BM25 fused via RRF). Lower this (e.g. 15000) on memory-constrained hosts
+      # to fall back to fast vector-only semantic search.
+      - RAG_BM25_MAX_DOCS=${RAG_BM25_MAX_DOCS:-60000}
+      # Cross-encoder re-ranking is accurate but CPU-expensive (~seconds/query). Off here
+      # for responsiveness; RRF-fused vector+BM25 still orders results well. Set true on a
+      # GPU host for max precision.
+      - RAG_ENABLE_RERANK=${RAG_ENABLE_RERANK:-false}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -428,6 +444,8 @@ services:
       - REACT_APP_EHR_API_URL=${REACT_APP_EHR_API_URL}
       - REACT_APP_TENANT_API_URL=${REACT_APP_TENANT_API_URL}
       - REACT_APP_CDSS_API_URL=${REACT_APP_CDSS_API_URL}
+      # Server-side only (proxy injects x-service-token to CDSS; never exposed to the browser)
+      - CDSS_SERVICE_TOKEN=${CDSS_SERVICE_TOKEN}
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=1000
       - FAST_REFRESH=true

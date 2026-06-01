@@ -302,10 +302,18 @@ def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
         # Folder-based domain is authoritative for the whole document
         folder_domain = _domain_from_path(pdf_path)
 
+        try:
+            from ai_models.chunk_quality import is_low_value_text, clean_chunk_text
+        except Exception:
+            from chunk_quality import is_low_value_text, clean_chunk_text
+
         processed_chunks = []
         for element in elements:
-            text = str(element).strip()
+            text = clean_chunk_text(str(element).strip())
             if len(text) < 50:
+                continue
+            # Skip non-clinical back-matter (reference lists, acknowledgments, TOC).
+            if is_low_value_text(text):
                 continue
 
             meta = element.metadata.to_dict() if hasattr(element.metadata, "to_dict") else {}

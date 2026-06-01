@@ -30,10 +30,20 @@ export default function LiteModeToggle() {
       {!isOnline && <span className="text-xs text-red-600 font-medium">OFFLINE</span>}
       <button
         onClick={toggleLiteMode}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${liteMode ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-gray-100 text-gray-600'}`}
+        aria-pressed={liteMode}
+        title={
+          liteMode
+            ? 'Lite Mode is ON — lighter pages and reduced data use for slow/low-bandwidth connections. Click to turn off.'
+            : 'Lite Mode — switch on for lighter pages and reduced data use on slow connections.'
+        }
+        className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-semibold border transition-colors ${
+          liteMode
+            ? 'bg-yellow-300 text-yellow-950 border-yellow-500'
+            : 'bg-white text-slate-800 border-slate-400 hover:bg-slate-50'
+        }`}
       >
-        {liteMode ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
-        {liteMode ? 'Lite Mode ON' : 'Lite Mode'}
+        {liteMode ? <WifiOff className="w-4 h-4" /> : <Wifi className="w-4 h-4" />}
+        <span className="whitespace-nowrap">{liteMode ? 'Lite Mode: On' : 'Lite Mode: Off'}</span>
       </button>
     </div>
   );

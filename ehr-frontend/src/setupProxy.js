@@ -79,6 +79,12 @@ module.exports = function setupProxy(app) {
     }),
   );
 
+  // CDSS enforces service-to-service auth. The browser can't hold the service
+  // secret, so the proxy (server-side) injects the static service token. CDSS runs
+  // SERVICE_AUTH_MODE=both, so x-service-token satisfies auth; X-Tenant-ID is sent
+  // by the client. The token stays server-side and is never exposed to the browser.
+  const cdssServiceToken = trim(process.env.CDSS_SERVICE_TOKEN);
+
   app.use(
     '/cdss-service',
     createProxyMiddleware({
@@ -88,6 +94,11 @@ module.exports = function setupProxy(app) {
       logLevel: 'silent',
       pathRewrite: {
         '^/cdss-service': '',
+      },
+      onProxyReq: (proxyReq) => {
+        if (cdssServiceToken) {
+          proxyReq.setHeader('x-service-token', cdssServiceToken);
+        }
       },
     }),
   );

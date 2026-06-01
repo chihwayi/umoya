@@ -204,13 +204,19 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', o
                               </span>
                             )}
                             {c.confidence != null && (
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-                                c.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
-                                c.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                'bg-red-50 text-red-700 border-red-100'
-                              }`}>
-                                {Math.round(c.confidence * 100)}%
-                              </span>
+                              c.confidence > 0 ? (
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+                                  c.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
+                                  c.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                                  'bg-orange-50 text-orange-700 border-orange-100'
+                                }`} title="Semantic match score">
+                                  {Math.round(c.confidence * 100)}% match
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-slate-50 text-slate-600 border-slate-200" title="Matched by keyword (BM25), not semantic similarity">
+                                  Keyword match
+                                </span>
+                              )
                             )}
                           </div>
                         </div>

@@ -6,6 +6,10 @@ import json
 from typing import List, Dict, Any, Optional
 import numpy as np
 from privacy_guard import redact_text
+try:
+    from ai_models.chunk_quality import is_low_value_text, clean_chunk_text
+except Exception:  # pragma: no cover - fallback when imported as a top-level module
+    from chunk_quality import is_low_value_text, clean_chunk_text
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -76,14 +80,20 @@ class RAGEngine:
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
             logger.info("SentenceTransformer (all-MiniLM-L6-v2) loaded.")
 
-            # Cross-Encoder for precise re-ranking
-            # Using a lightweight but effective model
-            try:
-                self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-                logger.info("CrossEncoder (ms-marco-MiniLM-L-6-v2) loaded for re-ranking.")
-            except Exception as e:
-                logger.warning(f"Failed to load CrossEncoder: {e}. Re-ranking will be disabled.")
+            # Cross-Encoder for precise re-ranking (a lightweight but effective model).
+            # Re-ranking is accurate but CPU-expensive (~seconds over the candidate set);
+            # disable on CPU-constrained hosts with RAG_ENABLE_RERANK=false to keep search
+            # responsive (RRF-fused vector+BM25 ordering is still strong without it).
+            if os.getenv("RAG_ENABLE_RERANK", "true").lower() != "true":
                 self.cross_encoder = None
+                logger.info("CrossEncoder re-ranking disabled via RAG_ENABLE_RERANK=false")
+            else:
+                try:
+                    self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+                    logger.info("CrossEncoder (ms-marco-MiniLM-L-6-v2) loaded for re-ranking.")
+                except Exception as e:
+                    logger.warning(f"Failed to load CrossEncoder: {e}. Re-ranking will be disabled.")
+                    self.cross_encoder = None
 
             # 3. Initialize NLP (scispaCy)
             # Fallback to standard en_core_web_sm if sci model missing
@@ -344,16 +354,21 @@ class RAGEngine:
                 meta = cand["metadata"]
                 source = meta.get('source', 'Unknown Source')
                 page = meta.get('page', '')
-                
+
+                # Drop non-clinical back-matter (reference lists, acknowledgments, TOC):
+                # these match keywords but carry no clinical guidance, so they're noise.
+                if is_low_value_text(cand["text"]):
+                    continue
+
                 # Page-level deduplication
                 page_key = f"{source}_{page}"
                 if page_key in seen_pages:
                     continue
                 seen_pages.add(page_key)
-                
+
                 candidates.append({
                     "source": f"{source}{f' (p.{page})' if page else ''}",
-                    "text": cand["text"],
+                    "text": clean_chunk_text(cand["text"]),
                     "confidence": round(cand["vector_confidence"], 2),
                     "url": meta.get('url', ''),
                     "metadata": meta,

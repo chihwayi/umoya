@@ -1752,6 +1752,32 @@ async def startup_event():
     except Exception as e:
         print(f"[CDSS] Auto-seed check failed: {e}")
 
+    # Warm the RAG engine (embedding model + BM25 index) in the background so the
+    # first guideline search isn't a cold multi-second build on the request path.
+    # Runs in a daemon thread (never blocks startup/health checks or the event loop)
+    # and is fully guarded so a failure falls back to lazy init instead of crashing.
+    # Disable on very memory-constrained hosts with CDSS_WARM_RAG_ON_STARTUP=false.
+    if os.getenv("CDSS_WARM_RAG_ON_STARTUP", "true").lower() == "true":
+        def _warm_rag_engine():
+            import time as _time
+            try:
+                _time.sleep(8)  # let boot + first health checks settle before the heavy load
+                print("[CDSS] Warming RAG engine (embedding model + BM25 index)...")
+                engine = _get_diagnostic_rag_engine()
+                if engine is None:
+                    print("[CDSS] RAG warm-up skipped (engine unavailable)")
+                    return
+                # Exercise the full retrieval path once so the encode + BM25 lookup are hot.
+                try:
+                    engine.query("clinical guideline", n_results=1)
+                except Exception as _qe:
+                    print(f"[CDSS] RAG warm-up query skipped: {_qe}")
+                print("[CDSS] RAG engine warmed — guideline search is ready")
+            except Exception as e:
+                print(f"[CDSS] RAG warm-up failed (will initialize lazily on first use): {e}")
+        import threading as _warm_threading
+        _warm_threading.Thread(target=_warm_rag_engine, daemon=True).start()
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -3740,19 +3766,28 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
             deduped.append(citation)
         citations = _filter_guideline_citations_by_population(deduped, request.patient_context)
             
-    # 2. Generate Patient-Specific Analysis (LLM) with caching
-    if diagnostic_assistant.llm_provider:
+    # 2. Generate an LLM synthesis with caching. Runs for both patient-specific and
+    # plain searches — a nurse needs an actionable summary, not just raw citations.
+    # Bounded by asyncio.wait_for(LLM_GUIDELINES_TIMEOUT_SECONDS) below; generate_response
+    # uses an async httpx client, so the timeout is effective and citations are always
+    # returned even if the LLM is slow/unavailable (analysis falls back to None).
+    if diagnostic_assistant.llm_provider and citations:
         try:
             # Construct context-aware prompt
-            context_str = ""
             if request.patient_context:
                 safe_patient_context = redact_value(request.patient_context)
                 context_str = "\n".join([f"{k}: {v}" for k, v in safe_patient_context.items()])
             else:
-                context_str = "No specific patient context provided. Answer generally."
+                context_str = "No specific patient provided. Give a concise, general clinical summary of the guidance for this query."
 
-            guidelines_str = "\n\n".join([f"Source: {c['source']}\n{c['text']}" for c in citations])
-            
+            # Build the synthesis context from the TOP citations only and cap each snippet.
+            # A focused prompt (vs. dumping all ~5 full chunks) lets the CPU/GPU LLM finish
+            # within budget while keeping the answer grounded in the most relevant guidance.
+            _top_for_synthesis = citations[:4]
+            guidelines_str = "\n\n".join(
+                [f"Source: {c['source']}\n{(c.get('text') or '')[:1200]}" for c in _top_for_synthesis]
+            )
+
             prompt = f"""
             You are a clinical decision support assistant. 
             Analyze the following patient case against the provided clinical guidelines.
@@ -3815,6 +3850,7 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
                             prompt,
                             use_case="guideline_analysis",
                             tenant_id=tenant_cache_key,
+                            max_tokens=int(os.getenv("LLM_GUIDELINES_MAX_TOKENS", "450")),
                         ),
                         timeout=_llm_wall_timeout,
                     )
