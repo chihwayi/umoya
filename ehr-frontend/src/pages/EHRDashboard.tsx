@@ -15,6 +15,7 @@ import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, tenantApi, cdssApi } from '../services/api';
 import LiteModeToggle from '../components/LiteModeToggle';
 import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
+import DashboardHero from '../components/DashboardHero';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -725,15 +726,13 @@ const EHRDashboard: React.FC = () => {
                 <Menu className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-white">
-                  Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}, {user.firstName}
-                </h1>
-                <p className="text-blue-100">
+                <h1 className="text-xl font-bold text-white">{tenantDisplayName}</h1>
+                <p className="text-blue-100 text-sm">
                   {user.role === 'admin'
-                    ? 'System operations and configuration'
+                    ? 'System operations'
                     : user.role === 'accounts'
-                    ? 'Monitor financial performance and keep revenue flowing'
-                    : 'Ready to provide excellent patient care?'}
+                    ? 'Revenue & finance'
+                    : 'Clinical workspace'}
                 </p>
               </div>
             </div>
@@ -775,6 +774,30 @@ const EHRDashboard: React.FC = () => {
         {/* Dashboard Content */}
         <main className="p-6">
           <TenantSubscriptionBanner tenantInfo={tenantInfo} />
+
+          <div className="mb-8">
+            <DashboardHero
+              name={user.firstName}
+              subtitle={
+                user.role === 'admin'
+                  ? 'System operations and configuration'
+                  : user.role === 'accounts'
+                  ? 'Monitor financial performance and keep revenue flowing'
+                  : 'Ready to provide excellent patient care?'
+              }
+              actions={
+                user.role !== 'admin' && user.role !== 'accounts' ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/ehr/${tenantSlug}/patients`)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
+                  >
+                    <Users className="h-4 w-4" /> Patients
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
 
           {/* Quick Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

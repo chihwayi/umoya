@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 
 import {
   TENANT_ENTITY_ALIGNMENT_BUNDLE_VERSION,
@@ -13754,8 +13755,10 @@ export class DatabaseProvisioningService {
 
     this.logger.log(`Seeding default demo users for tenant: ${s}`);
 
-    // Umoya1# — meets policy (uppercase, lowercase, digit, special char, 9 chars)
-    const demoPasswordHash = '$2b$10$WN4.1EiRgPP.oBR2hKOurulJvnlC6muYcBOtesTwgekWhqmacgUDy';
+    // Umoya1# — meets policy (uppercase, lowercase, digit, special char, 9 chars).
+    // Computed at runtime so the stored hash always matches the documented password
+    // (a previously hardcoded hash had drifted and rejected every demo login).
+    const demoPasswordHash = bcrypt.hashSync('Umoya1#', 10);
     await tenantDataSource.query(`
       INSERT INTO users (email, password_hash, first_name, last_name, role, license_number, specialization, phone, must_change_password)
       VALUES

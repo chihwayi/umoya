@@ -35,6 +35,7 @@ import HIVStockManagement from '../components/HIVStockManagement';
 import HivReportsPanel from '../components/HivReportsPanel';
 import MaternityDashboard from '../components/MaternityDashboard';
 import MentalHealthDashboard from '../components/MentalHealthDashboard';
+import PageHeader from '../components/PageHeader';
 import CervicalCancerDashboard from '../components/CervicalCancerDashboard';
 import FamilyPlanningDashboard from '../components/FamilyPlanningDashboard';
 import HypertensionDashboard from '../components/HypertensionDashboard';
@@ -241,6 +242,7 @@ const NurseDashboard: React.FC = () => {
   const [mhQuickScore, setMhQuickScore] = useState('');
   const [mhQuickResult, setMhQuickResult] = useState<any | null>(null);
   const [mhQuickSafetyPlan, setMhQuickSafetyPlan] = useState<any | null>(null);
+  const [showMhQuickModal, setShowMhQuickModal] = useState(false);
   const [showMentalHealthModal, setShowMentalHealthModal] = useState(false);
   const [mentalHealthInitialTab, setMentalHealthInitialTab] = useState<'overview' | 'screening' | 'mhgap' | 'careplans' | 'followups' | 'crisis' | 'safeplan' | 'meds'>('careplans');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals' | 'cervical-screening' | 'family-planning' | 'hypertension' | 'ncd-complications' | 'traditional-medicine' | 'scd' | 'epilepsy' | 'one-health' | 'nhif'>('dashboard');
@@ -967,14 +969,14 @@ const NurseDashboard: React.FC = () => {
   const getSidebarNavigation = () => {
     return [
       { 
-        icon: Stethoscope, 
-        label: 'Main Dashboard', 
-        desc: 'Core nursing tasks & patient queue', 
+        icon: Stethoscope,
+        label: 'Workspace',
+        desc: 'Core nursing tasks & patient queue',
         section: 'main' as const,
         tab: 'dashboard',
         color: 'from-emerald-500 to-teal-500',
         children: [
-          { label: 'Dashboard', tab: 'dashboard', icon: LayoutDashboard },
+          { label: 'Home', tab: 'dashboard', icon: LayoutDashboard },
           { label: 'My Tasks', tab: 'tasks', icon: Activity },
           { label: 'Cross-Module', tab: 'cross-module', icon: Sparkles },
           { label: 'Safety Alerts', tab: 'alerts', icon: Bell },
@@ -2897,55 +2899,56 @@ const NurseDashboard: React.FC = () => {
     );
   };
 
+  const deriveMhQuickRiskLevel = (tool: string, score: number): 'low' | 'moderate' | 'high' => {
+    if (tool === 'PHQ9') {
+      if (score >= 15) return 'high';
+      if (score >= 10) return 'moderate';
+    }
+    if (tool === 'GAD7') {
+      if (score >= 15) return 'high';
+      if (score >= 10) return 'moderate';
+    }
+    return 'low';
+  };
+
+  const runMhQuickInterpretation = async () => {
+    const numericScore = Number(mhQuickScore);
+    if (Number.isNaN(numericScore)) {
+      showError('Mental health', 'Enter a valid score before interpreting');
+      return;
+    }
+
+    try {
+      const result = await cdssApi.interpretMhScreening({
+        tool: mhQuickTool,
+        score: numericScore,
+        language_code: mhQuickLanguage,
+      });
+      setMhQuickResult(result);
+
+      const derivedRisk = deriveMhQuickRiskLevel(mhQuickTool, numericScore);
+      if (derivedRisk !== 'low') {
+        const safetyPlan = await cdssApi.getMhSafetyPlanTemplate({ risk_level: derivedRisk });
+        setMhQuickSafetyPlan(safetyPlan);
+      } else {
+        setMhQuickSafetyPlan(null);
+      }
+    } catch {
+      showError('Mental health', 'Failed to interpret the screening score');
+    }
+  };
+
+  const openMentalHealthWorkspace = (targetTab: 'careplans' | 'screening' | 'followups' | 'safeplan') => {
+    if (!selectedPatient) {
+      showError('Mental health', 'Select a patient from the queue first');
+      return;
+    }
+    setShowMhQuickModal(false);
+    setMentalHealthInitialTab(targetTab);
+    setShowMentalHealthModal(true);
+  };
+
   const renderDashboard = () => {
-    const deriveMhQuickRiskLevel = (tool: string, score: number): 'low' | 'moderate' | 'high' => {
-      if (tool === 'PHQ9') {
-        if (score >= 15) return 'high';
-        if (score >= 10) return 'moderate';
-      }
-      if (tool === 'GAD7') {
-        if (score >= 15) return 'high';
-        if (score >= 10) return 'moderate';
-      }
-      return 'low';
-    };
-
-    const runMhQuickInterpretation = async () => {
-      const numericScore = Number(mhQuickScore);
-      if (Number.isNaN(numericScore)) {
-        showError('Mental health', 'Enter a valid score before interpreting');
-        return;
-      }
-
-      try {
-        const result = await cdssApi.interpretMhScreening({
-          tool: mhQuickTool,
-          score: numericScore,
-          language_code: mhQuickLanguage,
-        });
-        setMhQuickResult(result);
-
-        const derivedRisk = deriveMhQuickRiskLevel(mhQuickTool, numericScore);
-        if (derivedRisk !== 'low') {
-          const safetyPlan = await cdssApi.getMhSafetyPlanTemplate({ risk_level: derivedRisk });
-          setMhQuickSafetyPlan(safetyPlan);
-        } else {
-          setMhQuickSafetyPlan(null);
-        }
-      } catch {
-        showError('Mental health', 'Failed to interpret the screening score');
-      }
-    };
-
-    const openMentalHealthWorkspace = (targetTab: 'careplans' | 'screening' | 'followups' | 'safeplan') => {
-      if (!selectedPatient) {
-        showError('Mental health', 'Select a patient from the queue first');
-        return;
-      }
-      setMentalHealthInitialTab(targetTab);
-      setShowMentalHealthModal(true);
-    };
-
     const getStatGradient = (label: string) => {
       switch (label) {
         case 'Patients Waiting': return 'from-blue-500 to-cyan-600';
@@ -2959,311 +2962,280 @@ const NurseDashboard: React.FC = () => {
       }
     };
 
+    const statTab: Record<string, typeof activeTab> = {
+      'Patients Waiting': 'queue',
+      'In Progress': 'queue',
+      'Vitals Recorded': 'queue',
+      'Urgent Cases': 'queue',
+      'Completed Today': 'queue',
+      'Awaiting Payment': 'queue',
+      'Cross-Module': 'cross-module',
+    };
+
+    const greeting = (() => {
+      const h = new Date().getHours();
+      if (h < 12) return 'Good morning';
+      if (h < 17) return 'Good afternoon';
+      return 'Good evening';
+    })();
+    const firstName = currentUser?.firstName || 'there';
+    const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+    const attentionCount =
+      (crossModuleSummary?.total ?? 0) +
+      (queueStats?.urgent ?? 0) +
+      (outcomeMaternity?.breached ?? 0) +
+      (postVisitTrialSlaAccountability?.summary?.breachedOpenEscalations ?? 0);
+
     return (
-      <div className="space-y-6 sm:space-y-8">
-        {/* Quick Stats - Compact Informational Section */}
-        <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-4 sm:p-6 shadow-md">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-slate-600" />
-            <h3 className="text-lg font-bold text-slate-900">Today's Statistics</h3>
-            <span className="text-xs text-slate-500 ml-auto">Real-time metrics</span>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-            {quickStats.map((stat, index) => (
-              <div 
-                key={index} 
-                className="relative overflow-hidden rounded-lg sm:rounded-xl shadow-sm hover:shadow-md transition-all duration-200 group"
-              >
-                {/* Gradient Background - Subtle */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${getStatGradient(stat.label)} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
-                
-                {/* Content - Compact */}
-                <div className="relative p-3 sm:p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    {/* Small Icon */}
-                    <div className={`p-1.5 sm:p-2 bg-gradient-to-br ${getStatGradient(stat.label)} rounded-md sm:rounded-lg`}>
-                      <stat.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
-                    </div>
-                    
-                    {/* Value - Compact */}
-                    <div className={`text-xl sm:text-2xl font-bold bg-gradient-to-br ${getStatGradient(stat.label)} bg-clip-text text-transparent`}>
-                      {stat.value}
-                    </div>
-                  </div>
-                  
-                  {/* Label - Small */}
-                  <div className="text-[10px] sm:text-xs font-medium text-slate-600 leading-tight">
-                    {stat.label}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/60 p-4 sm:p-6 shadow-md">
-          <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="space-y-6">
+        {/* Welcome hero */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 p-6 sm:p-8 text-white shadow-xl">
+          <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" />
+          <div className="absolute -bottom-16 -left-10 h-48 w-48 rounded-full bg-cyan-500/10 blur-3xl" />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h3 className="text-lg font-bold text-slate-900">AI/CDSS Outcome Snapshot</h3>
-              <p className="text-sm text-slate-600">
-                Live nurse queue execution and SLA outcomes for the last {outcomeWindowDays} days.
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-200/80">{todayLabel}</p>
+              <h2 className="mt-1 text-2xl font-bold sm:text-3xl">{greeting}, {firstName}</h2>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur-sm ring-1 ring-white/15">
+                {attentionCount > 0 ? (
+                  <>
+                    <AlertTriangle className="h-4 w-4 text-amber-300" />
+                    <span><span className="font-bold">{attentionCount}</span> item{attentionCount === 1 ? '' : 's'} need your attention</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-emerald-300" />
+                    <span>All clear — nothing flagged right now</span>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => {
-                  void Promise.all([
-                    loadNurseOutcomeAnalytics(30),
-                    loadPostVisitTrialAnalytics(30),
-                    loadPostVisitTrialSlaAccountability(30),
-                  ]);
+                  if (selectedPatient) { setActiveTab('triage'); }
+                  else { setActiveTab('queue'); showSuccess('Select Patient', 'Pick a patient from the queue to start triage.'); }
                 }}
-                className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 text-sm font-semibold"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
               >
-                <RefreshCw className={`w-4 h-4 ${nurseOutcomeAnalyticsLoading || postVisitTrialAnalyticsLoading || postVisitTrialSlaAccountabilityLoading ? 'animate-spin' : ''}`} />
-                Refresh
+                <ClipboardList className="h-4 w-4" /> Start triage
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  void exportPostVisitTrialAudit();
-                }}
-                disabled={postVisitTrialAuditExportLoading}
-                className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-2 text-sm font-semibold disabled:opacity-60"
+                onClick={() => setActiveTab('queue')}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20"
               >
-                <ArrowDown className={`w-4 h-4 ${postVisitTrialAuditExportLoading ? 'animate-bounce' : ''}`} />
-                {postVisitTrialAuditExportLoading ? 'Exporting…' : 'Export Trial Audit'}
+                <Users className="h-4 w-4" /> Patient queue
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('calendar')}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20"
+              >
+                <Calendar className="h-4 w-4" /> Schedule
               </button>
             </div>
           </div>
+        </div>
 
-          {nurseOutcomeAnalyticsLoading && !nurseOutcomeAnalytics && !postVisitTrialAnalytics && !postVisitTrialSlaAccountability ? (
-            <div className="py-8 flex items-center justify-center text-slate-600">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              Loading outcome metrics...
-            </div>
-          ) : nurseOutcomeAnalytics ? (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">Queue Completion</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {outcomeQueue?.completionRatePercent ?? 0}%
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">Active Queue</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {outcomeQueue?.activeItems ?? 0}
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">Pending &gt;24h</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {outcomeQueue?.pendingOlderThan24h ?? 0}
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">HIV Actions Executed</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {outcomeExecution?.executedActionsTotal ?? 0}
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">Reused/Idempotent</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {outcomeExecution?.reusedOrIdempotentTotal ?? 0}
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">Maternity SLA Breached</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {outcomeMaternity?.breached ?? 0}
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">Trial Enrolled</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {postVisitTrialAnalytics?.trialFunnel?.enrolled ?? 0}
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">Trial SLA Breached</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {postVisitTrialAnalytics?.trialDecisionSla?.breachedEscalations ?? 0}
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">Memory Active/Retired</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {(postVisitTrialAnalytics?.companionMemory?.active ?? 0)}/{(postVisitTrialAnalytics?.companionMemory?.retired ?? 0)}
-                  </p>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-slate-500">SLA Clinicians</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {postVisitTrialSlaAccountability?.summary?.cliniciansWithAssignments ?? 0}
-                  </p>
-                </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-amber-700">Trial Breached Open</p>
-                  <p className="text-xl font-bold text-amber-800">
-                    {postVisitTrialSlaAccountability?.summary?.breachedOpenEscalations ?? 0}
-                  </p>
-                </div>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-emerald-700">Trial SLA Compliance</p>
-                  <p className="text-xl font-bold text-emerald-800">
-                    {postVisitTrialSlaAccountability?.summary?.resolvedWithinSlaPercent ?? 0}%
-                  </p>
-                </div>
-              </div>
-
-              {Array.isArray(postVisitTrialSlaAccountability?.items) && (postVisitTrialSlaAccountability?.items?.length ?? 0) > 0 && (
-                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold text-slate-600 mb-2">Top Trial SLA Accountability</p>
-                  <div className="space-y-1">
-                    {(postVisitTrialSlaAccountability?.items ?? []).slice(0, 4).map((item, index) => {
-                      const clinicianName = [item.clinician?.firstName, item.clinician?.lastName].filter(Boolean).join(' ').trim();
-                      return (
-                        <p key={`${item.clinician?.id || 'clinician'}-${index}`} className="text-xs text-slate-700">
-                          {clinicianName || item.clinician?.id || 'Unassigned'}: open {item.openCount ?? 0} • breached {item.breachedOpenCount ?? 0} • SLA {item.resolvedWithinSlaPercent ?? 0}%
-                        </p>
-                      );
-                    })}
+        {/* KPI strip - clickable */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
+          {quickStats.map((stat, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => setActiveTab(statTab[stat.label] || 'queue')}
+              className="relative overflow-hidden rounded-xl shadow-sm hover:shadow-md transition-all duration-200 group text-left"
+            >
+              <div className={`absolute inset-0 bg-gradient-to-br ${getStatGradient(stat.label)} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
+              <div className="relative p-3 sm:p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`p-1.5 sm:p-2 bg-gradient-to-br ${getStatGradient(stat.label)} rounded-md sm:rounded-lg`}>
+                    <stat.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                  </div>
+                  <div className={`text-xl sm:text-2xl font-bold bg-gradient-to-br ${getStatGradient(stat.label)} bg-clip-text text-transparent`}>
+                    {stat.value}
                   </div>
                 </div>
-              )}
-
-              <div className="mt-3 text-xs text-slate-500">
-                Last generated:{' '}
-                {nurseOutcomeAnalytics.generatedAt
-                  ? formatDateTimeToDDMMYYYYHHMM(nurseOutcomeAnalytics.generatedAt)
-                  : 'n/a'}
+                <div className="text-[10px] sm:text-xs font-medium text-slate-600 leading-tight">
+                  {stat.label}
+                </div>
               </div>
-            </>
-          ) : (
-            <div className="py-8 text-sm text-slate-600">No outcome analytics available yet.</div>
-          )}
-        </div>
-
-        <NurseCrossModuleEscalations
-          items={crossModuleItems}
-          summary={crossModuleSummary}
-          loading={crossModuleLoading}
-          compact
-          acknowledgingTaskId={acknowledgingCrossModuleTaskId}
-          workflowActionItemId={updatingCrossModuleWorkflowItemId}
-          recommendationActionKey={executingRecommendationActionKey}
-          onRefresh={loadCrossModuleFeed}
-          onOpenWorkflow={handleOpenCrossModuleWorkflow}
-          onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
-          onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
-          onExecuteRecommendationAction={handleExecuteRecommendationAction}
-        />
-
-      <div className="rounded-2xl border border-slate-200/60 bg-white/70 p-4 shadow-md backdrop-blur-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <Brain className="h-5 w-5 text-violet-600" />
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Mental Health / mhGAP</h3>
-            <p className="text-sm text-slate-600">Quick screening interpretation, safety planning, and care-plan handoff.</p>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-4">
-          <select
-            value={mhQuickTool}
-            onChange={(event) => setMhQuickTool(event.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-          >
-            {mhQuickTools.map((tool) => (
-              <option key={tool.id} value={tool.id}>
-                {tool.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={mhQuickLanguage}
-            onChange={(event) => setMhQuickLanguage(event.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-          >
-            {(mhQuickTools.find((tool) => tool.id === mhQuickTool)?.languages || ['en']).map((languageCode) => (
-              <option key={languageCode} value={languageCode}>
-                {languageCode.toUpperCase()}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            value={mhQuickScore}
-            onChange={(event) => setMhQuickScore(event.target.value)}
-            placeholder="Enter total score"
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              void runMhQuickInterpretation();
-            }}
-            className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
-          >
-            Interpret score
-          </button>
-        </div>
-
-        {mhQuickResult && (
-          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-violet-900">{mhQuickResult.tool_name || mhQuickResult.tool}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-violet-700">
-                {mhQuickResult.severity}
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-violet-800">{mhQuickResult.action}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => openMentalHealthWorkspace('careplans')}
-                className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100"
-              >
-                Open care plan form
-              </button>
-              <button
-                type="button"
-                onClick={() => openMentalHealthWorkspace('screening')}
-                className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100"
-              >
-                Open screening workspace
-              </button>
-            </div>
-          </div>
-        )}
-
-        {mhQuickSafetyPlan && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
-            <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-red-600" />
-              <p className="text-sm font-semibold text-red-800">Safety plan template</p>
-            </div>
-            <p className="mt-2 text-sm text-red-700">{mhQuickSafetyPlan.emergency_action}</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-700">
-              {(mhQuickSafetyPlan.warning_signs || []).slice(0, 3).map((item: string) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              onClick={() => openMentalHealthWorkspace('safeplan')}
-              className="mt-3 rounded-lg bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
-            >
-              Open safety plan workspace
             </button>
+          ))}
+        </div>
+
+        {/* Priority lane + side rail */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* Needs your attention (main column) */}
+          <div className="xl:col-span-2 space-y-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <h3 className="text-lg font-bold text-slate-900">Needs Your Attention</h3>
+              {attentionCount > 0 && (
+                <span className="ml-auto rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">{attentionCount}</span>
+              )}
+            </div>
+
+            {(((outcomeMaternity?.breached ?? 0) > 0) || ((postVisitTrialSlaAccountability?.summary?.breachedOpenEscalations ?? 0) > 0) || ((outcomeQueue?.pendingOlderThan24h ?? 0) > 0)) && (
+              <div className="flex flex-wrap gap-2">
+                {(outcomeQueue?.pendingOlderThan24h ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 ring-1 ring-orange-200">
+                    <Clock className="h-3.5 w-3.5" /> {outcomeQueue?.pendingOlderThan24h} pending &gt;24h
+                  </span>
+                )}
+                {(outcomeMaternity?.breached ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 ring-1 ring-red-200">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {outcomeMaternity?.breached} maternity SLA breached
+                  </span>
+                )}
+                {(postVisitTrialSlaAccountability?.summary?.breachedOpenEscalations ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 ring-1 ring-red-200">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {postVisitTrialSlaAccountability?.summary?.breachedOpenEscalations} trial SLA breached
+                  </span>
+                )}
+              </div>
+            )}
+
+            <NurseCrossModuleEscalations
+              items={crossModuleItems}
+              summary={crossModuleSummary}
+              loading={crossModuleLoading}
+              compact
+              acknowledgingTaskId={acknowledgingCrossModuleTaskId}
+              workflowActionItemId={updatingCrossModuleWorkflowItemId}
+              recommendationActionKey={executingRecommendationActionKey}
+              onRefresh={loadCrossModuleFeed}
+              onOpenWorkflow={handleOpenCrossModuleWorkflow}
+              onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
+              onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
+              onExecuteRecommendationAction={handleExecuteRecommendationAction}
+            />
           </div>
-        )}
-      </div>
+
+          {/* Side rail */}
+          <div className="space-y-6">
+            {/* Care tools */}
+            <div className="rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-md backdrop-blur-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <Brain className="h-5 w-5 text-violet-600" />
+                <h3 className="text-base font-bold text-slate-900">Care Tools</h3>
+              </div>
+              <p className="text-sm text-slate-600">Quick clinical helpers without leaving the dashboard.</p>
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMhQuickModal(true)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-left transition hover:bg-violet-100"
+                >
+                  <span className="rounded-lg bg-violet-600 p-2"><Brain className="h-4 w-4 text-white" /></span>
+                  <span>
+                    <span className="block text-sm font-semibold text-violet-900">mhGAP quick screen</span>
+                    <span className="block text-xs text-violet-700">PHQ-9 / GAD-7 interpretation &amp; safety plan</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openMentalHealthWorkspace('careplans')}
+                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:bg-slate-50"
+                >
+                  <span className="rounded-lg bg-slate-700 p-2"><Heart className="h-4 w-4 text-white" /></span>
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">Mental health workspace</span>
+                    <span className="block text-xs text-slate-500">Care plans, follow-ups &amp; screening</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* AI / CDSS performance (condensed) */}
+            <div className="rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-md backdrop-blur-sm">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-indigo-600" />
+                  <h3 className="text-base font-bold text-slate-900">AI / CDSS Performance</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void Promise.all([
+                      loadNurseOutcomeAnalytics(30),
+                      loadPostVisitTrialAnalytics(30),
+                      loadPostVisitTrialSlaAccountability(30),
+                    ]);
+                  }}
+                  className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  title="Refresh metrics"
+                >
+                  <RefreshCw className={`h-4 w-4 ${nurseOutcomeAnalyticsLoading || postVisitTrialAnalyticsLoading || postVisitTrialSlaAccountabilityLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">Last {outcomeWindowDays} days</p>
+
+              {nurseOutcomeAnalyticsLoading && !nurseOutcomeAnalytics ? (
+                <div className="py-6 flex items-center justify-center text-slate-500 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
+                </div>
+              ) : nurseOutcomeAnalytics ? (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                      <p className="text-[11px] font-semibold text-slate-500">Queue Completion</p>
+                      <p className="text-lg font-bold text-slate-900">{outcomeQueue?.completionRatePercent ?? 0}%</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                      <p className="text-[11px] font-semibold text-slate-500">Active Queue</p>
+                      <p className="text-lg font-bold text-slate-900">{outcomeQueue?.activeItems ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                      <p className="text-[11px] font-semibold text-slate-500">HIV Actions</p>
+                      <p className="text-lg font-bold text-slate-900">{outcomeExecution?.executedActionsTotal ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                      <p className="text-[11px] font-semibold text-slate-500">Trial Enrolled</p>
+                      <p className="text-lg font-bold text-slate-900">{postVisitTrialAnalytics?.trialFunnel?.enrolled ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">
+                      <p className="text-[11px] font-semibold text-amber-700">Breached Open</p>
+                      <p className="text-lg font-bold text-amber-800">{postVisitTrialSlaAccountability?.summary?.breachedOpenEscalations ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3">
+                      <p className="text-[11px] font-semibold text-emerald-700">SLA Compliance</p>
+                      <p className="text-lg font-bold text-emerald-800">{postVisitTrialSlaAccountability?.summary?.resolvedWithinSlaPercent ?? 0}%</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('copilot-metrics')}
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                    >
+                      View full KPIs →
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void exportPostVisitTrialAudit(); }}
+                      disabled={postVisitTrialAuditExportLoading}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 disabled:opacity-60"
+                    >
+                      <ArrowDown className={`h-3.5 w-3.5 ${postVisitTrialAuditExportLoading ? 'animate-bounce' : ''}`} />
+                      {postVisitTrialAuditExportLoading ? 'Exporting…' : 'Export audit'}
+                    </button>
+                  </div>
+                  {nurseOutcomeAnalytics.generatedAt && (
+                    <p className="mt-2 text-[11px] text-slate-400">
+                      Updated {formatDateTimeToDDMMYYYYHHMM(nurseOutcomeAnalytics.generatedAt)}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="py-6 text-sm text-slate-500">No analytics yet.</div>
+              )}
+            </div>
+          </div>
+        </div>
 
       {/* Quick Actions - Prominent Clickable Cards */}
       <div>
@@ -4416,6 +4388,7 @@ const NurseDashboard: React.FC = () => {
         )}
         {activeTab === 'vitals' && (
           <div className="w-full overflow-x-auto space-y-4">
+            <PageHeader title="Vitals Recording" description="Record and review patient vitals with AI-assisted suggestions." icon={Heart} />
             <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
@@ -4463,6 +4436,7 @@ const NurseDashboard: React.FC = () => {
         )}
         {activeTab === 'triage' && (
           <div className="w-full overflow-x-auto space-y-4">
+            <PageHeader title="Triage Assessment" description="Structured patient assessment with decision support." icon={ClipboardList} />
             <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
@@ -5283,6 +5257,112 @@ const NurseDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showMhQuickModal && (
+        <ModalPortal>
+          <div className="mx-auto max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-200/50 bg-gradient-to-br from-white to-slate-50 p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Brain className="h-5 w-5 text-violet-600" />
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">mhGAP Quick Screen</h3>
+                  <p className="text-sm text-slate-600">Screening interpretation, safety planning, and care-plan handoff.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMhQuickModal(false)}
+                className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <select
+                value={mhQuickTool}
+                onChange={(event) => setMhQuickTool(event.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+              >
+                {mhQuickTools.map((tool) => (
+                  <option key={tool.id} value={tool.id}>{tool.name}</option>
+                ))}
+              </select>
+              <select
+                value={mhQuickLanguage}
+                onChange={(event) => setMhQuickLanguage(event.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+              >
+                {(mhQuickTools.find((tool) => tool.id === mhQuickTool)?.languages || ['en']).map((languageCode) => (
+                  <option key={languageCode} value={languageCode}>{languageCode.toUpperCase()}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                value={mhQuickScore}
+                onChange={(event) => setMhQuickScore(event.target.value)}
+                placeholder="Enter total score"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+              />
+              <button
+                type="button"
+                onClick={() => { void runMhQuickInterpretation(); }}
+                className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+              >
+                Interpret score
+              </button>
+            </div>
+
+            {mhQuickResult && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-violet-900">{mhQuickResult.tool_name || mhQuickResult.tool}</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-violet-700">{mhQuickResult.severity}</span>
+                </div>
+                <p className="mt-2 text-sm text-violet-800">{mhQuickResult.action}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openMentalHealthWorkspace('careplans')}
+                    className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100"
+                  >
+                    Open care plan form
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openMentalHealthWorkspace('screening')}
+                    className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100"
+                  >
+                    Open screening workspace
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {mhQuickSafetyPlan && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-red-600" />
+                  <p className="text-sm font-semibold text-red-800">Safety plan template</p>
+                </div>
+                <p className="mt-2 text-sm text-red-700">{mhQuickSafetyPlan.emergency_action}</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-700">
+                  {(mhQuickSafetyPlan.warning_signs || []).slice(0, 3).map((item: string) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => openMentalHealthWorkspace('safeplan')}
+                  className="mt-3 rounded-lg bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                >
+                  Open safety plan workspace
+                </button>
+              </div>
+            )}
+          </div>
+        </ModalPortal>
       )}
 
       {showMentalHealthModal && selectedPatient && (

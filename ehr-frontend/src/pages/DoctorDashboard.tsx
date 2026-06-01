@@ -62,6 +62,7 @@ import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import VoiceConsultationPanel from '../components/VoiceConsultation/VoiceConsultationPanel';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
+import DoctorSyncMetrics from '../components/DoctorSyncMetrics';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 import PreChartPanel from '../components/PreChartPanel';
 import AmbientBar from '../components/ambient/AmbientBar';
@@ -701,6 +702,7 @@ const DoctorDashboard: React.FC = () => {
   const [doctorOutcomeAnalytics, setDoctorOutcomeAnalytics] = useState<DoctorOutcomeAnalyticsSnapshot | null>(null);
   const [doctorSyncFocus, setDoctorSyncFocus] = useState<'all' | 'handoff' | 'critical_results' | 'triage' | 'orders' | 'coordination'>('all');
   const [doctorSyncIncludeAcknowledged, setDoctorSyncIncludeAcknowledged] = useState(false);
+  const [showDoctorMetrics, setShowDoctorMetrics] = useState(false);
   const routeNormalizedPath = useMemo(() => location.pathname.replace(/\/+$/, ''), [location.pathname]);
   const routeDoctorBasePath = useMemo(() => `/ehr/${tenantSlug}/doctor`, [tenantSlug]);
   const isDoctorDashboardShellRoute = routeNormalizedPath === routeDoctorBasePath;
@@ -2274,6 +2276,73 @@ const DoctorDashboard: React.FC = () => {
         <div className={`p-6 ${modalOpen ? 'pointer-events-none' : ''}`} aria-hidden={modalOpen}
         >
           {isDoctorDashboardRoute && (
+            <>
+            {/* Welcome hero */}
+            {(() => {
+              const h = new Date().getHours();
+              const greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+              const firstName = currentUser?.firstName || 'Doctor';
+              const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+              const attentionCount = (criticalAlertCount || 0) + (doctorSyncSummary?.pending || 0) + (doctorOutcomeAnalytics?.doctorQueue?.pendingOlderThan24h || 0);
+              return (
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 p-6 sm:p-8 text-white shadow-xl mb-6">
+                  <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" />
+                  <div className="absolute -bottom-16 -left-10 h-48 w-48 rounded-full bg-cyan-500/10 blur-3xl" />
+                  <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-200/80">{todayLabel}</p>
+                      <h2 className="mt-1 text-2xl font-bold sm:text-3xl">{greeting}, Dr {firstName}</h2>
+                      <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm backdrop-blur-sm ring-1 ring-white/15">
+                        {attentionCount > 0 ? (
+                          <>
+                            <AlertTriangle className="h-4 w-4 text-amber-300" />
+                            <span><span className="font-bold">{attentionCount}</span> item{attentionCount === 1 ? '' : 's'} need your attention</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-4 w-4 text-emerald-300" />
+                            <span>All clear — nothing flagged right now</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {criticalAlertCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('critical-alerts')}
+                          className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-red-600"
+                        >
+                          <AlertTriangle className="h-4 w-4" /> {criticalAlertCount} critical
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('queue')}
+                        className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
+                      >
+                        <Users className="h-4 w-4" /> Patient queue
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('schedule')}
+                        className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20"
+                      >
+                        <Calendar className="h-4 w-4" /> Schedule
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowInboxModal(true)}
+                        className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20"
+                      >
+                        <Mail className="h-4 w-4" /> Messages
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {quickStats.map((stat, index) => {
                 const Icon = stat.icon;
@@ -2285,7 +2354,12 @@ const DoctorDashboard: React.FC = () => {
                   ? 'bg-gradient-to-br from-emerald-50 via-white to-teal-100/70 border-emerald-200/70'
                   : 'bg-gradient-to-br from-violet-50 via-white to-indigo-100/70 border-violet-200/70';
                 return (
-                  <div key={index} className={`backdrop-blur-sm rounded-2xl border p-6 hover:shadow-lg transition-all duration-300 ${quickStatCardTone}`}>
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setActiveTab('queue')}
+                    className={`text-left backdrop-blur-sm rounded-2xl border p-6 hover:shadow-lg transition-all duration-300 ${quickStatCardTone}`}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-slate-600">{stat.label}</p>
@@ -2295,10 +2369,11 @@ const DoctorDashboard: React.FC = () => {
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
+            </>
           )}
 
           {isDoctorModulesRoute && (
@@ -2604,119 +2679,27 @@ const DoctorDashboard: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-3 mb-5">
-                  <div className="rounded-xl border border-blue-200/70 bg-gradient-to-br from-blue-50 via-white to-cyan-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Doctor Queue Total</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorOutcomeAnalytics?.doctorQueue?.totalItems ?? doctorSyncSummary.total}
-                    </p>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-semibold text-slate-700">Queue {doctorOutcomeAnalytics?.doctorQueue?.totalItems ?? doctorSyncSummary.total}</span>
+                    <span className="rounded-lg bg-amber-50 px-3 py-1.5 font-semibold text-amber-700">Pending {doctorSyncSummary.pending}</span>
+                    <span className="rounded-lg bg-rose-50 px-3 py-1.5 font-semibold text-rose-700">&gt;24h {doctorOutcomeAnalytics?.doctorQueue?.pendingOlderThan24h ?? 0}</span>
+                    <span className="rounded-lg bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700">CDSS {doctorOutcomeAnalytics?.cdssAdoption?.executionCoveragePercent ?? 0}%</span>
                   </div>
-                  <div className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-white to-orange-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Pending</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorSyncSummary.pending}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-white to-teal-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Acknowledged</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorSyncSummary.acknowledged}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-rose-200/70 bg-gradient-to-br from-rose-50 via-white to-red-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Pending &gt;24h</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorOutcomeAnalytics?.doctorQueue?.pendingOlderThan24h ?? 0}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-orange-200/70 bg-gradient-to-br from-orange-50 via-white to-amber-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Doctor Review Flags</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorSyncSummary.doctorReviewRecommended}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50 via-white to-blue-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Executed Recommendations</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorOutcomeAnalytics?.recommendationExecution?.executedActionsTotal ?? 0}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-violet-200/70 bg-gradient-to-br from-violet-50 via-white to-purple-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Reuse/Idempotent</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorOutcomeAnalytics?.recommendationExecution?.reusedOrIdempotentTotal ?? 0}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-cyan-200/70 bg-gradient-to-br from-cyan-50 via-white to-sky-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Accounts Sync Pending</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorOutcomeAnalytics?.accountsSync?.pendingItems ?? doctorSyncSummary.accounts}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-blue-200/70 bg-gradient-to-br from-blue-50 via-white to-indigo-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">CDSS Coverage</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorOutcomeAnalytics?.cdssAdoption?.executionCoveragePercent ?? 0}%
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-purple-200/70 bg-gradient-to-br from-purple-50 via-white to-fuchsia-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Avg Time To Action</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorOutcomeAnalytics?.cdssAdoption?.averageTimeToExecutionHours ?? 0}h
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-rose-200/70 bg-gradient-to-br from-rose-50 via-white to-pink-100/80 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500">Overrides Logged</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {doctorOutcomeAnalytics?.cdssAdoption?.overrideActionsTotal ?? 0}
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDoctorMetrics((v) => !v)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+                  >
+                    {showDoctorMetrics ? 'Hide metrics' : 'Show all metrics'}
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
-                  <div className="rounded-xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50 via-white to-blue-100/70 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500 mb-2">Specialty Queue Drilldown</p>
-                    <div className="space-y-2">
-                      {(doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).slice(0, 8).map((moduleRow) => (
-                        <div
-                          key={`doctor-module-${moduleRow.module}`}
-                          className="flex items-center justify-between rounded-lg border border-indigo-100/80 bg-white/70 px-3 py-2"
-                        >
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800 capitalize">{moduleRow.module}</p>
-                            <p className="text-xs text-slate-500">
-                              {moduleRow.pendingItems} pending • {moduleRow.acknowledgedItems} acknowledged • {moduleRow.completedItems} completed
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-slate-900">{moduleRow.totalItems}</p>
-                            <p className="text-xs text-slate-500">{moduleRow.executedActionsTotal} actions</p>
-                          </div>
-                        </div>
-                      ))}
-                      {(doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).length === 0 && (
-                        <p className="text-xs text-slate-500">No specialty drilldown data available for this window.</p>
-                      )}
-                    </div>
+                {showDoctorMetrics && (
+                  <div className="mb-5">
+                    <DoctorSyncMetrics analytics={doctorOutcomeAnalytics} summary={doctorSyncSummary} />
                   </div>
-                  <div className="rounded-xl border border-violet-200/70 bg-gradient-to-br from-violet-50 via-white to-purple-100/70 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-500 mb-2">Top Executed Doctor Actions</p>
-                    <div className="space-y-2">
-                      {(doctorOutcomeAnalytics?.recommendationExecution?.topActions || []).slice(0, 6).map((row) => (
-                        <div
-                          key={`doctor-action-${row.actionId}`}
-                          className="flex items-center justify-between rounded-lg border border-violet-100/80 bg-white/70 px-3 py-2"
-                        >
-                          <p className="text-sm text-slate-700">{row.actionId.replace(/-/g, ' ')}</p>
-                          <span className="text-sm font-bold text-slate-900">{row.count}</span>
-                        </div>
-                      ))}
-                      {(doctorOutcomeAnalytics?.recommendationExecution?.topActions || []).length === 0 && (
-                        <p className="text-xs text-slate-500">No executed doctor actions yet in this analytics window.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                )}
 
                 <NurseCrossModuleEscalations
                   items={doctorSyncItems}
