@@ -86,8 +86,8 @@ const CourseEditorPage: React.FC = () => {
     if (!courseId || !tenantSlug || !token) return;
     setPublishing(true);
     try {
-      const method = course?.published ? 'unpublishCourse' : 'publishCourse';
-      await healthEducationApi[method as keyof typeof healthEducationApi](courseId, token, tenantSlug);
+      const publish = course?.published ? healthEducationApi.unpublishCourse : healthEducationApi.publishCourse;
+      await publish(courseId, token, tenantSlug);
       showSuccess(
         'Course updated',
         `Course is now ${course?.published ? 'unpublished' : 'published'}.`

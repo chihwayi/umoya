@@ -55,11 +55,11 @@ export default function FollowUpRecommendationPanel({
     setLoading(true);
     setError(null);
     try {
-      const data = await api.post('/followup/recommend', {
+      const response = await api.post('/followup/recommend', {
         patientId, encounterId, encounterType, riskBand,
         diagnoses, openCareGapsCount, medicationsChanged,
       });
-      setRec(data);
+      setRec(response.data);
     } catch (e: any) {
       setError(e?.message ?? 'Failed to generate recommendation');
     } finally {

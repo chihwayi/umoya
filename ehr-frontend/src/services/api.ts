@@ -117,6 +117,35 @@ export const cdssAxios = createAxiosInstance(CDSS_API_URL);
 
 const getStoredAuthToken = (): string => localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
 
+/** Active tenant slug for X-Tenant-ID — from the /ehr/:slug route, else stored. */
+const getActiveTenantSlug = (): string => {
+  try {
+    const match = window.location.pathname.match(/\/ehr\/([^/]+)/);
+    if (match && match[1] && match[1] !== 'login') return match[1];
+  } catch {}
+  return localStorage.getItem('ehr_tenant_slug') || localStorage.getItem('ehr_tenant') || '';
+};
+
+/**
+ * Shared EHR API client for feature components/pages that call relative EHR routes
+ * (e.g. `api.get('/risk/...')`). Auto-attaches the bearer token and the X-Tenant-ID
+ * header (resolved from the active /ehr/:slug route or storage) so callers don't
+ * have to thread token/tenant through every request. Inherits the retry / offline /
+ * 401-auto-logout behaviour from createAxiosInstance.
+ */
+export const api = createAxiosInstance(EHR_API_URL);
+api.interceptors.request.use((config) => {
+  const token = getStoredAuthToken();
+  if (token && !(config.headers as any)['Authorization']) {
+    (config.headers as any)['Authorization'] = `Bearer ${token}`;
+  }
+  const slug = getActiveTenantSlug();
+  if (slug && !(config.headers as any)['X-Tenant-ID']) {
+    (config.headers as any)['X-Tenant-ID'] = slug;
+  }
+  return config;
+});
+
 export const tenantApi = {
   getActiveTenants: async () => {
     const response = await tenantAxios.get('/tenants/active');

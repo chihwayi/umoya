@@ -48,14 +48,14 @@ export default function DrugSubstitutionModal({
     setResult(null);
     setError(null);
     try {
-      const data = await api.post('/drug-substitution/suggest', {
+      const response = await api.post('/drug-substitution/suggest', {
         originalDrug: originalDrug.trim(),
         originalDose: originalDose.trim() || undefined,
         patientId,
         diagnoses,
         allergies,
       });
-      setResult(data);
+      setResult(response.data);
     } catch (e: any) {
       setError(e?.message ?? 'Failed to fetch suggestions');
     } finally {

@@ -34,6 +34,7 @@ interface User {
   email: string;
   role: string;
   specialization?: string;
+  is_health_educator?: boolean;
 }
 
 interface PostVisitTrialMemoryAnalyticsSnapshot {

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -63,11 +63,11 @@ export class TenantDatabaseService {
       const existing = await connection.query(existingQuery, [createUserDto.email]);
       
       if (existing.length > 0) {
-        throw new Error('User with this email already exists in this clinic');
+        throw new ConflictException('A user with this email already exists in this clinic');
       }
 
       if (!createUserDto.temporaryPassword) {
-        throw new Error('Temporary password is required when creating a clinic user');
+        throw new BadRequestException('A temporary password is required when creating a clinic user');
       }
 
       // Hash password supplied by admin/UI flow
