@@ -167,6 +167,37 @@ Deterministic patient-safety layer that overrides probabilistic AI output. Lives
 
 ---
 
+## Clinical LLM Backend
+
+Pluggable LLM provider in `services/ehr-service/src/services/clinical-llm.service.ts`, selected
+by `CLINICAL_LLM_BACKEND` = `ollama` | `aws_bedrock` | `anthropic` | `azure_openai` (env vars in
+`.env.example`). Default local dev = **Ollama** (`llama3.1:latest` on the host). HIPAA-eligible
+production = **AWS Bedrock** (Claude 3.5 Sonnet).
+
+**Bedrock auth is credential-free where possible** — use an EC2 instance role, or a `~/.aws`
+profile that assumes the scoped role; never hardcode `AWS_ACCESS_KEY_ID`/`SECRET` in code or
+`.env`. The IAM policy is least-privilege (Bedrock `InvokeModel` on the one model ARN only).
+
+Reference resources (account `505887203685`, `us-east-1`):
+
+| Resource | ARN / name |
+|---|---|
+| IAM role | `arn:aws:iam::505887203685:role/hipaa-ehr-bedrock-role` |
+| IAM policy | `hipaa-ehr-bedrock-policy` (Bedrock `InvokeModel` only) |
+| Model | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
+| KMS CMK | `arn:aws:kms:us-east-1:505887203685:key/2fbea39a-67ad-4f11-a459-e7707e33b34f` |
+
+**Production HIPAA controls still OPEN before go-live** (BAA, KMS-at-rest, TLS, least-privilege
+IAM, and role-based auth are already in place):
+
+- Disable root account access keys; enable MFA on root.
+- Enable CloudTrail audit logging.
+- Use VPC PrivateLink endpoints for Bedrock (set `BEDROCK_ENDPOINT_URL`).
+- Implement PHI de-identification in the prompt layer before sending to any external model.
+- Recreate the KMS CMK for production; rotate deploy credentials every 90 days.
+
+---
+
 ## Patient Portal Rules
 
 - All protected routes require `PatientJwtAuthGuard`.

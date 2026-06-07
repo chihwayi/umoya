@@ -423,3 +423,5 @@ npm run report:soc2-hipaa
 | [docs/UMOYA_BRAND.md](./docs/UMOYA_BRAND.md) | Brand and design guidelines |
 | [DEMO_CREDENTIALS.md](./DEMO_CREDENTIALS.md) | Demo accounts provisioned per tenant |
 | [.env.example](./.env.example) | All required environment variables |
+
+**Clinical LLM backend:** configurable via `CLINICAL_LLM_BACKEND` (`ollama` | `aws_bedrock` | `anthropic` | `azure_openai`). Local dev defaults to Ollama (`llama3.1`); HIPAA-eligible production uses AWS Bedrock (Claude 3.5 Sonnet) with role/profile auth — no hardcoded keys. See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md#clinical-llm-backend) and `.env.example`.

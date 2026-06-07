@@ -147,9 +147,5 @@ services/cdss-service/data/ingest_metadata_report.json
 # Playwright / local test output
 test-results/
 
-mobile-must-have
 feedback
 amazon
-hipaa-bedrock-setup.md
-must-have
-name-change-suggestion
