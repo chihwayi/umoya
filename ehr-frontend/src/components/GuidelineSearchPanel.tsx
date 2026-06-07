@@ -12,7 +12,7 @@ import { useNotification } from './GlobalNotification';
 
 interface GuidelineSearchPanelProps {
   /** Async function that executes the actual search — caller curries token/tenant/context */
-  searchFn: (query: string) => Promise<{ data?: { citations?: any[] }; citations?: any[] }>;
+  searchFn: (query: string) => Promise<{ data?: { citations?: any[]; analysis?: string }; citations?: any[]; analysis?: string }>;
   /** Short label prefix shown in the dock, e.g. "Cardiac notes" */
   contextLabel?: string;
   className?: string;
@@ -60,6 +60,7 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', o
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Citation[]>([]);
+  const [analysis, setAnalysis] = useState<string>('');
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,14 +79,17 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', o
     const taskId = registerTask(label, 'guidelines');
     setRunningTaskId(taskId);
     setResults([]);
+    setAnalysis('');
     setCollapsed(true); // auto-minimize — user can continue working
     onMinimize?.(); // close parent modal overlay if provided
 
     try {
       const response = await searchFn(q);
       const citations: Citation[] = response?.data?.citations ?? response?.citations ?? [];
+      const synthesis: string = response?.data?.analysis ?? response?.analysis ?? '';
       completeTask(taskId, { data: { citations } });
       setResults(citations);
+      setAnalysis(synthesis);
       setCollapsed(false); // re-expand to show results
 
       showInfo(
@@ -173,6 +177,20 @@ export function GuidelineSearchPanel({ searchFn, contextLabel, className = '', o
               >
                 Minimize
               </button>
+            </div>
+          )}
+
+          {/* AI synthesis (grounded summary over the citations) */}
+          {analysis && (
+            <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50/60 p-3">
+              <div className="mb-1 flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span className="text-xs font-semibold text-indigo-800">AI summary</span>
+                <span className="text-[10px] text-indigo-500">grounded in the sources below — verify before acting</span>
+              </div>
+              <p className="whitespace-pre-line text-xs leading-relaxed text-slate-700">{analysis}</p>
             </div>
           )}
 

@@ -175,7 +175,7 @@ To run locally with the Docker stack up:
 
 ```bash
 cd services/tenant-service
-SMOKE_DB_PASSWORD=dev_password SMOKE_DB_NAME=medicore npm run test:smoke
+SMOKE_DB_PASSWORD=dev_password SMOKE_DB_NAME=umoya npm run test:smoke
 ```
 
 ---

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class RAGEngine:
     """
-    Retrieval-Augmented Generation Engine for MediCore.
+    Retrieval-Augmented Generation Engine for Umoya.
     Handles Knowledge Base (Vector DB) interactions and Entity Extraction.
     """
     

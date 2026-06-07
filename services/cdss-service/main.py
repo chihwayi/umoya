@@ -1,5 +1,5 @@
 """
-MediCore Clinical Decision Support System (CDSS) Service
+Umoya Clinical Decision Support System (CDSS) Service
 Python FastAPI microservice for advanced clinical reasoning
 """
 from fastapi import FastAPI, HTTPException, Depends, Header, Form, Request, Response, BackgroundTasks
@@ -115,7 +115,7 @@ def _feedback_pg_dsn() -> str:
     port = os.getenv("PORT_POSTGRES", "5432")
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "postgres")
-    db = os.getenv("POSTGRES_DB", "medicore")
+    db = os.getenv("POSTGRES_DB", "umoya")
     return f"postgresql://{user}:{password}@{host}:{port}/{db}"
 
 
@@ -163,7 +163,7 @@ def _master_pg_conn_sync():
     port = int(os.getenv("DB_PORT") or os.getenv("PORT_POSTGRES", "5432"))
     user = os.getenv("DB_USERNAME") or os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD", "postgres")
-    dbname = os.getenv("MASTER_POSTGRES_DB") or os.getenv("POSTGRES_DB", "medicore")
+    dbname = os.getenv("MASTER_POSTGRES_DB") or os.getenv("POSTGRES_DB", "umoya")
 
     return psycopg2.connect(
         host=host,
@@ -207,7 +207,7 @@ def _resolve_tenant_database_name(tenant_key: Optional[str]) -> Optional[str]:
 
 def _feedback_store_path() -> pathlib.Path:
     configured = str(os.getenv("CDSS_FEEDBACK_DB_PATH", "")).strip()
-    path = pathlib.Path(configured).expanduser() if configured else pathlib.Path(tempfile.gettempdir()) / "medicore_cdss_feedback.sqlite3"
+    path = pathlib.Path(configured).expanduser() if configured else pathlib.Path(tempfile.gettempdir()) / "umoya_cdss_feedback.sqlite3"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -518,7 +518,7 @@ def _resolve_cors_origins(env: Optional[str] = None, raw_origins: Optional[str] 
 
 
 app = FastAPI(
-    title="MediCore CDSS Service",
+    title="Umoya CDSS Service",
     description="Clinical Decision Support System API",
     version="1.0.0"
 )
@@ -596,7 +596,7 @@ def _validate_security_config() -> None:
     jwt_secret = os.getenv("JWT_SECRET", "").strip()
     insecure_jwt_defaults = {
         "dev_secret_key_change_in_production",
-        "medicore-super-secret-key",
+        "umoya-super-secret-key",
         "ehr-super-secret-key",
     }
     if not jwt_secret:
@@ -646,8 +646,8 @@ SERVICE_AUTH_REQUIRED = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false
 SERVICE_AUTH_MODE = os.getenv("CDSS_SERVICE_AUTH_MODE", "both").strip().lower() or "both"
 SERVICE_AUTH_TOKEN = os.getenv("CDSS_SERVICE_TOKEN", "")
 SERVICE_AUTH_JWT_SECRET = os.getenv("CDSS_SERVICE_JWT_SECRET", "").strip()
-SERVICE_AUTH_ISSUER = os.getenv("CDSS_SERVICE_AUTH_ISSUER", "medicore.ehr-service").strip() or "medicore.ehr-service"
-SERVICE_AUTH_AUDIENCE = os.getenv("CDSS_SERVICE_AUTH_AUDIENCE", "medicore.cdss").strip() or "medicore.cdss"
+SERVICE_AUTH_ISSUER = os.getenv("CDSS_SERVICE_AUTH_ISSUER", "umoya.ehr-service").strip() or "umoya.ehr-service"
+SERVICE_AUTH_AUDIENCE = os.getenv("CDSS_SERVICE_AUTH_AUDIENCE", "umoya.cdss").strip() or "umoya.cdss"
 ADMIN_JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
 _SEC_ENV = os.getenv("ENVIRONMENT", "development").strip().lower()
 OWNER_SCOPE_STRICT = _get_bool_env_strict(
@@ -1227,7 +1227,7 @@ def _scan_upload_or_cleanup(file_path: str, file_label: str) -> None:
 
 
 def _tenant_temp_dir(tenant_key: str) -> str:
-    root = os.getenv("CDSS_TMP_ROOT", "/tmp/medicore-cdss")
+    root = os.getenv("CDSS_TMP_ROOT", "/tmp/umoya-cdss")
     path = os.path.join(root, tenant_key)
     os.makedirs(path, mode=0o700, exist_ok=True)
     return path
@@ -1609,7 +1609,7 @@ class FilariasisSafetyResponse(BaseModel):
 @app.get("/")
 async def root():
     return {
-        "service": "MediCore CDSS",
+        "service": "Umoya CDSS",
         "status": "healthy",
         "version": "1.0.0"
     }
@@ -1696,9 +1696,9 @@ if not MINIO_ENDPOINT:
     # In docker, it might be 'http://minio:9000', locally 'http://localhost:9000'
     # We'll leave it empty to force configuration or handle it downstream
 
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "medicore")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "medicore_password")
-MINIO_BUCKET = os.getenv("MINIO_BUCKET", "medicore-documents")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "umoya")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "umoya_password")
+MINIO_BUCKET = os.getenv("MINIO_BUCKET", "umoya-documents")
 
 # Initialize S3 Client
 s3_client = boto3.client(
@@ -3783,9 +3783,9 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
             # Build the synthesis context from the TOP citations only and cap each snippet.
             # A focused prompt (vs. dumping all ~5 full chunks) lets the CPU/GPU LLM finish
             # within budget while keeping the answer grounded in the most relevant guidance.
-            _top_for_synthesis = citations[:4]
+            _top_for_synthesis = citations[:3]
             guidelines_str = "\n\n".join(
-                [f"Source: {c['source']}\n{(c.get('text') or '')[:1200]}" for c in _top_for_synthesis]
+                [f"Source: {c['source']}\n{(c.get('text') or '')[:1000]}" for c in _top_for_synthesis]
             )
 
             prompt = f"""
@@ -4157,7 +4157,17 @@ async def calculate_risk_score(request: RiskScoreRequest, req: Request):
     print(f"[CDSS] Final response_data keys: {list(response_data.keys())}")
     print(f"[CDSS] response_data has trends: {'trends' in response_data}")
     print(f"[CDSS] response_data has visit_patterns: {'visit_patterns' in response_data}")
-    
+
+    # ── Phase-0 patient-safety governor ───────────────────────────────────────────
+    # Refuse to surface low-risk / discharge-oriented output while the patient is
+    # acutely deteriorating, and attach the synthesised sepsis/DKA/pain/multi-system
+    # signals. Deterministic clinical rules override the AI/readmission score.
+    try:
+        from clinical_safety import apply_safety_governor
+        response_data = apply_safety_governor(response_data, request.vitals or {})
+    except Exception as _gov_err:  # never let the governor break the endpoint
+        print(f"[CDSS] safety governor skipped: {_gov_err}")
+
     # Return as dict to include trend data (will be validated separately)
     return response_data
 
@@ -12234,7 +12244,7 @@ def radiology_analyze(req: RadiologyAnalyzeReq):
         "top_finding": finding["label"],
         "confidence": finding["confidence"],
         "heatmap_key": f"{req.storageKey}.heatmap.png" if finding["severity"] not in ("normal",) else None,
-        "model_version": f"medicore-{modality_key.lower()}-v1.0",
+        "model_version": f"umoya-{modality_key.lower()}-v1.0",
         "modality": req.modality,
     }
 
@@ -12319,8 +12329,8 @@ def symptom_check(req: SymptomCheckReq):
         "abstain_reason": None,
         "model": "symptom_check_rules_v1",
         "evidence": [
-            {"source": "medicore_symptom_checker_policy_v1", "section": "differentials", "strength": "governed_rule"},
-            {"source": "medicore_symptom_checker_policy_v1", "section": "triage", "strength": "governed_rule"},
+            {"source": "umoya_symptom_checker_policy_v1", "section": "differentials", "strength": "governed_rule"},
+            {"source": "umoya_symptom_checker_policy_v1", "section": "triage", "strength": "governed_rule"},
         ],
         "governance": {
             "governed_path": True,
@@ -12548,8 +12558,8 @@ async def patient_adherence_chat(req: PatientAdherenceChatReq, http_req: Request
         "reasoning": classification["reasoning"],
         "model": model_name,
         "evidence": [
-            {"source": "medicore_patient_adherence_policy_v1", "section": "triage", "strength": "governed_rule"},
-            {"source": "medicore_patient_adherence_policy_v1", "section": "patient_messaging", "strength": "governed_rule"},
+            {"source": "umoya_patient_adherence_policy_v1", "section": "triage", "strength": "governed_rule"},
+            {"source": "umoya_patient_adherence_policy_v1", "section": "patient_messaging", "strength": "governed_rule"},
         ],
         "governance": {
             "governed_path": True,
@@ -12971,7 +12981,7 @@ def _pg_conn_sync(tenant_id: Optional[str] = None):
         port=int(os.getenv("PORT_POSTGRES", 5432)),
         user=os.getenv("POSTGRES_USER", "postgres"),
         password=os.getenv("POSTGRES_PASSWORD", "postgres"),
-        dbname=tenant_db_name or os.getenv("POSTGRES_DB", "medicore"),
+        dbname=tenant_db_name or os.getenv("POSTGRES_DB", "umoya"),
     )
 
 def _register_pgvector(conn):
@@ -13800,7 +13810,7 @@ def _run_retraining_job(surface: str, entries: list):
     """
     import pathlib
     print(f"[retraining] {surface}: processing {len(entries)} feedback entries")
-    log_path = pathlib.Path(f"/tmp/medicore_retrain_{surface}.jsonl")
+    log_path = pathlib.Path(f"/tmp/umoya_retrain_{surface}.jsonl")
     try:
         with log_path.open("a") as f:
             for entry in entries:
@@ -15415,7 +15425,7 @@ async def proactive_patient_analysis(payload: PatientSummaryPayload):
         guideline_citations=citations,
         news2_score=news2,
         qsofa_score=qsofa,
-        model_version="medicore-proactive-v1.0",
+        model_version="umoya-proactive-v1.0",
         processing_time_ms=(end_ms - start_ms)
     )
 

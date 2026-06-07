@@ -72,6 +72,12 @@ function dedupeDrafts(items: RealTimeAlertEngineDraft[]): RealTimeAlertEngineDra
   });
 }
 
+function normalizeGlucoseToMmol(value: number): number {
+  // Older patient-facing flows store glucose in mg/dL, while clinical vitals entry uses mmol/L.
+  // Values above 60 are physiologically implausible in mmol/L, so treat them as mg/dL.
+  return value > 60 ? Number((value / 18).toFixed(1)) : value;
+}
+
 /**
  * Detect intra-visit safety alert drafts from a transcript chunk (allergy, medication reaction,
  * dose/vitals, cardiorespiratory, behavioral). Designed for low-latency use on local stack.
@@ -367,7 +373,10 @@ function fuseMultiSignalAlerts(drafts: RealTimeAlertEngineDraft[]): RealTimeAler
 export function analyseVitals(vitals: VitalsInput): RealTimeAlertEngineDraft[] {
   const drafts: RealTimeAlertEngineDraft[] = [];
 
-  const { temperature, heartRate, respiratoryRate, systolicBp, diastolicBp, spo2, gcs, bloodGlucose, lactate, news2Score } = vitals;
+  const { temperature, heartRate, respiratoryRate, systolicBp, diastolicBp, spo2, gcs, lactate, news2Score } = vitals;
+  const bloodGlucose = vitals.bloodGlucose !== undefined && Number.isFinite(vitals.bloodGlucose)
+    ? normalizeGlucoseToMmol(vitals.bloodGlucose)
+    : undefined;
 
   // Temperature
   if (temperature !== undefined && Number.isFinite(temperature)) {

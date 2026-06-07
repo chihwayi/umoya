@@ -12,7 +12,7 @@ import tempfile
 import os
 import uvicorn
 
-app = FastAPI(title="MediCore Voice Scribe API")
+app = FastAPI(title="Umoya Voice Scribe API")
 
 PORT = int(os.getenv("PORT", 8000))
 

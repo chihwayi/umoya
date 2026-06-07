@@ -32,9 +32,9 @@ class SettingsProvider:
 
         host = os.getenv("DB_HOST", "postgres-master")
         port = int(os.getenv("DB_PORT", "5432"))
-        user = os.getenv("DB_USERNAME", "medicore")
-        password = os.getenv("DB_PASSWORD", "medicore_password")
-        database = os.getenv("POSTGRES_DB", "medicore")
+        user = os.getenv("DB_USERNAME", "umoya")
+        password = os.getenv("DB_PASSWORD", "umoya_password")
+        database = os.getenv("POSTGRES_DB", "umoya")
 
         self.conn = psycopg2.connect(
             host=host, port=port, user=user, password=password, dbname=database

@@ -74,7 +74,7 @@ def test_generate_response_allows_registered_policy(monkeypatch):
         use_case_policy={
             "enabled": True,
             "vendor_id": "ollama",
-            "allowed_model_names": ["medicore-llm"],
+            "allowed_model_names": ["umoya-llm"],
             "require_tenant_context": True,
         },
         vendor={
@@ -86,7 +86,7 @@ def test_generate_response_allows_registered_policy(monkeypatch):
     )
     provider = llm_provider_module.LLMProvider(settings_provider=fake_settings)
     provider.base_url = "http://llm.local"
-    provider.model_name = "medicore-llm"
+    provider.model_name = "umoya-llm"
     provider.enabled = True
 
     async def _always_available():

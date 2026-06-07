@@ -91,7 +91,7 @@ services:
       - /app/services/tenant-service/node_modules
       - /var/run/docker.sock:/var/run/docker.sock
       - ~/.aws:/root/.aws:ro
-    command: sh -lc "npm run build && npm start"
+    command: sh -lc "npm install --no-audit --no-fund && npm run build && npm start"
     healthcheck:
       test:
         [

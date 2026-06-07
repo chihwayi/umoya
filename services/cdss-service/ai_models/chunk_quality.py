@@ -24,6 +24,15 @@ _ACK_RE = re.compile(
 )
 _ORG_RE = re.compile(r'\b(?:Society|Association|Federation|College of|Institute|Academy)\b')
 
+# Navigation / table-of-contents / "related articles" chrome that matches keywords but
+# carries no guidance (e.g. journal article outlines and "Most Popular" sidebars).
+_NAV_RE = re.compile(
+    r'(?:Most Popular|Previous Article|Next Article|Table of Contents|Article Outline|'
+    r'View (?:Full|All) Text|Download PDF)',
+    re.IGNORECASE,
+)
+_BULLET_RE = re.compile(r'[◦▪‣·•]')
+
 
 def is_low_value_text(text: str) -> bool:
     """True for reference lists, bibliographies, acknowledgments, society/TOC pages."""
@@ -52,6 +61,17 @@ def is_low_value_text(text: str) -> bool:
 
     # Dense numbered-citation block (e.g. "29. Author ... 2024 30. Author ... 2015").
     if len(_NUMBERED_ENTRY_RE.findall(t)) >= 4 and len(_YEAR_RE.findall(t)) >= 4:
+        return True
+
+    # Navigation / "Most Popular" / related-article chrome.
+    if _NAV_RE.search(t):
+        return True
+
+    # Table-of-contents / article outline: many bullet markers with little prose.
+    # Real clinical text has sentences; a TOC is a bulleted list of section headings.
+    bullets = len(_BULLET_RE.findall(t))
+    sentences = t.count('. ')
+    if bullets >= 6 and sentences <= 2:
         return True
 
     return False

@@ -1328,6 +1328,7 @@ export class CdssService {
     const results = {
       query,
       citations: [],
+      analysis: null as string | null,
       count: 0,
       error: null,
       governed_corpus_used: false,
@@ -1377,6 +1378,9 @@ export class CdssService {
           },
           governance: responseData?.governance || {},
         });
+        if (responseData && typeof responseData.analysis === 'string' && responseData.analysis.trim()) {
+          results.analysis = responseData.analysis;
+        }
         if (responseData && responseData.citations) {
           results.citations.push(...responseData.citations.map((c: any) => ({
             ...c,
@@ -3708,6 +3712,15 @@ export class CdssService {
 
   private normalizeVitalsForSafety(vitalsRaw: any) {
     const vitals = vitalsRaw || {};
+    const readNumber = (...keys: string[]): number | null => {
+      for (const key of keys) {
+        if (vitals[key] !== undefined && vitals[key] !== null && vitals[key] !== '') {
+          const value = Number(vitals[key]);
+          if (Number.isFinite(value)) return value;
+        }
+      }
+      return null;
+    };
     let systolic: number | null = null;
     let diastolic: number | null = null;
     if (typeof vitals.bloodPressure === 'string' && vitals.bloodPressure.includes('/')) {
@@ -3715,17 +3728,17 @@ export class CdssService {
       systolic = Number.isFinite(sys) ? sys : null;
       diastolic = Number.isFinite(dia) ? dia : null;
     }
-    if (vitals.systolic && Number.isFinite(Number(vitals.systolic))) {
-      systolic = Number(vitals.systolic);
-    }
-    if (vitals.diastolic && Number.isFinite(Number(vitals.diastolic))) {
-      diastolic = Number(vitals.diastolic);
-    }
+    systolic = readNumber('bloodPressureSystolic', 'systolicBp', 'systolic_bp', 'systolic') ?? systolic;
+    diastolic = readNumber('bloodPressureDiastolic', 'diastolicBp', 'diastolic_bp', 'diastolic') ?? diastolic;
 
-    const heartRate = Number.isFinite(Number(vitals.heartRate)) ? Number(vitals.heartRate) : null;
-    const temperature = Number.isFinite(Number(vitals.temperature)) ? Number(vitals.temperature) : null;
-    const oxygenSaturation = Number.isFinite(Number(vitals.oxygenSaturation)) ? Number(vitals.oxygenSaturation) : null;
-    const respiratoryRate = Number.isFinite(Number(vitals.respiratoryRate)) ? Number(vitals.respiratoryRate) : null;
+    const heartRate = readNumber('heartRate', 'heart_rate');
+    const temperature = readNumber('temperature');
+    const oxygenSaturation = readNumber('oxygenSaturation', 'oxygen_saturation', 'spo2');
+    const respiratoryRate = readNumber('respiratoryRate', 'respiratory_rate');
+    const painLevel = readNumber('painLevel', 'pain_level', 'painScore', 'pain_score');
+    const rawGlucose = readNumber('bloodGlucose', 'blood_glucose', 'glucose');
+    const bloodGlucoseMmol = rawGlucose !== null && rawGlucose > 60 ? Number((rawGlucose / 18).toFixed(1)) : rawGlucose;
+    const news2Score = readNumber('news2Score', 'newsScore', 'news2_score', 'news_score');
 
     return {
       systolic,
@@ -3734,11 +3747,14 @@ export class CdssService {
       temperature,
       oxygenSaturation,
       respiratoryRate,
+      painLevel,
+      bloodGlucoseMmol,
+      news2Score,
     };
   }
 
   private applyVitalsSafetyOverrides(
-    baseRisk: { risk_level?: string; recommendations?: string[]; factors?: any[]; model?: string } | null,
+    baseRisk: { risk_level?: string; recommendations?: string[]; factors?: any[]; model?: string; overall_score?: number } | null,
     vitalsRaw: any,
   ) {
     const vitals = this.normalizeVitalsForSafety(vitalsRaw);
@@ -3746,13 +3762,30 @@ export class CdssService {
 
     const highFever = vitals.temperature !== null && vitals.temperature >= 39;
     const severeFever = vitals.temperature !== null && vitals.temperature >= 40;
-    const tachycardia = vitals.heartRate !== null && vitals.heartRate >= 130;
+    const tachycardia = vitals.heartRate !== null && vitals.heartRate >= 120;
+    const severeTachycardia = vitals.heartRate !== null && vitals.heartRate >= 140;
+    const tachypnea = vitals.respiratoryRate !== null && vitals.respiratoryRate >= 25;
+    const severeTachypnea = vitals.respiratoryRate !== null && vitals.respiratoryRate >= 30;
     const hypotension =
       (vitals.systolic !== null && vitals.systolic < 90) ||
       (vitals.diastolic !== null && vitals.diastolic < 60);
+    const hypertensiveCrisis =
+      (vitals.systolic !== null && vitals.systolic >= 180) ||
+      (vitals.diastolic !== null && vitals.diastolic >= 120);
+    const severeDiastolicHypertension = vitals.diastolic !== null && vitals.diastolic >= 110;
     const veryLowSpO2 =
       vitals.oxygenSaturation !== null && vitals.oxygenSaturation > 0 && vitals.oxygenSaturation < 90;
+    const severePain = vitals.painLevel !== null && vitals.painLevel >= 8;
+    const hyperglycemia = vitals.bloodGlucoseMmol !== null && vitals.bloodGlucoseMmol >= 20;
+    const severeHyperglycemia = vitals.bloodGlucoseMmol !== null && vitals.bloodGlucoseMmol >= 25;
+    const highNews2 = vitals.news2Score !== null && vitals.news2Score >= 7;
+    const mediumNews2 = vitals.news2Score !== null && vitals.news2Score >= 5;
 
+    if (highNews2) {
+      factors.push(`NEWS2 ${vitals.news2Score} indicates high acute deterioration risk`);
+    } else if (mediumNews2) {
+      factors.push(`NEWS2 ${vitals.news2Score} indicates increased acute deterioration risk`);
+    }
     if (severeFever) {
       factors.push(`High fever ${vitals.temperature?.toFixed(1)}°C above safety threshold`);
     } else if (highFever) {
@@ -3765,16 +3798,51 @@ export class CdssService {
       const bp = `${vitals.systolic ?? '?'} / ${vitals.diastolic ?? '?'}`;
       factors.push(`Hypotension with blood pressure approximately ${bp}`);
     }
+    if (hypertensiveCrisis) {
+      const bp = `${vitals.systolic ?? '?'} / ${vitals.diastolic ?? '?'}`;
+      factors.push(`Hypertensive crisis range blood pressure ${bp}`);
+    } else if (severeDiastolicHypertension) {
+      factors.push(`Severe diastolic hypertension ${vitals.diastolic} mmHg`);
+    }
+    if (tachypnea) {
+      factors.push(`Tachypnoea ${vitals.respiratoryRate} breaths/min`);
+    }
     if (veryLowSpO2) {
       factors.push(`Low oxygen saturation ${vitals.oxygenSaturation}%`);
     }
+    if (severePain) {
+      factors.push(`Severe pain ${vitals.painLevel}/10`);
+    }
+    if (hyperglycemia) {
+      factors.push(`Hyperglycaemia ${vitals.bloodGlucoseMmol} mmol/L requiring DKA/HHS screen`);
+    }
 
     let safetyLevel: 'low' | 'moderate' | 'high' | 'critical' = 'low';
-    const dangerSignals = [highFever, tachycardia, hypotension, veryLowSpO2].filter(Boolean).length;
+    const dangerSignals = [
+      highFever,
+      tachycardia,
+      tachypnea,
+      hypotension,
+      hypertensiveCrisis,
+      veryLowSpO2,
+      severePain,
+      hyperglycemia,
+      mediumNews2,
+    ].filter(Boolean).length;
 
-    if (dangerSignals >= 2 || severeFever || (vitals.systolic !== null && vitals.systolic < 80)) {
+    if (
+      dangerSignals >= 3 ||
+      highNews2 ||
+      veryLowSpO2 ||
+      hypertensiveCrisis ||
+      severeFever ||
+      severeTachycardia ||
+      severeTachypnea ||
+      severeHyperglycemia ||
+      (vitals.systolic !== null && vitals.systolic < 80)
+    ) {
       safetyLevel = 'critical';
-    } else if (dangerSignals === 1) {
+    } else if (dangerSignals >= 1) {
       safetyLevel = 'high';
     } else if (highFever) {
       safetyLevel = 'moderate';
@@ -3789,10 +3857,13 @@ export class CdssService {
     const acuteRecommendations: string[] = [];
     if (finalLevel === 'critical') {
       acuteRecommendations.push(
-        'Critical vitals pattern detected: immediate clinical review required.',
+        'Critical acute deterioration pattern detected: immediate clinical review required.',
         'Escalate to senior clinician or emergency response according to local protocol.',
-        'Verify measurement accuracy (SpO2, respiratory rate) and repeat vitals urgently.',
+        'Repeat full vitals within 15 minutes and verify measurement accuracy.',
       );
+      if (veryLowSpO2) acuteRecommendations.push('Start oxygen support and assess for respiratory failure.');
+      if (hypertensiveCrisis) acuteRecommendations.push('Assess for hypertensive emergency and end-organ damage.');
+      if (hyperglycemia) acuteRecommendations.push('Check blood or urine ketones, venous/arterial pH, electrolytes, and hydration status.');
     } else if (finalLevel === 'high') {
       acuteRecommendations.push(
         'High risk vitals pattern: prompt clinical review recommended.',
@@ -3813,12 +3884,14 @@ export class CdssService {
 
     const baseRecommendations = Array.isArray(baseRisk?.recommendations) ? baseRisk!.recommendations : [];
     const filteredBaseRecommendations = baseRecommendations.filter((rec) => {
-      const lower = rec.toLowerCase();
+      const lower = String(rec).toLowerCase();
       if (lower.includes('readmission')) return false;
       if (lower.includes('discharge')) return false;
       if (lower.includes('follow-up')) return false;
+      if (lower.includes('routine')) return false;
       return true;
     });
+    const suppressedRecommendations = baseRecommendations.filter((rec) => !filteredBaseRecommendations.includes(rec));
 
     const combinedFactors = [
       ...(Array.isArray(baseRisk?.factors) ? baseRisk!.factors : []),
@@ -3829,6 +3902,13 @@ export class CdssService {
       riskLevel: finalLevel,
       recommendations: [...acuteRecommendations, ...filteredBaseRecommendations],
       factors: combinedFactors,
+      safetyOverride: safetyLevel !== 'low',
+      safetyLevel,
+      suppressedRecommendations,
+      conflictDetected:
+        safetyLevel !== 'low' &&
+        ['unknown', 'low'].includes((baseRisk?.risk_level || 'unknown').toLowerCase()) &&
+        suppressedRecommendations.length > 0,
     };
   }
 

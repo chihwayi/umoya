@@ -9,7 +9,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass ${REACT_APP_TENANT_API_URL_INTERNAL:-http://medicore-tenant-service:3001}/;
+        proxy_pass ${REACT_APP_TENANT_API_URL_INTERNAL:-http://umoya-tenant-service:3001}/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

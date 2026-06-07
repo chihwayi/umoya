@@ -39,7 +39,7 @@ def test_admin_ai_vendors_and_usecases_direct_calls():
             use_case="patient_summarization",
             enabled=True,
             vendor_id="ollama",
-            allowed_model_names=["medicore-llm"],
+            allowed_model_names=["umoya-llm"],
             require_tenant_context=True,
             redaction_required=True,
         )

@@ -491,7 +491,7 @@ async function main() {
     };
   });
 
-  await runStep('Medical aid member verification from MediCore', async () => {
+  await runStep('Medical aid member verification from Umoya', async () => {
     const res = await httpRequest({
       label: 'Verify member',
       method: 'POST',

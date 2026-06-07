@@ -209,8 +209,16 @@ export class CdssHookService {
 
       const formattedVitals = {
         bloodPressure: vitals.bloodPressure ?? vitals.blood_pressure,
-        systolic: vitals.bloodPressureSystolic ?? vitals.systolic,
-        diastolic: vitals.bloodPressureDiastolic ?? vitals.diastolic,
+        systolic:
+          vitals.bloodPressureSystolic ??
+          vitals.systolicBp ??
+          vitals.systolic_bp ??
+          vitals.systolic,
+        diastolic:
+          vitals.bloodPressureDiastolic ??
+          vitals.diastolicBp ??
+          vitals.diastolic_bp ??
+          vitals.diastolic,
         heartRate: vitals.heartRate ?? vitals.heart_rate,
         respiratoryRate: vitals.respiratoryRate ?? vitals.respiratory_rate,
         temperature: vitals.temperature,
@@ -219,6 +227,8 @@ export class CdssHookService {
         height: vitals.height,
         bmi: vitals.bmi,
         painLevel: vitals.painLevel ?? vitals.pain_level,
+        bloodGlucose: vitals.bloodGlucose ?? vitals.blood_glucose,
+        news2Score: vitals.newsScore ?? vitals.news_score,
         recordedAt: vitals.recordedAt ?? vitals.recorded_at ?? new Date().toISOString(),
       };
 

@@ -54,7 +54,8 @@ jobs:
         PYTHONPATH=services/cdss-service python -m pytest -q \
           services/cdss-service/tests/test_offline_clinical_eval_harness.py \
           services/cdss-service/tests/test_ai_governance.py \
-          services/cdss-service/tests/test_outbound_guard.py
+          services/cdss-service/tests/test_outbound_guard.py \
+          services/cdss-service/tests/test_clinical_safety.py
 
     - name: Enforce Frontend CDSS Proxy Boundary
       if: matrix.service == 'ehr-frontend'

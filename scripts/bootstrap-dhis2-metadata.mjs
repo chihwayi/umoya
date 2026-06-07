@@ -22,8 +22,8 @@ if (!token) {
   process.exit(1);
 }
 
-const clinicCode = process.env.DHIS2_CLINIC_CODE || 'medicore_clinic_default';
-const clinicName = process.env.DHIS2_CLINIC_NAME || 'MediCore Clinic';
+const clinicCode = process.env.DHIS2_CLINIC_CODE || 'umoya_clinic_default';
+const clinicName = process.env.DHIS2_CLINIC_NAME || 'Umoya Clinic';
 
 const endpoint = `${baseUrl}/api/${apiVersion}`;
 
@@ -157,10 +157,10 @@ const run = async () => {
     listField: 'trackedEntityTypes',
     code: 'MC_TET_PATIENT',
     payload: {
-      name: 'MediCore Patient',
+      name: 'Umoya Patient',
       shortName: 'MC Patient',
       code: 'MC_TET_PATIENT',
-      description: 'Tracked entity type for MediCore patient sync',
+      description: 'Tracked entity type for Umoya patient sync',
     },
   });
 
@@ -199,7 +199,7 @@ const run = async () => {
     {
       key: 'serviceDelivery',
       dataSetCode: 'MC_DS_SERVICE_DELIVERY_MONTHLY',
-      dataSetName: 'MediCore Service Delivery Monthly',
+      dataSetName: 'Umoya Service Delivery Monthly',
       dataSetShortName: 'MC Service Monthly',
       metrics: [
         { code: 'MC_DE_TOTAL_CONSULTATIONS', name: 'Total Consultations' },
@@ -212,7 +212,7 @@ const run = async () => {
     {
       key: 'maternalNewborn',
       dataSetCode: 'MC_DS_MATERNAL_NEWBORN_MONTHLY',
-      dataSetName: 'MediCore Maternal Newborn Monthly',
+      dataSetName: 'Umoya Maternal Newborn Monthly',
       dataSetShortName: 'MC Maternal Monthly',
       metrics: [
         { code: 'MC_DE_MATERNAL_ANC1_PLUS', name: 'ANC 1+ Coverage Count' },
@@ -228,7 +228,7 @@ const run = async () => {
     {
       key: 'hivMonthly',
       dataSetCode: 'MC_DS_HIV_MONTHLY_RETURN',
-      dataSetName: 'MediCore HIV Monthly Return',
+      dataSetName: 'Umoya HIV Monthly Return',
       dataSetShortName: 'MC HIV Monthly',
       metrics: [
         { code: 'MC_DE_HIV_PLHIV_ACTIVE_IN_CARE', name: 'PLHIV Active In Care' },
@@ -243,7 +243,7 @@ const run = async () => {
     {
       key: 'immunizationMonthly',
       dataSetCode: 'MC_DS_IMMUNIZATION_MONTHLY',
-      dataSetName: 'MediCore Immunization Monthly',
+      dataSetName: 'Umoya Immunization Monthly',
       dataSetShortName: 'MC Immun Monthly',
       metrics: [
         { code: 'MC_DE_IMMUNIZATION_DTP1', name: 'DTP1 Administered Count' },
@@ -256,7 +256,7 @@ const run = async () => {
     {
       key: 'pharmacyStock',
       dataSetCode: 'MC_DS_PHARMACY_STOCK_MONTHLY',
-      dataSetName: 'MediCore Pharmacy Stock Monthly',
+      dataSetName: 'Umoya Pharmacy Stock Monthly',
       dataSetShortName: 'MC Pharmacy Monthly',
       metrics: [
         { code: 'MC_DE_PHARMACY_STOCK_ON_HAND_TOTAL', name: 'Stock On Hand Total' },
@@ -358,7 +358,7 @@ const run = async () => {
     listField: 'programs',
     code: 'MC_PRG_CLINIC_VISIT',
     payload: {
-      name: 'MediCore Clinic Visit Program',
+      name: 'Umoya Clinic Visit Program',
       shortName: 'MC Clinic Visit',
       code: 'MC_PRG_CLINIC_VISIT',
       programType: 'WITH_REGISTRATION',
