@@ -76,16 +76,6 @@ interface VitalsPanelProps {
   onSave?: (insights?: any) => void;
 }
 
-const formatAnalysisText = (text: string) => {
-  if (!text) return null;
-  return text.split(/(\*\*.*?\*\*)/g).map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} className="font-bold text-indigo-950">{part.slice(2, -2)}</strong>;
-    }
-    return <span key={i}>{part}</span>;
-  });
-};
-
 const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) => {
   const { showSuccess, showError } = useNotification();
   const [vitals, setVitals] = useState<VitalsData>({
@@ -110,7 +100,6 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
   const [copilotDecisionSaving, setCopilotDecisionSaving] = useState(false);
   const [trendOverview, setTrendOverview] = useState<VitalTrendsResponse | null>(null);
   const [trendLoading, setTrendLoading] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [abnormalFindings, setAbnormalFindings] = useState<SnomedConcept[]>([]);
   const [pendingFinding, setPendingFinding] = useState<SnomedConcept | null>(null);
   const insightsRef = useRef<HTMLDivElement>(null);
@@ -554,9 +543,45 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-slate-900">CDSS Risk Insight</p>
-                  <p className="text-xs text-slate-500">Automatically generated from the latest vitals</p>
+                  <p className="text-xs text-slate-500">
+                    {cdssInsights.risk.acute_safety?.acute_deterioration
+                      ? 'Acute deterioration — readmission/discharge assessment deferred'
+                      : 'Automatically generated from the latest vitals'}
+                  </p>
                 </div>
               </div>
+
+              {/* Phase-0 safety governor: surface acute deterioration FIRST */}
+              {cdssInsights.risk.governor_banner && (
+                <div className="mb-4 rounded-lg border-2 border-red-500 bg-red-50 p-3">
+                  <p className="text-sm font-bold text-red-800">⛔ {cdssInsights.risk.governor_banner}</p>
+                  {cdssInsights.risk.risk_model_conflict && (
+                    <p className="mt-1 text-xs font-medium text-red-700">
+                      Risk-model conflict detected — deterministic safety rules override the AI/readmission score
+                      {cdssInsights.risk.readmission_assessment?.original_risk_level
+                        ? ` (was "${cdssInsights.risk.readmission_assessment.original_risk_level}").`
+                        : '.'}
+                    </p>
+                  )}
+                </div>
+              )}
+              {Array.isArray(cdssInsights.risk.acute_safety?.syndrome_alerts) && cdssInsights.risk.acute_safety.syndrome_alerts.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  {cdssInsights.risk.acute_safety.syndrome_alerts.map((a: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className={`rounded-lg border p-2.5 ${a.severity === 'critical' ? 'border-red-300 bg-red-50' : 'border-amber-300 bg-amber-50'}`}
+                    >
+                      <p className={`text-xs font-bold uppercase tracking-wide ${a.severity === 'critical' ? 'text-red-700' : 'text-amber-700'}`}>
+                        {String(a.type || '').replace(/_/g, ' ')} · {a.severity}
+                      </p>
+                      <p className="text-sm text-slate-800">{a.message}</p>
+                      {a.action && <p className="mt-0.5 text-xs font-medium text-slate-600">→ {a.action}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-xs uppercase text-slate-500 tracking-wide">Risk Level</p>
@@ -589,19 +614,25 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
               </div>
               <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 space-y-2">
                 <p className="text-xs font-semibold text-indigo-900">Copilot Decision (required for governance)</p>
+                {cdssInsights.risk.acute_safety?.acute_deterioration && (
+                  <p className="text-xs font-medium text-red-700">
+                    ⚠ Active acute deterioration — a written rationale is required to Accept during a critical state.
+                  </p>
+                )}
                 <input
                   type="text"
                   value={copilotDecisionNote}
                   onChange={(e) => setCopilotDecisionNote(e.target.value)}
-                  placeholder="Optional note (e.g. override rationale)"
+                  placeholder={cdssInsights.risk.acute_safety?.acute_deterioration ? 'Rationale required to Accept during acute deterioration' : 'Optional note (e.g. override rationale)'}
                   className="w-full px-3 py-2 text-sm rounded-md border border-indigo-200 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
                 />
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={copilotDecisionSaving}
+                    disabled={copilotDecisionSaving || (cdssInsights.risk.acute_safety?.acute_deterioration && !copilotDecisionNote.trim())}
+                    title={cdssInsights.risk.acute_safety?.acute_deterioration && !copilotDecisionNote.trim() ? 'Enter a rationale to Accept during acute deterioration' : undefined}
                     onClick={() => handleVitalsCopilotDecision('accept')}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Accept
                   </button>

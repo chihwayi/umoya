@@ -218,8 +218,27 @@ unified banner; (m4) apply safety-governor + copilot interlock to
   in `VitalsPanel.tsx`, so the dangerous "Low/0.0/discharge" no longer reaches the UI.
 - **Covers:** A1, A2, A3, A5, B1, B2, B3, B4 (backend), A7 (data) — **D4 also fixed earlier.**
 
-**Next:** Slice 2 — frontend rendering of `acute_safety` (syndrome alerts, `governor_banner`,
-explainability breakdown, panel rename/separation A4) + Copilot interlock (A6). Slice 3 — mobile parity.
+**Slice 2 — Frontend surfacing of the governed output + Copilot interlock (✅ done & verified, 2026-06-07)**
+- `services/ehr-service/src/services/cdss.service.ts` — pass the governor fields
+  (`acute_safety`, `governor_banner`, `readmission_assessment`, `risk_model_conflict`) through
+  the EHR `/risk/calculate` result (they were being dropped).
+- `ehr-frontend/src/components/VitalsPanel.tsx` — render, **above the risk score**: the red
+  `governor_banner`, a **risk-model-conflict** notice (shows the suppressed original level), and
+  the **syndrome alerts** (sepsis / DKA / pain / multi-system). Subtitle now says "readmission
+  assessment deferred" during acute deterioration.
+- **Copilot interlock (A6):** during acute deterioration, **Accept is disabled until a written
+  rationale is entered** (with a visible warning) — can't one-click "accept" a discharge rec on a
+  crashing patient. Modify/Reject remain available.
+- Cleaned 3 pre-existing eslint warnings in the touched file (dead `formatAnalysisText` +
+  unused `analysisResult` state) so the changed-file lint gate stays green.
+- **Verification:** `tsc` clean (ehr-service + ehr-frontend, my files); `eslint --max-warnings=0`
+  clean on all changed components; webpack "Compiled successfully"; serves 200.
+- **Covers:** A4 (panel context), A6, A7 (banner/conflict UI), B1–B4 (now visible to clinicians).
+  Note: the local `html5-qrcode` miss was the recurring stale-`node_modules` infra issue (passes in
+  CI which runs `npm install`); reinstalled locally.
+
+**Next:** Slice 3 — mobile parity (m2 consume safety-eval / governor output, m3 render
+syndrome+banner, m4 governor+interlock on `DoctorAIScreen`/`DoctorEscalationScreen`).
 
 ---
 

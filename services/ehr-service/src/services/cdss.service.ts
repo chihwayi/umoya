@@ -2178,6 +2178,13 @@ export class CdssService {
         source: 'advanced_cdss',
       };
 
+      // Phase-0 safety governor passthrough — the deterministic acute-deterioration
+      // synthesis + override must reach the UI (otherwise the governed output is lost).
+      if (responseData.acute_safety) result.acute_safety = responseData.acute_safety;
+      if (responseData.governor_banner) result.governor_banner = responseData.governor_banner;
+      if (responseData.readmission_assessment) result.readmission_assessment = responseData.readmission_assessment;
+      if (responseData.risk_model_conflict !== undefined) result.risk_model_conflict = responseData.risk_model_conflict;
+
       // Add historical context
       if (historicalData.totalVisits > 0) {
         result.historical_context = {
