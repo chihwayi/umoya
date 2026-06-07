@@ -237,8 +237,26 @@ unified banner; (m4) apply safety-governor + copilot interlock to
   Note: the local `html5-qrcode` miss was the recurring stale-`node_modules` infra issue (passes in
   CI which runs `npm install`); reinstalled locally.
 
-**Next:** Slice 3 — mobile parity (m2 consume safety-eval / governor output, m3 render
-syndrome+banner, m4 governor+interlock on `DoctorAIScreen`/`DoctorEscalationScreen`).
+**Slice 3 — Owner functional bugs D1/D2/D3 (✅ done & verified, 2026-06-07)**
+- **D1 (gender→pregnancy):** `CreatePatientModal.tsx` — Reproductive-Health/Pregnancy block
+  now only renders when `gender === 'female'`, and the payload omits `pregnancyStatus` for
+  non-female patients. (Removed 3 stale unused imports to keep the changed-file lint green.)
+- **D2 (NHIF "XML no root element"):** `nhif.controller.ts` `getMembershipCapitation` returned
+  a bare `null` (empty body) when no membership → now returns `{ member, hasMembership }`
+  (valid JSON); frontend `getMembership` unwraps `.member`. Verified: 200 +
+  `application/json` `{"member":null,"hasMembership":false}`.
+- **D3 (payment 403 for nurse_accounts):** root cause — `RolesGuard` *collapsed*
+  `nurse_accounts → nurse`, so the `@Roles('accounts','nurse_accounts')` finance endpoint
+  denied it. Changed to an **expansion** model (nurse_accounts ⇒ {nurse_accounts, nurse,
+  accounts}). Verified: payment as nurse_accounts now **400** (validation), no longer **403**.
+- **Verification:** `tsc` clean (ehr-service + ehr-frontend); `eslint --max-warnings=0` clean on
+  changed files; **`roles.guard.spec.ts` 10/10 pass** (added D3 regression cases); live D2/D3
+  confirmed; webpack compiled, serves 200.
+- **Covers:** D1, D2, D3.
+
+**Next:** Slice 4 — mobile parity (consume governor/synthesis output, render syndrome+banner,
+interlock on `DoctorAIScreen`/`DoctorEscalationScreen`) and the remaining P1/P2 items
+(B5 backend safety-eval endpoint, A4 full panel rename, A9/A10, C1, D5a–d, D6).
 
 ---
 

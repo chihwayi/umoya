@@ -92,7 +92,11 @@ export class NhifController {
 
   @Get('patient/:patientId/membership')
   async getMembershipCapitation(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
-    return this.nhifService.getMemberCapitation(req.tenantId, patientId);
+    // Always return a well-formed JSON object. Returning a bare `null` (no active
+    // membership) produced an empty response body the client failed to parse
+    // ("XML Parsing Error: no root element found").
+    const member = await this.nhifService.getMemberCapitation(req.tenantId, patientId);
+    return { member: member ?? null, hasMembership: !!member };
   }
 
   @Post('patient/:patientId/claims')

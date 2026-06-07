@@ -13159,7 +13159,10 @@ export const nhifApi = {
     const response = await ehrAxios.get(`/nhif/patient/${patientId}/membership`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
-    return response.data;
+    // Backend now wraps the result as { member, hasMembership } (so an absent
+    // membership returns valid JSON instead of an empty body). Unwrap for callers.
+    const data: any = response.data;
+    return data && typeof data === 'object' && 'member' in data ? data.member : (data ?? null);
   },
   createClaim: async (patientId: string, data: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/nhif/patient/${patientId}/claims`, data, {

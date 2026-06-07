@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Calendar, Phone, Mail, MapPin, Heart, Shield, AlertTriangle, ChevronDown, ChevronUp, Brain } from 'lucide-react';
+import { X, User, Phone, Heart, Shield, AlertTriangle, ChevronDown, ChevronUp, Brain } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
 import { formatDateForAPI, isValidDate } from '../utils/dateUtils';
@@ -271,7 +271,7 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
         smokingStatus: formData.smokingStatus || undefined,
         alcoholUse: formData.alcoholUse || undefined,
         substanceUseDetails: formData.substanceUseDetails || undefined,
-        pregnancyStatus: formData.pregnancyStatus || undefined,
+        pregnancyStatus: formData.gender === 'female' ? (formData.pregnancyStatus || undefined) : undefined,
       };
 
       await ehrApi.createPatient(patientData, token, tenantSlug);
@@ -753,7 +753,8 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
                     </div>
                   </div>
 
-                  {/* Reproductive Health */}
+                  {/* Reproductive Health — only relevant for female patients */}
+                  {formData.gender === 'female' && (
                   <div>
                     <h4 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">Reproductive Health</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -768,6 +769,7 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* Advance Care Planning */}
                   <div>

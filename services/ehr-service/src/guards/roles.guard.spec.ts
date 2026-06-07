@@ -52,7 +52,18 @@ describe('RolesGuard', () => {
     expect(() => guard.canActivate(makeContext(undefined))).toThrow(ForbiddenException);
   });
 
-  it('normalizes nurse_accounts to nurse', () => {
+  it('nurse_accounts still satisfies nurse-only endpoints', () => {
     expect(withRoles(['nurse'], 'nurse_accounts')).toBe(true);
+  });
+
+  it('nurse_accounts can access finance/accounts endpoints (regression: payment 403)', () => {
+    // Previously nurse_accounts was collapsed to "nurse" and was denied here.
+    expect(withRoles(['accounts', 'nurse_accounts'], 'nurse_accounts')).toBe(true);
+    expect(withRoles(['accounts'], 'nurse_accounts')).toBe(true);
+    expect(withRoles(['nurse_accounts'], 'nurse_accounts')).toBe(true);
+  });
+
+  it('plain nurse is still denied finance-only endpoints', () => {
+    expect(() => withRoles(['accounts'], 'nurse')).toThrow(ForbiddenException);
   });
 });

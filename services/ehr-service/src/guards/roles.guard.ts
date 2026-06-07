@@ -5,10 +5,19 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 const ADMIN_OVERRIDE_ROLES = new Set(['admin', 'super_admin']);
 
-const ROLE_NORMALIZATION_MAP: Record<string, string> = {
-  'nurse accounts': 'nurse',
-  nurse_accounts: 'nurse',
+// A combined role grants access to EACH of its constituent roles. Previously
+// nurse_accounts was *collapsed* to 'nurse', which broke endpoints that explicitly
+// allow 'nurse_accounts'/'accounts' (e.g. finance payments → 403). Expand instead so a
+// nurse_accounts user satisfies nurse, accounts, AND nurse_accounts.
+const ROLE_EXPANSION_MAP: Record<string, string[]> = {
+  'nurse accounts': ['nurse_accounts', 'nurse', 'accounts'],
+  nurse_accounts: ['nurse_accounts', 'nurse', 'accounts'],
 };
+
+function effectiveRoles(userRole: string): string[] {
+  const expanded = ROLE_EXPANSION_MAP[userRole];
+  return expanded ? [userRole, ...expanded] : [userRole];
+}
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -33,13 +42,13 @@ export class RolesGuard implements CanActivate {
     }
 
     const userRole = typeof rawRole === 'string' ? rawRole : String(rawRole);
-    const normalizedRole = ROLE_NORMALIZATION_MAP[userRole] || userRole;
+    const roles = effectiveRoles(userRole);
 
-    if (ADMIN_OVERRIDE_ROLES.has(normalizedRole)) {
+    if (roles.some((r) => ADMIN_OVERRIDE_ROLES.has(r))) {
       return true;
     }
 
-    if (requiredRoles.includes(normalizedRole)) {
+    if (roles.some((r) => requiredRoles.includes(r))) {
       return true;
     }
 
