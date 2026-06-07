@@ -191,21 +191,39 @@ def _humanize_window(minutes: Optional[float]) -> str:
 
 # Per-vital adverse-direction rules: (is the current value abnormal AND moving the
 # wrong way by a clinically meaningful step?). Trajectory only surfaces worsening trends.
-def compute_trajectory(v: Dict[str, Optional[float]], historical_vitals: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
-    """Compare the current reading to the most recent prior reading and surface
-    deterioration deltas (e.g. SpO₂ 94→86). Deterministic, worst-first."""
+def compute_trajectory(v: Dict[str, Optional[float]], historical_vitals: Optional[List[Dict[str, Any]]],
+                       current_recorded_at: Any = None) -> Dict[str, Any]:
+    """Compare the current reading to the most recent *prior* reading and surface
+    deterioration deltas (e.g. SpO₂ 94→86). Deterministic, worst-first.
+
+    The history payload usually includes the current reading itself (it was just
+    persisted), so we exclude any entry at-or-after the current timestamp before
+    choosing the previous reading — otherwise the current reading becomes its own
+    baseline and every delta is zero."""
     if not historical_vitals:
         return {"deltas": [], "window": ""}
 
-    sorted_h = sorted(historical_vitals, key=lambda x: str(x.get("recordedAt") or x.get("recorded_at") or ""))
-    prev_raw = sorted_h[-1]
+    cur_dt = _parse_dt(current_recorded_at)
+
+    candidates = []
+    for h in historical_vitals:
+        hdt = _parse_dt(h.get("recordedAt") or h.get("recorded_at"))
+        if cur_dt is not None and hdt is not None and hdt >= cur_dt:
+            continue  # skip the current reading (and anything newer)
+        candidates.append((hdt, h))
+    if not candidates:
+        return {"deltas": [], "window": ""}
+
+    # Most recent prior reading (entries without a parseable date sort earliest).
+    _epoch = datetime.min.replace(tzinfo=timezone.utc)
+    candidates.sort(key=lambda x: (x[0] is not None, x[0] or _epoch))
+    prev_dt, prev_raw = candidates[-1]
     prev = extract_vitals(prev_raw)
 
-    prev_dt = _parse_dt(prev_raw.get("recordedAt") or prev_raw.get("recorded_at"))
     minutes = None
     if prev_dt is not None:
-        now = datetime.now(timezone.utc)
-        minutes = max(0.0, (now - prev_dt).total_seconds() / 60.0)
+        end = cur_dt or datetime.now(timezone.utc)
+        minutes = max(0.0, (end - prev_dt).total_seconds() / 60.0)
 
     def adverse(key: str, curr: float, delta: float) -> bool:
         if key == "spo2":
@@ -375,7 +393,8 @@ def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False,
         "acute_deterioration": {"state": acute_state, "severity": aggregate},
         "mortality": mortality,
     }
-    result["trajectory"] = compute_trajectory(v, historical_vitals)
+    current_recorded_at = (vitals or {}).get("recordedAt") or (vitals or {}).get("recorded_at")
+    result["trajectory"] = compute_trajectory(v, historical_vitals, current_recorded_at)
     result["copilot_summary"] = build_copilot_summary(v, result)
     return result
 
