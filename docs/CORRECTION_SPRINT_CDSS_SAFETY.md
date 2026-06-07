@@ -287,8 +287,18 @@ state-aware — **"Acute Deterioration Monitor"** during acute states vs **"Read
 Discharge Risk"** when stable (no longer the ambiguous "CDSS Risk Insight" mixing both at equal
 authority). Lint + tsc clean.
 
-**Next:** A9 (mortality/acute risk domains), A10 (evidence↔score cross-check), C1 (copilot
-summary), D6 (no-show workflow), D5a–d (registration copy/UX).
+**C1 — Clinical Copilot Summary (✅ done & verified, 2026-06-07)**
+- **Deterministic** one-paragraph gestalt built in `clinical_safety.build_copilot_summary()`
+  (no LLM → reliable/fast): lead + NEWS2 + worst-first findings + concerns (sepsis/DKA/…) +
+  prioritised actions. Returned on `evaluate()` as `copilot_summary` (flows through both
+  `/clinical/safety-eval` and the `/risk/calculate` governor).
+- **Web** `VitalsPanel.tsx` and **mobile** `NurseVitalsScreen.tsx` render it as the first
+  "Clinical Copilot Summary" block.
+- **Verification:** CDSS pytest 10/10 (incl. 2 summary tests); web eslint+tsc clean; mobile tsc
+  clean; **live** summary confirmed for the synthetic patient. **Covers:** C1.
+
+**Next:** A9 (mortality/acute risk domains), A10 (evidence↔score cross-check), D6 (no-show
+workflow), D5a–d (registration copy/UX), A8 finish.
 
 ---
 

@@ -135,6 +135,69 @@ def critical_flags(v: Dict[str, Optional[float]]) -> List[Dict[str, str]]:
     return flags
 
 
+def _vital_findings(v: Dict[str, Optional[float]]) -> List[str]:
+    """Human-readable findings for the gestalt summary (worst-first)."""
+    f: List[str] = []
+    if v["spo2"] is not None and v["spo2"] < 90:
+        f.append(f"severe hypoxaemia (SpO₂ {v['spo2']:g}%)")
+    elif v["spo2"] is not None and v["spo2"] < 94:
+        f.append(f"mild hypoxaemia (SpO₂ {v['spo2']:g}%)")
+    if v["respiratory_rate"] is not None and v["respiratory_rate"] > 24:
+        f.append(f"marked tachypnoea (RR {v['respiratory_rate']:g})")
+    elif v["respiratory_rate"] is not None and v["respiratory_rate"] > 20:
+        f.append(f"tachypnoea (RR {v['respiratory_rate']:g})")
+    if v["temperature"] is not None and v["temperature"] >= 38.0:
+        f.append(f"fever ({v['temperature']:g}°C)")
+    elif v["temperature"] is not None and v["temperature"] <= 35.0:
+        f.append(f"hypothermia ({v['temperature']:g}°C)")
+    if v["heart_rate"] is not None and v["heart_rate"] > 120:
+        f.append(f"tachycardia (HR {v['heart_rate']:g})")
+    if v["systolic"] is not None and (v["systolic"] > 180 or (v["diastolic"] or 0) > 120):
+        f.append(f"hypertensive crisis ({v['systolic']:g}/{v['diastolic']:g} mmHg)" if v["diastolic"] else f"severe hypertension (SBP {v['systolic']:g})")
+    elif v["systolic"] is not None and v["systolic"] < 90:
+        f.append(f"hypotension (SBP {v['systolic']:g})")
+    if v["glucose"] is not None and v["glucose"] >= 13.9:
+        f.append(f"severe hyperglycaemia ({v['glucose']:g} mmol/L)")
+    if v["pain"] is not None and v["pain"] >= 7:
+        f.append(f"severe pain ({v['pain']:g}/10)")
+    return f
+
+
+def build_copilot_summary(v: Dict[str, Optional[float]], ev: Dict[str, Any]) -> str:
+    """One-paragraph gestalt synthesis a clinician reads first (deterministic)."""
+    findings = _vital_findings(v)
+    if ev["acute_deterioration"]:
+        lead = "Acute deterioration detected."
+    elif findings or ev["syndrome_alerts"]:
+        lead = "Some findings outside normal range."
+    else:
+        return "All recorded vitals are within normal limits. No immediate clinical concern; continue routine monitoring."
+
+    parts = [lead]
+    if v["news2"] is not None:
+        parts.append(f"NEWS2 {v['news2']:g}.")
+    if findings:
+        parts.append("Findings: " + ", ".join(findings) + ".")
+
+    concern_map = {
+        "sepsis_screen": "sepsis", "dka_hhs_screen": "DKA/HHS",
+        "multi_system_deterioration": "multi-system deterioration", "severe_pain": "uncontrolled pain",
+    }
+    concerns = [concern_map[a["type"]] for a in ev["syndrome_alerts"] if a["type"] in concern_map]
+    if concerns:
+        parts.append("Concern for " + ", ".join(dict.fromkeys(concerns)) + ".")
+
+    if ev["acute_deterioration"]:
+        parts.append("Immediate clinician review recommended; repeat full observations within 15 minutes.")
+        if ev["sepsis_screen_positive"]:
+            parts.append("Initiate sepsis screen (blood cultures, lactate).")
+        if ev["dka_hhs"].get("severity") == "severe":
+            parts.append("Check ketones + venous blood gas.")
+        if v["spo2"] is not None and v["spo2"] < 90:
+            parts.append("Commence oxygen therapy.")
+    return " ".join(parts)
+
+
 def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False) -> Dict[str, Any]:
     """Single source of truth: synthesise all signals + acute state + syndrome alerts."""
     v = extract_vitals(vitals)
@@ -184,7 +247,7 @@ def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False) 
             "action": "Immediate clinician review. Repeat full vitals within 15 minutes.",
         })
 
-    return {
+    result = {
         "acute_deterioration": acute,
         "acute_state": acute_state,
         "aggregate_severity": aggregate,
@@ -196,6 +259,8 @@ def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False) 
         "sepsis_screen_positive": sepsis_positive,
         "syndrome_alerts": syndrome_alerts,
     }
+    result["copilot_summary"] = build_copilot_summary(v, result)
+    return result
 
 
 # ── the safety governor ─────────────────────────────────────────────────────────────

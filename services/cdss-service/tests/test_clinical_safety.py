@@ -107,3 +107,21 @@ def test_evaluate_is_safe_with_empty_vitals():
     ev = evaluate({})
     assert ev["acute_deterioration"] is False
     assert ev["syndrome_alerts"] == []
+
+
+def test_copilot_summary_for_critical_patient():
+    ev = evaluate(CRITICAL_VITALS)
+    s = ev["copilot_summary"].lower()
+    assert "acute deterioration detected" in s
+    assert "hypoxaemia" in s            # SpO2 86
+    assert "fever" in s                 # 39.4
+    assert "hyperglycaemia" in s        # 21.1
+    assert "sepsis" in s
+    assert "immediate clinician review" in s
+
+
+def test_copilot_summary_for_stable_patient_is_reassuring():
+    ev = evaluate(STABLE_VITALS)
+    s = ev["copilot_summary"].lower()
+    assert "within normal limits" in s
+    assert "acute deterioration" not in s

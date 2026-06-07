@@ -555,6 +555,14 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                 </div>
               </div>
 
+              {/* Clinical Copilot Summary — the one-paragraph gestalt a clinician reads first */}
+              {cdssInsights.risk.acute_safety?.copilot_summary && (
+                <div className={`mb-4 rounded-lg border p-3 ${cdssInsights.risk.acute_safety?.acute_deterioration ? 'border-red-200 bg-red-50/70' : 'border-slate-200 bg-slate-50'}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Clinical Copilot Summary</p>
+                  <p className="text-sm leading-relaxed text-slate-800">{cdssInsights.risk.acute_safety.copilot_summary}</p>
+                </div>
+              )}
+
               {/* Phase-0 safety governor: surface acute deterioration FIRST */}
               {cdssInsights.risk.governor_banner && (
                 <div className="mb-4 rounded-lg border-2 border-red-500 bg-red-50 p-3">

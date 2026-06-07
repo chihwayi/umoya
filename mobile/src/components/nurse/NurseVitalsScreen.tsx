@@ -436,6 +436,12 @@ export const NurseVitalsScreen: React.FC = () => {
         {/* AI Interpretation result */}
         {safetyEval && (safetyEval.acute_deterioration || safetyEval.syndrome_alerts.length > 0) && (
           <Card accent={C.red} style={styles.interpretCard}>
+            {!!safetyEval.copilot_summary && (
+              <View style={{ marginBottom: 8 }}>
+                <Text style={{ color: C.textSecondary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 2 }}>Clinical Copilot Summary</Text>
+                <Text style={{ color: C.text, fontSize: 13, lineHeight: 19 }}>{safetyEval.copilot_summary}</Text>
+              </View>
+            )}
             {safetyEval.acute_deterioration && (
               <View style={{ backgroundColor: C.red + '18', borderColor: C.red + '40', borderWidth: 1, borderRadius: RADIUS.md, padding: 10, marginBottom: 8 }}>
                 <Text style={{ color: C.red, fontWeight: '800', fontSize: 13 }}>

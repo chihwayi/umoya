@@ -192,6 +192,7 @@ export interface SafetyEvalResult {
   aggregate_severity: string;
   sepsis_screen_positive: boolean;
   syndrome_alerts: SafetySyndromeAlert[];
+  copilot_summary?: string;
 }
 const ABSTAINED_SAFETY: SafetyEvalResult = {
   acute_deterioration: false, acute_state: 'STABLE', aggregate_severity: 'low',
