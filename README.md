@@ -417,5 +417,9 @@ npm run report:soc2-hipaa
 
 | Document | Contents |
 |---|---|
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Architecture rules, DB provisioning patterns, and agent constraints |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Architecture rules, DB provisioning patterns, CDSS clinical safety governor, and agent constraints |
+| [docs/PROVISIONING_GUIDE.md](./docs/PROVISIONING_GUIDE.md) | Tenant/system DB provisioning workflow |
+| [docs/CDSS_GUIDELINE_SEARCH_TUNING.md](./docs/CDSS_GUIDELINE_SEARCH_TUNING.md) | Guideline-search RAG tuning + GPU-time tweaks |
+| [docs/UMOYA_BRAND.md](./docs/UMOYA_BRAND.md) | Brand and design guidelines |
+| [DEMO_CREDENTIALS.md](./DEMO_CREDENTIALS.md) | Demo accounts provisioned per tenant |
 | [.env.example](./.env.example) | All required environment variables |

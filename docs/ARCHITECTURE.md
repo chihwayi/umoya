@@ -143,6 +143,30 @@ Every controller must appear in `controllers: []`.
 
 ---
 
+## CDSS Clinical Safety Governor
+
+Deterministic patient-safety layer that overrides probabilistic AI output. Lives in
+`services/cdss-service/clinical_safety.py` (pure, fully unit-tested in
+`tests/test_clinical_safety.py`, gated in CI).
+
+- `extract_vitals()` normalises raw vitals (parses `"195/115"` BP, glucose mg/dL→mmol/L when >45).
+- Deterministic scorers: `compute_qsofa()`, `compute_sirs()`, `screen_dka_hhs()` (ADA-correct),
+  `severe_pain()`, `critical_flags()` (SpO2<90, SBP>180, DBP>120, RR>24, HR>130, temp≥39.5).
+- `evaluate()` returns acute state (`ACUTE_DETERIORATION`/`STABLE`), aggregate severity,
+  `syndrome_alerts`, `mortality_risk` (NEWS2/RCP-2017 band), labelled `risk_domains`
+  (acute-deterioration vs mortality — never conflated with readmission), and a deterministic
+  `copilot_summary`.
+- `apply_safety_governor(response_data, vitals)` — wired into `POST /risk/calculate`: when the
+  patient is acutely deteriorating it forces `risk_level='critical'`, sets
+  `risk_model_conflict=true`, suppresses the readmission/discharge assessment, and replaces
+  recommendations with escalation guidance + a `governor_banner`. **This is the contract: AI
+  risk output must never present "low/discharge" for a patient flagged acute.**
+- `POST /clinical/safety-eval` exposes `evaluate()` directly; surfaced on web
+  (`VitalsPanel.tsx`) and mobile (`NurseVitalsScreen.tsx`) via the shared `/cdss/safety-eval`
+  proxy. Copilot "Accept" is interlocked (disabled until rationale entered) during acute states.
+
+---
+
 ## Patient Portal Rules
 
 - All protected routes require `PatientJwtAuthGuard`.

@@ -148,7 +148,7 @@ services/cdss-service/data/ingest_metadata_report.json
 test-results/
 
 mobile-must-have
-ci-errors
+feedback
 amazon
 hipaa-bedrock-setup.md
 must-have
