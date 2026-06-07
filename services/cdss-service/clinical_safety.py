@@ -198,6 +198,21 @@ def build_copilot_summary(v: Dict[str, Optional[float]], ev: Dict[str, Any]) -> 
     return " ".join(parts)
 
 
+def mortality_risk(news2: Optional[float], has_critical: bool) -> Dict[str, Any]:
+    """Deterministic, NEWS2-aligned mortality/ICU-risk band (RCP 2017: NEWS2≥7 = high risk
+    of death/ICU admission). A distinct risk *domain* from readmission and acute state — the
+    experts flagged that conflating these answers the wrong clinical question."""
+    if has_critical or (news2 is not None and news2 >= 7):
+        band = "high"
+    elif news2 is not None and news2 >= 5:
+        band = "medium"
+    elif news2 is not None:
+        band = "low"
+    else:
+        band = "unknown"
+    return {"band": band, "basis": "NEWS2 + critical vitals (RCP 2017)"}
+
+
 def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False) -> Dict[str, Any]:
     """Single source of truth: synthesise all signals + acute state + syndrome alerts."""
     v = extract_vitals(vitals)
@@ -258,6 +273,15 @@ def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False) 
         "critical_flags": flags,
         "sepsis_screen_positive": sepsis_positive,
         "syndrome_alerts": syndrome_alerts,
+    }
+    # Distinct, labelled risk domains (A9) — each answers a different clinical question.
+    # Readmission risk is owned by the readmission model and governed separately; here we
+    # surface the two vitals-driven domains so they're never conflated with discharge risk.
+    mortality = mortality_risk(news2, has_critical)
+    result["mortality_risk"] = mortality
+    result["risk_domains"] = {
+        "acute_deterioration": {"state": acute_state, "severity": aggregate},
+        "mortality": mortality,
     }
     result["copilot_summary"] = build_copilot_summary(v, result)
     return result

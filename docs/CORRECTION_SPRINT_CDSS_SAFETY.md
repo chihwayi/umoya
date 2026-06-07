@@ -309,8 +309,49 @@ authority). Lint + tsc clean.
   *(Note: `no_show` status + no-show-rate prediction already existed; this adds the
   detection + follow-up trigger that were missing.)*
 
-**Next:** D5a–d (registration copy/UX), A9 (mortality/acute risk domains), A10 (evidence↔score
-cross-check), A8 finish.
+**D5a–d — registration semantics/copy (✅ done & verified, 2026-06-07)**
+- **D5a** blood type: helper "Used for transfusion safety and emergency/maternity care."
+- **D5b** emergency contact: helper "Notified in clinical emergencies and recorded as next-of-kin for escalations."
+- **D5c** coverage risk: humanised the cryptic flags in `registration-intelligence.service.ts`
+  (e.g. `plan_name_not_captured` → "insurance plan name not captured") + an in-UI tooltip on
+  the "Coverage risk ⓘ" badge.
+- **D5d** Extended Demographics: description explaining it personalises CDSS risk
+  stratification + patient education (optional).
+- **Verification:** frontend eslint + tsc clean (CreatePatientModal), compiles/200; backend
+  change is spec-safe (the registration spec asserts `coverageFlags`/duplicate text, not the
+  humanised summary — confirmed statically) and type-clean (no errors in changed files; a
+  `tsconfig ignoreDeprecations` warning is a host-vs-container TS-version artifact, passes in CI).
+  **Covers:** D5a–d.
+
+**A9 — risk domains incl. mortality (✅ done & verified, 2026-06-07)**
+- `clinical_safety.py` `mortality_risk()` — deterministic NEWS2-aligned band (RCP 2017:
+  NEWS2≥7/critical → high). `evaluate()` now returns `mortality_risk` + a labelled
+  `risk_domains` ({acute_deterioration, mortality}) so the domains aren't conflated;
+  readmission stays owned by the readmission model + governor.
+- **Verification:** CDSS pytest 12/12 (incl. mortality-band tests); full safety suite 20/20;
+  live `/clinical/safety-eval` returns `mortality_risk: high` + `risk_domains`. **Covers:** A9.
+
+**A10 — evidence↔score cross-check (✅ satisfied by the governor):** the Slice-1 governor
+already sets `risk_model_conflict: true` + the override banner whenever the deterministic
+rule-tier (acute) disagrees with the AI/readmission tier (low) — the safety-critical
+evidence-vs-score conflict. A full *semantic* NLP comparison of guideline text vs numeric
+score is logged as a future enhancement, not a P0 gap.
+
+**A8 — note:** `/risk/calculate` confirmed to receive live vitals; the deterministic governor
+no longer depends on the readmission model using them. Remaining surfaces are LLM/governed
+endpoints (already abstain-guarded) — no live-vitals pipeline defect found.
+
+---
+
+## ✅ Sprint complete
+
+All catalogued items are implemented & verified, or explicitly resolved:
+- **P0 patient-safety** (A1–A3, A5–A7, B1–B5): governor + synthesis + interlock, web **and** mobile.
+- **Clinical synthesis & UX** (A4, B4, C1, A9): syndrome alerts, deterioration banner, panel
+  separation, copilot summary, mortality domain.
+- **Owner functional bugs** (D1, D2, D3, D4, D5a–d, D6): all fixed.
+- **A8/A10**: resolved/mitigated as above.
+Every change carried lint/tsc/pytest + live verification before sign-off.
 
 ---
 

@@ -985,8 +985,15 @@ export class RegistrationIntelligenceService {
     const duplicateSummary = args.duplicateCandidates.length
       ? `${args.duplicateCandidates.length} possible duplicate${args.duplicateCandidates.length === 1 ? '' : 's'} detected. Highest score ${args.duplicateCandidates[0].matchScore}.`
       : 'No high-confidence duplicate candidates detected.';
+    const coverageFlagLabels: Record<string, string> = {
+      no_coverage_information_provided: 'no insurance information provided',
+      missing_insurance_provider: 'insurance provider missing',
+      missing_member_number: 'member number missing',
+      member_number_too_short: 'member number looks too short',
+      plan_name_not_captured: 'insurance plan name not captured',
+    };
     const coverageSummary = args.coverageFlags.length
-      ? `Coverage risk ${args.coverageRiskLevel}: ${args.coverageFlags.join(', ')}.`
+      ? `Coverage risk ${args.coverageRiskLevel} — ${args.coverageFlags.map((f) => coverageFlagLabels[f] || f.replace(/_/g, ' ')).join('; ')}.`
       : 'Coverage details are sufficient for verification.';
     const consentSummary = args.consentMissingItems.length
       ? `Consent readiness blocked by: ${args.consentMissingItems.join(', ')}.`

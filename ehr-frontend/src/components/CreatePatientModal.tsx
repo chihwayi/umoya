@@ -347,6 +347,7 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
                       <option key={type} value={type}>{type}</option>
                     ))}
                   </select>
+                  <p className="mt-1 text-xs text-slate-400">Used for transfusion safety and emergency/maternity care.</p>
                 </div>
               </div>
             </div>
@@ -383,10 +384,11 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
 
             {/* Emergency Contact */}
             <div className="bg-amber-50 rounded-xl p-4">
-              <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5" />
                 Emergency Contact
               </h3>
+              <p className="mb-4 text-xs text-slate-500">Notified in clinical emergencies and recorded as next-of-kin for escalations.</p>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -464,7 +466,7 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
                       <p className="text-lg font-semibold text-slate-900">{assessmentResult.suspectedDuplicateCount || 0}</p>
                     </div>
                     <div className="rounded-lg bg-white p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Coverage risk</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500" title="How ready this patient's insurance/medical-aid details are for claims verification (e.g. missing plan name or member number).">Coverage risk ⓘ</p>
                       <p className="text-lg font-semibold text-slate-900">{toBadgeLabel(assessmentResult.coverageRiskLevel || 'unknown')}</p>
                     </div>
                   </div>
@@ -614,6 +616,10 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
 
               {showExtended && (
                 <div className="p-4 space-y-5">
+                  <p className="text-xs text-slate-500 -mt-1">
+                    Optional social &amp; clinical context (language, socioeconomic factors, etc.) used to personalise CDSS
+                    risk stratification and patient education. Leave blank if unknown.
+                  </p>
                   {/* Language & Culture */}
                   <div>
                     <h4 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">Language &amp; Culture</h4>

@@ -125,3 +125,18 @@ def test_copilot_summary_for_stable_patient_is_reassuring():
     s = ev["copilot_summary"].lower()
     assert "within normal limits" in s
     assert "acute deterioration" not in s
+
+
+def test_risk_domains_separate_acute_and_mortality():
+    ev = evaluate({**CRITICAL_VITALS, "news2": 10})
+    rd = ev["risk_domains"]
+    assert rd["acute_deterioration"]["state"] == "ACUTE_DETERIORATION"
+    assert ev["mortality_risk"]["band"] == "high"      # NEWS2 10 / critical vitals
+    assert rd["mortality"]["band"] == "high"
+
+
+def test_mortality_band_scales_with_news2():
+    assert evaluate({"news2": 3})["mortality_risk"]["band"] == "low"
+    assert evaluate({"news2": 6})["mortality_risk"]["band"] == "medium"
+    assert evaluate({"news2": 8})["mortality_risk"]["band"] == "high"
+    assert evaluate({})["mortality_risk"]["band"] == "unknown"
