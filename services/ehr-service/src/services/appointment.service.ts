@@ -675,7 +675,10 @@ export class AppointmentService {
   async getDoctorSchedule(doctorId: string, date: string, tenantId: string): Promise<AppointmentSimple[]> {
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
     const startDate = new Date(date);
-    const endDate = new Date(date);
+    if (!date || isNaN(startDate.getTime())) {
+      throw new BadRequestException('A valid appointment date is required (expected YYYY-MM-DD).');
+    }
+    const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 1);
 
     return appointmentRepository.find({

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, Clock, User, FileText, Search, ChevronDown, Repeat, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Clock, User, FileText, Search, ChevronDown, Repeat, AlertCircle, Loader2 } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
 import { formatDateForAPI, isValidDate } from '../utils/dateUtils';
 import DatePicker from './DatePicker';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- in-progress resource-booking UI (not yet rendered)
 import AppointmentResourceSelector from './AppointmentResourceSelector';
 
 interface Patient {
@@ -48,14 +49,17 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const [checkingConflict, setCheckingConflict] = useState(false);
+  // Reserved for the in-progress resource-booking UI; selectedResources is read in the create flow.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showResources, setShowResources] = useState(false);
   
   // Patient search states
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [showPatientDropdown, setShowPatientDropdown] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [, setSelectedPatient] = useState<Patient | null>(null);
   const patientDropdownRef = useRef<HTMLDivElement>(null);
 
   // Doctor search states
@@ -125,18 +129,24 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
   }, []);
 
   useEffect(() => {
-    if (formData.doctorId && formData.appointmentDate) {
+    // Only query once the typed date is complete & valid — avoids firing the API with
+    // partial input (e.g. "07/06/202") which produced empty-date 500s.
+    if (formData.doctorId && isValidDate(formData.appointmentDate)) {
       fetchAvailableSlots();
+    } else {
+      setAvailableSlots([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.doctorId, formData.appointmentDate]);
 
   // Check for conflicts when time is selected
   useEffect(() => {
-    if (formData.doctorId && formData.appointmentDate && selectedTime) {
+    if (formData.doctorId && isValidDate(formData.appointmentDate) && selectedTime) {
       checkForConflicts();
     } else {
       setConflictWarning(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.doctorId, formData.appointmentDate, selectedTime, formData.durationMinutes]);
 
   const fetchPatients = async () => {
@@ -211,6 +221,7 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- in-progress resource-booking feature
   const bookResourcesForAppointment = async (appointmentId: string, appointmentDateTime: Date, durationMinutes: number, token: string, tenantSlug: string) => {
     const bookingStart = appointmentDateTime.toISOString();
     const bookingEnd = new Date(appointmentDateTime.getTime() + durationMinutes * 60 * 1000).toISOString();
@@ -247,7 +258,10 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
 
       // Convert dd/mm/yyyy to yyyy-mm-dd for API
       const apiDate = formatDateForAPI(formData.appointmentDate);
-      console.log('Fetching available slots for doctor:', formData.doctorId, 'date:', formData.appointmentDate, 'API date:', apiDate);
+      if (!apiDate) {
+        setAvailableSlots([]);
+        return;
+      }
       const response = await ehrApi.getAvailableSlots(formData.doctorId, apiDate, token, tenantSlug);
       console.log('Available slots response:', response.data);
       setAvailableSlots(response.data || []);

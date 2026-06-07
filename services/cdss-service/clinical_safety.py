@@ -18,6 +18,7 @@ Pure functions, no external dependencies — safe to unit-test in the CI offline
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -163,6 +164,92 @@ def _vital_findings(v: Dict[str, Optional[float]]) -> List[str]:
     return f
 
 
+# ── deterioration trajectory (trend deltas vs the previous reading) ──────────────────
+def _parse_dt(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        text = str(value).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _humanize_window(minutes: Optional[float]) -> str:
+    if minutes is None or minutes < 0:
+        return ""
+    if minutes < 90:
+        return f"over {int(round(minutes))} min"
+    hours = minutes / 60.0
+    if hours < 48:
+        return f"over {hours:.0f} h"
+    return f"over {hours / 24:.0f} d"
+
+
+# Per-vital adverse-direction rules: (is the current value abnormal AND moving the
+# wrong way by a clinically meaningful step?). Trajectory only surfaces worsening trends.
+def compute_trajectory(v: Dict[str, Optional[float]], historical_vitals: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+    """Compare the current reading to the most recent prior reading and surface
+    deterioration deltas (e.g. SpO₂ 94→86). Deterministic, worst-first."""
+    if not historical_vitals:
+        return {"deltas": [], "window": ""}
+
+    sorted_h = sorted(historical_vitals, key=lambda x: str(x.get("recordedAt") or x.get("recorded_at") or ""))
+    prev_raw = sorted_h[-1]
+    prev = extract_vitals(prev_raw)
+
+    prev_dt = _parse_dt(prev_raw.get("recordedAt") or prev_raw.get("recorded_at"))
+    minutes = None
+    if prev_dt is not None:
+        now = datetime.now(timezone.utc)
+        minutes = max(0.0, (now - prev_dt).total_seconds() / 60.0)
+
+    def adverse(key: str, curr: float, delta: float) -> bool:
+        if key == "spo2":
+            return curr < 94 and delta <= -2
+        if key == "respiratory_rate":
+            return curr > 20 and delta >= 2
+        if key == "heart_rate":
+            return curr > 100 and delta >= 5
+        if key == "temperature":
+            return curr >= 38.0 and delta >= 0.5
+        if key == "systolic":
+            return (curr > 180 and delta >= 5) or (curr < 90 and delta <= -5)
+        if key == "glucose":
+            return curr >= 11.0 and delta >= 1
+        return False
+
+    labels = {
+        "spo2": "SpO₂", "respiratory_rate": "RR", "heart_rate": "HR",
+        "temperature": "Temp", "systolic": "SBP", "glucose": "glucose",
+    }
+    deltas: List[Dict[str, Any]] = []
+    for key in ("spo2", "respiratory_rate", "heart_rate", "temperature", "systolic", "glucose"):
+        curr, before = v.get(key), prev.get(key)
+        if curr is None or before is None:
+            continue
+        delta = round(curr - before, 1)
+        if delta != 0 and adverse(key, curr, delta):
+            deltas.append({
+                "parameter": key, "label": labels[key],
+                "previous": before, "current": curr, "delta": delta,
+            })
+    return {"deltas": deltas, "window": _humanize_window(minutes), "minutes": minutes}
+
+
+def _trajectory_phrase(trajectory: Dict[str, Any]) -> str:
+    deltas = trajectory.get("deltas") or []
+    if not deltas:
+        return ""
+    window = trajectory.get("window")
+    pieces = [f"{d['label']} {d['previous']:g}→{d['current']:g}" for d in deltas]
+    suffix = f" {window}" if window else ""
+    return f"Trajectory: {', '.join(pieces)}{suffix}."
+
+
 def build_copilot_summary(v: Dict[str, Optional[float]], ev: Dict[str, Any]) -> str:
     """One-paragraph gestalt synthesis a clinician reads first (deterministic)."""
     findings = _vital_findings(v)
@@ -178,6 +265,10 @@ def build_copilot_summary(v: Dict[str, Optional[float]], ev: Dict[str, Any]) -> 
         parts.append(f"NEWS2 {v['news2']:g}.")
     if findings:
         parts.append("Findings: " + ", ".join(findings) + ".")
+
+    trajectory_phrase = _trajectory_phrase(ev.get("trajectory") or {})
+    if trajectory_phrase:
+        parts.append(trajectory_phrase)
 
     concern_map = {
         "sepsis_screen": "sepsis", "dka_hhs_screen": "DKA/HHS",
@@ -213,7 +304,8 @@ def mortality_risk(news2: Optional[float], has_critical: bool) -> Dict[str, Any]
     return {"band": band, "basis": "NEWS2 + critical vitals (RCP 2017)"}
 
 
-def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False) -> Dict[str, Any]:
+def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False,
+             historical_vitals: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Single source of truth: synthesise all signals + acute state + syndrome alerts."""
     v = extract_vitals(vitals)
     qsofa = compute_qsofa(v, altered_mentation)
@@ -283,6 +375,7 @@ def evaluate(vitals: Optional[Dict[str, Any]], altered_mentation: bool = False) 
         "acute_deterioration": {"state": acute_state, "severity": aggregate},
         "mortality": mortality,
     }
+    result["trajectory"] = compute_trajectory(v, historical_vitals)
     result["copilot_summary"] = build_copilot_summary(v, result)
     return result
 
@@ -292,12 +385,13 @@ _DISCHARGE_TERMS = ("discharge", "routine follow", "low readmission", "low risk"
 
 
 def apply_safety_governor(response_data: Dict[str, Any], vitals: Optional[Dict[str, Any]],
-                          altered_mentation: bool = False) -> Dict[str, Any]:
+                          altered_mentation: bool = False,
+                          historical_vitals: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Intercept a risk/AI payload and refuse to present low-risk / discharge-oriented
     output while the patient is acutely deteriorating. Deterministic rules win."""
     if not isinstance(response_data, dict):
         return response_data
-    ev = evaluate(vitals, altered_mentation)
+    ev = evaluate(vitals, altered_mentation, historical_vitals)
     response_data["acute_safety"] = ev
 
     if not ev["acute_deterioration"]:

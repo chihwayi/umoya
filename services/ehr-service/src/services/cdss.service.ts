@@ -2096,6 +2096,17 @@ export class CdssService {
             return String(entry?.name || entry?.drug_name || entry?.medication || 'unknown');
           })
         : [];
+
+      // Structured SNOMED observations captured with the vitals (e.g. ACS,
+      // severe sepsis) are treated as active clinical findings. Merge them into
+      // the diagnoses the risk engine already reasons over so they influence the
+      // assessment, and pass them through explicitly for downstream use.
+      const clinicalFindings: string[] = Array.isArray(patientData?.clinicalFindings)
+        ? patientData.clinicalFindings.filter((t: any) => typeof t === 'string' && t.trim().length > 0)
+        : [];
+      for (const finding of clinicalFindings) {
+        if (!normalizedDiagnoses.includes(finding)) normalizedDiagnoses.push(finding);
+      }
       
       // Fetch historical data if database connection available
       let historicalData: any = {};
@@ -2136,6 +2147,7 @@ export class CdssService {
         vitals: formattedVitals,
         medications: normalizedMedications,
         diagnoses: normalizedDiagnoses,
+        clinical_findings: clinicalFindings,
         lab_results: labResults,
         context: patientData?.context || null,
         specialty: patientData?.specialty || null,
@@ -3634,6 +3646,8 @@ export class CdssService {
         temperature: v.temperature,
         weight: v.weight,
         oxygenSaturation: v.oxygenSaturation,
+        respiratoryRate: v.respiratoryRate,
+        bloodGlucose: v.bloodGlucose,
         recordedAt: v.recordedAt?.toISOString() || new Date().toISOString(),
       }));
       

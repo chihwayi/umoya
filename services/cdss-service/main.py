@@ -4164,7 +4164,10 @@ async def calculate_risk_score(request: RiskScoreRequest, req: Request):
     # signals. Deterministic clinical rules override the AI/readmission score.
     try:
         from clinical_safety import apply_safety_governor
-        response_data = apply_safety_governor(response_data, request.vitals or {})
+        response_data = apply_safety_governor(
+            response_data, request.vitals or {},
+            historical_vitals=request.historical_vitals or [],
+        )
     except Exception as _gov_err:  # never let the governor break the endpoint
         print(f"[CDSS] safety governor skipped: {_gov_err}")
 
@@ -4176,6 +4179,8 @@ class ClinicalSafetyEvalRequest(BaseModel):
     """Structured vitals for the deterministic safety synthesis."""
     vitals: Dict[str, Any] = Field(default_factory=dict)
     altered_mentation: bool = Field(False, description="GCS<15 / AVPU not alert (for qSOFA)")
+    historical_vitals: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Prior readings (most-recent-last) for deterioration-trajectory deltas")
 
 
 @app.post("/clinical/safety-eval")
@@ -4185,7 +4190,11 @@ async def clinical_safety_eval(request: ClinicalSafetyEvalRequest):
     aggregate severity, and fused syndrome alerts. Replaces partial client-side thresholds
     (web `PatientSafetyAlerts.tsx`, mobile `NurseVitalsScreen.tsx`)."""
     from clinical_safety import evaluate
-    return evaluate(request.vitals or {}, altered_mentation=request.altered_mentation)
+    return evaluate(
+        request.vitals or {},
+        altered_mentation=request.altered_mentation,
+        historical_vitals=request.historical_vitals or [],
+    )
 
 
 # Dosing Recommendations

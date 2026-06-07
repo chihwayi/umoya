@@ -81,6 +81,21 @@ export class Vitals {
   @Column({ name: 'news_score', type: 'int', nullable: true })
   newsScore?: number;
 
+  /**
+   * Full CDSS copilot insights computed at save time (risk level, governor
+   * banner, syndrome alerts, copilot summary, recommendations). Persisted so the
+   * interpretation can be re-displayed per record after the vitals pane closes.
+   */
+  @Column({ name: 'cdss_insights', type: 'jsonb', nullable: true })
+  cdssInsights?: any;
+
+  /**
+   * Structured SNOMED clinical observations captured alongside the vitals
+   * (e.g. ACS, severe sepsis). Fed into the CDSS risk engine as active findings.
+   */
+  @Column({ name: 'clinical_observations', type: 'jsonb', nullable: true })
+  clinicalObservations?: Array<{ conceptId?: string; term?: string }>;
+
   // ── Provenance ──────────────────────────────────────────────────────────────
   @Column({ name: 'vital_source', type: 'varchar', length: 30, default: 'manual' })
   vitalSource: string = 'manual';

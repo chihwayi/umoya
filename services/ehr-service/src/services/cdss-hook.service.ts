@@ -232,6 +232,15 @@ export class CdssHookService {
         recordedAt: vitals.recordedAt ?? vitals.recorded_at ?? new Date().toISOString(),
       };
 
+      // Structured SNOMED observations captured with the vitals (e.g. ACS,
+      // severe sepsis) — fed to the risk engine as active clinical findings.
+      const observations = Array.isArray(vitals.clinicalObservations ?? vitals.clinical_observations)
+        ? (vitals.clinicalObservations ?? vitals.clinical_observations)
+        : [];
+      const clinicalFindings = observations
+        .map((o: any) => (typeof o === 'string' ? o : o?.term))
+        .filter((t: any): t is string => typeof t === 'string' && t.trim().length > 0);
+
       const risk = await this.cdssService
         .riskAssessment(
           {
@@ -239,6 +248,8 @@ export class CdssHookService {
             age,
             gender,
             vitals: formattedVitals,
+            clinicalFindings,
+            observations,
             context: 'vital_sign_surveillance',
             specialty: 'acute_care',
             module: 'clinical_surveillance',

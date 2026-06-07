@@ -295,6 +295,17 @@ export class VitalsService {
       this.logger.warn(`CDSS hook failed for vitals: ${error instanceof Error ? error.message : error}`);
     }
 
+    // Persist the computed insights so the copilot interpretation can be
+    // re-displayed per record (Vitals History) after the pane is closed.
+    if (cdssInsights) {
+      try {
+        saved.cdssInsights = cdssInsights;
+        await repo.update(saved.id, { cdssInsights });
+      } catch (error) {
+        this.logger.warn(`Failed to persist CDSS insights for vitals ${saved.id}: ${error instanceof Error ? error.message : error}`);
+      }
+    }
+
     // ── Workflow hook ────────────────────────────────────────────────────────
     if (this.workflowService) {
       try {

@@ -17,6 +17,7 @@ import CreateAppointmentModal from '../components/CreateAppointmentModal';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import VitalsPanel from '../components/VitalsPanel';
+import VitalsInsightSummary from '../components/VitalsInsightSummary';
 import TriageQueue from '../components/TriageQueue';
 import PatientAssessment from '../components/PatientAssessment';
 import NursingNotes from '../components/NursingNotes';
@@ -314,6 +315,7 @@ const NurseDashboard: React.FC = () => {
   const [vitalsHistoryPatientName, setVitalsHistoryPatientName] = useState<string | null>(null);
   const [vitalsHistory, setVitalsHistory] = useState<any[]>([]);
   const [vitalsHistoryLoading, setVitalsHistoryLoading] = useState(false);
+  const [expandedVitalIds, setExpandedVitalIds] = useState<Set<string>>(new Set());
   const [ltfuDays, setLtfuDays] = useState(90);
   const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -5677,10 +5679,27 @@ const NurseDashboard: React.FC = () => {
                               </div>
                             </div>
                           </div>
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
-                            <Activity className="w-3 h-3" />
-                            Visit #{v.visitNumber || vitalsHistory.length - index}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {v.newsScore != null && (() => {
+                              const s = v.newsScore as number;
+                              const cls = s >= 7
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : s >= 5
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : s >= 1
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                              return (
+                                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${cls}`}>
+                                  NEWS2 {s}
+                                </span>
+                              );
+                            })()}
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                              <Activity className="w-3 h-3" />
+                              Visit #{v.visitNumber || vitalsHistory.length - index}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-700">
@@ -5789,6 +5808,47 @@ const NurseDashboard: React.FC = () => {
                             </div>
                           )}
                         </div>
+
+                        {/* Structured SNOMED observations captured with this reading */}
+                        {Array.isArray(v.clinicalObservations) && v.clinicalObservations.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {v.clinicalObservations.map((o: any, oi: number) => (
+                              <span key={oi} className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                {typeof o === 'string' ? o : o?.term}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Per-record CDSS copilot interpretation (expandable) */}
+                        {v.cdssInsights?.risk && (() => {
+                          const rid = String(v.id || index);
+                          const open = expandedVitalIds.has(rid);
+                          return (
+                            <div className="mt-3 border-t border-slate-100 pt-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpandedVitalIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(rid)) next.delete(rid); else next.add(rid);
+                                    return next;
+                                  });
+                                }}
+                                className="flex items-center gap-2 text-xs font-semibold text-indigo-700 hover:text-indigo-900 transition-colors"
+                              >
+                                <Brain className="w-4 h-4" />
+                                AI Copilot Interpretation
+                                <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+                              </button>
+                              {open && (
+                                <div className="mt-3">
+                                  <VitalsInsightSummary insights={v.cdssInsights} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>

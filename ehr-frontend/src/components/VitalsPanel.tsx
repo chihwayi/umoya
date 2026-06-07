@@ -96,6 +96,9 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(patient || null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
   const [savedNewsScore, setSavedNewsScore] = useState<number | null>(null);
+  // Signature of the last successfully-saved payload — blocks re-saving the
+  // exact same vitals (prevents accidental duplicate records).
+  const [lastSavedSignature, setLastSavedSignature] = useState<string | null>(null);
   const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
   const [copilotDecisionSaving, setCopilotDecisionSaving] = useState(false);
   const [trendOverview, setTrendOverview] = useState<VitalTrendsResponse | null>(null);
@@ -117,6 +120,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
 
   useEffect(() => {
     setCdssInsights(null);
+    setLastSavedSignature(null);
     if (!selectedPatient) {
       setTrendOverview(null);
     }
@@ -152,26 +156,62 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
     return { category: 'Obese', color: 'text-red-600' };
   };
 
-  const getVitalStatus = (value: number, type: string) => {
-    switch (type) {
-      case 'bloodPressure':
-        if (value > 140) return { status: 'High', color: 'text-red-600' };
-        if (value < 90) return { status: 'Low', color: 'text-blue-600' };
-        return { status: 'Normal', color: 'text-green-600' };
+  // Clinical status is derived from the *field* (e.g. heartRate), NOT the HTML input
+  // type ('number'). Returns a tone so the badge can colour by severity.
+  type VitalTone = 'normal' | 'low' | 'high' | 'critical' | 'none';
+  const getVitalStatus = (field: keyof VitalsData, value: number): { status: string; tone: VitalTone } => {
+    if (!value || value <= 0) return { status: 'Normal', tone: 'normal' };
+    switch (field) {
+      case 'bloodPressureSystolic':
+        if (value >= 180) return { status: 'Crisis', tone: 'critical' };
+        if (value > 140) return { status: 'High', tone: 'high' };
+        if (value < 90) return { status: 'Low', tone: 'low' };
+        return { status: 'Normal', tone: 'normal' };
+      case 'bloodPressureDiastolic':
+        if (value >= 120) return { status: 'Crisis', tone: 'critical' };
+        if (value > 90) return { status: 'High', tone: 'high' };
+        if (value < 60) return { status: 'Low', tone: 'low' };
+        return { status: 'Normal', tone: 'normal' };
       case 'heartRate':
-        if (value > 100) return { status: 'High', color: 'text-red-600' };
-        if (value < 60) return { status: 'Low', color: 'text-blue-600' };
-        return { status: 'Normal', color: 'text-green-600' };
+        if (value >= 130 || value < 40) return { status: 'Critical', tone: 'critical' };
+        if (value > 100) return { status: 'High', tone: 'high' };
+        if (value < 60) return { status: 'Low', tone: 'low' };
+        return { status: 'Normal', tone: 'normal' };
       case 'temperature':
-        if (value > 37.5) return { status: 'Fever', color: 'text-red-600' };
-        if (value < 36.0) return { status: 'Low', color: 'text-blue-600' };
-        return { status: 'Normal', color: 'text-green-600' };
+        if (value >= 39 || value <= 35) return { status: 'Critical', tone: 'critical' };
+        if (value > 37.5) return { status: 'Fever', tone: 'high' };
+        if (value < 36.0) return { status: 'Low', tone: 'low' };
+        return { status: 'Normal', tone: 'normal' };
       case 'oxygenSaturation':
-        if (value < 95) return { status: 'Low', color: 'text-red-600' };
-        return { status: 'Normal', color: 'text-green-600' };
+        if (value < 90) return { status: 'Critical', tone: 'critical' };
+        if (value < 95) return { status: 'Low', tone: 'high' };
+        return { status: 'Normal', tone: 'normal' };
+      case 'respiratoryRate':
+        if (value >= 25 || value < 8) return { status: 'Critical', tone: 'critical' };
+        if (value > 20) return { status: 'High', tone: 'high' };
+        if (value < 12) return { status: 'Low', tone: 'low' };
+        return { status: 'Normal', tone: 'normal' };
+      case 'painLevel':
+        if (value >= 7) return { status: 'Severe', tone: 'critical' };
+        if (value >= 4) return { status: 'Moderate', tone: 'high' };
+        return { status: 'Mild', tone: 'low' };
+      case 'bloodGlucose': // mg/dL
+        if (value >= 250 || value < 54) return { status: 'Critical', tone: 'critical' };
+        if (value > 180) return { status: 'High', tone: 'high' };
+        if (value < 70) return { status: 'Low', tone: 'low' };
+        return { status: 'Normal', tone: 'normal' };
       default:
-        return { status: 'Normal', color: 'text-green-600' };
+        // weight / height — no clinical threshold, suppress the badge
+        return { status: '', tone: 'none' };
     }
+  };
+
+  const vitalToneClasses: Record<VitalTone, string> = {
+    normal: 'bg-green-100 text-green-800',
+    low: 'bg-blue-100 text-blue-800',
+    high: 'bg-amber-100 text-amber-800',
+    critical: 'bg-red-100 text-red-800',
+    none: '',
   };
 
   const fetchVitalsTrend = async (patientId: string) => {
@@ -191,6 +231,12 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
   const handleSave = async () => {
     if (!selectedPatient) {
       showError('Error', 'No patient selected');
+      return;
+    }
+
+    if (loading) return;
+    if (lastSavedSignature !== null && lastSavedSignature === JSON.stringify({ ...vitals, bmi, obs: abnormalFindings })) {
+      showError('Already saved', 'These exact vitals were just recorded. Change a value to save a new reading.');
       return;
     }
 
@@ -219,6 +265,10 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
         painLevel:        vitals.painLevel        || undefined,
         bloodGlucose:     vitals.bloodGlucose     || undefined,
         notes:            vitals.notes            || undefined,
+        // Structured SNOMED observations — fed into the CDSS risk engine
+        clinicalObservations: abnormalFindings.length
+          ? abnormalFindings.map((f) => ({ conceptId: f.conceptId, term: f.term }))
+          : undefined,
         recordedAt: new Date().toISOString(),
         recordedBy: JSON.parse(localStorage.getItem('ehr_user') || '{}').id,
       };
@@ -231,6 +281,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
       const news2 = response.data?.vitals?.newsScore ?? response.data?.newsScore ?? null;
       setCdssInsights(insights);
       setSavedNewsScore(typeof news2 === 'number' ? news2 : null);
+      setLastSavedSignature(JSON.stringify({ ...vitals, bmi, obs: abnormalFindings }));
       setCopilotDecisionNote('');
       showSuccess('Success', 'Vitals recorded successfully');
       fetchVitalsTrend(selectedPatient.id);
@@ -409,8 +460,8 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
     step?: number
   ) => {
     const value = vitals[field];
-    const status = getVitalStatus(Number(value), type);
-    
+    const status = getVitalStatus(field, Number(value));
+
     return (
       <div className="p-4 bg-white/50 rounded-xl border border-slate-200/50">
         <div className="flex items-center gap-3 mb-3">
@@ -418,13 +469,11 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
             {icon}
           </div>
           <label className="text-sm font-semibold text-slate-700">{label}</label>
-          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-            status.status === 'Normal' ? 'bg-green-100 text-green-800' :
-            status.status === 'High' || status.status === 'Fever' ? 'bg-red-100 text-red-800' :
-            'bg-blue-100 text-blue-800'
-          }`}>
-            {status.status}
-          </span>
+          {status.tone !== 'none' && (
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${vitalToneClasses[status.tone]}`}>
+              {status.status}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -600,7 +649,9 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                   <p className="text-lg font-bold text-slate-900 capitalize">
                     {cdssInsights.risk.risk_level || 'unknown'}
                   </p>
-                  {typeof cdssInsights.risk.overall_score === 'number' && (
+                  {/* Readmission score is suppressed during acute deterioration —
+                      showing "Score 0.0" next to NEWS2 10 is misleading, so hide it. */}
+                  {typeof cdssInsights.risk.overall_score === 'number' && !cdssInsights.risk.acute_safety?.acute_deterioration && (
                     <p className="text-xs text-slate-500">Score: {cdssInsights.risk.overall_score.toFixed(1)}</p>
                   )}
                   {/* ML Deterioration Probability (Sprint 113) */}
@@ -968,23 +1019,36 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                 Cancel
               </button>
             )}
-            <button
-              onClick={handleSave}
-              disabled={loading}
-              className="px-6 py-2 bg-gradient-to-r from-pink-600 to-rose-600 text-white rounded-lg hover:from-pink-700 hover:to-rose-700 font-medium shadow-lg shadow-pink-200 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Vitals
-                </>
-              )}
-            </button>
+            {(() => {
+              const alreadySaved =
+                lastSavedSignature !== null &&
+                lastSavedSignature === JSON.stringify({ ...vitals, bmi, obs: abnormalFindings });
+              return (
+                <button
+                  onClick={handleSave}
+                  disabled={loading || alreadySaved}
+                  title={alreadySaved ? 'Change a value to record a new reading' : undefined}
+                  className="px-6 py-2 bg-gradient-to-r from-pink-600 to-rose-600 text-white rounded-lg hover:from-pink-700 hover:to-rose-700 font-medium shadow-lg shadow-pink-200 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : alreadySaved ? (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Saved
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Vitals
+                    </>
+                  )}
+                </button>
+              );
+            })()}
           </div>
         </div>
       );
