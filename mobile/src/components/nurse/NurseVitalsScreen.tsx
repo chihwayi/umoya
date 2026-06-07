@@ -20,7 +20,7 @@ import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, Dot } from '..
 import { EscalateModal } from './NurseShiftScreen';
 import { PatientsService } from '../../services/patients';
 import { VitalsService } from '../../services/vitals';
-import { CdssService } from '../../services/cdss';
+import { CdssService, SafetyEvalResult } from '../../services/cdss';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -215,6 +215,7 @@ export const NurseVitalsScreen: React.FC = () => {
   const [values,          setValues]          = useState<Record<string, string>>({});
   const [interpreting,    setInterpreting]    = useState(false);
   const [interpretation,  setInterpretation]  = useState<AiInterpretation | null>(null);
+  const [safetyEval,      setSafetyEval]      = useState<SafetyEvalResult | null>(null);
   const [saving,          setSaving]          = useState(false);
   const [saved,           setSaved]           = useState(false);
   const [showEscalate,    setShowEscalate]    = useState(false);
@@ -251,6 +252,7 @@ export const NurseVitalsScreen: React.FC = () => {
   const setValue = useCallback((key: string, val: string) => {
     setValues((prev) => ({ ...prev, [key]: val }));
     setInterpretation(null);
+    setSafetyEval(null);
     setSaved(false);
   }, []);
 
@@ -260,6 +262,16 @@ export const NurseVitalsScreen: React.FC = () => {
     if (filledCount < 3) return;
     setInterpreting(true);
     setInterpretation(null);
+    setSafetyEval(null);
+
+    // Deterministic safety synthesis (sepsis/DKA/pain/multi-system) — shared backend
+    // source of truth. Falls back to local thresholds offline (ABSTAINED_SAFETY).
+    const num = (k: string) => (values[k] ? parseFloat(values[k]) : undefined);
+    CdssService.safetyEval({
+      systolic: num('sbp'), diastolic: num('dbp'), spo2: num('spo2'),
+      heartRate: num('hr'), temperature: num('temp'), respiratoryRate: num('rr'),
+      pain: num('pain'), bgl: num('bgl'),
+    }).then(setSafetyEval).catch(() => {});
 
     let result: AiInterpretation | null = null;
 
@@ -422,6 +434,30 @@ export const NurseVitalsScreen: React.FC = () => {
         )}
 
         {/* AI Interpretation result */}
+        {safetyEval && (safetyEval.acute_deterioration || safetyEval.syndrome_alerts.length > 0) && (
+          <Card accent={C.red} style={styles.interpretCard}>
+            {safetyEval.acute_deterioration && (
+              <View style={{ backgroundColor: C.red + '18', borderColor: C.red + '40', borderWidth: 1, borderRadius: RADIUS.md, padding: 10, marginBottom: 8 }}>
+                <Text style={{ color: C.red, fontWeight: '800', fontSize: 13 }}>
+                  ⛔ Acute deterioration — escalate. Discharge/readmission assessment deferred.
+                </Text>
+              </View>
+            )}
+            {safetyEval.syndrome_alerts.map((a, i) => {
+              const col = a.severity === 'critical' ? C.red : C.amber;
+              return (
+                <View key={i} style={{ backgroundColor: col + '15', borderColor: col + '35', borderWidth: 1, borderRadius: RADIUS.md, padding: 10, marginBottom: 6 }}>
+                  <Text style={{ color: col, fontWeight: '700', fontSize: 11, textTransform: 'uppercase' }}>
+                    {a.type.replace(/_/g, ' ')} · {a.severity}
+                  </Text>
+                  <Text style={{ color: C.text, fontSize: 13, marginTop: 2 }}>{a.message}</Text>
+                  {!!a.action && <Text style={{ color: C.textSecondary, fontSize: 12, marginTop: 2 }}>→ {a.action}</Text>}
+                </View>
+              );
+            })}
+          </Card>
+        )}
+
         {interpretation && (
           <Animated.View style={{ opacity: resultAnim, transform: [{ translateY: resultAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
             <Card

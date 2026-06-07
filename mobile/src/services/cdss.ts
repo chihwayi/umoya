@@ -180,6 +180,24 @@ const ABSTAINED_GUIDELINE: GuidelineResult = { results: [], abstained: true };
 const ABSTAINED_DIAGNOSIS: DiagnosisResult = { differentials: [], confidence: 0, abstained: true };
 const ABSTAINED_LAB: LabInterpretResult = { interpretation: '', severity: 'unknown', trend: '', action: '', confidence: 0, abstained: true };
 
+export interface SafetySyndromeAlert {
+  type: string;
+  severity: string;
+  message: string;
+  action?: string;
+}
+export interface SafetyEvalResult {
+  acute_deterioration: boolean;
+  acute_state: string;
+  aggregate_severity: string;
+  sepsis_screen_positive: boolean;
+  syndrome_alerts: SafetySyndromeAlert[];
+}
+const ABSTAINED_SAFETY: SafetyEvalResult = {
+  acute_deterioration: false, acute_state: 'STABLE', aggregate_severity: 'low',
+  sepsis_screen_positive: false, syndrome_alerts: [],
+};
+
 // ─── CdssService ──────────────────────────────────────────────────────────────
 
 export const CdssService = {
@@ -263,6 +281,20 @@ export const CdssService = {
       return res.data?.result ?? ABSTAINED_RISK;
     } catch {
       return ABSTAINED_RISK;
+    }
+  },
+
+  /**
+   * Deterministic clinical-safety synthesis (NEWS2-aware qSOFA/SIRS/DKA/pain +
+   * syndrome alerts). Single source of truth shared with the web.
+   * POST /cdss/safety-eval
+   */
+  async safetyEval(vitals: Record<string, any>): Promise<SafetyEvalResult> {
+    try {
+      const res = await api.post<SafetyEvalResult>('/cdss/safety-eval', { vitals });
+      return res.data ?? ABSTAINED_SAFETY;
+    } catch {
+      return ABSTAINED_SAFETY;
     }
   },
 

@@ -542,11 +542,15 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                   <Brain className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">CDSS Risk Insight</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {cdssInsights.risk.acute_safety?.acute_deterioration
+                      ? 'Acute Deterioration Monitor'
+                      : 'Readmission & Discharge Risk'}
+                  </p>
                   <p className="text-xs text-slate-500">
                     {cdssInsights.risk.acute_safety?.acute_deterioration
-                      ? 'Acute deterioration — readmission/discharge assessment deferred'
-                      : 'Automatically generated from the latest vitals'}
+                      ? 'Real-time deterioration signals — discharge/readmission assessment deferred'
+                      : 'Discharge-planning risk — valid only when the patient is clinically stable'}
                   </p>
                 </div>
               </div>

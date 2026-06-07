@@ -269,9 +269,26 @@ unified banner; (m4) apply safety-governor + copilot interlock to
   source of truth for **mobile** (next) and any per-patient surface.
 - **Covers:** B5 (backend); enables m2/m3.
 
-**Next:** Slice 5 — mobile parity (m2 consume `/cdss/safety-eval`, m3 render syndrome+banner
-on `NurseVitalsScreen`/`EscalationAlertCard`) and remaining P1/P2 (A4 panel rename, A9/A10,
-C1, D5a–d, D6).
+**Slice 5 — Mobile parity (✅ done & verified, 2026-06-07)**
+- `mobile/src/services/cdss.ts` — `safetyEval(vitals)` calls `/cdss/safety-eval` (+ `SafetyEvalResult`
+  type), error-safe fallback for offline.
+- `mobile/src/components/nurse/NurseVitalsScreen.tsx` — on "Interpret", calls the shared
+  backend synthesis and renders an **acute-deterioration banner** + **syndrome alerts**
+  (sepsis/DKA/pain/multi-system) above the existing local-threshold interpretation (kept as the
+  offline fallback). Same source of truth as web.
+- **Verification:** `npx tsc --noEmit` clean across the mobile project (exit 0); no mobile eslint
+  config (tsc is the gate).
+- **Note:** mobile's "risk" tool uses `/governed/json` (LLM text risk), not the readmission
+  contradiction, so m4 (governor on `DoctorAIScreen`) isn't needed there; the real gap (missing
+  synthesis on vitals) is now closed. **Covers:** m2, m3.
+
+**A4 — panel rename/separation (✅ done, 2026-06-07):** `VitalsPanel.tsx` panel title is now
+state-aware — **"Acute Deterioration Monitor"** during acute states vs **"Readmission &
+Discharge Risk"** when stable (no longer the ambiguous "CDSS Risk Insight" mixing both at equal
+authority). Lint + tsc clean.
+
+**Next:** A9 (mortality/acute risk domains), A10 (evidence↔score cross-check), C1 (copilot
+summary), D6 (no-show workflow), D5a–d (registration copy/UX).
 
 ---
 
