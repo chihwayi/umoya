@@ -1032,18 +1032,58 @@ export class AppointmentService {
   async markNoShow(id: string, tenantId: string): Promise<AppointmentSimple> {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
-    
+
     appointment.status = 'no_show';
     const saved = await appointmentRepository.save(appointment);
 
-    if (this.mlFeedbackService) {
+    const connection = await this.tenantService.getTenantDatabase(tenantId).catch(() => null);
+
+    // Follow-up workflow so a missed patient isn't lost — drives contact/rebook tasks.
+    if (this.workflowService && connection) {
       try {
-        const connection = await this.tenantService.getTenantDatabase(tenantId);
+        await this.workflowService.executeWorkflow(
+          'appointment_no_show',
+          {
+            entityType: 'appointment',
+            entityId: saved.id,
+            patientId: saved.patientId,
+            data: {
+              appointmentType: saved.appointmentType,
+              doctorId: saved.doctorId,
+              appointmentDate: saved.appointmentDate,
+            },
+          },
+          connection,
+        );
+      } catch (error: any) {
+        this.logger.warn(`Failed to trigger workflow for appointment_no_show: ${error.message}`);
+      }
+    }
+
+    if (this.mlFeedbackService && connection) {
+      try {
         await this.mlFeedbackService.recordNoShowOutcome(connection, id, 'no_show');
-      } catch (e) { this.logger.warn(`ML feedback failed: ${e.message}`); }
+      } catch (e: any) { this.logger.warn(`ML feedback failed: ${e.message}`); }
     }
 
     return saved;
+  }
+
+  /**
+   * Overdue ("missed") appointments — scheduled time has passed but the patient never
+   * arrived (not checked in, still scheduled/confirmed). Surfaces them so staff can mark
+   * no-show and follow up. `graceMinutes` avoids flagging patients who are merely late.
+   */
+  async getOverdueAppointments(tenantId: string, graceMinutes = 30): Promise<AppointmentSimple[]> {
+    const repo = await this.getAppointmentRepository(tenantId);
+    const cutoff = new Date(Date.now() - graceMinutes * 60_000);
+    return repo
+      .createQueryBuilder('a')
+      .where('a.appointmentDate < :cutoff', { cutoff })
+      .andWhere('a.status IN (:...active)', { active: ['scheduled', 'confirmed'] })
+      .andWhere('a.checkInTime IS NULL')
+      .orderBy('a.appointmentDate', 'ASC')
+      .getMany();
   }
 
   async searchAppointments(query: string, tenantId: string): Promise<any[]> {

@@ -187,6 +187,14 @@ export class AppointmentController {
     return this.appointmentService.searchAppointments(query, req.tenantId);
   }
 
+  @Get('overdue')
+  @ApiOperation({ summary: 'Overdue / missed appointments', description: 'Appointments past their scheduled time with no check-in (still scheduled/confirmed) — for no-show follow-up' })
+  @ApiQuery({ name: 'graceMinutes', required: false, description: 'Minutes past scheduled time before flagging (default 30)' })
+  getOverdueAppointments(@Query('graceMinutes') graceMinutes: string | undefined, @Req() req: RequestWithTenant) {
+    const grace = graceMinutes ? parseInt(graceMinutes, 10) : 30;
+    return this.appointmentService.getOverdueAppointments(req.tenantId, Number.isFinite(grace) ? grace : 30);
+  }
+
   @Get('templates')
   @ApiOperation({ summary: 'Get appointment templates', description: 'Get predefined appointment templates for quick booking' })
   getAppointmentTemplates(@Req() req: RequestWithTenant) {

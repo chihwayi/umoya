@@ -297,8 +297,20 @@ authority). Lint + tsc clean.
 - **Verification:** CDSS pytest 10/10 (incl. 2 summary tests); web eslint+tsc clean; mobile tsc
   clean; **live** summary confirmed for the synthetic patient. **Covers:** C1.
 
-**Next:** A9 (mortality/acute risk domains), A10 (evidence↔score cross-check), D6 (no-show
-workflow), D5a–d (registration copy/UX), A8 finish.
+**D6 — missed/no-show appointment workflow (✅ done & verified, 2026-06-07)**
+- `appointment.service.ts`: **`getOverdueAppointments(tenantId, graceMinutes=30)`** — surfaces
+  appointments past their scheduled time with no check-in (still scheduled/confirmed), so
+  missed patients are visible. **`markNoShow`** now also triggers an `appointment_no_show`
+  workflow event (drives contact/rebook follow-up) — mirrors `completeAppointment`.
+- `appointment.controller.ts`: **`GET /appointments/overdue?graceMinutes=`** (placed among
+  static GET routes to avoid `:id` capture).
+- **Verification:** `tsc` clean; live `GET /api/appointments/overdue` returns the test
+  tenant's overdue appointment (2026-06-02 consultation, still scheduled). **Covers:** D6.
+  *(Note: `no_show` status + no-show-rate prediction already existed; this adds the
+  detection + follow-up trigger that were missing.)*
+
+**Next:** D5a–d (registration copy/UX), A9 (mortality/acute risk domains), A10 (evidence↔score
+cross-check), A8 finish.
 
 ---
 
