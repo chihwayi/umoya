@@ -254,9 +254,24 @@ unified banner; (m4) apply safety-governor + copilot interlock to
   confirmed; webpack compiled, serves 200.
 - **Covers:** D1, D2, D3.
 
-**Next:** Slice 4 — mobile parity (consume governor/synthesis output, render syndrome+banner,
-interlock on `DoctorAIScreen`/`DoctorEscalationScreen`) and the remaining P1/P2 items
-(B5 backend safety-eval endpoint, A4 full panel rename, A9/A10, C1, D5a–d, D6).
+**Slice 4 — B5 backend single-source-of-truth `/clinical/safety-eval` (✅ done & verified, 2026-06-07)**
+- **CDSS:** new `POST /clinical/safety-eval` (`main.py`) — thin wrapper over the tested
+  `clinical_safety.evaluate()`; returns NEWS2-aware qSOFA/SIRS/DKA/pain + per-vital critical
+  flags + acute-state + aggregate severity + fused syndrome alerts. Pure/deterministic.
+- **EHR:** `cdss.service.ts` `evaluateClinicalSafety()` proxy + `cdss.controller.ts`
+  `POST /cdss/safety-eval` (nurse/doctor auth).
+- **Verification:** py syntax OK; CDSS pytest 16/16; `tsc` clean (ehr-service); **live**
+  CDSS endpoint and **full EHR chain** (`/api/cdss/safety-eval` with nurse_accounts token →
+  200, ACUTE_DETERIORATION + syndrome alerts).
+- **Note:** the web `PatientSafetyAlerts.tsx` is an *appointment-driven, multi-patient*
+  dashboard — not the right consumer of a single-patient vitals eval; the single-patient
+  synthesis already surfaces in `VitalsPanel` (Slice 2). This endpoint is the shared
+  source of truth for **mobile** (next) and any per-patient surface.
+- **Covers:** B5 (backend); enables m2/m3.
+
+**Next:** Slice 5 — mobile parity (m2 consume `/cdss/safety-eval`, m3 render syndrome+banner
+on `NurseVitalsScreen`/`EscalationAlertCard`) and remaining P1/P2 (A4 panel rename, A9/A10,
+C1, D5a–d, D6).
 
 ---
 

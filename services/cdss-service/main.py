@@ -4172,6 +4172,22 @@ async def calculate_risk_score(request: RiskScoreRequest, req: Request):
     return response_data
 
 
+class ClinicalSafetyEvalRequest(BaseModel):
+    """Structured vitals for the deterministic safety synthesis."""
+    vitals: Dict[str, Any] = Field(default_factory=dict)
+    altered_mentation: bool = Field(False, description="GCS<15 / AVPU not alert (for qSOFA)")
+
+
+@app.post("/clinical/safety-eval")
+async def clinical_safety_eval(request: ClinicalSafetyEvalRequest):
+    """Single source of truth for deterministic clinical-safety synthesis: NEWS2-aware
+    qSOFA / SIRS / DKA-HHS / severe-pain / per-vital critical flags, acute-state machine,
+    aggregate severity, and fused syndrome alerts. Replaces partial client-side thresholds
+    (web `PatientSafetyAlerts.tsx`, mobile `NurseVitalsScreen.tsx`)."""
+    from clinical_safety import evaluate
+    return evaluate(request.vitals or {}, altered_mentation=request.altered_mentation)
+
+
 # Dosing Recommendations
 class DosingRequest(BaseModel):
     drug_name: str = Field(..., description="Drug name or ID")

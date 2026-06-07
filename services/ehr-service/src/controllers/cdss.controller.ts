@@ -59,6 +59,13 @@ export class CdssController {
     return this.cdssService.searchGuidelines(body.query, body.limit, body.patient_context, req.tenantId, req.tenantDb);
   }
 
+  @Post('safety-eval')
+  @ApiOperation({ summary: 'Deterministic clinical-safety synthesis (NEWS2/qSOFA/SIRS/DKA/pain + syndrome alerts)' })
+  @ApiResponse({ status: 200, description: 'Safety evaluation' })
+  async evaluateClinicalSafety(@Body() body: { vitals?: Record<string, any>; altered_mentation?: boolean }, @Request() req: RequestWithTenant) {
+    return this.cdssService.evaluateClinicalSafety(body.vitals || {}, req.tenantId, body.altered_mentation === true);
+  }
+
   @Post('analyze-image')
   @ApiOperation({ summary: 'Analyze medical image through CDSS' })
   @ApiConsumes('multipart/form-data')

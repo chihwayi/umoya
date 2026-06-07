@@ -2213,6 +2213,25 @@ export class CdssService {
     }
   }
 
+  /**
+   * Deterministic clinical-safety synthesis (NEWS2-aware qSOFA/SIRS/DKA/pain + syndrome
+   * alerts + acute state). Single source of truth for the Safety Alerts surfaces.
+   */
+  async evaluateClinicalSafety(
+    vitals: Record<string, any>,
+    tenantId?: string,
+    alteredMentation = false,
+  ): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'risk_assessment',
+      '/clinical/safety-eval',
+      { vitals: vitals || {}, altered_mentation: alteredMentation },
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async cervicalCancerScreenRecommend(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',
