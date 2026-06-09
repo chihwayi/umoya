@@ -325,7 +325,7 @@ export class DiabetesService {
         stress_level, notes, recorded_at, recorded_by, created_at, updated_at
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,COALESCE($7,'mg/dL'),$8,$9,
+        $1,$2,$3,$4,$5,$6,COALESCE($7,'mmol/L'),$8,$9,
         $10,$11,$12,$13,$14,$15,
         COALESCE($16::timestamptz,NOW()),$17,NOW(),NOW()
       )
@@ -338,7 +338,7 @@ export class DiabetesService {
         dto.deviceType ?? null,
         dto.deviceId ?? null,
         dto.glucoseValue,
-        dto.glucoseUnit ?? 'mg/dL',
+        dto.glucoseUnit ?? 'mmol/L',
         dto.readingType ?? null,
         dto.mealContext ?? null,
         dto.insulinDose ?? null,
@@ -401,8 +401,8 @@ export class DiabetesService {
           MIN(glucose_value)::numeric(10,2) AS min_value,
           MAX(glucose_value)::numeric(10,2) AS max_value,
           COUNT(*)::int AS total_readings,
-          SUM(CASE WHEN glucose_value < 70 THEN 1 ELSE 0 END)::int AS hypo_count,
-          SUM(CASE WHEN glucose_value > 180 THEN 1 ELSE 0 END)::int AS hyper_count
+          SUM(CASE WHEN glucose_value < 3.9 THEN 1 ELSE 0 END)::int AS hypo_count,
+          SUM(CASE WHEN glucose_value > 10.0 THEN 1 ELSE 0 END)::int AS hyper_count
         FROM glucose_monitoring
         WHERE diabetes_registry_id = $1
           AND recorded_at >= $2
@@ -696,7 +696,7 @@ export class DiabetesService {
 
     const carbRatio = dto.carbRatioOverride ?? regimen.carb_ratio ?? null;
     const correctionFactor = dto.correctionFactorOverride ?? regimen.correction_factor ?? null;
-    const targetGlucose = dto.targetGlucose ?? regimen.target_glucose ?? 110;
+    const targetGlucose = dto.targetGlucose ?? regimen.target_glucose ?? 6.0;
 
     if (!carbRatio || !correctionFactor) {
       throw new BadRequestException('Regimen is missing carb ratio or correction factor');
@@ -989,7 +989,7 @@ export class DiabetesService {
           )
           VALUES (
             $1,$2,'vitals','point_of_care',$3,
-            $4,'mg/dL',NULL,NULL,
+            $4,'mmol/L',NULL,NULL,
             NULL,NULL,NULL,NULL,
             NULL,$5,$6,$7,NOW(),NOW()
           )

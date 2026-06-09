@@ -48,14 +48,68 @@ interface TaskManagementProps {
   onTaskComplete?: (taskId: string) => void;
   onTaskUpdate?: (task: Task) => void;
   onTaskCountsChange?: (counts: { pending: number; inProgress: number; overdue: number }) => void;
+  /** Open the real workflow for a task (record vitals, triage, MAR, etc.). */
+  onTaskAction?: (task: Task) => void;
 }
 
-const TaskManagement: React.FC<TaskManagementProps> = ({ 
-  currentUser, 
-  appointments, 
-  onTaskComplete, 
+const PRIORITY_RANK: Record<string, number> = { urgent: 4, high: 3, normal: 2, low: 1 };
+
+/**
+ * Derive a task's clinical priority from REAL signals (persisted NEWS2 / CDSS
+ * acute-deterioration on the patient's latest vitals, appointment urgency,
+ * medication overdue, overdue due-time, age/comorbidity). Deterministic — used
+ * both at task generation and by the "Prioritize by Risk" action.
+ */
+function deriveClinicalPriority(
+  task: Task,
+  apt: any,
+): { priority: Task['priority']; reason: string } {
+  // Clinical escalations already carry a severity-derived priority.
+  if (task.source === 'clinical_escalation') {
+    return { priority: task.priority, reason: '' };
+  }
+  let priority: Task['priority'] = task.priority;
+  const reasons: string[] = [];
+  const bump = (p: Task['priority'], why: string) => {
+    if (PRIORITY_RANK[p] > PRIORITY_RANK[priority]) priority = p;
+    if (why && !reasons.includes(why)) reasons.push(why);
+  };
+
+  const v = apt?.vitals;
+  if (v) {
+    const news = Number(v.newsScore ?? v.news_score);
+    if (!Number.isNaN(news)) {
+      if (news >= 7) bump('urgent', `NEWS2 ${news}`);
+      else if (news >= 5) bump('high', `NEWS2 ${news}`);
+    }
+    if (v.cdssInsights?.risk?.acute_safety?.acute_deterioration) {
+      bump('urgent', 'Acute deterioration');
+    }
+  }
+  if (apt?.priorityLevel === 'urgent' || apt?.priorityLevel === 'emergency') {
+    bump('urgent', 'Appointment marked urgent');
+  }
+  if (task.taskType === 'medication' && (task.notes || '').toLowerCase().includes('overdue')) {
+    bump('urgent', 'Medication overdue');
+  }
+  // Overdue (past due time and not done) bumps one level toward high.
+  if (task.status !== 'completed' && task.dueTime && new Date(task.dueTime) < new Date()) {
+    bump(PRIORITY_RANK[priority] >= PRIORITY_RANK.high ? 'urgent' : 'high', 'Overdue');
+  }
+  if (apt?.patient?.age && apt.patient.age > 70) bump('high', 'Age > 70');
+  if (apt?.patient?.chronicConditions && /diabetes|heart|hypertension|copd/i.test(apt.patient.chronicConditions)) {
+    bump('high', 'Chronic condition risk');
+  }
+  return { priority, reason: reasons.join(', ') };
+}
+
+const TaskManagement: React.FC<TaskManagementProps> = ({
+  currentUser,
+  appointments,
+  onTaskComplete,
   onTaskUpdate,
-  onTaskCountsChange
+  onTaskCountsChange,
+  onTaskAction
 }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -69,7 +123,10 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
   const [serverCompletedTaskIds, setServerCompletedTaskIds] = useState<Set<string>>(new Set());
+  const [serverInProgressTaskIds, setServerInProgressTaskIds] = useState<Set<string>>(new Set());
   const [serverEscalationTasks, setServerEscalationTasks] = useState<Task[]>([]);
+  // Real, non-appointment task sources (broadens beyond triage/vitals/docs).
+  const [serverOrderTasks, setServerOrderTasks] = useState<Task[]>([]);
 
   useEffect(() => {
     const loadState = async () => {
@@ -77,12 +134,15 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         const token = localStorage.getItem('ehr_token');
         const tenantSlug = localStorage.getItem('ehr_tenant_slug');
         if (!token || !tenantSlug) return;
-        const [stateResponse, escalationResponse] = await Promise.all([
+        const [stateResponse, escalationResponse, marResponse, labResponse] = await Promise.all([
           ehrApi.getNurseWorklistState(token, tenantSlug),
           ehrApi.getClinicalEscalationFeed(token, tenantSlug, { includeCompleted: true, limit: 50 }),
+          ehrApi.getMedicationSafetyWorklist(token, tenantSlug, { includeCompleted: false, limit: 100 }).catch(() => ({ data: null })),
+          ehrApi.getPendingLabOrders(token, tenantSlug).catch(() => ({ data: null })),
         ]);
         const completed = new Set<string>(stateResponse.data?.completedTaskIds || []);
         setServerCompletedTaskIds(completed);
+        setServerInProgressTaskIds(new Set<string>(stateResponse.data?.inProgressTaskIds || []));
         const escalationTasks = Array.isArray(escalationResponse.data?.items)
           ? escalationResponse.data.items.map((item: any) => ({
               id: `clinical-escalation-${item.id}`,
@@ -114,6 +174,80 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
             }))
           : [];
         setServerEscalationTasks(escalationTasks);
+
+        // ── Medication administration tasks (real MAR worklist) ──────────────
+        const marItems: any[] = Array.isArray(marResponse.data)
+          ? marResponse.data
+          : Array.isArray(marResponse.data?.items)
+            ? marResponse.data.items
+            : [];
+        const medicationTasks: Task[] = marItems
+          .filter((m) => {
+            const s = String(m.administrationStatus || m.status || 'pending').toLowerCase();
+            return s !== 'administered' && s !== 'completed';
+          })
+          .map((m) => {
+            const overdue = Number(m.overdueMinutes || 0) > 0;
+            const taskId = `mar-${m.id}`;
+            return {
+              id: taskId,
+              patientId: m.patientId,
+              patientName: m.patientName || m.patientNumber || 'Unknown patient',
+              taskType: 'medication' as const,
+              title: `Administer ${m.medicationName || 'medication'}`,
+              description: `${m.medicationName || 'Medication'}${m.dose ? ` ${m.dose}` : ''}${m.route ? ` (${m.route})` : ''} for ${m.patientName || 'patient'}`,
+              priority: overdue ? 'urgent' : m.dueSoon ? 'high' : (m.priority as any) || 'normal',
+              status: completed.has(taskId) ? 'completed' : 'pending',
+              dueTime: m.scheduledTime || new Date().toISOString(),
+              estimatedDuration: 10,
+              assignedTo: currentUser?.id || '',
+              createdBy: 'mar_worklist',
+              createdAt: m.scheduledTime || new Date().toISOString(),
+              completedAt: completed.has(taskId) ? new Date().toISOString() : undefined,
+              notes: overdue ? `Overdue by ${m.overdueMinutes} min` : undefined,
+              isRecurring: false,
+              source: 'manual' as const,
+              relatedOrderId: m.id,
+            } as Task;
+          });
+
+        // ── Lab sample collection tasks (real pending lab orders) ────────────
+        const labItems: any[] = Array.isArray(labResponse.data)
+          ? labResponse.data
+          : Array.isArray(labResponse.data?.orders)
+            ? labResponse.data.orders
+            : Array.isArray(labResponse.data?.items)
+              ? labResponse.data.items
+              : [];
+        const labTasks: Task[] = labItems.map((o) => {
+          const taskId = `lab-collect-${o.id}`;
+          const testName = o.testName || o.test_name || o.panelName || o.snomedTerm || o.snomed_term || 'lab sample';
+          const patientName = o.patientName || o.patient_name ||
+            `${o.firstName || o.first_name || ''} ${o.lastName || o.last_name || ''}`.trim() || 'Unknown patient';
+          const isStat = String(o.priority || o.urgency || '').toLowerCase().includes('stat') ||
+            String(o.priority || o.urgency || '').toLowerCase().includes('urgent');
+          return {
+            id: taskId,
+            patientId: o.patientId || o.patient_id,
+            patientName,
+            taskType: 'lab' as const,
+            title: `Collect sample: ${testName}`,
+            description: `Collect ${testName} for ${patientName}`,
+            priority: isStat ? 'high' : 'normal',
+            status: completed.has(taskId) ? 'completed' : 'pending',
+            dueTime: o.createdAt || o.created_at || new Date().toISOString(),
+            estimatedDuration: 10,
+            assignedTo: currentUser?.id || '',
+            createdBy: 'lab_orders',
+            createdAt: o.createdAt || o.created_at || new Date().toISOString(),
+            completedAt: completed.has(taskId) ? new Date().toISOString() : undefined,
+            isRecurring: false,
+            source: 'manual' as const,
+            relatedOrderId: o.id,
+          } as Task;
+        });
+
+        setServerOrderTasks([...medicationTasks, ...labTasks]);
       } catch {
       }
     };
@@ -266,15 +400,26 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         }
       });
 
-      setTasks([...realTasks, ...serverEscalationTasks]);
+      // Decorate appointment + order tasks: apply persisted in-progress state and
+      // a real, data-driven priority. (Escalations keep their server status/priority.)
+      const decorate = (t: Task): Task => {
+        const apt = appointments.find((a) => a.id === t.relatedAppointmentId);
+        const { priority } = deriveClinicalPriority(t, apt);
+        let status = t.status;
+        if (completedTaskIds.has(t.id)) status = 'completed';
+        else if (serverInProgressTaskIds.has(t.id) && status !== 'completed') status = 'in_progress';
+        return { ...t, priority, status };
+      };
+      const decorated = [...realTasks, ...serverOrderTasks].map(decorate);
+      setTasks([...decorated, ...serverEscalationTasks]);
     };
 
-    if (appointments.length > 0 || serverEscalationTasks.length > 0) {
+    if (appointments.length > 0 || serverEscalationTasks.length > 0 || serverOrderTasks.length > 0) {
       generateTasksFromAppointments();
     } else {
       setTasks([]);
     }
-  }, [appointments, currentUser, serverCompletedTaskIds, serverEscalationTasks]);
+  }, [appointments, currentUser, serverCompletedTaskIds, serverInProgressTaskIds, serverEscalationTasks, serverOrderTasks]);
 
   // Notify parent of task count changes
   // Use useRef to store the callback to avoid recreating it on every render
@@ -355,6 +500,19 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
     }
   };
 
+  // Label for the deep-link "Do it" button — opens the real workflow for the task.
+  const getActionLabel = (taskType: string) => {
+    switch (taskType) {
+      case 'vitals': return 'Record Vitals';
+      case 'assessment': return 'Open Triage';
+      case 'documentation': return 'Open Notes';
+      case 'medication': return 'Open MAR';
+      case 'lab': return 'Open Labs';
+      case 'escalation': return 'Open Patient';
+      default: return 'Open';
+    }
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'urgent': return 'bg-red-100 text-red-800 border-red-200';
@@ -427,19 +585,34 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   };
 
   const handleTaskStart = async (taskId: string) => {
+    const token = localStorage.getItem('ehr_token');
+    const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+    const task = tasks.find((item) => item.id === taskId);
+    // Optimistic update so the card reacts immediately.
+    setServerInProgressTaskIds((prev) => new Set(prev).add(taskId));
+    setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, status: 'in_progress' as const } : t
+    ));
     try {
-      const token = localStorage.getItem('ehr_token');
-      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-      const task = tasks.find((item) => item.id === taskId);
-      if (task?.source === 'clinical_escalation' && task.relatedEscalationTaskId && token && tenantSlug) {
+      if (!token || !tenantSlug) return;
+      if (task?.source === 'clinical_escalation' && task.relatedEscalationTaskId) {
         await ehrApi.acknowledgeClinicalEscalation(task.relatedEscalationTaskId, token, tenantSlug);
+      } else {
+        // Persist in-progress so it survives reload (previously local-only).
+        await ehrApi.startNurseTask(
+          taskId,
+          { patientId: task?.patientId, context: { taskType: task?.taskType, priority: task?.priority } },
+          token,
+          tenantSlug,
+        );
       }
-      setTasks(prev => prev.map(task => 
-        task.id === taskId 
-          ? { ...task, status: 'in_progress' as const }
-          : task
-      ));
     } catch {
+      // Roll back optimistic state on failure.
+      setServerInProgressTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
     }
   };
 
@@ -466,90 +639,26 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
 
   const stats = getTaskStats();
 
-  const handleSmartPrioritize = async () => {
+  const handleSmartPrioritize = () => {
     setIsAiAnalyzing(true);
-    
-    // Simulate AI processing delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const updatedTasks = tasks.map(task => {
-      let newPriority = task.priority;
-      let reason = "";
-      
-      const apt = appointments.find(a => a.id === task.relatedAppointmentId);
-
-      // Logic for Vitals tasks
-      if (task.taskType === 'vitals' && apt) {
-        // If patient is elderly, increase priority
-        if (apt.patient.age && apt.patient.age > 70) {
-          newPriority = 'high';
-          reason = "Patient age > 70";
-        }
-        
-        // Check for chronic conditions (diabetes, hypertension, heart disease)
-        if (apt.patient.chronicConditions) {
-          const conditions = apt.patient.chronicConditions.toLowerCase();
-          if (conditions.includes('diabetes') || conditions.includes('heart') || conditions.includes('hypertension') || conditions.includes('copd')) {
-             if (newPriority !== 'urgent') { // Don't downgrade if already urgent
-               newPriority = 'high';
-               reason = reason ? `${reason}, Chronic Condition Risk` : "Chronic Condition Risk";
-             }
-          }
-        }
-
-        // Check for allergies that might react with common meds (simplified check)
-        if (apt.patient.allergies && (apt.patient.allergies.toLowerCase().includes('severe') || apt.patient.allergies.toLowerCase().includes('anaphylaxis'))) {
-             if (newPriority !== 'urgent') {
-               newPriority = 'high';
-               reason = reason ? `${reason}, High Risk Allergy` : "High Risk Allergy";
-             }
-        }
-        
-        // If appointment was marked urgent
-        if (apt.priorityLevel === 'urgent' || apt.priorityLevel === 'emergency') {
-          newPriority = 'urgent';
-          reason = "Appointment marked urgent";
-        }
-      }
-      
-      // Logic for Documentation tasks
-      if (task.taskType === 'documentation' && apt) {
-         if (apt.status === 'in-progress' || apt.status === 'in_progress') {
-             // If it's been in progress for a long time, bump priority (simulated)
-             const startTime = new Date(apt.appointmentDate);
-             const now = new Date();
-             const diffMins = (now.getTime() - startTime.getTime()) / 60000;
-             if (diffMins > 60) {
-                 newPriority = 'high';
-                 reason = "Appointment duration > 60m";
-             }
-         }
-      }
-
-      // Logic based on existing vitals (if re-assessing)
-      if (apt && apt.vitals) {
-        const { bloodPressure, heartRate, temperature, oxygenSaturation } = apt.vitals;
-        // Check for critical values
-        const sys = parseInt(bloodPressure?.split('/')[0] || "0");
-        const dia = parseInt(bloodPressure?.split('/')[1] || "0");
-        
-        if (sys > 180 || sys < 90 || dia > 120 || heartRate > 120 || heartRate < 50 || temperature > 39 || oxygenSaturation < 90) {
-            newPriority = 'urgent';
-            reason = "Critical vitals detected";
-        }
-      }
-
-      if (newPriority !== task.priority) {
-          // In a real app, we would update this on the server
-          return { ...task, priority: newPriority, notes: task.notes ? `${task.notes} [AI Priority: ${reason}]` : `[AI Priority: ${reason}]` };
+    // Recompute priorities from real clinical data (persisted NEWS2 / CDSS
+    // acute-deterioration, medication overdue, appointment urgency, overdue
+    // due-time, comorbidity) — deterministic, no fake delay, no fabricated data.
+    const updatedTasks = tasks.map((task) => {
+      const apt = appointments.find((a) => a.id === task.relatedAppointmentId);
+      const { priority, reason } = deriveClinicalPriority(task, apt);
+      if (priority !== task.priority || reason) {
+        const tag = reason ? `[Risk priority: ${reason}]` : '[Risk priority]';
+        // Replace any prior risk-priority annotation rather than stacking them.
+        const baseNotes = (task.notes || '').replace(/\s*\[Risk priority[^\]]*\]/g, '').trim();
+        return { ...task, priority, notes: baseNotes ? `${baseNotes} ${tag}` : tag };
       }
       return task;
     });
-
     setTasks(updatedTasks);
-    setIsAiAnalyzing(false);
     setSortBy('priority');
     setSortOrder('desc');
+    setIsAiAnalyzing(false);
   };
 
   return (
@@ -708,7 +817,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           <button
               onClick={handleSmartPrioritize}
               disabled={isAiAnalyzing}
-              title="Automatically analyzes patient data (age, conditions, vitals) to prioritize tasks"
+              title="Re-rank tasks using real clinical signals: NEWS2 / CDSS acute-deterioration, medication overdue, appointment urgency, overdue due-time, and comorbidity."
               className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm ${isAiAnalyzing ? 'opacity-70 cursor-wait' : ''}`}
             >
             {isAiAnalyzing ? (
@@ -716,14 +825,14 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-            <span className="text-sm font-medium">{isAiAnalyzing ? 'AI Analyzing...' : 'Smart Prioritize'}</span>
+            <span className="text-sm font-medium">Prioritize by Risk</span>
           </button>
         </div>
       </div>
 
       {/* Task List */}
       <div className="space-y-4">
-        {appointments.length === 0 && serverEscalationTasks.length === 0 ? (
+        {appointments.length === 0 && serverEscalationTasks.length === 0 && serverOrderTasks.length === 0 ? (
            <div className="text-center py-12 bg-white rounded-2xl shadow-lg border border-slate-200/50">
              <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
              <h3 className="text-lg font-semibold text-slate-600 mb-2">No Appointments Today</h3>
@@ -737,10 +846,10 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
             <div className="bg-blue-50 p-4 rounded-lg inline-block text-left max-w-md">
                 <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
                     <Sparkles className="w-4 h-4" />
-                    About Smart Prioritize
+                    About Prioritize by Risk
                 </h4>
                 <p className="text-sm text-blue-700">
-                    The Smart Prioritize button uses AI to analyze patient data (vitals, age, conditions) and automatically adjusts task priorities to highlight urgent cases.
+                    "Prioritize by Risk" re-ranks tasks from real clinical signals — the patient's latest NEWS2 / CDSS acute-deterioration, medication overdue, appointment urgency, overdue due-time, and comorbidity.
                 </p>
             </div>
           </div>
@@ -776,19 +885,10 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getStatusColor(task.status)}`}>
                           {task.status.replace('_', ' ').toUpperCase()}
                         </span>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-semibold border ${
-                            task.notes && task.notes.includes('[AI Priority')
-                              ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                              : 'bg-slate-100 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          {task.notes && task.notes.includes('[AI Priority') ? 'SUGGESTED' : 'MANUAL'}
-                        </span>
-                        {task.notes && task.notes.includes('[AI Priority') && (
+                        {task.notes && task.notes.includes('[Risk priority') && (
                           <span className="px-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
                             <Sparkles className="w-3 h-3" />
-                            AI PRIORITY
+                            RISK PRIORITY
                           </span>
                         )}
                         {task.source === 'clinical_escalation' && (
@@ -879,6 +979,17 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                       }
                     </button>
                     
+                    {/* Deep-link to actually perform the task (record vitals, triage, MAR…) */}
+                    {task.status !== 'completed' && onTaskAction && (
+                      <button
+                        onClick={() => onTaskAction(task)}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
+                      >
+                        {getTaskIcon(task.taskType)}
+                        {getActionLabel(task.taskType)}
+                      </button>
+                    )}
+
                     {task.status === 'pending' && (
                       <button
                         onClick={() => handleTaskStart(task.id)}

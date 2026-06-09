@@ -28,7 +28,7 @@ const THRESHOLDS = {
   temperature: { low: 36.0, high: 37.5, criticalLow: 35.0, criticalHigh: 40.0 }, // Celsius
   oxygenSaturation: { low: 95, high: 100, criticalLow: 90, criticalHigh: 100 },
   respiratoryRate: { low: 12, high: 20, criticalLow: 8, criticalHigh: 25 },
-  bloodGlucose: { low: 70, high: 140, criticalLow: 54, criticalHigh: 250 }, // mg/dL
+  bloodGlucose: { low: 4, high: 11, criticalLow: 3, criticalHigh: 25 }, // mmol/L
   systolicBP: { low: 90, high: 140, criticalLow: 70, criticalHigh: 180 },
   diastolicBP: { low: 60, high: 90, criticalLow: 40, criticalHigh: 120 },
   bmi: { low: 18.5, high: 25, criticalLow: 16, criticalHigh: 35 },
@@ -246,8 +246,8 @@ export function checkVitalsAlerts(vitals: VitalsData): VitalsAlert[] {
       alerts.push({
         type: 'critical',
         vital: 'Blood Glucose',
-        value: `${bg} mg/dL`,
-        threshold: `< ${THRESHOLDS.bloodGlucose.criticalLow} mg/dL`,
+        value: `${bg} mmol/L`,
+        threshold: `< ${THRESHOLDS.bloodGlucose.criticalLow} mmol/L`,
         message: `Critical: Severe hypoglycemia`,
         recommendation: 'Immediate glucose administration and medical attention required.'
       });
@@ -255,8 +255,8 @@ export function checkVitalsAlerts(vitals: VitalsData): VitalsAlert[] {
       alerts.push({
         type: 'critical',
         vital: 'Blood Glucose',
-        value: `${bg} mg/dL`,
-        threshold: `> ${THRESHOLDS.bloodGlucose.criticalHigh} mg/dL`,
+        value: `${bg} mmol/L`,
+        threshold: `> ${THRESHOLDS.bloodGlucose.criticalHigh} mmol/L`,
         message: `Critical: Severe hyperglycemia`,
         recommendation: 'Immediate medical attention required. Consider insulin therapy.'
       });
@@ -264,11 +264,11 @@ export function checkVitalsAlerts(vitals: VitalsData): VitalsAlert[] {
       alerts.push({
         type: 'warning',
         vital: 'Blood Glucose',
-        value: `${bg} mg/dL`,
-        threshold: `${THRESHOLDS.bloodGlucose.low}-${THRESHOLDS.bloodGlucose.high} mg/dL`,
+        value: `${bg} mmol/L`,
+        threshold: `${THRESHOLDS.bloodGlucose.low}-${THRESHOLDS.bloodGlucose.high} mmol/L`,
         message: bg < THRESHOLDS.bloodGlucose.low 
-          ? `Low blood glucose: ${bg} mg/dL (expected: ${THRESHOLDS.bloodGlucose.low}-${THRESHOLDS.bloodGlucose.high} mg/dL)`
-          : `Elevated blood glucose: ${bg} mg/dL (expected: ${THRESHOLDS.bloodGlucose.low}-${THRESHOLDS.bloodGlucose.high} mg/dL)`,
+          ? `Low blood glucose: ${bg} mmol/L (expected: ${THRESHOLDS.bloodGlucose.low}-${THRESHOLDS.bloodGlucose.high} mmol/L)`
+          : `Elevated blood glucose: ${bg} mmol/L (expected: ${THRESHOLDS.bloodGlucose.low}-${THRESHOLDS.bloodGlucose.high} mmol/L)`,
         recommendation: 'Monitor closely and investigate if symptomatic.'
       });
     }

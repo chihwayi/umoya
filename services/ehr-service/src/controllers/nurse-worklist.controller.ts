@@ -615,6 +615,29 @@ export class NurseWorklistController {
     );
   }
 
+  @Post('tasks/:taskId/start')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Persist server-scoped task in-progress state for current user' })
+  @ApiResponse({ status: 200, description: 'Task start recorded' })
+  async startTask(
+    @Param('taskId') taskId: string,
+    @Body() body: { patientId?: string; context?: any },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.startTask(
+      req.tenantDb,
+      user,
+      taskId,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
   @Post('tasks/:taskId/complete')
   @Patch('tasks/:taskId/complete')
   @Roles('nurse', 'doctor', 'admin')

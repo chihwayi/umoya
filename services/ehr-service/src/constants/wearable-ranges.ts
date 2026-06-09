@@ -16,7 +16,7 @@ export interface ReferenceRange {
 export const REFERENCE_RANGES: Record<ReadingType, ReferenceRange> = {
   bp_systolic:  { criticalLow: 80,  low: 90,  high: 140, criticalHigh: 180 },
   bp_diastolic: { criticalLow: 50,  low: 60,  high: 90,  criticalHigh: 120 },
-  glucose:      { criticalLow: 54,  low: 70,  high: 180, criticalHigh: 250 },
+  glucose:      { criticalLow: 3.0, low: 3.9, high: 10.0, criticalHigh: 13.9 }, // mmol/L
   heart_rate:   { criticalLow: 40,  low: 50,  high: 100, criticalHigh: 150 },
   spo2:         { criticalLow: 88,  low: 92,  high: 100 },
   weight:       { low: 30, high: 250 },

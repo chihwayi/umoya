@@ -18,7 +18,7 @@ const READING_TYPES = [
   { key: 'bp_systolic',  label: 'SBP (mmHg)' },
   { key: 'bp_diastolic', label: 'DBP (mmHg)' },
   { key: 'heart_rate',   label: 'HR (bpm)' },
-  { key: 'glucose',      label: 'Glucose (mg/dL)' },
+  { key: 'glucose',      label: 'Glucose (mmol/L)' },
   { key: 'spo2',         label: 'SpO₂ (%)' },
 ] as const;
 

@@ -7,14 +7,14 @@ export class PatientCharge {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ name: 'admission_id', nullable: true })
+  @Column({ name: 'admission_id', type: 'uuid', nullable: true })
   admissionId: string;
 
   @Column({ name: 'charge_code', length: 50 })
@@ -50,7 +50,7 @@ export class PatientCharge {
   @Column({ length: 100, nullable: true })
   department: string;
 
-  @Column({ name: 'ordering_provider', nullable: true })
+  @Column({ name: 'ordering_provider', type: 'uuid', nullable: true })
   orderingProviderId: string;
 
   @ManyToOne(() => User)
@@ -63,7 +63,7 @@ export class PatientCharge {
   @Column({ name: 'capture_method', length: 50, nullable: true })
   captureMethod: string;
 
-  @Column({ name: 'captured_by', nullable: true })
+  @Column({ name: 'captured_by', type: 'uuid', nullable: true })
   capturedById: string;
 
   @ManyToOne(() => User)
@@ -74,7 +74,7 @@ export class PatientCharge {
   capturedAt: Date;
 
   // Approval Workflow Columns (from Migration 028)
-  @Column({ name: 'reviewed_by', nullable: true })
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
   reviewedById: string;
 
   @ManyToOne(() => User)
@@ -84,7 +84,7 @@ export class PatientCharge {
   @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
   reviewedAt: Date;
 
-  @Column({ name: 'approved_by', nullable: true })
+  @Column({ name: 'approved_by', type: 'uuid', nullable: true })
   approvedById: string;
 
   @ManyToOne(() => User)

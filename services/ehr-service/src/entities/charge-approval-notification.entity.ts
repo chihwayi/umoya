@@ -8,14 +8,14 @@ export class ChargeApprovalNotification {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'admission_id', nullable: true })
+  @Column({ name: 'admission_id', type: 'uuid', nullable: true })
   admissionId: string;
 
   @ManyToOne(() => Admission)
   @JoinColumn({ name: 'admission_id' })
   admission: Admission;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -34,7 +34,7 @@ export class ChargeApprovalNotification {
   @Column({ name: 'total_charges_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
   totalChargesAmount: number;
 
-  @Column({ name: 'created_by', nullable: true })
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdById: string;
 
   @ManyToOne(() => User)
@@ -44,7 +44,7 @@ export class ChargeApprovalNotification {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @Column({ name: 'read_by', nullable: true })
+  @Column({ name: 'read_by', type: 'uuid', nullable: true })
   readById: string;
 
   @ManyToOne(() => User)

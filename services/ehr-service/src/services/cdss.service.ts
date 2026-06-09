@@ -3776,8 +3776,10 @@ export class CdssService {
     const oxygenSaturation = readNumber('oxygenSaturation', 'oxygen_saturation', 'spo2');
     const respiratoryRate = readNumber('respiratoryRate', 'respiratory_rate');
     const painLevel = readNumber('painLevel', 'pain_level', 'painScore', 'pain_score');
-    const rawGlucose = readNumber('bloodGlucose', 'blood_glucose', 'glucose');
-    const bloodGlucoseMmol = rawGlucose !== null && rawGlucose > 60 ? Number((rawGlucose / 18).toFixed(1)) : rawGlucose;
+    // Blood glucose is standardised on mmol/L across the system (entry, display, alerts),
+    // so the value is consumed as-is. Do NOT apply a magnitude-based mg/dL→mmol/L guess:
+    // it inverts genuinely low mmol/L readings (e.g. a 2.5 mmol/L hypo) into false hyperglycaemia.
+    const bloodGlucoseMmol = readNumber('bloodGlucose', 'blood_glucose', 'glucose');
     const news2Score = readNumber('news2Score', 'newsScore', 'news2_score', 'news_score');
 
     return {

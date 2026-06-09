@@ -10,7 +10,7 @@ import {
 import { Patient } from './patient.entity';
 import { User } from './user.entity';
 
-export type NurseCopilotTaskEventStatus = 'completed';
+export type NurseCopilotTaskEventStatus = 'completed' | 'in_progress';
 
 @Entity('nurse_copilot_task_events')
 export class NurseCopilotTaskEvent {

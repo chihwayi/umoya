@@ -44,7 +44,7 @@ export class GlucoseMonitoring {
   @Column({ name: 'glucose_value', type: 'numeric', precision: 6, scale: 2 })
   glucoseValue: number;
 
-  @Column({ name: 'glucose_unit', type: 'varchar', length: 10, default: 'mg/dL' })
+  @Column({ name: 'glucose_unit', type: 'varchar', length: 10, default: 'mmol/L' })
   glucoseUnit: 'mg/dL' | 'mmol/L';
 
   @Column({ name: 'reading_type', type: 'varchar', length: 30, nullable: true })

@@ -114,7 +114,7 @@ export class DiabetesDeviceIntegrationService {
             stress_level, notes, recorded_at, recorded_by, created_at, updated_at
           )
           VALUES (
-            $1,$2,'cgm',$3,$4,$5,'mg/dL',NULL,NULL,NULL,NULL,NULL,NULL,NULL,
+            $1,$2,'cgm',$3,$4,$5,'mmol/L',NULL,NULL,NULL,NULL,NULL,NULL,NULL,
             $6,$7,NOW(),NOW()
           )
         `,
@@ -123,7 +123,10 @@ export class DiabetesDeviceIntegrationService {
           patientId,
           dto.deviceType ?? 'cgm',
           dto.deviceId ?? null,
-          entry.value,
+          // CGM device payloads report glucose in mg/dL; store standardised to mmol/L.
+          entry.value !== null && entry.value !== undefined
+            ? Number((Number(entry.value) / 18.0182).toFixed(1))
+            : entry.value,
           entry.eventType ?? entry.trend ?? null,
           entry.timestamp,
           userId ?? null,

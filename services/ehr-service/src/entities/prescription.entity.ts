@@ -41,7 +41,7 @@ export class Prescription {
   @JoinColumn({ name: 'doctor_id' })
   prescriber: User;
 
-  @Column({ name: 'medical_record_id', nullable: true })
+  @Column({ name: 'medical_record_id', type: 'uuid', nullable: true })
   medicalRecordId?: string;
 
   @ManyToOne(() => MedicalRecord, { nullable: true })

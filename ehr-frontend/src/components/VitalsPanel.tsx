@@ -195,10 +195,10 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
         if (value >= 7) return { status: 'Severe', tone: 'critical' };
         if (value >= 4) return { status: 'Moderate', tone: 'high' };
         return { status: 'Mild', tone: 'low' };
-      case 'bloodGlucose': // mg/dL
-        if (value >= 250 || value < 54) return { status: 'Critical', tone: 'critical' };
-        if (value > 180) return { status: 'High', tone: 'high' };
-        if (value < 70) return { status: 'Low', tone: 'low' };
+      case 'bloodGlucose': // mmol/L
+        if (value >= 25 || value < 3) return { status: 'Critical', tone: 'critical' };
+        if (value > 11) return { status: 'High', tone: 'high' };
+        if (value < 4) return { status: 'Low', tone: 'low' };
         return { status: 'Normal', tone: 'normal' };
       default:
         // weight / height — no clinical threshold, suppress the badge
@@ -923,11 +923,12 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
             {renderVitalInput(
               'Blood Glucose',
               'bloodGlucose',
-              'mg/dL',
+              'mmol/L',
               <Droplets className="w-4 h-4 text-green-600" />,
               'number',
-              50,
-              500
+              1,
+              70,
+              0.1
             )}
           </div>
 

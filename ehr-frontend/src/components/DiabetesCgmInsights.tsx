@@ -114,7 +114,7 @@ const DiabetesCgmInsights: React.FC<DiabetesCgmInsightsProps> = ({
       },
       {
         label: 'Average glucose',
-        value: latest?.average_glucose ? `${latest.average_glucose} mg/dL` : '—',
+        value: latest?.average_glucose ? `${latest.average_glucose} mmol/L` : '—',
         tone: 'text-indigo-600',
         bg: 'bg-indigo-50 border-indigo-100',
       },
@@ -266,7 +266,7 @@ const DiabetesCgmInsights: React.FC<DiabetesCgmInsightsProps> = ({
                       {summary.summary_date ? new Date(summary.summary_date).toLocaleDateString() : 'Summary'}
                     </p>
                     <p className="text-xs text-slate-500">
-                      Avg {summary.average_glucose ?? '—'} mg/dL • {summary.total_readings ?? 0} readings
+                      Avg {summary.average_glucose ?? '—'} mmol/L • {summary.total_readings ?? 0} readings
                     </p>
                   </div>
                   <span className="text-sm font-semibold text-emerald-600">{summary.time_in_range_70_180 ?? 0}% TIR</span>

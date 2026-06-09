@@ -251,6 +251,7 @@ import { RadiologyReviewController } from './controllers/radiology-review.contro
 import { CdssHealthController } from './controllers/cdss-health.controller';
 import { EducationPersonalizationController } from './controllers/education-personalization.controller';
 import { ProactiveRiskController } from './controllers/proactive-risk.controller';
+import { ProactiveAiController } from './controllers/proactive-ai.controller';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -818,6 +819,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CdssHealthController,
     EducationPersonalizationController,
     ProactiveRiskController,
+    ProactiveAiController,
     LabNarrativeController,
     AppointmentAiController,
     VoiceController,

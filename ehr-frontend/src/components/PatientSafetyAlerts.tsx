@@ -1,324 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   AlertTriangle, Heart, Shield, Droplets, Activity,
   Bell, X, CheckCircle, Clock, User, Pill
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
-
-interface SafetyAlert {
-  id: string;
-  patientId: string;
-  patientName: string;
-  patientRoom?: string;
-  alertType: 'allergy' | 'fall_risk' | 'isolation' | 'critical_vitals' | 'medication' | 'lab' | 'general' | 'escalation';
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  title: string;
-  description: string;
-  details?: string;
-  createdAt: string;
-  acknowledgedBy?: string;
-  acknowledgedAt?: string;
-  isActive: boolean;
-  requiresAction: boolean;
-  actionRequired?: string;
-  relatedData?: any;
-  whyShown?: string;
-  whyNow?: string;
-  trustSummary?: {
-    sourceLabel?: string;
-    backingType?: string;
-    reviewState?: string;
-    classifierStage?: string;
-    workflowSource?: string;
-    recommendationCount?: number | null;
-    evidenceCount?: number | null;
-    riskBand?: string | null;
-  };
-}
+import { SafetyAlert, SafetyAlertCounts } from '../hooks/useSafetyAlerts';
 
 interface PatientSafetyAlertsProps {
-  currentUser: any;
-  appointments: any[];
-  acknowledgedAlertIds?: Set<string>;
-  onAlertAcknowledge?: (alertId: string) => void;
-  onAlertDismiss?: (alertId: string) => void;
-  onAlertCountsChange?: (counts: { active: number; critical: number; high: number }) => void;
+  /** Alerts from the shared useSafetyAlerts source of truth (already ack-applied). */
+  alerts: SafetyAlert[];
+  /** Aggregate counts from the same source — keeps stats in sync with the bell badge. */
+  counts: SafetyAlertCounts;
+  onAcknowledge: (alertId: string) => void | Promise<void>;
+  onDismiss: (alertId: string) => void;
+  loading?: boolean;
 }
 
 const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
-  currentUser,
-  appointments,
-  acknowledgedAlertIds,
-  onAlertAcknowledge,
-  onAlertDismiss,
-  onAlertCountsChange
+  alerts,
+  counts,
+  onAcknowledge,
+  onDismiss,
 }) => {
-  const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
-  const [filteredAlerts, setFilteredAlerts] = useState<SafetyAlert[]>([]);
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
   const [filterType, setFilterType] = useState<'all' | 'allergy' | 'fall_risk' | 'isolation' | 'critical_vitals' | 'medication' | 'lab' | 'general' | 'escalation'>('all');
   const [showAcknowledged, setShowAcknowledged] = useState(false);
-
   const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
-  const [serverAcknowledgedIds, setServerAcknowledgedIds] = useState<Set<string>>(new Set());
-  const [serverEscalationAlerts, setServerEscalationAlerts] = useState<SafetyAlert[]>([]);
 
-  useEffect(() => {
-    const loadState = async () => {
-      try {
-        const token = localStorage.getItem('ehr_token');
-        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-        if (!token || !tenantSlug) return;
-        const [stateResponse, escalationResponse] = await Promise.all([
-          ehrApi.getNurseWorklistState(token, tenantSlug),
-          ehrApi.getClinicalEscalationFeed(token, tenantSlug, { includeCompleted: true, limit: 50 }),
-        ]);
-        setServerAcknowledgedIds(new Set<string>(stateResponse.data?.acknowledgedAlertIds || []));
-        const escalationAlerts = Array.isArray(escalationResponse.data?.items)
-          ? escalationResponse.data.items.map((item: any) => ({
-              id: item.id,
-              patientId: item.patientId,
-              patientName: item.patientName || item.patientNumber || 'Unknown patient',
-              alertType: 'escalation' as const,
-              severity: item.severity || 'medium',
-              title: item.title || 'Clinical escalation',
-              description: item.summary || 'Clinical escalation requires follow-up.',
-              details: item.recommendedAction || undefined,
-              createdAt: item.dueAt || new Date().toISOString(),
-              acknowledgedBy: item.status === 'acknowledged' ? 'clinical_escalation' : undefined,
-              acknowledgedAt: item.acknowledgedAt || undefined,
-              isActive: item.status !== 'completed',
-              requiresAction: item.status !== 'completed',
-              actionRequired: item.recommendedAction || 'Review escalation and complete follow-up.',
-              relatedData: {
-                escalationTaskId: item.id,
-                sourceModule: item.sourceModule,
-                earlyWarning: item.earlyWarning,
-                remoteMonitoring: item.remoteMonitoring,
-              },
-              whyShown:
-                item.trustSummary?.sourceLabel ||
-                (item.sourceModule ? `Raised from ${item.sourceModule.replace(/_/g, ' ')} workflow.` : 'Raised from clinical escalation workflow.'),
-              whyNow:
-                item.trustSummary?.riskBand
-                  ? `Risk band ${String(item.trustSummary.riskBand).toLowerCase()} requires clinician follow-up.`
-                  : item.earlyWarning?.riskLevel
-                    ? `Risk level ${item.earlyWarning.riskLevel} requires nurse follow-up.`
-                    : 'Escalation remains open for nurse action.',
-              trustSummary: item.trustSummary || undefined,
-            }))
-          : [];
-        setServerEscalationAlerts(escalationAlerts);
-      } catch {
-      }
-    };
-    loadState();
-  }, [currentUser?.id]);
-
-  // Generate real safety alerts based on actual patient data
-  useEffect(() => {
-    const generateRealAlerts = () => {
-      const realAlerts: SafetyAlert[] = [];
-      const now = new Date();
-
-      appointments.forEach((apt, index) => {
-        const patientName = `${apt.patient.firstName} ${apt.patient.lastName}`;
-
-        // Only create alerts based on actual patient data
-        if (apt.patient.allergies && apt.patient.allergies.length > 0) {
-          realAlerts.push({
-            id: `allergy-${apt.id}`,
-            patientId: apt.patient.id,
-            patientName,
-            alertType: 'allergy',
-            severity: 'high',
-            title: 'Known Allergies',
-            description: `Patient has known allergies: ${apt.patient.allergies}`,
-            details: 'Verify all medications and treatments for allergen exposure',
-            createdAt: now.toISOString(),
-            isActive: true,
-            requiresAction: true,
-            actionRequired: 'Verify medication compatibility',
-            relatedData: { allergies: apt.patient.allergies },
-            whyShown: 'Patient has recorded allergies in chart.',
-            whyNow: 'Alert raised while patient is on today’s triage queue.'
-          });
-        }
-
-        // Fall risk alerts based on actual age
-        if (apt.patient.age && apt.patient.age > 65) {
-          realAlerts.push({
-            id: `fall-${apt.id}`,
-            patientId: apt.patient.id,
-            patientName,
-            alertType: 'fall_risk',
-            severity: 'medium',
-            title: 'Fall Risk Patient',
-            description: `Patient age ${apt.patient.age} - high fall risk`,
-            details: 'Implement fall prevention measures: bed alarm, non-slip socks, frequent checks',
-            createdAt: now.toISOString(),
-            isActive: true,
-            requiresAction: true,
-            actionRequired: 'Implement fall prevention protocol'
-          });
-        }
-
-        // Critical vitals alerts based on actual vitals data
-        if (apt.vitals) {
-          const vitals = apt.vitals;
-          
-          // Check for critical blood pressure
-          if (vitals.bloodPressure) {
-            const bpValues = vitals.bloodPressure.split('/');
-            if (bpValues.length === 2) {
-              const systolic = parseInt(bpValues[0]);
-              const diastolic = parseInt(bpValues[1]);
-              
-              if (systolic >= 180 || diastolic >= 110) {
-                realAlerts.push({
-                  id: `bp-${apt.id}`,
-                  patientId: apt.patient.id,
-                  patientName,
-                  alertType: 'critical_vitals',
-                  severity: 'critical',
-                  title: 'Critical Blood Pressure',
-                  description: `Blood pressure: ${vitals.bloodPressure} mmHg`,
-                  details: 'Immediate medical attention required. Notify physician immediately.',
-                  createdAt: now.toISOString(),
-                  isActive: true,
-                  requiresAction: true,
-                  actionRequired: 'Notify physician immediately',
-                  relatedData: { vitals },
-                  whyShown: 'Blood pressure is in critical range.',
-                  whyNow: 'Most recent vitals crossed critical BP threshold.'
-                });
-              }
-            }
-          }
-
-          // Check for abnormal heart rate
-          if (vitals.heartRate && (vitals.heartRate > 120 || vitals.heartRate < 50)) {
-            realAlerts.push({
-              id: `hr-${apt.id}`,
-              patientId: apt.patient.id,
-              patientName,
-              alertType: 'critical_vitals',
-              severity: 'high',
-              title: 'Abnormal Heart Rate',
-              description: `Heart rate: ${vitals.heartRate} bpm`,
-              details: 'Heart rate outside normal range. Monitor closely.',
-              createdAt: now.toISOString(),
-              isActive: true,
-              requiresAction: true,
-              actionRequired: 'Monitor closely and reassess',
-              relatedData: { vitals },
-              whyShown: 'Heart rate outside defined safe range.',
-              whyNow: 'Latest vitals show tachycardia or bradycardia.'
-            });
-          }
-
-          // Check for abnormal temperature
-          if (vitals.temperature && (vitals.temperature > 38.5 || vitals.temperature < 35)) {
-            realAlerts.push({
-              id: `temp-${apt.id}`,
-              patientId: apt.patient.id,
-              patientName,
-              alertType: 'critical_vitals',
-              severity: 'high',
-              title: 'Abnormal Temperature',
-              description: `Temperature: ${vitals.temperature}°C`,
-              details: 'Temperature outside normal range. Consider infection or hypothermia.',
-              createdAt: now.toISOString(),
-              isActive: true,
-              requiresAction: true,
-              actionRequired: 'Assess for infection or other causes',
-              relatedData: { vitals },
-              whyShown: 'Temperature suggests fever or hypothermia.',
-              whyNow: 'Latest vitals temperature is outside configured range.'
-            });
-          }
-
-          // Check for low oxygen saturation
-          if (vitals.oxygenSaturation && vitals.oxygenSaturation < 90) {
-            realAlerts.push({
-              id: `o2-${apt.id}`,
-              patientId: apt.patient.id,
-              patientName,
-              alertType: 'critical_vitals',
-              severity: 'critical',
-              title: 'Low Oxygen Saturation',
-              description: `Oxygen saturation: ${vitals.oxygenSaturation}%`,
-              details: 'Oxygen saturation below 90%. Immediate attention required.',
-              createdAt: now.toISOString(),
-              isActive: true,
-              requiresAction: true,
-              actionRequired: 'Administer oxygen and notify physician',
-              relatedData: { vitals },
-              whyShown: 'Oxygen saturation below 90%.',
-              whyNow: 'Latest vitals show hypoxia requiring urgent review.'
-            });
-          }
-        }
-      });
-
-      // Apply acknowledgment status from props
-      if (acknowledgedAlertIds || serverAcknowledgedIds.size > 0) {
-        realAlerts.forEach(alert => {
-          if ((acknowledgedAlertIds && acknowledgedAlertIds.has(alert.id)) || serverAcknowledgedIds.has(alert.id)) {
-            alert.acknowledgedAt = new Date().toISOString();
-            alert.isActive = false;
-            alert.acknowledgedBy = currentUser?.id || 'current_user';
-          }
-        });
-      }
-
-      const mergedAlerts = [...realAlerts, ...serverEscalationAlerts];
-      setAlerts(mergedAlerts);
-    };
-
-    if (appointments.length > 0 || serverEscalationAlerts.length > 0) {
-      generateRealAlerts();
-    } else {
-      setAlerts([]);
-    }
-  }, [appointments, acknowledgedAlertIds, serverAcknowledgedIds, currentUser?.id, serverEscalationAlerts]);
-
-  // Notify parent of alert count changes
-  // Use useRef to store the callback to avoid recreating it on every render
-  const onAlertCountsChangeRef = React.useRef(onAlertCountsChange);
-  
-  useEffect(() => {
-    onAlertCountsChangeRef.current = onAlertCountsChange;
-  }, [onAlertCountsChange]);
-
-  useEffect(() => {
-    const active = alerts.filter(a => a.isActive && !a.acknowledgedAt).length;
-    const critical = alerts.filter(a => a.severity === 'critical' && !a.acknowledgedAt).length;
-    const high = alerts.filter(a => a.severity === 'high' && !a.acknowledgedAt).length;
-    
-    if (onAlertCountsChangeRef.current) {
-      onAlertCountsChangeRef.current({ active, critical, high });
-    }
-  }, [alerts]);
-
-  // Filter alerts
-  useEffect(() => {
-    let filtered = alerts.filter(alert => {
+  const filteredAlerts = useMemo(() => {
+    const filtered = alerts.filter((alert) => {
       const matchesSeverity = filterSeverity === 'all' || alert.severity === filterSeverity;
       const matchesType = filterType === 'all' || alert.alertType === filterType;
       const matchesAcknowledged = showAcknowledged || !alert.acknowledgedAt;
       return matchesSeverity && matchesType && matchesAcknowledged;
     });
 
-    // Sort by severity and creation time
+    const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 } as const;
     filtered.sort((a, b) => {
-      const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
       const severityComparison = severityOrder[b.severity] - severityOrder[a.severity];
       if (severityComparison !== 0) return severityComparison;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-
-    setFilteredAlerts(filtered);
+    return filtered;
   }, [alerts, filterSeverity, filterType, showAcknowledged]);
 
   const getAlertIcon = (alertType: string) => {
@@ -344,77 +66,14 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
     }
   };
 
-  const getAlertStats = () => {
-    const total = alerts.length;
-    const active = alerts.filter(a => a.isActive && !a.acknowledgedAt).length;
-    const critical = alerts.filter(a => a.severity === 'critical' && !a.acknowledgedAt).length;
-    const high = alerts.filter(a => a.severity === 'high' && !a.acknowledgedAt).length;
-    const acknowledged = alerts.filter(a => a.acknowledgedAt).length;
-
-    return { total, active, critical, high, acknowledged };
-  };
-
-  const handleAcknowledge = async (alertId: string) => {
-    try {
-      const token = localStorage.getItem('ehr_token');
-      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-      if (!token || !tenantSlug) return;
-      const alert = alerts.find((a) => a.id === alertId);
-      if (alert?.alertType === 'escalation' && alert.relatedData?.escalationTaskId) {
-        await ehrApi.acknowledgeClinicalEscalation(alert.relatedData.escalationTaskId, token, tenantSlug);
-      } else {
-        await ehrApi.acknowledgeNurseAlert(
-          alertId,
-          {
-            patientId: alert?.patientId,
-            context: { alertType: alert?.alertType, severity: alert?.severity },
-          },
-          token,
-          tenantSlug,
-        );
-      }
-      setServerAcknowledgedIds((prev) => {
-        const next = new Set(prev);
-        next.add(alertId);
-        return next;
-      });
-      setAlerts(prev => prev.map(alertItem =>
-        alertItem.id === alertId
-          ? {
-              ...alertItem,
-              acknowledgedBy: currentUser?.id || 'current_user',
-              acknowledgedAt: new Date().toISOString(),
-              isActive: false
-            }
-          : alertItem
-      ));
-      onAlertAcknowledge?.(alertId);
-    } catch {
-    }
-  };
-
-  const handleDismiss = (alertId: string) => {
-    setAlerts(prev => prev.map(alert => 
-      alert.id === alertId 
-        ? { ...alert, isActive: false }
-        : alert
-    ));
-    onAlertDismiss?.(alertId);
-  };
-
   const toggleAlertExpansion = (alertId: string) => {
-    setExpandedAlerts(prev => {
+    setExpandedAlerts((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(alertId)) {
-        newSet.delete(alertId);
-      } else {
-        newSet.add(alertId);
-      }
+      if (newSet.has(alertId)) newSet.delete(alertId);
+      else newSet.add(alertId);
       return newSet;
     });
   };
-
-  const stats = getAlertStats();
 
   return (
     <div className="space-y-6">
@@ -445,35 +104,35 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
               <Bell className="w-4 h-4 text-blue-600" />
               <span className="text-sm font-semibold text-slate-700">Total</span>
             </div>
-            <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
+            <p className="text-2xl font-bold text-slate-900">{counts.total}</p>
           </div>
           <div className="bg-white rounded-lg p-4 border border-slate-200">
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-yellow-600" />
               <span className="text-sm font-semibold text-slate-700">Active</span>
             </div>
-            <p className="text-2xl font-bold text-yellow-600">{stats.active}</p>
+            <p className="text-2xl font-bold text-yellow-600">{counts.active}</p>
           </div>
           <div className="bg-white rounded-lg p-4 border border-slate-200">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-4 h-4 text-red-600" />
               <span className="text-sm font-semibold text-slate-700">Critical</span>
             </div>
-            <p className="text-2xl font-bold text-red-600">{stats.critical}</p>
+            <p className="text-2xl font-bold text-red-600">{counts.critical}</p>
           </div>
           <div className="bg-white rounded-lg p-4 border border-slate-200">
             <div className="flex items-center gap-2 mb-2">
               <Heart className="w-4 h-4 text-orange-600" />
               <span className="text-sm font-semibold text-slate-700">High</span>
             </div>
-            <p className="text-2xl font-bold text-orange-600">{stats.high}</p>
+            <p className="text-2xl font-bold text-orange-600">{counts.high}</p>
           </div>
           <div className="bg-white rounded-lg p-4 border border-slate-200">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle className="w-4 h-4 text-green-600" />
               <span className="text-sm font-semibold text-slate-700">Acknowledged</span>
             </div>
-            <p className="text-2xl font-bold text-green-600">{stats.acknowledged}</p>
+            <p className="text-2xl font-bold text-green-600">{counts.acknowledged}</p>
           </div>
         </div>
       </div>
@@ -558,14 +217,14 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                     }`}>
                       {getAlertIcon(alert.alertType)}
                     </div>
-                    
+
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-slate-900">{alert.title}</h3>
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getSeverityColor(alert.severity)}`}>
                           {alert.severity.toUpperCase()}
                         </span>
-                        {alert.requiresAction && (
+                        {alert.requiresAction && !alert.acknowledgedAt && (
                           <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
                             ACTION REQUIRED
                           </span>
@@ -576,9 +235,9 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                           </span>
                         )}
                       </div>
-                      
+
                       <p className="text-slate-600 mb-3">{alert.description}</p>
-                      
+
                       {alert.details && (
                         <p className="text-sm text-slate-500 mb-3">{alert.details}</p>
                       )}
@@ -589,7 +248,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                           <p className="text-sm text-amber-700">{alert.actionRequired}</p>
                         </div>
                       )}
-                      
+
                       <div className="flex items-center gap-6 text-sm text-slate-500">
                         {alert.patientId !== 'system' && (
                           <div className="flex items-center gap-1">
@@ -643,16 +302,16 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                   <div className="flex items-center gap-2 ml-4">
                     {!alert.acknowledgedAt && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleAcknowledge(alert.id); }}
+                        onClick={(e) => { e.stopPropagation(); onAcknowledge(alert.id); }}
                         className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
                       >
                         <CheckCircle className="w-4 h-4" />
                         Acknowledge
                       </button>
                     )}
-                    
+
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDismiss(alert.id); }}
+                      onClick={(e) => { e.stopPropagation(); onDismiss(alert.id); }}
                       className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all duration-200"
                     >
                       <X className="w-4 h-4" />

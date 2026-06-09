@@ -9412,13 +9412,22 @@ export class NurseWorklistService {
 
   async getState(tenantDb: DataSource, userId: string) {
     try {
-      const [taskRows, alertRows] = await Promise.all([
+      const [taskRows, inProgressRows, alertRows] = await Promise.all([
         tenantDb.query(
           `
           SELECT task_id
           FROM nurse_copilot_task_events
           WHERE user_id = $1 AND status = 'completed'
           ORDER BY completed_at DESC
+          `,
+          [userId],
+        ),
+        tenantDb.query(
+          `
+          SELECT task_id
+          FROM nurse_copilot_task_events
+          WHERE user_id = $1 AND status = 'in_progress'
+          ORDER BY updated_at DESC
           `,
           [userId],
         ),
@@ -9433,8 +9442,13 @@ export class NurseWorklistService {
         ),
       ]);
 
+      const completedTaskIds = new Set(taskRows.map((row: any) => String(row.task_id)));
       return {
-        completedTaskIds: Array.from(new Set(taskRows.map((row: any) => String(row.task_id)))),
+        completedTaskIds: Array.from(completedTaskIds),
+        // In-progress tasks that haven't since been completed.
+        inProgressTaskIds: Array.from(
+          new Set(inProgressRows.map((row: any) => String(row.task_id))),
+        ).filter((id) => !completedTaskIds.has(id)),
         acknowledgedAlertIds: Array.from(new Set(alertRows.map((row: any) => String(row.alert_id)))),
       };
     } catch (error) {
@@ -9474,6 +9488,7 @@ export class NurseWorklistService {
 
     return {
       completedTaskIds: Array.from(completedTaskIds),
+      inProgressTaskIds: [],
       acknowledgedAlertIds: Array.from(acknowledgedAlertIds),
     };
   }
@@ -9757,6 +9772,57 @@ export class NurseWorklistService {
     });
 
     return { ok: true, escalationTaskId };
+  }
+
+  async startTask(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    taskId: string,
+    payload?: { patientId?: string; context?: any },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    try {
+      await tenantDb.query(
+        `
+        INSERT INTO nurse_copilot_task_events (
+          user_id, task_id, patient_id, status, context, updated_at
+        )
+        VALUES ($1, $2, $3, 'in_progress', $4::jsonb, NOW())
+        ON CONFLICT (user_id, task_id)
+        DO UPDATE SET
+          patient_id = COALESCE(EXCLUDED.patient_id, nurse_copilot_task_events.patient_id),
+          status = 'in_progress',
+          context = EXCLUDED.context,
+          updated_at = NOW()
+        -- Never downgrade an already-completed task back to in_progress.
+        WHERE nurse_copilot_task_events.status <> 'completed'
+        `,
+        [user.id, taskId, payload?.patientId || null, JSON.stringify(payload?.context || {})],
+      );
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+    }
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_TASK_COMPLETE,
+      resourceType: 'nurse_task',
+      resourceId: taskId,
+      patientId: payload?.patientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: { taskId, action: 'start', context: payload?.context || {} },
+      riskLevel: 'low',
+      timestamp: new Date(),
+    });
+
+    return { ok: true, taskId, status: 'in_progress' };
   }
 
   async completeTask(

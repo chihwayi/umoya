@@ -114,7 +114,7 @@ const DiabetesGlucoseMonitoring: React.FC<DiabetesGlucoseMonitoringProps> = ({
     }
     setExporting(true);
     try {
-      const headers = ['Recorded At', 'Glucose (mg/dL)', 'Reading Type', 'Meal Context', 'Notes'];
+      const headers = ['Recorded At', 'Glucose (mmol/L)', 'Reading Type', 'Meal Context', 'Notes'];
       const rows = history.map((reading) => [
         new Date(reading.recorded_at).toISOString(),
         reading.glucose_value,
@@ -211,11 +211,12 @@ const DiabetesGlucoseMonitoring: React.FC<DiabetesGlucoseMonitoringProps> = ({
           <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Manual entry</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs text-slate-500 flex flex-col gap-1 col-span-2">
-              Glucose (mg/dL)
+              Glucose (mmol/L)
               <input
                 type="number"
-                min={20}
-                max={600}
+                min={1}
+                max={40}
+                step={0.1}
                 required
                 name="glucoseValue"
                 value={formState.glucoseValue}
@@ -298,7 +299,7 @@ const DiabetesGlucoseMonitoring: React.FC<DiabetesGlucoseMonitoringProps> = ({
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <Droplets className="h-4 w-4 text-emerald-500" />
-              <span>Target: 70-180 mg/dL</span>
+              <span>Target: 3.9-10 mmol/L</span>
             </div>
           </div>
           <div className="relative h-48">
@@ -363,7 +364,7 @@ const DiabetesGlucoseMonitoring: React.FC<DiabetesGlucoseMonitoringProps> = ({
                     <Activity className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{reading.glucose_value} mg/dL</p>
+                    <p className="text-sm font-semibold text-slate-900">{reading.glucose_value} mmol/L</p>
                     <p className="text-xs text-slate-500 capitalize">
                       {reading.reading_type?.replace('_', ' ') || 'manual'} •{' '}
                       {new Date(reading.recorded_at).toLocaleString()}
@@ -372,16 +373,16 @@ const DiabetesGlucoseMonitoring: React.FC<DiabetesGlucoseMonitoringProps> = ({
                 </div>
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    reading.glucose_value < 70
+                    reading.glucose_value < 3.9
                       ? 'bg-amber-100 text-amber-700'
-                      : reading.glucose_value > 180
+                      : reading.glucose_value > 10
                       ? 'bg-rose-100 text-rose-700'
                       : 'bg-emerald-100 text-emerald-700'
                   }`}
                 >
-                  {reading.glucose_value < 70
+                  {reading.glucose_value < 3.9
                     ? 'Hypo'
-                    : reading.glucose_value > 180
+                    : reading.glucose_value > 10
                     ? 'Hyper'
                     : 'In range'}
                 </span>

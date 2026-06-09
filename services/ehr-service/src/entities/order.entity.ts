@@ -34,21 +34,21 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ name: 'appointment_id', nullable: true })
+  @Column({ name: 'appointment_id', type: 'uuid', nullable: true })
   appointmentId?: string;
 
   @ManyToOne(() => AppointmentSimple, { nullable: true })
   @JoinColumn({ name: 'appointment_id' })
   appointment?: AppointmentSimple;
 
-  @Column({ name: 'doctor_id' })
+  @Column({ name: 'doctor_id', type: 'uuid' })
   doctorId: string;
 
   @ManyToOne(() => User)
@@ -107,7 +107,7 @@ export class Order {
   })
   status: OrderStatus;
 
-  @Column({ name: 'authorized_by', nullable: true })
+  @Column({ name: 'authorized_by', type: 'uuid', nullable: true })
   authorizedBy?: string;
 
   @ManyToOne(() => User, { nullable: true })
@@ -117,7 +117,7 @@ export class Order {
   @Column({ name: 'authorized_at', type: 'timestamp', nullable: true })
   authorizedAt?: Date;
 
-  @Column({ name: 'executed_by', nullable: true })
+  @Column({ name: 'executed_by', type: 'uuid', nullable: true })
   executedBy?: string;
 
   @ManyToOne(() => User, { nullable: true })
@@ -138,7 +138,7 @@ export class Order {
   })
   externalCodes?: Record<string, any>;
 
-  @Column({ name: 'drug_id', nullable: true })
+  @Column({ name: 'drug_id', type: 'uuid', nullable: true })
   drugId?: string;
 
   @CreateDateColumn({ name: 'created_at' })

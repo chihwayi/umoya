@@ -2859,6 +2859,39 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  startNurseTask: async (
+    taskId: string,
+    payload: { patientId?: string; context?: any },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/nurse-worklist/tasks/${taskId}/start`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getMedicationSafetyWorklist: async (
+    token: string,
+    tenantSlug: string,
+    params?: { includeCompleted?: boolean; limit?: number }
+  ) => {
+    const response = await ehrAxios.get('/bcma/mar/worklist', {
+      params: {
+        includeCompleted: params?.includeCompleted ? 'true' : 'false',
+        limit: params?.limit ?? 100,
+      },
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   acknowledgeNurseAlert: async (
     alertId: string,
     payload: { reason?: string; patientId?: string; context?: any },

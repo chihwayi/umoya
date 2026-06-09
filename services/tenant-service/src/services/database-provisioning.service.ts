@@ -1876,7 +1876,7 @@ export class DatabaseProvisioningService {
       {
         id: 'sprint46_nurse_copilot',
         label: 'Sprint 46 - Nurse Copilot Persistence',
-        version: '2026.02.16',
+        version: '2026.06.08',
         description: 'Server-side nurse copilot state tables for tasks, alerts, and handoff workflow lifecycle',
         statements: () => this.getSprint46NurseCopilotSchemaStatements(),
       },
@@ -6223,7 +6223,7 @@ export class DatabaseProvisioningService {
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         task_id VARCHAR(120) NOT NULL,
         patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'completed' CHECK (status IN ('completed')),
+        status VARCHAR(20) NOT NULL DEFAULT 'completed' CHECK (status IN ('completed', 'in_progress')),
         reason TEXT,
         context JSONB,
         source VARCHAR(50) NOT NULL DEFAULT 'nurse_worklist',
@@ -6232,6 +6232,9 @@ export class DatabaseProvisioningService {
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         UNIQUE(user_id, task_id)
       )`,
+      // Widen the status CHECK to allow persisted in-progress task state (idempotent for existing tenants).
+      `ALTER TABLE nurse_copilot_task_events DROP CONSTRAINT IF EXISTS nurse_copilot_task_events_status_check`,
+      `ALTER TABLE nurse_copilot_task_events ADD CONSTRAINT nurse_copilot_task_events_status_check CHECK (status IN ('completed', 'in_progress'))`,
       `CREATE TABLE IF NOT EXISTS nurse_copilot_alert_events (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -8305,6 +8308,7 @@ export class DatabaseProvisioningService {
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
           doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          medical_record_id UUID REFERENCES medical_records(id) ON DELETE SET NULL,
           medication_name VARCHAR(255) NOT NULL,
           medication_name_snomed_code VARCHAR(50),
           medication_name_snomed_term TEXT,

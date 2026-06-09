@@ -125,7 +125,7 @@ const DiabetesInsulinRegimen: React.FC<DiabetesInsulinRegimenProps> = ({
                 </p>
               )}
               {regimen.correction_factor && <p>Correction factor: {regimen.correction_factor}</p>}
-              {regimen.target_glucose && <p>Target glucose: {regimen.target_glucose} mg/dL</p>}
+              {regimen.target_glucose && <p>Target glucose: {regimen.target_glucose} mmol/L</p>}
             </div>
           </div>
 

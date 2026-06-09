@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { api } from '../services/api';
 
 interface RiskScores {
   deterioration?: number;
@@ -47,11 +48,11 @@ export function PatientRiskPanel({ patientId, token, snapshot: initialSnapshot }
   useEffect(() => {
     if (initialSnapshot) { setSnapshot(initialSnapshot); return; }
     setLoading(true);
-    fetch(`${process.env.REACT_APP_EHR_API_URL}/proactive/patient/${patientId}/snapshot`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.json())
-      .then(data => { setSnapshot(data); setLoading(false); })
+    // Use the shared api client so the request carries both the bearer token and
+    // the X-Tenant-ID header (a raw fetch omits the tenant header, which the EHR
+    // TenantMiddleware rejects with 400 "Tenant ID is required").
+    api.get(`/proactive/patient/${patientId}/snapshot`)
+      .then(res => { setSnapshot(res.data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [patientId]);
 

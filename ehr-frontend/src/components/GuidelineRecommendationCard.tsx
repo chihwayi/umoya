@@ -13,11 +13,19 @@ export interface ClinicalRecommendation {
 interface GuidelineRecommendationCardProps {
   data: ClinicalRecommendation;
   className?: string;
+  /**
+   * Word shown after the level in the corner badge (e.g. "High Evidence").
+   * Defaults to "Evidence" for guideline-derived recommendations; pass
+   * "Confidence" for deterministic outputs (e.g. vitals safety rules) where
+   * the level reflects confidence/severity rather than literature evidence.
+   */
+  metricLabel?: string;
 }
 
-export const GuidelineRecommendationCard: React.FC<GuidelineRecommendationCardProps> = ({ 
-  data, 
-  className = '' 
+export const GuidelineRecommendationCard: React.FC<GuidelineRecommendationCardProps> = ({
+  data,
+  className = '',
+  metricLabel = 'Evidence',
 }) => {
   // Determine severity/color based on evidence level and red flags
   const getSeverityConfig = () => {
@@ -77,7 +85,7 @@ export const GuidelineRecommendationCard: React.FC<GuidelineRecommendationCardPr
           </p>
         </div>
         <div className={`px-2 py-1 rounded-full text-xs font-medium ${config.accentColor} capitalize`}>
-          {data.evidence_level} Evidence
+          {data.evidence_level} {metricLabel}
         </div>
       </div>
 

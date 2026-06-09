@@ -24,6 +24,7 @@ import NursingNotes from '../components/NursingNotes';
 import { NursingIntelligencePanel } from '../components/NursingIntelligencePanel';
 import TaskManagement from '../components/TaskManagement';
 import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
+import { useSafetyAlerts } from '../hooks/useSafetyAlerts';
 import HIVNursePanel from '../components/HIVNursePanel';
 import HIVTestingComponent from '../components/HIVTestingComponent';
 import { HIVTestingWithSmartForms, HIVWorkflowIntegration } from '../components/HIV';
@@ -267,7 +268,10 @@ const NurseDashboard: React.FC = () => {
   const [draggingAppointmentId, setDraggingAppointmentId] = useState<string | null>(null);
   const [authorizedOrders, setAuthorizedOrders] = useState<any[]>([]);
   const [taskCounts, setTaskCounts] = useState({ pending: 0, inProgress: 0, overdue: 0 });
-  const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, high: 0 });
+  // Single source of truth for safety alerts — drives BOTH the notification bell
+  // badge and the Patient Safety Alerts page, so the two counts can never diverge.
+  const safetyAlerts = useSafetyAlerts(appointments, currentUser?.id);
+  const alertCounts = safetyAlerts.counts;
   const [crossModuleItems, setCrossModuleItems] = useState<NurseCrossModuleFeedItem[]>([]);
   const [crossModuleSummary, setCrossModuleSummary] = useState({
     total: 0,
@@ -322,38 +326,15 @@ const NurseDashboard: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Server-scoped acknowledged alerts
-  const [acknowledgedAlertIds, setAcknowledgedAlertIds] = useState<Set<string>>(new Set());
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const loadWorklistState = async () => {
-      try {
-        const token = localStorage.getItem('ehr_token');
-        const activeTenant = resolveTenantSlug();
-        if (!token || !activeTenant) return;
-        const response = await ehrApi.getNurseWorklistState(token, activeTenant);
-        setAcknowledgedAlertIds(new Set<string>(response.data?.acknowledgedAlertIds || []));
-      } catch {
-      }
-    };
-    loadWorklistState();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantSlug, currentUser?.id]);
+  // Acknowledged-alert state + worklist/escalation loading now live in useSafetyAlerts
+  // (the single source of truth shared with the bell badge), so they are no longer
+  // duplicated here.
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadCrossModuleFeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug, currentUser?.id]);
-
-  const handleAlertAcknowledge = (alertId: string) => {
-    setAcknowledgedAlertIds(prev => {
-      const newSet = new Set(prev);
-      newSet.add(alertId);
-      return newSet;
-    });
-  };
 
   const loadNurseOutcomeAnalytics = async (days = 30) => {
     try {
@@ -1202,100 +1183,25 @@ const NurseDashboard: React.FC = () => {
     setTaskCounts({ pending, inProgress, overdue });
   }, []);
 
-  // Calculate alert counts from appointments directly
-  const calculateAlertCountsFromAppointments = useCallback((appointments: any[]) => {
-    if (!Array.isArray(appointments)) {
-      setAlertCounts({ active: 0, critical: 0, high: 0 });
-      return;
-    }
-
-    let active = 0;
-    let critical = 0;
-    let high = 0;
-
-    appointments.forEach((apt) => {
-      // Only create alerts based on actual patient data
-      if (apt.patient.allergies && apt.patient.allergies.length > 0) {
-        active++;
-        high++;
-      }
-
-      // Fall risk alerts based on actual age
-      if (apt.patient.age && apt.patient.age > 65) {
-        active++;
-        high++;
-      }
-
-      // Critical vitals alerts based on actual vitals data
-      if (apt.vitals) {
-        const vitals = apt.vitals;
-        
-        // Check for critical blood pressure
-        if (vitals.bloodPressure) {
-          const bpValues = vitals.bloodPressure.split('/');
-          if (bpValues.length === 2) {
-            const systolic = parseInt(bpValues[0]);
-            const diastolic = parseInt(bpValues[1]);
-            
-            if (systolic >= 180 || diastolic >= 110) {
-              active++;
-              critical++;
-            }
-          }
-        }
-
-        // Check for abnormal heart rate
-        if (vitals.heartRate && (vitals.heartRate > 120 || vitals.heartRate < 50)) {
-          active++;
-          high++;
-        }
-
-        // Check for abnormal temperature
-        if (vitals.temperature && (vitals.temperature > 38.5 || vitals.temperature < 35)) {
-          active++;
-          high++;
-        }
-
-        // Check for low oxygen saturation
-        if (vitals.oxygenSaturation && vitals.oxygenSaturation < 90) {
-          active++;
-          critical++;
-        }
-      }
-    });
-
-    setAlertCounts({ active, critical, high });
-  }, []);
-
-  // Calculate task counts (for component callbacks)
-  const calculateTaskCounts = useCallback((tasks: any[]) => {
-    if (!Array.isArray(tasks)) {
-      setTaskCounts({ pending: 0, inProgress: 0, overdue: 0 });
-      return;
-    }
-    
-    const pending = tasks.filter(task => task.status === 'pending').length;
-    const inProgress = tasks.filter(task => task.status === 'in_progress').length;
-    const overdue = tasks.filter(task => task.status === 'overdue').length;
-    setTaskCounts({ pending, inProgress, overdue });
-  }, []);
+  // Alert counts now come from the shared useSafetyAlerts hook (alertCounts =
+  // safetyAlerts.counts), so the appointment-only counter that used to live here —
+  // which ignored escalations and acknowledgements — has been removed.
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('ehr_user') || '{}');
     setCurrentUser(user);
   }, []);
 
-  // Calculate counts immediately when appointments are loaded
+  // Calculate task counts immediately when appointments are loaded.
+  // (Alert counts are derived reactively by useSafetyAlerts.)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (appointments.length > 0) {
       calculateTaskCountsFromAppointments(appointments);
-      calculateAlertCountsFromAppointments(appointments);
     } else {
       setTaskCounts({ pending: 0, inProgress: 0, overdue: 0 });
-      setAlertCounts({ active: 0, critical: 0, high: 0 });
     }
-  }, [appointments, calculateTaskCountsFromAppointments, calculateAlertCountsFromAppointments]);
+  }, [appointments, calculateTaskCountsFromAppointments]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -3675,7 +3581,40 @@ const NurseDashboard: React.FC = () => {
               // Could update task in real-time
             }}
             onTaskCountsChange={(counts) => {
-              calculateTaskCounts([counts.pending, counts.inProgress, counts.overdue]);
+              // counts is already { pending, inProgress, overdue } numbers —
+              // set them directly (previously routed through a calculator that
+              // expected task objects and silently zeroed the badge).
+              setTaskCounts(counts);
+            }}
+            onTaskAction={(task) => {
+              // Deep-link a task to its real workflow so work can actually be done
+              // (not just toggled complete).
+              const apt = appointments.find((a) => a.id === task.relatedAppointmentId);
+              const slug = resolveTenantSlug();
+              switch (task.taskType) {
+                case 'vitals':
+                  if (apt) { handleRecordVitals(apt); }
+                  else if (task.patientId) { navigate(`/ehr/${slug}/nurse/patients/${task.patientId}`); }
+                  break;
+                case 'assessment':
+                  setActiveSection('main');
+                  setActiveTab('triage');
+                  break;
+                case 'documentation':
+                  setActiveSection('main');
+                  setActiveTab('notes');
+                  break;
+                case 'medication':
+                  navigate(`/ehr/${slug}/mar`);
+                  break;
+                case 'lab':
+                  navigate(`/ehr/${slug}/lab`);
+                  break;
+                case 'escalation':
+                default:
+                  if (task.patientId) navigate(`/ehr/${slug}/nurse/patients/${task.patientId}`);
+                  break;
+              }
             }}
           />
         )}
@@ -3931,17 +3870,12 @@ const NurseDashboard: React.FC = () => {
         )}
 
         {activeTab === 'alerts' && (
-          <PatientSafetyAlerts 
-            currentUser={currentUser}
-            appointments={appointments}
-            acknowledgedAlertIds={acknowledgedAlertIds}
-            onAlertAcknowledge={handleAlertAcknowledge}
-            onAlertDismiss={(alertId) => {
-              handleAlertAcknowledge(alertId);
-            }}
-            onAlertCountsChange={(counts) => {
-              calculateTaskCounts([counts.active, counts.critical, counts.high]);
-            }}
+          <PatientSafetyAlerts
+            alerts={safetyAlerts.alerts}
+            counts={safetyAlerts.counts}
+            onAcknowledge={safetyAlerts.acknowledge}
+            onDismiss={safetyAlerts.dismiss}
+            loading={safetyAlerts.loading}
           />
         )}
 
@@ -4413,9 +4347,23 @@ const NurseDashboard: React.FC = () => {
                   </div>
                   {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
                     <GuidelineRecommendationCard
+                      metricLabel="Confidence"
                       data={{
                         recommendation: String(vitalsCopilotResult.recommendations[0]),
-                        evidence_level: vitalsCopilotResult.riskLevel === 'high' ? 'High' : vitalsCopilotResult.riskLevel === 'medium' ? 'Medium' : 'Low',
+                        // Deterministic safety-rule output: the badge reflects confidence/severity,
+                        // not literature evidence. Map every backend risk level (incl. critical/moderate)
+                        // so a critical finding is never mislabelled as low.
+                        evidence_level: ['critical', 'high'].includes(String(vitalsCopilotResult.riskLevel))
+                          ? 'High'
+                          : vitalsCopilotResult.riskLevel === 'moderate'
+                            ? 'Medium'
+                            : 'Low',
+                        // Surface the deranged vitals as red flags (also forces the red critical styling).
+                        red_flags: (Array.isArray(vitalsCopilotResult.factors) ? vitalsCopilotResult.factors : [])
+                          .map((f: any) => (typeof f === 'string' ? f : f?.factor || f?.detail || f?.description || ''))
+                          .filter((s: string) => s && s.trim()),
+                        // Show the remaining recommendations instead of only the headline.
+                        action_items: vitalsCopilotResult.recommendations.slice(1).map((r: any) => String(r)),
                       }}
                     />
                   )}

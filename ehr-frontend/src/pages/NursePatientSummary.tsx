@@ -1127,9 +1127,23 @@ const NursePatientSummary: React.FC = () => {
                       </div>
                       {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
                         <GuidelineRecommendationCard
+                          metricLabel="Confidence"
                           data={{
                             recommendation: String(vitalsCopilotResult.recommendations[0]),
-                            evidence_level: vitalsCopilotResult.riskLevel === 'high' ? 'High' : vitalsCopilotResult.riskLevel === 'medium' ? 'Medium' : 'Low',
+                            // Deterministic safety-rule output: the badge reflects confidence/severity,
+                            // not literature evidence. Map every backend risk level (incl. critical/moderate)
+                            // so a critical finding is never mislabelled as low.
+                            evidence_level: ['critical', 'high'].includes(String(vitalsCopilotResult.riskLevel))
+                              ? 'High'
+                              : vitalsCopilotResult.riskLevel === 'moderate'
+                                ? 'Medium'
+                                : 'Low',
+                            // Surface the deranged vitals as red flags (also forces the red critical styling).
+                            red_flags: (Array.isArray(vitalsCopilotResult.factors) ? vitalsCopilotResult.factors : [])
+                              .map((f: any) => (typeof f === 'string' ? f : f?.factor || f?.detail || f?.description || ''))
+                              .filter((s: string) => s && s.trim()),
+                            // Show the remaining recommendations instead of only the headline.
+                            action_items: vitalsCopilotResult.recommendations.slice(1).map((r: any) => String(r)),
                           }}
                         />
                       )}
@@ -1319,7 +1333,7 @@ const NursePatientSummary: React.FC = () => {
                                 <h5 className="font-semibold text-rose-800">Blood Glucose</h5>
                               </div>
                               <p className="text-2xl font-bold text-rose-900">{vital.bloodGlucose}</p>
-                              <p className="text-sm text-rose-700">mg/dL</p>
+                              <p className="text-sm text-rose-700">mmol/L</p>
                             </div>
                           </div>
 

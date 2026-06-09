@@ -489,12 +489,12 @@ const DiabetesManagementDashboard: React.FC = () => {
                                 <p className="text-2xl font-semibold text-slate-900 mt-2">
                                   {currentCgm.time_in_range_70_180 ?? '--'}%
                                 </p>
-                                <p className="text-xs text-slate-500 mt-1">70-180 mg/dL</p>
+                                <p className="text-xs text-slate-500 mt-1">3.9-10 mmol/L</p>
                               </div>
                               <div className="rounded-xl bg-white p-4 border border-slate-100">
                                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Avg glucose</p>
                                 <p className="text-2xl font-semibold text-slate-900 mt-2">
-                                  {currentCgm.average_glucose ?? '--'} mg/dL
+                                  {currentCgm.average_glucose ?? '--'} mmol/L
                                 </p>
                                 <p className="text-xs text-slate-500 mt-1">Var {currentCgm.glucose_variability ?? '--'}</p>
                               </div>

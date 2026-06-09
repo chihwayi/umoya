@@ -229,8 +229,10 @@ export class DiabetesCdsService {
       [patientId],
     );
     if (latestVitals?.blood_glucose !== null) {
+      // Vitals blood glucose is recorded in mmol/L (system-wide standard). Thresholds:
+      // 13.9 mmol/L (~250 mg/dL) marked hyperglycaemia, 3.9 mmol/L (~70 mg/dL) hypoglycaemia.
       const glucoseValue = Number(latestVitals.blood_glucose);
-      if (glucoseValue >= 250 && shouldCreate('abnormal_value', 'vitals_hyper')) {
+      if (glucoseValue >= 13.9 && shouldCreate('abnormal_value', 'vitals_hyper')) {
         createdAlerts.push(
           await this.diabetesService.createAlert(
             tenantDb,
@@ -239,7 +241,7 @@ export class DiabetesCdsService {
             {
               alertType: 'abnormal_value',
               alertSeverity: 'high',
-              alertMessage: `Point-of-care glucose ${glucoseValue} mg/dL detected from vitals.`,
+              alertMessage: `Point-of-care glucose ${glucoseValue} mmol/L detected from vitals.`,
               relatedMetric: 'vitals_hyper',
               relatedValue: glucoseValue,
               relatedDate: latestVitals.recorded_at,
@@ -247,7 +249,7 @@ export class DiabetesCdsService {
             userId,
           ),
         );
-      } else if (glucoseValue <= 70 && shouldCreate('abnormal_value', 'vitals_hypo')) {
+      } else if (glucoseValue <= 3.9 && shouldCreate('abnormal_value', 'vitals_hypo')) {
         createdAlerts.push(
           await this.diabetesService.createAlert(
             tenantDb,
@@ -256,7 +258,7 @@ export class DiabetesCdsService {
             {
               alertType: 'abnormal_value',
               alertSeverity: 'critical',
-              alertMessage: `Point-of-care glucose ${glucoseValue} mg/dL indicates hypoglycemia.`,
+              alertMessage: `Point-of-care glucose ${glucoseValue} mmol/L indicates hypoglycemia.`,
               relatedMetric: 'vitals_hypo',
               relatedValue: glucoseValue,
               relatedDate: latestVitals.recorded_at,
