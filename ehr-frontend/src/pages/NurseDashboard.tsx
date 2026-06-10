@@ -1434,53 +1434,46 @@ const NurseDashboard: React.FC = () => {
       const day = String(today.getDate()).padStart(2, '0');
       const todayString = `${year}-${month}-${day}`;
       
-      const response = await ehrApi.getAppointments(token, activeTenant, { date: todayString });
+      const getLocalDateString = (date: Date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
 
-      // Show ALL appointments for today - nurses need to see everything
-      let allAppointments = response.data.appointments || [];
-      
-      // If no appointments for today, let's also check yesterday and day before
-      if (allAppointments.length === 0) {
-        try {
-          const getLocalDateString = (date: Date) => {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-          };
+      // Surface still-open (unseen) appointments from the recent past as well as
+      // today's, so patients who have been waiting in the queue for more than a
+      // day or two aren't silently dropped from the dashboard and its stats.
+      // Bounded to a 60-day lookback to avoid loading ancient no-shows.
+      const lookbackStart = new Date(today);
+      lookbackStart.setDate(lookbackStart.getDate() - 60);
+      const lookbackStartString = getLocalDateString(lookbackStart);
 
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayString = getLocalDateString(yesterday);
-          
-          const dayBefore = new Date(today);
-          dayBefore.setDate(dayBefore.getDate() - 2);
-          const dayBeforeString = getLocalDateString(dayBefore);
-          
-          // Fetch appointments for yesterday and day before
-          const [yesterdayResponse, dayBeforeResponse] = await Promise.all([
-            ehrApi.getAppointments(token, activeTenant, { date: yesterdayString }),
-            ehrApi.getAppointments(token, activeTenant, { date: dayBeforeString }),
-          ]);
-          
-          const recentAppointments = [
-            ...(yesterdayResponse.data.appointments || []),
-            ...(dayBeforeResponse.data.appointments || [])
-          ];
-          
-          // Fetch vitals for recent appointments
-          const appointmentsWithVitals = await fetchVitalsForAppointments(recentAppointments);
-          setAppointments(appointmentsWithVitals);
-        } catch {
-          // Fetch vitals for today's appointments as fallback
-          const appointmentsWithVitals = await fetchVitalsForAppointments(allAppointments);
-          setAppointments(appointmentsWithVitals);
-        }
-      } else {
-        // Fetch vitals for today's appointments
-        const appointmentsWithVitals = await fetchVitalsForAppointments(allAppointments);
-        setAppointments(appointmentsWithVitals);
+      const [todayResponse, staleScheduledResponse, staleConfirmedResponse] = await Promise.all([
+        ehrApi.getAppointments(token, activeTenant, { date: todayString }),
+        ehrApi.getAppointments(token, activeTenant, {
+          startDate: lookbackStartString, endDate: todayString, status: 'scheduled', limit: 200,
+        }),
+        ehrApi.getAppointments(token, activeTenant, {
+          startDate: lookbackStartString, endDate: todayString, status: 'confirmed', limit: 200,
+        }),
+      ]);
+
+      // Merge, de-duplicated by id — today's full record wins over the
+      // open-window copy of the same appointment.
+      const appointmentsById = new Map<string, any>();
+      for (const apt of [
+        ...(staleScheduledResponse.data.appointments || []),
+        ...(staleConfirmedResponse.data.appointments || []),
+        ...(todayResponse.data.appointments || []),
+      ]) {
+        if (apt?.id) appointmentsById.set(apt.id, apt);
       }
+
+      const appointmentsWithVitals = await fetchVitalsForAppointments(
+        Array.from(appointmentsById.values()),
+      );
+      setAppointments(appointmentsWithVitals);
     } catch {
       showError('Error', 'Failed to fetch appointments');
     } finally {
