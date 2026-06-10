@@ -1,135 +1,91 @@
-import React, { act } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import React from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import PatientSafetyAlerts from './PatientSafetyAlerts';
-import { ehrApi } from '../services/api';
+import { SafetyAlert, SafetyAlertCounts } from '../hooks/useSafetyAlerts';
 
-jest.mock('../services/api', () => ({
-  ehrApi: {
-    getNurseWorklistState: jest.fn(),
-    getClinicalEscalationFeed: jest.fn(),
-    acknowledgeNurseAlert: jest.fn(),
-    acknowledgeClinicalEscalation: jest.fn(),
+// PatientSafetyAlerts is a presentational component: the alert-generation,
+// escalation-feed and acknowledgement behaviour now live in the useSafetyAlerts
+// hook (covered in useSafetyAlerts.test.tsx). These tests assert that the
+// component renders the alerts it is given and wires its action callbacks.
+
+const escalationAlert: SafetyAlert = {
+  id: 'esc-1',
+  patientId: 'p-1',
+  patientName: 'Kaylee Dube',
+  alertType: 'escalation',
+  severity: 'critical',
+  title: 'Escalate NEWS2 deterioration',
+  description: 'Clinical escalation requires nurse action.',
+  details: 'Review patient now.',
+  createdAt: new Date().toISOString(),
+  isActive: true,
+  requiresAction: true,
+  actionRequired: 'Review patient now.',
+  trustSummary: {
+    sourceLabel: 'Early warning deterioration signal',
+    backingType: 'Rule-backed safety escalation',
+    reviewState: 'Pending nurse review',
+    classifierStage: 'Deterioration Review',
+    riskBand: 'High',
+    evidenceCount: 1,
   },
-}));
+};
+
+const counts: SafetyAlertCounts = {
+  total: 1,
+  active: 1,
+  critical: 1,
+  high: 0,
+  acknowledged: 0,
+};
 
 describe('PatientSafetyAlerts', () => {
-  beforeEach(() => {
-    localStorage.setItem('ehr_token', 'token');
-    localStorage.setItem('ehr_tenant_slug', 'kids-clinic');
-    (ehrApi.getNurseWorklistState as jest.Mock).mockResolvedValue({
-      data: { acknowledgedAlertIds: [] },
-    });
-    (ehrApi.getClinicalEscalationFeed as jest.Mock).mockResolvedValue({
-      data: { items: [] },
-    });
-    (ehrApi.acknowledgeClinicalEscalation as jest.Mock).mockResolvedValue({ data: { ok: true } });
-    (ehrApi.acknowledgeNurseAlert as jest.Mock).mockResolvedValue({ data: { ok: true } });
+  it('renders the alerts it is handed, including server escalations', () => {
+    render(
+      <PatientSafetyAlerts
+        alerts={[escalationAlert]}
+        counts={counts}
+        onAcknowledge={jest.fn()}
+        onDismiss={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Escalate NEWS2 deterioration')).not.toBeNull();
+    // Counts surface in the header stats.
+    expect(screen.getAllByText('1').length).toBeGreaterThan(0);
+
+    // Trust-summary detail reveals on expansion.
+    fireEvent.click(screen.getByText('Escalate NEWS2 deterioration'));
+    expect(screen.queryByText(/Rule-backed safety escalation/i)).not.toBeNull();
   });
 
-  it('emits alert counts from generated clinical safety alerts', async () => {
-    const onAlertCountsChange = jest.fn();
+  it('invokes onAcknowledge with the alert id when Acknowledge is clicked', () => {
+    const onAcknowledge = jest.fn();
+    render(
+      <PatientSafetyAlerts
+        alerts={[escalationAlert]}
+        counts={counts}
+        onAcknowledge={onAcknowledge}
+        onDismiss={jest.fn()}
+      />,
+    );
 
-    const appointments = [
-      {
-        id: 'apt-1',
-        patient: {
-          id: 'p-1',
-          firstName: 'Kaylee',
-          lastName: 'Dube',
-          age: 72,
-          allergies: 'Penicillin',
-        },
-        vitals: {
-          bloodPressure: '190/120',
-          heartRate: 130,
-          temperature: 39.1,
-          oxygenSaturation: 88,
-        },
-      },
-    ];
-
-    await act(async () => {
-      render(
-        <PatientSafetyAlerts
-          currentUser={{ id: 'nurse-1' }}
-          appointments={appointments as any}
-          onAlertCountsChange={onAlertCountsChange}
-        />,
-      );
-    });
-
-    await waitFor(() => {
-      expect(onAlertCountsChange).toHaveBeenCalled();
-    });
-
-    const latest = onAlertCountsChange.mock.calls[onAlertCountsChange.mock.calls.length - 1][0];
-    expect(latest.active).toBeGreaterThan(0);
-    expect(latest.critical).toBeGreaterThan(0);
-    expect(latest.high).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Acknowledge/i }));
+    expect(onAcknowledge).toHaveBeenCalledWith('esc-1');
   });
 
-  it('includes server escalation alerts and acknowledges them through the escalation endpoint', async () => {
-    const onAlertCountsChange = jest.fn();
-    (ehrApi.getClinicalEscalationFeed as jest.Mock).mockResolvedValue({
-      data: {
-        items: [
-          {
-            id: 'esc-1',
-            patientId: 'p-1',
-            patientName: 'Kaylee Dube',
-            severity: 'critical',
-            status: 'open',
-            title: 'Escalate NEWS2 deterioration',
-            summary: 'Clinical escalation requires nurse action.',
-            dueAt: new Date().toISOString(),
-            recommendedAction: 'Review patient now.',
-            trustSummary: {
-              sourceLabel: 'Early warning deterioration signal',
-              backingType: 'Rule-backed safety escalation',
-              reviewState: 'Pending nurse review',
-              classifierStage: 'Deterioration Review',
-              riskBand: 'High',
-              evidenceCount: 1,
-            },
-          },
-        ],
-      },
-    });
+  it('hides acknowledged alerts (and their Acknowledge button) by default', () => {
+    render(
+      <PatientSafetyAlerts
+        alerts={[{ ...escalationAlert, acknowledgedAt: new Date().toISOString(), isActive: false }]}
+        counts={{ ...counts, active: 0, critical: 0, acknowledged: 1 }}
+        onAcknowledge={jest.fn()}
+        onDismiss={jest.fn()}
+      />,
+    );
 
-    await act(async () => {
-      render(
-        <PatientSafetyAlerts
-          currentUser={{ id: 'nurse-1' }}
-          appointments={[] as any}
-          onAlertCountsChange={onAlertCountsChange}
-        />,
-      );
-    });
-
-    await waitFor(() => {
-      expect(onAlertCountsChange).toHaveBeenCalled();
-      expect(screen.queryByText('Escalate NEWS2 deterioration')).not.toBeNull();
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Escalate NEWS2 deterioration'));
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByText(/Rule-backed safety escalation/i)).not.toBeNull();
-    });
-
-    const latest = onAlertCountsChange.mock.calls[onAlertCountsChange.mock.calls.length - 1][0];
-    expect(latest.active).toBeGreaterThanOrEqual(1);
-    expect(latest.critical).toBeGreaterThanOrEqual(1);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Acknowledge/i }));
-    });
-
-    await waitFor(() => {
-      expect(ehrApi.acknowledgeClinicalEscalation).toHaveBeenCalledWith('esc-1', 'token', 'kids-clinic');
-    });
-    expect(ehrApi.acknowledgeNurseAlert).not.toHaveBeenCalled();
+    // showAcknowledged is off by default, so an acknowledged alert is filtered out entirely.
+    expect(screen.queryByText('Escalate NEWS2 deterioration')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Acknowledge/i })).toBeNull();
   });
 });

@@ -411,7 +411,16 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         return { ...t, priority, status };
       };
       const decorated = [...realTasks, ...serverOrderTasks].map(decorate);
-      setTasks([...decorated, ...serverEscalationTasks]);
+      // Escalations keep their server-derived priority/status, but must still honour
+      // persisted (and optimistic) in-progress/completed state — otherwise starting an
+      // escalation reverts to 'pending' on the next rebuild and the Complete action is lost.
+      const escalationsWithPersistedStatus = serverEscalationTasks.map((t) => {
+        let status = t.status;
+        if (completedTaskIds.has(t.id)) status = 'completed';
+        else if (serverInProgressTaskIds.has(t.id) && status !== 'completed') status = 'in_progress';
+        return status === t.status ? t : { ...t, status };
+      });
+      setTasks([...decorated, ...escalationsWithPersistedStatus]);
     };
 
     if (appointments.length > 0 || serverEscalationTasks.length > 0 || serverOrderTasks.length > 0) {

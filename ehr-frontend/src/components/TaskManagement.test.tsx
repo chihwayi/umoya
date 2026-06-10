@@ -7,9 +7,12 @@ jest.mock('../services/api', () => ({
   ehrApi: {
     getNurseWorklistState: jest.fn(),
     getClinicalEscalationFeed: jest.fn(),
+    getMedicationSafetyWorklist: jest.fn(),
+    getPendingLabOrders: jest.fn(),
     acknowledgeClinicalEscalation: jest.fn(),
     completeClinicalEscalation: jest.fn(),
     completeNurseTask: jest.fn(),
+    startNurseTask: jest.fn(),
   },
   cdssApi: {
     markNurseTaskViewed: jest.fn().mockResolvedValue({ data: { ok: true } }),
@@ -26,9 +29,12 @@ describe('TaskManagement', () => {
     (ehrApi.getClinicalEscalationFeed as jest.Mock).mockResolvedValue({
       data: { items: [] },
     });
+    (ehrApi.getMedicationSafetyWorklist as jest.Mock).mockResolvedValue({ data: [] });
+    (ehrApi.getPendingLabOrders as jest.Mock).mockResolvedValue({ data: [] });
     (ehrApi.acknowledgeClinicalEscalation as jest.Mock).mockResolvedValue({ data: { ok: true } });
     (ehrApi.completeClinicalEscalation as jest.Mock).mockResolvedValue({ data: { ok: true } });
     (ehrApi.completeNurseTask as jest.Mock).mockResolvedValue({ data: { ok: true } });
+    (ehrApi.startNurseTask as jest.Mock).mockResolvedValue({ data: { ok: true } });
   });
 
   it('emits task counts generated from appointment workflow state', async () => {
