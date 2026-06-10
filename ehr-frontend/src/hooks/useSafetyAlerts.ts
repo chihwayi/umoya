@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ehrApi } from '../services/api';
+import { resolveTenantSlug } from '../utils/tenantSlug';
 
 export interface SafetyAlert {
   id: string;
@@ -62,7 +63,7 @@ export function useSafetyAlerts(appointments: any[], currentUserId?: string) {
   const loadState = useCallback(async () => {
     try {
       const token = localStorage.getItem('ehr_token');
-      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      const tenantSlug = resolveTenantSlug();
       if (!token || !tenantSlug) return;
       setLoading(true);
       const [stateResponse, escalationResponse] = await Promise.all([
@@ -260,7 +261,7 @@ export function useSafetyAlerts(appointments: any[], currentUserId?: string) {
 
   const acknowledge = useCallback(async (alertId: string) => {
     const token = localStorage.getItem('ehr_token');
-    const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+    const tenantSlug = resolveTenantSlug();
     if (!token || !tenantSlug) return;
     const alert = alerts.find((a) => a.id === alertId);
     // Optimistic update first so the badge/list react instantly.

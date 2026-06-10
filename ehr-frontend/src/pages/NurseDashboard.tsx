@@ -3413,7 +3413,7 @@ const NurseDashboard: React.FC = () => {
                   className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200 relative"
                 >
                   <Bell className="h-5 w-5" />
-                  {(taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active + crossModuleSummary.total) > 0 && (
+                  {(taskCounts.pending + taskCounts.inProgress + alertCounts.active + crossModuleSummary.total) > 0 && (
                     <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
                       alertCounts.critical > 0 || crossModuleSummary.critical > 0
                         ? 'bg-gradient-to-r from-red-600 to-red-700' 
@@ -3421,7 +3421,7 @@ const NurseDashboard: React.FC = () => {
                         ? 'bg-gradient-to-r from-orange-500 to-red-500'
                         : 'bg-gradient-to-r from-green-500 to-emerald-600'
                     }`}>
-                      {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active + crossModuleSummary.total}
+                      {taskCounts.pending + taskCounts.inProgress + alertCounts.active + crossModuleSummary.total}
                     </span>
                   )}
                 </button>

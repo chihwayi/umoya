@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronRight, Flag, Eye, TestTube, Sparkles, RefreshCw
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
+import { resolveTenantSlug } from '../utils/tenantSlug';
 import { ehrApi, cdssApi } from '../services/api';
 
 interface Task {
@@ -132,7 +133,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
     const loadState = async () => {
       try {
         const token = localStorage.getItem('ehr_token');
-        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+        const tenantSlug = resolveTenantSlug();
         if (!token || !tenantSlug) return;
         const [stateResponse, escalationResponse, marResponse, labResponse] = await Promise.all([
           ehrApi.getNurseWorklistState(token, tenantSlug),
@@ -554,11 +555,23 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   };
 
   const handleTaskComplete = async (taskId: string) => {
+    const token = localStorage.getItem('ehr_token');
+    const tenantSlug = resolveTenantSlug();
+    const task = tasks.find((t) => t.id === taskId);
+
+    // Optimistic update first so the card reacts immediately and the count
+    // drops — mirrors handleTaskStart. The completion is then persisted
+    // best-effort and rolled back only if the server call actually fails.
+    setServerCompletedTaskIds((prev) => new Set(prev).add(taskId));
+    setTasks(prev => prev.map(taskItem =>
+      taskItem.id === taskId
+        ? { ...taskItem, status: 'completed' as const, completedAt: new Date().toISOString() }
+        : taskItem
+    ));
+    onTaskComplete?.(taskId);
+
+    if (!token || !tenantSlug) return;
     try {
-      const token = localStorage.getItem('ehr_token');
-      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-      if (!token || !tenantSlug) return;
-      const task = tasks.find((t) => t.id === taskId);
       if (task?.source === 'clinical_escalation' && task.relatedEscalationTaskId) {
         await ehrApi.completeClinicalEscalation(
           task.relatedEscalationTaskId,
@@ -577,25 +590,24 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           tenantSlug,
         );
       }
-
+    } catch {
+      // Roll back the optimistic completion if the server rejected it.
       setServerCompletedTaskIds((prev) => {
         const next = new Set(prev);
-        next.add(taskId);
+        next.delete(taskId);
         return next;
       });
       setTasks(prev => prev.map(taskItem =>
         taskItem.id === taskId
-          ? { ...taskItem, status: 'completed' as const, completedAt: new Date().toISOString() }
+          ? { ...taskItem, status: 'pending' as const, completedAt: undefined }
           : taskItem
       ));
-      onTaskComplete?.(taskId);
-    } catch {
     }
   };
 
   const handleTaskStart = async (taskId: string) => {
     const token = localStorage.getItem('ehr_token');
-    const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+    const tenantSlug = resolveTenantSlug();
     const task = tasks.find((item) => item.id === taskId);
     // Optimistic update so the card reacts immediately.
     setServerInProgressTaskIds((prev) => new Set(prev).add(taskId));
@@ -634,7 +646,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         newSet.add(taskId);
         // Fire-and-forget: mark this nurse task as viewed so it won't reappear as unread
         const token = localStorage.getItem('ehr_token');
-        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+        const tenantSlug = resolveTenantSlug();
         if (token && tenantSlug) {
           const markViewedRequest = cdssApi?.markNurseTaskViewed?.(taskId, token, tenantSlug);
           if (markViewedRequest && typeof (markViewedRequest as Promise<unknown>).catch === 'function') {
