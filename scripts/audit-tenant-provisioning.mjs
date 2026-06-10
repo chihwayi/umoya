@@ -199,6 +199,27 @@ function splitSqlStatements(input) {
     const char = input[i];
     const prev = input[i - 1];
 
+    // Skip SQL comments outside of string/dollar-quoted literals so that
+    // quotes, parens, and semicolons inside comments don't corrupt parsing.
+    if (!inSingle && !inDouble && !dollarQuoteTag) {
+      if (char === '-' && input[i + 1] === '-') {
+        const newlineIndex = input.indexOf('\n', i);
+        if (newlineIndex === -1) {
+          i = input.length;
+        } else {
+          i = newlineIndex;
+          current += '\n';
+        }
+        continue;
+      }
+      if (char === '/' && input[i + 1] === '*') {
+        const endIndex = input.indexOf('*/', i + 2);
+        i = endIndex === -1 ? input.length : endIndex + 1;
+        current += ' ';
+        continue;
+      }
+    }
+
     if (!inSingle && !inDouble) {
       const dollarMatch = input.slice(i).match(/^\$[A-Za-z0-9_]*\$/);
       if (dollarMatch) {
@@ -284,7 +305,7 @@ function parseAlterTableStatement(statement, tables) {
 
 async function getTenantEntityRegistry() {
   const source = await fs.readFile(TENANT_SERVICE_PATH, 'utf8');
-  const importRegex = /import\s+\{([^}]+)\}\s+from\s+'(\.\.\/entities\/[^']+)';/g;
+  const importRegex = /import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+'(\.[^']+\.entity)';/g;
   const importMap = new Map();
 
   for (const match of source.matchAll(importRegex)) {
