@@ -228,8 +228,7 @@ describe('NurseWorklistService', () => {
 
     expect(result).toEqual({
       completedTaskIds: ['task-1'],
-      // HIPAA-audit fallback cannot reconstruct in-progress state (only
-      // COMPLETE/ACKNOWLEDGE actions are logged), so it is always empty here.
+      // HIPAA-audit fallback only logs complete/acknowledge, so in-progress is always empty here.
       inProgressTaskIds: [],
       acknowledgedAlertIds: ['alert-1'],
     });
