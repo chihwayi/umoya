@@ -8,7 +8,7 @@ export class BloodTransfusion {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -18,7 +18,7 @@ export class BloodTransfusion {
   @Column({ name: 'admission_id', nullable: true })
   admissionId: string;
 
-  @Column({ name: 'inventory_id' })
+  @Column({ name: 'inventory_id', type: 'uuid' })
   inventoryId: string;
 
   @ManyToOne(() => BloodInventory)
@@ -28,7 +28,7 @@ export class BloodTransfusion {
   @Column({ name: 'cross_match_id', nullable: true })
   crossMatchId: string;
 
-  @Column({ name: 'ordered_by' })
+  @Column({ name: 'ordered_by', type: 'uuid' })
   orderedById: string;
 
   @ManyToOne(() => User)
@@ -47,7 +47,7 @@ export class BloodTransfusion {
   @Column({ name: 'consent_obtained', default: false })
   consentObtained: boolean;
 
-  @Column({ name: 'consent_obtained_by', nullable: true })
+  @Column({ name: 'consent_obtained_by', type: 'uuid', nullable: true })
   consentObtainedById: string;
 
   @ManyToOne(() => User)
@@ -63,14 +63,14 @@ export class BloodTransfusion {
   @Column({ name: 'volume_transfused', nullable: true })
   volumeTransfused: number;
 
-  @Column({ name: 'administered_by' })
+  @Column({ name: 'administered_by', type: 'uuid' })
   administeredById: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'administered_by' })
   administeredBy: User;
 
-  @Column({ name: 'monitored_by', nullable: true })
+  @Column({ name: 'monitored_by', type: 'uuid', nullable: true })
   monitoredById: string;
 
   @ManyToOne(() => User)

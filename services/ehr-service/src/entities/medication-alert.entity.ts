@@ -8,7 +8,7 @@ export class MedicationAlert {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -18,7 +18,7 @@ export class MedicationAlert {
   @Column({ name: 'prescription_id', nullable: true })
   prescriptionId: string;
 
-  @Column({ name: 'mar_id', nullable: true })
+  @Column({ name: 'mar_id', type: 'uuid', nullable: true })
   marId: string;
 
   @ManyToOne(() => MedicationAdministrationRecord)
@@ -41,7 +41,7 @@ export class MedicationAlert {
   @Column({ default: false })
   acknowledged: boolean;
 
-  @Column({ name: 'acknowledged_by', nullable: true })
+  @Column({ name: 'acknowledged_by', type: 'uuid', nullable: true })
   acknowledgedById: string;
 
   @ManyToOne(() => User)

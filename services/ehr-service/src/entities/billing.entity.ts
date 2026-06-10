@@ -29,14 +29,14 @@ export class Bill {
   @Column({ name: 'invoice_number' })
   billNumber: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ name: 'appointment_id', nullable: true })
+  @Column({ name: 'appointment_id', type: 'uuid', nullable: true })
   appointmentId: string;
 
   @ManyToOne(() => AppointmentSimple)
@@ -90,7 +90,7 @@ export class Bill {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-  @Column({ name: 'created_by', nullable: true })
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdById: string;
 
   @ManyToOne(() => User)

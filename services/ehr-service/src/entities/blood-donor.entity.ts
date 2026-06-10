@@ -6,7 +6,7 @@ export class BloodDonor {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id', nullable: true })
+  @Column({ name: 'patient_id', type: 'uuid', nullable: true })
   patientId: string;
 
   @ManyToOne(() => Patient)

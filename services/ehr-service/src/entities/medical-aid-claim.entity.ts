@@ -31,14 +31,14 @@ export class MedicalAidClaim {
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Bill)
   @JoinColumn({ name: 'billing_id' })
   bill: Bill;
 
-  @Column({ name: 'billing_id' })
+  @Column({ name: 'billing_id', type: 'uuid' })
   billId: string;
 
   @Column({ name: 'medical_aid_name' })

@@ -7,7 +7,7 @@ export class AntimicrobialStewardship {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -74,7 +74,7 @@ export class AntimicrobialStewardship {
   @Column({ name: 'review_date', type: 'date', nullable: true })
   reviewDate: Date;
 
-  @Column({ name: 'reviewed_by', nullable: true })
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
   reviewedById: string;
 
   @ManyToOne(() => User)
@@ -102,7 +102,7 @@ export class AntimicrobialStewardship {
   @Column({ name: 'de_escalation_notes', type: 'text', nullable: true })
   deEscalationNotes: string;
 
-  @Column({ name: 'prescribed_by' })
+  @Column({ name: 'prescribed_by', type: 'uuid' })
   prescribedById: string;
 
   @ManyToOne(() => User)

@@ -7,7 +7,7 @@ export class IsolationPrecaution {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -47,14 +47,14 @@ export class IsolationPrecaution {
   @Column({ length: 50, default: 'active' })
   status: string;
 
-  @Column({ name: 'ordered_by' })
+  @Column({ name: 'ordered_by', type: 'uuid' })
   orderedById: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'ordered_by' })
   orderedBy: User;
 
-  @Column({ name: 'discontinued_by', nullable: true })
+  @Column({ name: 'discontinued_by', type: 'uuid', nullable: true })
   discontinuedById: string;
 
   @ManyToOne(() => User)

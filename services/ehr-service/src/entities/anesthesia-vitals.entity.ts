@@ -55,7 +55,7 @@ export class AnesthesiaVitals {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-  @Column({ name: 'recorded_by', nullable: true })
+  @Column({ name: 'recorded_by', type: 'uuid', nullable: true })
   recordedById: string;
 
   @ManyToOne(() => User)

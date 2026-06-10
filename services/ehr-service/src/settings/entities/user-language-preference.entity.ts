@@ -5,7 +5,7 @@ export class UserLanguagePreference {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', unique: true })
+  @Column({ name: 'user_id', type: 'uuid', unique: true })
   userId: string;
 
   @Column({ name: 'preferred_language', default: 'en' })

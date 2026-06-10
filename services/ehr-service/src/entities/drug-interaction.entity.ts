@@ -21,14 +21,14 @@ export class DrugInteraction {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'drug1_id' })
+  @Column({ name: 'drug1_id', type: 'uuid' })
   drug1Id: string;
 
   @ManyToOne(() => Drug)
   @JoinColumn({ name: 'drug1_id' })
   drug1: Drug;
 
-  @Column({ name: 'drug2_id' })
+  @Column({ name: 'drug2_id', type: 'uuid' })
   drug2Id: string;
 
   @ManyToOne(() => Drug)

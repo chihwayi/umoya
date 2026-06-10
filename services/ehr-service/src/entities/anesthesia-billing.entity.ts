@@ -8,14 +8,14 @@ export class AnesthesiaBilling {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'surgical_case_id' })
+  @Column({ name: 'surgical_case_id', type: 'uuid' })
   surgicalCaseId: string;
 
   @ManyToOne(() => SurgicalCase)
   @JoinColumn({ name: 'surgical_case_id' })
   surgicalCase: SurgicalCase;
 
-  @Column({ name: 'anesthesia_record_id', nullable: true })
+  @Column({ name: 'anesthesia_record_id', type: 'uuid', nullable: true })
   anesthesiaRecordId: string;
 
   @ManyToOne(() => AnesthesiaRecord)
@@ -66,7 +66,7 @@ export class AnesthesiaBilling {
   @Column({ name: 'billed_at', type: 'timestamptz', nullable: true })
   billedAt: Date;
 
-  @Column({ name: 'billed_by', nullable: true })
+  @Column({ name: 'billed_by', type: 'uuid', nullable: true })
   billedById: string;
 
   @ManyToOne(() => User)

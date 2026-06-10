@@ -20,21 +20,21 @@ export class CriticalResultAlert {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'lab_order_id' })
+  @Column({ name: 'lab_order_id', type: 'uuid' })
   labOrderId: string;
 
   @ManyToOne(() => LabOrder)
   @JoinColumn({ name: 'lab_order_id' })
   labOrder: LabOrder;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ name: 'ordering_provider_id' })
+  @Column({ name: 'ordering_provider_id', type: 'uuid' })
   orderingProviderId: string;
 
   @ManyToOne(() => User)
@@ -59,7 +59,7 @@ export class CriticalResultAlert {
   @Column({ type: 'varchar', default: AlertStatus.PENDING })
   status: AlertStatus;
 
-  @Column({ name: 'acknowledged_by', nullable: true })
+  @Column({ name: 'acknowledged_by', type: 'uuid', nullable: true })
   acknowledgedBy: string;
 
   @ManyToOne(() => User)

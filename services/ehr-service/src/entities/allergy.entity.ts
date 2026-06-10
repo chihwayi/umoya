@@ -7,7 +7,7 @@ export class Allergy {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -47,7 +47,7 @@ export class Allergy {
   @CreateDateColumn({ name: 'recorded_at' })
   recordedAt: Date;
 
-  @Column({ name: 'recorded_by', nullable: true })
+  @Column({ name: 'recorded_by', type: 'uuid', nullable: true })
   recordedBy: string;
 
   @ManyToOne(() => User)

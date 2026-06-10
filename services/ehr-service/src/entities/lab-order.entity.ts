@@ -43,21 +43,21 @@ export class LabOrder {
   @Column({ name: 'order_number' })
   orderNumber: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ name: 'ordering_provider_id' })
+  @Column({ name: 'ordering_provider_id', type: 'uuid' })
   orderingProviderId: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'ordering_provider_id' })
   orderingProvider: User;
 
-  @Column({ name: 'medical_record_id', nullable: true })
+  @Column({ name: 'medical_record_id', type: 'uuid', nullable: true })
   medicalRecordId: string;
 
   @ManyToOne(() => MedicalRecord)
@@ -112,7 +112,7 @@ export class LabOrder {
   @Column({ type: 'timestamp', name: 'collected_at', nullable: true })
   collectedAt: Date;
 
-  @Column({ name: 'collected_by_id', nullable: true })
+  @Column({ name: 'collected_by_id', type: 'uuid', nullable: true })
   collectedById: string;
 
   @ManyToOne(() => User)
@@ -134,7 +134,7 @@ export class LabOrder {
   @Column({ type: 'text', name: 'interpretation', nullable: true })
   interpretation: string;
 
-  @Column({ name: 'reviewed_by_id', nullable: true })
+  @Column({ name: 'reviewed_by_id', type: 'uuid', nullable: true })
   reviewedById: string;
 
   @ManyToOne(() => User)

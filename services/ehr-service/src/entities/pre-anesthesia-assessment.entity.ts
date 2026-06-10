@@ -8,14 +8,14 @@ export class PreAnesthesiaAssessment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'surgical_case_id' })
+  @Column({ name: 'surgical_case_id', type: 'uuid' })
   surgicalCaseId: string;
 
   @ManyToOne(() => SurgicalCase)
   @JoinColumn({ name: 'surgical_case_id' })
   surgicalCase: SurgicalCase;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -131,7 +131,7 @@ export class PreAnesthesiaAssessment {
   @Column({ name: 'anesthesia_consent_obtained', default: false })
   anesthesiaConsentObtained: boolean;
 
-  @Column({ name: 'consent_obtained_by', nullable: true })
+  @Column({ name: 'consent_obtained_by', type: 'uuid', nullable: true })
   consentObtainedById: string;
 
   @ManyToOne(() => User)
@@ -142,7 +142,7 @@ export class PreAnesthesiaAssessment {
   consentObtainedAt: Date;
 
   // Assessment
-  @Column({ name: 'assessed_by' })
+  @Column({ name: 'assessed_by', type: 'uuid' })
   assessedById: string;
 
   @ManyToOne(() => User)

@@ -27,14 +27,14 @@ export class Prescription {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ name: 'doctor_id' })
+  @Column({ name: 'doctor_id', type: 'uuid' })
   prescriberId: string;
 
   @ManyToOne(() => User)

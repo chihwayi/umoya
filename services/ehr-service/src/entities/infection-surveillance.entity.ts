@@ -7,7 +7,7 @@ export class InfectionSurveillance {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -83,7 +83,7 @@ export class InfectionSurveillance {
   @Column({ name: 'root_cause', type: 'text', nullable: true })
   rootCause: string;
 
-  @Column({ name: 'detected_by', nullable: true })
+  @Column({ name: 'detected_by', type: 'uuid', nullable: true })
   detectedById: string;
 
   @ManyToOne(() => User)

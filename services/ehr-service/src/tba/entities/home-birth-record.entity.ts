@@ -5,7 +5,7 @@ import { TbaRegister } from './tba-register.entity';
 export class HomeBirthRecord {
   @PrimaryGeneratedColumn('uuid') id: string;
 
-  @Column({ name: 'tba_id', nullable: true }) tbaId: string;
+  @Column({ name: 'tba_id', type: 'uuid', nullable: true }) tbaId: string;
   @ManyToOne(() => TbaRegister, t => t.births)
   @JoinColumn({ name: 'tba_id' })
   tba: TbaRegister;

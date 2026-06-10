@@ -10,7 +10,7 @@ export class MedicationAdministrationRecord {
   @Column({ name: 'prescription_id' })
   prescriptionId: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -73,14 +73,14 @@ export class MedicationAdministrationRecord {
   administrationStatus: string;
 
   // Administration Details
-  @Column({ name: 'administered_by' })
+  @Column({ name: 'administered_by', type: 'uuid' })
   administeredById: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'administered_by' })
   administeredBy: User;
 
-  @Column({ name: 'witnessed_by', nullable: true })
+  @Column({ name: 'witnessed_by', type: 'uuid', nullable: true })
   witnessedById: string;
 
   @ManyToOne(() => User)

@@ -11,7 +11,7 @@ const OUTPUT_PATH = path.join(
   ROOT,
   'services/tenant-service/src/generated/tenant-entity-structure-alignment.statements.ts',
 );
-const BUNDLE_VERSION = '2026.03.23.4';
+const BUNDLE_VERSION = '2026.06.10.1';
 
 function stripQuotes(identifier) {
   return identifier.replace(/^"+|"+$/g, '');
@@ -427,7 +427,7 @@ function defaultJoinColumnName(propertyName) {
 
 async function getTenantEntityRegistry() {
   const source = await fs.readFile(TENANT_SERVICE_PATH, 'utf8');
-  const importRegex = /import\s+\{([^}]+)\}\s+from\s+'(\.\.\/entities\/[^']+)';/g;
+  const importRegex = /import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+'(\.[^']+\.entity)';/g;
   const importMap = new Map();
 
   for (const match of source.matchAll(importRegex)) {
@@ -498,6 +498,7 @@ export async function extractEntityStructure() {
       );
 
       let columnName = propertyMatch.propertyName;
+      let columnUnique = false;
       if (columnDecorator) {
         const parts = splitTopLevelSegments(columnDecorator.args)
           .map((part) => part.trim())
@@ -508,6 +509,8 @@ export async function extractEntityStructure() {
           if (options.name) {
             columnName = unquoteLiteral(options.name);
           }
+          // Column-level `unique: true` declares a single-column unique index.
+          columnUnique = options.unique === 'true';
         }
       } else if (joinColumnDecorator) {
         const parts = splitTopLevelSegments(joinColumnDecorator.args)
@@ -564,6 +567,7 @@ export async function extractEntityStructure() {
       properties.set(propertyMatch.propertyName, {
         propertyName: propertyMatch.propertyName,
         columnName,
+        columnUnique,
         relation,
         joinColumn,
         propertyIndexes,
@@ -633,6 +637,20 @@ export async function extractEntityStructure() {
           columns,
           unique: propertyIndex.unique,
         });
+      }
+
+      // Column-level `@Column({ unique: true })` declares a single-column unique
+      // index that ON CONFLICT seeds and entity contracts rely on.
+      if (property.columnUnique) {
+        const columns = [property.columnName];
+        const key = `unique:${columns.join(',')}`;
+        if (!indexSet.has(key)) {
+          indexSet.set(key, {
+            name: buildGeneratedName('uidx', entity.tableName, columns),
+            columns,
+            unique: true,
+          });
+        }
       }
 
       if (property.relation?.targetEntity && property.joinColumn) {

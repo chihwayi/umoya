@@ -9,21 +9,21 @@ export class PacuRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'surgical_case_id' })
+  @Column({ name: 'surgical_case_id', type: 'uuid' })
   surgicalCaseId: string;
 
   @ManyToOne(() => SurgicalCase)
   @JoinColumn({ name: 'surgical_case_id' })
   surgicalCase: SurgicalCase;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ name: 'anesthesia_record_id', nullable: true })
+  @Column({ name: 'anesthesia_record_id', type: 'uuid', nullable: true })
   anesthesiaRecordId: string;
 
   @ManyToOne(() => AnesthesiaRecord)
@@ -82,14 +82,14 @@ export class PacuRecord {
   dischargeCriteriaMet: boolean;
 
   // Staff
-  @Column({ name: 'pacu_nurse_id', nullable: true })
+  @Column({ name: 'pacu_nurse_id', type: 'uuid', nullable: true })
   pacuNurseId: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'pacu_nurse_id' })
   pacuNurse: User;
 
-  @Column({ name: 'discharge_approved_by', nullable: true })
+  @Column({ name: 'discharge_approved_by', type: 'uuid', nullable: true })
   dischargeApprovedById: string;
 
   @ManyToOne(() => User)
