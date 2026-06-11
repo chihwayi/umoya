@@ -32,6 +32,7 @@ import {
   ChevronDown,
   ChevronUp,
   Upload,
+  X,
 } from 'lucide-react';
 import { claimsApi, billingApi, ehrApi, tenantApi, cdssApi } from '../services/api';
 import { AppealLetterPanel } from '../components/AppealLetterPanel';
@@ -83,13 +84,17 @@ const ClaimsDashboard: React.FC = () => {
   const [claimReadinessById, setClaimReadinessById] = useState<Record<string, any>>({});
   const [bills, setBills] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'claims' | 'readiness' | 'create' | 'analytics' | 'preauth' | 'bulk' | 'api-config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'claims' | 'readiness' | 'create' | 'analytics' | 'preauth' | 'bulk' | 'api-config' | 'aged'>('overview');
   const [filters, setFilters] = useState({
     status: '',
     provider: '',
     dateFrom: '',
     dateTo: '',
   });
+  const [agedData, setAgedData] = useState<any>(null);
+  const [agedLoading, setAgedLoading] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showClaimDetailModal, setShowClaimDetailModal] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState<any>(null);
@@ -271,6 +276,51 @@ const ClaimsDashboard: React.FC = () => {
     }
   };
 
+  const loadAgedClaims = useCallback(async () => {
+    if (!tenantSlug) return;
+    setAgedLoading(true);
+    try {
+      const response = await claimsApi.getAgedClaims(tenantSlug, token, {
+        provider: filters.provider || undefined,
+      });
+      setAgedData(response.data);
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to load aged claims', 'error');
+    } finally {
+      setAgedLoading(false);
+    }
+  }, [tenantSlug, token, filters.provider, showError]);
+
+  useEffect(() => {
+    if (activeTab === 'aged') loadAgedClaims();
+  }, [activeTab, loadAgedClaims]);
+
+  const handleExportCsv = async () => {
+    if (!tenantSlug) return;
+    setExporting(true);
+    try {
+      const response = await claimsApi.exportClaimsCsv(tenantSlug, token, {
+        status: filters.status || undefined,
+        provider: filters.provider || undefined,
+      });
+      const { csv, filename } = response.data || {};
+      const blob = new Blob([csv || ''], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || 'claims-export.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showSuccess('Claims exported', 'success');
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to export claims', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { color: string; label: string; icon: React.ComponentType<any> }> = {
       draft: { color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', label: 'Draft', icon: FileText },
@@ -365,6 +415,21 @@ const ClaimsDashboard: React.FC = () => {
                 Refresh
               </button>
               <button
+                onClick={handleExportCsv}
+                disabled={exporting}
+                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                {exporting ? 'Exporting…' : 'Export CSV'}
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Import Remittance
+              </button>
+              <button
                 onClick={() => setActiveTab('create')}
                 className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all flex items-center gap-2"
               >
@@ -383,6 +448,7 @@ const ClaimsDashboard: React.FC = () => {
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'claims', label: 'Claims', icon: FileText },
             { id: 'readiness', label: 'Readiness', icon: Shield },
+            { id: 'aged', label: 'Aged Claims', icon: Clock },
             { id: 'create', label: 'Create', icon: Plus },
             { id: 'preauth', label: 'Pre-Auth', icon: Shield },
             { id: 'bulk', label: 'Bulk Ops', icon: Layers },
@@ -989,6 +1055,10 @@ const ClaimsDashboard: React.FC = () => {
           />
         )}
 
+        {activeTab === 'aged' && (
+          <AgedClaimsTab data={agedData} loading={agedLoading} onRefresh={loadAgedClaims} />
+        )}
+
         {/* Analytics Tab */}
         {activeTab === 'analytics' && (
           <AnalyticsTab
@@ -1050,6 +1120,20 @@ const ClaimsDashboard: React.FC = () => {
         </ModalPortal>
       )}
 
+      {showImportModal && (
+        <ModalPortal>
+          <ImportRemittanceModal
+            tenantSlug={tenantSlug!}
+            token={token}
+            onClose={() => setShowImportModal(false)}
+            onSuccess={() => {
+              setShowImportModal(false);
+              loadDashboardData();
+            }}
+          />
+        </ModalPortal>
+      )}
+
       {/* Pre-Authorization Modal - Placeholder */}
       {/* 
       {showPreAuthModal && (
@@ -1083,6 +1167,181 @@ const ClaimsDashboard: React.FC = () => {
         </ModalPortal>
       )}
       */}
+    </div>
+  );
+};
+
+// Aged Claims Tab — outstanding claims bucketed by age, per provider.
+const AGED_BUCKETS: { key: string; label: string }[] = [
+  { key: '0_30', label: '0–30 days' },
+  { key: '31_60', label: '31–60 days' },
+  { key: '61_90', label: '61–90 days' },
+  { key: '90_plus', label: '90+ days' },
+];
+
+const AgedClaimsTab: React.FC<{ data: any; loading: boolean; onRefresh: () => void }> = ({ data, loading, onRefresh }) => {
+  const money = (n: any) => formatCurrency(Number(n || 0));
+  const totals = data?.totals || {};
+  const byProvider: any[] = data?.byProvider || [];
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-xl font-bold text-white">Aged Claims</h3>
+            <p className="text-white/60 text-sm mt-1">Outstanding (submitted / processing / approved-unpaid) claims by age.</p>
+          </div>
+          <button
+            onClick={onRefresh}
+            className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="text-white/50 py-8 text-center">Loading aged claims…</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+              {AGED_BUCKETS.map((b) => (
+                <div key={b.key} className="bg-white/5 rounded-lg p-4 border border-white/10">
+                  <p className="text-white/60 text-xs mb-1">{b.label}</p>
+                  <p className="text-lg font-bold text-white">{money(totals?.[b.key]?.amount)}</p>
+                  <p className="text-white/40 text-xs">{totals?.[b.key]?.count ?? 0} claims</p>
+                </div>
+              ))}
+              <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/30">
+                <p className="text-white/60 text-xs mb-1">Total Outstanding</p>
+                <p className="text-lg font-bold text-white">{money(data?.totalOutstanding)}</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-white/50 text-left border-b border-white/10">
+                    <th className="py-2 pr-4">Provider</th>
+                    {AGED_BUCKETS.map((b) => (
+                      <th key={b.key} className="py-2 px-4 text-right">{b.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {byProvider.length === 0 ? (
+                    <tr><td colSpan={5} className="py-8 text-center text-white/40">No outstanding claims.</td></tr>
+                  ) : (
+                    byProvider.map((row: any) => (
+                      <tr key={row.provider} className="border-b border-white/5">
+                        <td className="py-3 pr-4 text-white capitalize">{String(row.provider || '').replace(/_/g, ' ')}</td>
+                        {AGED_BUCKETS.map((b) => (
+                          <td key={b.key} className="py-3 px-4 text-right text-white/80">
+                            {money(row.buckets?.[b.key]?.amount)}
+                            <span className="text-white/30 text-xs ml-1">({row.buckets?.[b.key]?.count ?? 0})</span>
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Import Remittance Modal — paste/upload a remittance advice CSV and reconcile.
+const ImportRemittanceModal: React.FC<{
+  tenantSlug: string;
+  token: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}> = ({ tenantSlug, token, onClose, onSuccess }) => {
+  const { showError, showSuccess } = useNotification();
+  const [csv, setCsv] = useState('');
+  const [reference, setReference] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCsv(String(reader.result || ''));
+    reader.readAsText(file);
+  };
+
+  const handleImport = async () => {
+    if (!csv.trim()) {
+      showError('Paste or upload a remittance CSV first', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await claimsApi.importRemittance(tenantSlug, token, {
+        remittanceReference: reference || undefined,
+        csv,
+      });
+      setResult(response.data);
+      showSuccess('Remittance imported', 'success');
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to import remittance', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-2xl rounded-2xl bg-slate-900 border border-white/10 p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-white">Import Remittance</h3>
+          <button onClick={onClose} className="text-white/50 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+
+        <label className="block text-white/60 text-sm mb-2">Remittance Reference (optional)</label>
+        <input
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          placeholder="e.g. CIMAS-2026-06-01"
+          className="w-full mb-4 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30"
+        />
+
+        <label className="block text-white/60 text-sm mb-2">
+          Remittance CSV (headers: claim_number, paid_amount, claimed_amount, status, reason)
+        </label>
+        <input type="file" accept=".csv,text/csv" onChange={onFile} className="mb-2 text-white/70 text-sm" />
+        <textarea
+          value={csv}
+          onChange={(e) => setCsv(e.target.value)}
+          rows={8}
+          placeholder="claim_number,claimed_amount,paid_amount,status,reason&#10;CLM00000001,100.00,80.00,short_paid,Tariff cap"
+          className="w-full mb-4 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 font-mono text-xs"
+        />
+
+        {result && (
+          <div className="mb-4 rounded-lg bg-white/5 border border-white/10 p-4 text-sm text-white/80">
+            <p className="font-semibold text-white mb-1">Reconciliation summary</p>
+            <p>Lines: {result.totalLines} · Matched: {result.matched} · Unmatched: {result.unmatched}</p>
+            <p>Paid: {formatCurrency(result.totalPaid)} · Shortfall: {formatCurrency(result.totalShortfall)}</p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white">Close</button>
+          <button
+            onClick={result ? onSuccess : handleImport}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white disabled:opacity-50"
+          >
+            {loading ? 'Importing…' : result ? 'Done' : 'Import & Reconcile'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
