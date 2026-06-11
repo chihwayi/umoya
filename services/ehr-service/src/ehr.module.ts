@@ -426,6 +426,7 @@ import { NotificationCenterService } from './services/notification-center.servic
 import { AppointmentReminderCronService } from './services/appointment-reminder-cron.service';
 import { McazComplianceController } from './controllers/mcaz-compliance.controller';
 import { McazComplianceService } from './services/mcaz-compliance.service';
+import { EdiSerializerService } from './services/edi-serializer.service';
 import { ClinicalWorkflowService } from './services/clinical-workflow.service';
 import { CarePlanService } from './services/care-plan.service';
 import { CarePlanTemplateService } from './services/care-plan-template.service';
@@ -847,6 +848,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     NotificationCenterService,
     AppointmentReminderCronService,
     McazComplianceService,
+    EdiSerializerService,
     AuthService,
     PatientService,
     PatientHistoryService,

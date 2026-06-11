@@ -4880,6 +4880,16 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_prescriptions_is_controlled ON prescriptions(is_controlled) WHERE is_controlled = true`,
         ],
       },
+      {
+        id: 'sprint224_edi_switch_adapter',
+        label: 'Sprint 224 — Switch Wire-Format (EDI) Adapter',
+        version: '2026.06.11.0',
+        description:
+          'Stores the generated X12 837P interchange on claim_submissions for audit; 835 parsing is query-free',
+        statements: () => [
+          `DO $$ BEGIN ALTER TABLE claim_submissions ADD COLUMN IF NOT EXISTS edi_content TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+        ],
+      },
     ];
   }
 

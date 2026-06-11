@@ -5,6 +5,7 @@ import { MedicalAidClaimLine } from '../entities/medical-aid-claim-line.entity';
 import { Bill } from '../entities/billing.entity';
 import { MedicalAidApiService } from './medical-aid-api.service';
 import { NotificationCenterService } from './notification-center.service';
+import { EdiSerializerService } from './edi-serializer.service';
 import { ClaimDenialPrediction } from '../entities/claim-denial-prediction.entity';
 import { FinancialClearanceAssessment } from '../entities/financial-clearance-assessment.entity';
 import { PriorAuthorizationDraft } from '../entities/prior-authorization-draft.entity';
@@ -21,6 +22,7 @@ export class ClaimsService {
   constructor(
     private readonly medicalAidApiService?: MedicalAidApiService,
     private readonly notificationCenterService?: NotificationCenterService,
+    private readonly ediSerializer?: EdiSerializerService,
   ) {}
 
   private clampLimit(value: any, fallback = 50, max = 200) {
@@ -1036,6 +1038,14 @@ export class ClaimsService {
     }));
   }
 
+  /** S224 — render the claim as a downloadable X12 837P interchange. */
+  async generateEdi837(claimId: string, tenantDb: DataSource) {
+    if (!this.ediSerializer) {
+      throw new BadRequestException('EDI serializer unavailable');
+    }
+    return this.ediSerializer.generate837PForClaim(tenantDb, claimId);
+  }
+
   /** Itemised lines for a claim, ordered by creation. */
   async getClaimLines(claimId: string, tenantDb: DataSource) {
     const rows = await tenantDb.query(
@@ -1102,23 +1112,36 @@ export class ClaimsService {
    * status, and a remittance-line record is written for the audit/aging trail.
    */
   async importRemittance(
-    body: { providerId?: string; remittanceReference?: string; receivedAt?: string; lines?: any[]; csv?: string },
+    body: { providerId?: string; remittanceReference?: string; receivedAt?: string; lines?: any[]; csv?: string; edi835?: string },
     tenantDb: DataSource,
     userId?: string,
   ) {
-    const rawLines = Array.isArray(body?.lines) && body.lines.length > 0
-      ? body.lines
-      : this.parseRemittanceCsv(body?.csv || '');
+    // S224: accept an X12 835 remittance advice (explicit edi835 field, or
+    // pasted into the csv field — detected by the ISA envelope) in addition to
+    // structured lines[] and CSV.
+    let remittanceReference = body?.remittanceReference;
+    let rawLines: any[];
+    const x12Content =
+      body?.edi835 || (this.ediSerializer?.isX12(body?.csv || '') ? body?.csv : null);
+    if (x12Content && this.ediSerializer) {
+      const parsed = this.ediSerializer.parse835(x12Content);
+      rawLines = parsed.lines;
+      remittanceReference = remittanceReference || parsed.remittanceReference || undefined;
+    } else {
+      rawLines = Array.isArray(body?.lines) && body.lines.length > 0
+        ? body.lines
+        : this.parseRemittanceCsv(body?.csv || '');
+    }
 
     if (rawLines.length === 0) {
-      throw new BadRequestException('No remittance lines provided (supply `lines[]` or a `csv` body).');
+      throw new BadRequestException('No remittance lines provided (supply `lines[]`, a `csv` body, or an `edi835` X12 advice).');
     }
 
     const [header] = await tenantDb.query(
       `INSERT INTO medical_aid_remittances (provider_id, remittance_reference, received_at, status, processed_by, processed_at)
        VALUES ($1, $2, COALESCE($3::timestamptz, NOW()), 'processing', $4, NOW())
        RETURNING id`,
-      [body?.providerId || null, body?.remittanceReference || null, body?.receivedAt || null, userId || null],
+      [body?.providerId || null, remittanceReference || null, body?.receivedAt || null, userId || null],
     );
     const remittanceId = header.id;
 
@@ -2028,6 +2051,7 @@ export class ClaimsService {
 
     const previousStatus = claim.status;
     const startTime = Date.now();
+    let ediContent: string | null = null;
 
     try {
       // If API method and service available, submit via API
@@ -2060,7 +2084,16 @@ export class ClaimsService {
           throw new BadRequestException(apiResult.error || 'API submission failed');
         }
       } else {
-        // Manual or EDI submission (simulated for now)
+        // S224: EDI renders a real X12 837P interchange (stored on the
+        // submission record, downloadable via GET /claims/:id/edi-837 for
+        // upload to the switch portal). Manual just records the submission.
+        if (submissionMethod === 'edi') {
+          if (!this.ediSerializer) {
+            throw new BadRequestException('EDI serializer unavailable');
+          }
+          const edi = await this.ediSerializer.generate837PForClaim(tenantDb, claim.id);
+          ediContent = edi.content;
+        }
         claim.status = ClaimStatus.SUBMITTED;
         claim.submissionDate = new Date();
         (claim as any).submissionMethod = submissionMethod;
@@ -2074,8 +2107,8 @@ export class ClaimsService {
       await tenantDb.query(
         `INSERT INTO claim_submissions (
           claim_id, submission_method, submission_status, submission_attempt,
-          submitted_at, submitted_by, processing_time_ms
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          submitted_at, submitted_by, processing_time_ms, edi_content
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           claim.id,
           submissionMethod,
@@ -2084,6 +2117,7 @@ export class ClaimsService {
           new Date(),
           userId ?? null,
           Date.now() - startTime,
+          ediContent,
         ]
       );
 

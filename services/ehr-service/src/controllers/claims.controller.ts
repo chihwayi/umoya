@@ -111,6 +111,13 @@ export class ClaimsController {
     return this.claimsService.getClaimLines(id, req.tenantDb);
   }
 
+  @Get(':id/edi-837')
+  @ApiOperation({ summary: 'Render the claim as an X12 837P interchange for switch-portal upload' })
+  @ApiResponse({ status: 200, description: '837P generated' })
+  async getClaimEdi837(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.generateEdi837(id, req.tenantDb);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get claim by ID' })
   @ApiResponse({ status: 200, description: 'Claim retrieved successfully' })

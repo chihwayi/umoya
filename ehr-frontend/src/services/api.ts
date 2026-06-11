@@ -9162,6 +9162,14 @@ export const claimsApi = {
     return { data: response.data };
   },
 
+  // S224 — download the claim as an X12 837P interchange for switch-portal upload.
+  getClaimEdi837: async (tenantSlug: string, token: string, claimId: string) => {
+    const response = await ehrAxios.get(`/claims/${claimId}/edi-837`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   // S217 — claims revenue-cycle ops: remittance import, aged claims, CSV export.
   importRemittance: async (
     tenantSlug: string,

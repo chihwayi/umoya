@@ -131,3 +131,32 @@ demo will be judged on. Make it provably robust.
 2. **S221** (notifications) and **S222** (subscription tiers) — high demo/marketing impact, independent.
 3. **S219 / S220** (MCAZ + Rx legal) — regulatory, can run in parallel.
 4. **S223** (offline hardening) — continuous; validate before any on-site demo.
+
+---
+
+## Post-review additions (2026-06-11 hard review)
+
+## S224 — Switch Wire-Format (EDI) Adapter
+**Why:** The 'edi' submission method was simulated (claims.service: "simulated for now");
+no X12/EDIFACT/XML serialization existed anywhere. Local ZW switches don't speak FHIR/JSON.
+**Scope (implementable now, spec-blocked parts named):**
+- X12 **837P generation** from the claims model (envelopes, subscriber/member + dependant code,
+  CLM, HI diagnosis, SV1 service lines from S216 tariff lines) — downloadable for portal upload.
+- X12 **835 remittance parsing** → feeds the S217 reconciliation (importRemittance).
+- Generated 837 stored on claim_submissions (audit). DB: edi_content column (bundle, full checklist).
+- **Spec-blocked (documented):** per-switch XML dialects + direct switch transport need the real
+  CIMAS/Healthbridge wire specs + credentials; the serializer layer is the chassis for them.
+
+## S225 — True Offline-First Client (ODK-parity hardening)
+**Why (hard-review findings):** web SW was broken (TS syntax in .js) AND never registered → zero
+web offline; mobile replays bypass the S223-hardened sync endpoint (original endpoints, no
+idempotency) and one failed item blocks the whole queue.
+**Scope:**
+- Web: valid app-shell SW (precache + runtime cache of hashed chunks + navigation fallback)
+  actually registered in index.tsx.
+- Mobile queue: per-op clientOpId, retry/backoff metadata, mutation mutex, poisoned-item
+  isolation (4xx doesn't block the queue), X-Client-Op-Id sent on replay.
+- Server: idempotency_keys table + interceptor honoring X-Client-Op-Id on POST/PATCH across ALL
+  endpoints (replays return the stored response); sync_queue_logs.client_op_id strengthens
+  processBatch replay detection. DB bundle, full checklist.
+- **Out of scope (named):** SQLite/WatermelonDB store, offline auth PIN, attachment sync.
