@@ -9185,45 +9185,6 @@ export const claimsApi = {
     return { data: response.data };
   },
 
-  // S221 — notification center.
-  getNotificationTriggers: async (tenantSlug: string, token: string) => {
-    const response = await ehrAxios.get('/notification-center/triggers', {
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-    });
-    return { data: response.data };
-  },
-
-  updateNotificationTrigger: async (
-    tenantSlug: string,
-    token: string,
-    key: string,
-    body: { smsEnabled?: boolean; emailEnabled?: boolean },
-  ) => {
-    const response = await ehrAxios.patch(`/notification-center/triggers/${key}`, body, {
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-    });
-    return { data: response.data };
-  },
-
-  sendManualReminder: async (
-    tenantSlug: string,
-    token: string,
-    body: { patientId?: string; recipient: string; channel: 'sms' | 'email'; subject?: string; message: string },
-  ) => {
-    const response = await ehrAxios.post('/notification-center/manual-reminder', body, {
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-    });
-    return { data: response.data };
-  },
-
-  getNotificationLog: async (tenantSlug: string, token: string, params?: { limit?: number }) => {
-    const response = await ehrAxios.get('/notification-center/log', {
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-      params,
-    });
-    return { data: response.data };
-  },
-
   getClaims: async (
     tenantSlug: string,
     token: string,
@@ -9520,6 +9481,47 @@ export const claimsApi = {
         'X-Tenant-ID': tenantSlug,
         Authorization: `Bearer ${token}`,
       },
+    });
+    return { data: response.data };
+  },
+};
+
+// S221 — Notification Center (automated trigger configs, manual reminders, audit log)
+export const notificationCenterApi = {
+  getTriggers: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/notification-center/triggers', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateTrigger: async (
+    tenantSlug: string,
+    token: string,
+    key: string,
+    body: { smsEnabled?: boolean; emailEnabled?: boolean },
+  ) => {
+    const response = await ehrAxios.patch(`/notification-center/triggers/${key}`, body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  sendManualReminder: async (
+    tenantSlug: string,
+    token: string,
+    body: { patientId?: string; recipient: string; channel: 'sms' | 'email'; subject?: string; message: string },
+  ) => {
+    const response = await ehrAxios.post('/notification-center/manual-reminder', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getLog: async (tenantSlug: string, token: string, params?: { limit?: number }) => {
+    const response = await ehrAxios.get('/notification-center/log', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
     });
     return { data: response.data };
   },
