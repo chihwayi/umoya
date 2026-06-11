@@ -1,12 +1,17 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CreateFinanceTransactionDto, FinanceLineItemDto, RecordPaymentDto } from '../dto/finance.dto';
 import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { FinancialQuoteAssessment } from '../entities/financial-quote-assessment.entity';
+import { NotificationCenterService } from './notification-center.service';
 
 @Injectable()
 export class FinanceService {
   private readonly logger = new Logger(FinanceService.name);
+
+  constructor(
+    @Optional() private readonly notificationCenterService?: NotificationCenterService,
+  ) {}
 
   private mapFinanceStatusToPaymentStatus(financeStatus: string): PaymentStatus {
     if (financeStatus === 'paid') {
@@ -608,7 +613,7 @@ export class FinanceService {
 
     try {
       const [transaction] = await tenantDb.query(
-        `SELECT id, amount, balance, payment_status, source_module, source_reference_id FROM financial_transactions WHERE id = $1 FOR UPDATE`,
+        `SELECT id, amount, balance, payment_status, source_module, source_reference_id, patient_id FROM financial_transactions WHERE id = $1 FOR UPDATE`,
         [transactionId],
       );
 
@@ -666,6 +671,30 @@ export class FinanceService {
       );
 
       await tenantDb.query('COMMIT');
+
+      // S221: payment_received notification — config-gated, best-effort, never
+      // affects the recorded payment.
+      if (this.notificationCenterService && transaction.patient_id) {
+        try {
+          const [patient] = await tenantDb.query(
+            `SELECT phone, email, first_name FROM patients WHERE id = $1 LIMIT 1`,
+            [transaction.patient_id],
+          );
+          if (patient?.phone || patient?.email) {
+            const reference = payload.paymentReference || String(transactionId).slice(0, 8).toUpperCase();
+            const balanceNote = newBalance > 0.01 ? ` Outstanding balance: $${newBalance.toFixed(2)}.` : '';
+            await this.notificationCenterService.notifyTrigger(tenantDb, 'payment_received', {
+              recipientSms: patient.phone || undefined,
+              recipientEmail: patient.email || undefined,
+              patientId: transaction.patient_id,
+              subject: 'Payment Received',
+              message: `Payment of $${paymentAmount.toFixed(2)} received. Ref: ${reference}.${balanceNote} Thank you.`,
+            });
+          }
+        } catch (notifyError: any) {
+          this.logger.warn(`payment_received notification failed: ${notifyError?.message}`);
+        }
+      }
 
       return {
         payment,

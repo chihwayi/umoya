@@ -15,6 +15,7 @@ import { ClinicalWorkflowService } from './clinical-workflow.service';
 import { SchedulingIntelligenceService } from './scheduling-intelligence.service';
 import { MlFeedbackService } from './ml-feedback.service';
 import { SmsService } from './sms.service';
+import { NotificationCenterService } from './notification-center.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
@@ -33,6 +34,7 @@ export class AppointmentService {
     @Optional() private schedulingIntelligenceService?: SchedulingIntelligenceService,
     @Optional() private mlFeedbackService?: MlFeedbackService,
     @Optional() private smsService?: SmsService,
+    @Optional() private notificationCenterService?: NotificationCenterService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -126,22 +128,33 @@ export class AppointmentService {
 
     try {
       let patientPhone = (createAppointmentDto as any).patientPhone ?? (createAppointmentDto as any).phone_number;
-      if (!patientPhone) {
+      let patientEmail: string | undefined;
+      if (!patientPhone || this.notificationCenterService) {
         const [patient] = await connection.query(
-          `SELECT phone FROM patients WHERE id = $1 LIMIT 1`,
+          `SELECT phone, email FROM patients WHERE id = $1 LIMIT 1`,
           [createAppointmentDto.patientId],
         );
-        patientPhone = patient?.phone;
+        patientPhone = patientPhone || patient?.phone;
+        patientEmail = patient?.email || undefined;
       }
-      if (patientPhone && this.smsService) {
-        const apptDate = new Date((createAppointmentDto as any).appointmentDate ?? (createAppointmentDto as any).start_time);
-        await this.smsService.send(
-          patientPhone,
-          `Umoya: Appointment confirmed at ${(createAppointmentDto as any).facilityName ?? 'your clinic'} on ${apptDate.toDateString()} at ${apptDate.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}. Reply STOP to opt out.`,
-        );
+      const apptDate = new Date((createAppointmentDto as any).appointmentDate ?? (createAppointmentDto as any).start_time);
+      const confirmationMessage =
+        `Umoya: Appointment confirmed at ${(createAppointmentDto as any).facilityName ?? 'your clinic'} on ${apptDate.toDateString()} at ${apptDate.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}. Reply STOP to opt out.`;
+
+      if (this.notificationCenterService && (patientPhone || patientEmail)) {
+        // S221: config-gated appointment_booked trigger (SMS/Email per tenant), logged.
+        await this.notificationCenterService.notifyTrigger(connection, 'appointment_booked', {
+          recipientSms: patientPhone || undefined,
+          recipientEmail: patientEmail,
+          patientId: createAppointmentDto.patientId,
+          subject: 'Appointment Confirmation',
+          message: confirmationMessage,
+        });
+      } else if (patientPhone && this.smsService) {
+        await this.smsService.send(patientPhone, confirmationMessage);
       }
     } catch {
-      // SMS failure must never break appointment creation
+      // Notification failure must never break appointment creation
     }
 
     if (financeTransactionId) {

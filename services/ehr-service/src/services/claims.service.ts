@@ -4,6 +4,7 @@ import { MedicalAidClaim, ClaimStatus, MedicalAidProvider } from '../entities/me
 import { MedicalAidClaimLine } from '../entities/medical-aid-claim-line.entity';
 import { Bill } from '../entities/billing.entity';
 import { MedicalAidApiService } from './medical-aid-api.service';
+import { NotificationCenterService } from './notification-center.service';
 import { ClaimDenialPrediction } from '../entities/claim-denial-prediction.entity';
 import { FinancialClearanceAssessment } from '../entities/financial-clearance-assessment.entity';
 import { PriorAuthorizationDraft } from '../entities/prior-authorization-draft.entity';
@@ -17,7 +18,10 @@ export interface ClaimReadinessIssue {
 export class ClaimsService {
   private readonly logger = new Logger(ClaimsService.name);
 
-  constructor(private readonly medicalAidApiService?: MedicalAidApiService) {}
+  constructor(
+    private readonly medicalAidApiService?: MedicalAidApiService,
+    private readonly notificationCenterService?: NotificationCenterService,
+  ) {}
 
   private clampLimit(value: any, fallback = 50, max = 200) {
     const parsed = Number.parseInt(String(value || fallback), 10);
@@ -1130,7 +1134,7 @@ export class ClaimsService {
 
       const matchRows = claimNumber || externalClaimId
         ? await tenantDb.query(
-            `SELECT id, claim_amount FROM medical_aid_claims
+            `SELECT id, claim_amount, claim_number, patient_id FROM medical_aid_claims
              WHERE ($1::text IS NOT NULL AND claim_number = $1)
                 OR ($2::text IS NOT NULL AND external_claim_id = $2)
              LIMIT 1`,
@@ -1170,6 +1174,27 @@ export class ClaimsService {
            WHERE id = $1`,
           [matchedClaim.id, paid.toFixed(2), claimStatus, status === 'rejected' ? (line.reason || 'Rejected on remittance') : null],
         );
+
+        // S221: claim_status_updated notification — config-gated, best-effort.
+        if (this.notificationCenterService && matchedClaim.patient_id) {
+          try {
+            const [patient] = await tenantDb.query(
+              `SELECT phone, email FROM patients WHERE id = $1 LIMIT 1`,
+              [matchedClaim.patient_id],
+            );
+            if (patient?.phone || patient?.email) {
+              await this.notificationCenterService.notifyTrigger(tenantDb, 'claim_status_updated', {
+                recipientSms: patient.phone || undefined,
+                recipientEmail: patient.email || undefined,
+                patientId: matchedClaim.patient_id,
+                subject: 'Medical Aid Claim Update',
+                message: `Claim ${matchedClaim.claim_number}: ${claimStatus.toUpperCase()}. Paid: $${paid.toFixed(2)}${shortfall > 0 ? `, shortfall: $${shortfall.toFixed(2)}` : ''}.`,
+              });
+            }
+          } catch (notifyError: any) {
+            this.logger.warn(`claim_status_updated notification failed: ${notifyError?.message}`);
+          }
+        }
       } else {
         unmatched += 1;
       }
