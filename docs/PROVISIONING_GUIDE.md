@@ -190,7 +190,7 @@ Two files in `src/generated/` are auto-generated and contain structural backfill
 | `tenant-entity-structure-alignment.statements.ts` | Adds missing indexes, FKs, and constraints declared in TypeORM entities |
 
 **Do not hand-edit these files unless you understand the generator output.** If the generator is re-run, the following manual fixes must be re-applied:
-1. Every `DO $$ BEGIN ... END IF; END $$` block in `tenant-entity-structure-alignment.statements.ts` must end with `EXCEPTION WHEN others THEN NULL;` before `END $$`. The generator does not add these — they prevent FK errors when referenced tables don't exist yet.
+1. ~~Every `DO $$ BEGIN ... END IF; END $$` block must end with `EXCEPTION WHEN others THEN NULL;`~~ — **no longer manual.** As of `generate-tenant-structure-alignment.mjs` (2026-06-11) the generator emits this guard on every `DO` block automatically, so re-running it no longer strips them. Verify with: `grep -c 'EXCEPTION WHEN others THEN NULL'` equals the `DO $$ BEGIN` count.
 2. The `UPDATE medical_records SET ... record_type = COALESCE(record_type, type) ...` line in `tenant-entity-shadow-cleanup.statements.ts` must be removed — `medical_records` has no `type` column.
 
 If you regenerate these files, run the smoke test immediately after to confirm both fixes are still present.

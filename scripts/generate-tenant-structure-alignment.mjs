@@ -11,7 +11,7 @@ const OUTPUT_PATH = path.join(
   ROOT,
   'services/tenant-service/src/generated/tenant-entity-structure-alignment.statements.ts',
 );
-const BUNDLE_VERSION = '2026.06.10.1';
+const BUNDLE_VERSION = '2026.06.11.1';
 
 function stripQuotes(identifier) {
   return identifier.replace(/^"+|"+$/g, '');
@@ -747,6 +747,7 @@ function renderIndexStatement(tableName, index) {
     CREATE ${uniqueSql}INDEX IF NOT EXISTS ${indexName}
       ON ${renderIdentifier(tableName)} (${columnsSql});
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`;
 }
 
@@ -790,6 +791,7 @@ function renderUniqueConstraintStatement(tableName, unique) {
       ADD CONSTRAINT ${renderIdentifier(unique.name)}
       UNIQUE (${columnsSql});
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`;
 }
 
@@ -829,6 +831,7 @@ function renderForeignKeyStatement(tableName, foreignKey) {
       FOREIGN KEY (${localColumnsSql})
       REFERENCES ${renderIdentifier(foreignKey.referencedTable)} (${referencedColumnsSql})${onDeleteSql};
   END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;`;
 }
 
