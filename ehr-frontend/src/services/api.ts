@@ -9133,6 +9133,26 @@ export const claimsApi = {
     return { data: response.data };
   },
 
+  // S216 — ZW medical-aid claim depth: tariff catalog typeahead + itemised lines.
+  searchTariffCodes: async (
+    tenantSlug: string,
+    token: string,
+    params: { q?: string; schedule?: string; limit?: number },
+  ) => {
+    const response = await ehrAxios.get('/claims/tariff-codes', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getClaimLines: async (tenantSlug: string, token: string, claimId: string) => {
+    const response = await ehrAxios.get(`/claims/${claimId}/lines`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getClaims: async (
     tenantSlug: string,
     token: string,

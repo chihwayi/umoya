@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { MedicalAidClaim, ClaimStatus, MedicalAidProvider } from '../entities/medical-aid-claim.entity';
+import { MedicalAidClaimLine } from '../entities/medical-aid-claim-line.entity';
 import { Bill } from '../entities/billing.entity';
 import { MedicalAidApiService } from './medical-aid-api.service';
 import { ClaimDenialPrediction } from '../entities/claim-denial-prediction.entity';
@@ -936,17 +937,124 @@ export class ClaimsService {
   
   async createClaim(createClaimDto: any, tenantDb: DataSource) {
     const claimRepository = tenantDb.getRepository(MedicalAidClaim);
-    
+    const lineRepository = tenantDb.getRepository(MedicalAidClaimLine);
+
     const claimCount = await claimRepository.count();
     const claimNumber = `CLM${String(claimCount + 1).padStart(8, '0')}`;
-    
-    const claim = claimRepository.create({
-      ...createClaimDto,
+
+    // Itemised lines (optional). When present, the claim amount is the sum of
+    // line amounts so the header total can never drift from the detail.
+    const rawLines: any[] = Array.isArray(createClaimDto?.lines) ? createClaimDto.lines : [];
+    const normalizedLines = rawLines
+      .filter((line) => line && (line.tariffCode || line.description))
+      .map((line) => {
+        const quantity = Number(line.quantity) > 0 ? Math.floor(Number(line.quantity)) : 1;
+        const unitAmount = Number(line.unitAmount) || 0;
+        const lineAmount =
+          Number(line.lineAmount) > 0 ? Number(line.lineAmount) : Number((unitAmount * quantity).toFixed(2));
+        return {
+          tariffCode: line.tariffCode ?? null,
+          description: String(line.description ?? line.tariffCode ?? '').trim(),
+          quantity,
+          unitAmount: unitAmount.toFixed(2),
+          lineAmount: lineAmount.toFixed(2),
+          toothNumber: line.toothNumber ?? null,
+          quadrant: line.quadrant ?? null,
+          icd10Code: line.icd10Code ?? null,
+        };
+      });
+
+    const linesTotal = normalizedLines.reduce((sum, line) => sum + Number(line.lineAmount), 0);
+    const claimAmount =
+      normalizedLines.length > 0 ? Number(linesTotal.toFixed(2)) : createClaimDto?.claimAmount;
+
+    // Don't persist the transient `lines` payload onto the claim row.
+    const { lines: _lines, ...claimFields } = createClaimDto ?? {};
+
+    const claim: any = claimRepository.create({
+      ...claimFields,
+      ...(claimAmount !== undefined ? { claimAmount } : {}),
       claimNumber,
-      status: ClaimStatus.DRAFT
+      status: ClaimStatus.DRAFT,
     });
-    
-    return claimRepository.save(claim);
+
+    const savedClaim: any = await claimRepository.save(claim);
+
+    if (normalizedLines.length > 0) {
+      await lineRepository.save(
+        normalizedLines.map((line) => lineRepository.create({ ...line, claimId: savedClaim.id })),
+      );
+    }
+
+    return savedClaim;
+  }
+
+  /**
+   * Typeahead over the tariff-code catalog (AHFoZ-style schedules) used to build
+   * itemised claim lines. Matches on code prefix or description.
+   */
+  async searchTariffCodes(
+    tenantDb: DataSource,
+    query: { q?: string; schedule?: string; limit?: number },
+  ) {
+    const term = String(query?.q ?? '').trim();
+    const limit = Math.min(Math.max(Number(query?.limit) || 25, 1), 100);
+    const params: any[] = [];
+    const conditions: string[] = ['active = true'];
+
+    if (term) {
+      params.push(`${term}%`);
+      params.push(`%${term}%`);
+      conditions.push(`(code ILIKE $${params.length - 1} OR description ILIKE $${params.length})`);
+    }
+    if (query?.schedule && query.schedule !== 'all') {
+      params.push(query.schedule);
+      conditions.push(`schedule = $${params.length}`);
+    }
+    params.push(limit);
+
+    const rows = await tenantDb.query(
+      `SELECT id, code, description, schedule, category, default_amount
+       FROM medical_aid_tariff_codes
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY code ASC
+       LIMIT $${params.length}`,
+      params,
+    );
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      code: row.code,
+      description: row.description,
+      schedule: row.schedule,
+      category: row.category,
+      defaultAmount: row.default_amount === null ? null : Number(row.default_amount),
+    }));
+  }
+
+  /** Itemised lines for a claim, ordered by creation. */
+  async getClaimLines(claimId: string, tenantDb: DataSource) {
+    const rows = await tenantDb.query(
+      `SELECT id, claim_id, tariff_code, description, quantity, unit_amount, line_amount,
+              tooth_number, quadrant, icd10_code, created_at
+       FROM medical_aid_claim_lines
+       WHERE claim_id = $1
+       ORDER BY created_at ASC`,
+      [claimId],
+    );
+    return rows.map((row: any) => ({
+      id: row.id,
+      claimId: row.claim_id,
+      tariffCode: row.tariff_code,
+      description: row.description,
+      quantity: Number(row.quantity),
+      unitAmount: Number(row.unit_amount),
+      lineAmount: Number(row.line_amount),
+      toothNumber: row.tooth_number,
+      quadrant: row.quadrant,
+      icd10Code: row.icd10_code,
+      createdAt: row.created_at,
+    }));
   }
 
   async generateClaimFromBill(billId: string, claimData: any, tenantDb: DataSource) {

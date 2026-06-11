@@ -39,6 +39,8 @@ import { DiabetesAlert } from '../entities/diabetes-alert.entity';
 import { DiabetesDeviceIntegration } from '../entities/diabetes-device-integration.entity';
 import { DoctorAvailability } from '../entities/doctor-availability.entity';
 import { MedicalAidClaim } from '../entities/medical-aid-claim.entity';
+import { MedicalAidClaimLine } from '../entities/medical-aid-claim-line.entity';
+import { MedicalAidTariffCode } from '../entities/medical-aid-tariff-code.entity';
 import { TelemedicineConsultation } from '../entities/telemedicine-consultation.entity';
 import { TelemedicineDevice } from '../entities/telemedicine-device.entity';
 import { TelemedicineConsent } from '../entities/telemedicine-consent.entity';
@@ -621,6 +623,8 @@ export class TenantService {
         DiabetesDeviceIntegration,
         DoctorAvailability,
         MedicalAidClaim,
+        MedicalAidClaimLine,
+        MedicalAidTariffCode,
         TelemedicineConsultation,
         TelemedicineDevice,
         TelemedicineConsent,

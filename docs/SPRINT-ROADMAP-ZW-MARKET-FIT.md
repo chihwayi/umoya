@@ -1,4 +1,4 @@
-# Umoya — Zimbabwe Market-Fit Sprint Roadmap (S201–S208)
+# Umoya — Zimbabwe Market-Fit Sprint Roadmap (S216–S223)
 
 Created 2026-06-11. Drivers: (a) the Gemini market analysis points we agreed with,
 (b) gaps found validating Umoya against a ZW competitor (Murapi), (c) additions of
@@ -29,7 +29,7 @@ our own. **Every sprint that changes the database MUST ship a provisioning bundl
 
 ---
 
-## S201 — ZW Medical-Aid Claim Depth: AHFoZ tariffs + itemised claim lines
+## S216 — ZW Medical-Aid Claim Depth: AHFoZ tariffs + itemised claim lines
 **Why:** Competitor itemises claims with AHFoZ tariff codes, dependant code, plan name;
 our claim is a single-amount record (member_number + ICD-10 only). This is the #1 ZW
 billing-parity gap.
@@ -46,7 +46,7 @@ new columns on `medical_aid_claims`; seed AHFoZ codes via bundle (`ON CONFLICT D
 Run full DB checklist.
 **Acceptance:** create an itemised, tariff-coded claim; total auto-sums; smoke 5/5.
 
-## S202 — Claims Revenue-Cycle Ops: Remittance import, Aged Claims, CSV export
+## S217 — Claims Revenue-Cycle Ops: Remittance import, Aged Claims, CSV export
 **Why:** Competitor has Import Remittance, Aged Claims, Export CSV — the back-office loop
 that practice managers live in. We have a `medical_aid_remittance` entity but no import/aging UI.
 **Scope**
@@ -54,11 +54,11 @@ that practice managers live in. We have a `medical_aid_remittance` entity but no
   post approved/short-paid/rejected → update claim status + shortfall.
 - **Aged Claims** report: aging buckets (0–30 / 31–60 / 61–90 / 90+) per provider; pairs with Aged Debtors.
 - **Export claims CSV**.
-- Claim-status-change → patient SMS (wires into S206).
+- Claim-status-change → patient SMS (wires into S221).
 **DB → Provisioning:** `medical_aid_remittance_lines` table. Run full DB checklist.
 **Acceptance:** import a sample remittance → claims reconcile + aging populates; CSV downloads.
 
-## S203 — Real Medical-Aid Integration: de-stub eligibility + live submission  *(Gemini #1)*
+## S218 — Real Medical-Aid Integration: de-stub eligibility + live submission  *(Gemini #1)*
 **Why:** `medical-aid-integration.service.ts` eligibility returns `'Stub eligibility response'`
 and the adapter defaults to a demo service. Real-time "is this patient covered?" is the
 make-or-break for ZW private clinics.
@@ -71,7 +71,7 @@ make-or-break for ZW private clinics.
 **DB → Provisioning:** per-tenant provider-config table/columns. Run full DB checklist.
 **Acceptance:** configure a sandbox provider → live eligibility (not the stub) + claim submit/poll.
 
-## S204 — MCAZ Pharmacy Compliance  *(Gemini)*
+## S219 — MCAZ Pharmacy Compliance  *(Gemini)*
 **Why:** No MCAZ (Medicines Control Authority of Zimbabwe) alignment anywhere — the one
 genuine regulatory gap Gemini correctly identified.
 **Scope**
@@ -79,14 +79,14 @@ genuine regulatory gap Gemini correctly identified.
 - Controlled-substance register aligned to MCAZ schedules; MCAZ dispensing/returns export.
 **DB → Provisioning:** `mcaz_*` columns/tables. Run full DB checklist.
 
-## S205 — Prescription Legal Validity & Print Hardening  *(Gemini)*
+## S220 — Prescription Legal Validity & Print Hardening  *(Gemini)*
 **Why:** PDF script exists; confirm it satisfies local "valid prescription" rules.
 **Scope**
 - Prescriber registration numbers (MDPCZ etc.), e-signature, MCAZ-compliant Rx layout,
   controlled-substance handling on the printed script, explicit "print physical script" affordance.
 **DB → Provisioning:** prescriber-registration fields on practitioner/user. Run full DB checklist.
 
-## S206 — Automated Notification Center + Manual Reminder  *(competitor Image 1)*
+## S221 — Automated Notification Center + Manual Reminder  *(competitor Image 1)*
 **Why:** Competitor has one clean configurable hub (Appointment Booked, 24h Reminder,
 Payment Received, Claim Status Updated, Staff Invitation — each SMS/Email) + a manual
 composer. We have the plumbing (`at-messaging`, `notification-template`, `sms.service`,
@@ -97,7 +97,7 @@ composer. We have the plumbing (`at-messaging`, `notification-template`, `sms.se
 - Notification audit log.
 **DB → Provisioning:** `notification_trigger_configs`, `notification_log`. Run full DB checklist.
 
-## S207 — Self-Serve Tiered Subscription & Usage Metering  *(competitor Image 3 + Gemini tiering)*
+## S222 — Self-Serve Tiered Subscription & Usage Metering  *(competitor Image 3 + Gemini tiering)*
 **Why:** Competitor sells clean SME tiers (Solo $35 / Clinic $85 / Multi-Branch $180) with
 live usage meters (staff, patients, SMS, branches). Ours is enterprise module-entitlement
 with no self-serve tiers or usage caps.
@@ -110,7 +110,7 @@ metadata lives in the **master** DB, not the per-tenant DB — provision there a
 Run full DB checklist where tenant-scoped.
 **Acceptance:** usage bars reflect real counts; upgrade path visible; limits enforced.
 
-## S208 — Offline / Load-Shedding Resilience Hardening  *(our add — the moat)*
+## S223 — Offline / Load-Shedding Resilience Hardening  *(our add — the moat)*
 **Why:** Offline-through-load-shedding is the strongest local differentiator and is what a
 demo will be judged on. Make it provably robust.
 **Scope**
@@ -121,7 +121,7 @@ demo will be judged on. Make it provably robust.
 ---
 
 ## Suggested sequencing
-1. **S201 → S202 → S203** (claims is the commercial critical path; do it as a block).
-2. **S206** (notifications) and **S207** (subscription tiers) — high demo/marketing impact, independent.
-3. **S204 / S205** (MCAZ + Rx legal) — regulatory, can run in parallel.
-4. **S208** (offline hardening) — continuous; validate before any on-site demo.
+1. **S216 → S217 → S218** (claims is the commercial critical path; do it as a block).
+2. **S221** (notifications) and **S222** (subscription tiers) — high demo/marketing impact, independent.
+3. **S219 / S220** (MCAZ + Rx legal) — regulatory, can run in parallel.
+4. **S223** (offline hardening) — continuous; validate before any on-site demo.

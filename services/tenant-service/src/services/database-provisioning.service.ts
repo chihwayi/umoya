@@ -4736,6 +4736,63 @@ export class DatabaseProvisioningService {
           `DO $$ BEGIN ALTER TABLE storeroom_items ADD COLUMN IF NOT EXISTS reorder_point INTEGER DEFAULT 0; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
         ],
       },
+      {
+        id: 'sprint216_zw_medical_aid_claim_depth',
+        label: 'Sprint 216 — ZW Medical-Aid Claim Depth (AHFoZ tariffs + itemised claim lines)',
+        version: '2026.06.11.0',
+        description:
+          'medical_aid_tariff_codes catalog (AHFoZ-style, starter-seeded), medical_aid_claim_lines itemised lines, and dependant_code/plan_name on medical_aid_claims',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS medical_aid_tariff_codes (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            code VARCHAR(50) NOT NULL,
+            description TEXT NOT NULL,
+            schedule VARCHAR(30) NOT NULL DEFAULT 'general',
+            category VARCHAR(100),
+            default_amount NUMERIC(10,2),
+            active BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS uidx_medical_aid_tariff_codes_code ON medical_aid_tariff_codes(code)`,
+          `CREATE INDEX IF NOT EXISTS idx_medical_aid_tariff_codes_schedule ON medical_aid_tariff_codes(schedule)`,
+          `CREATE TABLE IF NOT EXISTS medical_aid_claim_lines (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            claim_id UUID NOT NULL REFERENCES medical_aid_claims(id) ON DELETE CASCADE,
+            tariff_code VARCHAR(50),
+            description TEXT NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            unit_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+            line_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+            tooth_number VARCHAR(10),
+            quadrant VARCHAR(10),
+            icd10_code VARCHAR(20),
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_medical_aid_claim_lines_claim ON medical_aid_claim_lines(claim_id)`,
+          `DO $$ BEGIN ALTER TABLE medical_aid_claims ADD COLUMN IF NOT EXISTS dependant_code VARCHAR(10); EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          `DO $$ BEGIN ALTER TABLE medical_aid_claims ADD COLUMN IF NOT EXISTS plan_name VARCHAR(120); EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          // Starter tariff set (illustrative AHFoZ-style codes). The full schedule
+          // is loaded per deployment via the catalog import.
+          `INSERT INTO medical_aid_tariff_codes (code, description, schedule, category, default_amount) VALUES
+            ('0001', 'General practitioner consultation', 'gp', 'consultation', 30.00),
+            ('0002', 'GP consultation - extended', 'gp', 'consultation', 45.00),
+            ('0190', 'Home visit', 'gp', 'consultation', 60.00),
+            ('0301', 'Intramuscular injection', 'gp', 'procedure', 10.00),
+            ('0302', 'Intravenous infusion', 'gp', 'procedure', 25.00),
+            ('0401', 'Wound suturing - simple', 'gp', 'procedure', 35.00),
+            ('0402', 'Wound dressing', 'gp', 'procedure', 15.00),
+            ('8101', 'Dental consultation / examination', 'dental', 'consultation', 25.00),
+            ('8104', 'Full mouth examination', 'dental', 'consultation', 35.00),
+            ('8201', 'Scaling and polishing', 'dental', 'preventive', 40.00),
+            ('8301', 'Amalgam filling - one surface', 'dental', 'restorative', 45.00),
+            ('8302', 'Composite filling - one surface', 'dental', 'restorative', 55.00),
+            ('8401', 'Tooth extraction - simple', 'dental', 'surgical', 50.00),
+            ('8402', 'Surgical extraction', 'dental', 'surgical', 90.00),
+            ('8501', 'Dental x-ray - periapical', 'dental', 'radiology', 20.00),
+            ('8601', 'Root canal treatment - anterior', 'dental', 'endodontic', 120.00)
+          ON CONFLICT DO NOTHING`,
+        ],
+      },
     ];
   }
 

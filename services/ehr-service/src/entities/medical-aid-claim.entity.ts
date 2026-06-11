@@ -47,6 +47,13 @@ export class MedicalAidClaim {
   @Column({ name: 'member_number' })
   memberNumber: string;
 
+  // Zimbabwe medical-aid claim identifiers
+  @Column({ name: 'dependant_code', nullable: true })
+  dependantCode: string;
+
+  @Column({ name: 'plan_name', nullable: true })
+  planName: string;
+
   @Column({ name: 'claim_amount', type: 'decimal', precision: 10, scale: 2 })
   claimAmount: number;
 

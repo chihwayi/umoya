@@ -47,6 +47,13 @@ export class ClaimsController {
     return this.claimsService.getClaimReadinessWorklist(query, req.tenantDb);
   }
 
+  @Get('tariff-codes')
+  @ApiOperation({ summary: 'Search the medical-aid tariff-code catalog (AHFoZ-style)' })
+  @ApiResponse({ status: 200, description: 'Tariff codes retrieved' })
+  async searchTariffCodes(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.claimsService.searchTariffCodes(req.tenantDb, query);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all claims with filtering' })
   @ApiResponse({ status: 200, description: 'Claims retrieved successfully' })
@@ -73,6 +80,13 @@ export class ClaimsController {
   @ApiResponse({ status: 201, description: 'Prior-authorization draft generated' })
   async generatePriorAuthorizationDraft(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.claimsService.generatePriorAuthorizationDraft(id, req.tenantDb);
+  }
+
+  @Get(':id/lines')
+  @ApiOperation({ summary: 'Get itemised tariff lines for a claim' })
+  @ApiResponse({ status: 200, description: 'Claim lines retrieved' })
+  async getClaimLines(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.getClaimLines(id, req.tenantDb);
   }
 
   @Get(':id')
