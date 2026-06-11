@@ -53,6 +53,10 @@ export class Tenant {
   @Column({ nullable: true })
   packageName: string | null;
 
+  // Self-serve plan key (subscription_plans.key, e.g. solo/clinic/multi_branch).
+  @Column({ nullable: true })
+  subscriptionPlanKey: string | null;
+
   @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
   enabledModules: string[];
 

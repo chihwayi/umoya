@@ -1335,6 +1335,60 @@ export class TenantService implements OnModuleInit {
     return Math.ceil((target.getTime() - now.getTime()) / ONE_DAY_MS);
   }
 
+  /** S222 — active self-serve plans, ordered for display. */
+  async getSubscriptionPlans(): Promise<any[]> {
+    await this.ensureSubscriptionSchema();
+    const rows = await this.tenantRepository.query(
+      `SELECT key, name, monthly_price_usd, max_practitioners, max_staff_accounts,
+              max_active_patients, sms_per_month, max_branches, package_preset, highlight, sort_order
+       FROM subscription_plans
+       WHERE active = true
+       ORDER BY sort_order ASC`,
+    );
+    return rows.map((row: any) => ({
+      key: row.key,
+      name: row.name,
+      monthlyPriceUsd: Number(row.monthly_price_usd),
+      limits: {
+        practitioners: row.max_practitioners === null ? null : Number(row.max_practitioners),
+        staffAccounts: row.max_staff_accounts === null ? null : Number(row.max_staff_accounts),
+        activePatients: row.max_active_patients === null ? null : Number(row.max_active_patients),
+        smsPerMonth: row.sms_per_month === null ? null : Number(row.sms_per_month),
+        branches: row.max_branches === null ? null : Number(row.max_branches),
+      },
+      packagePreset: row.package_preset,
+      highlight: row.highlight,
+    }));
+  }
+
+  /** Resolve the plan for a tenant: explicit key, else a tier-based default. */
+  async resolveTenantPlan(tenant: Tenant): Promise<any | null> {
+    const plans = await this.getSubscriptionPlans();
+    if (tenant.subscriptionPlanKey) {
+      const explicit = plans.find((plan) => plan.key === tenant.subscriptionPlanKey);
+      if (explicit) return explicit;
+    }
+    const tierDefault: Record<string, string> = {
+      basic: 'solo',
+      professional: 'clinic',
+      enterprise: 'multi_branch',
+    };
+    return plans.find((plan) => plan.key === tierDefault[tenant.subscriptionTier]) ?? null;
+  }
+
+  /** S222 — set a tenant's self-serve plan (admin). */
+  async setTenantPlan(tenantId: string, planKey: string): Promise<Tenant> {
+    const plans = await this.getSubscriptionPlans();
+    const plan = plans.find((candidate) => candidate.key === planKey);
+    if (!plan) {
+      throw new NotFoundException(`Unknown subscription plan: ${planKey}`);
+    }
+    const tenant = await this.findById(tenantId);
+    tenant.subscriptionPlanKey = plan.key;
+    tenant.packageName = plan.name;
+    return this.tenantRepository.save(tenant);
+  }
+
   private async ensureSubscriptionSchema(): Promise<void> {
     await this.tenantRepository.query(`
       ALTER TABLE tenants
@@ -1352,7 +1406,37 @@ export class TenantService implements OnModuleInit {
       ADD COLUMN IF NOT EXISTS "deploymentMode" VARCHAR(20) NOT NULL DEFAULT 'clinic',
       ADD COLUMN IF NOT EXISTS "mfaRequired" BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "sessionTimeoutMinutes" INTEGER NOT NULL DEFAULT 60,
-      ADD COLUMN IF NOT EXISTS "allowEmergencyBypass" BOOLEAN NOT NULL DEFAULT false
+      ADD COLUMN IF NOT EXISTS "allowEmergencyBypass" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "subscriptionPlanKey" VARCHAR(40)
+    `);
+
+    // S222 — self-serve plan catalog with usage limits (master DB).
+    await this.tenantRepository.query(`
+      CREATE TABLE IF NOT EXISTS subscription_plans (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        key VARCHAR(40) NOT NULL UNIQUE,
+        name VARCHAR(120) NOT NULL,
+        monthly_price_usd NUMERIC(10,2) NOT NULL DEFAULT 0,
+        max_practitioners INTEGER,
+        max_staff_accounts INTEGER,
+        max_active_patients INTEGER,
+        sms_per_month INTEGER,
+        max_branches INTEGER NOT NULL DEFAULT 1,
+        package_preset VARCHAR(20) NOT NULL DEFAULT 'full_ehr',
+        highlight BOOLEAN NOT NULL DEFAULT false,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await this.tenantRepository.query(`
+      INSERT INTO subscription_plans
+        (key, name, monthly_price_usd, max_practitioners, max_staff_accounts, max_active_patients, sms_per_month, max_branches, package_preset, highlight, sort_order)
+      VALUES
+        ('solo', 'Solo Practice', 35, 1, 3, 500, 150, 1, 'full_ehr', false, 1),
+        ('clinic', 'Clinic', 85, 8, 15, 3000, 600, 1, 'full_ehr', true, 2),
+        ('multi_branch', 'Multi-Branch', 180, NULL, NULL, NULL, 2000, 5, 'full_ehr', false, 3)
+      ON CONFLICT DO NOTHING
     `);
 
     await this.tenantRepository.query(`

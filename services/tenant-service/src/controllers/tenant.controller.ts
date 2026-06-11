@@ -200,6 +200,54 @@ export class TenantController {
       }));
   }
 
+  @Get("subscription-plans")
+  @ApiOperation({ summary: "List self-serve subscription plans with usage limits" })
+  async getSubscriptionPlans(): Promise<any[]> {
+    return this.tenantService.getSubscriptionPlans();
+  }
+
+  @Get("subdomain/:subdomain/usage")
+  @ApiOperation({ summary: "Current plan + live usage meters for a tenant (by subdomain)" })
+  async getTenantUsage(@Param("subdomain") subdomain: string): Promise<any> {
+    const tenant = await this.tenantService.findBySubdomain(subdomain);
+    const plan = await this.tenantService.resolveTenantPlan(tenant);
+    const usage = await this.tenantDatabaseService.getUsageCounts(tenant.id);
+
+    const meter = (used: number, limit: number | null) => ({
+      used,
+      limit,
+      percent: limit ? Math.min(100, Math.round((used / limit) * 100)) : null,
+      overLimit: limit !== null && used > limit,
+    });
+
+    return {
+      tenantId: tenant.id,
+      subdomain: tenant.subdomain,
+      plan,
+      subscriptionState: tenant.subscriptionState,
+      subscriptionMode: tenant.subscriptionMode,
+      meters: {
+        staffAccounts: meter(usage.staffAccounts, plan?.limits?.staffAccounts ?? null),
+        practitioners: meter(usage.practitioners, plan?.limits?.practitioners ?? null),
+        activePatients: meter(usage.activePatients, plan?.limits?.activePatients ?? null),
+        smsThisMonth: meter(usage.smsThisMonth, plan?.limits?.smsPerMonth ?? null),
+      },
+    };
+  }
+
+  @Put(":id/plan")
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: "Set a tenant's self-serve subscription plan" })
+  async setTenantPlan(
+    @Param("id") id: string,
+    @Body() body: { planKey: string },
+    @Req() req: any,
+  ): Promise<any> {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN]);
+    const tenant = await this.tenantService.setTenantPlan(id, body?.planKey);
+    return this.toSafeTenant(tenant);
+  }
+
   @Get("subdomain/:subdomain")
   async getTenantBySubdomain(@Param("subdomain") subdomain: string): Promise<PublicTenant> {
     const tenant = await this.tenantService.findBySubdomain(subdomain);

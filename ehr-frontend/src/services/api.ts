@@ -168,6 +168,15 @@ export const tenantApi = {
     const response = await tenantAxios.get(`/tenants/subdomain/${slug}`);
     return { data: response.data };
   },
+  // S222 — self-serve subscription plans + live usage meters.
+  getSubscriptionPlans: async () => {
+    const response = await tenantAxios.get('/tenants/subscription-plans');
+    return { data: response.data };
+  },
+  getTenantUsage: async (slug: string) => {
+    const response = await tenantAxios.get(`/tenants/subdomain/${slug}/usage`);
+    return { data: response.data };
+  },
   submitDemoAccessRequest: async (payload: {
     fullName: string;
     clinicName: string;

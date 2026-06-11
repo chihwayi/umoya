@@ -54,9 +54,43 @@ export class TenantDatabaseService {
     return dataSource;
   }
 
+  /**
+   * S222 — live usage counts for the tenant's subscription meters: active staff
+   * accounts, practitioners, active patients, and SMS sent this calendar month
+   * (from the notification center log). Each count is best-effort so a missing
+   * table on an older tenant never breaks the usage endpoint.
+   */
+  async getUsageCounts(tenantId: string): Promise<{
+    staffAccounts: number;
+    practitioners: number;
+    activePatients: number;
+    smsThisMonth: number;
+  }> {
+    const connection = await this.getTenantConnection(tenantId);
+    const count = async (sql: string): Promise<number> => {
+      try {
+        const [row] = await connection.query(sql);
+        return Number(row?.n) || 0;
+      } catch {
+        return 0;
+      }
+    };
+    try {
+      const [staffAccounts, practitioners, activePatients, smsThisMonth] = await Promise.all([
+        count(`SELECT COUNT(*)::int AS n FROM users WHERE is_active = true`),
+        count(`SELECT COUNT(*)::int AS n FROM users WHERE is_active = true AND role = 'doctor'`),
+        count(`SELECT COUNT(*)::int AS n FROM patients`),
+        count(`SELECT COUNT(*)::int AS n FROM notification_log WHERE channel = 'sms' AND created_at >= date_trunc('month', NOW())`),
+      ]);
+      return { staffAccounts, practitioners, activePatients, smsThisMonth };
+    } finally {
+      await connection.destroy();
+    }
+  }
+
   async createUser(tenantId: string, createUserDto: CreateClinicUserDto): Promise<TenantUser> {
     const connection = await this.getTenantConnection(tenantId);
-    
+
     try {
       // Check if user already exists in this tenant
       const existingQuery = `SELECT id FROM users WHERE email = $1`;

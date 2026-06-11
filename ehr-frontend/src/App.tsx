@@ -39,6 +39,7 @@ const PharmacyDashboard = lazy(() => import('./pages/PharmacyDashboard'));
 const BillingDashboard = lazy(() => import('./pages/BillingDashboard'));
 const ClaimsDashboard = lazy(() => import('./pages/ClaimsDashboard'));
 const NotificationCenterPage = lazy(() => import('./pages/NotificationCenterPage'));
+const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
 const TelemedicineDashboard = lazy(() => import('./pages/TelemedicineDashboard'));
 const TelemedicineConsultationPage = lazy(() => import('./pages/TelemedicineConsultationPage'));
 const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'));
@@ -931,6 +932,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
                   <BillingDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/subscription"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts']}>
+                  <SubscriptionPage />
                 </RoleProtectedRoute>
               }
             />
