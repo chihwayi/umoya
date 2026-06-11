@@ -9153,6 +9153,38 @@ export const claimsApi = {
     return { data: response.data };
   },
 
+  // S217 — claims revenue-cycle ops: remittance import, aged claims, CSV export.
+  importRemittance: async (
+    tenantSlug: string,
+    token: string,
+    body: { providerId?: string; remittanceReference?: string; lines?: any[]; csv?: string },
+  ) => {
+    const response = await ehrAxios.post('/claims/remittances/import', body, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getAgedClaims: async (tenantSlug: string, token: string, params?: { provider?: string }) => {
+    const response = await ehrAxios.get('/claims/aged', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  exportClaimsCsv: async (
+    tenantSlug: string,
+    token: string,
+    params?: { status?: string; provider?: string },
+  ) => {
+    const response = await ehrAxios.get('/claims/export', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return { data: response.data };
+  },
+
   getClaims: async (
     tenantSlug: string,
     token: string,

@@ -8,7 +8,7 @@ const OUTPUT_PATH = path.join(
   ROOT,
   'services/tenant-service/src/generated/tenant-entity-alignment.statements.ts',
 );
-const BUNDLE_VERSION = '2026.06.11.1';
+const BUNDLE_VERSION = '2026.06.11.2';
 
 const RESERVED_IDENTIFIERS = new Set([
   'all',

@@ -1057,6 +1057,241 @@ export class ClaimsService {
     }));
   }
 
+  /**
+   * Parse a remittance-advice CSV into structured lines. Accepts a header row
+   * with any of: claim_number, external_claim_id, claimed_amount, paid_amount,
+   * status, reason (order-independent, case/space tolerant). Simple v1 parser —
+   * no quoted-field/embedded-comma support.
+   */
+  private parseRemittanceCsv(csv: string): any[] {
+    const rows = String(csv || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (rows.length < 2) return [];
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
+    const headers = rows[0].split(',').map(norm);
+    const idx = (name: string) => headers.indexOf(name);
+    const out: any[] = [];
+    for (const row of rows.slice(1)) {
+      const cells = row.split(',').map((c) => c.trim());
+      const at = (name: string) => {
+        const i = idx(name);
+        return i >= 0 ? cells[i] : undefined;
+      };
+      out.push({
+        claimNumber: at('claim_number') || at('claim') || undefined,
+        externalClaimId: at('external_claim_id') || undefined,
+        claimedAmount: at('claimed_amount') || at('claimed') || undefined,
+        paidAmount: at('paid_amount') || at('paid') || undefined,
+        status: at('status') || undefined,
+        reason: at('reason') || undefined,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Import a medical-aid remittance advice and reconcile it against claims.
+   * Each line is matched (by claim_number or external_claim_id), the matched
+   * claim is updated with the paid/approved amount and a paid/approved/rejected
+   * status, and a remittance-line record is written for the audit/aging trail.
+   */
+  async importRemittance(
+    body: { providerId?: string; remittanceReference?: string; receivedAt?: string; lines?: any[]; csv?: string },
+    tenantDb: DataSource,
+    userId?: string,
+  ) {
+    const rawLines = Array.isArray(body?.lines) && body.lines.length > 0
+      ? body.lines
+      : this.parseRemittanceCsv(body?.csv || '');
+
+    if (rawLines.length === 0) {
+      throw new BadRequestException('No remittance lines provided (supply `lines[]` or a `csv` body).');
+    }
+
+    const [header] = await tenantDb.query(
+      `INSERT INTO medical_aid_remittances (provider_id, remittance_reference, received_at, status, processed_by, processed_at)
+       VALUES ($1, $2, COALESCE($3::timestamptz, NOW()), 'processing', $4, NOW())
+       RETURNING id`,
+      [body?.providerId || null, body?.remittanceReference || null, body?.receivedAt || null, userId || null],
+    );
+    const remittanceId = header.id;
+
+    let matched = 0;
+    let unmatched = 0;
+    let totalPaid = 0;
+    let totalShortfall = 0;
+
+    for (const line of rawLines) {
+      const claimNumber = line.claimNumber ? String(line.claimNumber).trim() : null;
+      const externalClaimId = line.externalClaimId ? String(line.externalClaimId).trim() : null;
+      const paid = Number(line.paidAmount) || 0;
+
+      const matchRows = claimNumber || externalClaimId
+        ? await tenantDb.query(
+            `SELECT id, claim_amount FROM medical_aid_claims
+             WHERE ($1::text IS NOT NULL AND claim_number = $1)
+                OR ($2::text IS NOT NULL AND external_claim_id = $2)
+             LIMIT 1`,
+            [claimNumber, externalClaimId],
+          )
+        : [];
+      const matchedClaim = matchRows[0] || null;
+
+      const claimed = Number(line.claimedAmount) > 0
+        ? Number(line.claimedAmount)
+        : Number(matchedClaim?.claim_amount) || 0;
+      const shortfall = Math.max(0, Number((claimed - paid).toFixed(2)));
+
+      let status: string;
+      if (!matchedClaim) status = 'unmatched';
+      else if (paid <= 0) status = 'rejected';
+      else if (paid + 0.001 >= claimed) status = 'paid';
+      else status = 'short_paid';
+
+      await tenantDb.query(
+        `INSERT INTO medical_aid_remittance_lines
+           (remittance_id, claim_number, external_claim_id, matched_claim_id, claimed_amount, paid_amount, shortfall_amount, status, reason)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [remittanceId, claimNumber, externalClaimId, matchedClaim?.id || null,
+          claimed.toFixed(2), paid.toFixed(2), shortfall.toFixed(2), status, line.reason || null],
+      );
+
+      if (matchedClaim) {
+        matched += 1;
+        totalPaid += paid;
+        totalShortfall += shortfall;
+        const claimStatus = status === 'rejected' ? 'rejected' : status === 'paid' ? 'paid' : 'approved';
+        await tenantDb.query(
+          `UPDATE medical_aid_claims
+           SET approved_amount = $2, status = $3, response_date = NOW(),
+               rejection_reason = COALESCE($4, rejection_reason)
+           WHERE id = $1`,
+          [matchedClaim.id, paid.toFixed(2), claimStatus, status === 'rejected' ? (line.reason || 'Rejected on remittance') : null],
+        );
+      } else {
+        unmatched += 1;
+      }
+    }
+
+    const summary = {
+      totalLines: rawLines.length,
+      matched,
+      unmatched,
+      totalPaid: Number(totalPaid.toFixed(2)),
+      totalShortfall: Number(totalShortfall.toFixed(2)),
+    };
+
+    await tenantDb.query(
+      `UPDATE medical_aid_remittances
+       SET status = 'processed', payload = $2::jsonb, processed_at = NOW()
+       WHERE id = $1`,
+      [remittanceId, JSON.stringify(summary)],
+    );
+
+    return { remittanceId, ...summary };
+  }
+
+  /**
+   * Aged outstanding claims (submitted/processing/approved-but-unpaid) bucketed
+   * by age since submission, per provider. Powers the Aged Claims report.
+   */
+  async getAgedClaims(tenantDb: DataSource, query: { provider?: string } = {}) {
+    const params: any[] = [];
+    let providerFilter = '';
+    if (query?.provider && query.provider !== 'all') {
+      params.push(query.provider);
+      providerFilter = ` AND medical_aid_name = $${params.length}`;
+    }
+
+    const rows = await tenantDb.query(
+      `SELECT medical_aid_name AS provider,
+              CASE
+                WHEN age_days <= 30 THEN '0_30'
+                WHEN age_days <= 60 THEN '31_60'
+                WHEN age_days <= 90 THEN '61_90'
+                ELSE '90_plus'
+              END AS bucket,
+              COUNT(*)::int AS count,
+              COALESCE(SUM(outstanding), 0) AS amount
+       FROM (
+         SELECT medical_aid_name,
+                GREATEST(0, DATE_PART('day', NOW() - COALESCE(submission_date, created_at)))::int AS age_days,
+                (COALESCE(claim_amount, 0) - COALESCE(approved_amount, 0)) AS outstanding
+         FROM medical_aid_claims
+         WHERE status IN ('submitted', 'processing', 'approved')${providerFilter}
+       ) aged
+       GROUP BY provider, bucket`,
+      params,
+    );
+
+    const emptyBuckets = () => ({ '0_30': { count: 0, amount: 0 }, '31_60': { count: 0, amount: 0 }, '61_90': { count: 0, amount: 0 }, '90_plus': { count: 0, amount: 0 } });
+    const totals = emptyBuckets();
+    const byProvider: Record<string, any> = {};
+    for (const row of rows) {
+      const provider = row.provider || 'unknown';
+      byProvider[provider] = byProvider[provider] || emptyBuckets();
+      byProvider[provider][row.bucket] = { count: Number(row.count), amount: Number(row.amount) };
+      totals[row.bucket].count += Number(row.count);
+      totals[row.bucket].amount += Number(row.amount);
+    }
+
+    return {
+      totals,
+      byProvider: Object.entries(byProvider).map(([provider, buckets]) => ({ provider, buckets })),
+      totalOutstanding: Number(
+        Object.values(totals).reduce((sum: number, b: any) => sum + b.amount, 0).toFixed(2),
+      ),
+    };
+  }
+
+  /** Export claims (respecting filters) as a downloadable CSV payload. */
+  async exportClaimsCsv(tenantDb: DataSource, query: { status?: string; provider?: string } = {}) {
+    const params: any[] = [];
+    const conditions: string[] = [];
+    if (query?.status && query.status !== 'all') {
+      params.push(query.status);
+      conditions.push(`status = $${params.length}`);
+    }
+    if (query?.provider && query.provider !== 'all') {
+      params.push(query.provider);
+      conditions.push(`medical_aid_name = $${params.length}`);
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const rows = await tenantDb.query(
+      `SELECT claim_number, medical_aid_name, plan_name, member_number, dependant_code,
+              claim_amount, approved_amount, status, submission_date, response_date, created_at
+       FROM medical_aid_claims
+       ${where}
+       ORDER BY created_at DESC`,
+      params,
+    );
+
+    const headers = [
+      'Claim Number', 'Provider', 'Plan', 'Member Number', 'Dependant Code',
+      'Claim Amount', 'Approved Amount', 'Status', 'Submitted', 'Responded', 'Created',
+    ];
+    const esc = (v: any) => {
+      const s = v === null || v === undefined ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(',')];
+    for (const row of rows) {
+      lines.push([
+        row.claim_number, row.medical_aid_name, row.plan_name, row.member_number, row.dependant_code,
+        row.claim_amount, row.approved_amount, row.status, row.submission_date, row.response_date, row.created_at,
+      ].map(esc).join(','));
+    }
+
+    return {
+      filename: `claims-export-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv: lines.join('\n'),
+      rowCount: rows.length,
+    };
+  }
+
   async generateClaimFromBill(billId: string, claimData: any, tenantDb: DataSource) {
     const billRepository = tenantDb.getRepository(Bill);
     const claimRepository = tenantDb.getRepository(MedicalAidClaim);

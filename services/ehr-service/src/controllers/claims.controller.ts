@@ -54,6 +54,28 @@ export class ClaimsController {
     return this.claimsService.searchTariffCodes(req.tenantDb, query);
   }
 
+  @Post('remittances/import')
+  @ApiOperation({ summary: 'Import a remittance advice and reconcile it against claims' })
+  @ApiResponse({ status: 201, description: 'Remittance imported and reconciled' })
+  async importRemittance(@Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = (req.user as any)?.id;
+    return this.claimsService.importRemittance(body, req.tenantDb, userId);
+  }
+
+  @Get('aged')
+  @ApiOperation({ summary: 'Aged outstanding claims bucketed by age, per provider' })
+  @ApiResponse({ status: 200, description: 'Aged claims report retrieved' })
+  async getAgedClaims(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.claimsService.getAgedClaims(req.tenantDb, query);
+  }
+
+  @Get('export')
+  @ApiOperation({ summary: 'Export claims as a downloadable CSV payload' })
+  @ApiResponse({ status: 200, description: 'CSV export generated' })
+  async exportClaimsCsv(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.claimsService.exportClaimsCsv(req.tenantDb, query);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all claims with filtering' })
   @ApiResponse({ status: 200, description: 'Claims retrieved successfully' })

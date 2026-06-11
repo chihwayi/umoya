@@ -4793,6 +4793,30 @@ export class DatabaseProvisioningService {
           ON CONFLICT DO NOTHING`,
         ],
       },
+      {
+        id: 'sprint217_claims_revenue_cycle_ops',
+        label: 'Sprint 217 — Claims Revenue-Cycle Ops (remittance lines / reconciliation)',
+        version: '2026.06.11.1',
+        description:
+          'medical_aid_remittance_lines for ERA/remittance import + claim reconciliation; aged-claims and CSV export are query-only',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS medical_aid_remittance_lines (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            remittance_id UUID NOT NULL REFERENCES medical_aid_remittances(id) ON DELETE CASCADE,
+            claim_number VARCHAR(60),
+            external_claim_id VARCHAR(120),
+            matched_claim_id UUID,
+            claimed_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+            paid_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+            shortfall_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+            status VARCHAR(20) NOT NULL DEFAULT 'unmatched',
+            reason TEXT,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_medical_aid_remittance_lines_remittance ON medical_aid_remittance_lines(remittance_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_medical_aid_remittance_lines_claim_number ON medical_aid_remittance_lines(claim_number)`,
+        ],
+      },
     ];
   }
 
