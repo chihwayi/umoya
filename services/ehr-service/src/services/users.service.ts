@@ -1,11 +1,17 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Optional, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity';
 import { CreateUserDto, UpdateUserDto } from '../dto/users.dto';
+import { NotificationCenterService } from './notification-center.service';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    @Optional() private readonly notificationCenterService?: NotificationCenterService,
+  ) {}
   async getAllUsers(tenantDb: DataSource, role?: string): Promise<User[]> {
     const userRepository = tenantDb.getRepository(User);
     
@@ -54,7 +60,27 @@ export class UsersService {
     });
 
     const savedUser = await userRepository.save(user);
-    
+
+    // S221: staff_invitation trigger — email the new staff member their
+    // temporary credentials (must be changed on first login). Config-gated,
+    // best-effort; the admin still sees the temp password in the response.
+    if (this.notificationCenterService && savedUser.email) {
+      try {
+        await this.notificationCenterService.notifyTrigger(tenantDb, 'staff_invitation', {
+          recipientEmail: savedUser.email,
+          subject: 'You have been invited to Umoya',
+          message:
+            `Hello ${savedUser.firstName || ''} ${savedUser.lastName || ''},\n\n` +
+            `An account has been created for you (role: ${savedUser.role}).\n` +
+            `Login email: ${savedUser.email}\n` +
+            `Temporary password: ${tempPassword}\n\n` +
+            `You will be required to change this password on first login.`,
+        });
+      } catch (notifyError: any) {
+        this.logger.warn(`staff_invitation notification failed: ${notifyError?.message}`);
+      }
+    }
+
     return Object.assign(savedUser, { tempPassword });
   }
 

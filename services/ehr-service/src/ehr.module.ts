@@ -423,6 +423,7 @@ import { HealthGoalsService } from './services/health-goals.service';
 import { MedicalAidApiService } from './services/medical-aid-api.service';
 import { NotificationCenterController } from './controllers/notification-center.controller';
 import { NotificationCenterService } from './services/notification-center.service';
+import { AppointmentReminderCronService } from './services/appointment-reminder-cron.service';
 import { ClinicalWorkflowService } from './services/clinical-workflow.service';
 import { CarePlanService } from './services/care-plan.service';
 import { CarePlanTemplateService } from './services/care-plan-template.service';
@@ -841,6 +842,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
   ],
   providers: [
     NotificationCenterService,
+    AppointmentReminderCronService,
     AuthService,
     PatientService,
     PatientHistoryService,
