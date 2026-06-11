@@ -1,5 +1,11 @@
 # Umoya — Zimbabwe Market-Fit Sprint Roadmap (S216–S223)
 
+> **STATUS: ALL 8 SPRINTS IMPLEMENTED (2026-06-11).** S216 claims depth, S217 revenue-cycle ops,
+> S218 real eligibility, S219 MCAZ register, S220 Rx legal validity, S221 notification center
+> (all 5 triggers live incl. 24h reminder cron + staff invitation), S222 tiered subscription +
+> usage meters, S223 offline resilience. Known deliberate gaps: S222 hard limit enforcement
+> (meters warn only); S218 needs real insurer credentials per tenant to go beyond the demo adapter.
+
 Created 2026-06-11. Drivers: (a) the Gemini market analysis points we agreed with,
 (b) gaps found validating Umoya against a ZW competitor (Murapi), (c) additions of
 our own. **Every sprint that changes the database MUST ship a provisioning bundle**
