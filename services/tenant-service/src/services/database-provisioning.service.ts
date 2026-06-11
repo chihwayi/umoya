@@ -4817,6 +4817,46 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_medical_aid_remittance_lines_claim_number ON medical_aid_remittance_lines(claim_number)`,
         ],
       },
+      {
+        id: 'sprint221_notification_center',
+        label: 'Sprint 221 — Automated Notification Center + Manual Reminder',
+        version: '2026.06.11.0',
+        description:
+          'notification_trigger_configs (per-tenant SMS/Email toggles, 5 seeded triggers) and notification_log audit trail',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS notification_trigger_configs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            trigger_key VARCHAR(60) NOT NULL,
+            label VARCHAR(120) NOT NULL,
+            description TEXT,
+            sms_enabled BOOLEAN NOT NULL DEFAULT true,
+            email_enabled BOOLEAN NOT NULL DEFAULT true,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS uidx_notification_trigger_configs_key ON notification_trigger_configs(trigger_key)`,
+          `CREATE TABLE IF NOT EXISTS notification_log (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            trigger_key VARCHAR(60),
+            channel VARCHAR(20) NOT NULL,
+            recipient VARCHAR(255) NOT NULL,
+            patient_id UUID,
+            subject VARCHAR(255),
+            body TEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'sent',
+            error TEXT,
+            sent_by UUID,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_notification_log_created_at ON notification_log(created_at DESC)`,
+          `INSERT INTO notification_trigger_configs (trigger_key, label, description) VALUES
+            ('appointment_booked', 'Appointment Booked', 'Confirmation with date, time, practitioner, and location when an appointment is created.'),
+            ('appointment_reminder', 'Appointment Reminder', 'Reminder with appointment details 24 hours before the appointment.'),
+            ('payment_received', 'Payment Received', 'Receipt confirmation with invoice number and amount when a payment is recorded.'),
+            ('claim_status_updated', 'Claim Status Updated', 'Status update with claim number and new status when a medical-aid claim status changes.'),
+            ('staff_invitation', 'Staff Invitation', 'Invitation email with an accept link when a staff member is invited to the practice.')
+          ON CONFLICT DO NOTHING`,
+        ],
+      },
     ];
   }
 

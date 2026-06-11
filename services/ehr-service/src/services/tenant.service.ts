@@ -319,6 +319,8 @@ import { DatimSubmission } from '../entities/datim-submission.entity';
 import { AtMessageLog } from '../entities/at-message-log.entity';
 import { UssdSession } from '../entities/ussd-session.entity';
 import { NotificationTemplate } from '../entities/notification-template.entity';
+import { NotificationTriggerConfig } from '../entities/notification-trigger-config.entity';
+import { NotificationLog } from '../entities/notification-log.entity';
 import { BirthNotification } from '../entities/birth-notification.entity';
 import { DeathCertificate } from '../entities/death-certificate.entity';
 import { MdsrNotification } from '../entities/mdsr-notification.entity';
@@ -904,6 +906,8 @@ export class TenantService {
         AtMessageLog,
         UssdSession,
         NotificationTemplate,
+        NotificationTriggerConfig,
+        NotificationLog,
         SocialDeterminant,
         FamilyCouncilConsent,
         UbuntuWellbeingAssessment,

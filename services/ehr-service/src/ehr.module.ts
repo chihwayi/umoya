@@ -421,6 +421,8 @@ import { PatientProService } from './services/patient-pro.service';
 import { ProSchedulingService } from './services/pro-scheduling.service';
 import { HealthGoalsService } from './services/health-goals.service';
 import { MedicalAidApiService } from './services/medical-aid-api.service';
+import { NotificationCenterController } from './controllers/notification-center.controller';
+import { NotificationCenterService } from './services/notification-center.service';
 import { ClinicalWorkflowService } from './services/clinical-workflow.service';
 import { CarePlanService } from './services/care-plan.service';
 import { CarePlanTemplateService } from './services/care-plan-template.service';
@@ -604,6 +606,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DisaSmartcareModule,
   ],
   controllers: [
+    NotificationCenterController,
     AuthController,
     PatientController,
     MigrationController,
@@ -837,6 +840,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     StoreroomController,
   ],
   providers: [
+    NotificationCenterService,
     AuthService,
     PatientService,
     PatientHistoryService,

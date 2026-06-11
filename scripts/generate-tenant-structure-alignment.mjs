@@ -11,7 +11,7 @@ const OUTPUT_PATH = path.join(
   ROOT,
   'services/tenant-service/src/generated/tenant-entity-structure-alignment.statements.ts',
 );
-const BUNDLE_VERSION = '2026.06.11.3';
+const BUNDLE_VERSION = '2026.06.11.4';
 
 function stripQuotes(identifier) {
   return identifier.replace(/^"+|"+$/g, '');
