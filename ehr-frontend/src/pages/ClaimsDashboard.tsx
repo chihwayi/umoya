@@ -1354,7 +1354,7 @@ const CreateClaimTab: React.FC<{
   onSuccess: () => void;
 }> = ({ tenantSlug, token, bills, onSuccess }) => {
   const { showError, showSuccess } = useNotification();
-  const [claimSource, setClaimSource] = useState<'bill' | 'appointment' | 'procedure'>('bill');
+  const [claimSource, setClaimSource] = useState<'bill' | 'appointment' | 'procedure' | 'itemised'>('bill');
   const [selectedBill, setSelectedBill] = useState<any>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [selectedProcedure, setSelectedProcedure] = useState<any>(null);
@@ -1365,9 +1365,86 @@ const CreateClaimTab: React.FC<{
     medicalAidProvider: '',
     memberNumber: '',
     memberName: '',
+    planName: '',
+    dependantCode: '',
   });
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
+
+  // Itemised (standalone, tariff-coded) claim state — S216.
+  const [patientQuery, setPatientQuery] = useState('');
+  const [patientResults, setPatientResults] = useState<any[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [tariffQuery, setTariffQuery] = useState('');
+  const [tariffResults, setTariffResults] = useState<any[]>([]);
+  const [tariffSchedule, setTariffSchedule] = useState<'all' | 'gp' | 'dental'>('all');
+  const [claimLines, setClaimLines] = useState<any[]>([]);
+  const linesTotal = claimLines.reduce(
+    (sum, line) => sum + (Number(line.unitAmount) || 0) * (Number(line.quantity) || 1),
+    0,
+  );
+
+  // Debounced patient search for the itemised form.
+  useEffect(() => {
+    if (claimSource !== 'itemised' || patientQuery.trim().length < 2) {
+      setPatientResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const response = await ehrApi.searchPatients(patientQuery.trim(), token, tenantSlug);
+        const list = response.data?.patients || response.data || [];
+        setPatientResults(Array.isArray(list) ? list.slice(0, 8) : []);
+      } catch {
+        setPatientResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [patientQuery, claimSource, tenantSlug, token]);
+
+  // Debounced tariff-code typeahead (AHFoZ catalog).
+  useEffect(() => {
+    if (claimSource !== 'itemised' || tariffQuery.trim().length < 1) {
+      setTariffResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const response = await claimsApi.searchTariffCodes(tenantSlug, token, {
+          q: tariffQuery.trim(),
+          schedule: tariffSchedule,
+          limit: 10,
+        });
+        setTariffResults(Array.isArray(response.data) ? response.data : []);
+      } catch {
+        setTariffResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [tariffQuery, tariffSchedule, claimSource, tenantSlug, token]);
+
+  const addTariffLine = (tariff: any) => {
+    setClaimLines((prev) => [
+      ...prev,
+      {
+        tariffCode: tariff.code,
+        description: tariff.description,
+        quantity: 1,
+        unitAmount: tariff.defaultAmount ?? 0,
+        icd10Code: '',
+      },
+    ]);
+    setTariffQuery('');
+    setTariffResults([]);
+  };
+
+  const updateLine = (index: number, patch: any) => {
+    setClaimLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  };
+
+  const removeLine = (index: number) => {
+    setClaimLines((prev) => prev.filter((_, i) => i !== index));
+  };
 
   // Load appointments and procedures when source changes
   useEffect(() => {
@@ -1415,6 +1492,44 @@ const CreateClaimTab: React.FC<{
       return;
     }
 
+    if (claimSource === 'itemised') {
+      if (!selectedPatient) {
+        showError('Select a patient for the claim', 'error');
+        return;
+      }
+      if (claimLines.length === 0) {
+        showError('Add at least one tariff line', 'error');
+        return;
+      }
+      setLoading(true);
+      try {
+        await claimsApi.createClaim(tenantSlug, token, {
+          patientId: selectedPatient.id,
+          medicalAidProvider: formData.medicalAidProvider,
+          memberNumber: formData.memberNumber,
+          planName: formData.planName || undefined,
+          dependantCode: formData.dependantCode || undefined,
+          lines: claimLines.map((line) => ({
+            tariffCode: line.tariffCode,
+            description: line.description,
+            quantity: Number(line.quantity) || 1,
+            unitAmount: Number(line.unitAmount) || 0,
+            icd10Code: line.icd10Code || undefined,
+          })),
+        });
+        showSuccess('Itemised claim created', 'success');
+        setClaimLines([]);
+        setSelectedPatient(null);
+        setPatientQuery('');
+        onSuccess();
+      } catch (error: any) {
+        showError('Failed to create claim', error.response?.data?.message || 'Please check your input');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoading(true);
     try {
       if (claimSource === 'bill' && selectedBill) {
@@ -1450,8 +1565,8 @@ const CreateClaimTab: React.FC<{
         {/* Source Selection */}
         <div className="mb-6">
           <label className="block text-white/60 text-sm mb-2">Claim Source</label>
-          <div className="grid grid-cols-3 gap-3">
-            {(['bill', 'appointment', 'procedure'] as const).map((source) => (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {(['bill', 'appointment', 'procedure', 'itemised'] as const).map((source) => (
               <button
                 key={source}
                 onClick={() => setClaimSource(source)}
@@ -1461,7 +1576,13 @@ const CreateClaimTab: React.FC<{
                     : 'bg-white/5 hover:bg-white/10 border-2 border-transparent text-white/60'
                 }`}
               >
-                {source === 'appointment' ? 'From Appointment' : source === 'procedure' ? 'From Procedure' : 'From Bill'}
+                {source === 'appointment'
+                  ? 'From Appointment'
+                  : source === 'procedure'
+                  ? 'From Procedure'
+                  : source === 'itemised'
+                  ? 'Itemised (Tariff)'
+                  : 'From Bill'}
               </button>
             ))}
           </div>
@@ -1585,8 +1706,166 @@ const CreateClaimTab: React.FC<{
           </div>
         )}
 
+        {/* Itemised (standalone tariff-coded) claim — S216 */}
+        {claimSource === 'itemised' && (
+          <div className="mb-6 space-y-4">
+            <div className="relative">
+              <label className="block text-white/60 text-sm mb-2">Patient *</label>
+              {selectedPatient ? (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-purple-500/20 border-2 border-purple-500">
+                  <p className="text-white">
+                    {selectedPatient.firstName} {selectedPatient.lastName}
+                    {selectedPatient.patientNumber ? ` · ${selectedPatient.patientNumber}` : ''}
+                  </p>
+                  <button
+                    onClick={() => { setSelectedPatient(null); setPatientQuery(''); }}
+                    className="text-white/60 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={patientQuery}
+                    onChange={(e) => setPatientQuery(e.target.value)}
+                    placeholder="Type name, phone, or patient number…"
+                    className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/30"
+                  />
+                  {patientResults.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full rounded-lg bg-slate-800 border border-white/10 max-h-56 overflow-y-auto">
+                      {patientResults.map((patient) => (
+                        <button
+                          key={patient.id}
+                          onClick={() => { setSelectedPatient(patient); setPatientResults([]); }}
+                          className="w-full text-left px-4 py-2 text-white hover:bg-white/10"
+                        >
+                          {patient.firstName} {patient.lastName}
+                          {patient.patientNumber ? <span className="text-white/40"> · {patient.patientNumber}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-white/60 text-sm">
+                  Tariff Codes <span className="text-white/30">(AHFoZ schedule)</span>
+                </label>
+                <select
+                  value={tariffSchedule}
+                  onChange={(e) => setTariffSchedule(e.target.value as any)}
+                  className="px-2 py-1 rounded bg-white/10 border border-white/20 text-white text-xs"
+                >
+                  <option value="all">All schedules</option>
+                  <option value="gp">GP</option>
+                  <option value="dental">Dental</option>
+                </select>
+              </div>
+              <input
+                type="text"
+                value={tariffQuery}
+                onChange={(e) => setTariffQuery(e.target.value)}
+                placeholder="Search by code or description…"
+                className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/30"
+              />
+              {tariffResults.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full rounded-lg bg-slate-800 border border-white/10 max-h-56 overflow-y-auto">
+                  {tariffResults.map((tariff) => (
+                    <button
+                      key={tariff.id}
+                      onClick={() => addTariffLine(tariff)}
+                      className="w-full text-left px-4 py-2 hover:bg-white/10 flex justify-between"
+                    >
+                      <span className="text-white">
+                        <span className="font-mono text-purple-300">{tariff.code}</span> {tariff.description}
+                      </span>
+                      <span className="text-white/40">
+                        {tariff.defaultAmount != null ? formatCurrency(tariff.defaultAmount) : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {claimLines.length > 0 && (
+              <div className="rounded-lg border border-white/10 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-white/5">
+                    <tr className="text-white/50 text-left">
+                      <th className="py-2 px-3">Code</th>
+                      <th className="py-2 px-3">Description</th>
+                      <th className="py-2 px-3 w-20">Qty</th>
+                      <th className="py-2 px-3 w-28">Unit ($)</th>
+                      <th className="py-2 px-3 w-28">ICD-10</th>
+                      <th className="py-2 px-3 w-24 text-right">Total</th>
+                      <th className="py-2 px-2 w-8" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {claimLines.map((line, index) => (
+                      <tr key={index} className="border-t border-white/5">
+                        <td className="py-2 px-3 font-mono text-purple-300">{line.tariffCode}</td>
+                        <td className="py-2 px-3 text-white/80">{line.description}</td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="number"
+                            min={1}
+                            value={line.quantity}
+                            onChange={(e) => updateLine(index, { quantity: e.target.value })}
+                            className="w-16 px-2 py-1 rounded bg-white/10 border border-white/20 text-white"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={line.unitAmount}
+                            onChange={(e) => updateLine(index, { unitAmount: e.target.value })}
+                            className="w-24 px-2 py-1 rounded bg-white/10 border border-white/20 text-white"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={line.icd10Code}
+                            onChange={(e) => updateLine(index, { icd10Code: e.target.value })}
+                            placeholder="e.g. K02.1"
+                            className="w-24 px-2 py-1 rounded bg-white/10 border border-white/20 text-white placeholder-white/20"
+                          />
+                        </td>
+                        <td className="py-2 px-3 text-right text-white">
+                          {formatCurrency((Number(line.unitAmount) || 0) * (Number(line.quantity) || 1))}
+                        </td>
+                        <td className="py-2 px-2">
+                          <button onClick={() => removeLine(index)} className="text-white/40 hover:text-red-400">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-white/5">
+                    <tr className="text-white font-bold">
+                      <td colSpan={5} className="py-2 px-3 text-right">Claim Total</td>
+                      <td className="py-2 px-3 text-right">{formatCurrency(linesTotal)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Claim Details */}
-        {(selectedBill || selectedAppointment || selectedProcedure) && (
+        {(selectedBill || selectedAppointment || selectedProcedure || claimSource === 'itemised') && (
           <div className="space-y-4">
             <div>
               <label className="block text-white/60 text-sm mb-2">Medical Aid Provider *</label>
@@ -1604,14 +1883,36 @@ const CreateClaimTab: React.FC<{
                 <option value="psmas">PSMAS</option>
               </select>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-white/60 text-sm mb-2">Member Number *</label>
+                <input
+                  type="text"
+                  value={formData.memberNumber}
+                  onChange={(e) => setFormData({ ...formData, memberNumber: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-white/60 text-sm mb-2">Dependant Code</label>
+                <input
+                  type="text"
+                  value={formData.dependantCode}
+                  onChange={(e) => setFormData({ ...formData, dependantCode: e.target.value })}
+                  placeholder="00, 01…"
+                  className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/30"
+                />
+              </div>
+            </div>
             <div>
-              <label className="block text-white/60 text-sm mb-2">Member Number *</label>
+              <label className="block text-white/60 text-sm mb-2">Plan Name</label>
               <input
                 type="text"
-                value={formData.memberNumber}
-                onChange={(e) => setFormData({ ...formData, memberNumber: e.target.value })}
-                className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
-                required
+                value={formData.planName}
+                onChange={(e) => setFormData({ ...formData, planName: e.target.value })}
+                placeholder="e.g. Gold, Standard"
+                className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/30"
               />
             </div>
             <div>

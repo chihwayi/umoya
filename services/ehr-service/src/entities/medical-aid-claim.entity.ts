@@ -38,7 +38,8 @@ export class MedicalAidClaim {
   @JoinColumn({ name: 'billing_id' })
   bill: Bill;
 
-  @Column({ name: 'billing_id', type: 'uuid' })
+  // Nullable: standalone itemised claims (tariff lines) have no internal bill.
+  @Column({ name: 'billing_id', type: 'uuid', nullable: true })
   billId: string;
 
   @Column({ name: 'medical_aid_name' })
