@@ -4869,6 +4869,17 @@ export class DatabaseProvisioningService {
           `DO $$ BEGIN ALTER TABLE users ADD COLUMN IF NOT EXISTS registration_council VARCHAR(50); EXCEPTION WHEN undefined_table THEN NULL; END $$`,
         ],
       },
+      {
+        id: 'sprint219_mcaz_pharmacy_compliance',
+        label: 'Sprint 219 — MCAZ Pharmacy Compliance (controlled-substance register)',
+        version: '2026.06.11.0',
+        description:
+          'mcaz_schedule classification on the drugs catalog; the controlled-substance register itself is query-only over dispensings + controlled prescriptions',
+        statements: () => [
+          `DO $$ BEGIN ALTER TABLE drugs ADD COLUMN IF NOT EXISTS mcaz_schedule VARCHAR(50); EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          `CREATE INDEX IF NOT EXISTS idx_prescriptions_is_controlled ON prescriptions(is_controlled) WHERE is_controlled = true`,
+        ],
+      },
     ];
   }
 

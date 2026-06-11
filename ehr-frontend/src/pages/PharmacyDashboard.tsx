@@ -17,8 +17,10 @@ import {
   Brain,
   BookOpen,
   Sparkles,
+  Shield,
+  Download,
 } from 'lucide-react';
-import { pharmacyApi, ehrApi, cdssApi } from '../services/api';
+import { pharmacyApi, ehrApi, cdssApi, mcazApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import PharmacyDispensing from '../components/PharmacyDispensing';
 import PharmacyInventory from '../components/PharmacyInventory';
@@ -76,7 +78,7 @@ const PharmacyDashboard: React.FC = () => {
   const [inventoryForecasts, setInventoryForecasts] = useState<any[]>([]);
   const [dispensingAnomalies, setDispensingAnomalies] = useState<any[]>([]);
   const [stewardshipReviews, setStewardshipReviews] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'orders' | 'receipts' | 'suppliers' | 'alerts' | 'dispensing' | 'shared-documents'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'orders' | 'receipts' | 'suppliers' | 'alerts' | 'dispensing' | 'shared-documents' | 'mcaz-register'>('overview');
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
   const [showCopilot, setShowCopilot] = useState(false);
   const [copilotQuery, setCopilotQuery] = useState('');
@@ -431,6 +433,7 @@ const PharmacyDashboard: React.FC = () => {
             { id: 'suppliers', label: 'Suppliers', icon: Users },
             { id: 'alerts', label: 'Alerts', icon: AlertTriangle },
             { id: 'shared-documents', label: 'Shared Documents', icon: FolderOpen, badge: sharedDocumentsCount },
+            { id: 'mcaz-register', label: 'MCAZ Register', icon: Shield },
           ].map((tab: any) => {
             const Icon = tab.icon;
             return (
@@ -772,8 +775,172 @@ const PharmacyDashboard: React.FC = () => {
             />
           </div>
         )}
+
+        {/* MCAZ Controlled-Substance Register Tab — S219 */}
+        {activeTab === 'mcaz-register' && (
+          <McazRegisterTab tenantSlug={tenantSlug || ''} token={token} />
+        )}
       </div>
     </AdminNavigationShell>
+  );
+};
+
+// MCAZ controlled-substance (dangerous drugs) dispensing register with CSV export.
+const McazRegisterTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlug, token }) => {
+  const { showError, showSuccess } = useNotification();
+  const [entries, setEntries] = useState<any[]>([]);
+  const [totalQuantity, setTotalQuantity] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [filters, setFilters] = useState({ from: '', to: '', schedule: 'all' });
+
+  const loadRegister = useCallback(async () => {
+    if (!tenantSlug) return;
+    setLoading(true);
+    try {
+      const response = await mcazApi.getControlledRegister(tenantSlug, token, {
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        schedule: filters.schedule,
+      });
+      setEntries(response.data?.entries || []);
+      setTotalQuantity(response.data?.totalQuantity || 0);
+    } catch (error: any) {
+      showError('Failed to load register', error.response?.data?.message || 'Please try again');
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantSlug, token, filters, showError]);
+
+  useEffect(() => {
+    loadRegister();
+  }, [loadRegister]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const response = await mcazApi.exportControlledRegisterCsv(tenantSlug, token, {
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        schedule: filters.schedule,
+      });
+      const { csv, filename } = response.data || {};
+      const blob = new Blob([csv || ''], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || 'mcaz-controlled-register.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showSuccess('Register exported', 'CSV downloaded');
+    } catch (error: any) {
+      showError('Failed to export register', error.response?.data?.message || 'Please try again');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Shield className="w-5 h-5 text-teal-600" /> MCAZ Controlled-Substance Register
+          </h2>
+          <p className="text-slate-500 text-sm mt-1">
+            Dangerous-drugs dispensing record for MCAZ inspection — controlled prescriptions only.
+          </p>
+        </div>
+        <div className="flex items-end gap-3">
+          <div>
+            <label className="block text-slate-500 text-xs mb-1">From</label>
+            <input
+              type="date"
+              value={filters.from}
+              onChange={(e) => setFilters({ ...filters, from: e.target.value })}
+              className="px-3 py-2 rounded-lg border border-slate-300 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-slate-500 text-xs mb-1">To</label>
+            <input
+              type="date"
+              value={filters.to}
+              onChange={(e) => setFilters({ ...filters, to: e.target.value })}
+              className="px-3 py-2 rounded-lg border border-slate-300 text-sm"
+            />
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting || entries.length === 0}
+            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-slate-400 py-10 text-center">Loading register…</p>
+      ) : entries.length === 0 ? (
+        <p className="text-slate-400 py-10 text-center">
+          No controlled-substance dispensings in this period.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-500 text-left border-b border-slate-200">
+                <th className="py-2 pr-3">Date</th>
+                <th className="py-2 pr-3">Dispensing No</th>
+                <th className="py-2 pr-3">Patient</th>
+                <th className="py-2 pr-3">Medication</th>
+                <th className="py-2 pr-3">Schedule</th>
+                <th className="py-2 pr-3 text-right">Qty</th>
+                <th className="py-2 pr-3">Prescriber (Reg No)</th>
+                <th className="py-2">Dispensed By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry, index) => (
+                <tr key={index} className="border-b border-slate-100">
+                  <td className="py-2 pr-3 whitespace-nowrap">
+                    {entry.dispensingDate ? new Date(entry.dispensingDate).toLocaleDateString() : ''}
+                  </td>
+                  <td className="py-2 pr-3 font-mono text-xs">{entry.dispensingNumber}</td>
+                  <td className="py-2 pr-3">
+                    {entry.patientName}
+                    {entry.patientNumber ? <span className="text-slate-400"> · {entry.patientNumber}</span> : null}
+                  </td>
+                  <td className="py-2 pr-3">{entry.medicationName}</td>
+                  <td className="py-2 pr-3">
+                    <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-xs font-semibold border border-red-200">
+                      {entry.schedule || 'Controlled'}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-3 text-right font-semibold">{entry.quantityDispensed}</td>
+                  <td className="py-2 pr-3">
+                    {entry.prescriberName}
+                    {entry.prescriberLicense ? <span className="text-slate-400"> ({entry.prescriberLicense})</span> : null}
+                  </td>
+                  <td className="py-2">{entry.dispenserName}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="font-bold text-slate-900">
+                <td colSpan={5} className="py-2 pr-3 text-right">Total quantity</td>
+                <td className="py-2 pr-3 text-right">{totalQuantity}</td>
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
   );
 };
 

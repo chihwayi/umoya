@@ -9527,6 +9527,33 @@ export const notificationCenterApi = {
   },
 };
 
+// S219 — MCAZ pharmacy compliance (controlled-substance register)
+export const mcazApi = {
+  getControlledRegister: async (
+    tenantSlug: string,
+    token: string,
+    params?: { from?: string; to?: string; schedule?: string },
+  ) => {
+    const response = await ehrAxios.get('/pharmacy/mcaz/controlled-register', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  exportControlledRegisterCsv: async (
+    tenantSlug: string,
+    token: string,
+    params?: { from?: string; to?: string; schedule?: string },
+  ) => {
+    const response = await ehrAxios.get('/pharmacy/mcaz/controlled-register/export', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params,
+    });
+    return { data: response.data };
+  },
+};
+
 // Billing API (Bills table)
 export const billingApi = {
   createBill: async (tenantSlug: string, token: string, billData: any) => {

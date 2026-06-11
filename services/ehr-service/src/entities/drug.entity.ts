@@ -9,6 +9,11 @@ export class Drug {
   @Column({ name: 'generic_name' })
   genericName: string;
 
+  // MCAZ (Medicines Control Authority of Zimbabwe) schedule classification for
+  // the catalog entry (e.g. 'Schedule I' … 'Schedule VIII' / dangerous drug).
+  @Column({ name: 'mcaz_schedule', nullable: true })
+  mcazSchedule: string;
+
   @Column({ type: 'text', array: true, nullable: true, name: 'brand_names' })
   brandNames: string[];
 
