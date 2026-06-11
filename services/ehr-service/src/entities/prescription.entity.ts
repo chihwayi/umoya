@@ -84,6 +84,13 @@ export class Prescription {
   @Column({ type: 'text', nullable: true })
   instructions?: string;
 
+  // Controlled-substance handling for legally-valid scripts (MCAZ schedules).
+  @Column({ name: 'is_controlled', type: 'boolean', default: false })
+  isControlled: boolean;
+
+  @Column({ name: 'controlled_schedule', nullable: true })
+  controlledSchedule?: string;
+
   @Column({ type: 'enum', enum: PrescriptionStatus, default: PrescriptionStatus.ACTIVE })
   status: PrescriptionStatus;
 

@@ -45,6 +45,10 @@ export class User {
   @Column({ name: 'license_number', nullable: true })
   licenseNumber: string;
 
+  // Statutory registration council for the prescriber (e.g. MDPCZ, PCZ, NCZ).
+  @Column({ name: 'registration_council', nullable: true })
+  registrationCouncil: string;
+
   @Column({ nullable: true })
   specialization: string;
 

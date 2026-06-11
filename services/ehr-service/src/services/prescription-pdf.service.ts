@@ -7,6 +7,26 @@ import * as QRCode from 'qrcode';
 export class PrescriptionPdfService {
   private readonly logger = new Logger(PrescriptionPdfService.name);
 
+  /** Render a non-negative integer as words (for controlled-substance quantities). */
+  private numberToWords(value: number): string {
+    const n = Math.floor(Math.abs(value));
+    if (n === 0) return 'Zero';
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+      'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const under1000 = (num: number): string => {
+      if (num === 0) return '';
+      if (num < 20) return ones[num];
+      if (num < 100) return `${tens[Math.floor(num / 10)]}${num % 10 ? ' ' + ones[num % 10] : ''}`;
+      return `${ones[Math.floor(num / 100)]} Hundred${num % 100 ? ' ' + under1000(num % 100) : ''}`;
+    };
+    if (n < 1000) return under1000(n);
+    if (n < 1_000_000) {
+      return `${under1000(Math.floor(n / 1000))} Thousand${n % 1000 ? ' ' + under1000(n % 1000) : ''}`;
+    }
+    return String(n); // beyond a typical script quantity — fall back to digits
+  }
+
   async generatePrescriptionPDF(
     tenantDb: DataSource,
     prescriptionId: string,
@@ -26,7 +46,8 @@ export class PrescriptionPdfService {
         u.first_name as doctor_first_name,
         u.last_name as doctor_last_name,
         u.specialization as doctor_specialization,
-        u.license_number as doctor_license
+        u.license_number as doctor_license,
+        u.registration_council as doctor_council
       FROM prescriptions p
       LEFT JOIN patients pt ON pt.id = p.patient_id
       LEFT JOIN users u ON u.id = p.doctor_id
@@ -172,10 +193,40 @@ export class PrescriptionPdfService {
     }
 
     if (prescription.doctor_license) {
-      doc.text(`License #: ${prescription.doctor_license}`, { continued: false });
+      const councilLabel = (prescription.doctor_council || 'Council').trim();
+      doc.text(`${councilLabel} Reg. No.: ${prescription.doctor_license}`, { continued: false });
+    }
+    const clinicRegistration = process.env.CLINIC_REGISTRATION_NO || '';
+    if (clinicRegistration) {
+      doc.text(`Practice / MCAZ No.: ${clinicRegistration}`, { continued: false });
     }
 
     doc.moveDown(1);
+
+    // Controlled-substance legal banner (MCAZ schedules require explicit
+    // flagging, the schedule, and quantity in words on the script).
+    if (prescription.is_controlled) {
+      const schedule = (prescription.controlled_schedule || 'Controlled').trim();
+      doc
+        .fontSize(11)
+        .font('Helvetica-Bold')
+        .fillColor('#B91C1C')
+        .text(`CONTROLLED SUBSTANCE — ${schedule}`, { continued: false });
+      const qty = Number(prescription.quantity);
+      if (Number.isFinite(qty)) {
+        doc
+          .fontSize(9)
+          .font('Helvetica')
+          .fillColor('#374151')
+          .text(`Quantity (in words): ${this.numberToWords(qty)}`, { continued: false });
+      }
+      doc
+        .fontSize(8)
+        .font('Helvetica-Oblique')
+        .fillColor('#6B7280')
+        .text('Single dispensing only. Not repeatable without a new prescription.', { continued: false });
+      doc.moveDown(1).font('Helvetica');
+    }
 
     // Medication Information
     doc
@@ -333,7 +384,8 @@ export class PrescriptionPdfService {
       .font('Helvetica')
       .fillColor('#9CA3AF')
       .text(
-        'This is a digitally generated prescription. Please verify authenticity before dispensing.',
+        'Valid for 30 days from the date of issue unless otherwise stated. ' +
+        'This prescription is generated and signed electronically; scan the QR code to verify authenticity before dispensing.',
         doc.page.margins.left,
         footerY,
         {

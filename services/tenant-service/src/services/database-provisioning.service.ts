@@ -4857,6 +4857,18 @@ export class DatabaseProvisioningService {
           ON CONFLICT DO NOTHING`,
         ],
       },
+      {
+        id: 'sprint220_prescription_legal_validity',
+        label: 'Sprint 220 — Prescription Legal Validity (controlled-substance + prescriber registration)',
+        version: '2026.06.11.0',
+        description:
+          'is_controlled/controlled_schedule on prescriptions and registration_council on users for legally-valid printed scripts',
+        statements: () => [
+          `DO $$ BEGIN ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS is_controlled BOOLEAN NOT NULL DEFAULT false; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          `DO $$ BEGIN ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS controlled_schedule VARCHAR(50); EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          `DO $$ BEGIN ALTER TABLE users ADD COLUMN IF NOT EXISTS registration_council VARCHAR(50); EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+        ],
+      },
     ];
   }
 
