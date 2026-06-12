@@ -61,6 +61,17 @@ Umoya is a production-grade, AI-first, multi-tenant electronic health record pla
 - **Post-visit satisfaction surveys** — 2–4 hours after encounter completion, a token-gated CSAT/NPS survey is sent by SMS and push; 5-star overall rating, per-category scores (wait time, clinician, facility, admin), and free text; management dashboard with NPS trend and per-clinician averages
 - **Wearable and home device data** — patient app pulls from Apple Health (HealthKit) and Google Fit on a background schedule; Bluetooth BP cuffs and glucometers pair via standard BLE profiles; readings stored per-tenant with clinical reference range checking; AI fires a trend alert when three consecutive abnormal readings occur in 24 hours; EHR shows 7-day sparklines per vital type with red flagging
 - **Household and family risk graph** — patients are linked into household and family units; when an infectious or heritable condition is diagnosed the system automatically raises household alerts for linked members; EHR panel shows the family risk level and recent diagnoses; patient app shows linked family members with general health status (privacy-safe)
+- **Digital WHO Partograph** — real-time labour progress tracking on a digital partograph; cervicogram and descent graph plotted automatically as observations arrive; alert line and action line computed per session; fetal heart rate, amniotic fluid, contractions, oxytocin, and maternal vitals all charted; integrated into the maternity module
+- **Radiology report notifications** — when a report is finalised the ordering clinician and primary nurse receive an instant push notification and SMS; critical or high-urgency findings trigger an additional alert to the on-call team; report status visible inline in the EHR worklist and mobile
+- **Orthopaedics** — fracture and trauma register with Gustilo-Anderson urgency classification; joint replacement (THA/TKA) tracking with outcome scores; CDSS rehab plan generator; Wells DVT score calculator
+- **ENT (Ear, Nose and Throat)** — visit records for tympanic, nasal, and tonsil findings; pure-tone audiometry with auto-computed PTA and classification (normal through profound); Centor score for Strep throat vs viral; rhinosinusitis management algorithm
+- **Gastroenterology** — endoscopy records, Rockall upper-GI bleed risk score, Child-Pugh cirrhosis classification (A/B/C), dyspepsia management with H.pylori/GERD/alarm feature guidance
+- **Rheumatology** — joint assessments with auto-computed DAS28-ESR on every entry; DMARD initiation and cessation records; treat-to-target step-up algorithm; gout colchicine/allopurinol protocol; biologic pre-screen with mandatory TB exclusion (Zimbabwe-specific)
+- **Haematology** — MCV morphology-based anaemia workup; restrictive transfusion threshold (Hb <7 g/dL); Ann Arbor lymphoma staging
+- **Urology** — IPSS-based BPH management (watchful waiting / medication / TURP); renal stone algorithm by size and infection status (ESWL/URS/PCN/PCNL); age-adjusted PSA interpretation
+- **Physiotherapy and Rehabilitation** — cross-specialty rehab referrals (physio, OT, speech, cardiac, pulmonary); session tracking with pain score, ROM, MRC grade, and functional outcome score; Barthel-stratified stroke rehab plan; 4-phase LVEF-aware cardiac rehab (HFrEF variant)
+- **Endocrinology** — TSH/FT4 thyroid management algorithm (hypothyroid/hyperthyroid/subclinical); 6-step adrenal crisis protocol with hydrocortisone IV; levothyroxine dosing formula with cardiac and age adjustments
+- **NCD Comorbidity Bridge** — unified cross-module NCD profile aggregating diabetes, CKD, CVD, and retinopathy data into a single patient view with Framingham CVD risk (sex-stratified) and auto-generated alerts on sync
 
 ### SADC and Africa-Specific Modules
 - **Hypertension and Traditional Medicine** — HTN risk stratification, herb-drug interaction CDSS, traditional healer referral pathway
@@ -267,7 +278,8 @@ Umoya implements the deepest DHIS2 integration of any open-source EHR. Every cli
 - PACTR — Pan African Clinical Trials Registry integration
 - Africa's Talking — SMS appointment reminders and USSD gateway for low-bandwidth access
 - CRVS — Civil registration and vital statistics (birth and death notifications)
-- Medical-aid, NHIF, and CBHI insurance integrations
+- **X12 EDI 837P/835** — native X12 837P professional claim generation and 835 remittance advice parsing; compliant wire format with per-payer ISA/GS segment configuration replacing the demo adapter; round-trip tested against standard clearinghouse schemas
+- Medical-aid, NHIF, and CBHI insurance integrations with real-time eligibility (per-tenant insurer endpoint, CIMAS-first); AHFoZ tariff-coded itemised claim lines with tariff typeahead; remittance import (CSV/ERA) with automatic claim matching, short-pay recording, and aged claims report (0–30/31–60/61–90/90+ day buckets)
 - Patient health record exports in PDF, FHIR bundle, JSON, and CSV
 
 ---
@@ -338,6 +350,17 @@ Umoya implements the deepest DHIS2 integration of any open-source EHR. Every cli
 - Language preference persisted to patient record across all sessions
 - USSD self-service via Africa's Talking (`*123#`) — appointment confirmation, medication refill requests, recent lab result view, and SMS opt-out; no smartphone required
 - PDF appointment letters and discharge summaries generated in the patient's preferred language
+
+---
+
+## Zimbabwe Market-Fit Additions
+
+Targeted enhancements built specifically for private clinic and hospital operations in Zimbabwe (S216–S225).
+
+- **MCAZ Pharmacy Compliance** — MCAZ facility licence and dispensing-pharmacist registration fields; controlled-substance register aligned to MCAZ schedules; dispensing and returns export; MCAZ-compliant printed prescription layout with prescriber registration number (MDPCZ) and e-signature; controlled-drug handling printed on the script
+- **Automated Notification Center** — per-tenant configurable triggers (Appointment Booked, 24-hour Reminder, Payment Received, Claim Status Updated, Staff Invitation) each independently toggleable for SMS and email; manual reminder composer with 160-character SMS counter and delivery confirmation; full notification audit log
+- **Tiered SaaS Subscriptions** — Solo / Clinic / Multi-Branch plan tiers mapped onto module presets with staff account, active patient, SMS, and branch usage caps; live usage meters in the admin portal; in-app upgrade and pricing page; soft limit enforcement with warnings before hard block
+- **True Offline-First App Shell** — service worker caches the EHR app shell so the frontend loads instantly with no network; request replay queue with idempotency keys prevents duplicate writes on reconnect; per-record retry backoff and conflict detection during sync; full offline operation for vitals, triage, and ward rounds through load-shedding events
 
 ---
 

@@ -82,6 +82,17 @@ const interestOptions = [
   'Digital procedural consent with e-signature',
   'Cross-facility stock balancing',
   'Safe offline sync conflict resolution',
+  'WHO Partograph (digital labour chart)',
+  'Radiology report notifications',
+  'Orthopaedics, ENT, Gastroenterology, Rheumatology modules',
+  'Haematology, Urology, Physiotherapy, Endocrinology modules',
+  'AHFoZ tariff-coded itemised claims',
+  'X12 837P/835 EDI claims',
+  'Real medical-aid eligibility (CIMAS / insurer)',
+  'MCAZ pharmacy compliance',
+  'Automated notification center',
+  'Tiered SaaS subscription plans',
+  'True offline-first app shell (load-shedding resilient)',
 ];
 
 const STANDARDS = [
@@ -100,8 +111,8 @@ const STANDARDS = [
 ];
 
 const stats = [
-  { value: '80+', label: 'Clinical modules', sub: 'From maternity to wearables and theatre AI' },
-  { value: '30+', label: 'AI capabilities', sub: 'Risk, forecasting, substitution, adherence, voice' },
+  { value: '90+', label: 'Clinical modules', sub: 'From maternity and partograph to 9 new specialties' },
+  { value: '35+', label: 'AI capabilities', sub: 'Risk, forecasting, substitution, adherence, voice' },
   { value: '8 langs', label: 'Mobile languages', sub: 'Auto-detected from device locale' },
   { value: 'DHIS2', label: 'Program reporting', sub: 'HIV, maternal, vaccine cohorts' },
 ];
@@ -115,7 +126,7 @@ const audiences = [
     points: [
       'CDSS dose checks and risk flags in every encounter',
       'PostVisit AI summaries with patient-safe publishing',
-      'Specialty-specific workflows: HIV, oncology, maternity, cardiology',
+      'Specialty-specific workflows: HIV, oncology, maternity, cardiology, orthopaedics, ENT, rheumatology, gastroenterology, and 6 more',
       'Real-time doctor-nurse coordination and alert loops',
       'Composite mortality risk badge and proactive daily risk score on every patient card',
       'One-click AI documents — referral letters, discharge summaries, pre-auth, sick notes',
@@ -134,10 +145,13 @@ const audiences = [
     color: '#3B9EFF',
     headline: 'One platform. Every revenue line. Zero gaps.',
     points: [
-      'Claims, medical-aid, and billing in the same system',
+      'AHFoZ tariff-coded itemised claims, X12 837P/835 EDI, remittance import, aged claims, and real-time insurer eligibility',
       'Patients pay outstanding invoices with EcoCash, OneMoney, or ZiG directly from the app — no cashier queue',
       'QR self-check-in and digital pre-visit intake eliminate front-desk bottlenecks',
       'Theatre utilization dashboard — Gantt board, on-time start rate, cancellation tracking',
+      'Tiered subscription plans (Solo / Clinic / Multi-Branch) with live usage meters, in-app upgrade page, and self-serve limit management',
+      'MCAZ pharmacy compliance — controlled substance register, dispensing log, and MCAZ-compliant prescription layout',
+      'Configurable notification center — per-trigger SMS/email toggles for appointments, payments, claims, and staff invitations',
       'SaaS billing enforcer — demo trials auto-expire, grace periods auto-suspend, payments extend access in one API call',
       'Deployment mode gating — clinic, hospital, or ministry tier hides irrelevant modules automatically',
       'Multi-tenant architecture — isolate each facility',
@@ -159,6 +173,8 @@ const audiences = [
       'Cross-tenant JWT validation — tokens are clinic-scoped and cannot replay across facilities',
       'Biometric app lock, session auto-lock, and offline PHI cache wipe on logout',
       'FHIR-exportable records for referrals and transfers',
+      'MCAZ controlled-substance register — dispensing log, returns register, and MCAZ-compliant prescription layout',
+      'Zimbabwe CDPA 2021 compliance — 18-control register, POTRAZ 72-hour breach notification, per-patient consent records',
     ],
   },
   {
@@ -448,6 +464,23 @@ const modules = [
   { label: 'Digital E-Consent + PDF', icon: ShieldCheck, color: '#0AA98A' },
   { label: 'Cross-Facility Stock', icon: Database, color: '#3B9EFF' },
   { label: 'Safe Sync Conflicts', icon: Shield, color: '#E8614D' },
+  { label: 'WHO Partograph', icon: HeartPulse, color: '#0AA98A' },
+  { label: 'Radiology Notifications', icon: AlertCircle, color: '#3B9EFF' },
+  { label: 'Orthopaedics', icon: Activity, color: '#E8614D' },
+  { label: 'ENT Module', icon: Stethoscope, color: '#0AA98A' },
+  { label: 'Gastroenterology', icon: FlaskConical, color: '#3B9EFF' },
+  { label: 'Rheumatology', icon: Activity, color: '#E8614D' },
+  { label: 'Haematology', icon: FlaskConical, color: '#0AA98A' },
+  { label: 'Urology', icon: Stethoscope, color: '#3B9EFF' },
+  { label: 'Physiotherapy & Rehab', icon: TrendingUp, color: '#E8614D' },
+  { label: 'Endocrinology', icon: Brain, color: '#0AA98A' },
+  { label: 'NCD Comorbidity Bridge', icon: Network, color: '#3B9EFF' },
+  { label: 'AHFoZ Tariff Claims', icon: Wallet, color: '#E8614D' },
+  { label: 'X12 EDI 837P/835', icon: Code2, color: '#0AA98A' },
+  { label: 'MCAZ Compliance', icon: Shield, color: '#3B9EFF' },
+  { label: 'Notification Center', icon: MessageSquare, color: '#E8614D' },
+  { label: 'Tiered Subscriptions', icon: BarChart3, color: '#0AA98A' },
+  { label: 'Offline App Shell', icon: Zap, color: '#3B9EFF' },
 ];
 
 const liveActivityItems = [
@@ -490,6 +523,16 @@ const liveActivityItems = [
   { type: 'transfer', text: 'Stock transfer: AI recommends 200 units Amoxicillin 500mg from Facility B (surplus 340) → Facility A (shortage 60)', color: '#0AA98A' },
   { type: 'pro',      text: 'PRO risk loop: Patient pain score 8/10 submitted → risk recalculated 84/100 (HIGH) → outreach task created for Dr. Ndlovu', color: '#E8614D' },
   { type: 'referral', text: 'Referral update: Cardiology referral for patient #2204 → status "Appointment Scheduled: 2026-06-10" received via webhook', color: '#3B9EFF' },
+  { type: 'partograph', text: 'WHO Partograph: Cervical dilation 7 cm at 14:00 — action line reached, oxytocin escalation protocol initiated for Mrs. Chikwanda', color: '#E8614D' },
+  { type: 'radnotif',  text: 'Radiology notification: Chest X-ray report finalised — "Right lower lobe consolidation — pneumonia probable" sent to Dr. Moyo and Ward 2 nurse', color: '#3B9EFF' },
+  { type: 'ent',       text: 'ENT CDSS: Centor score 4/4 — Strep throat highly likely → penicillin V 500 mg protocol loaded for patient at Beitbridge Clinic', color: '#0AA98A' },
+  { type: 'ortho',     text: 'Orthopaedics: Gustilo Grade IIIB open tibial fracture — urgent orthopaedic consult and IV antibiotics ordered; Wells DVT score 3 (high probability)', color: '#E8614D' },
+  { type: 'rheum',     text: 'Rheumatology CDSS: DAS28-ESR 5.2 (high activity) — treat-to-target step-up from MTX to MTX + HCQ combination recommended', color: '#0AA98A' },
+  { type: 'edi',       text: 'X12 837P: Professional claim for Encounter #ENC-2026-8841 generated and submitted to CIMAS clearinghouse — claim ID CR-8841', color: '#3B9EFF' },
+  { type: 'ahfoz',     text: 'AHFoZ claim: 3 tariff lines itemised (0113 GP consult + 1042 ECG + 0321 venepuncture) — total ZiG 185.50 auto-summed, claim ready for submission', color: '#0AA98A' },
+  { type: 'mcaz',      text: 'MCAZ register: Morphine 10 mg/mL ampoule × 2 dispensed to patient #9021 — controlled-substance log entry captured with pharmacist signature', color: '#E8614D' },
+  { type: 'notif',     text: 'Notification center: 24-hour appointment reminder batch — 47 SMS and 39 email reminders sent; 3 patients opted out of channel', color: '#3B9EFF' },
+  { type: 'offline',   text: 'Offline replay: Power restored after 3-hour load-shedding — 14 queued vitals, 3 triage forms, and 1 ward round replayed idempotently; 0 conflicts', color: '#0AA98A' },
 ];
 
 export default function LandingPage() {
@@ -713,7 +756,7 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="mt-7 max-w-2xl text-[1.05rem] leading-[1.9] text-[#7A9CBC]">
-                  Umoya is the clinical operating system built for Africa and the world. AI-first, offline-capable, and deeply human — 80+ clinical modules, 30+ AI capabilities, FHIR R4, DHIS2, SNOMED CT, and a multilingual mobile app in 8 languages. Designed for clinicians in Harare, Johannesburg, Nairobi, Lusaka, Maputo — and everywhere care cannot wait for a signal.
+                  Umoya is the clinical operating system built for Africa and the world. AI-first, offline-capable, and deeply human — 90+ clinical modules, 35+ AI capabilities, FHIR R4, DHIS2, SNOMED CT, and a multilingual mobile app in 8 languages. Designed for clinicians in Harare, Johannesburg, Nairobi, Lusaka, Maputo — and everywhere care cannot wait for a signal.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -735,7 +778,7 @@ export default function LandingPage() {
 
                 {/* Compliance badges */}
                 <div className="mt-8 flex flex-wrap gap-2">
-                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2 18-profile', 'LOINC', 'HIPAA-aware', 'HL7', '65+ modules', '30+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS', 'Inventory AI', 'Tracker sync', 'Benchmark pull-back'].map((tag) => (
+                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2 18-profile', 'LOINC', 'HIPAA-aware', 'HL7', 'X12 EDI', '90+ modules', '35+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS', 'MCAZ', 'AHFoZ tariffs', 'Inventory AI', 'WHO Partograph', 'Tracker sync', 'Benchmark pull-back'].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8FA8CC]"

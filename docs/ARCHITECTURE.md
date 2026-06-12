@@ -1,6 +1,6 @@
 # Umoya Architecture Reference
 
-Last updated: 2026-05-29
+Last updated: 2026-06-12
 
 This document contains the architecture rules, DB provisioning patterns, and agent constraints that apply to all work on this codebase. Read it before editing any file.
 
@@ -82,6 +82,16 @@ Add a provisioning bundle to `getProvisioningBundles()` in `services/tenant-serv
 | `household_family_graph` | `household_groups`, `patient_family_links`; `household_id` on `patients`; `household_alerts` (infectious/genetic propagation) |
 | `digital_consent` | `consent_form_templates` (procedure-specific risks/benefits), `consent_requests` (e-signature + PDF via pdfkit → MinIO) |
 | `stock_transfer` | `stock_transfer_orders` (cross-facility transfer lifecycle); `min_stock_level`, `reorder_point` columns on `storeroom_items` |
+| `ahfoz_claims` | `medical_aid_tariff_codes` (AHFoZ GP + dental schedule), `medical_aid_claim_lines` (tariff_code, qty, unit_amount, line_amount, tooth/quadrant, ICD-10 link); `dependant_code`, `plan_name` columns on `medical_aid_claims` |
+| `medical_aid_remittance_lines` | `medical_aid_remittance_lines` (remittance import: ERA/CSV → matched claim + short-pay/rejection amounts) |
+| `medical_aid_provider_config` | per-tenant insurer endpoint, auth type, and credentials for real eligibility + claim submission (CIMAS and others) |
+| `mcaz_compliance` | `mcaz_facility_licences`, `mcaz_pharmacist_registrations`, `mcaz_controlled_dispenses`, `mcaz_controlled_returns`; prescriber MDPCZ registration numbers on staff |
+| `notification_center` | `notification_trigger_configs` (per-tenant toggle per trigger + channel), `notification_log` (audit trail of every notification sent); triggers: Appointment Booked, 24h Reminder, Payment Received, Claim Status Updated, Staff Invitation |
+| `subscription_plans` | `subscription_plans` master table (Solo/Clinic/Multi-Branch tiers with limits); usage counter columns on system `tenants` table (staff count, patient count, sms_sent_month, branch_count) |
+| `offline_app_shell` | `offline_replay_queue` (pending requests with idempotency key, retry backoff, conflict flag); `offline_sync_sessions` (session-level sync state and version) |
+| `sprint226_specialty_modules` | `orthopaedic_registers`, `fracture_records`, `joint_replacement_records`; `ent_visits`, `audiogram_records`; `gastro_registers`, `endoscopy_records`; `rheumatology_registers`, `joint_assessments`, `dmard_records`; `haematology_registers`; `urology_registers`; `physio_referrals`, `physio_sessions`; `endocrine_registers`; `ncd_comorbidity_profiles` (17 tables total) |
+| `who_partograph` | `partograph_sessions` (labour start, admission cervix dilation, station); `partograph_observations` (time-series: cervical dilation, descent, FHR, contractions, moulding, liquor, oxytocin, drugs, BP, pulse, temperature, urine); alert line and action line computed per-session |
+| `radiology_notifications` | `radiology_report_notifications` (report_id, ordered_by, notified_at, channel, critical_flag); `notification_sent_at`, `notification_channel` columns on `imaging_reports` |
 
 ### System-level column additions (via `ensureSubscriptionSchema()`)
 
@@ -129,6 +139,23 @@ Every controller must appear in `controllers: []`.
 | `HouseholdRiskController` | `/household` | Household creation and assignment, family linking, diagnosis propagation, alert management |
 | `DigitalConsentController` | `/consent` | Consent request creation, token-gated form fetch, e-signature submission → PDF → MinIO, encounter consent status |
 | `CrossFacilityStockController` | `/network/stock` | Cross-tenant stock level aggregation, AI rebalancing recommendations, transfer order lifecycle |
+| `OrthopaedicsController` | `/orthopaedics` | Fracture/trauma register, joint replacement records (THA/TKA), Gustilo-Anderson urgency, Wells DVT, rehab plan |
+| `EntController` | `/ent` | ENT visits, audiogram records with PTA auto-classification, Centor score, rhinosinusitis triage |
+| `GastroenterologyController` | `/gastroenterology` | Gastro register, endoscopy records, Rockall score, Child-Pugh cirrhosis classification, dyspepsia algorithm |
+| `RheumatologyController` | `/rheumatology` | Joint assessments with DAS28-ESR, DMARD records, treat-to-target algorithm, gout protocol, biologic pre-screen |
+| `HaematologyController` | `/haematology` | Haematology register, anaemia MCV workup, transfusion threshold, Ann Arbor lymphoma staging |
+| `UrologyController` | `/urology` | Urology register, IPSS BPH management, renal stone algorithm, PSA age-adjusted thresholds |
+| `PhysiotherapyController` | `/physiotherapy` | Cross-specialty rehab referrals, session tracking, Barthel stroke rehab, LVEF-aware cardiac rehab |
+| `EndocrinologyController` | `/endocrinology` | Endocrine register, thyroid algorithm (TSH/FT4), adrenal crisis protocol, levothyroxine dosing |
+| `NcdComorbidityController` | `/ncd-comorbidity` | Unified NCD profile aggregating DM/CKD/CVD/retinopathy; Framingham CVD risk; cross-module sync alerts |
+| `AhfozClaimsController` | `/claims/ahfoz` | AHFoZ tariff code search, itemised claim line management, claim total computation |
+| `RemittanceController` | `/claims/remittance` | ERA/CSV remittance import, claim matching, aged claims report, claims CSV export |
+| `MedicalAidEligibilityController` | `/medical-aid/eligibility` | Per-tenant provider config, real-time eligibility check via configured insurer endpoint |
+| `McazController` | `/mcaz` | Facility licence, pharmacist registration, controlled substance dispensing log, returns register |
+| `NotificationCenterController` | `/notifications/config` | Per-tenant trigger configuration, manual reminder composer, notification audit log |
+| `SubscriptionPlansController` | `/subscription-plans` | Plan tier listing, tenant usage meter read, upgrade/downgrade, limit enforcement |
+| `WhoPartographController` | `/maternity/partograph` | Partograph session creation, time-series observation recording, alert/action line computation |
+| `RadiologyNotificationsController` | `/radiology/notifications` | Report finalisation notifications (push + SMS) to ordering clinician; critical finding alerts |
 
 ---
 
