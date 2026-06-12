@@ -1054,6 +1054,7 @@ const NurseDashboard: React.FC = () => {
   const [notesCopilotLoading, setNotesCopilotLoading] = useState(false);
   const [handoffCopilotLoading, setHandoffCopilotLoading] = useState(false);
   const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
+  const [triageCopilotPanelExpanded, setTriageCopilotPanelExpanded] = useState(true);
   const [triageSuggestedPriority, setTriageSuggestedPriority] = useState<'urgent' | 'high' | 'normal' | 'low' | null>(null);
   const [vitalsCopilotResult, setVitalsCopilotResult] = useState<any | null>(null);
   const [notesCopilotDraft, setNotesCopilotDraft] = useState<string>('');
@@ -4336,7 +4337,25 @@ const NurseDashboard: React.FC = () => {
               {vitalsCopilotResult && (
                 <div className="mt-3 space-y-2">
                   <div className="rounded-lg bg-white p-2 border border-blue-100 text-sm text-slate-700">
-                    <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                    {(() => {
+                      const rl = String(vitalsCopilotResult.riskLevel || '').toLowerCase();
+                      const actionMap: Record<string, { label: string; action: string; colorClass: string }> = {
+                        critical: { label: 'CRITICAL', action: 'Call doctor NOW — do not leave patient unattended.', colorClass: 'text-red-700' },
+                        high: { label: 'HIGH', action: 'Fetch senior nurse or doctor within 10 minutes.', colorClass: 'text-orange-700' },
+                        medium: { label: 'MEDIUM', action: 'Monitor every 30 minutes; escalate if condition deteriorates.', colorClass: 'text-amber-700' },
+                        moderate: { label: 'MEDIUM', action: 'Monitor every 30 minutes; escalate if condition deteriorates.', colorClass: 'text-amber-700' },
+                        low: { label: 'LOW', action: 'Routine care; reassess in 1 hour.', colorClass: 'text-green-700' },
+                      };
+                      const entry = actionMap[rl];
+                      return entry ? (
+                        <>
+                          <p><strong>Risk Level:</strong> <span className={`font-bold ${entry.colorClass}`}>{entry.label}</span></p>
+                          <p className={`text-xs mt-1 font-semibold ${entry.colorClass}`}>⚡ {entry.action}</p>
+                        </>
+                      ) : (
+                        <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                      );
+                    })()}
                   </div>
                   {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
                     <GuidelineRecommendationCard
@@ -4382,9 +4401,21 @@ const NurseDashboard: React.FC = () => {
             <PageHeader title="Triage Assessment" description="Structured patient assessment with decision support." icon={ClipboardList} />
             <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-amber-900">Triage Copilot</h3>
-                  <p className="text-xs text-amber-700">Use as decision support only. Confirm before saving triage.</p>
+                <div className="flex items-center gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-amber-900">Triage Copilot</h3>
+                    <p className="text-xs text-amber-700">Use as decision support only. Confirm before saving triage.</p>
+                  </div>
+                  {triageCopilotResult && (
+                    <button
+                      type="button"
+                      onClick={() => setTriageCopilotPanelExpanded(e => !e)}
+                      className="p-1 rounded hover:bg-amber-100 text-amber-700 ml-1"
+                      title={triageCopilotPanelExpanded ? 'Collapse result' : 'Expand result'}
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform ${triageCopilotPanelExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -4407,7 +4438,7 @@ const NurseDashboard: React.FC = () => {
                   </button>
                 </div>
               </div>
-              {triageCopilotResult && (
+              {triageCopilotResult && triageCopilotPanelExpanded && (
                 <div className="mt-3 text-sm text-slate-700 space-y-2">
                   <div>
                     {(() => {

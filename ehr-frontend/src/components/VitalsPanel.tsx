@@ -644,7 +644,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                   </p>
                   {/* Readmission score is suppressed during acute deterioration —
                       showing "Score 0.0" next to NEWS2 10 is misleading, so hide it. */}
-                  {typeof cdssInsights.risk.overall_score === 'number' && !cdssInsights.risk.acute_safety?.acute_deterioration && (
+                  {typeof cdssInsights.risk.overall_score === 'number' && cdssInsights.risk.overall_score > 0 && !cdssInsights.risk.acute_safety?.acute_deterioration && (
                     <p className="text-xs text-slate-500">Score: {cdssInsights.risk.overall_score.toFixed(1)}</p>
                   )}
                   {/* ML Deterioration Probability (Sprint 113) */}

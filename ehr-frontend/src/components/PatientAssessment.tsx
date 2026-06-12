@@ -82,6 +82,8 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
   const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
   const [recentVitals, setRecentVitals] = useState<any>(null);
+  const [assessmentOpen, setAssessmentOpen] = useState(true);
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [triageHistory, setTriageHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<any | null>(null);
@@ -432,7 +434,8 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-800">Risk Assessment</p>
                 <span className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-slate-900 text-white capitalize">
-                  {cdssInsights.risk.risk_level || 'unknown'} · Score {cdssInsights.risk.overall_score ?? '—'}
+                  {cdssInsights.risk.risk_level || 'unknown'}
+                  {typeof cdssInsights.risk.overall_score === 'number' && cdssInsights.risk.overall_score > 0 && ` · Score ${cdssInsights.risk.overall_score.toFixed(1)}`}
                 </span>
               </div>
               {Array.isArray(cdssInsights.risk.factors) && cdssInsights.risk.factors.length > 0 && (
@@ -502,9 +505,40 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
         </div>
       )}
 
+      {/* SATS Triage Colour */}
+      {(() => {
+        const sats: Record<string, { bg: string; label: string; desc: string }> = {
+          urgent: { bg: 'bg-red-600 border-red-700 text-white', label: 'RED', desc: 'Immediate — life-threatening' },
+          high:   { bg: 'bg-orange-500 border-orange-600 text-white', label: 'ORANGE', desc: 'Very urgent — attend within 10 min' },
+          normal: { bg: 'bg-yellow-400 border-yellow-500 text-yellow-900', label: 'YELLOW', desc: 'Urgent — attend within 1 hour' },
+          low:    { bg: 'bg-green-500 border-green-600 text-white', label: 'GREEN', desc: 'Not urgent — routine care' },
+        };
+        const s = sats[priority] ?? sats.normal;
+        return (
+          <div className={`rounded-xl px-4 py-3 border flex items-center gap-4 ${s.bg}`}>
+            <span className="text-2xl font-black tracking-wider">{s.label}</span>
+            <span className="text-sm font-medium">{s.desc}</span>
+          </div>
+        );
+      })()}
+
       {/* Triage Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4">
+
+          {/* Clinical Assessment */}
+          <button
+            type="button"
+            onClick={() => setAssessmentOpen(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-3 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <Stethoscope className="w-4 h-4 text-pink-500" />
+              Clinical Assessment
+            </span>
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${assessmentOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {assessmentOpen && <>
           <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-semibold text-slate-700">Chief Complaint</label>
@@ -754,7 +788,21 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
               />
             </div>
           </div>
+          </>}
 
+          {/* Patient Background */}
+          <button
+            type="button"
+            onClick={() => setBackgroundOpen(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-3 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <ClipboardList className="w-4 h-4 text-slate-500" />
+              Patient Background
+            </span>
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${backgroundOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {backgroundOpen && <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
               <div className="flex items-center justify-between mb-2">
@@ -964,11 +1012,11 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
               )}
             </div>
           </div>
+          </>}
         </div>
 
         {/* Right rail */}
         <div className="space-y-6">
-
 
           <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
             <div className="flex items-center gap-3 mb-4">
