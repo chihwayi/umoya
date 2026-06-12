@@ -32,8 +32,9 @@ describe('FamilyPlanningService', () => {
       }),
     };
     const tenantService = { getTenantDatabase: jest.fn(async () => db) };
+    const cdssService = { getGuidelines: jest.fn(async () => ({ guidelines: [] })) };
     return {
-      service: new FamilyPlanningService(tenantService as any),
+      service: new FamilyPlanningService(tenantService as any, cdssService as any),
       enrollmentRepo,
       followupRepo,
     };

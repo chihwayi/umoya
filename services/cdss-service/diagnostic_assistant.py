@@ -195,88 +195,109 @@ class DiagnosticAssistant:
             "canary_percent": llm_route.get("canary_percent", 0),
         }
     
-    # Symptom-diagnosis mapping database (simplified clinical knowledge base)
+    # Symptom-diagnosis mapping database (clinical knowledge base, Zimbabwe/Africa context)
     DIAGNOSTIC_DATABASE = {
         'fever': {
             'common_diagnoses': [
-                {'diagnosis': 'Viral Upper Respiratory Infection', 'probability': 0.35},
-                {'diagnosis': 'Bacterial Pneumonia', 'probability': 0.20},
-                {'diagnosis': 'Urinary Tract Infection', 'probability': 0.15},
-                {'diagnosis': 'COVID-19', 'probability': 0.10},
-                {'diagnosis': 'Influenza', 'probability': 0.10},
-                {'diagnosis': 'Sepsis', 'probability': 0.05}
+                {'diagnosis': 'Malaria', 'probability': 0.55},
+                {'diagnosis': 'Viral Upper Respiratory Infection', 'probability': 0.20},
+                {'diagnosis': 'Typhoid Fever', 'probability': 0.12},
+                {'diagnosis': 'Bacterial Pneumonia', 'probability': 0.10},
+                {'diagnosis': 'Urinary Tract Infection', 'probability': 0.08},
+                {'diagnosis': 'Sepsis', 'probability': 0.06}
             ],
             'key_symptoms': ['fever', 'fatigue', 'body aches'],
             'alarming_signs': ['high_fever', 'rigors', 'altered_mental_status']
         },
         'cough': {
             'common_diagnoses': [
-                {'diagnosis': 'Acute Bronchitis', 'probability': 0.30},
-                {'diagnosis': 'Pneumonia', 'probability': 0.25},
-                {'diagnosis': 'Asthma Exacerbation', 'probability': 0.15},
-                {'diagnosis': 'COPD Exacerbation', 'probability': 0.10},
-                {'diagnosis': 'Post-nasal Drip', 'probability': 0.10},
-                {'diagnosis': 'GERD', 'probability': 0.05}
+                {'diagnosis': 'Pulmonary Tuberculosis', 'probability': 0.35},
+                {'diagnosis': 'Pneumonia', 'probability': 0.28},
+                {'diagnosis': 'Acute Bronchitis', 'probability': 0.18},
+                {'diagnosis': 'Asthma Exacerbation', 'probability': 0.12},
+                {'diagnosis': 'COPD Exacerbation', 'probability': 0.08}
             ],
             'key_symptoms': ['cough', 'sputum', 'shortness_of_breath'],
             'alarming_signs': ['hemoptysis', 'chest_pain', 'respiratory_distress']
         },
         'chest_pain': {
             'common_diagnoses': [
-                {'diagnosis': 'Musculoskeletal Pain', 'probability': 0.25},
-                {'diagnosis': 'GERD/Reflux', 'probability': 0.20},
-                {'diagnosis': 'Anxiety/Panic Attack', 'probability': 0.15},
-                {'diagnosis': 'Acute Coronary Syndrome', 'probability': 0.15},
-                {'diagnosis': 'Pneumonia', 'probability': 0.10},
-                {'diagnosis': 'Pulmonary Embolism', 'probability': 0.08},
-                {'diagnosis': 'Pericarditis', 'probability': 0.05}
+                {'diagnosis': 'Acute Coronary Syndrome', 'probability': 0.25},
+                {'diagnosis': 'Pneumonia', 'probability': 0.20},
+                {'diagnosis': 'Musculoskeletal Pain', 'probability': 0.18},
+                {'diagnosis': 'GERD/Reflux', 'probability': 0.15},
+                {'diagnosis': 'Pulmonary Embolism', 'probability': 0.12},
+                {'diagnosis': 'Pericarditis', 'probability': 0.07}
             ],
             'key_symptoms': ['chest_pain', 'dyspnea', 'diaphoresis'],
             'alarming_signs': ['crushing_pain', 'radiating_pain', 'syncope']
         },
         'shortness_of_breath': {
             'common_diagnoses': [
-                {'diagnosis': 'Heart Failure', 'probability': 0.25},
-                {'diagnosis': 'COPD Exacerbation', 'probability': 0.20},
-                {'diagnosis': 'Asthma', 'probability': 0.18},
-                {'diagnosis': 'Pneumonia', 'probability': 0.15},
-                {'diagnosis': 'Anxiety', 'probability': 0.10},
-                {'diagnosis': 'Pulmonary Embolism', 'probability': 0.08}
+                {'diagnosis': 'Severe Anaemia', 'probability': 0.35},
+                {'diagnosis': 'Heart Failure', 'probability': 0.22},
+                {'diagnosis': 'Pneumonia', 'probability': 0.18},
+                {'diagnosis': 'Asthma', 'probability': 0.12},
+                {'diagnosis': 'Pulmonary Embolism', 'probability': 0.08},
+                {'diagnosis': 'COPD Exacerbation', 'probability': 0.06}
             ],
             'key_symptoms': ['dyspnea', 'orthopnea', 'cough'],
             'alarming_signs': ['sudden_onset', 'cyanosis', 'respiratory_distress']
         },
+        'fatigue': {
+            'common_diagnoses': [
+                {'diagnosis': 'Severe Anaemia', 'probability': 0.45},
+                {'diagnosis': 'Malaria', 'probability': 0.35},
+                {'diagnosis': 'Pulmonary Tuberculosis', 'probability': 0.20},
+                {'diagnosis': 'Heart Failure', 'probability': 0.15},
+                {'diagnosis': 'HIV/AIDS', 'probability': 0.12},
+                {'diagnosis': 'Hypothyroidism', 'probability': 0.08}
+            ],
+            'key_symptoms': ['fatigue', 'weakness', 'lethargy'],
+            'alarming_signs': ['severe_fatigue', 'pallor', 'syncope']
+        },
+        'vomiting': {
+            'common_diagnoses': [
+                {'diagnosis': 'Malaria', 'probability': 0.40},
+                {'diagnosis': 'Gastroenteritis', 'probability': 0.30},
+                {'diagnosis': 'Typhoid Fever', 'probability': 0.15},
+                {'diagnosis': 'Meningitis', 'probability': 0.10},
+                {'diagnosis': 'Diabetic Ketoacidosis', 'probability': 0.06}
+            ],
+            'key_symptoms': ['vomiting', 'nausea', 'abdominal_pain'],
+            'alarming_signs': ['projectile_vomiting', 'blood_in_vomit', 'altered_consciousness']
+        },
         'abdominal_pain': {
             'common_diagnoses': [
                 {'diagnosis': 'Gastroenteritis', 'probability': 0.30},
-                {'diagnosis': 'Irritable Bowel Syndrome', 'probability': 0.20},
-                {'diagnosis': 'Appendicitis', 'probability': 0.15},
-                {'diagnosis': 'Peptic Ulcer Disease', 'probability': 0.10},
-                {'diagnosis': 'Gallstones/Cholecystitis', 'probability': 0.10},
-                {'diagnosis': 'Constipation', 'probability': 0.08}
+                {'diagnosis': 'Appendicitis', 'probability': 0.18},
+                {'diagnosis': 'Peptic Ulcer Disease', 'probability': 0.14},
+                {'diagnosis': 'Gallstones/Cholecystitis', 'probability': 0.12},
+                {'diagnosis': 'Irritable Bowel Syndrome', 'probability': 0.10},
+                {'diagnosis': 'Ectopic Pregnancy', 'probability': 0.08}
             ],
             'key_symptoms': ['abdominal_pain', 'nausea', 'vomiting'],
             'alarming_signs': ['rebound_tenderness', 'rigid_abdomen', 'fever']
         },
         'headache': {
             'common_diagnoses': [
-                {'diagnosis': 'Tension Headache', 'probability': 0.40},
-                {'diagnosis': 'Migraine', 'probability': 0.25},
-                {'diagnosis': 'Sinusitis', 'probability': 0.15},
-                {'diagnosis': 'Medication Overuse Headache', 'probability': 0.10},
-                {'diagnosis': 'Hypertension', 'probability': 0.05},
-                {'diagnosis': 'Meningitis', 'probability': 0.03}
+                {'diagnosis': 'Malaria', 'probability': 0.40},
+                {'diagnosis': 'Hypertensive Emergency', 'probability': 0.20},
+                {'diagnosis': 'Meningitis', 'probability': 0.15},
+                {'diagnosis': 'Migraine', 'probability': 0.12},
+                {'diagnosis': 'Tension Headache', 'probability': 0.10},
+                {'diagnosis': 'Sinusitis', 'probability': 0.06}
             ],
-            'key_symptoms': ['headache', 'photophobia', 'nausea'],
-            'alarming_signs': ['sudden_severe', 'neck_stiffness', 'focal_neurologic']
+            'key_symptoms': ['headache', 'photophobia', 'fever'],
+            'alarming_signs': ['sudden_severe', 'neck_stiffness', 'focal_neurologic', 'worst_headache_of_life']
         },
         'dizziness': {
             'common_diagnoses': [
-                {'diagnosis': 'Benign Paroxysmal Positional Vertigo', 'probability': 0.30},
-                {'diagnosis': 'Orthostatic Hypotension', 'probability': 0.25},
-                {'diagnosis': 'Medication Side Effect', 'probability': 0.15},
-                {'diagnosis': 'Anemia', 'probability': 0.12},
-                {'diagnosis': 'Arrhythmia', 'probability': 0.10},
+                {'diagnosis': 'Severe Anaemia', 'probability': 0.35},
+                {'diagnosis': 'Orthostatic Hypotension', 'probability': 0.22},
+                {'diagnosis': 'Malaria', 'probability': 0.18},
+                {'diagnosis': 'Benign Paroxysmal Positional Vertigo', 'probability': 0.12},
+                {'diagnosis': 'Arrhythmia', 'probability': 0.08},
                 {'diagnosis': 'Stroke/TIA', 'probability': 0.05}
             ],
             'key_symptoms': ['dizziness', 'vertigo', 'nausea'],
@@ -285,9 +306,9 @@ class DiagnosticAssistant:
         'musculoskeletal_pain': {
             'common_diagnoses': [
                 {'diagnosis': 'Muscle Strain', 'probability': 0.35},
-                {'diagnosis': 'Contusion', 'probability': 0.25},
+                {'diagnosis': 'Arthritis', 'probability': 0.20},
+                {'diagnosis': 'Contusion', 'probability': 0.18},
                 {'diagnosis': 'Fracture', 'probability': 0.15},
-                {'diagnosis': 'Arthritis', 'probability': 0.15},
                 {'diagnosis': 'Tendinitis', 'probability': 0.10}
             ],
             'key_symptoms': ['pain', 'swelling', 'limited_range_of_motion'],
@@ -297,9 +318,9 @@ class DiagnosticAssistant:
             'common_diagnoses': [
                 {'diagnosis': 'Contusion', 'probability': 0.30},
                 {'diagnosis': 'Fracture', 'probability': 0.25},
-                {'diagnosis': 'Head Injury', 'probability': 0.15},
-                {'diagnosis': 'Sprain/Strain', 'probability': 0.20},
-                {'diagnosis': 'Laceration', 'probability': 0.10}
+                {'diagnosis': 'Head Injury', 'probability': 0.20},
+                {'diagnosis': 'Sprain/Strain', 'probability': 0.18},
+                {'diagnosis': 'Laceration', 'probability': 0.08}
             ],
             'key_symptoms': ['pain', 'bruising', 'swelling'],
             'alarming_signs': ['loss_of_consciousness', 'deformity', 'severe_bleeding']
@@ -441,36 +462,81 @@ class DiagnosticAssistant:
         age: Optional[int] = None,
         gender: Optional[str] = None
     ) -> float:
-        """Calculate probability score for a diagnosis"""
-        base_probability = 0.1  # Base probability
-        
-        # Age-based adjustments
-        if age:
-            if 'pneumonia' in diagnosis.lower() and age >= 65:
-                base_probability += 0.15
-            if 'heart_failure' in diagnosis.lower() and age >= 65:
+        """Calculate probability score for a diagnosis based on symptom clusters and context."""
+        diag_lower = diagnosis.lower()
+        sym_text = ' '.join(symptoms).lower()
+        vitals_text = ' '.join(str(v) for v in vitals_clues).lower()
+
+        # Start from the DB base_probability (caller adds 0.1 minimum; we adjust from there)
+        base_probability = 0.1
+
+        # ── Malaria (Zimbabwe endemic — always considered with fever/headache/fatigue) ──
+        if 'malaria' in diag_lower:
+            if any(w in sym_text for w in ['fever', 'headache', 'fatigue', 'vomiting', 'chills', 'rigors']):
+                base_probability += 0.30
+            if sum(1 for w in ['fever', 'headache', 'vomiting', 'fatigue'] if w in sym_text) >= 3:
                 base_probability += 0.20
-            if 'migraine' in diagnosis.lower() and 15 <= age <= 50:
-                base_probability += 0.10
-        
-        # Symptom matching boosts
-        normalized_symptoms = [self.normalize_symptom(s) for s in symptoms]
-        if any('cough' in s or 'fever' in s for s in normalized_symptoms):
-            if 'pneumonia' in diagnosis.lower() or 'respiratory' in diagnosis.lower():
+
+        # ── Anaemia ──
+        if 'anaemia' in diag_lower or 'anemia' in diag_lower:
+            if 'fatigue' in sym_text or 'tired' in sym_text:
                 base_probability += 0.25
-        
-        if any('chest_pain' in s for s in normalized_symptoms):
-            if 'cardiac' in diagnosis.lower() or 'coronary' in diagnosis.lower():
-                base_probability += 0.20
-        
-        # Vitals clues
-        if vitals_clues:
-            if 'hypoxia' in str(vitals_clues).lower() and 'respiratory' in diagnosis.lower():
+            if 'shortness' in sym_text or 'dyspnea' in sym_text:
                 base_probability += 0.15
-            if 'tachycardia' in str(vitals_clues).lower() and 'cardiac' in diagnosis.lower():
+            if 'dizziness' in sym_text:
                 base_probability += 0.10
-        
-        # Cap at 0.95 (leave room for uncertainty)
+
+        # ── Meningitis ──
+        if 'meningitis' in diag_lower:
+            if 'headache' in sym_text and ('vomiting' in sym_text or 'nausea' in sym_text):
+                base_probability += 0.30
+            if 'fever' in sym_text:
+                base_probability += 0.15
+            if 'neck stiffness' in sym_text or 'photophobia' in sym_text or 'confusion' in sym_text:
+                base_probability += 0.25
+
+        # ── Hypertensive Emergency / Pre-eclampsia ──
+        if 'hypertensive' in diag_lower or 'eclampsia' in diag_lower or 'pre-eclampsia' in diag_lower:
+            if 'headache' in sym_text and ('vomiting' in sym_text or 'shortness' in sym_text):
+                base_probability += 0.35
+            if 'hypertension' in vitals_text or 'high blood pressure' in vitals_text:
+                base_probability += 0.25
+
+        # ── TB ──
+        if 'tuberculosis' in diag_lower or ' tb' in diag_lower:
+            if 'cough' in sym_text and ('fatigue' in sym_text or 'weight' in sym_text or 'sweating' in sym_text):
+                base_probability += 0.30
+
+        # ── Pneumonia ──
+        if 'pneumonia' in diag_lower:
+            if 'cough' in sym_text and 'fever' in sym_text:
+                base_probability += 0.25
+            if 'shortness' in sym_text or 'dyspnea' in sym_text:
+                base_probability += 0.15
+            if age and age >= 65:
+                base_probability += 0.10
+
+        # ── Heart Failure ──
+        if 'heart failure' in diag_lower:
+            if 'shortness' in sym_text and 'fatigue' in sym_text:
+                base_probability += 0.25
+            if age and age >= 60:
+                base_probability += 0.15
+            if 'edema' in sym_text or 'orthopnea' in sym_text:
+                base_probability += 0.15
+
+        # ── Cardiac / ACS ──
+        if 'coronary' in diag_lower or 'cardiac' in diag_lower or 'infarction' in diag_lower:
+            if 'chest pain' in sym_text or 'chest_pain' in sym_text:
+                base_probability += 0.20
+
+        # ── Vitals boosts ──
+        if vitals_clues:
+            if 'hypoxia' in vitals_text and ('respiratory' in diag_lower or 'pneumonia' in diag_lower or 'heart failure' in diag_lower):
+                base_probability += 0.15
+            if 'tachycardia' in vitals_text and ('cardiac' in diag_lower or 'sepsis' in diag_lower or 'malaria' in diag_lower):
+                base_probability += 0.10
+
         return min(base_probability, 0.95)
     
     def suggest_diagnosis(
@@ -506,20 +572,47 @@ class DiagnosticAssistant:
             symptom_str = str(symptom).lower().strip()
             # If symptom is a long text string, extract keywords
             if len(symptom_str) > 20:
-                # Extract symptom keywords from text
+                # Normalise common free-text synonyms before keyword scanning
+                expanded = symptom_str
+                for src, dst in [
+                    ('shortness breath', 'shortness of breath'),
+                    ('short of breath', 'shortness of breath'),
+                    ('breathlessness', 'shortness of breath'),
+                    ('difficulty breath', 'shortness of breath'),
+                    ('difficulty breathing', 'shortness of breath'),
+                    ('can\'t breathe', 'shortness of breath'),
+                    ('cannot breathe', 'shortness of breath'),
+                    ('extremely tired', 'fatigue'),
+                    ('very tired', 'fatigue'),
+                    ('feeling tired', 'fatigue'),
+                    ('feeling weak', 'fatigue'),
+                    ('weakness', 'fatigue'),
+                    ('lethargy', 'fatigue'),
+                    ('lethargic', 'fatigue'),
+                    ('exhausted', 'fatigue'),
+                    ('tiredness', 'fatigue'),
+                    (' tired', ' fatigue'),
+                    ('throwing up', 'vomiting'),
+                    ('been sick', 'vomiting'),
+                    ('nausea', 'nausea'),
+                    ('rigors', 'chills'),
+                    ('photophobia', 'sensitivity to light'),
+                ]:
+                    expanded = expanded.replace(src, dst)
+
                 symptom_keywords = [
                     'fever', 'cough', 'headache', 'chest pain', 'shortness of breath',
                     'dyspnea', 'abdominal pain', 'nausea', 'vomiting', 'dizziness',
                     'vertigo', 'fatigue', 'body aches', 'sore throat', 'runny nose',
                     'congestion', 'diarrhea', 'constipation', 'back pain', 'joint pain',
                     'muscle pain', 'rash', 'itching', 'sweating', 'chills', 'rigors',
-                    'photophobia', 'neck stiffness', 'confusion', 'seizure', 'syncope',
+                    'neck stiffness', 'confusion', 'seizure', 'syncope',
                     'palpitations', 'orthopnea', 'edema', 'jaundice', 'bleeding',
                     'hemoptysis', 'dysuria', 'frequency', 'urgency', 'hematuria',
-                    'sensitivity to light', 'photophobia', 'nausea', 'sweating'
+                    'sensitivity to light',
                 ]
                 for keyword in symptom_keywords:
-                    if keyword in symptom_str:
+                    if keyword in expanded:
                         normalized_symptoms.append(keyword)
             else:
                 # Short symptom text, normalize directly
@@ -562,8 +655,12 @@ class DiagnosticAssistant:
             'dyspnea': 'shortness_of_breath',
             'abdominal pain': 'abdominal_pain',
             'abdominal_pain': 'abdominal_pain',
-            'nausea': 'abdominal_pain',  # Often associated with abdominal issues
-            'vomiting': 'abdominal_pain',
+            'stomach pain': 'abdominal_pain',
+            'nausea': 'vomiting',
+            'vomiting': 'vomiting',
+            'fatigue': 'fatigue',
+            'tiredness': 'fatigue',
+            'weakness': 'fatigue',
             'dizziness': 'dizziness',
             'vertigo': 'dizziness',
             'hip pain': 'musculoskeletal_pain',
@@ -603,10 +700,14 @@ class DiagnosticAssistant:
                 matched_db_keys.add('cough')
             if any(word in symptom_text for word in ['chest', 'heart', 'cardiac']):
                 matched_db_keys.add('chest_pain')
-            if any(word in symptom_text for word in ['breath', 'breathing', 'short', 'winded']):
+            if any(word in symptom_text for word in ['breath', 'breathing', 'short', 'winded', 'dyspnea']):
                 matched_db_keys.add('shortness_of_breath')
-            if any(word in symptom_text for word in ['stomach', 'abdomen', 'belly', 'nausea', 'vomit']):
+            if any(word in symptom_text for word in ['stomach', 'abdomen', 'belly', 'abdominal']):
                 matched_db_keys.add('abdominal_pain')
+            if any(word in symptom_text for word in ['vomit', 'nausea', 'sick']):
+                matched_db_keys.add('vomiting')
+            if any(word in symptom_text for word in ['fatigue', 'tired', 'weak', 'exhaust', 'lethargy']):
+                matched_db_keys.add('fatigue')
             if any(word in symptom_text for word in ['dizzy', 'vertigo', 'spinning']):
                 matched_db_keys.add('dizziness')
             if 'pain' in symptom_text and not matched_db_keys:
@@ -672,25 +773,53 @@ class DiagnosticAssistant:
                 confidence = 'low'
             confidence_scores[diag['diagnosis']] = confidence
         
-        # Recommend diagnostic tests
+        # ── Combination red flags (symptom cluster logic) ──
+        sym_joined = ' '.join(normalized_symptoms).lower()
+        has_headache = 'headache' in sym_joined
+        has_vomiting = any(w in sym_joined for w in ['vomiting', 'nausea'])
+        has_fever    = 'fever' in sym_joined
+        has_sob      = any(w in sym_joined for w in ['shortness of breath', 'shortness_of_breath', 'dyspnea', 'breath'])
+        has_fatigue  = any(w in sym_joined for w in ['fatigue', 'tired', 'weak'])
+        has_severe   = 'severe' in ' '.join([str(s) for s in symptoms]).lower()
+
+        if has_headache and has_vomiting and has_fever:
+            red_flags.append('Headache + vomiting + fever: exclude Malaria (urgent RDT) and Meningitis (lumbar puncture if neck stiffness or photophobia).')
+        elif has_headache and has_vomiting and has_severe:
+            red_flags.append('Severe headache with vomiting: meningism pattern — assess for neck stiffness, photophobia, altered consciousness. Also consider hypertensive emergency (check BP urgently).')
+        elif has_headache and has_vomiting:
+            red_flags.append('Headache with vomiting: check blood pressure urgently and assess for meningism signs.')
+
+        if has_fatigue and has_sob:
+            red_flags.append('Fatigue with shortness of breath: assess for severe anaemia (FBC + peripheral smear), heart failure (clinical exam, ECG), and malaria RDT.')
+
+        if has_sob and has_headache and has_vomiting:
+            red_flags.append('Triad of shortness of breath + severe headache + vomiting: consider hypertensive emergency or pre-eclampsia — check blood pressure immediately.')
+
+        # ── Recommended tests based on matched symptom categories ──
         recommended_tests = []
-        if any('fever' in s or 'cough' in s for s in normalized_symptoms):
-            recommended_tests.append('Complete Blood Count (CBC)')
-            recommended_tests.append('Chest X-ray (if respiratory symptoms)')
-        
-        if any('chest_pain' in s for s in normalized_symptoms):
-            recommended_tests.append('ECG')
-            recommended_tests.append('Troponin (if cardiac suspected)')
+        if has_fever or 'fever' in matched_db_keys:
+            recommended_tests.append('Malaria RDT (or thick/thin blood film)')
+            recommended_tests.append('Full Blood Count (FBC)')
+        if has_fatigue or 'fatigue' in matched_db_keys or has_sob or 'shortness_of_breath' in matched_db_keys:
+            recommended_tests.append('Full Blood Count (FBC) — haemoglobin, MCV for anaemia')
+        if has_headache and has_vomiting:
+            recommended_tests.append('Blood pressure measurement (urgent)')
+            recommended_tests.append('Malaria RDT')
+            if has_severe:
+                recommended_tests.append('Lumbar puncture (after excluding raised ICP) if meningism signs present')
+        if 'cough' in matched_db_keys:
             recommended_tests.append('Chest X-ray')
-        
-        if any('abdominal_pain' in s for s in normalized_symptoms):
+            recommended_tests.append('Sputum GeneXpert MTB/RIF (if cough ≥2 weeks)')
+        if 'chest_pain' in matched_db_keys:
+            recommended_tests.append('12-lead ECG (urgent)')
+            recommended_tests.append('Troponin')
+            recommended_tests.append('Chest X-ray')
+        if 'abdominal_pain' in matched_db_keys:
+            recommended_tests.append('Urine pregnancy test (if female, reproductive age)')
             recommended_tests.append('Complete Metabolic Panel (CMP)')
-            recommended_tests.append('Lipase (if pancreatitis suspected)')
-        
-        if any('headache' in s or 'dizziness' in s for s in normalized_symptoms):
-            if red_flags:
-                recommended_tests.append('CT Head (if red flags present)')
-        
+        if has_headache and red_flags:
+            recommended_tests.append('CT Head (if focal neurology or altered consciousness)')
+
         # Remove duplicates
         recommended_tests = list(dict.fromkeys(recommended_tests))
         

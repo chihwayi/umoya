@@ -53,11 +53,22 @@ def _build_allowlist() -> set[str]:
             if host_port:
                 allowlist.add(host_port)
 
-    # Derive allowlist from explicitly configured internal service URLs only.
-    # No hardcoded hosts/ports to avoid accidental open egress drift.
+    # Derive allowlist from explicitly configured service URLs.
+    # Anthropic is included only when ANTHROPIC_API_KEY is set (opted-in cloud LLM).
     configured_targets = [
         os.getenv("LLM_API_URL", "").strip(),
         os.getenv("EHR_SERVICE_URL", "").strip(),
+        "https://api.anthropic.com" if os.getenv("ANTHROPIC_API_KEY", "").strip() else "",
+        "https://api.openai.com" if os.getenv("OPENAI_API_KEY", "").strip() else "",
+        "https://generativelanguage.googleapis.com" if (
+            os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
+        ) else "",
+        # Vertex AI endpoint (service-account auth, HIPAA-eligible with BAA)
+        f"https://{os.getenv('GOOGLE_CLOUD_LOCATION', 'us-central1')}-aiplatform.googleapis.com" if (
+            os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
+        ) else "",
+        # OAuth2 token exchange used internally by the Vertex AI SDK
+        "https://oauth2.googleapis.com" if os.getenv("GOOGLE_CLOUD_PROJECT", "").strip() else "",
     ]
     for item in configured_targets:
         if not item:

@@ -161,12 +161,23 @@ services:
       - LLM_TIMEOUT_SECONDS=${LLM_TIMEOUT_SECONDS}
       - LLM_GUIDELINES_TIMEOUT_SECONDS=${LLM_GUIDELINES_TIMEOUT_SECONDS}
       - LLM_MAX_RETRIES=${LLM_MAX_RETRIES}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa-key.json
+      - LLM_PROVIDER=${LLM_PROVIDER}
       - WHISPER_API_KEY=${WHISPER_API_KEY}
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - HF_HOME=/app/data/hf_cache
       - TRANSFORMERS_CACHE=/app/data/hf_cache
+      - SENTENCE_TRANSFORMERS_HOME=/app/data/hf_cache
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
       - HF_TOKEN=${HF_TOKEN}
       - CDSS_INGEST_MAX_CHUNKS_PER_FILE=400
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
@@ -187,6 +198,7 @@ services:
       - ./services/cdss-service:/app
       - ./data/chroma_db:/app/data/chroma_db
       - cdss_hf_cache:/opt/hf_cache
+      - ./secrets/gcp-sa-key.json:/run/secrets/gcp-sa-key.json:ro
     depends_on:
       - redis
       - postgres-master
@@ -245,12 +257,23 @@ services:
       - LLM_MODEL_NAME=${LLM_MODEL_NAME}
       - LLM_TIMEOUT_SECONDS=${LLM_TIMEOUT_SECONDS}
       - LLM_MAX_RETRIES=${LLM_MAX_RETRIES}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa-key.json
+      - LLM_PROVIDER=${LLM_PROVIDER}
       - WHISPER_API_KEY=${WHISPER_API_KEY}
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - HF_HOME=/app/data/hf_cache
       - TRANSFORMERS_CACHE=/app/data/hf_cache
+      - SENTENCE_TRANSFORMERS_HOME=/app/data/hf_cache
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
       - HF_TOKEN=${HF_TOKEN}
       - CDSS_INGEST_MAX_CHUNKS_PER_FILE=400
       - CDSS_INGEST_MAX_FILE_BYTES=7000000
@@ -271,6 +294,7 @@ services:
       - ./services/cdss-service:/app
       - ./data/chroma_db:/app/data/chroma_db
       - cdss_hf_cache:/opt/hf_cache
+      - ./secrets/gcp-sa-key.json:/run/secrets/gcp-sa-key.json:ro
     depends_on:
       - redis
       - postgres-master

@@ -194,25 +194,34 @@ class SettingsProvider:
             self._seed_ai_governance(cur)
 
     def _seed_model_registry(self, cur) -> None:
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+        anthropic_model = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001").strip()
+        openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+        openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+        gemini_key = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+
+        if anthropic_key:
+            provider, version = "anthropic", anthropic_model
+            cfg = {"model_name": anthropic_model, "provider": "anthropic"}
+        elif openai_key:
+            provider, version = "openai", openai_model
+            cfg = {"model_name": openai_model, "provider": "openai"}
+        elif gemini_key:
+            provider, version = "gemini", gemini_model
+            cfg = {"model_name": gemini_model, "provider": "gemini"}
+        else:
+            provider, version = "ollama", os.getenv("LLM_MODEL_NAME", "unset")
+            cfg = {"base_url": os.getenv("LLM_API_URL"), "model_name": os.getenv("LLM_MODEL_NAME", "unset")}
+
+        llm_primary_entry = ("llm_primary", "llm", provider, version, "active", cfg)
+        llm_canary_entry = ("llm_canary", "llm", provider, version, "disabled", {**cfg, "canary_percent": 0})
+
         seeds = [
             ("rule_engine", "rules", "cdss", "2026.02", "active", {"always_on": True}),
             ("rag", "retrieval", "chromadb", "v1", "active", {"collection": "medical_guidelines"}),
-            (
-                "llm_primary",
-                "llm",
-                "ollama",
-                os.getenv("LLM_MODEL_NAME", "unset"),
-                "active",
-                {"base_url": os.getenv("LLM_API_URL"), "model_name": os.getenv("LLM_MODEL_NAME", "unset")},
-            ),
-            (
-                "llm_canary",
-                "llm",
-                "ollama",
-                os.getenv("LLM_MODEL_NAME", "unset"),
-                "disabled",
-                {"base_url": os.getenv("LLM_API_URL"), "model_name": os.getenv("LLM_MODEL_NAME", "unset"), "canary_percent": 0},
-            ),
+            llm_primary_entry,
+            llm_canary_entry,
             ("medbert_local", "classifier", "medbert", "local", "active", {}),
             ("clinicalbert_local", "classifier", "clinicalbert", "local", "active", {}),
             ("fusion_engine", "ensemble", "fusion", "local", "active", {}),
@@ -236,6 +245,15 @@ class SettingsProvider:
     def _seed_ai_governance(self, cur) -> None:
         llm_model_name = os.getenv("LLM_MODEL_NAME", "").strip()
         llm_api_url = os.getenv("LLM_API_URL", "").strip()
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+        anthropic_model = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001").strip()
+        openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+        openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+        gemini_key = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        use_anthropic = bool(anthropic_key)
+        use_openai = bool(openai_key) and not use_anthropic
+        use_gemini = bool(gemini_key) and not use_anthropic and not use_openai
 
         vendor_seeds = [
             (
@@ -248,6 +266,39 @@ class SettingsProvider:
                     "required_env": ["LLM_API_URL", "LLM_MODEL_NAME"],
                     "egress_purpose": "llm_generate",
                     "local_only": True,
+                },
+            ),
+            (
+                "anthropic",
+                "anthropic",
+                "Anthropic Claude",
+                "active" if use_anthropic else "inactive",
+                {
+                    "model": anthropic_model,
+                    "required_env": ["ANTHROPIC_API_KEY"],
+                    "egress_purpose": "llm_generate",
+                },
+            ),
+            (
+                "openai",
+                "openai",
+                "OpenAI / ChatGPT",
+                "active" if use_openai else "inactive",
+                {
+                    "model": openai_model,
+                    "required_env": ["OPENAI_API_KEY"],
+                    "egress_purpose": "llm_generate",
+                },
+            ),
+            (
+                "gemini",
+                "gemini",
+                "Google Gemini",
+                "active" if use_gemini else "inactive",
+                {
+                    "model": gemini_model,
+                    "required_env": ["GEMINI_API_KEY"],
+                    "egress_purpose": "llm_generate",
                 },
             ),
         ]
@@ -266,14 +317,25 @@ class SettingsProvider:
                 (vendor_id, provider, display_name, status, Json(config)),
             )
 
-        default_allowed_models = [llm_model_name] if llm_model_name else []
+        if use_anthropic:
+            active_vendor = "anthropic"
+            default_allowed_models = [anthropic_model]
+        elif use_openai:
+            active_vendor = "openai"
+            default_allowed_models = [openai_model]
+        elif use_gemini:
+            active_vendor = "gemini"
+            default_allowed_models = [gemini_model]
+        else:
+            active_vendor = "ollama"
+            default_allowed_models = [llm_model_name] if llm_model_name else []
         usecase_seeds = [
             (
                 "intelligent_diagnosis",
                 {
                     "enabled": True,
                     "purpose": "Clinician-facing diagnosis support with minimum-necessary context.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": True,
                     "redaction_required": True,
@@ -284,7 +346,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Patient header summarization with minimum-necessary redacted context.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": True,
                     "redaction_required": True,
@@ -295,7 +357,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Patient adherence support phrasing under governed non-diagnostic rules.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": True,
                     "redaction_required": True,
@@ -306,7 +368,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Encounter transcription to SOAP conversion using redacted transcript text.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": True,
                     "redaction_required": True,
@@ -317,7 +379,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Clinician-facing guideline-grounded analysis with redacted prompt context.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": True,
                     "redaction_required": True,
@@ -328,7 +390,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Patient education generation with simple language and minimum-necessary context.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": True,
                     "redaction_required": True,
@@ -339,7 +401,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Clinical coding extraction with minimum-necessary note context and governed LLM use.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": True,
                     "redaction_required": True,
@@ -350,7 +412,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Registration and referral document understanding with minimum-necessary intake context.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": True,
                     "redaction_required": True,
@@ -361,7 +423,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Grounded patient-facing post-visit answers from approved visit artifacts only.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": False,
                     "redaction_required": True,
@@ -372,7 +434,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Clinician-facing post-visit summary polishing using grounded recommendation context only.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": False,
                     "redaction_required": True,
@@ -383,7 +445,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Post-visit escalation classification with governed structured output.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": False,
                     "redaction_required": True,
@@ -394,7 +456,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Grounded referral letter drafting from approved post-visit context only.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": False,
                     "redaction_required": True,
@@ -405,7 +467,7 @@ class SettingsProvider:
                 {
                     "enabled": True,
                     "purpose": "Grounded clinical note drafting from approved post-visit context only.",
-                    "vendor_id": "ollama",
+                    "vendor_id": active_vendor,
                     "allowed_model_names": default_allowed_models,
                     "require_tenant_context": False,
                     "redaction_required": True,
